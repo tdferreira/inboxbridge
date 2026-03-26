@@ -32,6 +32,9 @@ public class MailSourceClient {
     @Inject
     MimeHashService mimeHashService;
 
+    @Inject
+    MicrosoftOAuthService microsoftOAuthService;
+
     public List<FetchedMessage> fetch(BridgeConfig.Source source) {
         return switch (source.protocol()) {
             case IMAP -> fetchImap(source);
@@ -50,13 +53,18 @@ public class MailSourceClient {
         properties.put("mail.imaps.timeout", "20000");
         properties.put("mail.imap.connectiontimeout", "20000");
         properties.put("mail.imaps.connectiontimeout", "20000");
+        if (usesMicrosoftOAuth(source)) {
+            configureImapMicrosoftOAuth(properties);
+        } else {
+            requireSupportedAuth(source);
+        }
 
         Session session = Session.getInstance(properties);
         Store store = null;
         Folder folder = null;
         try {
             store = session.getStore(source.tls() ? "imaps" : "imap");
-            store.connect(source.host(), source.port(), source.username(), source.password());
+            connectStore(store, source);
             folder = store.getFolder(source.folder().orElse("INBOX"));
             folder.open(Folder.READ_ONLY);
             Message[] candidateMessages = source.unreadOnly()
@@ -82,13 +90,18 @@ public class MailSourceClient {
         properties.put("mail.pop3.connectiontimeout", "20000");
         properties.put("mail.pop3s.timeout", "20000");
         properties.put("mail.pop3s.connectiontimeout", "20000");
+        if (usesMicrosoftOAuth(source)) {
+            configurePop3MicrosoftOAuth(properties);
+        } else {
+            requireSupportedAuth(source);
+        }
 
         Session session = Session.getInstance(properties);
         Store store = null;
         Folder folder = null;
         try {
             store = session.getStore(source.tls() ? "pop3s" : "pop3");
-            store.connect(source.host(), source.port(), source.username(), source.password());
+            connectStore(store, source);
             folder = store.getFolder("INBOX");
             folder.open(Folder.READ_ONLY);
             Message[] candidateMessages = selectTailMessages(folder);
@@ -207,6 +220,50 @@ public class MailSourceClient {
         } catch (MessagingException ignored) {
             // ignored on shutdown
         }
+    }
+
+    private void connectStore(Store store, BridgeConfig.Source source) throws MessagingException {
+        if (usesMicrosoftOAuth(source)) {
+            String accessToken = microsoftOAuthService.getAccessToken(source);
+            store.connect(source.host(), source.port(), source.username(), accessToken);
+            return;
+        }
+        store.connect(source.host(), source.port(), source.username(), source.password());
+    }
+
+    private boolean usesMicrosoftOAuth(BridgeConfig.Source source) {
+        return source.authMethod() == BridgeConfig.AuthMethod.OAUTH2
+                && source.oauthProvider() == BridgeConfig.OAuthProvider.MICROSOFT;
+    }
+
+    private void requireSupportedAuth(BridgeConfig.Source source) {
+        if (source.authMethod() == BridgeConfig.AuthMethod.OAUTH2) {
+            throw new IllegalStateException("OAuth2 is only implemented for Microsoft sources at the moment");
+        }
+    }
+
+    private void configureImapMicrosoftOAuth(Properties properties) {
+        properties.put("mail.imap.auth.mechanisms", "XOAUTH2");
+        properties.put("mail.imaps.auth.mechanisms", "XOAUTH2");
+        properties.put("mail.imap.auth.login.disable", "true");
+        properties.put("mail.imaps.auth.login.disable", "true");
+        properties.put("mail.imap.auth.plain.disable", "true");
+        properties.put("mail.imaps.auth.plain.disable", "true");
+        properties.put("mail.imap.auth.xoauth2.disable", "false");
+        properties.put("mail.imaps.auth.xoauth2.disable", "false");
+    }
+
+    private void configurePop3MicrosoftOAuth(Properties properties) {
+        properties.put("mail.pop3.auth.mechanisms", "XOAUTH2");
+        properties.put("mail.pop3s.auth.mechanisms", "XOAUTH2");
+        properties.put("mail.pop3.auth.login.disable", "true");
+        properties.put("mail.pop3s.auth.login.disable", "true");
+        properties.put("mail.pop3.auth.plain.disable", "true");
+        properties.put("mail.pop3s.auth.plain.disable", "true");
+        properties.put("mail.pop3.auth.xoauth2.disable", "false");
+        properties.put("mail.pop3s.auth.xoauth2.disable", "false");
+        properties.put("mail.pop3.auth.xoauth2.two.line.authentication.format", "true");
+        properties.put("mail.pop3s.auth.xoauth2.two.line.authentication.format", "true");
     }
 
 }

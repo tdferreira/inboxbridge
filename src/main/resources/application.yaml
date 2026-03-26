@@ -32,6 +32,11 @@ bridge:
     create-missing-labels: ${BRIDGE_GMAIL_CREATE_MISSING_LABELS:true}
     never-mark-spam: ${BRIDGE_GMAIL_NEVER_MARK_SPAM:false}
     process-for-calendar: ${BRIDGE_GMAIL_PROCESS_FOR_CALENDAR:false}
+  microsoft:
+    tenant: ${MICROSOFT_TENANT:consumers}
+    client-id: ${MICROSOFT_CLIENT_ID:replace-me}
+    client-secret: ${MICROSOFT_CLIENT_SECRET:replace-me}
+    redirect-uri: ${MICROSOFT_REDIRECT_URI:http://localhost:8080/api/microsoft-oauth/callback}
   sources:
     # Keep real source credentials out of this file. Configure them in .env
     # with indexed variables like BRIDGE_SOURCES_0__* and BRIDGE_SOURCES_1__*.
@@ -41,8 +46,11 @@ bridge:
       host: ${BRIDGE_SOURCES_0__HOST:imap.example.com}
       port: ${BRIDGE_SOURCES_0__PORT:993}
       tls: ${BRIDGE_SOURCES_0__TLS:true}
+      auth-method: ${BRIDGE_SOURCES_0__AUTH_METHOD:PASSWORD}
+      oauth-provider: ${BRIDGE_SOURCES_0__OAUTH_PROVIDER:NONE}
       username: ${BRIDGE_SOURCES_0__USERNAME:replace-me@example.com}
       password: ${BRIDGE_SOURCES_0__PASSWORD:replace-me}
+      oauth-refresh-token: ${BRIDGE_SOURCES_0__OAUTH_REFRESH_TOKEN:}
       folder: ${BRIDGE_SOURCES_0__FOLDER:INBOX}
       unread-only: ${BRIDGE_SOURCES_0__UNREAD_ONLY:false}
       custom-label: ${BRIDGE_SOURCES_0__CUSTOM_LABEL:Imported/Source0}

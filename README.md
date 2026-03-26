@@ -28,7 +28,7 @@ This is a strong base, but some features are still intentionally left for you to
 
 - encrypted-at-rest storage of mailbox credentials
 - admin UI
-- provider-specific OAuth flows for Outlook/Yahoo/etc.
+- provider-specific OAuth flows beyond Microsoft / Gmail
 - IMAP IDLE / push-style fetching
 - sophisticated mailbox cursors for very large mailboxes
 - metrics, rate-limits, retries, and dead-letter handling
@@ -87,6 +87,7 @@ Fill in:
 - `GOOGLE_CLIENT_ID`
 - `GOOGLE_CLIENT_SECRET`
 - `GOOGLE_REFRESH_TOKEN`
+- `BRIDGE_SECURITY_TOKEN_ENCRYPTION_KEY` if you want OAuth refresh tokens encrypted in PostgreSQL
 - `BRIDGE_SOURCES_<index>__...` for each external mailbox
 
 ### 2. Configure source accounts
@@ -104,6 +105,7 @@ BRIDGE_SOURCES_0__PROTOCOL=IMAP
 BRIDGE_SOURCES_0__HOST=outlook.office365.com
 BRIDGE_SOURCES_0__PORT=993
 BRIDGE_SOURCES_0__TLS=true
+BRIDGE_SOURCES_0__AUTH_METHOD=PASSWORD
 BRIDGE_SOURCES_0__USERNAME=you@example.com
 BRIDGE_SOURCES_0__PASSWORD=your-app-password
 BRIDGE_SOURCES_0__FOLDER=INBOX
@@ -120,6 +122,7 @@ BRIDGE_SOURCES_1__PROTOCOL=POP3
 BRIDGE_SOURCES_1__HOST=pop.example.com
 BRIDGE_SOURCES_1__PORT=995
 BRIDGE_SOURCES_1__TLS=true
+BRIDGE_SOURCES_1__AUTH_METHOD=PASSWORD
 BRIDGE_SOURCES_1__USERNAME=you@example.com
 BRIDGE_SOURCES_1__PASSWORD=your-app-password
 BRIDGE_SOURCES_1__UNREAD_ONLY=false
@@ -127,6 +130,21 @@ BRIDGE_SOURCES_1__CUSTOM_LABEL=Imported/LegacyPOP
 ```
 
 `.env` is gitignored, but it is still plaintext. For stronger protection, move these values to Docker secrets or an external secret manager later.
+
+For encrypted OAuth token storage, generate a 32-byte base64 key and set:
+
+```bash
+openssl rand -base64 32
+```
+
+Then place the output in `BRIDGE_SECURITY_TOKEN_ENCRYPTION_KEY`. When that key is configured, InboxBridge stores Google and Microsoft OAuth refresh tokens encrypted in PostgreSQL and automatically refreshes short-lived access tokens.
+
+In short, secure token storage is enabled by:
+
+1. generating a key with `openssl rand -base64 32`
+2. setting `BRIDGE_SECURITY_TOKEN_ENCRYPTION_KEY` in `.env`
+3. restarting the app
+4. running the OAuth exchange again so the token is written into PostgreSQL
 
 ### 3. Build and run locally
 
@@ -147,6 +165,11 @@ The project exposes helper endpoints:
 - `GET /api/google-oauth/url`
 - `POST /api/google-oauth/exchange`
 - `GET /api/google-oauth/callback`
+- `GET /api/microsoft-oauth/url?sourceId=<source-id>`
+- `GET /api/microsoft-oauth/start?sourceId=<source-id>`
+- `POST /api/microsoft-oauth/exchange`
+- `GET /api/microsoft-oauth/callback`
+- `GET /oauth/microsoft/`
 
 Suggested flow:
 
@@ -155,7 +178,7 @@ Suggested flow:
 3. Grant access
 4. Copy the returned authorization code
 5. POST it to `/api/google-oauth/exchange`
-6. Take the returned refresh token and store it in `.env`
+6. If secure storage is enabled, InboxBridge stores the refresh token encrypted in PostgreSQL. Otherwise store the returned refresh token in `.env`.
 
 Example exchange request:
 
@@ -164,6 +187,18 @@ curl -X POST http://localhost:8080/api/google-oauth/exchange \
   -H 'Content-Type: application/json' \
   -d '{"code":"REPLACE_ME"}'
 ```
+
+Example Microsoft exchange request:
+
+```bash
+curl -X POST http://localhost:8080/api/microsoft-oauth/exchange \
+  -H 'Content-Type: application/json' \
+  -d '{"sourceId":"outlook-main","code":"REPLACE_ME"}'
+```
+
+When `BRIDGE_SECURITY_TOKEN_ENCRYPTION_KEY` is configured, the Microsoft helper page stores the refresh token encrypted in PostgreSQL and future access-token renewals happen automatically. Without that key, the exchange response falls back to returning the refresh token so you can keep using `BRIDGE_SOURCES_<index>__OAUTH_REFRESH_TOKEN` in `.env`.
+
+For the full Microsoft cloud setup path, including how to create the Azure / Entra account, register the app, choose the right redirect URI platform, add IMAP / POP delegated permissions, and locate the client ID / tenant / client secret, see [docs/OAUTH_SETUP.md](/Users/tdferreira/Developer/inboxbridge/docs/OAUTH_SETUP.md).
 
 ## Trigger a manual poll
 
@@ -177,6 +212,17 @@ curl -X POST http://localhost:8080/api/poll/run
 curl http://localhost:8080/api/health/summary
 ```
 
+Current behavior:
+
+- returns `status=UP`
+- returns `importedMessages`, which is the total number of successfully recorded imports in PostgreSQL
+
+To force an immediate poll and see fetched/imported/duplicate/error counts:
+
+```bash
+curl -X POST http://localhost:8080/api/poll/run
+```
+
 ## Source account configuration
 
 Example IMAP source in `.env`:
@@ -188,6 +234,7 @@ BRIDGE_SOURCES_0__PROTOCOL=IMAP
 BRIDGE_SOURCES_0__HOST=outlook.office365.com
 BRIDGE_SOURCES_0__PORT=993
 BRIDGE_SOURCES_0__TLS=true
+BRIDGE_SOURCES_0__AUTH_METHOD=PASSWORD
 BRIDGE_SOURCES_0__USERNAME=you@example.com
 BRIDGE_SOURCES_0__PASSWORD=your-app-password
 BRIDGE_SOURCES_0__FOLDER=INBOX
@@ -204,10 +251,36 @@ BRIDGE_SOURCES_1__PROTOCOL=POP3
 BRIDGE_SOURCES_1__HOST=pop.example.com
 BRIDGE_SOURCES_1__PORT=995
 BRIDGE_SOURCES_1__TLS=true
+BRIDGE_SOURCES_1__AUTH_METHOD=PASSWORD
 BRIDGE_SOURCES_1__USERNAME=you@example.com
 BRIDGE_SOURCES_1__PASSWORD=your-password
 BRIDGE_SOURCES_1__UNREAD_ONLY=false
 BRIDGE_SOURCES_1__CUSTOM_LABEL=Imported/LegacyPOP
+```
+
+Example Outlook IMAP source with Microsoft OAuth:
+
+```dotenv
+MICROSOFT_TENANT=consumers
+MICROSOFT_CLIENT_ID=your-microsoft-app-client-id
+MICROSOFT_CLIENT_SECRET=your-microsoft-app-client-secret
+MICROSOFT_REDIRECT_URI=http://localhost:8080/api/microsoft-oauth/callback
+BRIDGE_SECURITY_TOKEN_ENCRYPTION_KEY=base64-encoded-32-byte-key
+BRIDGE_SECURITY_TOKEN_ENCRYPTION_KEY_ID=v1
+
+BRIDGE_SOURCES_0__ID=outlook-main
+BRIDGE_SOURCES_0__ENABLED=true
+BRIDGE_SOURCES_0__PROTOCOL=IMAP
+BRIDGE_SOURCES_0__HOST=outlook.office365.com
+BRIDGE_SOURCES_0__PORT=993
+BRIDGE_SOURCES_0__TLS=true
+BRIDGE_SOURCES_0__AUTH_METHOD=OAUTH2
+BRIDGE_SOURCES_0__OAUTH_PROVIDER=MICROSOFT
+BRIDGE_SOURCES_0__USERNAME=you@outlook.com
+BRIDGE_SOURCES_0__OAUTH_REFRESH_TOKEN=optional-fallback-if-db-encryption-is-disabled
+BRIDGE_SOURCES_0__FOLDER=INBOX
+BRIDGE_SOURCES_0__UNREAD_ONLY=false
+BRIDGE_SOURCES_0__CUSTOM_LABEL=Imported/Outlook
 ```
 
 ## Important implementation note
@@ -225,9 +298,9 @@ That is good enough to get the project running and is easy to reason about, but 
 
 Before treating this as a personal production bridge, add at least:
 
-- encrypted secret storage
+- encrypted-at-rest storage for mailbox passwords, not just OAuth tokens
 - Docker secrets or an external secret manager
-- app passwords instead of primary mailbox passwords
+- minimal OAuth scopes and app passwords only where OAuth is unavailable
 - structured logging that never emits raw message bodies
 - metrics and alerting
 - retry / backoff rules
@@ -235,7 +308,7 @@ Before treating this as a personal production bridge, add at least:
 
 ## Useful next extensions
 
-- secure credentials with AES-GCM and a master key from Docker secrets
+- extend the encrypted credential model to mailbox passwords
 - add a `source_account` table instead of YAML-only config
 - add a small admin UI
 - add provider templates for Yahoo / Outlook / iCloud / Fastmail

@@ -20,6 +20,8 @@ public interface BridgeConfig {
 
     Gmail gmail();
 
+    Microsoft microsoft();
+
     List<Source> sources();
 
     interface Gmail {
@@ -44,6 +46,20 @@ public interface BridgeConfig {
         boolean processForCalendar();
     }
 
+    interface Microsoft {
+        @WithDefault("consumers")
+        String tenant();
+
+        @WithDefault("replace-me")
+        String clientId();
+
+        @WithDefault("replace-me")
+        String clientSecret();
+
+        @WithDefault("http://localhost:8080/api/microsoft-oauth/callback")
+        String redirectUri();
+    }
+
     interface Source {
         String id();
 
@@ -59,9 +75,17 @@ public interface BridgeConfig {
         @WithDefault("true")
         boolean tls();
 
+        @WithDefault("PASSWORD")
+        AuthMethod authMethod();
+
+        @WithDefault("NONE")
+        OAuthProvider oauthProvider();
+
         String username();
 
         String password();
+
+        Optional<String> oauthRefreshToken();
 
         Optional<String> folder();
 
@@ -74,5 +98,15 @@ public interface BridgeConfig {
     enum Protocol {
         IMAP,
         POP3
+    }
+
+    enum AuthMethod {
+        PASSWORD,
+        OAUTH2
+    }
+
+    enum OAuthProvider {
+        NONE,
+        MICROSOFT
     }
 }

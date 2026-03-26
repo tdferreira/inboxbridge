@@ -3,7 +3,7 @@ package dev.connexa.inboxbridge.web;
 import java.util.Map;
 
 import dev.connexa.inboxbridge.dto.GoogleOAuthCodeRequest;
-import dev.connexa.inboxbridge.dto.GoogleTokenResponse;
+import dev.connexa.inboxbridge.dto.GoogleTokenExchangeResponse;
 import dev.connexa.inboxbridge.dto.OAuthUrlResponse;
 import dev.connexa.inboxbridge.service.GoogleOAuthService;
 import jakarta.inject.Inject;
@@ -31,7 +31,7 @@ public class GoogleOAuthResource {
     @POST
     @Path("/exchange")
     @Consumes(MediaType.APPLICATION_JSON)
-    public GoogleTokenResponse exchange(GoogleOAuthCodeRequest request) {
+    public GoogleTokenExchangeResponse exchange(GoogleOAuthCodeRequest request) {
         return googleOAuthService.exchangeAuthorizationCode(request.code());
     }
 
@@ -39,7 +39,7 @@ public class GoogleOAuthResource {
     @Path("/callback")
     public Map<String, String> callback(@QueryParam("code") String code) {
         return Map.of(
-                "message", "Copy the authorization code and POST it to /api/google-oauth/exchange, or wire this endpoint to store tokens.",
+                "message", "Exchange this authorization code through /api/google-oauth/exchange. With encrypted token storage configured, InboxBridge will keep the refresh token in PostgreSQL instead of asking you to keep it in .env.",
                 "code", code == null ? "" : code);
     }
 }

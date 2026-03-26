@@ -4,7 +4,7 @@
 
 InboxBridge is a self-hosted bridge that pulls messages from external mailboxes over IMAP or POP3 and imports them into a Gmail mailbox using the Gmail API.
 
-The project is deliberately a starter scaffold, not a production-ready MailBridge clone. It is meant to preserve the old Gmailify / POP fetching workflow with a small containerized service that you can run yourself.
+The project is intentionally a starter-oriented service rather than a hosted SaaS product. The goal is to keep the old "one Gmail inbox, many external sources" workflow alive with a small containerized application that remains understandable and hackable.
 
 ## Product Goal
 
@@ -30,7 +30,7 @@ This avoids the main drawbacks of SMTP auto-forwarding:
 - Flyway for schema migration
 - Hibernate ORM Panache for persistence
 - Angus Mail 2.0.4 for IMAP/POP access
-- Java `HttpClient` for Gmail and Google OAuth HTTP calls
+- Java `HttpClient` for Google and Microsoft OAuth / API HTTP calls
 - Docker multi-stage build
 - Docker Compose for app + database
 
@@ -38,7 +38,7 @@ This avoids the main drawbacks of SMTP auto-forwarding:
 
 InboxBridge is a single Quarkus application with PostgreSQL as its only durable state store.
 
-High-level flow:
+High-level ingestion flow:
 
 1. `PollingService` is triggered by the scheduler or a manual REST call.
 2. Each enabled source account from config is processed sequentially.
@@ -49,6 +49,15 @@ High-level flow:
 7. `GmailImportService` sends the raw MIME to Gmail `users.messages.import`.
 8. `ImportDeduplicationService` records the successful import in PostgreSQL.
 9. `PollRunResult` summarizes fetched, imported, duplicate, and error counts.
+
+High-level OAuth flow:
+
+1. Helper endpoints build provider-specific authorization URLs.
+2. The browser completes the provider consent step.
+3. InboxBridge exchanges the authorization code for tokens.
+4. If secure token storage is configured, refresh and access tokens are stored encrypted in PostgreSQL.
+5. Otherwise the exchange response falls back to returning the refresh token for env-based local setups.
+6. Source polling and Gmail import flows reuse the stored refresh token to renew short-lived access tokens automatically.
 
 ## Main Architectural Decisions
 
@@ -86,16 +95,51 @@ Current import behavior:
 - can set `neverMarkSpam`
 - can set `processForCalendar`
 
-### 3. Narrow Gmail OAuth scopes
+### 3. Env-first runtime config with DB-backed durable state
 
-The OAuth helper currently requests:
+Mailbox sources are still configured through environment variables or `.env`, using indexed keys such as:
+
+- `BRIDGE_SOURCES_0__ID`
+- `BRIDGE_SOURCES_0__HOST`
+- `BRIDGE_SOURCES_0__USERNAME`
+- `BRIDGE_SOURCES_0__PASSWORD`
+
+`application.yaml` only provides env-backed placeholder shape and safe defaults.
+
+Durable runtime state lives in PostgreSQL:
+
+- imported-message dedupe state
+- encrypted OAuth credentials
+
+Why this split was chosen:
+
+- sources stay easy to define for local/self-hosted users
+- credentials do not need to live in committed YAML
+- durable operational state survives restarts
+- a future admin UI can replace the env-defined source layer without rethinking the persistence model
+
+Tradeoffs:
+
+- `.env` is still plaintext for mailbox passwords and any OAuth fallback tokens
+- mailbox credentials are not yet DB-backed or encrypted at rest
+- the current model is strong enough for a serious hobby/self-hosted v1, but not yet equivalent to a managed secrets platform
+
+### 4. Narrow OAuth scopes
+
+Google OAuth scopes are intentionally limited to:
 
 - `https://www.googleapis.com/auth/gmail.insert`
 - `https://www.googleapis.com/auth/gmail.labels`
 
-This is intentionally narrower than full Gmail read/write access.
+Microsoft scopes are protocol-specific:
 
-### 4. Jakarta / Angus Mail for source mailbox access
+- `offline_access`
+- `https://outlook.office.com/IMAP.AccessAsUser.All`
+- `https://outlook.office.com/POP.AccessAsUser.All`
+
+This avoids requesting broad mail read/write access when the app only needs import and source-authentication capabilities.
+
+### 5. Jakarta / Angus Mail for source mailbox access
 
 The bridge uses Angus Mail through the Jakarta Mail API for:
 
@@ -110,8 +154,9 @@ Connection behavior currently includes:
 - hostname verification via `ssl.checkserveridentity=true`
 - connection timeout `20000ms`
 - read timeout `20000ms`
+- Microsoft `XOAUTH2` support for IMAP and POP when a source is configured with `AUTH_METHOD=OAUTH2`
 
-### 5. PostgreSQL-backed dedupe state
+### 6. PostgreSQL-backed dedupe state
 
 The app persists successful imports in PostgreSQL.
 
@@ -122,30 +167,42 @@ Why:
 - easy to inspect and extend
 - good fit for a small self-hosted daemon
 
-### 6. Env-first source definition
+Current duplicate checks:
 
-Mailbox sources are configured through environment variables or `.env`, using indexed keys such as:
+1. `(sourceAccountId, sourceMessageKey)`
+2. raw MIME SHA-256
 
-- `BRIDGE_SOURCES_0__ID`
-- `BRIDGE_SOURCES_0__HOST`
-- `BRIDGE_SOURCES_0__USERNAME`
-- `BRIDGE_SOURCES_0__PASSWORD`
+Important behavior:
 
-`application.yaml` only provides an env-backed placeholder shape and safe defaults.
+- the SHA-based duplicate check is global
+- if two different source mailboxes deliver byte-identical MIME, the second one will be skipped as a duplicate
 
-Why this was chosen:
+### 7. Encrypted OAuth token storage in PostgreSQL
 
-- avoids committing mailbox credentials to source-controlled YAML
-- keeps the starter easy to run without a database-backed admin plane
-- leaves room for a future web UI without changing the runtime model
+OAuth refresh and access tokens can now be stored encrypted at rest in PostgreSQL.
 
-Tradeoff:
+Implementation choices:
 
-- `.env` is still plaintext
-- this is safer than committed YAML, but not production-grade secret handling
-- a DB-backed `source_account` model or secret-store integration is still a likely next step
+- AES-GCM with a 32-byte application-managed key
+- Additional Authenticated Data bound to provider, subject, and token type
+- key version stored with each record
+- no authorization-code persistence after exchange
+- access-token expiry metadata stored so valid tokens can be reused without unnecessary refresh calls
 
-### 7. Keep the polling logic simple in v1
+Why this design was chosen:
+
+- removes refresh tokens from normal day-to-day operator workflows
+- supports automatic access-token renewal
+- keeps the secure path available without introducing an external vault dependency
+- allows local self-hosted deployments to remain simple
+
+Current limitation:
+
+- key management is still application-managed via env var, not KMS/HSM-backed
+- key rotation support is version-labelled but not yet a full multi-key ring
+- the feature is enabled by setting `BRIDGE_SECURITY_TOKEN_ENCRYPTION_KEY` to a valid base64-encoded 32-byte key and then running the OAuth exchange flow again
+
+### 8. Keep the polling logic simple in v1
 
 The current implementation does not maintain mailbox checkpoints such as IMAP UIDVALIDITY or POP UIDL state.
 
@@ -156,6 +213,27 @@ Instead, it scans the latest `N` messages from each mailbox, where:
 This keeps the first version easy to reason about, but it has an important limitation:
 
 - if more than `fetch-window` new messages arrive between polls, older unseen messages can be skipped
+
+## Security Posture
+
+### Implemented now
+
+- TLS-capable mailbox connections
+- hostname verification for mail connections
+- encrypted-at-rest storage for Google and Microsoft OAuth tokens when `BRIDGE_SECURITY_TOKEN_ENCRYPTION_KEY` is configured
+- automatic access-token refresh using encrypted stored refresh tokens
+- no authorization-code persistence after exchange
+- explicit minimal OAuth scopes for Google and protocol-specific scopes for Microsoft
+
+### Not implemented yet
+
+- encrypted-at-rest storage for mailbox passwords
+- KMS/HSM-backed key management
+- structured audit log for OAuth and polling events
+- strict retry backoff / provider lockout protection
+- comprehensive metrics and alerting
+- circuit breakers for repeated provider auth failures
+- full secret redaction guarantees across every future log path
 
 ## Current Runtime Model
 
@@ -185,6 +263,27 @@ If a second poll starts while one is already running:
 - the run continues with the next enabled source
 - unexpected runtime errors are surfaced in the result
 
+### Current observability
+
+The project currently exposes only basic runtime visibility:
+
+- `GET /api/health/summary`
+  - returns `status`
+  - returns total `importedMessages`
+- `POST /api/poll/run`
+  - triggers a manual poll
+  - returns fetched/imported/duplicate/error counts for that run
+- container logs
+  - currently the main way to diagnose provider auth and polling failures
+
+There is no built-in admin dashboard yet for:
+
+- per-source import totals
+- last successful sync time
+- recent errors by source
+- OAuth / source configuration visualization
+- add/update/remove bridge management
+
 ### Processing model
 
 - sources are processed sequentially
@@ -193,35 +292,13 @@ If a second poll starts while one is already running:
 
 ## Build and Deployment
 
-### Host build
+### Docker-first local workflow
 
-The project now builds successfully on the host with Maven after these fixes:
+The intended local path is Docker Compose:
 
-- Quarkus version set to `3.32.3`
-- Quarkus Maven plugin group corrected to `io.quarkus`
-- Quarkus BOM kept under `io.quarkus.platform`
-- `quarkus-junit5` replaced with `quarkus-junit`
-- Jakarta Mail header access fixed in `MailSourceClient`
-
-Current host result:
-
-- `mvn test` succeeds
-- there are no test classes yet, so no automated tests are executed
-
-### Docker build
-
-The Docker image uses a multi-stage build:
-
-1. `maven:3.9.9-eclipse-temurin-21` builds the Quarkus app
-2. `eclipse-temurin:21-jre` runs the built app
-
-The current Compose setup requires host networking during image build:
-
-- `docker-compose.yml` sets `build.network: host`
-
-This was added because dependency resolution inside Docker failed without host networking in the current environment.
-
-### Compose services
+```bash
+docker compose up --build
+```
 
 `docker-compose.yml` defines:
 
@@ -235,6 +312,12 @@ Postgres details:
 - user: `inboxbridge`
 - password: `inboxbridge`
 
+### Host build
+
+Host Maven builds also work and are useful for tests:
+
+- `mvn test` succeeds
+
 ### App runtime defaults
 
 Important environment variables:
@@ -247,6 +330,12 @@ Important environment variables:
 - `GOOGLE_CLIENT_SECRET`
 - `GOOGLE_REFRESH_TOKEN`
 - `GOOGLE_REDIRECT_URI`
+- `MICROSOFT_TENANT`
+- `MICROSOFT_CLIENT_ID`
+- `MICROSOFT_CLIENT_SECRET`
+- `MICROSOFT_REDIRECT_URI`
+- `BRIDGE_SECURITY_TOKEN_ENCRYPTION_KEY`
+- `BRIDGE_SECURITY_TOKEN_ENCRYPTION_KEY_ID`
 - `BRIDGE_POLL_ENABLED`
 - `BRIDGE_POLL_INTERVAL`
 - `BRIDGE_FETCH_WINDOW`
@@ -259,33 +348,18 @@ Important environment variables:
 
 Validated as of 2026-03-26:
 
-- host Maven build works
+- `mvn test` passes with unit coverage for Microsoft OAuth flow, encrypted token storage, and helper-resource behavior
 - Docker Compose build works
 - Quarkus app starts successfully in the container
-- Flyway migration runs successfully
-- `/api/health/summary` returns `200 OK` inside the container
-- `/api/poll/run` returns `200 OK` inside the container
+- Flyway migrations `V1` and `V2` run successfully
+- `GET /oauth/microsoft/` returns `200 OK`
+- `GET /api/microsoft-oauth/sources` returns the configured Microsoft OAuth sources
+- the browser-first Microsoft OAuth helper flow is present in the running app
 
-Important caveats:
+Known live runtime issue from the current local configuration:
 
-- there are still no automated tests in the repo
-- host-side `curl http://localhost:8080/...` was not reliable in this environment even though the app responds correctly inside the container
-
-### Current end-to-end blocker
-
-A previously tested Outlook IMAP source was not fetchable from this environment.
-
-What was confirmed:
-
-- DNS resolution for `outlook.office365.com` works on both host and container
-- TCP connection attempts to `outlook.office365.com:993` time out on both host and container
-- the failure occurs before authentication
-
-Conclusion:
-
-- the app and Docker setup are working
-- outbound IMAP connectivity to Outlook on port `993` is blocked or unreachable from this network
-- end-to-end mailbox ingestion cannot be validated until that network issue is resolved
+- the configured Outlook source is currently failing refresh with Microsoft `invalid_grant`
+- this indicates a token / consent / provider-side issue, not a build or application boot issue
 
 ## Code Structure
 
@@ -306,23 +380,34 @@ src/main/java/dev/connexa/inboxbridge
 ├── dto
 │   ├── GmailImportResponse.java
 │   ├── GoogleOAuthCodeRequest.java
+│   ├── GoogleTokenExchangeResponse.java
 │   ├── GoogleTokenResponse.java
+│   ├── MicrosoftOAuthCodeRequest.java
+│   ├── MicrosoftOAuthSourceOption.java
+│   ├── MicrosoftTokenExchangeResponse.java
+│   ├── MicrosoftTokenResponse.java
 │   ├── OAuthUrlResponse.java
 │   └── PollRunResult.java
 ├── persistence
 │   ├── ImportedMessage.java
-│   └── ImportedMessageRepository.java
+│   ├── ImportedMessageRepository.java
+│   ├── OAuthCredential.java
+│   └── OAuthCredentialRepository.java
 ├── service
 │   ├── GmailImportService.java
 │   ├── GmailLabelService.java
 │   ├── GoogleOAuthService.java
 │   ├── ImportDeduplicationService.java
 │   ├── MailSourceClient.java
+│   ├── MicrosoftOAuthService.java
 │   ├── MimeHashService.java
-│   └── PollingService.java
+│   ├── OAuthCredentialService.java
+│   ├── PollingService.java
+│   └── SecretEncryptionService.java
 └── web
     ├── GoogleOAuthResource.java
     ├── HealthResource.java
+    ├── MicrosoftOAuthResource.java
     └── PollingResource.java
 ```
 
@@ -330,8 +415,23 @@ Resources:
 
 ```text
 src/main/resources
+├── META-INF/resources/oauth/microsoft/index.html
 ├── application.yaml
-└── db/migration/V1__init.sql
+└── db/migration
+    ├── V1__init.sql
+    └── V2__oauth_credential.sql
+```
+
+Tests:
+
+```text
+src/test/java/dev/connexa/inboxbridge
+├── service
+│   ├── MicrosoftOAuthServiceTest.java
+│   ├── OAuthCredentialServiceTest.java
+│   └── SecretEncryptionServiceTest.java
+└── web
+    └── MicrosoftOAuthResourceTest.java
 ```
 
 ## Package Details
@@ -347,13 +447,17 @@ Main sections:
 - global polling settings
 - fetch window
 - Gmail OAuth and import options
+- Microsoft OAuth options
 - list of source mailbox definitions
 
 Nested config types:
 
 - `BridgeConfig.Gmail`
+- `BridgeConfig.Microsoft`
 - `BridgeConfig.Source`
 - `BridgeConfig.Protocol`
+- `BridgeConfig.AuthMethod`
+- `BridgeConfig.OAuthProvider`
 
 Supported protocols:
 
@@ -378,34 +482,13 @@ Fields:
 
 Boundary DTOs used by REST resources and HTTP integrations.
 
-#### `GmailImportResponse`
+Key DTO groups:
 
-Stores Gmail's returned message id and thread id.
-
-#### `GoogleOAuthCodeRequest`
-
-JSON request body for exchanging an OAuth authorization code.
-
-#### `GoogleTokenResponse`
-
-Represents the Google OAuth token endpoint response.
-
-#### `OAuthUrlResponse`
-
-Simple DTO containing the generated Google authorization URL.
-
-#### `PollRunResult`
-
-Mutable result object for a poll run.
-
-Tracks:
-
-- `startedAt`
-- `finishedAt`
-- `fetched`
-- `imported`
-- `duplicates`
-- `errors`
+- Gmail import responses
+- Google OAuth code and token exchange payloads
+- Microsoft OAuth source-selection and token-exchange payloads
+- generic authorization URL payloads
+- poll result payloads
 
 ### `persistence`
 
@@ -417,42 +500,29 @@ Table:
 
 - `imported_message`
 
-Fields:
+Used for durable dedupe across restarts and repeated polls.
 
-- `id`
-- `sourceAccountId`
-- `sourceMessageKey`
-- `messageIdHeader`
-- `rawSha256`
-- `gmailMessageId`
-- `gmailThreadId`
-- `importedAt`
+#### `OAuthCredential`
 
-Constraints and indexes:
+Panache entity representing encrypted OAuth material and token metadata.
 
-- unique on `(source_account_id, source_message_key)`
-- unique on `raw_sha256`
-- index on `source_account_id`
-- index on `gmail_message_id`
+Table:
 
-#### `ImportedMessageRepository`
+- `oauth_credential`
 
-Panache repository used to:
+Fields include:
 
-- check existence by source key
-- check existence by raw MIME SHA-256
-- retrieve existing rows by source key
+- provider
+- subject key
+- key version
+- encrypted refresh token
+- encrypted access token
+- access expiry
+- scope
+- token type
+- created / updated / refreshed timestamps
 
 ### `service`
-
-#### `MimeHashService`
-
-Utility for computing SHA-256 hashes of raw MIME bytes.
-
-Used for:
-
-- durable dedupe
-- fallback source message keys
 
 #### `MailSourceClient`
 
@@ -466,26 +536,13 @@ Key behavior:
 - otherwise scans the last `fetch-window` messages
 - sorts messages by received date, then sent date fallback, else epoch
 - materializes each message as raw MIME bytes
+- uses Microsoft `XOAUTH2` when a source is configured for Microsoft OAuth
 
 Current source message key strategy:
 
 1. IMAP UID via `UIDFolder`
 2. `Message-ID` header
 3. fallback `accountId:sha:<sha256>`
-
-#### `ImportDeduplicationService`
-
-Determines whether a fetched message is already known and records successful imports.
-
-Current duplicate checks:
-
-1. `(sourceAccountId, sourceMessageKey)`
-2. raw MIME SHA-256
-
-Important behavior:
-
-- the SHA-based duplicate check is global
-- if two different source mailboxes deliver byte-identical MIME, the second one will be skipped as a duplicate
 
 #### `GoogleOAuthService`
 
@@ -497,171 +554,71 @@ Responsibilities:
 - exchange an authorization code for tokens
 - refresh access tokens using the refresh token
 - cache the access token in memory until near expiry
+- optionally store Google OAuth tokens encrypted in PostgreSQL
 
-Caching detail:
+#### `MicrosoftOAuthService`
 
-- uses `AtomicReference<CachedToken>`
-- refreshes when the cached token is within 30 seconds of expiry
-
-#### `GmailLabelService`
-
-Resolves Gmail label ids required for imported messages.
-
-Behavior:
-
-- always includes `INBOX`
-- always includes `UNREAD`
-- resolves optional custom labels by name
-- can auto-create missing custom labels
-
-Implementation detail:
-
-- list labels via Gmail API
-- create labels via Gmail API when allowed by config
-
-#### `GmailImportService`
-
-Imports raw MIME messages into Gmail.
-
-Behavior:
-
-- base64url encodes the raw MIME
-- sends Gmail `messages.import`
-- sets import query parameters from config
-- parses the returned Gmail id and thread id
-
-#### `PollingService`
-
-Top-level orchestrator for scheduled and manual polling.
+Handles Outlook / Microsoft OAuth flows for source accounts.
 
 Responsibilities:
 
-- scheduler entrypoint
-- manual API entrypoint
-- overlap protection with `AtomicBoolean`
-- iterate enabled sources
-- fetch, dedupe, import, persist
-- accumulate a `PollRunResult`
+- list configured Microsoft OAuth-capable sources
+- generate source-specific authorization URLs
+- validate callback state
+- exchange authorization codes for tokens
+- refresh source access tokens
+- reuse cached or encrypted stored access tokens when valid
+- store refreshed credentials when secure storage is enabled
+
+#### `OAuthCredentialService`
+
+Owns persistence and retrieval of encrypted OAuth credentials.
+
+Responsibilities:
+
+- encrypt refresh/access tokens before persistence
+- decrypt stored tokens for runtime use
+- keep provider and subject contexts separate
+- preserve refresh tokens when a provider refresh call returns only a new access token
+
+#### `SecretEncryptionService`
+
+Performs low-level AES-GCM encryption and decryption for OAuth credentials.
+
+Responsibilities:
+
+- validate key configuration
+- generate per-secret nonces
+- bind ciphertext to provider/subject/token-type context via AAD
+- enforce matching key-version use on decrypt
 
 ### `web`
 
 #### `GoogleOAuthResource`
 
+Small REST resource for Google OAuth helper endpoints.
+
+#### `MicrosoftOAuthResource`
+
+REST resource for Microsoft OAuth helper endpoints and browser callback UX.
+
 Endpoints:
 
-- `GET /api/google-oauth/url`
-- `POST /api/google-oauth/exchange`
-- `GET /api/google-oauth/callback`
+- `/api/microsoft-oauth/url`
+- `/api/microsoft-oauth/start`
+- `/api/microsoft-oauth/sources`
+- `/api/microsoft-oauth/exchange`
+- `/api/microsoft-oauth/callback`
 
-Purpose:
+Static helper UI:
 
-- bootstrap Gmail OAuth credentials
-- help obtain a refresh token during setup
+- `/oauth/microsoft/`
 
-#### `PollingResource`
+## Documentation Discipline
 
-Endpoint:
+Repository maintenance expectation going forward:
 
-- `POST /api/poll/run`
-
-Purpose:
-
-- manually trigger a poll cycle
-
-#### `HealthResource`
-
-Endpoint:
-
-- `GET /api/health/summary`
-
-Current response fields:
-
-- `status`
-- `importedMessages`
-
-## Database Schema
-
-Flyway migration:
-
-- `src/main/resources/db/migration/V1__init.sql`
-
-Current schema creates one table:
-
-- `imported_message`
-
-Deliberate omission:
-
-- mailbox credentials are not stored in the database
-- raw message bodies are not stored in the database
-
-## Security Posture
-
-Good choices already present:
-
-- Gmail OAuth instead of a Gmail password
-- narrow Gmail scopes
-- TLS support for IMAP / POP
-- hostname verification enabled
-- raw messages are not persisted in PostgreSQL
-- durable state stores only metadata and hashes
-
-Current limitations:
-
-- source mailbox credentials currently live in `.env`
-- Gmail refresh token is environment/config driven
-- there is no encrypted-at-rest secret storage
-- there is no vault integration
-- there is no admin auth model
-- there is no structured redaction framework for secrets in config
-
-Important current concern:
-
-- `.env` is gitignored, but it is still plaintext
-- for production use, secrets should move to Docker secrets or an external secret manager
-
-## Known Limitations
-
-Not yet implemented:
-
-- automated tests
-- provider OAuth for source mailboxes
-- IMAP checkpoint persistence
-- POP UIDL checkpoint persistence
-- IMAP IDLE / push ingestion
-- retries and exponential backoff
-- dead-letter handling
-- metrics / tracing
-- admin UI
-- DB-backed source account management
-- secret manager integration
-- message retention / delete semantics on source side
-
-## Recommended Next Steps
-
-1. Resolve outbound network access to the source provider's IMAP/POP ports.
-2. Validate Gmail OAuth with real destination account credentials.
-3. Run a real end-to-end poll with a dedicated test mailbox.
-4. Add at least one automated integration test around polling and dedupe.
-5. Replace fetch-window scanning with durable mailbox checkpoints.
-6. Move mailbox secrets from `.env` to Docker secrets or an external secret manager.
-
-## Quick Reading Order
-
-For a new maintainer or agent, the most useful reading order is:
-
-1. `README.md`
-2. `CONTEXT.md`
-3. `pom.xml`
-4. `docker-compose.yml`
-5. `src/main/resources/application.yaml`
-6. `src/main/java/dev/connexa/inboxbridge/config/BridgeConfig.java`
-7. `src/main/java/dev/connexa/inboxbridge/service/PollingService.java`
-8. `src/main/java/dev/connexa/inboxbridge/service/MailSourceClient.java`
-9. `src/main/java/dev/connexa/inboxbridge/service/GmailImportService.java`
-10. `src/main/java/dev/connexa/inboxbridge/service/ImportDeduplicationService.java`
-11. `src/main/java/dev/connexa/inboxbridge/persistence/ImportedMessage.java`
-12. `src/main/resources/db/migration/V1__init.sql`
-
-## One-Paragraph Mental Model
-
-InboxBridge is a small Quarkus daemon that periodically scans the latest messages from configured external IMAP or POP mailboxes, converts each candidate into raw MIME bytes, skips anything already seen by source key or MIME hash, imports genuinely new mail into Gmail through `users.messages.import`, applies `INBOX`, `UNREAD`, and optional source labels, and stores only durable import metadata in PostgreSQL so duplicate imports do not reappear across poll runs or restarts.
+- `CONTEXT.md` should be updated whenever technical behavior, architecture, or validation status changes
+- existing user-facing docs should be kept in sync with code changes
+- non-obvious code paths, especially security-sensitive ones, should carry enough inline documentation to explain intent and constraints
+- operator-facing setup docs should include any provider account-registration steps needed to make the feature usable end to end, such as Microsoft Entra app-registration guidance for Outlook.com OAuth

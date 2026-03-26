@@ -4,3 +4,4 @@ target/
 .env
 *.iml
 .DS_Store
+.m2repo/
