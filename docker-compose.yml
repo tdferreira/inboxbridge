@@ -1,0 +1,36 @@
+services:
+  inboxbridge:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      network: host
+    container_name: inboxbridge
+    ports:
+      - "8080:8080"
+    depends_on:
+      postgres:
+        condition: service_healthy
+    env_file:
+      - .env
+    restart: unless-stopped
+
+  postgres:
+    image: postgres:16
+    container_name: inboxbridge-postgres
+    environment:
+      POSTGRES_DB: inboxbridge
+      POSTGRES_USER: inboxbridge
+      POSTGRES_PASSWORD: inboxbridge
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U inboxbridge -d inboxbridge"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+    restart: unless-stopped
+
+volumes:
+  postgres_data:

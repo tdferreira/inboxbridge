@@ -1,0 +1,6 @@
+target/
+.idea/
+.vscode/
+.env
+*.iml
+.DS_Store

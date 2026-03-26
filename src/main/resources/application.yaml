@@ -1,0 +1,48 @@
+quarkus:
+  http:
+    port: ${HTTP_PORT:8080}
+  datasource:
+    db-kind: postgresql
+    jdbc:
+      url: ${JDBC_URL:jdbc:postgresql://postgres:5432/inboxbridge}
+    username: ${JDBC_USERNAME:inboxbridge}
+    password: ${JDBC_PASSWORD:inboxbridge}
+  hibernate-orm:
+    database:
+      generation: validate
+    log:
+      sql: false
+  flyway:
+    migrate-at-start: true
+  log:
+    category:
+      "dev.connexa.inboxbridge":
+        level: INFO
+
+bridge:
+  poll-enabled: ${BRIDGE_POLL_ENABLED:true}
+  poll-interval: ${BRIDGE_POLL_INTERVAL:5m}
+  fetch-window: ${BRIDGE_FETCH_WINDOW:50}
+  gmail:
+    destination-user: ${BRIDGE_GMAIL_DESTINATION_USER:me}
+    client-id: ${GOOGLE_CLIENT_ID:replace-me}
+    client-secret: ${GOOGLE_CLIENT_SECRET:replace-me}
+    refresh-token: ${GOOGLE_REFRESH_TOKEN:replace-me}
+    redirect-uri: ${GOOGLE_REDIRECT_URI:http://localhost:8080/api/google-oauth/callback}
+    create-missing-labels: ${BRIDGE_GMAIL_CREATE_MISSING_LABELS:true}
+    never-mark-spam: ${BRIDGE_GMAIL_NEVER_MARK_SPAM:false}
+    process-for-calendar: ${BRIDGE_GMAIL_PROCESS_FOR_CALENDAR:false}
+  sources:
+    # Keep real source credentials out of this file. Configure them in .env
+    # with indexed variables like BRIDGE_SOURCES_0__* and BRIDGE_SOURCES_1__*.
+    - id: ${BRIDGE_SOURCES_0__ID:source-0}
+      enabled: ${BRIDGE_SOURCES_0__ENABLED:false}
+      protocol: ${BRIDGE_SOURCES_0__PROTOCOL:IMAP}
+      host: ${BRIDGE_SOURCES_0__HOST:imap.example.com}
+      port: ${BRIDGE_SOURCES_0__PORT:993}
+      tls: ${BRIDGE_SOURCES_0__TLS:true}
+      username: ${BRIDGE_SOURCES_0__USERNAME:replace-me@example.com}
+      password: ${BRIDGE_SOURCES_0__PASSWORD:replace-me}
+      folder: ${BRIDGE_SOURCES_0__FOLDER:INBOX}
+      unread-only: ${BRIDGE_SOURCES_0__UNREAD_ONLY:false}
+      custom-label: ${BRIDGE_SOURCES_0__CUSTOM_LABEL:Imported/Source0}
