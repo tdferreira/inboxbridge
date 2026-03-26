@@ -232,7 +232,7 @@
           <h2>What this page expects</h2>
           <ul>
             <li>Your source already exists in <span class="mono">.env</span> with <span class="mono">AUTH_METHOD=OAUTH2</span>.</li>
-            <li>Microsoft app settings are configured with the redirect URI <span class="mono">http://localhost:8080/api/microsoft-oauth/callback</span>.</li>
+            <li>Microsoft app settings use the redirect URI <span class="mono">https://&lt;admin-ui-host&gt;/api/microsoft-oauth/callback</span>, or whatever you explicitly configured in <span class="mono">MICROSOFT_REDIRECT_URI</span>.</li>
             <li>The source ID here matches the configured bridge source exactly.</li>
           </ul>
         </div>

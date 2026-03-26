@@ -1,0 +1,18 @@
+.hero-panel {
+  padding: 30px;
+  display: flex;
+  justify-content: space-between;
+  gap: 20px;
+  align-items: start;
+  background: var(--panel);
+  border: 1px solid var(--line);
+  border-radius: 24px;
+  box-shadow: 0 20px 60px var(--shadow);
+}
+
+@media (max-width: 760px) {
+  .hero-panel {
+    flex-direction: column;
+    padding: 18px;
+  }
+}

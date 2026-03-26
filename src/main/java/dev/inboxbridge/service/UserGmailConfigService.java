@@ -1,0 +1,207 @@
+package dev.inboxbridge.service;
+
+import java.time.Instant;
+import java.util.Optional;
+
+import dev.inboxbridge.config.BridgeConfig;
+import dev.inboxbridge.dto.UpdateUserGmailConfigRequest;
+import dev.inboxbridge.dto.UserGmailConfigView;
+import dev.inboxbridge.persistence.AppUser;
+import dev.inboxbridge.persistence.UserGmailConfig;
+import dev.inboxbridge.persistence.UserGmailConfigRepository;
+import jakarta.enterprise.context.ApplicationScoped;
+import jakarta.inject.Inject;
+import jakarta.transaction.Transactional;
+
+@ApplicationScoped
+public class UserGmailConfigService {
+
+    @Inject
+    UserGmailConfigRepository repository;
+
+    @Inject
+    SecretEncryptionService secretEncryptionService;
+
+    @Inject
+    BridgeConfig bridgeConfig;
+
+    @Inject
+    OAuthCredentialService oAuthCredentialService;
+
+    public Optional<UserGmailConfigView> viewForUser(Long userId) {
+        return repository.findByUserId(userId).map(config -> toView(userId, config));
+    }
+
+    public UserGmailConfigView defaultView(Long userId) {
+        boolean sharedClientConfigured = sharedGoogleClientConfigured();
+        boolean tokenStored = googleOAuthStored(userId);
+        return new UserGmailConfigView(
+                bridgeConfig.gmail().destinationUser(),
+                sharedClientConfigured,
+                sharedClientConfigured,
+                tokenStored,
+                defaultRedirectUri(),
+                defaultRedirectUri(),
+                sharedClientConfigured,
+                bridgeConfig.gmail().createMissingLabels(),
+                bridgeConfig.gmail().neverMarkSpam(),
+                bridgeConfig.gmail().processForCalendar());
+    }
+
+    public Optional<ResolvedUserGmailConfig> resolveForUser(Long userId) {
+        if (!secretEncryptionService.isConfigured()) {
+            return Optional.empty();
+        }
+        return repository.findByUserId(userId).map(config -> new ResolvedUserGmailConfig(
+                config.userId,
+                config.destinationUser,
+                decrypt(config.clientIdCiphertext, config.clientIdNonce, config.keyVersion, "user-gmail:" + config.userId + ":client-id"),
+                decrypt(config.clientSecretCiphertext, config.clientSecretNonce, config.keyVersion, "user-gmail:" + config.userId + ":client-secret"),
+                decrypt(config.refreshTokenCiphertext, config.refreshTokenNonce, config.keyVersion, "user-gmail:" + config.userId + ":refresh-token"),
+                config.redirectUri,
+                config.createMissingLabels,
+                config.neverMarkSpam,
+                config.processForCalendar));
+    }
+
+    @Transactional
+    public UserGmailConfigView update(AppUser user, UpdateUserGmailConfigRequest request) {
+        if (!secretEncryptionService.isConfigured() && containsSecrets(request)) {
+            throw new IllegalStateException("Secure secret storage must be configured before storing user Gmail credentials in the database.");
+        }
+
+        UserGmailConfig config = repository.findByUserId(user.id).orElseGet(UserGmailConfig::new);
+        config.userId = user.id;
+        config.destinationUser = nonBlankOrDefault(request.destinationUser(), bridgeConfig.gmail().destinationUser());
+        config.redirectUri = nonBlankOrDefault(request.redirectUri(), bridgeConfig.gmail().redirectUri());
+        config.createMissingLabels = request.createMissingLabels() == null ? bridgeConfig.gmail().createMissingLabels() : request.createMissingLabels();
+        config.neverMarkSpam = request.neverMarkSpam() == null ? bridgeConfig.gmail().neverMarkSpam() : request.neverMarkSpam();
+        config.processForCalendar = request.processForCalendar() == null ? bridgeConfig.gmail().processForCalendar() : request.processForCalendar();
+        config.keyVersion = secretEncryptionService.isConfigured() ? secretEncryptionService.keyVersion() : null;
+        config.updatedAt = Instant.now();
+
+        setSecret(request.clientId(), config, "client-id");
+        setSecret(request.clientSecret(), config, "client-secret");
+        setSecret(request.refreshToken(), config, "refresh-token");
+
+        repository.persist(config);
+        return toView(user.id, config);
+    }
+
+    private void setSecret(String value, UserGmailConfig config, String secretName) {
+        if (value == null || value.isBlank()) {
+            return;
+        }
+        SecretEncryptionService.EncryptedValue encrypted = secretEncryptionService.encrypt(value, "user-gmail:" + config.userId + ":" + secretName);
+        switch (secretName) {
+            case "client-id" -> {
+                config.clientIdCiphertext = encrypted.ciphertextBase64();
+                config.clientIdNonce = encrypted.nonceBase64();
+            }
+            case "client-secret" -> {
+                config.clientSecretCiphertext = encrypted.ciphertextBase64();
+                config.clientSecretNonce = encrypted.nonceBase64();
+            }
+            case "refresh-token" -> {
+                config.refreshTokenCiphertext = encrypted.ciphertextBase64();
+                config.refreshTokenNonce = encrypted.nonceBase64();
+            }
+            default -> throw new IllegalArgumentException("Unsupported secret name");
+        }
+    }
+
+    public Optional<GoogleOAuthService.GoogleOAuthProfile> googleProfileForUser(Long userId) {
+        if (secretEncryptionService.isConfigured()) {
+            Optional<GoogleOAuthService.GoogleOAuthProfile> userManaged = resolveForUser(userId)
+                    .filter(config -> !config.clientId().isBlank() && !config.clientSecret().isBlank())
+                    .map(config -> new GoogleOAuthService.GoogleOAuthProfile(
+                            "user-gmail:" + userId,
+                            config.clientId(),
+                            config.clientSecret(),
+                            config.refreshToken(),
+                            nonBlankOrDefault(config.redirectUri(), defaultRedirectUri())));
+            if (userManaged.isPresent()) {
+                return userManaged;
+            }
+        }
+
+        if (!sharedGoogleClientConfigured()) {
+            return Optional.empty();
+        }
+
+        String redirectUri = repository.findByUserId(userId)
+                .map(config -> nonBlankOrDefault(config.redirectUri, defaultRedirectUri()))
+                .orElse(defaultRedirectUri());
+
+        return Optional.of(new GoogleOAuthService.GoogleOAuthProfile(
+                "user-gmail:" + userId,
+                bridgeConfig.gmail().clientId(),
+                bridgeConfig.gmail().clientSecret(),
+                "",
+                redirectUri));
+    }
+
+    public boolean sharedGoogleClientConfigured() {
+        return isConfiguredValue(bridgeConfig.gmail().clientId()) && isConfiguredValue(bridgeConfig.gmail().clientSecret());
+    }
+
+    public String defaultRedirectUri() {
+        return nonBlankOrDefault(bridgeConfig.gmail().redirectUri(), "https://localhost:3000/api/google-oauth/callback");
+    }
+
+    private String decrypt(String ciphertext, String nonce, String keyVersion, String context) {
+        if (ciphertext == null || nonce == null) {
+            return "";
+        }
+        return secretEncryptionService.decrypt(ciphertext, nonce, keyVersion, context);
+    }
+
+    private UserGmailConfigView toView(Long userId, UserGmailConfig config) {
+        boolean sharedClientConfigured = sharedGoogleClientConfigured();
+        return new UserGmailConfigView(
+                config.destinationUser,
+                config.clientIdCiphertext != null || sharedClientConfigured,
+                config.clientSecretCiphertext != null || sharedClientConfigured,
+                config.refreshTokenCiphertext != null || googleOAuthStored(userId),
+                nonBlankOrDefault(config.redirectUri, defaultRedirectUri()),
+                defaultRedirectUri(),
+                sharedClientConfigured,
+                config.createMissingLabels,
+                config.neverMarkSpam,
+                config.processForCalendar);
+    }
+
+    private boolean googleOAuthStored(Long userId) {
+        return oAuthCredentialService.findGoogleCredential("user-gmail:" + userId)
+                .map(credential -> credential.refreshToken() != null && !credential.refreshToken().isBlank())
+                .orElse(false);
+    }
+
+    private boolean containsSecrets(UpdateUserGmailConfigRequest request) {
+        return isProvided(request.clientId()) || isProvided(request.clientSecret()) || isProvided(request.refreshToken());
+    }
+
+    private String nonBlankOrDefault(String value, String fallback) {
+        return value == null || value.isBlank() ? fallback : value.trim();
+    }
+
+    private boolean isConfiguredValue(String value) {
+        return isProvided(value) && !"replace-me".equals(value.trim());
+    }
+
+    private boolean isProvided(String value) {
+        return value != null && !value.isBlank();
+    }
+
+    public record ResolvedUserGmailConfig(
+            Long userId,
+            String destinationUser,
+            String clientId,
+            String clientSecret,
+            String refreshToken,
+            String redirectUri,
+            boolean createMissingLabels,
+            boolean neverMarkSpam,
+            boolean processForCalendar) {
+    }
+}

@@ -1,321 +1,318 @@
 # InboxBridge
 
-InboxBridge is a self-hosted starter project that polls external mailboxes over IMAP or POP3 and imports messages into Gmail through the Gmail API.
+InboxBridge is a self-hosted mail bridge that polls external IMAP / POP3 mailboxes and imports their messages into Gmail through the Gmail API.
 
-This repository is intentionally a **clean starter scaffold**, not a finished SaaS clone. It already contains the core moving parts:
+The project now runs as two cooperating applications:
 
-- Quarkus 3.x application
-- Docker / Docker Compose setup
-- PostgreSQL persistence for import deduplication
-- Gmail OAuth helper endpoints
-- Gmail `messages.import` integration
-- IMAP and POP3 polling with TLS
-- Custom per-source labels in Gmail
-- Manual and scheduled polling
+- a Quarkus backend
+- a separate React admin UI
 
-## What this starter already does
+By default, Docker Compose starts both over HTTPS with locally generated self-signed certificates.
 
-1. Connects to configured external source accounts
-2. Pulls recent messages from IMAP or POP3
-3. Dedupe-checks them against PostgreSQL
-4. Imports them into Gmail
-5. Applies `INBOX`, `UNREAD`, and an optional per-source custom label
-6. Stores the import state so the same message is not imported twice
+InboxBridge supports both operator-managed system configuration from `.env` and per-user configuration stored securely in PostgreSQL through the admin UI.
 
-## What this starter does not yet do
+## What it already does
 
-This is a strong base, but some features are still intentionally left for you to extend:
+1. Polls env-managed system bridges and DB-managed user bridges.
+2. Imports messages into Gmail with `users.messages.import`.
+3. Deduplicates imports in PostgreSQL.
+4. Stores OAuth tokens encrypted in PostgreSQL when secure storage is enabled.
+5. Stores user-managed Gmail and bridge secrets encrypted in PostgreSQL.
+6. Provides a separate React admin UI with login, self-registration, approval workflow, user management, Gmail config, and bridge config.
+7. Supports Google OAuth for Gmail destinations and Microsoft OAuth for Outlook / Hotmail / Live sources.
+8. Organizes the admin UI into reusable React components with component-scoped styles and frontend unit tests.
 
-- encrypted-at-rest storage of mailbox credentials
-- admin UI
-- provider-specific OAuth flows beyond Microsoft / Gmail
-- IMAP IDLE / push-style fetching
-- sophisticated mailbox cursors for very large mailboxes
-- metrics, rate-limits, retries, and dead-letter handling
-- secret vault integration
+## What it still does not do
 
-## Architecture
+- encrypt env-managed mailbox passwords from `.env`
+- support non-Google / non-Microsoft provider OAuth flows
+- provide IMAP IDLE or durable mailbox cursors
+- provide production-grade metrics, backoff, or circuit breakers
+- integrate with an external secret vault or KMS
 
-- `MailSourceClient` fetches source messages using Jakarta / Angus Mail
-- `GmailImportService` calls Gmail `users.messages.import`
-- `GmailLabelService` resolves or creates Gmail labels
-- `ImportDeduplicationService` prevents duplicate imports
-- `PollingService` orchestrates scheduled/manual polling
-- `ImportedMessage` stores durable import history
-
-## Project structure
-
-```text
-src/main/java/dev/connexa/inboxbridge
-├── config
-├── domain
-├── dto
-├── persistence
-├── service
-└── web
-```
-
-## Requirements
+## Stack
 
 - Java 21
-- Maven 3.9+
-- Docker + Docker Compose
-- A Google Cloud project with the Gmail API enabled
-- OAuth client credentials for the destination Gmail account
-- External mailbox credentials (preferably app passwords)
+- Quarkus 3.32.3
+- React 18 + Vite
+- PostgreSQL 16
+- Flyway
+- Hibernate ORM Panache
+- Angus Mail
+- Docker Compose
+- Maven group/package namespace: `dev.inboxbridge`
 
-## Gmail API notes
+## Minimum bootstrap
 
-This starter is built around **message import**, not SMTP forwarding.
+If you only want to boot the stack, sign in to the admin UI, and start configuring users and OAuth from the browser, the minimum local setup is:
 
-That keeps the original message shape and avoids the usual forwarding drawbacks. The implementation uses:
+1. Copy the env template.
+2. Generate an encryption key.
+3. Start Docker Compose.
 
-- Gmail OAuth token refresh
-- `gmail.insert` scope for message import
-- `gmail.labels` scope for creating / resolving custom labels
+```bash
+cp .env.example .env
+openssl rand -base64 32
+docker compose up --build
+```
 
-## Quick start
+Then set at least these values in `.env` before starting:
 
-### 1. Prepare environment file
+- `BRIDGE_SECURITY_TOKEN_ENCRYPTION_KEY=<base64 32-byte key>`
+- `PUBLIC_BASE_URL=https://localhost:3000`
+- `JDBC_URL=jdbc:postgresql://postgres:5432/inboxbridge`
+- `JDBC_USERNAME=inboxbridge`
+- `JDBC_PASSWORD=inboxbridge`
+
+With only that configuration, you can:
+
+- open `https://localhost:3000`
+- sign in with `admin` / `nimda`
+- change the bootstrap password
+- create users
+- configure Gmail and source bridges from the admin UI
+- access password changes from the top header via `Change Password`
+
+You do not need to prefill `GOOGLE_*` or `MICROSOFT_*` just to bring the stack up.
+
+## Minimum to import mail
+
+To actually import mail, you need the bootstrap config above plus:
+
+- a Gmail destination configured either through shared `GOOGLE_*` env vars or per-user Gmail settings in the admin UI
+- provider OAuth app credentials for any OAuth-based source or destination flow
+- at least one source bridge, either from `.env` or from the admin UI
+
+The fastest operator-managed path is:
 
 ```bash
 cp .env.example .env
 ```
 
-Fill in:
+Important values when you want a shared, env-managed deployment setup:
 
-- `GOOGLE_CLIENT_ID`
-- `GOOGLE_CLIENT_SECRET`
-- `GOOGLE_REFRESH_TOKEN`
-- `BRIDGE_SECURITY_TOKEN_ENCRYPTION_KEY` if you want OAuth refresh tokens encrypted in PostgreSQL
-- `BRIDGE_SOURCES_<index>__...` for each external mailbox
+- `PUBLIC_BASE_URL` for browser callback defaults and UI links
+- `BRIDGE_SECURITY_TOKEN_ENCRYPTION_KEY`
+- `BRIDGE_SECURITY_TOKEN_ENCRYPTION_KEY_ID`
+- `BRIDGE_SOURCES_<index>__...` for env-managed system bridges
+- `GOOGLE_*` only if you want an env-managed system Gmail destination
+- `MICROSOFT_*` for Microsoft OAuth sources
 
-### 2. Configure source accounts
-
-Keep real source accounts in `.env`, not in `src/main/resources/application.yaml`.
-
-The repository now uses env-backed indexed source settings so credentials do not need to live in committed YAML. The first source uses `BRIDGE_SOURCES_0__...`, the second uses `BRIDGE_SOURCES_1__...`, and so on.
-
-Example IMAP source in `.env`:
-
-```dotenv
-BRIDGE_SOURCES_0__ID=outlook-main
-BRIDGE_SOURCES_0__ENABLED=true
-BRIDGE_SOURCES_0__PROTOCOL=IMAP
-BRIDGE_SOURCES_0__HOST=outlook.office365.com
-BRIDGE_SOURCES_0__PORT=993
-BRIDGE_SOURCES_0__TLS=true
-BRIDGE_SOURCES_0__AUTH_METHOD=PASSWORD
-BRIDGE_SOURCES_0__USERNAME=you@example.com
-BRIDGE_SOURCES_0__PASSWORD=your-app-password
-BRIDGE_SOURCES_0__FOLDER=INBOX
-BRIDGE_SOURCES_0__UNREAD_ONLY=false
-BRIDGE_SOURCES_0__CUSTOM_LABEL=Imported/Outlook
-```
-
-Example POP3 source in `.env`:
-
-```dotenv
-BRIDGE_SOURCES_1__ID=legacy-pop
-BRIDGE_SOURCES_1__ENABLED=true
-BRIDGE_SOURCES_1__PROTOCOL=POP3
-BRIDGE_SOURCES_1__HOST=pop.example.com
-BRIDGE_SOURCES_1__PORT=995
-BRIDGE_SOURCES_1__TLS=true
-BRIDGE_SOURCES_1__AUTH_METHOD=PASSWORD
-BRIDGE_SOURCES_1__USERNAME=you@example.com
-BRIDGE_SOURCES_1__PASSWORD=your-app-password
-BRIDGE_SOURCES_1__UNREAD_ONLY=false
-BRIDGE_SOURCES_1__CUSTOM_LABEL=Imported/LegacyPOP
-```
-
-`.env` is gitignored, but it is still plaintext. For stronger protection, move these values to Docker secrets or an external secret manager later.
-
-For encrypted OAuth token storage, generate a 32-byte base64 key and set:
+Generate a local encryption key with:
 
 ```bash
 openssl rand -base64 32
 ```
 
-Then place the output in `BRIDGE_SECURITY_TOKEN_ENCRYPTION_KEY`. When that key is configured, InboxBridge stores Google and Microsoft OAuth refresh tokens encrypted in PostgreSQL and automatically refreshes short-lived access tokens.
-
-In short, secure token storage is enabled by:
-
-1. generating a key with `openssl rand -base64 32`
-2. setting `BRIDGE_SECURITY_TOKEN_ENCRYPTION_KEY` in `.env`
-3. restarting the app
-4. running the OAuth exchange again so the token is written into PostgreSQL
-
-### 3. Build and run locally
-
-```bash
-mvn quarkus:dev
-```
-
-### 4. Or run with Docker Compose
+## Quick start
 
 ```bash
 docker compose up --build
 ```
 
-## OAuth helper flow
+Services:
 
-The project exposes helper endpoints:
+- admin UI: `https://localhost:3000`
+- backend HTTP: `http://localhost:8080`
+- backend HTTPS: `https://localhost:8443`
+- PostgreSQL: `localhost:5432`
 
-- `GET /api/google-oauth/url`
+The first compose run generates local certificates into `./certs`. You can later replace those files with your own certificates.
+
+After the stack is up:
+
+1. Open `https://localhost:3000`
+2. Sign in with the bootstrap admin
+3. Change the bootstrap password
+4. Follow the `Quick Setup Guide` panel in the admin UI
+5. Configure Gmail destination OAuth
+6. Add at least one bridge
+7. Run a poll and verify the dashboard counters
+
+The `Quick Setup Guide` cards in the admin UI are clickable and jump to the section where each action is performed. They also reflect live state:
+
+- green when the step is complete
+- red when InboxBridge has a recorded error associated with that step
+- neutral when the step has not been completed yet
+- the guide auto-collapses when all tracked steps are complete
+- users can opt into persisting collapsed/expanded section state across sign-ins on their own account
+
+## Admin UI login
+
+Initial bootstrap credentials:
+
+- username: `admin`
+- password: `nimda`
+
+The bootstrap admin is marked `mustChangePassword=true`, so change it immediately after first login.
+
+## Admin UI capabilities
+
+The React admin UI lives in `admin-ui/` and runs in its own container/server.
+
+Current features:
+
+- secure sign-in using HTTP-only same-site cookies
+- self-registration followed by admin approval
+- admin-managed user creation
+- multiple admin users, with admin rights managed from the UI
+- per-user Gmail destination config
+- per-user Gmail config can reuse the deployment’s shared Google OAuth client when one is configured
+- per-user bridge create/update/delete
+- per-user bridge passwords and OAuth refresh tokens are stored encrypted in PostgreSQL by default when saved from the admin UI
+- password changes are available from the top header and enforce confirmation, minimum length, uppercase, lowercase, number, special character, and “must differ from current password” rules
+- env-managed system bridge visibility
+- manual poll trigger for admins
+- Google OAuth launch for the system Gmail destination and for the current user
+- Microsoft OAuth launch for visible Microsoft bridges
+- import totals and latest poll outcome per bridge
+- reusable component-based frontend sections with local CSS files
+- frontend unit tests for key auth, Gmail, bridge-card, and utility behavior
+- one-click copy actions for API error banners and bridge error payloads
+
+Security model:
+
+- admin APIs require `ADMIN`
+- user config APIs require an authenticated session and are scoped to the current user
+- admins can inspect other users’ configuration summaries without seeing raw client secrets or refresh tokens
+- users cannot access other users’ bridge or Gmail configuration through the authenticated user APIs
+
+## OAuth flows
+
+Preferred local redirect URIs:
+
+- Google: `https://localhost:3000/api/google-oauth/callback`
+- Microsoft: `https://localhost:3000/api/microsoft-oauth/callback`
+
+If you deploy InboxBridge on another hostname, set `PUBLIC_BASE_URL` and the default callback URIs will follow that host automatically unless you explicitly override `GOOGLE_REDIRECT_URI` or `MICROSOFT_REDIRECT_URI`.
+
+Useful endpoints:
+
+- `GET /api/google-oauth/start/self`
+- `GET /api/google-oauth/start/system`
 - `POST /api/google-oauth/exchange`
 - `GET /api/google-oauth/callback`
-- `GET /api/microsoft-oauth/url?sourceId=<source-id>`
-- `GET /api/microsoft-oauth/start?sourceId=<source-id>`
+- `GET /api/microsoft-oauth/start?sourceId=<bridge-id>`
 - `POST /api/microsoft-oauth/exchange`
 - `GET /api/microsoft-oauth/callback`
-- `GET /oauth/microsoft/`
 
-Suggested flow:
+Recommended flow:
 
-1. Open `/api/google-oauth/url`
-2. Authenticate with Google
-3. Grant access
-4. Copy the returned authorization code
-5. POST it to `/api/google-oauth/exchange`
-6. If secure storage is enabled, InboxBridge stores the refresh token encrypted in PostgreSQL. Otherwise store the returned refresh token in `.env`.
+1. Sign in to `https://localhost:3000`
+2. Use the relevant OAuth button in the UI
+3. Complete provider consent
+4. Use the callback page button to exchange the code
+5. The callback page starts a 10-second countdown and returns to the admin UI automatically after a successful in-browser exchange
+6. You can still use the callback page return button to navigate back immediately
+7. If secure storage is enabled, InboxBridge stores the token encrypted in PostgreSQL automatically
 
-Example exchange request:
+OAuth callback usability notes:
 
-```bash
-curl -X POST http://localhost:8080/api/google-oauth/exchange \
-  -H 'Content-Type: application/json' \
-  -d '{"code":"REPLACE_ME"}'
-```
+- the callback page includes a `Copy Code` button
+- the callback page includes a `Return To Admin UI` button
+- returning to the admin UI before exchange asks for confirmation
+- after a successful in-browser exchange, the callback page shows a 10-second auto-return countdown
+- if you leave without exchanging, you must add the code or resulting token manually later
 
-Example Microsoft exchange request:
+Admin UI loading feedback notes:
 
-```bash
-curl -X POST http://localhost:8080/api/microsoft-oauth/exchange \
-  -H 'Content-Type: application/json' \
-  -d '{"sourceId":"outlook-main","code":"REPLACE_ME"}'
-```
+- buttons that trigger backend calls now show an inline loading spinner while the request is in progress
+- this includes sign-in, registration, password changes, Gmail settings saves, bridge saves/deletes, user management actions, poll runs, refresh, and OAuth start actions
 
-When `BRIDGE_SECURITY_TOKEN_ENCRYPTION_KEY` is configured, the Microsoft helper page stores the refresh token encrypted in PostgreSQL and future access-token renewals happen automatically. Without that key, the exchange response falls back to returning the refresh token so you can keep using `BRIDGE_SOURCES_<index>__OAUTH_REFRESH_TOKEN` in `.env`.
+### Fix Google `403: org_internal`
 
-For the full Microsoft cloud setup path, including how to create the Azure / Entra account, register the app, choose the right redirect URI platform, add IMAP / POP delegated permissions, and locate the client ID / tenant / client secret, see [docs/OAUTH_SETUP.md](/Users/tdferreira/Developer/inboxbridge/docs/OAUTH_SETUP.md).
+If Google shows `Error 403: org_internal`, your Google OAuth consent screen is restricted to an internal Google Workspace audience.
 
-## Trigger a manual poll
+Fix it in Google Cloud:
 
-```bash
-curl -X POST http://localhost:8080/api/poll/run
-```
+1. Open `APIs & Services > OAuth consent screen`
+2. Change the audience / user type from `Internal` to `External`
+3. If the app is still in testing, add your Gmail accounts as `Test users`
+4. Retry the InboxBridge flow
 
-## Health summary
+### Can InboxBridge auto-create Google OAuth client credentials?
 
-```bash
-curl http://localhost:8080/api/health/summary
-```
+No.
 
-Current behavior:
+Google OAuth client IDs and client secrets belong to a Google Cloud project, not to a Gmail mailbox. InboxBridge can guide the user through setup and store the provided credentials securely, but it cannot automatically provision a Google OAuth client from the admin UI.
 
-- returns `status=UP`
-- returns `importedMessages`, which is the total number of successfully recorded imports in PostgreSQL
+In practice, each deployment must choose one of these patterns:
 
-To force an immediate poll and see fetched/imported/duplicate/error counts:
+1. reuse one shared Google OAuth client for many users
+2. let each user create a Google Cloud OAuth client and paste the values into the UI
 
-```bash
-curl -X POST http://localhost:8080/api/poll/run
-```
+The admin UI now explains those setup steps next to the Gmail settings form, and if a shared Google OAuth client is configured it can be reused automatically for each user’s Gmail destination.
 
-## Source account configuration
+## Secure token storage
 
-Example IMAP source in `.env`:
+Secure storage is enabled by setting:
 
-```dotenv
-BRIDGE_SOURCES_0__ID=outlook-main
-BRIDGE_SOURCES_0__ENABLED=true
-BRIDGE_SOURCES_0__PROTOCOL=IMAP
-BRIDGE_SOURCES_0__HOST=outlook.office365.com
-BRIDGE_SOURCES_0__PORT=993
-BRIDGE_SOURCES_0__TLS=true
-BRIDGE_SOURCES_0__AUTH_METHOD=PASSWORD
-BRIDGE_SOURCES_0__USERNAME=you@example.com
-BRIDGE_SOURCES_0__PASSWORD=your-app-password
-BRIDGE_SOURCES_0__FOLDER=INBOX
-BRIDGE_SOURCES_0__UNREAD_ONLY=false
-BRIDGE_SOURCES_0__CUSTOM_LABEL=Imported/Outlook
-```
+- `BRIDGE_SECURITY_TOKEN_ENCRYPTION_KEY`
+- optionally `BRIDGE_SECURITY_TOKEN_ENCRYPTION_KEY_ID`
 
-Example POP3 source in `.env`:
+When enabled:
 
-```dotenv
-BRIDGE_SOURCES_1__ID=legacy-pop
-BRIDGE_SOURCES_1__ENABLED=true
-BRIDGE_SOURCES_1__PROTOCOL=POP3
-BRIDGE_SOURCES_1__HOST=pop.example.com
-BRIDGE_SOURCES_1__PORT=995
-BRIDGE_SOURCES_1__TLS=true
-BRIDGE_SOURCES_1__AUTH_METHOD=PASSWORD
-BRIDGE_SOURCES_1__USERNAME=you@example.com
-BRIDGE_SOURCES_1__PASSWORD=your-password
-BRIDGE_SOURCES_1__UNREAD_ONLY=false
-BRIDGE_SOURCES_1__CUSTOM_LABEL=Imported/LegacyPOP
-```
+- Google refresh/access tokens are stored encrypted
+- Microsoft refresh/access tokens are stored encrypted
+- user-managed Gmail client credentials are stored encrypted
+- user-managed bridge passwords and refresh tokens are stored encrypted by default whenever they are saved from the admin UI
 
-Example Outlook IMAP source with Microsoft OAuth:
+Important nuance:
 
-```dotenv
-MICROSOFT_TENANT=consumers
-MICROSOFT_CLIENT_ID=your-microsoft-app-client-id
-MICROSOFT_CLIENT_SECRET=your-microsoft-app-client-secret
-MICROSOFT_REDIRECT_URI=http://localhost:8080/api/microsoft-oauth/callback
-BRIDGE_SECURITY_TOKEN_ENCRYPTION_KEY=base64-encoded-32-byte-key
-BRIDGE_SECURITY_TOKEN_ENCRYPTION_KEY_ID=v1
+- secrets are encrypted at the application layer before they reach PostgreSQL
+- passwords are hashed, not reversibly encrypted
+- non-secret metadata remains queryable in the database so the app can function
 
-BRIDGE_SOURCES_0__ID=outlook-main
-BRIDGE_SOURCES_0__ENABLED=true
-BRIDGE_SOURCES_0__PROTOCOL=IMAP
-BRIDGE_SOURCES_0__HOST=outlook.office365.com
-BRIDGE_SOURCES_0__PORT=993
-BRIDGE_SOURCES_0__TLS=true
-BRIDGE_SOURCES_0__AUTH_METHOD=OAUTH2
-BRIDGE_SOURCES_0__OAUTH_PROVIDER=MICROSOFT
-BRIDGE_SOURCES_0__USERNAME=you@outlook.com
-BRIDGE_SOURCES_0__OAUTH_REFRESH_TOKEN=optional-fallback-if-db-encryption-is-disabled
-BRIDGE_SOURCES_0__FOLDER=INBOX
-BRIDGE_SOURCES_0__UNREAD_ONLY=false
-BRIDGE_SOURCES_0__CUSTOM_LABEL=Imported/Outlook
-```
+For the user Gmail screen specifically:
 
-## Important implementation note
+- `Destination User` should usually stay `me`
+- `Redirect URI` now defaults to the deployment callback URL and is prefilled in the UI
+- per-user `Client ID` / `Client Secret` are optional when the deployment already has a shared Google OAuth client configured
+- the Gmail destination panel now shows the effective Gmail OAuth state for the user, including shared deployment client availability and refresh-token storage from the encrypted OAuth credential store
 
-For simplicity, this starter currently scans the **most recent N messages** per source account, where `N = bridge.fetch-window`.
+When disabled:
 
-That is good enough to get the project running and is easy to reason about, but for large / busy mailboxes you will likely want to evolve it toward:
+- env-managed flows can still fall back to `.env`
+- user-managed secret storage is intentionally blocked
 
-- IMAP UID checkpoints
-- POP UIDL checkpoints
-- retry queues
-- parallel import workers
+## HTTPS certificates
 
-## Security recommendations before production use
+Compose uses a `cert-init` container that generates:
 
-Before treating this as a personal production bridge, add at least:
+- `certs/ca.crt`
+- `certs/backend.crt`
+- `certs/backend.key`
+- `certs/frontend.crt`
+- `certs/frontend.key`
 
-- encrypted-at-rest storage for mailbox passwords, not just OAuth tokens
-- Docker secrets or an external secret manager
-- minimal OAuth scopes and app passwords only where OAuth is unavailable
-- structured logging that never emits raw message bodies
-- metrics and alerting
-- retry / backoff rules
-- account disable circuit breaker
+The frontend proxies to the backend over HTTPS and validates the backend certificate against `ca.crt`.
 
-## Useful next extensions
+To replace the generated certs with your own:
 
-- extend the encrypted credential model to mailbox passwords
-- add a `source_account` table instead of YAML-only config
-- add a small admin UI
-- add provider templates for Yahoo / Outlook / iCloud / Fastmail
-- add OAuth for external mail providers where available
-- add OpenTelemetry / Micrometer metrics
-- add IMAP IDLE mode
+1. stop the stack
+2. replace the files in `./certs`
+3. start the stack again
 
-## Disclaimer
+## Important current limitations
 
-This project is intended as a self-hosted starter and learning base. It is not yet production-grade and has not been hardened or audited.
+- env-managed mailbox passwords are still plaintext in `.env`
+- polling still scans the most recent `bridge.fetch-window` messages rather than using durable mailbox cursors
+- provider backoff / lockout protection is not implemented yet
+- metrics and audit-friendly structured event logs are still limited
+
+## Tests
+
+Verified on 2026-03-26:
+
+- `mvn test` passes with 27 backend tests
+- admin UI Docker build runs 6 frontend Vitest unit tests successfully
+- Docker Compose builds successfully
+- the HTTPS admin UI serves correctly in the container
+- unauthenticated `GET /api/auth/me` returns `401` through the HTTPS proxy
+- bootstrap login `admin` / `nimda` succeeds and returns `mustChangePassword=true`
+
+## More docs
+
+- Microsoft and Gmail provider setup: [docs/OAUTH_SETUP.md](/Users/tdferreira/Developer/inboxbridge/docs/OAUTH_SETUP.md)
+- architectural summary and code structure: [CONTEXT.md](/Users/tdferreira/Developer/inboxbridge/CONTEXT.md)
+- frontend component structure and frontend tests: [admin-ui/README.md](/Users/tdferreira/Developer/inboxbridge/admin-ui/README.md)

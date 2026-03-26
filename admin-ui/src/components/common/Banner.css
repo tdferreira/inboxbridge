@@ -1,0 +1,26 @@
+.app-banner {
+  border-radius: 18px;
+  padding: 14px 18px;
+  border: 1px solid var(--line);
+  box-shadow: 0 12px 24px rgba(36, 26, 20, 0.08);
+  display: flex;
+  align-items: start;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.app-banner-content {
+  min-width: 0;
+}
+
+.banner-success {
+  background: rgba(23, 101, 75, 0.12);
+}
+
+.banner-warning {
+  background: rgba(138, 90, 18, 0.14);
+}
+
+.banner-error {
+  background: rgba(139, 45, 32, 0.14);
+}

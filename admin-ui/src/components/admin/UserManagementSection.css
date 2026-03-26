@@ -1,0 +1,47 @@
+.user-management-panel {
+  padding: 24px;
+  display: grid;
+  gap: 18px;
+}
+
+.user-list-item {
+  text-align: left;
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  background: rgba(255, 255, 255, 0.82);
+  border: 1px solid var(--line);
+}
+
+.user-list-item.selected {
+  border-color: rgba(23, 101, 75, 0.4);
+  box-shadow: inset 0 0 0 1px rgba(23, 101, 75, 0.22);
+}
+
+.user-list-inline-loading {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  margin-left: 10px;
+  color: var(--accent);
+  font-weight: 700;
+}
+
+.user-list-inline-spinner {
+  width: 0.8rem;
+  height: 0.8rem;
+  border-radius: 999px;
+  border: 2px solid currentColor;
+  border-right-color: transparent;
+  animation: user-list-inline-spin 0.8s linear infinite;
+}
+
+@keyframes user-list-inline-spin {
+  from {
+    transform: rotate(0deg);
+  }
+
+  to {
+    transform: rotate(360deg);
+  }
+}

@@ -1,0 +1,33 @@
+.system-dashboard-section {
+  padding: 24px;
+  display: grid;
+  gap: 18px;
+}
+
+.system-dashboard-summary {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  gap: 14px;
+}
+
+.metric-card {
+  padding: 20px;
+  display: grid;
+  gap: 8px;
+}
+
+.metric-card strong {
+  font-size: 2rem;
+  line-height: 1;
+}
+
+.metric-label {
+  font-size: 0.78rem;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+
+.metric-card-accent {
+  background: linear-gradient(135deg, rgba(23, 101, 75, 0.14), rgba(255, 252, 247, 0.92));
+}

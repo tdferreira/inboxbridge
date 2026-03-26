@@ -1,4 +1,13 @@
 services:
+  cert-init:
+    image: alpine:3.20
+    container_name: inboxbridge-cert-init
+    volumes:
+      - ./certs:/certs
+      - ./docker:/opt/inboxbridge/docker:ro
+    command: ["sh", "/opt/inboxbridge/docker/cert-init.sh"]
+    restart: "no"
+
   inboxbridge:
     build:
       context: .
@@ -7,11 +16,33 @@ services:
     container_name: inboxbridge
     ports:
       - "8080:8080"
+      - "8443:8443"
     depends_on:
+      cert-init:
+        condition: service_completed_successfully
       postgres:
         condition: service_healthy
+    volumes:
+      - ./certs:/etc/inboxbridge/certs:ro
     env_file:
       - .env
+    restart: unless-stopped
+
+  inboxbridge-admin:
+    build:
+      context: .
+      dockerfile: admin-ui/Dockerfile
+      network: host
+    container_name: inboxbridge-admin
+    ports:
+      - "3000:443"
+    depends_on:
+      cert-init:
+        condition: service_completed_successfully
+      inboxbridge:
+        condition: service_started
+    volumes:
+      - ./certs:/etc/inboxbridge/certs:ro
     restart: unless-stopped
 
   postgres:

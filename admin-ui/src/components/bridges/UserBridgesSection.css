@@ -1,0 +1,11 @@
+.user-bridges-section {
+  padding: 24px;
+  display: grid;
+  gap: 18px;
+}
+
+.bridge-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+  gap: 16px;
+}

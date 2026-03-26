@@ -1,6 +1,12 @@
 quarkus:
   http:
     port: ${HTTP_PORT:8080}
+    ssl-port: ${HTTPS_PORT:8443}
+    insecure-requests: enabled
+    ssl:
+      certificate:
+        files: ${HTTPS_CERT_FILE:/etc/inboxbridge/certs/backend.crt}
+        key-files: ${HTTPS_KEY_FILE:/etc/inboxbridge/certs/backend.key}
   datasource:
     db-kind: postgresql
     jdbc:
@@ -16,7 +22,7 @@ quarkus:
     migrate-at-start: true
   log:
     category:
-      "dev.connexa.inboxbridge":
+      "dev.inboxbridge":
         level: INFO
 
 bridge:
@@ -28,7 +34,7 @@ bridge:
     client-id: ${GOOGLE_CLIENT_ID:replace-me}
     client-secret: ${GOOGLE_CLIENT_SECRET:replace-me}
     refresh-token: ${GOOGLE_REFRESH_TOKEN:replace-me}
-    redirect-uri: ${GOOGLE_REDIRECT_URI:http://localhost:8080/api/google-oauth/callback}
+    redirect-uri: ${GOOGLE_REDIRECT_URI:${PUBLIC_BASE_URL:https://localhost:3000}/api/google-oauth/callback}
     create-missing-labels: ${BRIDGE_GMAIL_CREATE_MISSING_LABELS:true}
     never-mark-spam: ${BRIDGE_GMAIL_NEVER_MARK_SPAM:false}
     process-for-calendar: ${BRIDGE_GMAIL_PROCESS_FOR_CALENDAR:false}
@@ -36,7 +42,7 @@ bridge:
     tenant: ${MICROSOFT_TENANT:consumers}
     client-id: ${MICROSOFT_CLIENT_ID:replace-me}
     client-secret: ${MICROSOFT_CLIENT_SECRET:replace-me}
-    redirect-uri: ${MICROSOFT_REDIRECT_URI:http://localhost:8080/api/microsoft-oauth/callback}
+    redirect-uri: ${MICROSOFT_REDIRECT_URI:${PUBLIC_BASE_URL:https://localhost:3000}/api/microsoft-oauth/callback}
   sources:
     # Keep real source credentials out of this file. Configure them in .env
     # with indexed variables like BRIDGE_SOURCES_0__* and BRIDGE_SOURCES_1__*.
