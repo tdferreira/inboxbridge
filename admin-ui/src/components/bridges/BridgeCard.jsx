@@ -1,12 +1,12 @@
-import { formatDate, statusTone, tokenStorageLabel } from '../../lib/formatters'
+import { authMethodLabel, formatDate, oauthProviderLabel, protocolLabel, statusLabel, statusTone, tokenStorageLabel, triggerLabel } from '../../lib/formatters'
 import CopyButton from '../common/CopyButton'
 import LoadingButton from '../common/LoadingButton'
 import './BridgeCard.css'
 
 function BridgeCard({
   bridge,
-  connectLabel = 'Connect Microsoft OAuth',
-  editLabel = 'Edit',
+  connectLabel,
+  editLabel,
   connectLoading = false,
   deleteLoading = false,
   locale = 'en',
@@ -18,15 +18,23 @@ function BridgeCard({
   t
 }) {
   const bridgeId = bridge.bridgeId || bridge.id
+  const resolvedConnectLabel = connectLabel || t('bridge.connectMicrosoft')
+  const resolvedEditLabel = editLabel || t('bridge.edit')
 
   return (
     <article className="surface-card bridge-card">
       <div className="bridge-card-topline">
         <div>
           <h2>{bridgeId}</h2>
-          <p className="section-copy">{bridge.protocol} via {bridge.authMethod}{bridge.oauthProvider !== 'NONE' ? ` / ${bridge.oauthProvider}` : ''}</p>
+          <p className="section-copy">
+            {t('bridge.summaryLine', {
+              authMethod: authMethodLabel(bridge.authMethod, locale),
+              oauthProvider: bridge.oauthProvider !== 'NONE' ? ` / ${oauthProviderLabel(bridge.oauthProvider, locale)}` : '',
+              protocol: protocolLabel(bridge.protocol, locale)
+            })}
+          </p>
         </div>
-        <span className={`status-pill ${statusTone(bridge.lastEvent?.status)}`}>{bridge.lastEvent?.status || t('bridge.notRun')}</span>
+        <span className={`status-pill ${statusTone(bridge.lastEvent?.status)}`}>{statusLabel(bridge.lastEvent?.status, locale)}</span>
       </div>
 
       <dl className="bridge-card-config">
@@ -40,7 +48,7 @@ function BridgeCard({
 
       {bridge.lastEvent ? (
         <div className="event-box">
-          <div className="section-copy">{t('bridge.viaTrigger', { time: formatDate(bridge.lastEvent.finishedAt, locale), trigger: bridge.lastEvent.trigger })}</div>
+          <div className="section-copy">{t('bridge.viaTrigger', { time: formatDate(bridge.lastEvent.finishedAt, locale), trigger: triggerLabel(bridge.lastEvent.trigger, locale) })}</div>
           <div className="section-copy">{t('bridge.results', { fetched: bridge.lastEvent.fetched, imported: bridge.lastEvent.imported, duplicates: bridge.lastEvent.duplicates })}</div>
           {bridge.lastEvent.error ? (
             <div className="bridge-card-error-block">
@@ -54,10 +62,10 @@ function BridgeCard({
       )}
 
       <div className="action-row">
-        {showEdit ? <button className="secondary" type="button" onClick={() => onEdit(bridge)}>{editLabel}</button> : null}
+        {showEdit ? <button className="secondary" type="button" onClick={() => onEdit(bridge)}>{resolvedEditLabel}</button> : null}
         {bridge.oauthProvider === 'MICROSOFT' && bridge.authMethod === 'OAUTH2' ? (
           <LoadingButton className="secondary" isLoading={connectLoading} loadingLabel={t('bridge.startingMicrosoftOAuth')} onClick={() => onConnectMicrosoft(bridgeId)} type="button">
-            {connectLabel}
+            {resolvedConnectLabel}
           </LoadingButton>
         ) : null}
         {showDelete ? (

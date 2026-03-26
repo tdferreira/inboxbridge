@@ -2,6 +2,7 @@ package dev.inboxbridge.web;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 
 import org.junit.jupiter.api.Test;
 
@@ -13,8 +14,10 @@ import dev.inboxbridge.dto.StartPasskeyLoginRequest;
 import dev.inboxbridge.persistence.AppUser;
 import dev.inboxbridge.security.CurrentUserContext;
 import dev.inboxbridge.service.AppUserService;
+import dev.inboxbridge.service.ApplicationModeService;
 import dev.inboxbridge.service.AuthService;
 import dev.inboxbridge.service.PasskeyService;
+import jakarta.ws.rs.BadRequestException;
 import jakarta.ws.rs.core.NewCookie;
 import jakarta.ws.rs.core.Response;
 
@@ -24,6 +27,7 @@ class AuthResourceTest {
     void startPasskeyLoginReturnsCeremonyPayload() {
         AuthResource resource = new AuthResource();
         resource.passkeyService = new FakePasskeyService();
+        resource.applicationModeService = new FakeApplicationModeService(true);
 
         StartPasskeyCeremonyResponse response = resource.startPasskeyLogin(new StartPasskeyLoginRequest(null));
 
@@ -38,6 +42,7 @@ class AuthResourceTest {
         resource.passkeyService = new FakePasskeyService();
         resource.appUserService = new AppUserService();
         resource.currentUserContext = new CurrentUserContext();
+        resource.applicationModeService = new FakeApplicationModeService(true);
 
         Response response = resource.finishPasskeyLogin(new FinishPasskeyCeremonyRequest("ceremony-1", "{\"id\":\"cred\"}"));
 
@@ -47,6 +52,29 @@ class AuthResourceTest {
         assertEquals("session-1", cookie.getValue());
         LoginResponse payload = (LoginResponse) response.getEntity();
         assertEquals("AUTHENTICATED", payload.status());
+    }
+
+    @Test
+    void optionsReturnsSingleUserSetting() {
+        AuthResource resource = new AuthResource();
+        resource.applicationModeService = new FakeApplicationModeService(false);
+
+        var response = resource.options();
+
+        assertEquals(false, response.multiUserEnabled());
+    }
+
+    @Test
+    void registerIsBlockedWhenMultiUserModeIsDisabled() {
+        AuthResource resource = new AuthResource();
+        resource.applicationModeService = new FakeApplicationModeService(false);
+        resource.appUserService = new AppUserService();
+
+        BadRequestException error = assertThrows(
+                BadRequestException.class,
+                () -> resource.register(new dev.inboxbridge.dto.RegisterUserRequest("alice", "Secret#123", "Secret#123")));
+
+        assertEquals("Multi-user mode is disabled for this deployment.", error.getMessage());
     }
 
     private static final class FakePasskeyService extends PasskeyService {
@@ -86,6 +114,19 @@ class AuthResourceTest {
         @Override
         public AuthenticatedSession loginWithPasskey(AppUser user) {
             return new AuthenticatedSession(user, "session-1");
+        }
+    }
+
+    private static final class FakeApplicationModeService extends ApplicationModeService {
+        private final boolean enabled;
+
+        private FakeApplicationModeService(boolean enabled) {
+            this.enabled = enabled;
+        }
+
+        @Override
+        public boolean multiUserEnabled() {
+            return enabled;
         }
     }
 }

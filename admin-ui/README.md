@@ -14,7 +14,8 @@ admin-ui/src
 │   ├── bridges
 │   ├── common
 │   ├── gmail
-│   └── layout
+│   ├── layout
+│   └── polling
 ├── lib
 └── test
 ```
@@ -33,6 +34,7 @@ Key design choices:
 - the login screen supports passkey sign-in for users who have already enrolled one
 - the login screen intentionally avoids exposing live bootstrap-account state to unauthenticated visitors; bootstrap credentials are documented in the operator docs instead
 - self-registration is launched from a dedicated `Register for access` button and uses a modal dialog instead of always rendering the full form
+- when the deployment sets `BRIDGE_MULTI_USER_ENABLED=false`, the login screen hides self-registration and the post-login UI hides user-management features entirely
 - accounts with both a password and a passkey now use password + passkey login, not passkey-only login
 - accounts with only a passkey ignore any typed password and fall through into the passkey prompt instead of stopping on an error
 - users can remove their password and run the account in passkey-only mode
@@ -44,13 +46,18 @@ Key design choices:
 - admin actions that suspend/reactivate a user, force a password change, or wipe passkeys are also guarded by confirmation modals
 - admins cannot demote themselves out of the admin role from the UI
 - admins can override scheduled polling enablement, poll interval, and fetch window without changing `.env`
+- each user now gets a dedicated `My Poller Settings` section to override polling enablement, poll interval, and fetch window for their own UI-managed fetchers
+- the fetcher detail view now surfaces poll cooldown/backoff state, next scheduled poll time, and the last recorded provider failure
 - the mail-fetcher area is now presented as `My Email Fetchers`, with add/edit happening in a wider modal dialog instead of an always-visible form
 - the fetcher dialog includes provider presets, auth-aware field visibility, inline help tooltips, and duplicate-ID validation before save
+- fetcher contextual menus auto-close on outside click or `Escape`
 - env-managed fetchers appear in the same list with a read-only `.env` badge only for the account named `admin`; other users never see those env-backed entries
+- placeholder fallback values do not count as env-managed fetchers, so an empty `.env` source configuration produces no `.env` fetcher entry in the UI
 - the Gmail destination panel distinguishes deployment-shared Google OAuth client credentials from user-specific overrides, but regular users now only see Gmail connection status plus connect/reconnect OAuth while admins keep the advanced override form
 - in the normal operating model, that shared Google OAuth client comes from one deployment-wide Google Cloud project reused across many users
 - the polling area is now framed as `Poller Settings` and focuses on runtime scheduler controls plus polling-health metrics
 - the hero/header now includes a persisted language selector for English, French, German, Portuguese (Portugal), Portuguese (Brazil), and Spanish
+- visible labels route through the in-repo translation dictionary instead of mixing translated and raw JSX text
 - collapsible panes use compact `+` / `-` window-style controls instead of text-heavy expand/collapse buttons
 - collapse buttons expose native hover hints and stay pinned to the top-right corner of the card
 - Each component imports its own CSS file for local structure and appearance.
@@ -79,6 +86,7 @@ Current unit coverage focuses on:
 - Gmail destination guidance and shared-client behavior
 - first-run setup guide rendering
 - admin security-management controls
+- per-user poller settings controls
 - email fetcher dialog presets and auth-aware field visibility
 - reusable bridge card actions
 - language-aware setup guide generation and formatting helpers

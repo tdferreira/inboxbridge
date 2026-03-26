@@ -28,11 +28,15 @@ public class RuntimeBridgeService {
     @Inject
     AppUserRepository appUserRepository;
 
+    @Inject
+    EnvSourceService envSourceService;
+
     public List<RuntimeBridge> listEnabledForPolling() {
         List<RuntimeBridge> bridges = new ArrayList<>();
         GmailTarget systemTarget = systemGmailTarget();
 
-        for (BridgeConfig.Source source : config.sources()) {
+        for (EnvSourceService.IndexedSource indexedSource : envSourceService.configuredSources()) {
+            BridgeConfig.Source source = indexedSource.source();
             if (!source.enabled()) {
                 continue;
             }

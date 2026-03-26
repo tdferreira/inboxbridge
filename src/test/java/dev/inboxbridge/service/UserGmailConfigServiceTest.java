@@ -187,6 +187,11 @@ class UserGmailConfigServiceTest {
         }
 
         @Override
+        public boolean multiUserEnabled() {
+            return true;
+        }
+
+        @Override
         public Security security() {
             return new Security() {
                 @Override

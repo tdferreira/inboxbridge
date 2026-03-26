@@ -106,6 +106,11 @@ class PollingSettingsServiceTest {
         }
 
         @Override
+        public boolean multiUserEnabled() {
+            return true;
+        }
+
+        @Override
         public Security security() {
             return null;
         }

@@ -33,6 +33,12 @@ public class AdminDashboardService {
     @Inject
     PollingSettingsService pollingSettingsService;
 
+    @Inject
+    EnvSourceService envSourceService;
+
+    @Inject
+    SourcePollingStateService sourcePollingStateService;
+
     public AdminDashboardResponse dashboard() {
         PollingSettingsService.EffectivePollingSettings effectivePolling = pollingSettingsService.effectiveSettings();
         Map<String, ImportStats> importStatsBySource = new HashMap<>();
@@ -42,13 +48,23 @@ public class AdminDashboardService {
                     new ImportStats(((Long) row[1]).longValue(), (Instant) row[2]));
         }
 
-        List<AdminBridgeSummary> bridges = config.sources().stream()
-                .map(source -> {
+        List<EnvSourceService.IndexedSource> configuredSources = envSourceService.configuredSources();
+        Map<String, dev.inboxbridge.dto.SourcePollingStateView> pollingStateBySource = sourcePollingStateService.viewBySourceIds(
+                configuredSources.stream()
+                        .map(indexedSource -> indexedSource.source().id())
+                        .toList());
+
+        List<AdminBridgeSummary> bridges = configuredSources.stream()
+                .map(indexedSource -> {
+                    BridgeConfig.Source source = indexedSource.source();
                     ImportStats importStats = importStatsBySource.getOrDefault(source.id(), ImportStats.EMPTY);
                     AdminPollEventSummary lastEvent = sourcePollEventService.latestForSource(source.id()).orElse(null);
                     return new AdminBridgeSummary(
                             source.id(),
                             source.enabled(),
+                            effectivePolling.pollEnabled(),
+                            effectivePolling.pollIntervalText(),
+                            effectivePolling.fetchWindow(),
                             source.protocol().name(),
                             source.authMethod().name(),
                             source.oauthProvider().name(),
@@ -62,7 +78,8 @@ public class AdminDashboardService {
                             tokenStorageMode(source),
                             importStats.totalImported(),
                             importStats.lastImportedAt(),
-                            lastEvent);
+                            lastEvent,
+                            pollingStateBySource.get(source.id()));
                 })
                 .toList();
 
@@ -72,8 +89,8 @@ public class AdminDashboardService {
 
         return new AdminDashboardResponse(
                 new AdminOverallSummary(
-                        config.sources().size(),
-                        (int) config.sources().stream().filter(BridgeConfig.Source::enabled).count(),
+                        configuredSources.size(),
+                        (int) configuredSources.stream().map(EnvSourceService.IndexedSource::source).filter(BridgeConfig.Source::enabled).count(),
                         importedMessageRepository.count(),
                         sourcesWithErrors,
                         effectivePolling.pollEnabled(),

@@ -5,6 +5,9 @@ import java.time.Instant;
 public record AdminBridgeSummary(
         String id,
         boolean enabled,
+        boolean effectivePollEnabled,
+        String effectivePollInterval,
+        int effectiveFetchWindow,
         String protocol,
         String authMethod,
         String oauthProvider,
@@ -18,5 +21,6 @@ public record AdminBridgeSummary(
         String tokenStorageMode,
         long totalImportedMessages,
         Instant lastImportedAt,
-        AdminPollEventSummary lastEvent) {
+        AdminPollEventSummary lastEvent,
+        SourcePollingStateView pollingState) {
 }

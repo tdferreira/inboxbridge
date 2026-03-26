@@ -4,7 +4,6 @@ import java.time.Instant;
 import java.util.List;
 import java.util.Optional;
 import java.util.concurrent.atomic.AtomicBoolean;
-import java.util.concurrent.atomic.AtomicReference;
 
 import org.jboss.logging.Logger;
 
@@ -42,20 +41,16 @@ public class PollingService {
     @Inject
     PollingSettingsService pollingSettingsService;
 
+    @Inject
+    UserPollingSettingsService userPollingSettingsService;
+
+    @Inject
+    SourcePollingStateService sourcePollingStateService;
+
     private final AtomicBoolean running = new AtomicBoolean(false);
-    private final AtomicReference<Instant> lastPollStartedAt = new AtomicReference<>();
 
     @Scheduled(every = "5s")
     void scheduledPoll() {
-        PollingSettingsService.EffectivePollingSettings settings = pollingSettingsService.effectiveSettings();
-        if (!settings.pollEnabled()) {
-            return;
-        }
-        Instant lastPollStarted = lastPollStartedAt.get();
-        if (lastPollStarted != null && lastPollStarted.plus(settings.pollInterval()).isAfter(Instant.now())) {
-            return;
-        }
-        lastPollStartedAt.set(Instant.now());
         runPoll("scheduler");
     }
 
@@ -69,10 +64,25 @@ public class PollingService {
 
         PollRunResult result = new PollRunResult();
         try {
-            lastPollStartedAt.set(Instant.now());
-            LOG.infof("Starting poll triggered by %s", trigger);
+            if (!"scheduler".equals(trigger)) {
+                LOG.infof("Starting poll triggered by %s", trigger);
+            }
+            Instant now = Instant.now();
+            boolean ignoreInterval = !"scheduler".equals(trigger);
             for (RuntimeBridge bridge : runtimeBridgeService.listEnabledForPolling()) {
-                pollSource(bridge, trigger, result);
+                PollingSettingsService.EffectivePollingSettings settings = effectiveSettingsFor(bridge);
+                SourcePollingStateService.PollEligibility eligibility = sourcePollingStateService.eligibility(
+                        bridge.id(),
+                        settings,
+                        now,
+                        ignoreInterval);
+                if (!eligibility.shouldPoll()) {
+                    if (ignoreInterval) {
+                        result.addError(skipMessage(bridge, eligibility));
+                    }
+                    continue;
+                }
+                pollSource(bridge, trigger, settings, result);
             }
             return result;
         } catch (RuntimeException e) {
@@ -82,19 +92,29 @@ public class PollingService {
         } finally {
             result.finish();
             running.set(false);
-            LOG.infof("Poll finished: fetched=%d imported=%d duplicates=%d errors=%d",
-                    result.getFetched(), result.getImported(), result.getDuplicates(), result.getErrors().size());
+            if (!"scheduler".equals(trigger)
+                    || result.getFetched() > 0
+                    || result.getImported() > 0
+                    || result.getDuplicates() > 0
+                    || !result.getErrors().isEmpty()) {
+                LOG.infof("Poll finished: fetched=%d imported=%d duplicates=%d errors=%d",
+                        result.getFetched(), result.getImported(), result.getDuplicates(), result.getErrors().size());
+            }
         }
     }
 
-    private void pollSource(RuntimeBridge bridge, String trigger, PollRunResult result) {
+    private void pollSource(
+            RuntimeBridge bridge,
+            String trigger,
+            PollingSettingsService.EffectivePollingSettings settings,
+            PollRunResult result) {
         Instant startedAt = Instant.now();
         int fetched = 0;
         int imported = 0;
         int duplicates = 0;
         String error = null;
         try {
-            List<FetchedMessage> messages = mailSourceClient.fetch(bridge);
+            List<FetchedMessage> messages = mailSourceClient.fetch(bridge, settings.fetchWindow());
             List<String> labelIds = gmailLabelService.resolveLabelIds(bridge.gmailTarget(), bridge.customLabel());
             for (FetchedMessage message : messages) {
                 result.incrementFetched();
@@ -114,15 +134,43 @@ public class PollingService {
             LOG.error(error, e);
             result.addError(error);
         } finally {
+            Instant finishedAt = Instant.now();
+            if (error == null) {
+                sourcePollingStateService.recordSuccess(bridge.id(), finishedAt, settings);
+            } else {
+                sourcePollingStateService.recordFailure(bridge.id(), finishedAt, error);
+            }
             sourcePollEventService.record(
                     bridge.id(),
                     trigger,
                     startedAt,
-                    Instant.now(),
+                    finishedAt,
                     fetched,
                     imported,
                     duplicates,
                     error);
         }
+    }
+
+    private PollingSettingsService.EffectivePollingSettings effectiveSettingsFor(RuntimeBridge bridge) {
+        if (bridge.ownerUserId() != null) {
+            return userPollingSettingsService.effectiveSettingsForUser(bridge.ownerUserId());
+        }
+        return pollingSettingsService.effectiveSettings();
+    }
+
+    private String skipMessage(RuntimeBridge bridge, SourcePollingStateService.PollEligibility eligibility) {
+        return switch (eligibility.reason()) {
+            case "DISABLED" -> "Source " + bridge.id() + " is skipped because polling is disabled for this fetcher owner.";
+            case "COOLDOWN" -> "Source " + bridge.id() + " is cooling down until "
+                    + Optional.ofNullable(eligibility.state())
+                            .map(state -> String.valueOf(state.cooldownUntil()))
+                            .orElse("a later retry time") + ".";
+            case "INTERVAL" -> "Source " + bridge.id() + " is waiting for its next poll window at "
+                    + Optional.ofNullable(eligibility.state())
+                            .map(state -> String.valueOf(state.nextPollAt()))
+                            .orElse("a later retry time") + ".";
+            default -> "Source " + bridge.id() + " is not ready to poll yet.";
+        };
     }
 }

@@ -40,20 +40,28 @@ public class MailSourceClient {
     MicrosoftOAuthService microsoftOAuthService;
 
     public List<FetchedMessage> fetch(BridgeConfig.Source source) {
+        return fetch(source, pollingSettingsService.effectiveSettings().fetchWindow());
+    }
+
+    public List<FetchedMessage> fetch(BridgeConfig.Source source, int fetchWindow) {
         return switch (source.protocol()) {
-            case IMAP -> fetchImap(source);
-            case POP3 -> fetchPop3(source);
+            case IMAP -> fetchImap(source, fetchWindow);
+            case POP3 -> fetchPop3(source, fetchWindow);
         };
     }
 
     public List<FetchedMessage> fetch(RuntimeBridge bridge) {
+        return fetch(bridge, pollingSettingsService.effectiveSettings().fetchWindow());
+    }
+
+    public List<FetchedMessage> fetch(RuntimeBridge bridge, int fetchWindow) {
         return switch (bridge.protocol()) {
-            case IMAP -> fetchImap(bridge);
-            case POP3 -> fetchPop3(bridge);
+            case IMAP -> fetchImap(bridge, fetchWindow);
+            case POP3 -> fetchPop3(bridge, fetchWindow);
         };
     }
 
-    private List<FetchedMessage> fetchImap(BridgeConfig.Source source) {
+    private List<FetchedMessage> fetchImap(BridgeConfig.Source source, int fetchWindow) {
         Properties properties = new Properties();
         properties.put("mail.store.protocol", source.tls() ? "imaps" : "imap");
         properties.put("mail.imap.ssl.enable", source.tls());
@@ -79,8 +87,8 @@ public class MailSourceClient {
             folder = store.getFolder(source.folder().orElse("INBOX"));
             folder.open(Folder.READ_ONLY);
             Message[] candidateMessages = source.unreadOnly()
-                    ? trimTailMessages(folder.search(new FlagTerm(new Flags(Flags.Flag.SEEN), false)))
-                    : selectTailMessages(folder);
+                    ? trimTailMessages(folder.search(new FlagTerm(new Flags(Flags.Flag.SEEN), false)), fetchWindow)
+                    : selectTailMessages(folder, fetchWindow);
             return toFetchedMessages(source, candidateMessages);
         } catch (MessagingException e) {
             throw new IllegalStateException("Failed to fetch IMAP mail for source " + source.id(), e);
@@ -90,7 +98,7 @@ public class MailSourceClient {
         }
     }
 
-    private List<FetchedMessage> fetchImap(RuntimeBridge bridge) {
+    private List<FetchedMessage> fetchImap(RuntimeBridge bridge, int fetchWindow) {
         Properties properties = new Properties();
         properties.put("mail.store.protocol", bridge.tls() ? "imaps" : "imap");
         properties.put("mail.imap.ssl.enable", bridge.tls());
@@ -116,8 +124,8 @@ public class MailSourceClient {
             folder = store.getFolder(bridge.folder().orElse("INBOX"));
             folder.open(Folder.READ_ONLY);
             Message[] candidateMessages = bridge.unreadOnly()
-                    ? trimTailMessages(folder.search(new FlagTerm(new Flags(Flags.Flag.SEEN), false)))
-                    : selectTailMessages(folder);
+                    ? trimTailMessages(folder.search(new FlagTerm(new Flags(Flags.Flag.SEEN), false)), fetchWindow)
+                    : selectTailMessages(folder, fetchWindow);
             return toFetchedMessages(bridge.id(), candidateMessages);
         } catch (MessagingException e) {
             throw new IllegalStateException("Failed to fetch IMAP mail for source " + bridge.id(), e);
@@ -127,7 +135,7 @@ public class MailSourceClient {
         }
     }
 
-    private List<FetchedMessage> fetchPop3(BridgeConfig.Source source) {
+    private List<FetchedMessage> fetchPop3(BridgeConfig.Source source, int fetchWindow) {
         Properties properties = new Properties();
         properties.put("mail.store.protocol", source.tls() ? "pop3s" : "pop3");
         properties.put("mail.pop3.ssl.enable", source.tls());
@@ -152,7 +160,7 @@ public class MailSourceClient {
             connectStore(store, source);
             folder = store.getFolder("INBOX");
             folder.open(Folder.READ_ONLY);
-            Message[] candidateMessages = selectTailMessages(folder);
+            Message[] candidateMessages = selectTailMessages(folder, fetchWindow);
             return toFetchedMessages(source, candidateMessages);
         } catch (MessagingException e) {
             throw new IllegalStateException("Failed to fetch POP3 mail for source " + source.id(), e);
@@ -162,7 +170,7 @@ public class MailSourceClient {
         }
     }
 
-    private List<FetchedMessage> fetchPop3(RuntimeBridge bridge) {
+    private List<FetchedMessage> fetchPop3(RuntimeBridge bridge, int fetchWindow) {
         Properties properties = new Properties();
         properties.put("mail.store.protocol", bridge.tls() ? "pop3s" : "pop3");
         properties.put("mail.pop3.ssl.enable", bridge.tls());
@@ -187,7 +195,7 @@ public class MailSourceClient {
             connectStore(store, bridge);
             folder = store.getFolder("INBOX");
             folder.open(Folder.READ_ONLY);
-            Message[] candidateMessages = selectTailMessages(folder);
+            Message[] candidateMessages = selectTailMessages(folder, fetchWindow);
             return toFetchedMessages(bridge.id(), candidateMessages);
         } catch (MessagingException e) {
             throw new IllegalStateException("Failed to fetch POP3 mail for source " + bridge.id(), e);
@@ -197,22 +205,22 @@ public class MailSourceClient {
         }
     }
 
-    private Message[] selectTailMessages(Folder folder) throws MessagingException {
+    private Message[] selectTailMessages(Folder folder, int fetchWindow) throws MessagingException {
         int count = folder.getMessageCount();
         if (count == 0) {
             return new Message[0];
         }
-        int fetchWindow = Math.max(1, pollingSettingsService.effectiveSettings().fetchWindow());
-        int start = Math.max(1, count - fetchWindow + 1);
+        int normalizedFetchWindow = Math.max(1, fetchWindow);
+        int start = Math.max(1, count - normalizedFetchWindow + 1);
         return folder.getMessages(start, count);
     }
 
-    private Message[] trimTailMessages(Message[] messages) {
-        int fetchWindow = Math.max(1, pollingSettingsService.effectiveSettings().fetchWindow());
-        if (messages.length <= fetchWindow) {
+    private Message[] trimTailMessages(Message[] messages, int fetchWindow) {
+        int normalizedFetchWindow = Math.max(1, fetchWindow);
+        if (messages.length <= normalizedFetchWindow) {
             return messages;
         }
-        return Arrays.copyOfRange(messages, messages.length - fetchWindow, messages.length);
+        return Arrays.copyOfRange(messages, messages.length - normalizedFetchWindow, messages.length);
     }
 
     private List<FetchedMessage> toFetchedMessages(BridgeConfig.Source source, Message[] messages) {

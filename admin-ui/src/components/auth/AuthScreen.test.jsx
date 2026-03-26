@@ -19,6 +19,7 @@ describe('AuthScreen', () => {
         authError=""
         loginLoading={false}
         loginForm={loginForm}
+        multiUserEnabled
         notice=""
         onCloseRegisterDialog={() => {
           registerOpen = false
@@ -55,6 +56,7 @@ describe('AuthScreen', () => {
           authError=""
           loginLoading={false}
           loginForm={loginForm}
+          multiUserEnabled
           notice=""
           onCloseRegisterDialog={() => {
             registerOpen = false
@@ -111,6 +113,7 @@ describe('AuthScreen', () => {
         authError=""
         loginLoading
         loginForm={{ username: 'admin', password: 'nimda' }}
+        multiUserEnabled
         notice=""
         onCloseRegisterDialog={vi.fn()}
         onLogin={vi.fn()}
@@ -138,6 +141,7 @@ describe('AuthScreen', () => {
         authError=""
         loginLoading={false}
         loginForm={{ username: 'admin', password: '' }}
+        multiUserEnabled
         notice=""
         onCloseRegisterDialog={vi.fn()}
         onLogin={vi.fn()}
@@ -157,5 +161,33 @@ describe('AuthScreen', () => {
 
     expect(screen.getByText(/repeat password must match/i)).toBeInTheDocument()
     expect(screen.getByRole('button', { name: 'Register For Approval' })).toBeDisabled()
+  })
+
+  it('hides self-registration in single-user mode', () => {
+    render(
+      <AuthScreen
+        authError=""
+        loginLoading={false}
+        loginForm={{ username: 'admin', password: '' }}
+        multiUserEnabled={false}
+        notice=""
+        onCloseRegisterDialog={vi.fn()}
+        onLogin={vi.fn()}
+        onLoginChange={vi.fn()}
+        onPasskeyLogin={vi.fn()}
+        onOpenRegisterDialog={vi.fn()}
+        onRegister={vi.fn()}
+        onRegisterChange={vi.fn()}
+        registerOpen={false}
+        passkeyLoading={false}
+        passkeysSupported={true}
+        registerForm={{ username: '', password: '', confirmPassword: '' }}
+        registerLoading={false}
+        t={t}
+      />
+    )
+
+    expect(screen.queryByRole('button', { name: 'Register for access' })).not.toBeInTheDocument()
+    expect(screen.getByText(/single-user mode/i)).toBeInTheDocument()
   })
 })

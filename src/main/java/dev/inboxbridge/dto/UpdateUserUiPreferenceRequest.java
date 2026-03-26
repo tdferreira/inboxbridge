@@ -7,6 +7,7 @@ public record UpdateUserUiPreferenceRequest(
         Boolean persistLayout,
         Boolean quickSetupCollapsed,
         Boolean gmailDestinationCollapsed,
+        Boolean userPollingCollapsed,
         Boolean sourceBridgesCollapsed,
         Boolean systemDashboardCollapsed,
         Boolean userManagementCollapsed,

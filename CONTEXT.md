@@ -19,6 +19,7 @@ The app supports two bridge sources of truth:
 - user-managed mail fetchers stored in PostgreSQL through the admin UI
 
 In the current admin UI, both kinds of fetchers are shown together in the `My Email Fetchers` section, but env-managed entries are explicitly marked as read-only `.env` items and are only surfaced to the account named `admin`.
+Fallback placeholder values from `application.yaml` are filtered out before that merge, so if the deployment does not actually define any `BRIDGE_SOURCES_*` values then no env-managed fetcher is surfaced.
 
 Deployment-wide browser callback defaults can now be anchored on `PUBLIC_BASE_URL`, which feeds the default Google and Microsoft OAuth redirect URIs shown in the UI and docs.
 
@@ -64,6 +65,7 @@ Bootstrap auth behavior:
 
 - default admin user is `admin`
 - default password is `nimda`
+- the deployment can run in multi-user mode or single-user mode through `BRIDGE_MULTI_USER_ENABLED`
 - bootstrap admin is forced to change password
 - the login screen no longer exposes live bootstrap-account state to unauthenticated visitors; bootstrap credentials are documented, but runtime bootstrap status is not published through a public endpoint
 - users can register WebAuthn passkeys after signing in
@@ -75,6 +77,8 @@ Bootstrap auth behavior:
 - admin-created users are also forced to change password
 - self-registered users start as `inactive` and `unapproved`
 - self-registration now starts from a focused modal workflow on the unauthenticated screen instead of leaving the request form always visible
+- when single-user mode is enabled, self-registration and admin user-management endpoints are disabled and the UI hides those controls entirely
+- single-user mode still keeps the rest of the admin control plane visible for the bootstrap admin, including Gmail setup, mail fetchers, security tools, and poller settings
 - admins can approve, suspend, reactivate, promote, or demote users from the admin UI
 - admins can reset another user's password to a temporary value and wipe that user's passkeys
 - the admin password reset workflow now uses a modal dialog instead of an inline form in the user-management panel
@@ -85,9 +89,13 @@ System polling behavior:
 
 - polling defaults still come from env/config
 - admins can override poll enablement, poll interval, and fetch window from the admin UI
+- each user can also override poll enablement, poll interval, and fetch window for that user's own UI-managed fetchers
 - overrides are stored in PostgreSQL and merged at runtime with the env defaults
 - clearing an override returns that field to the env default
 - the scheduler now checks effective runtime settings dynamically instead of relying only on a static Quarkus cron interval
+- env-managed system fetchers use the global effective settings, while DB-managed user fetchers use the owning user's effective settings
+- each fetcher now has its own persisted polling state, including next poll time, cooldown-until timestamp, consecutive failure count, and last failure reason
+- repeated provider failures now trigger automatic cooldown/backoff so one blocked mailbox does not cause InboxBridge to hammer that provider
 
 ### 3. Hybrid env + DB config model
 
@@ -247,7 +255,34 @@ Constraints:
 
 This model preserves bootstrap simplicity while making the running system tunable without editing deployment files.
 
-### 11. Actionable admin-ui notifications
+### 11. Per-user polling overrides and source backoff
+
+DB-managed user fetchers now resolve polling behavior from two layers:
+
+- deployment/global defaults and admin overrides
+- optional per-user overrides stored in PostgreSQL
+
+That lets one user poll every `2m` while another polls every `15m`, without changing the operator defaults for env-managed fetchers.
+
+Each source also persists scheduler state in PostgreSQL:
+
+- `nextPollAt`
+- `cooldownUntil`
+- `consecutiveFailures`
+- `lastFailureReason`
+- `lastFailureAt`
+- `lastSuccessAt`
+
+Current backoff behavior is heuristic but practical:
+
+- rate-limit, throttling, quota, or lockout style errors trigger longer cooldowns
+- auth and consent failures trigger an even longer cooldown so InboxBridge does not repeatedly hammer a blocked account
+- transient network failures trigger a medium cooldown
+- repeated failures increase the cooldown window with exponential growth up to a capped maximum
+
+Manual poll requests bypass the normal interval gate, but they still respect explicit poll-disable settings and active cooldown windows.
+
+### 12. Actionable admin-ui notifications
 
 Authenticated notifications below the setup guide now support:
 
@@ -257,7 +292,7 @@ Authenticated notifications below the setup guide now support:
 
 High-importance warnings and errors remain visible until the user dismisses them.
 
-### 12. Lightweight admin-ui internationalization
+### 13. Lightweight admin-ui internationalization
 
 The admin UI now ships with an internal translation dictionary and a persisted user language preference.
 
@@ -275,6 +310,7 @@ Design choices:
 - translations are stored in `admin-ui/src/lib/i18n.js`
 - the backend persists the selected language in `user_ui_preference.language`
 - the browser also mirrors the last selected language in local storage so the login screen can reuse it before session data is loaded
+- visible labels now route through the translation helper instead of mixing translated and raw JSX text
 - the structure is intentionally simple so additional languages can be added without bringing in a heavier i18n framework
 
 ## OAuth model
@@ -336,7 +372,7 @@ Still missing for a higher-assurance v1:
 
 - encrypted env-managed mailbox passwords
 - KMS-backed key management and rotation
-- durable backoff / lockout protection
+- richer metrics and audit-friendly event logs around poll cooldown/backoff decisions
 - richer metrics and alerting
 - more structured audit logging
 
@@ -474,21 +510,27 @@ src/main/resources/db/migration
 ├── V3__source_poll_event.sql
 ├── V4__identity_and_user_bridge.sql
 ├── V5__user_secret_keys_and_destination_scope.sql
-└── V6__user_approval.sql
+├── V6__user_approval.sql
+├── V7__user_ui_preference.sql
+├── V8__passkeys.sql
+├── V9__optional_password.sql
+├── V10__system_polling_setting.sql
+├── V11__passkey_login_and_language.sql
+└── V12__user_polling_and_source_backoff.sql
 ```
 
 ## Current validation status
 
 Validated on 2026-03-26:
 
-- `mvn test` passes with 27 backend tests
-- admin-ui Vitest suite passes with 6 frontend tests during the Docker build
+- `mvn test` passes
+- admin-ui Vitest suite passes during the Docker build
 - Docker Compose build succeeds
 - backend starts on both HTTP `8080` and HTTPS `8443`
 - admin UI serves correctly over HTTPS in the container
 - unauthenticated `GET /api/auth/me` returns `401`
 - bootstrap login `admin` / `nimda` succeeds and returns `mustChangePassword=true`
-- Flyway migrations `V1` through `V6` apply successfully
+- Flyway migrations `V1` through `V12` apply successfully
 
 Admin UI frontend structure now follows a controller-and-components split:
 

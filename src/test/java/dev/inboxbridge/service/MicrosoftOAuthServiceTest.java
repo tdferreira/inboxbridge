@@ -34,6 +34,7 @@ class MicrosoftOAuthServiceTest {
                         BridgeConfig.OAuthProvider.MICROSOFT)));
         service.objectMapper = new ObjectMapper();
         service.userBridgeRepository = new EmptyUserBridgeRepository();
+        service.envSourceService = envSourceService(service.config);
 
         String authorizationUrl = service.buildAuthorizationUrl("outlook-main-imap");
         Map<String, String> params = queryParams(authorizationUrl);
@@ -60,6 +61,7 @@ class MicrosoftOAuthServiceTest {
                         BridgeConfig.OAuthProvider.MICROSOFT)));
         service.objectMapper = new ObjectMapper();
         service.userBridgeRepository = new EmptyUserBridgeRepository();
+        service.envSourceService = envSourceService(service.config);
 
         String authorizationUrl = service.buildAuthorizationUrl("outlook-main-pop");
 
@@ -80,6 +82,7 @@ class MicrosoftOAuthServiceTest {
                         BridgeConfig.OAuthProvider.MICROSOFT)));
         service.objectMapper = new ObjectMapper();
         service.userBridgeRepository = new EmptyUserBridgeRepository();
+        service.envSourceService = envSourceService(service.config);
 
         IllegalStateException error = assertThrows(IllegalStateException.class,
                 () -> service.buildAuthorizationUrl("outlook-main-imap"));
@@ -111,6 +114,12 @@ class MicrosoftOAuthServiceTest {
         return params;
     }
 
+    private EnvSourceService envSourceService(BridgeConfig config) {
+        EnvSourceService service = new EnvSourceService();
+        service.setConfigForTest(config);
+        return service;
+    }
+
     private record TestConfig(TestMicrosoft microsoft, List<BridgeConfig.Source> sources) implements BridgeConfig {
         @Override
         public boolean pollEnabled() {
@@ -125,6 +134,11 @@ class MicrosoftOAuthServiceTest {
         @Override
         public int fetchWindow() {
             return 50;
+        }
+
+        @Override
+        public boolean multiUserEnabled() {
+            return true;
         }
 
         @Override

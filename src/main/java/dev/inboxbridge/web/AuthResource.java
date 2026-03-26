@@ -1,8 +1,9 @@
 package dev.inboxbridge.web;
 
+import dev.inboxbridge.dto.AuthUiOptionsResponse;
+import dev.inboxbridge.dto.FinishPasskeyCeremonyRequest;
 import dev.inboxbridge.dto.LoginRequest;
 import dev.inboxbridge.dto.LoginResponse;
-import dev.inboxbridge.dto.FinishPasskeyCeremonyRequest;
 import dev.inboxbridge.dto.RegisterUserRequest;
 import dev.inboxbridge.dto.SessionUserResponse;
 import dev.inboxbridge.dto.StartPasskeyCeremonyResponse;
@@ -12,6 +13,7 @@ import dev.inboxbridge.security.AuthenticatedFilter;
 import dev.inboxbridge.security.CurrentUserContext;
 import dev.inboxbridge.security.RequireAuth;
 import dev.inboxbridge.service.AppUserService;
+import dev.inboxbridge.service.ApplicationModeService;
 import dev.inboxbridge.service.AuthService;
 import dev.inboxbridge.service.PasskeyService;
 import jakarta.inject.Inject;
@@ -46,6 +48,15 @@ public class AuthResource {
     @Inject
     PasskeyService passkeyService;
 
+    @Inject
+    ApplicationModeService applicationModeService;
+
+    @GET
+    @Path("/options")
+    public AuthUiOptionsResponse options() {
+        return new AuthUiOptionsResponse(applicationModeService.multiUserEnabled());
+    }
+
     @POST
     @Path("/login")
     @Consumes(MediaType.APPLICATION_JSON)
@@ -69,6 +80,7 @@ public class AuthResource {
     @Consumes(MediaType.APPLICATION_JSON)
     public Response register(RegisterUserRequest request) {
         try {
+            applicationModeService.requireMultiUserMode();
             AppUser user = appUserService.registerUser(request);
             return Response.status(Response.Status.ACCEPTED)
                     .entity(java.util.Map.of(

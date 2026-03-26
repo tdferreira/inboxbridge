@@ -27,6 +27,7 @@ class UserUiPreferenceServiceTest {
         assertFalse(view.persistLayout());
         assertFalse(view.quickSetupCollapsed());
         assertFalse(view.gmailDestinationCollapsed());
+        assertFalse(view.userPollingCollapsed());
         assertFalse(view.sourceBridgesCollapsed());
         assertEquals("en", view.language());
     }
@@ -43,6 +44,7 @@ class UserUiPreferenceServiceTest {
                 true,
                 true,
                 false,
+                false,
                 true,
                 false,
                 true,
@@ -50,6 +52,7 @@ class UserUiPreferenceServiceTest {
 
         assertTrue(updated.persistLayout());
         assertTrue(updated.quickSetupCollapsed());
+        assertFalse(updated.userPollingCollapsed());
         assertTrue(updated.sourceBridgesCollapsed());
         assertTrue(updated.userManagementCollapsed());
         assertFalse(updated.gmailDestinationCollapsed());

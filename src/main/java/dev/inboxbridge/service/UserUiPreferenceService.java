@@ -29,7 +29,7 @@ public class UserUiPreferenceService {
     }
 
     public UserUiPreferenceView defaultView() {
-        return new UserUiPreferenceView(false, false, false, false, false, false, DEFAULT_LANGUAGE);
+        return new UserUiPreferenceView(false, false, false, false, false, false, false, DEFAULT_LANGUAGE);
     }
 
     @Transactional
@@ -41,6 +41,7 @@ public class UserUiPreferenceService {
         preference.persistLayout = request.persistLayout() != null && request.persistLayout();
         preference.quickSetupCollapsed = request.quickSetupCollapsed() != null && request.quickSetupCollapsed();
         preference.gmailDestinationCollapsed = request.gmailDestinationCollapsed() != null && request.gmailDestinationCollapsed();
+        preference.userPollingCollapsed = request.userPollingCollapsed() != null && request.userPollingCollapsed();
         preference.sourceBridgesCollapsed = request.sourceBridgesCollapsed() != null && request.sourceBridgesCollapsed();
         preference.systemDashboardCollapsed = request.systemDashboardCollapsed() != null && request.systemDashboardCollapsed();
         preference.userManagementCollapsed = request.userManagementCollapsed() != null && request.userManagementCollapsed();
@@ -55,6 +56,7 @@ public class UserUiPreferenceService {
                 preference.persistLayout,
                 preference.quickSetupCollapsed,
                 preference.gmailDestinationCollapsed,
+                preference.userPollingCollapsed,
                 preference.sourceBridgesCollapsed,
                 preference.systemDashboardCollapsed,
                 preference.userManagementCollapsed,

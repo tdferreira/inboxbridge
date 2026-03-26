@@ -5,7 +5,6 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 
-import dev.inboxbridge.config.BridgeConfig;
 import dev.inboxbridge.dto.MicrosoftOAuthCodeRequest;
 import dev.inboxbridge.dto.MicrosoftOAuthSourceOption;
 import dev.inboxbridge.dto.MicrosoftTokenExchangeResponse;
@@ -16,6 +15,7 @@ import dev.inboxbridge.security.CurrentUserContext;
 import dev.inboxbridge.security.RequireAuth;
 import dev.inboxbridge.service.MicrosoftOAuthService;
 import dev.inboxbridge.service.UserBridgeService;
+import dev.inboxbridge.service.EnvSourceService;
 import jakarta.inject.Inject;
 import jakarta.ws.rs.BadRequestException;
 import jakarta.ws.rs.Consumes;
@@ -42,7 +42,7 @@ public class MicrosoftOAuthResource {
     UserBridgeService userBridgeService;
 
     @Inject
-    BridgeConfig bridgeConfig;
+    EnvSourceService envSourceService;
 
     @GET
     @Path("/url")
@@ -606,7 +606,9 @@ public class MicrosoftOAuthResource {
 
     private void authorizeSource(String sourceId) {
         AppUser user = currentUserContext.user();
-        boolean envSource = bridgeConfig.sources().stream().anyMatch(source -> source.id().equals(sourceId));
+        boolean envSource = envSourceService.configuredSources().stream()
+                .map(EnvSourceService.IndexedSource::source)
+                .anyMatch(source -> source.id().equals(sourceId));
         if (envSource) {
             if (user.role != AppUser.Role.ADMIN) {
                 throw new ForbiddenException("Admin access is required for environment-managed bridges");

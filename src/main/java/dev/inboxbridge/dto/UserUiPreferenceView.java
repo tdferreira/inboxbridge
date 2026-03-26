@@ -7,6 +7,7 @@ public record UserUiPreferenceView(
         boolean persistLayout,
         boolean quickSetupCollapsed,
         boolean gmailDestinationCollapsed,
+        boolean userPollingCollapsed,
         boolean sourceBridgesCollapsed,
         boolean systemDashboardCollapsed,
         boolean userManagementCollapsed,

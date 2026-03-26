@@ -16,6 +16,72 @@ export function statusTone(status) {
   }
 }
 
+export function statusLabel(status, locale = 'en') {
+  switch (status) {
+    case 'SUCCESS':
+      return translate(locale, 'status.success')
+    case 'ERROR':
+      return translate(locale, 'status.error')
+    default:
+      return translate(locale, 'status.notRun')
+  }
+}
+
+export function roleLabel(role, locale = 'en') {
+  switch (role) {
+    case 'ADMIN':
+      return translate(locale, 'role.admin')
+    case 'USER':
+      return translate(locale, 'role.user')
+    default:
+      return role || translate(locale, 'tokenStorage.unknown')
+  }
+}
+
+export function protocolLabel(protocol, locale = 'en') {
+  switch (protocol) {
+    case 'IMAP':
+      return translate(locale, 'protocol.imap')
+    case 'POP3':
+      return translate(locale, 'protocol.pop3')
+    default:
+      return protocol || translate(locale, 'tokenStorage.unknown')
+  }
+}
+
+export function authMethodLabel(method, locale = 'en') {
+  switch (method) {
+    case 'PASSWORD':
+      return translate(locale, 'authMethod.password')
+    case 'OAUTH2':
+      return translate(locale, 'authMethod.oauth2')
+    default:
+      return method || translate(locale, 'tokenStorage.unknown')
+  }
+}
+
+export function oauthProviderLabel(provider, locale = 'en') {
+  switch (provider) {
+    case 'MICROSOFT':
+      return translate(locale, 'oauthProvider.microsoft')
+    case 'NONE':
+      return translate(locale, 'oauthProvider.none')
+    default:
+      return provider || translate(locale, 'tokenStorage.unknown')
+  }
+}
+
+export function triggerLabel(trigger, locale = 'en') {
+  switch (String(trigger || '').toLowerCase()) {
+    case 'scheduler':
+      return translate(locale, 'trigger.scheduler')
+    case 'manual':
+      return translate(locale, 'trigger.manual')
+    default:
+      return trigger || translate(locale, 'trigger.unknown')
+  }
+}
+
 export function tokenStorageLabel(mode, locale = 'en') {
   switch (mode) {
     case 'DATABASE':

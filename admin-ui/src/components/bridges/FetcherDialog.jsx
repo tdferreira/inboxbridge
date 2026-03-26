@@ -47,11 +47,11 @@ function FetcherDialog({
         <LabeledField helpText={t('bridges.providerPresetHelp')} label={t('bridges.providerPreset')}>
           <select value={selectedPreset} onChange={(event) => applyPreset(event.target.value)}>
             {EMAIL_PROVIDER_PRESETS.map((option) => (
-              <option key={option.id} value={option.id}>{option.label}</option>
+              <option key={option.id} value={option.id}>{t(`preset.${option.id}.label`)}</option>
             ))}
           </select>
         </LabeledField>
-        <div className="muted-box full">{preset.description}</div>
+        <div className="muted-box full">{t(`preset.${preset.id}.description`)}</div>
 
         <LabeledField helpText={t('bridges.bridgeIdHelp')} label={t('bridges.bridgeId')}>
           <input value={bridgeForm.bridgeId} onChange={(event) => onBridgeFormChange((current) => ({ ...current, bridgeId: event.target.value }))} />
@@ -62,8 +62,8 @@ function FetcherDialog({
         </LabeledField>
         <LabeledField helpText={t('bridges.protocolHelp')} label={t('bridges.protocol')}>
           <select value={bridgeForm.protocol} onChange={(event) => onBridgeFormChange((current) => ({ ...current, protocol: event.target.value, port: event.target.value === 'IMAP' ? 993 : 995 }))}>
-            <option>IMAP</option>
-            <option>POP3</option>
+            <option value="IMAP">{t('protocol.imap')}</option>
+            <option value="POP3">{t('protocol.pop3')}</option>
           </select>
         </LabeledField>
         <LabeledField helpText={t('bridges.portHelp')} label={t('bridges.port')}>
@@ -71,14 +71,14 @@ function FetcherDialog({
         </LabeledField>
         <LabeledField helpText={t('bridges.authMethodHelp')} label={t('bridges.authMethod')}>
           <select value={bridgeForm.authMethod} onChange={(event) => onBridgeFormChange((current) => ({ ...current, authMethod: event.target.value }))}>
-            <option>PASSWORD</option>
-            <option>OAUTH2</option>
+            <option value="PASSWORD">{t('authMethod.password')}</option>
+            <option value="OAUTH2">{t('authMethod.oauth2')}</option>
           </select>
         </LabeledField>
         {!usingPassword ? (
           <LabeledField helpText={t('bridges.oauthProviderHelp')} label={t('bridges.oauthProvider')}>
             <select value={bridgeForm.oauthProvider} onChange={(event) => onBridgeFormChange((current) => ({ ...current, oauthProvider: event.target.value }))}>
-              <option>MICROSOFT</option>
+              <option value="MICROSOFT">{t('oauthProvider.microsoft')}</option>
             </select>
           </LabeledField>
         ) : null}

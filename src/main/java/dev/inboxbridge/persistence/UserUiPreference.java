@@ -43,6 +43,9 @@ public class UserUiPreference extends PanacheEntityBase {
     @Column(name = "gmail_destination_collapsed", nullable = false)
     public boolean gmailDestinationCollapsed;
 
+    @Column(name = "user_polling_collapsed", nullable = false)
+    public boolean userPollingCollapsed;
+
     @Column(name = "source_bridges_collapsed", nullable = false)
     public boolean sourceBridgesCollapsed;
 

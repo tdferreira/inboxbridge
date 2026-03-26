@@ -1,3 +1,4 @@
+import { roleLabel } from '../../lib/formatters'
 import LoadingButton from '../common/LoadingButton'
 import './HeroPanel.css'
 
@@ -19,8 +20,8 @@ function HeroPanel({
     <section className="hero-panel">
       <div>
         <div className="eyebrow">{t('hero.eyebrow')}</div>
-        <h1>InboxBridge</h1>
-        <p className="section-copy">{t('hero.signedInAs', { username: session.username, role: session.role })}</p>
+        <h1>{t('auth.brand')}</h1>
+        <p className="section-copy">{t('hero.signedInAs', { username: session.username, role: roleLabel(session.role, language) })}</p>
       </div>
       <div className="action-row">
         <label className="hero-language-select">

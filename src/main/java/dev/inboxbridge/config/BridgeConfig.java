@@ -18,6 +18,9 @@ public interface BridgeConfig {
     @WithDefault("50")
     int fetchWindow();
 
+    @WithDefault("true")
+    boolean multiUserEnabled();
+
     Security security();
 
     Gmail gmail();

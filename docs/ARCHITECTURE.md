@@ -31,14 +31,24 @@ The fetch window and scheduler interval now come from effective runtime polling 
 
 - environment values provide defaults
 - PostgreSQL stores optional admin overrides
-- the running poller merges both at runtime
+- PostgreSQL also stores optional per-user overrides for DB-managed fetchers
+- the running poller merges the correct layer at runtime for each source
+
+Each source now has its own persisted polling state:
+
+- next eligible poll time
+- active cooldown-until time
+- consecutive failure count
+- last failure reason and timestamps
+
+The scheduler checks that state on every run so one blocked or throttled mailbox does not stall unrelated fetchers.
 
 That is deliberately simple for a first self-hosted version. The next evolution should be:
 
 - persistent IMAP UID / UIDVALIDITY checkpoints
 - POP UIDL checkpoints
-- finer retry rules
-- source throttling
+- richer retry classification
+- richer metrics and audit logs for poll cooldown decisions
 
 ## Package map
 
@@ -53,5 +63,11 @@ That is deliberately simple for a first self-hosted version. The next evolution 
 
 The React admin UI now separates:
 
+- `My Poller Settings`: per-user polling overrides for UI-managed fetchers
 - `My Email Fetchers`: a unified operational list of DB-managed and env-managed fetchers, with add/edit work happening in a modal dialog
 - `Poller Settings`: global polling controls, health metrics, and runtime overrides
+
+Deployment mode is also configurable:
+
+- multi-user mode shows self-registration and admin user management
+- single-user mode hides those surfaces and keeps InboxBridge focused on the bootstrap admin only

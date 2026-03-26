@@ -14,6 +14,7 @@ import org.junit.jupiter.api.Test;
 import dev.inboxbridge.config.BridgeConfig;
 import dev.inboxbridge.dto.AdminDashboardResponse;
 import dev.inboxbridge.dto.AdminPollEventSummary;
+import dev.inboxbridge.dto.SourcePollingStateView;
 import dev.inboxbridge.persistence.ImportedMessageRepository;
 
 class AdminDashboardServiceTest {
@@ -26,6 +27,8 @@ class AdminDashboardServiceTest {
         service.oAuthCredentialService = new FakeOAuthCredentialService();
         service.sourcePollEventService = new FakeSourcePollEventService();
         service.pollingSettingsService = new FakePollingSettingsService();
+        service.envSourceService = envSourceService(service.config);
+        service.sourcePollingStateService = new FakeSourcePollingStateService();
 
         AdminDashboardResponse response = service.dashboard();
 
@@ -45,9 +48,27 @@ class AdminDashboardServiceTest {
         assertEquals("DATABASE", response.bridges().getFirst().tokenStorageMode());
         assertNotNull(response.bridges().getFirst().lastEvent());
         assertEquals("ERROR", response.bridges().getFirst().lastEvent().status());
+        assertEquals("3m", response.bridges().getFirst().effectivePollInterval());
+        assertEquals(25, response.bridges().getFirst().effectiveFetchWindow());
+        assertNotNull(response.bridges().getFirst().pollingState());
 
         assertEquals(1, response.recentEvents().size());
         assertEquals("outlook-main-imap", response.recentEvents().getFirst().sourceId());
+    }
+
+    private static final class FakeSourcePollingStateService extends SourcePollingStateService {
+        @Override
+        public java.util.Map<String, SourcePollingStateView> viewBySourceIds(java.util.List<String> sourceIds) {
+            return java.util.Map.of(
+                    "outlook-main-imap",
+                    new SourcePollingStateView(
+                            Instant.parse("2026-03-26T10:10:00Z"),
+                            Instant.parse("2026-03-26T10:10:00Z"),
+                            1,
+                            "Source outlook-main-imap failed: AUTHENTICATE failed",
+                            Instant.parse("2026-03-26T10:02:05Z"),
+                            null));
+        }
     }
 
     private static final class FakePollingSettingsService extends PollingSettingsService {
@@ -69,6 +90,12 @@ class AdminDashboardServiceTest {
                     Integer.valueOf(25),
                     25);
         }
+    }
+
+    private EnvSourceService envSourceService(BridgeConfig config) {
+        EnvSourceService service = new EnvSourceService();
+        service.setConfigForTest(config);
+        return service;
     }
 
     private static final class FakeImportedMessageRepository extends ImportedMessageRepository {
@@ -156,6 +183,11 @@ class AdminDashboardServiceTest {
         @Override
         public int fetchWindow() {
             return 50;
+        }
+
+        @Override
+        public boolean multiUserEnabled() {
+            return true;
         }
 
         @Override

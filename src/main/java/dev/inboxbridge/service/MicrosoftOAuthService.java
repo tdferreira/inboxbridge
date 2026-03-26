@@ -54,6 +54,9 @@ public class MicrosoftOAuthService {
     @Inject
     UserBridgeRepository userBridgeRepository;
 
+    @Inject
+    EnvSourceService envSourceService;
+
     private final HttpClient httpClient = HttpClient.newBuilder()
             .connectTimeout(HTTP_TIMEOUT)
             .build();
@@ -62,7 +65,8 @@ public class MicrosoftOAuthService {
     private final ConcurrentMap<String, PendingState> pendingStates = new ConcurrentHashMap<>();
 
     public List<MicrosoftOAuthSourceOption> listMicrosoftOAuthSources() {
-        List<MicrosoftOAuthSourceOption> envSources = config.sources().stream()
+        List<MicrosoftOAuthSourceOption> envSources = envSourceService.configuredSources().stream()
+                .map(EnvSourceService.IndexedSource::source)
                 .filter(source -> source.oauthProvider() == BridgeConfig.OAuthProvider.MICROSOFT)
                 .map(source -> new MicrosoftOAuthSourceOption(source.id(), source.protocol().name(), source.enabled()))
                 .toList();
@@ -299,8 +303,8 @@ public class MicrosoftOAuthService {
     }
 
     private SourceRef resolveSourceRef(String sourceId) {
-        for (int i = 0; i < config.sources().size(); i++) {
-            BridgeConfig.Source source = config.sources().get(i);
+        for (EnvSourceService.IndexedSource indexedSource : envSourceService.configuredSources()) {
+            BridgeConfig.Source source = indexedSource.source();
             if (!source.id().equals(sourceId)) {
                 continue;
             }
@@ -314,7 +318,7 @@ public class MicrosoftOAuthService {
                     source.id(),
                     source.protocol(),
                     source.oauthRefreshToken().orElse(""),
-                    i,
+                    indexedSource.index(),
                     false);
         }
 

@@ -33,10 +33,26 @@ public class UserBridgeService {
     @Inject
     SourcePollEventService sourcePollEventService;
 
+    @Inject
+    UserPollingSettingsService userPollingSettingsService;
+
+    @Inject
+    SourcePollingStateService sourcePollingStateService;
+
     public List<UserBridgeView> listForUser(Long userId) {
         Map<String, ImportStats> importStatsBySource = importStatsBySource();
-        return repository.listByUserId(userId).stream()
-                .map(bridge -> toView(bridge, importStatsBySource.getOrDefault(bridge.bridgeId, ImportStats.EMPTY)))
+        PollingSettingsService.EffectivePollingSettings effectiveSettings = userPollingSettingsService.effectiveSettingsForUser(userId);
+        List<UserBridge> bridges = repository.listByUserId(userId);
+        Map<String, dev.inboxbridge.dto.SourcePollingStateView> pollingStateBySource = sourcePollingStateService.viewBySourceIds(
+                bridges.stream()
+                        .map(bridge -> bridge.bridgeId)
+                        .toList());
+        return bridges.stream()
+                .map(bridge -> toView(
+                        bridge,
+                        effectiveSettings,
+                        importStatsBySource.getOrDefault(bridge.bridgeId, ImportStats.EMPTY),
+                        pollingStateBySource.get(bridge.bridgeId)))
                 .toList();
     }
 
@@ -104,7 +120,11 @@ public class UserBridgeService {
         }
 
         repository.persist(bridge);
-        return toView(bridge, ImportStats.EMPTY);
+        return toView(
+                bridge,
+                userPollingSettingsService.effectiveSettingsForUser(user.id),
+                ImportStats.EMPTY,
+                sourcePollEventState(bridge.bridgeId));
     }
 
     @Transactional
@@ -137,11 +157,18 @@ public class UserBridgeService {
                 "user-bridge:" + bridge.userId + ":" + bridge.bridgeId + ":oauth-refresh-token");
     }
 
-    private UserBridgeView toView(UserBridge bridge, ImportStats importStats) {
+    private UserBridgeView toView(
+            UserBridge bridge,
+            PollingSettingsService.EffectivePollingSettings effectiveSettings,
+            ImportStats importStats,
+            dev.inboxbridge.dto.SourcePollingStateView pollingState) {
         AdminPollEventSummary lastEvent = sourcePollEventService.latestForSource(bridge.bridgeId).orElse(null);
         return new UserBridgeView(
                 bridge.bridgeId,
                 bridge.enabled,
+                effectiveSettings.pollEnabled(),
+                effectiveSettings.pollIntervalText(),
+                effectiveSettings.fetchWindow(),
                 bridge.protocol.name(),
                 bridge.host,
                 bridge.port,
@@ -157,7 +184,12 @@ public class UserBridgeService {
                 tokenStorageMode(bridge),
                 importStats.totalImported(),
                 importStats.lastImportedAt(),
-                lastEvent);
+                lastEvent,
+                pollingState);
+    }
+
+    private dev.inboxbridge.dto.SourcePollingStateView sourcePollEventState(String bridgeId) {
+        return sourcePollingStateService.viewForSource(bridgeId).orElse(null);
     }
 
     private Map<String, ImportStats> importStatsBySource() {

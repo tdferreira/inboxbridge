@@ -22,13 +22,15 @@ InboxBridge supports both operator-managed system configuration from `.env` and 
 7. Supports Google OAuth for Gmail destinations and Microsoft OAuth for Outlook / Hotmail / Live sources.
 8. Organizes the admin UI into reusable React components with component-scoped styles and frontend unit tests.
 9. Supports WebAuthn passkeys for browser sign-in after a user enrolls one from the security panel.
+10. Supports per-user poller overrides plus automatic per-source cooldown/backoff when providers start rejecting or throttling requests.
+11. Can run either in single-user mode or multi-user mode, controlled by `.env`.
 
 ## What it still does not do
 
 - encrypt env-managed mailbox passwords from `.env`
 - support non-Google / non-Microsoft provider OAuth flows
 - provide IMAP IDLE or durable mailbox cursors
-- provide production-grade metrics, backoff, or circuit breakers
+- provide production-grade metrics or circuit breakers
 - integrate with an external secret vault or KMS
 
 ## Stack
@@ -96,6 +98,7 @@ cp .env.example .env
 Important values when you want a shared, env-managed deployment setup:
 
 - `PUBLIC_BASE_URL` for browser callback defaults and UI links
+- `BRIDGE_MULTI_USER_ENABLED` to choose single-user vs multi-user operation
 - `BRIDGE_SECURITY_TOKEN_ENCRYPTION_KEY`
 - `BRIDGE_SECURITY_TOKEN_ENCRYPTION_KEY_ID`
 - `BRIDGE_SOURCES_<index>__...` for env-managed system bridges
@@ -152,6 +155,8 @@ Initial bootstrap credentials:
 The bootstrap admin is marked `mustChangePassword=true`, so change it immediately after first login.
 The running unauthenticated login screen does not expose whether those bootstrap credentials are still active, so setup operators should rely on this documentation rather than a public status endpoint.
 After that, the user can enroll one or more passkeys from the `Security` panel and use `Sign in with passkey` on later visits.
+If `BRIDGE_MULTI_USER_ENABLED=false`, the login screen hides self-registration entirely and the admin UI does not expose user-management features.
+Single-user mode still keeps the rest of the control plane visible for the bootstrap admin, including Gmail setup, mail fetchers, poller settings, and dashboard views.
 Current login rules:
 
 - password only: the normal `Sign in` flow uses only the password
@@ -181,6 +186,7 @@ Current features:
 - self-registration followed by admin approval
 - self-registration opens through a dedicated unauthenticated modal flow instead of occupying the main login screen full time
 - admin-managed user creation
+- single-user deployments can disable all self-registration and user-management surfaces with `BRIDGE_MULTI_USER_ENABLED=false`
 - multiple admin users, with admin rights managed from the UI
 - admins can reset another user’s password to a temporary value and wipe that user’s passkeys
 - admin password reset now opens a dedicated dialog instead of an always-visible inline form
@@ -194,6 +200,7 @@ Current features:
 - auth-aware fetcher forms that hide password-only or OAuth-only fields when they are not relevant
 - inline help tooltips for fetcher and poller fields so each control explains what it does
 - env-managed fetchers shown in the same operational list with a read-only `.env` badge, but only for the account named `admin`
+- placeholder fallback values from `application.yaml` are now filtered out, so if no `BRIDGE_SOURCES_*` values are configured then no env-managed fetcher appears in the UI or runtime
 - per-user mail-fetcher passwords and OAuth refresh tokens are stored encrypted in PostgreSQL by default when saved from the admin UI
 - the add/edit mail fetcher dialog is wider, rejects duplicate IDs before submit, and only shows the `.env` badge for environment-managed entries
 - password changes are available from the top header security panel and enforce confirmation, minimum length, uppercase, lowercase, number, special character, and “must differ from current password” rules
@@ -203,7 +210,10 @@ Current features:
 - self-service password removal and passkey deletion now require an explicit confirmation modal before the backend call is made
 - admin-managed runtime overrides for polling enablement, poll interval, and fetch window while still showing the `.env` defaults
 - a dedicated `Poller Settings` section for global polling controls and health metrics instead of rendering env-managed fetchers there
+- a dedicated `My Poller Settings` section so each user can override polling enablement, interval, and fetch window for their own UI-managed fetchers
 - manual poll trigger for admins
+- per-source cooldown/backoff state that pauses only the affected fetcher after repeated auth, quota, or transient provider failures
+- cooldown visibility in the UI, including next poll time, cooldown-until, failure count, and the last failure reason for each fetcher
 - Google OAuth launch for the system Gmail destination and for the current user
 - Microsoft OAuth launch for visible Microsoft bridges
 - import totals and latest poll outcome per bridge
@@ -465,15 +475,14 @@ To replace the generated certs with your own:
 
 - env-managed mailbox passwords are still plaintext in `.env`
 - polling still scans the most recent `bridge.fetch-window` messages rather than using durable mailbox cursors
-- provider backoff / lockout protection is not implemented yet
 - metrics and audit-friendly structured event logs are still limited
 
 ## Tests
 
 Verified on 2026-03-26:
 
-- `mvn test` passes with 27 backend tests
-- admin UI Docker build runs 6 frontend Vitest unit tests successfully
+- `mvn test` passes
+- admin UI Docker build runs the Vitest suite successfully
 - Docker Compose builds successfully
 - the HTTPS admin UI serves correctly in the container
 - unauthenticated `GET /api/auth/me` returns `401` through the HTTPS proxy

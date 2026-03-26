@@ -50,6 +50,8 @@ class UserBridgeServiceTest {
         service.repository = new InMemoryUserBridgeRepository();
         service.secretEncryptionService = new FakeSecretEncryptionService();
         service.sourcePollEventService = new NoopSourcePollEventService();
+        service.userPollingSettingsService = new FakeUserPollingSettingsService();
+        service.sourcePollingStateService = new NoopSourcePollingStateService();
         return service;
     }
 
@@ -123,6 +125,20 @@ class UserBridgeServiceTest {
     private static final class NoopSourcePollEventService extends SourcePollEventService {
         @Override
         public Optional<AdminPollEventSummary> latestForSource(String sourceId) {
+            return Optional.empty();
+        }
+    }
+
+    private static final class FakeUserPollingSettingsService extends UserPollingSettingsService {
+        @Override
+        public PollingSettingsService.EffectivePollingSettings effectiveSettingsForUser(Long userId) {
+            return new PollingSettingsService.EffectivePollingSettings(true, "5m", java.time.Duration.ofMinutes(5), 50);
+        }
+    }
+
+    private static final class NoopSourcePollingStateService extends SourcePollingStateService {
+        @Override
+        public Optional<dev.inboxbridge.dto.SourcePollingStateView> viewForSource(String sourceId) {
             return Optional.empty();
         }
     }

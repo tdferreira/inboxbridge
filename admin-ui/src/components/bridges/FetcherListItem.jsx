@@ -1,5 +1,5 @@
-import { useState } from 'react'
-import { formatDate, statusTone, tokenStorageLabel } from '../../lib/formatters'
+import { useEffect, useRef, useState } from 'react'
+import { authMethodLabel, formatDate, oauthProviderLabel, protocolLabel, statusLabel, statusTone, tokenStorageLabel, triggerLabel } from '../../lib/formatters'
 import CopyButton from '../common/CopyButton'
 import './BridgeCard.css'
 import './FetcherListItem.css'
@@ -16,7 +16,31 @@ function FetcherListItem({
 }) {
   const [expanded, setExpanded] = useState(false)
   const [menuOpen, setMenuOpen] = useState(false)
+  const menuRef = useRef(null)
   const isEnvManaged = fetcher.managementSource === 'ENVIRONMENT'
+
+  useEffect(() => {
+    if (!menuOpen) {
+      return undefined
+    }
+    function handlePointerDown(event) {
+      if (!menuRef.current || menuRef.current.contains(event.target)) {
+        return
+      }
+      setMenuOpen(false)
+    }
+    function handleKeyDown(event) {
+      if (event.key === 'Escape') {
+        setMenuOpen(false)
+      }
+    }
+    document.addEventListener('mousedown', handlePointerDown)
+    document.addEventListener('keydown', handleKeyDown)
+    return () => {
+      document.removeEventListener('mousedown', handlePointerDown)
+      document.removeEventListener('keydown', handleKeyDown)
+    }
+  }, [menuOpen])
 
   return (
     <article className="surface-card fetcher-list-item">
@@ -28,14 +52,14 @@ function FetcherListItem({
               {isEnvManaged ? <span className="status-pill tone-neutral">{t('bridges.envManagedBadge')}</span> : null}
             </div>
             <div className="section-copy">
-              {fetcher.bridgeId} · {fetcher.protocol} · {fetcher.host}:{fetcher.port} · {fetcher.authMethod}{fetcher.oauthProvider !== 'NONE' ? ` / ${fetcher.oauthProvider}` : ''}
+              {fetcher.bridgeId} · {protocolLabel(fetcher.protocol, locale)} · {fetcher.host}:{fetcher.port} · {authMethodLabel(fetcher.authMethod, locale)}{fetcher.oauthProvider !== 'NONE' ? ` / ${oauthProviderLabel(fetcher.oauthProvider, locale)}` : ''}
             </div>
           </div>
-          <span className={`status-pill ${statusTone(fetcher.lastEvent?.status)}`}>{fetcher.lastEvent?.status || t('bridge.notRun')}</span>
+          <span className={`status-pill ${statusTone(fetcher.lastEvent?.status)}`}>{statusLabel(fetcher.lastEvent?.status, locale)}</span>
         </button>
-        <div className="fetcher-list-item-menu">
-          <button className="secondary fetcher-menu-button" onClick={() => setMenuOpen((current) => !current)} title={t('bridges.actions')} type="button">
-            ...
+        <div ref={menuRef} className="fetcher-list-item-menu">
+          <button aria-label={t('bridges.actions')} className="secondary fetcher-menu-button" onClick={() => setMenuOpen((current) => !current)} title={t('bridges.actions')} type="button">
+            {t('bridges.actionsIcon')}
           </button>
           {menuOpen ? (
             <div className="fetcher-menu">
@@ -61,10 +85,22 @@ function FetcherListItem({
             <div><dt>{t('bridge.lastImport')}</dt><dd>{formatDate(fetcher.lastImportedAt, locale)}</dd></div>
             <div><dt>{t('bridges.folder')}</dt><dd>{fetcher.folder || 'INBOX'}</dd></div>
             <div><dt>{t('bridges.customLabel')}</dt><dd>{fetcher.customLabel || t('users.notSet')}</dd></div>
+            <div><dt>{t('bridge.pollingEnabled')}</dt><dd>{fetcher.effectivePollEnabled ? t('common.yes') : t('common.no')}</dd></div>
+            <div><dt>{t('bridge.effectivePollInterval')}</dt><dd>{fetcher.effectivePollInterval}</dd></div>
+            <div><dt>{t('bridge.effectiveFetchWindow')}</dt><dd>{fetcher.effectiveFetchWindow}</dd></div>
+            <div><dt>{t('bridge.nextPollAt')}</dt><dd>{formatDate(fetcher.pollingState?.nextPollAt, locale)}</dd></div>
+            <div><dt>{t('bridge.cooldownUntil')}</dt><dd>{formatDate(fetcher.pollingState?.cooldownUntil, locale)}</dd></div>
+            <div><dt>{t('bridge.consecutiveFailures')}</dt><dd>{fetcher.pollingState?.consecutiveFailures || 0}</dd></div>
           </dl>
+          {fetcher.pollingState?.lastFailureReason ? (
+            <div className="muted-box">
+              <strong>{t('bridge.lastFailureReason')}</strong><br />
+              {fetcher.pollingState.lastFailureReason}
+            </div>
+          ) : null}
           {fetcher.lastEvent ? (
             <div className="event-box">
-              <div className="section-copy">{t('bridge.viaTrigger', { time: formatDate(fetcher.lastEvent.finishedAt, locale), trigger: fetcher.lastEvent.trigger })}</div>
+              <div className="section-copy">{t('bridge.viaTrigger', { time: formatDate(fetcher.lastEvent.finishedAt, locale), trigger: triggerLabel(fetcher.lastEvent.trigger, locale) })}</div>
               <div className="section-copy">{t('bridge.results', { fetched: fetcher.lastEvent.fetched, imported: fetcher.lastEvent.imported, duplicates: fetcher.lastEvent.duplicates })}</div>
               {fetcher.lastEvent.error ? (
                 <div className="bridge-card-error-block">

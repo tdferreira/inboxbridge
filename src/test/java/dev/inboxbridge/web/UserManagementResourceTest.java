@@ -14,9 +14,11 @@ import dev.inboxbridge.dto.UserSummaryResponse;
 import dev.inboxbridge.persistence.AppUser;
 import dev.inboxbridge.security.CurrentUserContext;
 import dev.inboxbridge.service.AppUserService;
+import dev.inboxbridge.service.ApplicationModeService;
 import dev.inboxbridge.service.PasskeyService;
 import dev.inboxbridge.service.UserBridgeService;
 import dev.inboxbridge.service.UserGmailConfigService;
+import dev.inboxbridge.service.UserPollingSettingsService;
 import jakarta.ws.rs.BadRequestException;
 
 class UserManagementResourceTest {
@@ -53,6 +55,16 @@ class UserManagementResourceTest {
         assertEquals("alice@example.com", summary.username());
     }
 
+    @Test
+    void listUsersIsBlockedWhenMultiUserModeIsDisabled() {
+        UserManagementResource resource = resource();
+        resource.applicationModeService = new FakeApplicationModeService(false);
+
+        BadRequestException error = assertThrows(BadRequestException.class, resource::listUsers);
+
+        assertEquals("Multi-user mode is disabled for this deployment.", error.getMessage());
+    }
+
     private UserManagementResource resource() {
         UserManagementResource resource = new UserManagementResource();
         resource.currentUserContext = new CurrentUserContext();
@@ -62,8 +74,10 @@ class UserManagementResourceTest {
         admin.role = AppUser.Role.ADMIN;
         resource.currentUserContext.setUser(admin);
         resource.appUserService = new FakeAppUserService(null);
+        resource.applicationModeService = new FakeApplicationModeService(true);
         resource.userGmailConfigService = new UserGmailConfigService();
         resource.userBridgeService = new UserBridgeService();
+        resource.userPollingSettingsService = new UserPollingSettingsService();
         resource.passkeyService = new PasskeyService();
         return resource;
     }
@@ -127,6 +141,19 @@ class UserManagementResourceTest {
         @Override
         public List<dev.inboxbridge.dto.PasskeyView> listForUser(Long userId) {
             return List.of();
+        }
+    }
+
+    private static final class FakeApplicationModeService extends ApplicationModeService {
+        private final boolean enabled;
+
+        private FakeApplicationModeService(boolean enabled) {
+            this.enabled = enabled;
+        }
+
+        @Override
+        public boolean multiUserEnabled() {
+            return enabled;
         }
     }
 }

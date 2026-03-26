@@ -5,6 +5,9 @@ import java.time.Instant;
 public record UserBridgeView(
         String bridgeId,
         boolean enabled,
+        boolean effectivePollEnabled,
+        String effectivePollInterval,
+        int effectiveFetchWindow,
         String protocol,
         String host,
         int port,
@@ -20,5 +23,6 @@ public record UserBridgeView(
         String tokenStorageMode,
         long totalImportedMessages,
         Instant lastImportedAt,
-        AdminPollEventSummary lastEvent) {
+        AdminPollEventSummary lastEvent,
+        SourcePollingStateView pollingState) {
 }

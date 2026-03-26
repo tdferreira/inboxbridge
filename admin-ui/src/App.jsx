@@ -10,6 +10,7 @@ import GmailDestinationSection from './components/gmail/GmailDestinationSection'
 import HeroPanel from './components/layout/HeroPanel'
 import SetupGuidePanel from './components/layout/SetupGuidePanel'
 import SystemDashboardSection from './components/admin/SystemDashboardSection'
+import UserPollingSettingsSection from './components/polling/UserPollingSettingsSection'
 import UserManagementSection from './components/admin/UserManagementSection'
 import UserBridgesSection from './components/bridges/UserBridgesSection'
 import { apiErrorText } from './lib/api'
@@ -56,6 +57,7 @@ const DEFAULT_UI_PREFERENCES = {
   persistLayout: false,
   quickSetupCollapsed: false,
   gmailDestinationCollapsed: false,
+  userPollingCollapsed: false,
   sourceBridgesCollapsed: false,
   systemDashboardCollapsed: false,
   userManagementCollapsed: false,
@@ -66,6 +68,14 @@ const DEFAULT_SYSTEM_POLLING_FORM = {
   pollIntervalOverride: '',
   fetchWindowOverride: ''
 }
+const DEFAULT_USER_POLLING_FORM = {
+  pollEnabledMode: 'DEFAULT',
+  pollIntervalOverride: '',
+  fetchWindowOverride: ''
+}
+const DEFAULT_AUTH_OPTIONS = {
+  multiUserEnabled: true
+}
 
 /**
  * Coordinates admin-ui data fetching and browser interactions while delegating
@@ -73,6 +83,7 @@ const DEFAULT_SYSTEM_POLLING_FORM = {
  */
 function App() {
   const [session, setSession] = useState(null)
+  const [authOptions, setAuthOptions] = useState(DEFAULT_AUTH_OPTIONS)
   const [authLoading, setAuthLoading] = useState(true)
   const [authError, setAuthError] = useState('')
   const [notifications, setNotifications] = useState([])
@@ -89,6 +100,9 @@ function App() {
 
   const [gmailConfig, setGmailConfig] = useState(DEFAULT_GMAIL_CONFIG)
   const [gmailMeta, setGmailMeta] = useState(null)
+  const [userPollingSettings, setUserPollingSettings] = useState(null)
+  const [userPollingForm, setUserPollingForm] = useState(DEFAULT_USER_POLLING_FORM)
+  const [userPollingFormDirty, setUserPollingFormDirty] = useState(false)
 
   const [bridgeForm, setBridgeForm] = useState(DEFAULT_BRIDGE_FORM)
   const [bridgeDuplicateError, setBridgeDuplicateError] = useState('')
@@ -129,6 +143,7 @@ function App() {
       ...(nextUiPreferences.persistLayout ? {} : {
         quickSetupCollapsed: false,
         gmailDestinationCollapsed: false,
+        userPollingCollapsed: false,
         sourceBridgesCollapsed: false,
         systemDashboardCollapsed: false,
         userManagementCollapsed: false
@@ -234,8 +249,24 @@ function App() {
     }
   }
 
+  async function loadAuthOptions() {
+    try {
+      const response = await fetch('/api/auth/options')
+      if (!response.ok) {
+        throw new Error('Unable to load auth options')
+      }
+      const payload = await response.json()
+      setAuthOptions({
+        ...DEFAULT_AUTH_OPTIONS,
+        ...(payload || {})
+      })
+    } catch (_err) {
+      setAuthOptions(DEFAULT_AUTH_OPTIONS)
+    }
+  }
+
   async function loadSelectedUserConfiguration(userId) {
-    if (!session || session.role !== 'ADMIN' || !userId) return
+    if (!session || session.role !== 'ADMIN' || !authOptions.multiUserEnabled || !userId) return
     setSelectedUserLoading(true)
     try {
       const response = await fetch(`/api/admin/users/${userId}/configuration`)
@@ -256,6 +287,7 @@ function App() {
     try {
       const requests = [
         fetch('/api/app/gmail-config'),
+        fetch('/api/app/polling-settings'),
         fetch('/api/app/bridges'),
         fetch('/api/app/ui-preferences'),
         fetch('/api/account/passkeys')
@@ -263,6 +295,8 @@ function App() {
 
       if (session.role === 'ADMIN') {
         requests.push(fetch('/api/admin/dashboard'))
+      }
+      if (session.role === 'ADMIN' && authOptions.multiUserEnabled) {
         requests.push(fetch('/api/admin/users'))
       }
 
@@ -273,7 +307,7 @@ function App() {
       }
 
       const payloads = await Promise.all(responses.map((response) => response.json()))
-      const [gmailPayload, bridgesPayload, uiPreferencesPayload, passkeysPayload, adminPayload, usersPayload] = payloads
+      const [gmailPayload, userPollingPayload, bridgesPayload, uiPreferencesPayload, passkeysPayload, adminPayload, usersPayload] = payloads
 
       setGmailMeta(gmailPayload)
       setGmailConfig({
@@ -284,6 +318,16 @@ function App() {
         neverMarkSpam: gmailPayload.neverMarkSpam,
         processForCalendar: gmailPayload.processForCalendar
       })
+      setUserPollingSettings(userPollingPayload)
+      if (!userPollingFormDirty && userPollingPayload) {
+        setUserPollingForm({
+          pollEnabledMode: userPollingPayload.pollEnabledOverride === null
+            ? 'DEFAULT'
+            : userPollingPayload.pollEnabledOverride ? 'ENABLED' : 'DISABLED',
+          pollIntervalOverride: userPollingPayload.pollIntervalOverride || '',
+          fetchWindowOverride: userPollingPayload.fetchWindowOverride === null ? '' : String(userPollingPayload.fetchWindowOverride)
+        })
+      }
       setMyBridges(Array.isArray(bridgesPayload) ? bridgesPayload : [])
       setMyPasskeys(Array.isArray(passkeysPayload) ? passkeysPayload : [])
       if (uiPreferencesLoadedForUserId !== session.id) {
@@ -305,12 +349,18 @@ function App() {
             fetchWindowOverride: adminPayload.polling.fetchWindowOverride === null ? '' : String(adminPayload.polling.fetchWindowOverride)
           })
         }
+      } else {
+        setSystemDashboard(null)
       }
       if (usersPayload) {
         setUsers(usersPayload)
         if (!selectedUserId && usersPayload.length > 0) {
           setSelectedUserId(usersPayload[0].id)
         }
+      } else {
+        setUsers([])
+        setSelectedUserId(null)
+        setSelectedUserConfig(null)
       }
     } catch (err) {
       pushNotification({ autoCloseMs: null, copyText: err.message || 'Unable to load application data', message: err.message || 'Unable to load application data', tone: 'error' })
@@ -320,6 +370,7 @@ function App() {
   }
 
   useEffect(() => {
+    loadAuthOptions()
     loadSession()
   }, [])
 
@@ -328,7 +379,7 @@ function App() {
     loadAppData()
     const timer = window.setInterval(loadAppData, REFRESH_MS)
     return () => window.clearInterval(timer)
-  }, [session])
+  }, [authOptions.multiUserEnabled, session])
 
   useEffect(() => {
     setDismissedPersistentNotifications({})
@@ -342,7 +393,7 @@ function App() {
     if (selectedUserId) {
       loadSelectedUserConfiguration(selectedUserId)
     }
-  }, [selectedUserId, session?.role])
+  }, [authOptions.multiUserEnabled, selectedUserId, session?.role])
 
   useEffect(() => {
     notifications.forEach((notification) => {
@@ -431,6 +482,9 @@ function App() {
       setShowSecurityPanel(false)
       setSystemPollingForm(DEFAULT_SYSTEM_POLLING_FORM)
       setSystemPollingFormDirty(false)
+      setUserPollingSettings(null)
+      setUserPollingForm(DEFAULT_USER_POLLING_FORM)
+      setUserPollingFormDirty(false)
       setNotifications([])
       setRegisterOpen(false)
       setConfirmationDialog(null)
@@ -903,6 +957,60 @@ function App() {
     })
   }
 
+  async function saveUserPollingSettings(event) {
+    event.preventDefault()
+    await withPending('userPollingSettingsSave', async () => {
+      try {
+        const response = await fetch('/api/app/polling-settings', {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            pollEnabledOverride: userPollingForm.pollEnabledMode === 'DEFAULT'
+              ? null
+              : userPollingForm.pollEnabledMode === 'ENABLED',
+            pollIntervalOverride: userPollingForm.pollIntervalOverride.trim() || null,
+            fetchWindowOverride: userPollingForm.fetchWindowOverride.trim() === ''
+              ? null
+              : Number(userPollingForm.fetchWindowOverride)
+          })
+        })
+        if (!response.ok) {
+          throw new Error(await apiErrorText(response, 'Unable to save your polling settings'))
+        }
+        setUserPollingFormDirty(false)
+        pushNotification({ message: t('notifications.userPollingUpdated'), targetId: 'user-polling-section', tone: 'success' })
+        await loadAppData()
+      } catch (err) {
+        pushNotification({ autoCloseMs: null, copyText: err.message || 'Unable to save your polling settings', message: err.message || 'Unable to save your polling settings', targetId: 'user-polling-section', tone: 'error' })
+      }
+    })
+  }
+
+  async function resetUserPollingSettings() {
+    await withPending('userPollingSettingsSave', async () => {
+      try {
+        const response = await fetch('/api/app/polling-settings', {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            pollEnabledOverride: null,
+            pollIntervalOverride: null,
+            fetchWindowOverride: null
+          })
+        })
+        if (!response.ok) {
+          throw new Error(await apiErrorText(response, 'Unable to reset your polling settings'))
+        }
+        setUserPollingForm(DEFAULT_USER_POLLING_FORM)
+        setUserPollingFormDirty(false)
+        pushNotification({ message: t('notifications.userPollingReset'), targetId: 'user-polling-section', tone: 'success' })
+        await loadAppData()
+      } catch (err) {
+        pushNotification({ autoCloseMs: null, copyText: err.message || 'Unable to reset your polling settings', message: err.message || 'Unable to reset your polling settings', targetId: 'user-polling-section', tone: 'error' })
+      }
+    })
+  }
+
   function startGoogleOAuthSelf() {
     withPending('googleOAuthSelf', async () => {
       await new Promise((resolve) => {
@@ -1003,6 +1111,7 @@ function App() {
   function focusTarget(targetId, sectionKey = null) {
     const derivedSectionKey = sectionKey || ({
       'gmail-destination-section': 'gmailDestinationCollapsed',
+      'user-polling-section': 'userPollingCollapsed',
       'source-bridges-section': 'sourceBridgesCollapsed',
       'system-dashboard-section': 'systemDashboardCollapsed',
       'user-management-section': 'userManagementCollapsed'
@@ -1074,6 +1183,9 @@ function App() {
       ? (systemDashboard?.bridges || []).map((bridge) => ({
         bridgeId: bridge.id,
         enabled: bridge.enabled,
+        effectivePollEnabled: bridge.effectivePollEnabled,
+        effectivePollInterval: bridge.effectivePollInterval,
+        effectiveFetchWindow: bridge.effectiveFetchWindow,
         protocol: bridge.protocol,
         authMethod: bridge.authMethod,
         oauthProvider: bridge.oauthProvider,
@@ -1087,6 +1199,7 @@ function App() {
         totalImportedMessages: bridge.totalImportedMessages,
         lastImportedAt: bridge.lastImportedAt,
         lastEvent: bridge.lastEvent,
+        pollingState: bridge.pollingState,
         managementSource: 'ENVIRONMENT',
         canDelete: false,
         canEdit: false,
@@ -1156,6 +1269,7 @@ function App() {
           authError={authError}
           loginLoading={isPending('login')}
           loginForm={loginForm}
+          multiUserEnabled={authOptions.multiUserEnabled}
           notice=""
           onCloseRegisterDialog={() => setRegisterOpen(false)}
           onLogin={handleLogin}
@@ -1270,6 +1384,23 @@ function App() {
           t={t}
         />
 
+        <UserPollingSettingsSection
+          collapsed={uiPreferences.userPollingCollapsed}
+          collapseLoading={isPending('uiPreferences') && uiPreferences.persistLayout}
+          hasFetchers={myBridges.length > 0}
+          onCollapseToggle={() => toggleSection('userPollingCollapsed')}
+          onPollingFormChange={(updater) => {
+            setUserPollingFormDirty(true)
+            setUserPollingForm((current) => typeof updater === 'function' ? updater(current) : updater)
+          }}
+          onResetPollingSettings={resetUserPollingSettings}
+          onSavePollingSettings={saveUserPollingSettings}
+          pollingSettings={userPollingSettings}
+          pollingSettingsForm={userPollingForm}
+          pollingSettingsLoading={isPending('userPollingSettingsSave')}
+          t={t}
+        />
+
         <UserBridgesSection
           bridgeForm={bridgeForm}
           collapsed={uiPreferences.sourceBridgesCollapsed}
@@ -1294,25 +1425,27 @@ function App() {
         />
 
         {session.role === 'ADMIN' ? (
+          <SystemDashboardSection
+            collapsed={uiPreferences.systemDashboardCollapsed}
+            collapseLoading={isPending('uiPreferences') && uiPreferences.persistLayout}
+            dashboard={systemDashboard}
+            onCollapseToggle={() => toggleSection('systemDashboardCollapsed')}
+            onPollingFormChange={(updater) => {
+              setSystemPollingFormDirty(true)
+              setSystemPollingForm((current) => typeof updater === 'function' ? updater(current) : updater)
+            }}
+            onResetPollingSettings={resetPollingSettings}
+            onRunPoll={runPoll}
+            onSavePollingSettings={savePollingSettings}
+            pollingSettingsForm={systemPollingForm}
+            pollingSettingsLoading={isPending('pollingSettingsSave')}
+            runningPoll={runningPoll}
+            t={t}
+            locale={language}
+          />
+        ) : null}
+        {session.role === 'ADMIN' && authOptions.multiUserEnabled ? (
           <>
-            <SystemDashboardSection
-              collapsed={uiPreferences.systemDashboardCollapsed}
-              collapseLoading={isPending('uiPreferences') && uiPreferences.persistLayout}
-              dashboard={systemDashboard}
-              onCollapseToggle={() => toggleSection('systemDashboardCollapsed')}
-              onPollingFormChange={(updater) => {
-                setSystemPollingFormDirty(true)
-                setSystemPollingForm((current) => typeof updater === 'function' ? updater(current) : updater)
-              }}
-              onResetPollingSettings={resetPollingSettings}
-              onRunPoll={runPoll}
-              onSavePollingSettings={savePollingSettings}
-              pollingSettingsForm={systemPollingForm}
-              pollingSettingsLoading={isPending('pollingSettingsSave')}
-              runningPoll={runningPoll}
-              t={t}
-              locale={language}
-            />
             <UserManagementSection
               collapsed={uiPreferences.userManagementCollapsed}
               collapseLoading={isPending('uiPreferences') && uiPreferences.persistLayout}

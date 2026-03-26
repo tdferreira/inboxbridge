@@ -43,6 +43,7 @@ describe('App', () => {
     })
 
     const fetchMock = vi.fn()
+      .mockResolvedValueOnce(jsonResponse({ multiUserEnabled: true }))
       .mockResolvedValueOnce({ ok: false, status: 401, text: () => Promise.resolve(''), json: () => Promise.resolve({}) })
       .mockResolvedValueOnce(jsonResponse({
         status: 'PASSKEY_REQUIRED',
@@ -66,6 +67,17 @@ describe('App', () => {
         createMissingLabels: true,
         neverMarkSpam: false,
         processForCalendar: false
+      }))
+      .mockResolvedValueOnce(jsonResponse({
+        defaultPollEnabled: true,
+        pollEnabledOverride: null,
+        effectivePollEnabled: true,
+        defaultPollInterval: '5m',
+        pollIntervalOverride: null,
+        effectivePollInterval: '5m',
+        defaultFetchWindow: 50,
+        fetchWindowOverride: null,
+        effectiveFetchWindow: 50
       }))
       .mockResolvedValueOnce(jsonResponse([]))
       .mockResolvedValueOnce(jsonResponse({}))
@@ -98,6 +110,9 @@ describe('App', () => {
           passwordConfigured: true
         })
       }
+      if (url === '/api/auth/options') {
+        return jsonResponse({ multiUserEnabled: true })
+      }
       if (url === '/api/app/gmail-config') {
         return jsonResponse({
           destinationUser: 'me',
@@ -105,6 +120,19 @@ describe('App', () => {
           createMissingLabels: true,
           neverMarkSpam: false,
           processForCalendar: false
+        })
+      }
+      if (url === '/api/app/polling-settings') {
+        return jsonResponse({
+          defaultPollEnabled: true,
+          pollEnabledOverride: null,
+          effectivePollEnabled: true,
+          defaultPollInterval: '5m',
+          pollIntervalOverride: null,
+          effectivePollInterval: '5m',
+          defaultFetchWindow: 50,
+          fetchWindowOverride: null,
+          effectiveFetchWindow: 50
         })
       }
       if (url === '/api/app/bridges') {
@@ -154,5 +182,88 @@ describe('App', () => {
       expect(fetchMock).toHaveBeenCalledWith('/api/account/password', { method: 'DELETE' })
     })
     expect(await screen.findByText('Password removed. This account now requires passkey sign-in.')).toBeInTheDocument()
+  })
+
+  it('hides multi-user surfaces when the deployment runs in single-user mode', async () => {
+    const fetchMock = vi.fn(async (input) => {
+      const url = String(input)
+      if (url === '/api/auth/options') {
+        return jsonResponse({ multiUserEnabled: false })
+      }
+      if (url === '/api/auth/me') {
+        return jsonResponse({
+          id: 1,
+          username: 'admin',
+          role: 'ADMIN',
+          approved: true,
+          mustChangePassword: false,
+          passkeyCount: 0,
+          passwordConfigured: true
+        })
+      }
+      if (url === '/api/app/gmail-config') {
+        return jsonResponse({
+          destinationUser: 'me',
+          redirectUri: 'https://localhost:3000/api/google-oauth/callback',
+          createMissingLabels: true,
+          neverMarkSpam: false,
+          processForCalendar: false
+        })
+      }
+      if (url === '/api/app/polling-settings') {
+        return jsonResponse({
+          defaultPollEnabled: true,
+          pollEnabledOverride: null,
+          effectivePollEnabled: true,
+          defaultPollInterval: '5m',
+          pollIntervalOverride: null,
+          effectivePollInterval: '5m',
+          defaultFetchWindow: 50,
+          fetchWindowOverride: null,
+          effectiveFetchWindow: 50
+        })
+      }
+      if (url === '/api/app/bridges') {
+        return jsonResponse([])
+      }
+      if (url === '/api/app/ui-preferences') {
+        return jsonResponse({})
+      }
+      if (url === '/api/account/passkeys') {
+        return jsonResponse([])
+      }
+      if (url === '/api/admin/dashboard') {
+        return jsonResponse({
+          overall: {
+            configuredSources: 0,
+            totalImportedMessages: 0,
+            sourcesWithErrors: 0,
+            pollInterval: '5m',
+            fetchWindow: 50
+          },
+          polling: {
+            defaultPollEnabled: true,
+            pollEnabledOverride: null,
+            effectivePollEnabled: true,
+            defaultPollInterval: '5m',
+            pollIntervalOverride: null,
+            effectivePollInterval: '5m',
+            defaultFetchWindow: 50,
+            fetchWindowOverride: null,
+            effectiveFetchWindow: 50
+          },
+          bridges: []
+        })
+      }
+      throw new Error(`Unexpected request: GET ${url}`)
+    })
+
+    vi.stubGlobal('fetch', fetchMock)
+
+    render(<App />)
+
+    await screen.findByText(/signed in as/i)
+    expect(screen.queryByText('Users')).not.toBeInTheDocument()
+    expect(fetchMock).not.toHaveBeenCalledWith('/api/admin/users')
   })
 })

@@ -29,6 +29,7 @@ bridge:
   poll-enabled: ${BRIDGE_POLL_ENABLED:true}
   poll-interval: ${BRIDGE_POLL_INTERVAL:5m}
   fetch-window: ${BRIDGE_FETCH_WINDOW:50}
+  multi-user-enabled: ${BRIDGE_MULTI_USER_ENABLED:true}
   security:
     passkeys:
       enabled: ${BRIDGE_SECURITY_PASSKEYS_ENABLED:true}

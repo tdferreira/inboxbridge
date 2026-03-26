@@ -62,6 +62,17 @@ describe('UserManagementSection', () => {
               clientSecretConfigured: false,
               refreshTokenConfigured: true
             },
+            pollingSettings: {
+              defaultPollEnabled: true,
+              pollEnabledOverride: null,
+              effectivePollEnabled: true,
+              defaultPollInterval: '5m',
+              pollIntervalOverride: null,
+              effectivePollInterval: '5m',
+              defaultFetchWindow: 50,
+              fetchWindowOverride: null,
+              effectiveFetchWindow: 50
+            },
             passkeys: [],
             bridges: []
           }}

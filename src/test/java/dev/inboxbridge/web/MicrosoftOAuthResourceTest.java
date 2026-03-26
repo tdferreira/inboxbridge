@@ -14,6 +14,7 @@ import dev.inboxbridge.dto.MicrosoftOAuthSourceOption;
 import dev.inboxbridge.persistence.AppUser;
 import dev.inboxbridge.persistence.UserBridge;
 import dev.inboxbridge.security.CurrentUserContext;
+import dev.inboxbridge.service.EnvSourceService;
 import dev.inboxbridge.service.MicrosoftOAuthService;
 import dev.inboxbridge.service.UserBridgeService;
 import jakarta.ws.rs.BadRequestException;
@@ -26,7 +27,7 @@ class MicrosoftOAuthResourceTest {
         MicrosoftOAuthResource resource = new MicrosoftOAuthResource();
         resource.microsoftOAuthService = new FakeMicrosoftOAuthService();
         resource.currentUserContext = adminContext();
-        resource.bridgeConfig = testConfig();
+        resource.envSourceService = envSourceService();
         resource.userBridgeService = new FakeUserBridgeService();
 
         Response response = resource.start("outlook-main-imap");
@@ -102,7 +103,7 @@ class MicrosoftOAuthResourceTest {
             }
         };
         resource.currentUserContext = adminContext();
-        resource.bridgeConfig = testConfig();
+        resource.envSourceService = envSourceService();
         resource.userBridgeService = new FakeUserBridgeService();
 
         BadRequestException error = org.junit.jupiter.api.Assertions.assertThrows(
@@ -117,7 +118,7 @@ class MicrosoftOAuthResourceTest {
         MicrosoftOAuthResource resource = new MicrosoftOAuthResource();
         resource.microsoftOAuthService = new FakeMicrosoftOAuthService();
         resource.currentUserContext = adminContext();
-        resource.bridgeConfig = testConfig();
+        resource.envSourceService = envSourceService();
         resource.userBridgeService = new FakeUserBridgeService();
 
         List<MicrosoftOAuthSourceOption> sources = resource.sources();
@@ -152,6 +153,11 @@ class MicrosoftOAuthResourceTest {
             @Override
             public int fetchWindow() {
                 return 50;
+            }
+
+            @Override
+            public boolean multiUserEnabled() {
+                return true;
             }
 
             @Override
@@ -274,6 +280,12 @@ class MicrosoftOAuthResourceTest {
                 });
             }
         };
+    }
+
+    private EnvSourceService envSourceService() {
+        EnvSourceService service = new EnvSourceService();
+        service.setConfigForTest(testConfig());
+        return service;
     }
 
     private static class FakeMicrosoftOAuthService extends MicrosoftOAuthService {

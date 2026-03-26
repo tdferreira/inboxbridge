@@ -1,4 +1,4 @@
-import { formatDate, tokenStorageLabel } from '../../lib/formatters'
+import { authMethodLabel, formatDate, oauthProviderLabel, protocolLabel, roleLabel, tokenStorageLabel } from '../../lib/formatters'
 import LoadingButton from '../common/LoadingButton'
 import PaneToggleButton from '../common/PaneToggleButton'
 import './UserManagementSection.css'
@@ -49,7 +49,7 @@ function UserManagementSection({
             <form className="settings-grid" onSubmit={onCreateUser}>
               <label><span>{t('auth.username')}</span><input value={createUserForm.username} onChange={(event) => onCreateUserFormChange((current) => ({ ...current, username: event.target.value }))} /></label>
               <label><span>{t('users.initialPassword')}</span><input type="password" value={createUserForm.password} onChange={(event) => onCreateUserFormChange((current) => ({ ...current, password: event.target.value }))} /></label>
-              <label><span>{t('users.role')}</span><select value={createUserForm.role} onChange={(event) => onCreateUserFormChange((current) => ({ ...current, role: event.target.value }))}><option value="USER">USER</option><option value="ADMIN">ADMIN</option></select></label>
+              <label><span>{t('users.role')}</span><select value={createUserForm.role} onChange={(event) => onCreateUserFormChange((current) => ({ ...current, role: event.target.value }))}><option value="USER">{roleLabel('USER', locale)}</option><option value="ADMIN">{roleLabel('ADMIN', locale)}</option></select></label>
               <div className="full action-row">
               <LoadingButton className="primary" isLoading={createUserLoading} loadingLabel={t('users.createLoading')} type="submit">
                 {t('users.create')}
@@ -68,7 +68,7 @@ function UserManagementSection({
                 >
                   <span>{user.username}</span>
                   <span>
-                    {user.role} · {user.approved ? t('users.approved') : t('users.pending')} · {user.active ? t('users.active') : t('users.inactive')} · {t('users.bridges', { count: user.bridgeCount })}
+                    {roleLabel(user.role, locale)} · {user.approved ? t('users.approved') : t('users.pending')} · {user.active ? t('users.active') : t('users.inactive')} · {t('users.bridges', { count: user.bridgeCount })}
                     {selectedUserId === user.id && selectedUserLoading ? (
                       <span className="user-list-inline-loading">
                         <span aria-hidden="true" className="user-list-inline-spinner" />
@@ -89,7 +89,7 @@ function UserManagementSection({
           <div className="detail-stack">
             <div className="muted-box">
               <strong>{selectedUserConfig.user.username}</strong><br />
-              {selectedUserConfig.user.role} · {selectedUserConfig.user.approved ? t('users.approved') : t('users.pendingApproval')} · {selectedUserConfig.user.active ? t('users.active') : t('users.inactive')}<br />
+              {roleLabel(selectedUserConfig.user.role, locale)} · {selectedUserConfig.user.approved ? t('users.approved') : t('users.pendingApproval')} · {selectedUserConfig.user.active ? t('users.active') : t('users.inactive')}<br />
               {t('users.gmailConfigured', { value: t(selectedUserConfig.user.gmailConfigured ? 'common.yes' : 'common.no') })} · {t('users.passwordConfigured', { value: t(selectedUserConfig.user.passwordConfigured ? 'common.yes' : 'common.no') })} · {t('users.mustChangePassword', { value: t(selectedUserConfig.user.mustChangePassword ? 'common.yes' : 'common.no') })} · {t('users.passkeys', { value: selectedUserConfig.user.passkeyCount })}
             </div>
 
@@ -125,6 +125,19 @@ function UserManagementSection({
               {t('users.refreshTokenStored', { value: t(selectedUserConfig.gmailConfig.refreshTokenConfigured ? 'common.yes' : 'common.no') })}
             </div>
 
+            <div className="muted-box">
+              {t('users.pollingEnabled', { value: t(selectedUserConfig.pollingSettings.effectivePollEnabled ? 'common.yes' : 'common.no') })}<br />
+              {t('users.pollIntervalValue', { value: selectedUserConfig.pollingSettings.effectivePollInterval })}<br />
+              {t('users.fetchWindowValue', { value: selectedUserConfig.pollingSettings.effectiveFetchWindow })}<br />
+              {t('users.pollingOverrideState', {
+                value: selectedUserConfig.pollingSettings.pollEnabledOverride === null
+                  && !selectedUserConfig.pollingSettings.pollIntervalOverride
+                  && selectedUserConfig.pollingSettings.fetchWindowOverride === null
+                  ? t('users.noneApplied')
+                  : t('common.yes')
+              })}
+            </div>
+
             <div className="list-stack">
               {selectedUserConfig.passkeys.length > 0 ? selectedUserConfig.passkeys.map((passkey) => (
                 <div key={passkey.id} className="muted-box">
@@ -139,9 +152,11 @@ function UserManagementSection({
               {selectedUserConfig.bridges.map((bridge) => (
                 <div key={bridge.bridgeId} className="muted-box">
                   <strong>{bridge.bridgeId}</strong><br />
-                  {bridge.protocol} via {bridge.authMethod}{bridge.oauthProvider !== 'NONE' ? ` / ${bridge.oauthProvider}` : ''}<br />
+                  {protocolLabel(bridge.protocol, locale)} {t('users.via')} {authMethodLabel(bridge.authMethod, locale)}{bridge.oauthProvider !== 'NONE' ? ` / ${oauthProviderLabel(bridge.oauthProvider, locale)}` : ''}<br />
                   {bridge.host}:{bridge.port} · {t('bridge.tokenStorage').toLowerCase()} {tokenStorageLabel(bridge.tokenStorageMode, locale)}<br />
-                  {t('users.lastUsed', { value: formatDate(bridge.lastEvent?.finishedAt, locale) })}
+                  {t('users.pollIntervalValue', { value: bridge.effectivePollInterval })} · {t('users.fetchWindowValue', { value: bridge.effectiveFetchWindow })}<br />
+                  {bridge.pollingState?.cooldownUntil ? `${t('users.cooldownUntil', { value: formatDate(bridge.pollingState.cooldownUntil, locale) })} · ` : ''}{t('users.lastUsed', { value: formatDate(bridge.lastEvent?.finishedAt, locale) })}
+                  {bridge.pollingState?.lastFailureReason ? <><br />{t('users.lastFailure', { value: bridge.pollingState.lastFailureReason })}</> : null}
                 </div>
               ))}
             </div>

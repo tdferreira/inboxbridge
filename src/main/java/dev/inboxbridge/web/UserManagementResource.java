@@ -10,9 +10,11 @@ import dev.inboxbridge.dto.UserSummaryResponse;
 import dev.inboxbridge.security.CurrentUserContext;
 import dev.inboxbridge.security.RequireAdmin;
 import dev.inboxbridge.service.AppUserService;
+import dev.inboxbridge.service.ApplicationModeService;
 import dev.inboxbridge.service.PasskeyService;
 import dev.inboxbridge.service.UserBridgeService;
 import dev.inboxbridge.service.UserGmailConfigService;
+import dev.inboxbridge.service.UserPollingSettingsService;
 import jakarta.inject.Inject;
 import jakarta.ws.rs.BadRequestException;
 import jakarta.ws.rs.Consumes;
@@ -39,6 +41,9 @@ public class UserManagementResource {
     AppUserService appUserService;
 
     @Inject
+    ApplicationModeService applicationModeService;
+
+    @Inject
     CurrentUserContext currentUserContext;
 
     @Inject
@@ -48,17 +53,26 @@ public class UserManagementResource {
     UserBridgeService userBridgeService;
 
     @Inject
+    UserPollingSettingsService userPollingSettingsService;
+
+    @Inject
     PasskeyService passkeyService;
 
     @GET
     public List<UserSummaryResponse> listUsers() {
-        return appUserService.listUsers();
+        try {
+            applicationModeService.requireMultiUserMode();
+            return appUserService.listUsers();
+        } catch (IllegalArgumentException e) {
+            throw new BadRequestException(e.getMessage(), e);
+        }
     }
 
     @POST
     @Consumes(MediaType.APPLICATION_JSON)
     public UserSummaryResponse createUser(CreateUserRequest request) {
         try {
+            applicationModeService.requireMultiUserMode();
             return appUserService.toSummary(appUserService.createUser(request));
         } catch (IllegalArgumentException e) {
             throw new BadRequestException(e.getMessage(), e);
@@ -70,6 +84,7 @@ public class UserManagementResource {
     @Consumes(MediaType.APPLICATION_JSON)
     public UserSummaryResponse updateUser(@PathParam("userId") Long userId, UpdateUserRequest request) {
         try {
+            applicationModeService.requireMultiUserMode();
             return appUserService.toSummary(appUserService.updateUser(currentUserContext.user(), userId, request));
         } catch (IllegalArgumentException e) {
             throw new BadRequestException(e.getMessage(), e);
@@ -81,6 +96,7 @@ public class UserManagementResource {
     @Consumes(MediaType.APPLICATION_JSON)
     public UserSummaryResponse resetPassword(@PathParam("userId") Long userId, AdminResetPasswordRequest request) {
         try {
+            applicationModeService.requireMultiUserMode();
             return appUserService.toSummary(appUserService.adminResetPassword(currentUserContext.user(), userId, request));
         } catch (IllegalArgumentException e) {
             throw new BadRequestException(e.getMessage(), e);
@@ -91,6 +107,7 @@ public class UserManagementResource {
     @Path("/{userId}/passkeys")
     public java.util.Map<String, Object> resetPasskeys(@PathParam("userId") Long userId) {
         try {
+            applicationModeService.requireMultiUserMode();
             long deleted = passkeyService.resetForUser(userId);
             return java.util.Map.of("deleted", deleted);
         } catch (IllegalArgumentException e) {
@@ -101,13 +118,20 @@ public class UserManagementResource {
     @GET
     @Path("/{userId}/configuration")
     public AdminUserConfigurationResponse configuration(@PathParam("userId") Long userId) {
-        return appUserService.findById(userId)
-                .map(user -> new AdminUserConfigurationResponse(
-                        appUserService.toSummary(user),
-                        userGmailConfigService.viewForUser(user.id)
-                                .orElse(userGmailConfigService.defaultView(user.id)),
-                        userBridgeService.listForUser(user.id),
-                        passkeyService.listForUser(user.id)))
-                .orElseThrow(() -> new BadRequestException("Unknown user id"));
+        try {
+            applicationModeService.requireMultiUserMode();
+            return appUserService.findById(userId)
+                    .map(user -> new AdminUserConfigurationResponse(
+                            appUserService.toSummary(user),
+                            userGmailConfigService.viewForUser(user.id)
+                                    .orElse(userGmailConfigService.defaultView(user.id)),
+                            userPollingSettingsService.viewForUser(user.id)
+                                    .orElse(userPollingSettingsService.defaultView(user.id)),
+                            userBridgeService.listForUser(user.id),
+                            passkeyService.listForUser(user.id)))
+                    .orElseThrow(() -> new BadRequestException("Unknown user id"));
+        } catch (IllegalArgumentException e) {
+            throw new BadRequestException(e.getMessage(), e);
+        }
     }
 }

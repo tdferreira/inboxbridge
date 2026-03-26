@@ -12,6 +12,7 @@ function AuthScreen({
   authError,
   loginLoading,
   loginForm,
+  multiUserEnabled,
   notice,
   onLogin,
   onLoginChange,
@@ -32,7 +33,7 @@ function AuthScreen({
   return (
     <div className="page-shell">
       <main className="auth-screen-card">
-        <div className="eyebrow">InboxBridge</div>
+        <div className="eyebrow">{t('auth.brand')}</div>
         <h1>{t('auth.title')}</h1>
         <form className="stack-form" onSubmit={onLogin}>
           <label>
@@ -58,18 +59,24 @@ function AuthScreen({
         </form>
         {!passkeysSupported ? <div className="muted-box auth-screen-note">{t('auth.passkeySupport')}</div> : null}
 
-        <div className="muted-box auth-screen-note">
-          <strong>{t('auth.needAccessTitle')}</strong><br />
-          {t('auth.needAccessBody')}
-        </div>
-        <LoadingButton className="secondary auth-screen-register-trigger" isLoading={false} onClick={onOpenRegisterDialog} type="button">
-          {t('auth.openRegister')}
-        </LoadingButton>
+        {multiUserEnabled ? (
+          <>
+            <div className="muted-box auth-screen-note">
+              <strong>{t('auth.needAccessTitle')}</strong><br />
+              {t('auth.needAccessBody')}
+            </div>
+            <LoadingButton className="secondary auth-screen-register-trigger" isLoading={false} onClick={onOpenRegisterDialog} type="button">
+              {t('auth.openRegister')}
+            </LoadingButton>
+          </>
+        ) : (
+          <div className="muted-box auth-screen-note">{t('auth.singleUserMode')}</div>
+        )}
 
         {authError ? <Banner copyLabel={t('common.copyError')} copyText={authError} dismissLabel={t('common.dismissNotification')} focusLabel={t('common.focusSection')} tone="error">{authError}</Banner> : null}
         {notice ? <Banner tone="success">{notice}</Banner> : null}
       </main>
-      {registerOpen ? (
+      {multiUserEnabled && registerOpen ? (
         <ModalDialog closeLabel={t('auth.closeRegisterDialog')} onClose={onCloseRegisterDialog} title={t('auth.registerDialogTitle')}>
           <p className="section-copy">{t('auth.registerDialogCopy')}</p>
           <form className="stack-form" onSubmit={onRegister}>
