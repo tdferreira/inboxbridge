@@ -13,3 +13,12 @@
 .auth-screen-note {
   color: var(--muted);
 }
+
+.auth-screen-hint {
+  color: var(--danger);
+  font-size: 0.92rem;
+}
+
+.auth-screen-register-trigger {
+  justify-self: start;
+}

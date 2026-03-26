@@ -8,15 +8,19 @@ function LoadingButton({
   children,
   className = '',
   disabled = false,
+  hint,
   isLoading = false,
   loadingLabel,
   type = 'button',
   ...rest
 }) {
+  const title = hint || (typeof children === 'string' ? children : undefined)
+
   return (
     <button
       className={className}
       disabled={disabled || isLoading}
+      title={title}
       type={type}
       {...rest}
     >

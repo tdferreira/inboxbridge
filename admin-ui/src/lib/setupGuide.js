@@ -1,4 +1,4 @@
-export function buildSetupGuideState({ gmailMeta, myBridges = [], session, systemDashboard }) {
+export function buildSetupGuideState({ gmailMeta, myBridges = [], session, systemDashboard, t }) {
   if (!session) {
     return {
       steps: [],
@@ -6,9 +6,12 @@ export function buildSetupGuideState({ gmailMeta, myBridges = [], session, syste
     }
   }
 
+  const visibleSystemBridges = session.username === 'admin'
+    ? (systemDashboard?.bridges || [])
+    : []
   const allBridges = [
     ...myBridges,
-    ...(systemDashboard?.bridges || [])
+    ...visibleSystemBridges
   ]
   const oauthBridges = allBridges.filter((bridge) => bridge.authMethod === 'OAUTH2')
   const bridgeErrors = allBridges.filter((bridge) => bridge.lastEvent?.status === 'ERROR' || bridge.lastEvent?.error)
@@ -30,47 +33,48 @@ export function buildSetupGuideState({ gmailMeta, myBridges = [], session, syste
   const steps = [
     {
       title: '1. Secure your session',
-      description: 'Sign in, then change your password if this is the bootstrap account or an admin-forced reset.',
+      title: t('setup.step1Title'),
+      description: t('setup.step1Pending'),
       targetId: 'password-panel-section',
       sectionKey: null,
       status: sessionReady ? 'complete' : 'pending'
     },
     {
-      title: '2. Configure the Gmail destination',
+      title: t('setup.step2Title'),
       description: gmailReady
-        ? 'Gmail destination OAuth is stored and ready.'
-        : 'Save the Gmail settings, then click Connect My Gmail OAuth.',
+        ? t('setup.step2Ready')
+        : t('setup.step2Pending'),
       targetId: 'gmail-destination-section',
       sectionKey: 'gmailDestinationCollapsed',
       status: gmailReady ? 'complete' : 'pending'
     },
     {
-      title: '3. Add at least one source bridge',
+      title: t('setup.step3Title'),
       description: bridgeReady
-        ? 'At least one source bridge is configured.'
-        : 'Add a bridge in the UI or keep using system bridges from .env.',
+        ? t('setup.step3Ready')
+        : t('setup.step3Pending'),
       targetId: 'source-bridges-section',
       sectionKey: 'sourceBridgesCollapsed',
       status: bridgeReady ? 'complete' : 'pending'
     },
     {
-      title: '4. Complete provider OAuth',
+      title: t('setup.step4Title'),
       description: oauthErrors.length > 0
-        ? 'At least one OAuth-backed bridge is currently failing. Re-run the provider consent flow from the source bridges section.'
+        ? t('setup.step4Error')
         : oauthReady
-          ? 'OAuth-backed flows are configured and no current bridge OAuth errors are recorded.'
-          : 'Use the provider-specific OAuth buttons, finish consent, and exchange the code in the callback page.',
+          ? t('setup.step4Ready')
+          : t('setup.step4Pending'),
       targetId: 'source-bridges-section',
       sectionKey: 'sourceBridgesCollapsed',
       status: oauthErrors.length > 0 ? 'error' : oauthReady ? 'complete' : 'pending'
     },
     {
-      title: '5. Run and verify imports',
+      title: t('setup.step5Title'),
       description: importsErrored
-        ? 'Recent bridge errors were recorded. Open the dashboard and inspect the latest error details.'
+        ? t('setup.step5Error')
         : importsReady
-          ? 'Imports have completed successfully and no current bridge errors are recorded.'
-          : 'Trigger a poll, then confirm import counts and provider status from the dashboard.',
+          ? t('setup.step5Ready')
+          : t('setup.step5Pending'),
       targetId: session.role === 'ADMIN' ? 'system-dashboard-section' : 'source-bridges-section',
       sectionKey: session.role === 'ADMIN' ? 'systemDashboardCollapsed' : 'sourceBridgesCollapsed',
       status: importsErrored ? 'error' : importsReady ? 'complete' : 'pending'

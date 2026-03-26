@@ -1,79 +1,86 @@
-import BridgeCard from './BridgeCard'
+import FetcherDialog from './FetcherDialog'
+import FetcherListItem from './FetcherListItem'
 import LoadingButton from '../common/LoadingButton'
+import PaneToggleButton from '../common/PaneToggleButton'
 import './UserBridgesSection.css'
 
 /**
- * Displays the current user's source bridges and the form used to create or
- * edit bridge records stored in PostgreSQL.
+ * Displays user-managed and env-managed mail fetchers in one operational list
+ * while moving create/edit work into a dedicated modal dialog.
  */
 function UserBridgesSection({
   bridgeForm,
-  bridges,
   collapsed,
   collapseLoading,
   connectingBridgeId,
   deletingBridgeId,
+  duplicateIdError,
+  fetchers,
+  fetcherDialogOpen,
+  onAddFetcher,
+  onApplyPreset,
   onBridgeFormChange,
+  onCloseDialog,
   onCollapseToggle,
   onConnectMicrosoft,
   onDeleteBridge,
   onEditBridge,
   onSaveBridge,
-  saveLoading
+  saveLoading,
+  t,
+  locale
 }) {
   return (
-    <section className="surface-card user-bridges-section" id="source-bridges-section" tabIndex="-1">
+    <section className="surface-card user-bridges-section section-with-corner-toggle" id="source-bridges-section" tabIndex="-1">
       <div className="panel-header">
         <div>
-          <div className="section-title">My Source Bridges</div>
-          <p className="section-copy">These bridges live in the database, import into your Gmail destination, and keep their secrets encrypted at rest.</p>
+          <div className="section-title">{t('bridges.title')}</div>
+          <p className="section-copy">{t('bridges.copy')}</p>
         </div>
-        <div className="action-row">
-          <LoadingButton className="secondary" isLoading={collapseLoading} loadingLabel={collapsed ? 'Expanding…' : 'Collapsing…'} onClick={onCollapseToggle} type="button">
-            {collapsed ? 'Expand' : 'Collapse'}
-          </LoadingButton>
-        </div>
+        {!collapsed ? (
+          <div className="panel-header-actions">
+            <LoadingButton className="primary" isLoading={false} onClick={onAddFetcher} type="button">
+              {t('bridges.add')}
+            </LoadingButton>
+          </div>
+        ) : null}
       </div>
+      <PaneToggleButton className="pane-toggle-button-corner" collapseLabel={t('common.collapseSection')} collapsed={collapsed} disabled={collapseLoading} expandLabel={t('common.expandSection')} isLoading={collapseLoading} onClick={onCollapseToggle} />
       {!collapsed ? (
-        <>
-          <div className="bridge-grid">
-            {bridges.map((bridge) => (
-              <BridgeCard
-                key={bridge.bridgeId}
-                bridge={bridge}
-                connectLoading={connectingBridgeId === bridge.bridgeId}
-                deleteLoading={deletingBridgeId === bridge.bridgeId}
+        fetchers.length > 0 ? (
+          <div className="fetcher-list">
+            {fetchers.map((fetcher) => (
+              <FetcherListItem
+                key={`${fetcher.managementSource}:${fetcher.bridgeId}`}
+                connectLoading={connectingBridgeId === fetcher.bridgeId}
+                deleteLoading={deletingBridgeId === fetcher.bridgeId}
+                fetcher={fetcher}
+                locale={locale}
                 onConnectMicrosoft={onConnectMicrosoft}
                 onDelete={onDeleteBridge}
                 onEdit={onEditBridge}
-                showDelete
-                showEdit
+                t={t}
               />
             ))}
           </div>
-
-          <form className="settings-grid" onSubmit={onSaveBridge}>
-            <label><span>Bridge ID</span><input value={bridgeForm.bridgeId} onChange={(event) => onBridgeFormChange((current) => ({ ...current, bridgeId: event.target.value }))} /></label>
-            <label><span>Host</span><input value={bridgeForm.host} onChange={(event) => onBridgeFormChange((current) => ({ ...current, host: event.target.value }))} /></label>
-            <label><span>Protocol</span><select value={bridgeForm.protocol} onChange={(event) => onBridgeFormChange((current) => ({ ...current, protocol: event.target.value, port: event.target.value === 'IMAP' ? 993 : 995 }))}><option>IMAP</option><option>POP3</option></select></label>
-            <label><span>Port</span><input type="number" value={bridgeForm.port} onChange={(event) => onBridgeFormChange((current) => ({ ...current, port: Number(event.target.value) }))} /></label>
-            <label><span>Auth Method</span><select value={bridgeForm.authMethod} onChange={(event) => onBridgeFormChange((current) => ({ ...current, authMethod: event.target.value }))}><option>PASSWORD</option><option>OAUTH2</option></select></label>
-            <label><span>OAuth Provider</span><select value={bridgeForm.oauthProvider} onChange={(event) => onBridgeFormChange((current) => ({ ...current, oauthProvider: event.target.value }))}><option>NONE</option><option>MICROSOFT</option></select></label>
-            <label><span>Username</span><input value={bridgeForm.username} onChange={(event) => onBridgeFormChange((current) => ({ ...current, username: event.target.value }))} /></label>
-            <label><span>Password</span><input type="password" value={bridgeForm.password} onChange={(event) => onBridgeFormChange((current) => ({ ...current, password: event.target.value }))} placeholder="Leave blank to keep existing" /></label>
-            <label><span>OAuth Refresh Token</span><input type="password" value={bridgeForm.oauthRefreshToken} onChange={(event) => onBridgeFormChange((current) => ({ ...current, oauthRefreshToken: event.target.value }))} placeholder="Optional manual token" /></label>
-            <label><span>Folder</span><input value={bridgeForm.folder} onChange={(event) => onBridgeFormChange((current) => ({ ...current, folder: event.target.value }))} /></label>
-            <label className="full"><span>Custom Label</span><input value={bridgeForm.customLabel} onChange={(event) => onBridgeFormChange((current) => ({ ...current, customLabel: event.target.value }))} /></label>
-            <label className="checkbox-row"><input type="checkbox" checked={bridgeForm.enabled} onChange={(event) => onBridgeFormChange((current) => ({ ...current, enabled: event.target.checked }))} /><span>Enabled</span></label>
-            <label className="checkbox-row"><input type="checkbox" checked={bridgeForm.tls} onChange={(event) => onBridgeFormChange((current) => ({ ...current, tls: event.target.checked }))} /><span>TLS only</span></label>
-            <label className="checkbox-row"><input type="checkbox" checked={bridgeForm.unreadOnly} onChange={(event) => onBridgeFormChange((current) => ({ ...current, unreadOnly: event.target.checked }))} /><span>Unread only</span></label>
-            <div className="full action-row">
-              <LoadingButton className="primary" isLoading={saveLoading} loadingLabel="Saving Bridge…" type="submit">
-                Save Bridge
-              </LoadingButton>
-            </div>
-          </form>
-        </>
+        ) : (
+          <div className="muted-box user-bridges-empty-state">
+            <strong>{t('bridges.emptyTitle')}</strong><br />
+            {t('bridges.emptyBody')}
+          </div>
+        )
+      ) : null}
+      {fetcherDialogOpen ? (
+        <FetcherDialog
+          bridgeForm={bridgeForm}
+          duplicateIdError={duplicateIdError}
+          onApplyPreset={onApplyPreset}
+          onBridgeFormChange={onBridgeFormChange}
+          onClose={onCloseDialog}
+          onSave={onSaveBridge}
+          saveLoading={saveLoading}
+          t={t}
+        />
       ) : null}
     </section>
   )

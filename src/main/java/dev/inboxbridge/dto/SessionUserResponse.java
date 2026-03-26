@@ -5,5 +5,7 @@ public record SessionUserResponse(
         String username,
         String role,
         boolean approved,
-        boolean mustChangePassword) {
+        boolean mustChangePassword,
+        int passkeyCount,
+        boolean passwordConfigured) {
 }

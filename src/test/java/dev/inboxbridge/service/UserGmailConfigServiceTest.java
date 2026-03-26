@@ -2,6 +2,7 @@ package dev.inboxbridge.service;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.util.Optional;
@@ -22,6 +23,7 @@ class UserGmailConfigServiceTest {
         UserGmailConfigService service = service(false, repositoryWithNoRow(), Optional.empty());
         AppUser user = new AppUser();
         user.id = 7L;
+        user.role = AppUser.Role.ADMIN;
 
         UserGmailConfigView view = service.update(user, new UpdateUserGmailConfigRequest(
                 "me",
@@ -35,9 +37,31 @@ class UserGmailConfigServiceTest {
 
         assertEquals("me", view.destinationUser());
         assertEquals("https://mail.example.test/api/google-oauth/callback", view.redirectUri());
-        assertTrue(view.clientIdConfigured());
-        assertTrue(view.clientSecretConfigured());
+        assertFalse(view.clientIdConfigured());
+        assertFalse(view.clientSecretConfigured());
         assertTrue(view.sharedClientConfigured());
+    }
+
+    @Test
+    void updateRejectsNonAdminOverrides() {
+        UserGmailConfigService service = service(false, repositoryWithNoRow(), Optional.empty());
+        AppUser user = new AppUser();
+        user.id = 8L;
+        user.role = AppUser.Role.USER;
+
+        IllegalStateException error = assertThrows(
+                IllegalStateException.class,
+                () -> service.update(user, new UpdateUserGmailConfigRequest(
+                        "me",
+                        "",
+                        "",
+                        "",
+                        "",
+                        true,
+                        false,
+                        false)));
+
+        assertEquals("Only admins can override Gmail destination settings from the admin UI.", error.getMessage());
     }
 
     @Test
@@ -67,8 +91,8 @@ class UserGmailConfigServiceTest {
         UserGmailConfigView view = service.defaultView(7L);
 
         assertTrue(view.sharedClientConfigured());
-        assertTrue(view.clientIdConfigured());
-        assertTrue(view.clientSecretConfigured());
+        assertFalse(view.clientIdConfigured());
+        assertFalse(view.clientSecretConfigured());
         assertEquals("https://mail.example.test/api/google-oauth/callback", view.defaultRedirectUri());
         assertEquals("https://mail.example.test/api/google-oauth/callback", view.redirectUri());
     }
@@ -97,8 +121,9 @@ class UserGmailConfigServiceTest {
         UserGmailConfigView view = service.viewForUser(11L).orElseThrow();
 
         assertTrue(view.refreshTokenConfigured());
-        assertTrue(view.clientIdConfigured());
-        assertTrue(view.clientSecretConfigured());
+        assertFalse(view.clientIdConfigured());
+        assertFalse(view.clientSecretConfigured());
+        assertTrue(view.sharedClientConfigured());
     }
 
     private UserGmailConfigService service(
@@ -159,6 +184,41 @@ class UserGmailConfigServiceTest {
         @Override
         public int fetchWindow() {
             return 50;
+        }
+
+        @Override
+        public Security security() {
+            return new Security() {
+                @Override
+                public Passkeys passkeys() {
+                    return new Passkeys() {
+                        @Override
+                        public boolean enabled() {
+                            return true;
+                        }
+
+                        @Override
+                        public String rpId() {
+                            return "localhost";
+                        }
+
+                        @Override
+                        public String rpName() {
+                            return "InboxBridge";
+                        }
+
+                        @Override
+                        public String origins() {
+                            return "https://localhost:3000";
+                        }
+
+                        @Override
+                        public String challengeTtl() {
+                            return "PT5M";
+                        }
+                    };
+                }
+            };
         }
 
         @Override

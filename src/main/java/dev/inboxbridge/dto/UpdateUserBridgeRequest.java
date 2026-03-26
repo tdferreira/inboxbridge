@@ -1,6 +1,7 @@
 package dev.inboxbridge.dto;
 
 public record UpdateUserBridgeRequest(
+        String originalBridgeId,
         String bridgeId,
         Boolean enabled,
         String protocol,

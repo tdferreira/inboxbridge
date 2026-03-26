@@ -18,6 +18,8 @@ public interface BridgeConfig {
     @WithDefault("50")
     int fetchWindow();
 
+    Security security();
+
     Gmail gmail();
 
     Microsoft microsoft();
@@ -44,6 +46,27 @@ public interface BridgeConfig {
 
         @WithDefault("false")
         boolean processForCalendar();
+    }
+
+    interface Security {
+        Passkeys passkeys();
+
+        interface Passkeys {
+            @WithDefault("true")
+            boolean enabled();
+
+            @WithDefault("localhost")
+            String rpId();
+
+            @WithDefault("InboxBridge")
+            String rpName();
+
+            @WithDefault("https://localhost:3000")
+            String origins();
+
+            @WithDefault("PT5M")
+            String challengeTtl();
+        }
     }
 
     interface Microsoft {

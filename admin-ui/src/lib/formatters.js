@@ -1,6 +1,8 @@
-export function formatDate(value) {
-  if (!value) return 'Never'
-  return new Date(value).toLocaleString()
+import { translate } from './i18n'
+
+export function formatDate(value, locale = 'en') {
+  if (!value) return translate(locale, 'common.never')
+  return new Date(value).toLocaleString(locale)
 }
 
 export function statusTone(status) {
@@ -14,19 +16,19 @@ export function statusTone(status) {
   }
 }
 
-export function tokenStorageLabel(mode) {
+export function tokenStorageLabel(mode, locale = 'en') {
   switch (mode) {
     case 'DATABASE':
-      return 'Encrypted DB'
+      return translate(locale, 'tokenStorage.database')
     case 'ENVIRONMENT':
-      return '.env fallback'
+      return translate(locale, 'tokenStorage.environment')
     case 'CONFIGURED_BUT_EMPTY':
-      return 'Ready for OAuth'
+      return translate(locale, 'tokenStorage.configuredEmpty')
     case 'NOT_CONFIGURED':
-      return 'Not configured'
+      return translate(locale, 'tokenStorage.notConfigured')
     case 'PASSWORD':
-      return 'Password auth'
+      return translate(locale, 'tokenStorage.password')
     default:
-      return mode || 'Unknown'
+      return mode || translate(locale, 'tokenStorage.unknown')
   }
 }

@@ -13,12 +13,13 @@ import jakarta.inject.Inject;
 import jakarta.transaction.Transactional;
 
 /**
- * Owns the small set of per-user admin-ui layout preferences that may be
- * persisted across login sessions when the user explicitly enables that
- * behavior.
+ * Owns the small set of per-user admin-ui preferences, including optionally
+ * persisted layout state and the authenticated user's language choice.
  */
 @ApplicationScoped
 public class UserUiPreferenceService {
+
+    static final String DEFAULT_LANGUAGE = "en";
 
     @Inject
     UserUiPreferenceRepository repository;
@@ -28,7 +29,7 @@ public class UserUiPreferenceService {
     }
 
     public UserUiPreferenceView defaultView() {
-        return new UserUiPreferenceView(false, false, false, false, false, false);
+        return new UserUiPreferenceView(false, false, false, false, false, false, DEFAULT_LANGUAGE);
     }
 
     @Transactional
@@ -43,6 +44,7 @@ public class UserUiPreferenceService {
         preference.sourceBridgesCollapsed = request.sourceBridgesCollapsed() != null && request.sourceBridgesCollapsed();
         preference.systemDashboardCollapsed = request.systemDashboardCollapsed() != null && request.systemDashboardCollapsed();
         preference.userManagementCollapsed = request.userManagementCollapsed() != null && request.userManagementCollapsed();
+        preference.language = normalizeLanguage(request.language());
         preference.updatedAt = Instant.now();
         repository.persist(preference);
         return toView(preference);
@@ -55,6 +57,14 @@ public class UserUiPreferenceService {
                 preference.gmailDestinationCollapsed,
                 preference.sourceBridgesCollapsed,
                 preference.systemDashboardCollapsed,
-                preference.userManagementCollapsed);
+                preference.userManagementCollapsed,
+                normalizeLanguage(preference.language));
+    }
+
+    private String normalizeLanguage(String language) {
+        if (language == null || language.isBlank()) {
+            return DEFAULT_LANGUAGE;
+        }
+        return language.trim();
     }
 }

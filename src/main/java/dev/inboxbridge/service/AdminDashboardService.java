@@ -30,7 +30,11 @@ public class AdminDashboardService {
     @Inject
     SourcePollEventService sourcePollEventService;
 
+    @Inject
+    PollingSettingsService pollingSettingsService;
+
     public AdminDashboardResponse dashboard() {
+        PollingSettingsService.EffectivePollingSettings effectivePolling = pollingSettingsService.effectiveSettings();
         Map<String, ImportStats> importStatsBySource = new HashMap<>();
         for (Object[] row : importedMessageRepository.summarizeBySource()) {
             importStatsBySource.put(
@@ -72,7 +76,10 @@ public class AdminDashboardService {
                         (int) config.sources().stream().filter(BridgeConfig.Source::enabled).count(),
                         importedMessageRepository.count(),
                         sourcesWithErrors,
-                        config.pollEnabled()),
+                        effectivePolling.pollEnabled(),
+                        effectivePolling.pollIntervalText(),
+                        effectivePolling.fetchWindow()),
+                pollingSettingsService.view(),
                 new AdminDestinationSummary(
                         gmailClientConfigured(),
                         googleTokenStorageMode(),

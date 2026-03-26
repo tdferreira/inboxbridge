@@ -1,0 +1,65 @@
+.fetcher-list-item {
+  padding: 18px;
+  display: grid;
+  gap: 14px;
+}
+
+.fetcher-list-item-summary {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 12px;
+  align-items: start;
+}
+
+.fetcher-list-item-main {
+  display: flex;
+  justify-content: space-between;
+  align-items: start;
+  gap: 12px;
+  text-align: left;
+  width: 100%;
+  background: transparent;
+  border: none;
+  padding: 0;
+}
+
+.fetcher-list-item-title-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 6px;
+}
+
+.fetcher-list-item-menu {
+  position: relative;
+}
+
+.fetcher-menu-button {
+  min-width: 2.75rem;
+  padding-inline: 0.9rem;
+}
+
+.fetcher-menu {
+  position: absolute;
+  top: calc(100% + 8px);
+  right: 0;
+  z-index: 10;
+  display: grid;
+  gap: 8px;
+  min-width: 220px;
+  padding: 12px;
+  border-radius: 16px;
+  border: 1px solid var(--line);
+  background: rgba(255, 252, 247, 0.98);
+  box-shadow: 0 16px 32px rgba(36, 26, 20, 0.16);
+}
+
+.fetcher-menu button {
+  width: 100%;
+}
+
+.fetcher-list-item-details {
+  display: grid;
+  gap: 12px;
+}

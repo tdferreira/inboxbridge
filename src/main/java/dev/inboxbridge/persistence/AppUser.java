@@ -36,7 +36,10 @@ public class AppUser extends PanacheEntityBase {
     @Column(name = "username", nullable = false, length = 120)
     public String username;
 
-    @Column(name = "password_hash", nullable = false, length = 512)
+    @Column(name = "user_handle", nullable = false, length = 128)
+    public String userHandle;
+
+    @Column(name = "password_hash", length = 512)
     public String passwordHash;
 
     @Enumerated(EnumType.STRING)

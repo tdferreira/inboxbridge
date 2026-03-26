@@ -1,14 +1,19 @@
 package dev.inboxbridge.web;
 
 import dev.inboxbridge.dto.LoginRequest;
+import dev.inboxbridge.dto.LoginResponse;
+import dev.inboxbridge.dto.FinishPasskeyCeremonyRequest;
 import dev.inboxbridge.dto.RegisterUserRequest;
 import dev.inboxbridge.dto.SessionUserResponse;
+import dev.inboxbridge.dto.StartPasskeyCeremonyResponse;
+import dev.inboxbridge.dto.StartPasskeyLoginRequest;
 import dev.inboxbridge.persistence.AppUser;
 import dev.inboxbridge.security.AuthenticatedFilter;
 import dev.inboxbridge.security.CurrentUserContext;
 import dev.inboxbridge.security.RequireAuth;
 import dev.inboxbridge.service.AppUserService;
 import dev.inboxbridge.service.AuthService;
+import dev.inboxbridge.service.PasskeyService;
 import jakarta.inject.Inject;
 import jakarta.ws.rs.BadRequestException;
 import jakarta.ws.rs.Consumes;
@@ -38,13 +43,20 @@ public class AuthResource {
     @Inject
     AppUserService appUserService;
 
+    @Inject
+    PasskeyService passkeyService;
+
     @POST
     @Path("/login")
     @Consumes(MediaType.APPLICATION_JSON)
     public Response login(LoginRequest request) {
         try {
-            AuthService.AuthenticatedSession session = authService.login(request.username(), request.password());
-            return Response.ok(toResponse(session.user()))
+            AuthService.LoginResult result = authService.login(request.username(), request.password());
+            if (result.status() == AuthService.LoginStatus.PASSKEY_REQUIRED) {
+                return Response.ok(LoginResponse.passkeyRequired(result.passkeyChallenge())).build();
+            }
+            AuthService.AuthenticatedSession session = result.session();
+            return Response.ok(LoginResponse.authenticated(toResponse(session.user())))
                     .cookie(sessionCookie(session.token()))
                     .build();
         } catch (IllegalArgumentException e) {
@@ -69,6 +81,44 @@ public class AuthResource {
     }
 
     @POST
+    @Path("/passkey/options")
+    @Consumes(MediaType.APPLICATION_JSON)
+    public StartPasskeyCeremonyResponse startPasskeyLogin(StartPasskeyLoginRequest request) {
+        try {
+            if (request != null && request.username() != null && !request.username().isBlank()) {
+                AppUser user = appUserService.findByUsername(request.username().trim())
+                        .filter(found -> found.active && found.approved)
+                        .orElseThrow(() -> new IllegalArgumentException("Unknown account for passkey sign-in"));
+                if (appUserService.hasPassword(user) && appUserService.requiresPasskey(user)) {
+                    throw new IllegalArgumentException("This account requires password verification before passkey sign-in.");
+                }
+                if (!appUserService.requiresPasskey(user)) {
+                    throw new IllegalArgumentException("This account does not have a passkey configured.");
+                }
+                return passkeyService.startAuthenticationForUser(user, false);
+            }
+            return passkeyService.startAuthentication();
+        } catch (IllegalArgumentException | IllegalStateException e) {
+            throw new BadRequestException(e.getMessage(), e);
+        }
+    }
+
+    @POST
+    @Path("/passkey/verify")
+    @Consumes(MediaType.APPLICATION_JSON)
+    public Response finishPasskeyLogin(FinishPasskeyCeremonyRequest request) {
+        try {
+            AppUser user = passkeyService.finishAuthentication(request);
+            AuthService.AuthenticatedSession session = authService.loginWithPasskey(user);
+            return Response.ok(LoginResponse.authenticated(toResponse(session.user())))
+                    .cookie(sessionCookie(session.token()))
+                    .build();
+        } catch (IllegalArgumentException | IllegalStateException e) {
+            throw new BadRequestException(e.getMessage(), e);
+        }
+    }
+
+    @POST
     @Path("/logout")
     @RequireAuth
     public Response logout(@jakarta.ws.rs.CookieParam(AuthenticatedFilter.SESSION_COOKIE) String token) {
@@ -84,7 +134,14 @@ public class AuthResource {
     }
 
     private SessionUserResponse toResponse(AppUser user) {
-        return new SessionUserResponse(user.id, user.username, user.role.name(), user.approved, user.mustChangePassword);
+        return new SessionUserResponse(
+                user.id,
+                user.username,
+                user.role.name(),
+                user.approved,
+                user.mustChangePassword,
+                (int) passkeyService.countForUser(user.id),
+                appUserService.hasPassword(user));
     }
 
     private NewCookie sessionCookie(String token) {

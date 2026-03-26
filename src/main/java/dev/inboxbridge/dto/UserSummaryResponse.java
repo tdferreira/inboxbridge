@@ -7,6 +7,8 @@ public record UserSummaryResponse(
         boolean active,
         boolean approved,
         boolean mustChangePassword,
+        boolean passwordConfigured,
         boolean gmailConfigured,
-        int bridgeCount) {
+        int bridgeCount,
+        int passkeyCount) {
 }

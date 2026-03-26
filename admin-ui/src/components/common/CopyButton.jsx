@@ -5,7 +5,7 @@ import './CopyButton.css'
 /**
  * One-click clipboard helper for API payloads and other diagnostic text.
  */
-function CopyButton({ label = 'Copy', text }) {
+function CopyButton({ copiedLabel = 'Copied', label = 'Copy', text }) {
   const [copied, setCopied] = useState(false)
 
   async function handleCopy() {
@@ -20,7 +20,7 @@ function CopyButton({ label = 'Copy', text }) {
 
   return (
     <button className="copy-button" type="button" onClick={handleCopy}>
-      {copied ? 'Copied' : label}
+      {copied ? copiedLabel : label}
     </button>
   )
 }

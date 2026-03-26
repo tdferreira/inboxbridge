@@ -21,6 +21,7 @@ InboxBridge supports both operator-managed system configuration from `.env` and 
 6. Provides a separate React admin UI with login, self-registration, approval workflow, user management, Gmail config, and bridge config.
 7. Supports Google OAuth for Gmail destinations and Microsoft OAuth for Outlook / Hotmail / Live sources.
 8. Organizes the admin UI into reusable React components with component-scoped styles and frontend unit tests.
+9. Supports WebAuthn passkeys for browser sign-in after a user enrolls one from the security panel.
 
 ## What it still does not do
 
@@ -60,6 +61,8 @@ Then set at least these values in `.env` before starting:
 
 - `BRIDGE_SECURITY_TOKEN_ENCRYPTION_KEY=<base64 32-byte key>`
 - `PUBLIC_BASE_URL=https://localhost:3000`
+- `BRIDGE_SECURITY_PASSKEY_RP_ID=localhost`
+- `BRIDGE_SECURITY_PASSKEY_ORIGINS=https://localhost:3000`
 - `JDBC_URL=jdbc:postgresql://postgres:5432/inboxbridge`
 - `JDBC_USERNAME=inboxbridge`
 - `JDBC_PASSWORD=inboxbridge`
@@ -69,8 +72,9 @@ With only that configuration, you can:
 - open `https://localhost:3000`
 - sign in with `admin` / `nimda`
 - change the bootstrap password
+- register passkeys from the `Security` panel if the browser supports them
 - create users
-- configure Gmail and source bridges from the admin UI
+- configure Gmail and mail fetchers from the admin UI
 - access password changes from the top header via `Change Password`
 
 You do not need to prefill `GOOGLE_*` or `MICROSOFT_*` just to bring the stack up.
@@ -81,7 +85,7 @@ To actually import mail, you need the bootstrap config above plus:
 
 - a Gmail destination configured either through shared `GOOGLE_*` env vars or per-user Gmail settings in the admin UI
 - provider OAuth app credentials for any OAuth-based source or destination flow
-- at least one source bridge, either from `.env` or from the admin UI
+- at least one mail fetcher, either from `.env` or from the admin UI
 
 The fastest operator-managed path is:
 
@@ -97,6 +101,7 @@ Important values when you want a shared, env-managed deployment setup:
 - `BRIDGE_SOURCES_<index>__...` for env-managed system bridges
 - `GOOGLE_*` only if you want an env-managed system Gmail destination
 - `MICROSOFT_*` for Microsoft OAuth sources
+- `BRIDGE_SECURITY_PASSKEY_*` if you need to override the default local WebAuthn relying-party settings
 
 Generate a local encryption key with:
 
@@ -145,6 +150,25 @@ Initial bootstrap credentials:
 - password: `nimda`
 
 The bootstrap admin is marked `mustChangePassword=true`, so change it immediately after first login.
+The running unauthenticated login screen does not expose whether those bootstrap credentials are still active, so setup operators should rely on this documentation rather than a public status endpoint.
+After that, the user can enroll one or more passkeys from the `Security` panel and use `Sign in with passkey` on later visits.
+Current login rules:
+
+- password only: the normal `Sign in` flow uses only the password
+- passkey only: the normal `Sign in` flow ignores any typed password and starts passkey authentication
+- password + passkey: the normal `Sign in` flow validates the password first and then requires the passkey as a second factor
+- the dedicated `Sign in with passkey` button is mainly for passkey-only accounts or discoverable-credential sign-in
+- users can intentionally remove their password and stay passkey-only
+- self-registration is opened from a dedicated `Register for access` button and uses a focused modal instead of permanently rendering the request form on the login card
+
+The admin UI also supports these languages, with the user preference stored per account and reused across sessions:
+
+- English
+- French
+- German
+- Portuguese (Portugal)
+- Portuguese (Brazil)
+- Spanish
 
 ## Admin UI capabilities
 
@@ -153,15 +177,32 @@ The React admin UI lives in `admin-ui/` and runs in its own container/server.
 Current features:
 
 - secure sign-in using HTTP-only same-site cookies
+- optional passkey sign-in using WebAuthn
 - self-registration followed by admin approval
+- self-registration opens through a dedicated unauthenticated modal flow instead of occupying the main login screen full time
 - admin-managed user creation
 - multiple admin users, with admin rights managed from the UI
-- per-user Gmail destination config
-- per-user Gmail config can reuse the deployment’s shared Google OAuth client when one is configured
-- per-user bridge create/update/delete
-- per-user bridge passwords and OAuth refresh tokens are stored encrypted in PostgreSQL by default when saved from the admin UI
-- password changes are available from the top header and enforce confirmation, minimum length, uppercase, lowercase, number, special character, and “must differ from current password” rules
-- env-managed system bridge visibility
+- admins can reset another user’s password to a temporary value and wipe that user’s passkeys
+- admin password reset now opens a dedicated dialog instead of an always-visible inline form
+- the admin reset-password dialog shows the temporary-password rules inline so the operator can see when the new password satisfies the policy before submitting
+- admin actions that can suspend a user, force a password change, wipe passkeys, or remove stored mail-fetcher data now require an explicit confirmation modal before execution
+- admins cannot remove their own admin rights
+- admin-managed per-user Gmail destination overrides when advanced customization is really needed
+- non-admin users get a simplified Gmail destination status panel with connect/reconnect OAuth, while shared Google OAuth client reuse still lets each user grant consent for their own Gmail mailbox refresh token
+- per-user email fetcher create/update/delete through a dedicated modal dialog
+- common provider presets for Outlook / Hotmail / Live, Gmail, Yahoo Mail, and Proton Mail Bridge when creating a fetcher
+- auth-aware fetcher forms that hide password-only or OAuth-only fields when they are not relevant
+- inline help tooltips for fetcher and poller fields so each control explains what it does
+- env-managed fetchers shown in the same operational list with a read-only `.env` badge, but only for the account named `admin`
+- per-user mail-fetcher passwords and OAuth refresh tokens are stored encrypted in PostgreSQL by default when saved from the admin UI
+- the add/edit mail fetcher dialog is wider, rejects duplicate IDs before submit, and only shows the `.env` badge for environment-managed entries
+- password changes are available from the top header security panel and enforce confirmation, minimum length, uppercase, lowercase, number, special character, and “must differ from current password” rules
+- users can remove their password entirely and operate in passkey-only mode
+- passkeys can be registered and removed from that same top-header security panel
+- the last passkey on a passwordless account cannot be removed until a password is set again or another passkey is added
+- self-service password removal and passkey deletion now require an explicit confirmation modal before the backend call is made
+- admin-managed runtime overrides for polling enablement, poll interval, and fetch window while still showing the `.env` defaults
+- a dedicated `Poller Settings` section for global polling controls and health metrics instead of rendering env-managed fetchers there
 - manual poll trigger for admins
 - Google OAuth launch for the system Gmail destination and for the current user
 - Microsoft OAuth launch for visible Microsoft bridges
@@ -169,6 +210,8 @@ Current features:
 - reusable component-based frontend sections with local CSS files
 - frontend unit tests for key auth, Gmail, bridge-card, and utility behavior
 - one-click copy actions for API error banners and bridge error payloads
+- dismissable notifications that can focus the related section, with non-critical notices auto-closing after 10 seconds
+- per-user admin-ui language selection persisted in PostgreSQL and mirrored to the browser for future visits
 
 Security model:
 
@@ -176,6 +219,7 @@ Security model:
 - user config APIs require an authenticated session and are scoped to the current user
 - admins can inspect other users’ configuration summaries without seeing raw client secrets or refresh tokens
 - users cannot access other users’ bridge or Gmail configuration through the authenticated user APIs
+- users cannot access or delete other users’ passkeys
 
 ## OAuth flows
 
@@ -195,20 +239,29 @@ Useful endpoints:
 - `GET /api/microsoft-oauth/start?sourceId=<bridge-id>`
 - `POST /api/microsoft-oauth/exchange`
 - `GET /api/microsoft-oauth/callback`
+- `POST /api/auth/passkey/options`
+- `POST /api/auth/passkey/verify`
+- `GET /api/account/passkeys`
+- `POST /api/account/passkeys/options`
+- `POST /api/account/passkeys/verify`
 
 Recommended flow:
 
 1. Sign in to `https://localhost:3000`
 2. Use the relevant OAuth button in the UI
 3. Complete provider consent
-4. Use the callback page button to exchange the code
+4. The callback page automatically tries to exchange the code in the browser as soon as it loads
 5. The callback page starts a 10-second countdown and returns to the admin UI automatically after a successful in-browser exchange
-6. You can still use the callback page return button to navigate back immediately
-7. If secure storage is enabled, InboxBridge stores the token encrypted in PostgreSQL automatically
+6. You can still use the callback page exchange button to retry manually if the automatic attempt fails
+7. You can still use the callback page return button to navigate back immediately
+8. If secure storage is enabled, InboxBridge stores the token encrypted in PostgreSQL automatically
 
 OAuth callback usability notes:
 
 - the callback page includes a `Copy Code` button
+- the callback page automatically attempts the code exchange when it loads
+- the Google callback page now also re-reads the browser query string directly, so it can recover if the reverse proxy or callback rendering path did not populate the code into the initial HTML
+- both Google and Microsoft callback pages now detect consent denial and tell the user to retry the OAuth flow while approving every requested permission
 - the callback page includes a `Return To Admin UI` button
 - returning to the admin UI before exchange asks for confirmation
 - after a successful in-browser exchange, the callback page shows a 10-second auto-return countdown
@@ -218,6 +271,63 @@ Admin UI loading feedback notes:
 
 - buttons that trigger backend calls now show an inline loading spinner while the request is in progress
 - this includes sign-in, registration, password changes, Gmail settings saves, bridge saves/deletes, user management actions, poll runs, refresh, and OAuth start actions
+
+## Passkeys
+
+InboxBridge can use browser passkeys for admin-ui sign-in after a user first signs in with their password and enrolls a passkey from the `Security` panel.
+
+Default local settings:
+
+- `BRIDGE_SECURITY_PASSKEYS_ENABLED=true`
+- `BRIDGE_SECURITY_PASSKEY_RP_ID=localhost`
+- `BRIDGE_SECURITY_PASSKEY_RP_NAME=InboxBridge`
+- `BRIDGE_SECURITY_PASSKEY_ORIGINS=https://localhost:3000`
+- `BRIDGE_SECURITY_PASSKEY_CHALLENGE_TTL=PT5M`
+
+These values are loaded through the same `bridge.security.passkeys` config tree as the rest of the backend settings, so invalid mapping changes will fail startup immediately.
+
+For a deployed hostname, set these to your public origin:
+
+- `PUBLIC_BASE_URL=https://your-domain.example`
+- `BRIDGE_SECURITY_PASSKEY_RP_ID=your-domain.example`
+- `BRIDGE_SECURITY_PASSKEY_ORIGINS=https://your-domain.example`
+
+Notes:
+
+- passkeys require HTTPS or localhost
+- passkeys require a browser with WebAuthn support
+- only public credential material is stored for passkeys; the private key stays with the authenticator
+- admins can wipe all passkeys for a user, after which that user must enroll a new passkey to sign in passwordlessly again
+- when both a password and a passkey exist, sign-in becomes password + passkey instead of passkey-only
+- when only a passkey exists, typed passwords are ignored and the browser is guided into passkey sign-in
+- passwordless accounts are supported, but InboxBridge will not allow a user to remove their final remaining passkey
+
+## Polling controls
+
+Polling still starts from `.env`, but admins can now override the live runtime behavior from the admin UI system dashboard.
+
+What can be overridden:
+
+- whether scheduled polling is enabled
+- the scheduled poll interval
+- the mailbox fetch window
+
+Behavior:
+
+- `.env` remains the default source of truth on startup
+- the admin UI stores only overrides in PostgreSQL
+- clearing an override falls back to the `.env` default again
+- the scheduler checks the effective interval dynamically, so changes apply without editing `.env`
+
+Accepted poll interval formats:
+
+- shorthand: `30s`, `5m`, `1h`, `1d`
+- ISO-8601: `PT30S`, `PT5M`, `PT1H`
+
+Current limits:
+
+- minimum interval: `5s`
+- fetch window range: `1` to `500`
 
 ### Fix Google `403: org_internal`
 
@@ -234,6 +344,61 @@ Fix it in Google Cloud:
 
 No.
 
+## Env Variable Reference
+
+Core runtime:
+
+- `JDBC_URL`, `JDBC_USERNAME`, `JDBC_PASSWORD`: PostgreSQL connection used by Quarkus and Flyway.
+- `PUBLIC_BASE_URL`: public HTTPS base URL used to derive OAuth callback defaults.
+- `HTTP_PORT`, `HTTPS_PORT`: backend listener ports.
+- `HTTPS_CERT_FILE`, `HTTPS_KEY_FILE`: backend TLS certificate and private key paths.
+
+Shared Google destination:
+
+- `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET`: deployment-shared Google Cloud OAuth client for the Gmail API. In the normal deployment model, one Google Cloud project/client is enough for many users. Each user still needs their own Gmail OAuth consent and refresh token for their own destination mailbox. These values belong to the deployment, not to one specific end user.
+- `GOOGLE_REFRESH_TOKEN`: refresh token for the system Gmail destination.
+- `GOOGLE_REDIRECT_URI`: optional explicit Google callback override.
+- `BRIDGE_GMAIL_DESTINATION_USER`: Gmail API target user for the shared/system destination. In most cases this should stay `me`, which tells Gmail to import into the mailbox that granted the token.
+- `BRIDGE_GMAIL_CREATE_MISSING_LABELS`: create configured Gmail labels automatically if they do not exist yet.
+- `BRIDGE_GMAIL_NEVER_MARK_SPAM`: asks Gmail import to avoid spam classification where supported.
+- `BRIDGE_GMAIL_PROCESS_FOR_CALENDAR`: lets Gmail process imported messages for calendar extraction.
+
+Shared Microsoft OAuth app:
+
+- `MICROSOFT_TENANT`: usually `consumers` for Outlook.com / Hotmail / Live accounts.
+- `MICROSOFT_CLIENT_ID`, `MICROSOFT_CLIENT_SECRET`: Microsoft Entra app credentials reused across Outlook bridges.
+- `MICROSOFT_REDIRECT_URI`: optional explicit Microsoft callback override.
+
+Security:
+
+- `BRIDGE_SECURITY_TOKEN_ENCRYPTION_KEY`: base64-encoded 32-byte key used to encrypt tokens and user-managed secrets at rest.
+- `BRIDGE_SECURITY_TOKEN_ENCRYPTION_KEY_ID`: version label stored beside encrypted values.
+- `BRIDGE_SECURITY_PASSKEYS_ENABLED`: enables or disables WebAuthn passkeys.
+- `BRIDGE_SECURITY_PASSKEY_RP_ID`, `BRIDGE_SECURITY_PASSKEY_RP_NAME`, `BRIDGE_SECURITY_PASSKEY_ORIGINS`: passkey relying-party identity settings.
+- `BRIDGE_SECURITY_PASSKEY_CHALLENGE_TTL`: lifetime for passkey registration/authentication ceremonies.
+
+Polling defaults:
+
+- `BRIDGE_POLL_ENABLED`: default scheduled polling state before any admin override.
+- `BRIDGE_POLL_INTERVAL`: default polling interval before any admin override.
+- `BRIDGE_FETCH_WINDOW`: default number of most recent source messages scanned on each poll before any admin override.
+
+Env-managed mail fetchers:
+
+- `BRIDGE_SOURCES_<n>__ID`: stable mail-fetcher identifier.
+- `BRIDGE_SOURCES_<n>__ENABLED`: enables or disables that source.
+- `BRIDGE_SOURCES_<n>__PROTOCOL`: `IMAP` or `POP3`.
+- `BRIDGE_SOURCES_<n>__HOST`, `BRIDGE_SOURCES_<n>__PORT`: source mailbox server location.
+- `BRIDGE_SOURCES_<n>__TLS`: whether to require TLS for the source connection.
+- `BRIDGE_SOURCES_<n>__AUTH_METHOD`: `PASSWORD` or `OAUTH2`.
+- `BRIDGE_SOURCES_<n>__OAUTH_PROVIDER`: currently `NONE` or `MICROSOFT`.
+- `BRIDGE_SOURCES_<n>__USERNAME`: source mailbox username.
+- `BRIDGE_SOURCES_<n>__PASSWORD`: source mailbox password or app password for password auth.
+- `BRIDGE_SOURCES_<n>__OAUTH_REFRESH_TOKEN`: optional manual refresh token for env-managed OAuth2 sources.
+- `BRIDGE_SOURCES_<n>__FOLDER`: IMAP folder to scan.
+- `BRIDGE_SOURCES_<n>__UNREAD_ONLY`: whether to import only unread messages.
+- `BRIDGE_SOURCES_<n>__CUSTOM_LABEL`: Gmail label to apply after import.
+
 Google OAuth client IDs and client secrets belong to a Google Cloud project, not to a Gmail mailbox. InboxBridge can guide the user through setup and store the provided credentials securely, but it cannot automatically provision a Google OAuth client from the admin UI.
 
 In practice, each deployment must choose one of these patterns:
@@ -241,7 +406,9 @@ In practice, each deployment must choose one of these patterns:
 1. reuse one shared Google OAuth client for many users
 2. let each user create a Google Cloud OAuth client and paste the values into the UI
 
-The admin UI now explains those setup steps next to the Gmail settings form, and if a shared Google OAuth client is configured it can be reused automatically for each user’s Gmail destination.
+Pattern `1` is the intended default for most InboxBridge deployments.
+
+The admin UI now explains those setup steps next to the Gmail destination area. For regular users the UI is simplified to Gmail status plus connect/reconnect OAuth, while admins can still access the advanced override form when that is actually needed.
 
 ## Secure token storage
 
@@ -267,8 +434,9 @@ For the user Gmail screen specifically:
 
 - `Destination User` should usually stay `me`
 - `Redirect URI` now defaults to the deployment callback URL and is prefilled in the UI
-- per-user `Client ID` / `Client Secret` are optional when the deployment already has a shared Google OAuth client configured
-- the Gmail destination panel now shows the effective Gmail OAuth state for the user, including shared deployment client availability and refresh-token storage from the encrypted OAuth credential store
+- the actual Gmail destination mailbox is the Google account that completed OAuth consent; `Destination User=me` just tells the Gmail API to use that authenticated mailbox
+- per-user `Client ID` / `Client Secret` are optional admin-only overrides when the deployment already has a shared Google OAuth client configured; most deployments should not need these overrides
+- the Gmail destination panel now shows deployment-shared Google client availability separately from user-specific client overrides and refresh-token storage, but non-admin users only see the simplified connection status they actually need
 
 When disabled:
 

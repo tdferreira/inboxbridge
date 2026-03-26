@@ -1,21 +1,21 @@
-import LoadingButton from '../common/LoadingButton'
+import PaneToggleButton from '../common/PaneToggleButton'
 import './SetupGuidePanel.css'
 
 /**
  * Gives first-time operators and regular users a compact, in-app checklist for
  * the minimum steps needed to make InboxBridge usable.
  */
-function SetupGuidePanel({ collapsed, onFocusSection, onPersistLayoutChange, onToggleCollapse, persistLayout, savingLayout, steps }) {
+function SetupGuidePanel({ collapsed, onFocusSection, onPersistLayoutChange, onToggleCollapse, persistLayout, savingLayout, steps, t }) {
   return (
-    <section className="surface-card setup-guide-panel" id="quick-setup-guide-section" tabIndex="-1">
+    <section className="surface-card setup-guide-panel section-with-corner-toggle" id="quick-setup-guide-section" tabIndex="-1">
       <div className="panel-header">
         <div>
-          <div className="section-title">Quick Setup Guide</div>
+          <div className="section-title">{t('setup.title')}</div>
           <p className="section-copy">
-            Follow these steps to get from a fresh startup to a working import flow.
+            {t('setup.copy')}
           </p>
         </div>
-        <div className="action-row">
+        <div className="panel-header-actions">
           <label className="setup-guide-persist-toggle">
             <input
               checked={persistLayout}
@@ -23,14 +23,12 @@ function SetupGuidePanel({ collapsed, onFocusSection, onPersistLayoutChange, onT
               onChange={(event) => onPersistLayoutChange(event.target.checked)}
               type="checkbox"
             />
-            <span>Remember layout on this account</span>
+            <span>{t('setup.rememberLayout')}</span>
           </label>
-          <LoadingButton className="secondary" isLoading={savingLayout && persistLayout} loadingLabel={collapsed ? 'Expanding…' : 'Collapsing…'} onClick={onToggleCollapse} type="button">
-            {collapsed ? 'Expand' : 'Collapse'}
-          </LoadingButton>
         </div>
       </div>
-      {savingLayout ? <div className="section-copy">Saving layout preference…</div> : null}
+      <PaneToggleButton className="pane-toggle-button-corner" collapseLabel={t('common.collapseSection')} collapsed={collapsed} disabled={savingLayout} expandLabel={t('common.expandSection')} isLoading={savingLayout && persistLayout} onClick={onToggleCollapse} />
+      {savingLayout ? <div className="section-copy">{t('common.savingLayoutPreference')}</div> : null}
       {!collapsed ? (
         <div className="setup-guide-grid">
           {steps.map((step) => (

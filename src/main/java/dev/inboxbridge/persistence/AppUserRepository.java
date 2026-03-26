@@ -12,6 +12,10 @@ public class AppUserRepository implements PanacheRepository<AppUser> {
         return find("username", username).firstResultOptional();
     }
 
+    public Optional<AppUser> findByUserHandle(String userHandle) {
+        return find("userHandle", userHandle).firstResultOptional();
+    }
+
     public long countApprovedAdmins() {
         return count("role = ?1 and active = true and approved = true", AppUser.Role.ADMIN);
     }

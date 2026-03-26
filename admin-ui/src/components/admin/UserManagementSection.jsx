@@ -1,5 +1,6 @@
 import { formatDate, tokenStorageLabel } from '../../lib/formatters'
 import LoadingButton from '../common/LoadingButton'
+import PaneToggleButton from '../common/PaneToggleButton'
 import './UserManagementSection.css'
 
 /**
@@ -14,38 +15,45 @@ function UserManagementSection({
   onCollapseToggle,
   onCreateUser,
   onCreateUserFormChange,
+  onForcePasswordChange,
+  onOpenResetPasswordDialog,
+  onResetUserPasskeys,
   onSelectUser,
+  onToggleUserActive,
   onUpdateUser,
+  session,
   selectedUserConfig,
   selectedUserId,
   selectedUserLoading,
+  updatingPasskeysResetUserId,
   updatingUserId,
-  users
+  users,
+  t,
+  locale
 }) {
+  const viewingSelfAdmin = selectedUserConfig?.user.id === session.id && selectedUserConfig?.user.role === 'ADMIN'
+  const selectedUserHasPasskeys = (selectedUserConfig?.passkeys?.length || 0) > 0
+
   return (
     <section className="app-columns">
-      <section className="surface-card user-management-panel">
+      <section className="surface-card user-management-panel section-with-corner-toggle" id="user-management-section" tabIndex="-1">
         <div className="panel-header">
           <div>
-            <div className="section-title">Users</div>
-            <p className="section-copy">Admins can see non-sensitive configuration summaries across all users without exposing their actual client secrets or refresh tokens.</p>
-          </div>
-          <div className="action-row">
-            <LoadingButton className="secondary" isLoading={collapseLoading} loadingLabel={collapsed ? 'Expanding…' : 'Collapsing…'} onClick={onCollapseToggle} type="button">
-              {collapsed ? 'Expand' : 'Collapse'}
-            </LoadingButton>
+            <div className="section-title">{t('users.title')}</div>
+            <p className="section-copy">{t('users.copy')}</p>
           </div>
         </div>
+        <PaneToggleButton className="pane-toggle-button-corner" collapseLabel={t('common.collapseSection')} collapsed={collapsed} disabled={collapseLoading} expandLabel={t('common.expandSection')} isLoading={collapseLoading} onClick={onCollapseToggle} />
         {!collapsed ? (
           <>
             <form className="settings-grid" onSubmit={onCreateUser}>
-              <label><span>Username</span><input value={createUserForm.username} onChange={(event) => onCreateUserFormChange((current) => ({ ...current, username: event.target.value }))} /></label>
-              <label><span>Initial Password</span><input type="password" value={createUserForm.password} onChange={(event) => onCreateUserFormChange((current) => ({ ...current, password: event.target.value }))} /></label>
-              <label><span>Role</span><select value={createUserForm.role} onChange={(event) => onCreateUserFormChange((current) => ({ ...current, role: event.target.value }))}><option value="USER">USER</option><option value="ADMIN">ADMIN</option></select></label>
+              <label><span>{t('auth.username')}</span><input value={createUserForm.username} onChange={(event) => onCreateUserFormChange((current) => ({ ...current, username: event.target.value }))} /></label>
+              <label><span>{t('users.initialPassword')}</span><input type="password" value={createUserForm.password} onChange={(event) => onCreateUserFormChange((current) => ({ ...current, password: event.target.value }))} /></label>
+              <label><span>{t('users.role')}</span><select value={createUserForm.role} onChange={(event) => onCreateUserFormChange((current) => ({ ...current, role: event.target.value }))}><option value="USER">USER</option><option value="ADMIN">ADMIN</option></select></label>
               <div className="full action-row">
-                <LoadingButton className="primary" isLoading={createUserLoading} loadingLabel="Creating User…" type="submit">
-                  Create User
-                </LoadingButton>
+              <LoadingButton className="primary" isLoading={createUserLoading} loadingLabel={t('users.createLoading')} type="submit">
+                {t('users.create')}
+              </LoadingButton>
               </div>
             </form>
 
@@ -56,14 +64,15 @@ function UserManagementSection({
                   className={`user-list-item ${selectedUserId === user.id ? 'selected' : ''}`}
                   type="button"
                   onClick={() => onSelectUser(user.id)}
+                  title={t('users.inspectHint', { username: user.username })}
                 >
                   <span>{user.username}</span>
                   <span>
-                    {user.role} · {user.approved ? 'approved' : 'pending'} · {user.active ? 'active' : 'inactive'} · {user.bridgeCount} bridges
+                    {user.role} · {user.approved ? t('users.approved') : t('users.pending')} · {user.active ? t('users.active') : t('users.inactive')} · {t('users.bridges', { count: user.bridgeCount })}
                     {selectedUserId === user.id && selectedUserLoading ? (
                       <span className="user-list-inline-loading">
                         <span aria-hidden="true" className="user-list-inline-spinner" />
-                        Loading…
+                        {t('users.loading')}
                       </span>
                     ) : null}
                   </span>
@@ -75,38 +84,55 @@ function UserManagementSection({
       </section>
 
       <aside className="surface-card user-management-panel">
-        <div className="section-title">Selected User Configuration</div>
+        <div className="section-title">{t('users.selectedTitle')}</div>
         {!collapsed && selectedUserConfig ? (
           <div className="detail-stack">
             <div className="muted-box">
               <strong>{selectedUserConfig.user.username}</strong><br />
-              {selectedUserConfig.user.role} · {selectedUserConfig.user.approved ? 'approved' : 'pending approval'} · {selectedUserConfig.user.active ? 'active' : 'inactive'}<br />
-              Gmail configured: {selectedUserConfig.user.gmailConfigured ? 'Yes' : 'No'} · must change password: {selectedUserConfig.user.mustChangePassword ? 'Yes' : 'No'}
+              {selectedUserConfig.user.role} · {selectedUserConfig.user.approved ? t('users.approved') : t('users.pendingApproval')} · {selectedUserConfig.user.active ? t('users.active') : t('users.inactive')}<br />
+              {t('users.gmailConfigured', { value: t(selectedUserConfig.user.gmailConfigured ? 'common.yes' : 'common.no') })} · {t('users.passwordConfigured', { value: t(selectedUserConfig.user.passwordConfigured ? 'common.yes' : 'common.no') })} · {t('users.mustChangePassword', { value: t(selectedUserConfig.user.mustChangePassword ? 'common.yes' : 'common.no') })} · {t('users.passkeys', { value: selectedUserConfig.user.passkeyCount })}
             </div>
 
             <div className="action-row">
               {!selectedUserConfig.user.approved ? (
-                <LoadingButton className="primary" isLoading={updatingUserId === selectedUserConfig.user.id} loadingLabel="Saving User…" type="button" onClick={() => onUpdateUser(selectedUserConfig.user.id, { approved: true, active: true }, `Approved ${selectedUserConfig.user.username}.`)}>
-                  Approve user
+                <LoadingButton className="primary" isLoading={updatingUserId === selectedUserConfig.user.id} loadingLabel={t('users.saving')} type="button" onClick={() => onUpdateUser(selectedUserConfig.user.id, { approved: true, active: true }, t('notifications.userApproved', { username: selectedUserConfig.user.username }))}>
+                  {t('users.approve')}
                 </LoadingButton>
               ) : null}
-              <LoadingButton className="secondary" isLoading={updatingUserId === selectedUserConfig.user.id} loadingLabel="Saving User…" type="button" onClick={() => onUpdateUser(selectedUserConfig.user.id, { active: !selectedUserConfig.user.active }, `${selectedUserConfig.user.active ? 'Suspended' : 'Reactivated'} ${selectedUserConfig.user.username}.`)}>
-                {selectedUserConfig.user.active ? 'Suspend user' : 'Reactivate user'}
+              <LoadingButton className="secondary" hint={selectedUserConfig.user.active ? t('users.suspendHint') : t('users.reactivateHint')} isLoading={updatingUserId === selectedUserConfig.user.id} loadingLabel={t('users.saving')} type="button" onClick={() => onToggleUserActive(selectedUserConfig.user)}>
+                {selectedUserConfig.user.active ? t('users.suspend') : t('users.reactivate')}
               </LoadingButton>
-              <LoadingButton className="secondary" isLoading={updatingUserId === selectedUserConfig.user.id} loadingLabel="Saving User…" type="button" onClick={() => onUpdateUser(selectedUserConfig.user.id, { role: selectedUserConfig.user.role === 'ADMIN' ? 'USER' : 'ADMIN' }, `${selectedUserConfig.user.username} role updated.`)}>
-                {selectedUserConfig.user.role === 'ADMIN' ? 'Make regular user' : 'Grant admin rights'}
+              <LoadingButton className="secondary" disabled={viewingSelfAdmin} hint={selectedUserConfig.user.role === 'ADMIN' ? t('users.makeRegularHint') : t('users.grantAdminHint')} isLoading={updatingUserId === selectedUserConfig.user.id} loadingLabel={t('users.saving')} type="button" onClick={() => onUpdateUser(selectedUserConfig.user.id, { role: selectedUserConfig.user.role === 'ADMIN' ? 'USER' : 'ADMIN' }, t('notifications.userRoleUpdated', { username: selectedUserConfig.user.username }))}>
+                {selectedUserConfig.user.role === 'ADMIN' ? t('users.makeRegular') : t('users.grantAdmin')}
               </LoadingButton>
-              <LoadingButton className="secondary" isLoading={updatingUserId === selectedUserConfig.user.id} loadingLabel="Saving User…" type="button" onClick={() => onUpdateUser(selectedUserConfig.user.id, { mustChangePassword: true }, `Forced password reset for ${selectedUserConfig.user.username}.`)}>
-                Force password change
+              <LoadingButton className="secondary" hint={t('users.forcePasswordChangeHint')} isLoading={updatingUserId === selectedUserConfig.user.id} loadingLabel={t('users.saving')} type="button" onClick={() => onForcePasswordChange(selectedUserConfig.user)}>
+                {t('users.forcePasswordChange')}
+              </LoadingButton>
+              <LoadingButton className="secondary" hint={t('users.resetPasswordHint')} type="button" onClick={onOpenResetPasswordDialog}>
+                {t('users.resetPassword')}
+              </LoadingButton>
+              <LoadingButton className="danger" disabled={!selectedUserHasPasskeys} hint={t('users.resetPasskeysHint')} isLoading={updatingPasskeysResetUserId === selectedUserConfig.user.id} loadingLabel={t('users.resetPasskeysLoading')} type="button" onClick={onResetUserPasskeys}>
+                {t('users.resetPasskeys')}
               </LoadingButton>
             </div>
+            {viewingSelfAdmin ? <div className="muted-box">{t('users.selfAdminWarning')}</div> : null}
 
             <div className="muted-box">
-              Gmail redirect URI: {selectedUserConfig.gmailConfig.redirectUri || 'Not set'}<br />
-              Shared client available: {selectedUserConfig.gmailConfig.sharedClientConfigured ? 'Yes' : 'No'}<br />
-              Client ID stored: {selectedUserConfig.gmailConfig.clientIdConfigured ? 'Yes' : 'No'}<br />
-              Client secret stored: {selectedUserConfig.gmailConfig.clientSecretConfigured ? 'Yes' : 'No'}<br />
-              Refresh token stored: {selectedUserConfig.gmailConfig.refreshTokenConfigured ? 'Yes' : 'No'}
+              {t('users.gmailRedirectUri', { value: selectedUserConfig.gmailConfig.redirectUri || t('users.notSet') })}<br />
+              {t('users.sharedClientAvailable', { value: t(selectedUserConfig.gmailConfig.sharedClientConfigured ? 'common.yes' : 'common.no') })}<br />
+              {t('users.clientIdStored', { value: t(selectedUserConfig.gmailConfig.clientIdConfigured ? 'common.yes' : 'common.no') })}<br />
+              {t('users.clientSecretStored', { value: t(selectedUserConfig.gmailConfig.clientSecretConfigured ? 'common.yes' : 'common.no') })}<br />
+              {t('users.refreshTokenStored', { value: t(selectedUserConfig.gmailConfig.refreshTokenConfigured ? 'common.yes' : 'common.no') })}
+            </div>
+
+            <div className="list-stack">
+              {selectedUserConfig.passkeys.length > 0 ? selectedUserConfig.passkeys.map((passkey) => (
+                <div key={passkey.id} className="muted-box">
+                  <strong>{passkey.label}</strong><br />
+                  {t('users.discoverable', { value: t(passkey.discoverable ? 'common.yes' : 'common.no').toLowerCase() })} · {t('users.backedUp', { value: t(passkey.backedUp ? 'common.yes' : 'common.no').toLowerCase() })}<br />
+                  {t('users.created', { value: formatDate(passkey.createdAt, locale) })} · {t('users.lastUsed', { value: formatDate(passkey.lastUsedAt, locale) })}
+                </div>
+              )) : <div className="muted-box">{t('users.noPasskeys')}</div>}
             </div>
 
             <div className="list-stack">
@@ -114,13 +140,13 @@ function UserManagementSection({
                 <div key={bridge.bridgeId} className="muted-box">
                   <strong>{bridge.bridgeId}</strong><br />
                   {bridge.protocol} via {bridge.authMethod}{bridge.oauthProvider !== 'NONE' ? ` / ${bridge.oauthProvider}` : ''}<br />
-                  {bridge.host}:{bridge.port} · token storage {tokenStorageLabel(bridge.tokenStorageMode)}<br />
-                  last run {formatDate(bridge.lastEvent?.finishedAt)}
+                  {bridge.host}:{bridge.port} · {t('bridge.tokenStorage').toLowerCase()} {tokenStorageLabel(bridge.tokenStorageMode, locale)}<br />
+                  {t('users.lastUsed', { value: formatDate(bridge.lastEvent?.finishedAt, locale) })}
                 </div>
               ))}
             </div>
           </div>
-        ) : <div className="muted-box">{collapsed ? 'Expand this section to manage users and inspect configuration.' : 'Choose a user to inspect.'}</div>}
+        ) : <div className="muted-box">{collapsed ? t('users.expandToManage') : t('users.noUserSelected')}</div>}
       </aside>
     </section>
   )

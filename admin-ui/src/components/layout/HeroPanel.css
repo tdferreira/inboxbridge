@@ -10,6 +10,18 @@
   box-shadow: 0 20px 60px var(--shadow);
 }
 
+.hero-language-select {
+  display: inline-flex;
+  flex-direction: column;
+  gap: 6px;
+  font-size: 0.85rem;
+  color: var(--muted);
+}
+
+.hero-language-select select {
+  min-width: 170px;
+}
+
 @media (max-width: 760px) {
   .hero-panel {
     flex-direction: column;

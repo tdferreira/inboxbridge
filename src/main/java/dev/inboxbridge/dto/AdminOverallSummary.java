@@ -5,5 +5,7 @@ public record AdminOverallSummary(
         int enabledSources,
         long totalImportedMessages,
         int sourcesWithErrors,
-        boolean pollEnabled) {
+        boolean pollEnabled,
+        String pollInterval,
+        int fetchWindow) {
 }

@@ -4,8 +4,11 @@
   gap: 18px;
 }
 
-.bridge-grid {
+.fetcher-list {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
   gap: 16px;
+}
+
+.user-bridges-empty-state {
+  line-height: 1.6;
 }

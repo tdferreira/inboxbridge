@@ -174,6 +174,7 @@ public class MicrosoftOAuthService {
                 "scope", authorizationScopes(sourceRef)));
         MicrosoftTokenResponse token = executeTokenRequest(body);
         requireRefreshToken(token.refreshToken(), "Microsoft");
+        validateGrantedScopes(token.scope(), sourceRef.protocol());
         Instant expiresAt = Instant.now().plusSeconds(token.expiresIn() == null ? 300 : token.expiresIn());
         cachedTokens.put(sourceRef.sourceId(), new CachedToken(token.accessToken(), expiresAt));
 
@@ -258,6 +259,14 @@ public class MicrosoftOAuthService {
         if (refreshToken == null || refreshToken.isBlank()) {
             throw new IllegalStateException(provider + " did not return a refresh token. Ensure offline_access is granted and repeat consent.");
         }
+    }
+
+    void validateGrantedScopes(String grantedScopes, BridgeConfig.Protocol protocol) {
+        GoogleOAuthService.validateGrantedScopes(
+                grantedScopes,
+                authorizationScopes(new SourceRef("ignored", protocol, "", null, false)),
+                "Microsoft",
+                "Retry the Microsoft OAuth flow and approve every requested mailbox permission.");
     }
 
     private MicrosoftTokenResponse executeTokenRequest(String body) {

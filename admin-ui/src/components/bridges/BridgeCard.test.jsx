@@ -1,5 +1,8 @@
 import { fireEvent, render, screen, waitFor } from '@testing-library/react'
 import BridgeCard from './BridgeCard'
+import { translate } from '../../lib/i18n'
+
+const t = (key, params) => translate('en', key, params)
 
 describe('BridgeCard', () => {
   it('shows bridge metadata and emits edit/delete/oauth actions', () => {
@@ -37,6 +40,8 @@ describe('BridgeCard', () => {
         onEdit={onEdit}
         showDelete
         showEdit
+        locale="en"
+        t={t}
       />
     )
 
@@ -81,6 +86,8 @@ describe('BridgeCard', () => {
           }
         }}
         onConnectMicrosoft={vi.fn()}
+        locale="en"
+        t={t}
       />
     )
 

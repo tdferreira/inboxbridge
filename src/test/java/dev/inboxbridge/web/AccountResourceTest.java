@@ -47,6 +47,23 @@ class AccountResourceTest {
         assertEquals("Current password is incorrect", error.getMessage());
     }
 
+    @Test
+    void removePasswordSurfacesDomainValidation() {
+        AccountResource resource = new AccountResource();
+        resource.currentUserContext = new CurrentUserContext();
+        AppUser user = new AppUser();
+        user.id = 3L;
+        user.username = "charlie";
+        resource.currentUserContext.setUser(user);
+        resource.appUserService = new RemovePasswordErrorAppUserService();
+
+        BadRequestException error = assertThrows(
+                BadRequestException.class,
+                resource::removePassword);
+
+        assertEquals("Register a passkey before removing the password.", error.getMessage());
+    }
+
     private static final class FakeAppUserService extends AppUserService {
         private final String errorMessage;
 
@@ -66,6 +83,13 @@ class AccountResourceTest {
             if (!newPassword.equals(confirmNewPassword)) {
                 throw new IllegalArgumentException("New password confirmation does not match");
             }
+        }
+    }
+
+    private static final class RemovePasswordErrorAppUserService extends AppUserService {
+        @Override
+        public void removePassword(AppUser user) {
+            throw new IllegalArgumentException("Register a passkey before removing the password.");
         }
     }
 }

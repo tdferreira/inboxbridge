@@ -53,10 +53,20 @@ public class UserBridgeService {
         if (!secretEncryptionService.isConfigured()) {
             throw new IllegalStateException("Secure secret storage must be configured before storing user bridge secrets in the database.");
         }
-        String bridgeId = requireNonBlank(request.bridgeId(), "Bridge ID");
-        UserBridge bridge = repository.findByBridgeId(bridgeId)
-                .filter(existing -> existing.userId.equals(user.id))
-                .orElseGet(UserBridge::new);
+        String bridgeId = requireNonBlank(request.bridgeId(), "Mail fetcher ID");
+        String originalBridgeId = blankToNull(request.originalBridgeId());
+        UserBridge bridge = originalBridgeId == null
+                ? new UserBridge()
+                : repository.findByBridgeId(originalBridgeId)
+                        .filter(existing -> existing.userId.equals(user.id))
+                        .orElseThrow(() -> new IllegalArgumentException("Unknown mail fetcher id"));
+        // Fetcher IDs are global across env-backed runtime config, OAuth state,
+        // logs, and imported-message attribution, so renames must stay unique.
+        repository.findByBridgeId(bridgeId)
+                .filter(existing -> bridge.id == null || !existing.id.equals(bridge.id))
+                .ifPresent(existing -> {
+                    throw new IllegalArgumentException("Mail fetcher ID already exists");
+                });
         boolean isNew = bridge.id == null;
         bridge.userId = user.id;
         bridge.bridgeId = bridgeId;
@@ -101,7 +111,7 @@ public class UserBridgeService {
     public void delete(AppUser user, String bridgeId) {
         UserBridge bridge = repository.findByBridgeId(bridgeId)
                 .filter(existing -> existing.userId.equals(user.id))
-                .orElseThrow(() -> new IllegalArgumentException("Unknown bridge id"));
+                .orElseThrow(() -> new IllegalArgumentException("Unknown mail fetcher id"));
         repository.delete(bridge);
     }
 

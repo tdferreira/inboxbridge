@@ -37,8 +37,8 @@ public class UserGmailConfigService {
         boolean tokenStored = googleOAuthStored(userId);
         return new UserGmailConfigView(
                 bridgeConfig.gmail().destinationUser(),
-                sharedClientConfigured,
-                sharedClientConfigured,
+                false,
+                false,
                 tokenStored,
                 defaultRedirectUri(),
                 defaultRedirectUri(),
@@ -66,6 +66,12 @@ public class UserGmailConfigService {
 
     @Transactional
     public UserGmailConfigView update(AppUser user, UpdateUserGmailConfigRequest request) {
+        // User-owned Gmail OAuth for regular accounts is intentionally a
+        // button-driven consent flow. Only admins can override the advanced
+        // destination settings or secret material from the UI.
+        if (user.role != AppUser.Role.ADMIN) {
+            throw new IllegalStateException("Only admins can override Gmail destination settings from the admin UI.");
+        }
         if (!secretEncryptionService.isConfigured() && containsSecrets(request)) {
             throw new IllegalStateException("Secure secret storage must be configured before storing user Gmail credentials in the database.");
         }
@@ -160,8 +166,8 @@ public class UserGmailConfigService {
         boolean sharedClientConfigured = sharedGoogleClientConfigured();
         return new UserGmailConfigView(
                 config.destinationUser,
-                config.clientIdCiphertext != null || sharedClientConfigured,
-                config.clientSecretCiphertext != null || sharedClientConfigured,
+                config.clientIdCiphertext != null,
+                config.clientSecretCiphertext != null,
                 config.refreshTokenCiphertext != null || googleOAuthStored(userId),
                 nonBlankOrDefault(config.redirectUri, defaultRedirectUri()),
                 defaultRedirectUri(),

@@ -52,6 +52,9 @@ public class UserUiPreference extends PanacheEntityBase {
     @Column(name = "user_management_collapsed", nullable = false)
     public boolean userManagementCollapsed;
 
+    @Column(name = "language", nullable = false, length = 32)
+    public String language;
+
     @Column(name = "updated_at", nullable = false)
     public Instant updatedAt;
 }

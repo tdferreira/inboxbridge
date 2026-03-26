@@ -87,6 +87,18 @@ class MicrosoftOAuthServiceTest {
         assertEquals("Microsoft OAuth client id is not configured", error.getMessage());
     }
 
+    @Test
+    void validateGrantedScopesRejectsMissingMailboxPermission() {
+        MicrosoftOAuthService service = new MicrosoftOAuthService();
+
+        IllegalStateException error = assertThrows(
+                IllegalStateException.class,
+                () -> service.validateGrantedScopes("offline_access", BridgeConfig.Protocol.IMAP));
+
+        assertTrue(error.getMessage().contains("did not grant all required permissions"));
+        assertTrue(error.getMessage().contains("IMAP.AccessAsUser.All"));
+    }
+
     private static Map<String, String> queryParams(String url) {
         String query = URI.create(url).getRawQuery();
         Map<String, String> params = new HashMap<>();
@@ -113,6 +125,41 @@ class MicrosoftOAuthServiceTest {
         @Override
         public int fetchWindow() {
             return 50;
+        }
+
+        @Override
+        public Security security() {
+            return new Security() {
+                @Override
+                public Passkeys passkeys() {
+                    return new Passkeys() {
+                        @Override
+                        public boolean enabled() {
+                            return true;
+                        }
+
+                        @Override
+                        public String rpId() {
+                            return "localhost";
+                        }
+
+                        @Override
+                        public String rpName() {
+                            return "InboxBridge";
+                        }
+
+                        @Override
+                        public String origins() {
+                            return "https://localhost:3000";
+                        }
+
+                        @Override
+                        public String challengeTtl() {
+                            return "PT5M";
+                        }
+                    };
+                }
+            };
         }
 
         @Override

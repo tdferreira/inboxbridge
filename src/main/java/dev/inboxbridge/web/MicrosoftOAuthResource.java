@@ -108,8 +108,8 @@ public class MicrosoftOAuthResource {
             @QueryParam("error_description") String errorDescription) {
         if (error != null && !error.isBlank()) {
             return htmlCallbackPage(
-                    "Microsoft OAuth Error",
-                    "The Microsoft authorization step failed.",
+                    microsoftErrorTitle(error),
+                    microsoftErrorMessage(error, errorDescription),
                     Map.of(
                             "Error", error,
                             "Description", errorDescription == null ? "" : errorDescription),
@@ -219,6 +219,7 @@ public class MicrosoftOAuthResource {
                       const oauthConfigKey = %s;
                       const oauthCode = %s;
                       let exchanged = false;
+                      let exchangeAttempted = false;
                       let redirectTimerId = null;
                       let countdownIntervalId = null;
 
@@ -282,7 +283,26 @@ public class MicrosoftOAuthResource {
                         }
                       });
 
-                      exchangeButton?.addEventListener("click", async () => {
+                      function formatExchangeError(payloadText) {
+                        const normalized = (payloadText || "").toLowerCase();
+                        if (
+                          normalized.includes("access_denied") ||
+                          normalized.includes("consent_required") ||
+                          normalized.includes("did not grant all required permissions") ||
+                          normalized.includes("did not return a refresh token") ||
+                          normalized.includes("offline_access") ||
+                          normalized.includes("missing scopes")
+                        ) {
+                          return "Microsoft OAuth is still missing one or more required permissions. Retry the flow and approve every requested mailbox permission, then try again. Details: " + payloadText;
+                        }
+                        return "Exchange failed: " + payloadText;
+                      }
+
+                      async function exchangeCode() {
+                        if (exchangeAttempted) {
+                          return;
+                        }
+                        exchangeAttempted = true;
                         exchangeButton.disabled = true;
                         exchangeStatus.textContent = "Exchanging authorization code...";
                         try {
@@ -294,7 +314,7 @@ public class MicrosoftOAuthResource {
 
                           const payloadText = await response.text();
                           if (!response.ok) {
-                            exchangeStatus.textContent = "Exchange failed: " + payloadText;
+                            exchangeStatus.textContent = formatExchangeError(payloadText);
                             return;
                           }
 
@@ -323,11 +343,20 @@ public class MicrosoftOAuthResource {
                             exchangeStatus.textContent = "Exchange completed. The refresh token was stored encrypted in PostgreSQL and future renewals will be automatic.";
                           }
                         } catch (error) {
+                          exchangeAttempted = false;
                           exchangeStatus.textContent = "Exchange failed. Check the server logs and Microsoft app settings.";
                         } finally {
                           exchangeButton.disabled = false;
                         }
-                      });
+                      }
+
+                      exchangeButton?.addEventListener("click", exchangeCode);
+                      if (oauthCode && oauthState) {
+                        exchangeStatus.textContent = "Authorization code received. Attempting automatic exchange...";
+                        window.setTimeout(() => {
+                          exchangeCode();
+                        }, 0);
+                      }
 
                       window.addEventListener("beforeunload", (event) => {
                         if (exchanged) {
@@ -349,6 +378,14 @@ public class MicrosoftOAuthResource {
                       });
                     </script>
                     """.formatted(jsString(sourceId), jsString(state), jsString(configKey), jsString(code));
+        }
+        String auxiliaryActionsHtml = "";
+        if (browserExchangeHtml.isBlank()) {
+            auxiliaryActionsHtml = """
+                    <div class="actions">
+                      <a class="button-link" href="/">Return To Admin UI</a>
+                    </div>
+                    """;
         }
 
         String html = """
@@ -502,6 +539,7 @@ public class MicrosoftOAuthResource {
                     <section class="body">
                       %s
                       %s
+                      %s
                       <div class="hint">You can close this tab after the exchange succeeds and any remaining setup is complete.</div>
                     </section>
                   </main>
@@ -515,9 +553,27 @@ public class MicrosoftOAuthResource {
                         escapeHtml(title),
                         escapeHtml(message.strip()),
                         fieldsHtml,
-                        browserExchangeHtml);
+                        browserExchangeHtml,
+                        auxiliaryActionsHtml);
 
         return Response.ok(html, MediaType.TEXT_HTML).build();
+    }
+
+    private String microsoftErrorTitle(String error) {
+        if ("access_denied".equalsIgnoreCase(error)) {
+            return "Microsoft OAuth Permission Required";
+        }
+        return "Microsoft OAuth Error";
+    }
+
+    private String microsoftErrorMessage(String error, String errorDescription) {
+        if ("access_denied".equalsIgnoreCase(error)) {
+            return "Microsoft OAuth did not receive the required consent. Retry the flow and approve every requested mailbox permission so InboxBridge can refresh tokens and read the source mailbox.";
+        }
+        if (errorDescription != null && !errorDescription.isBlank()) {
+            return "The Microsoft authorization step failed. Retry the flow after correcting the Microsoft consent or app configuration.";
+        }
+        return "The Microsoft authorization step failed. Retry the flow and approve every requested permission.";
     }
 
     private String escapeHtml(String value) {

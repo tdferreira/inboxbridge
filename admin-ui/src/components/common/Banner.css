@@ -13,6 +13,40 @@
   min-width: 0;
 }
 
+.app-banner-actions {
+  display: inline-flex;
+  align-items: start;
+  gap: 8px;
+}
+
+.banner-focus-button {
+  padding: 0;
+  border: none;
+  background: transparent;
+  color: inherit;
+  text-align: left;
+  font: inherit;
+  font-weight: 600;
+  border-radius: 10px;
+}
+
+.banner-focus-button:hover,
+.banner-focus-button:focus-visible {
+  text-decoration: underline;
+  outline: none;
+}
+
+.banner-dismiss-button {
+  width: 2rem;
+  height: 2rem;
+  min-width: 2rem;
+  padding: 0;
+  border-radius: 999px;
+  border: 1px solid rgba(36, 26, 20, 0.14);
+  background: rgba(255, 255, 255, 0.75);
+  color: var(--ink);
+}
+
 .banner-success {
   background: rgba(23, 101, 75, 0.12);
 }

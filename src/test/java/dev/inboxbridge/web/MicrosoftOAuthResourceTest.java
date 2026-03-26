@@ -53,8 +53,11 @@ class MicrosoftOAuthResourceTest {
         assertTrue(html.contains("Exchange Code In Browser"));
         assertTrue(html.contains("Return To Admin UI"));
         assertTrue(html.contains("Leave this page without exchanging the code?"));
+        assertTrue(html.contains("Attempting automatic exchange"));
+        assertTrue(html.contains("window.setTimeout(() => {"));
         assertTrue(html.contains("Returning to the admin UI in"));
         assertTrue(html.contains("encrypted in PostgreSQL"));
+        assertTrue(html.contains("Microsoft OAuth is still missing one or more required permissions"));
     }
 
     @Test
@@ -73,6 +76,20 @@ class MicrosoftOAuthResourceTest {
         assertEquals(200, response.getStatus());
         assertTrue(html.contains("Invalid OAuth State"));
         assertTrue(html.contains("Invalid or expired OAuth state"));
+    }
+
+    @Test
+    void callbackShowsConsentRetryGuidanceWhenMicrosoftConsentIsDenied() {
+        MicrosoftOAuthResource resource = new MicrosoftOAuthResource();
+        resource.microsoftOAuthService = new FakeMicrosoftOAuthService();
+
+        Response response = resource.callback(null, null, "access_denied", "user denied");
+        String html = (String) response.getEntity();
+
+        assertEquals(200, response.getStatus());
+        assertTrue(html.contains("Microsoft OAuth Permission Required"));
+        assertTrue(html.contains("required consent"));
+        assertTrue(html.contains("Return To Admin UI"));
     }
 
     @Test
@@ -135,6 +152,41 @@ class MicrosoftOAuthResourceTest {
             @Override
             public int fetchWindow() {
                 return 50;
+            }
+
+            @Override
+            public Security security() {
+                return new Security() {
+                    @Override
+                    public Passkeys passkeys() {
+                        return new Passkeys() {
+                            @Override
+                            public boolean enabled() {
+                                return true;
+                            }
+
+                            @Override
+                            public String rpId() {
+                                return "localhost";
+                            }
+
+                            @Override
+                            public String rpName() {
+                                return "InboxBridge";
+                            }
+
+                            @Override
+                            public String origins() {
+                                return "https://localhost:3000";
+                            }
+
+                            @Override
+                            public String challengeTtl() {
+                                return "PT5M";
+                            }
+                        };
+                    }
+                };
             }
 
             @Override

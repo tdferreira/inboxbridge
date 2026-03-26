@@ -30,15 +30,32 @@ class GoogleOAuthResourceTest {
         GoogleOAuthResource resource = new GoogleOAuthResource();
         resource.googleOAuthService = new FakeGoogleOAuthService();
 
-        String html = resource.callback("code-123", "state-1");
+        String html = resource.callback("code-123", "state-1", null, null);
 
         assertTrue(html.contains("Google OAuth Code Received"));
         assertTrue(html.contains("Copy Code"));
         assertTrue(html.contains("Exchange Code In Browser"));
         assertTrue(html.contains("Return To Admin UI"));
         assertTrue(html.contains("Leave this page without exchanging the code?"));
+        assertTrue(html.contains("Attempting automatic exchange"));
+        assertTrue(html.contains("window.setTimeout(() => {"));
         assertTrue(html.contains("Returning to the admin UI in"));
+        assertTrue(html.contains("new URLSearchParams(window.location.search)"));
+        assertTrue(html.contains("callbackParams.get('code')"));
+        assertTrue(html.contains("Google OAuth is still missing one or more required permissions"));
         assertTrue(html.contains("code-123"));
+    }
+
+    @Test
+    void callbackShowsConsentRetryGuidanceWhenGoogleConsentIsDenied() {
+        GoogleOAuthResource resource = new GoogleOAuthResource();
+        resource.googleOAuthService = new FakeGoogleOAuthService();
+
+        String html = resource.callback(null, null, "access_denied", "user denied");
+
+        assertTrue(html.contains("Google OAuth Permission Required"));
+        assertTrue(html.contains("did not receive the required consent"));
+        assertTrue(html.contains("Return To Admin UI"));
     }
 
     private static final class FakeGoogleOAuthService extends GoogleOAuthService {

@@ -9,5 +9,6 @@ public record UserUiPreferenceView(
         boolean gmailDestinationCollapsed,
         boolean sourceBridgesCollapsed,
         boolean systemDashboardCollapsed,
-        boolean userManagementCollapsed) {
+        boolean userManagementCollapsed,
+        String language) {
 }

@@ -31,6 +31,9 @@ public class MailSourceClient {
     BridgeConfig bridgeConfig;
 
     @Inject
+    PollingSettingsService pollingSettingsService;
+
+    @Inject
     MimeHashService mimeHashService;
 
     @Inject
@@ -199,13 +202,13 @@ public class MailSourceClient {
         if (count == 0) {
             return new Message[0];
         }
-        int fetchWindow = Math.max(1, bridgeConfig.fetchWindow());
+        int fetchWindow = Math.max(1, pollingSettingsService.effectiveSettings().fetchWindow());
         int start = Math.max(1, count - fetchWindow + 1);
         return folder.getMessages(start, count);
     }
 
     private Message[] trimTailMessages(Message[] messages) {
-        int fetchWindow = Math.max(1, bridgeConfig.fetchWindow());
+        int fetchWindow = Math.max(1, pollingSettingsService.effectiveSettings().fetchWindow());
         if (messages.length <= fetchWindow) {
             return messages;
         }

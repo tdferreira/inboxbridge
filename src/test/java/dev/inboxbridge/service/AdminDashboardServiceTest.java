@@ -25,6 +25,7 @@ class AdminDashboardServiceTest {
         service.importedMessageRepository = new FakeImportedMessageRepository();
         service.oAuthCredentialService = new FakeOAuthCredentialService();
         service.sourcePollEventService = new FakeSourcePollEventService();
+        service.pollingSettingsService = new FakePollingSettingsService();
 
         AdminDashboardResponse response = service.dashboard();
 
@@ -32,6 +33,10 @@ class AdminDashboardServiceTest {
         assertEquals(1, response.overall().enabledSources());
         assertEquals(4L, response.overall().totalImportedMessages());
         assertEquals(1, response.overall().sourcesWithErrors());
+        assertEquals("3m", response.overall().pollInterval());
+        assertEquals(25, response.overall().fetchWindow());
+        assertFalse(response.polling().defaultPollEnabled());
+        assertEquals("3m", response.polling().effectivePollInterval());
 
         assertEquals("DATABASE", response.destination().tokenStorageMode());
         assertEquals(2, response.bridges().size());
@@ -43,6 +48,27 @@ class AdminDashboardServiceTest {
 
         assertEquals(1, response.recentEvents().size());
         assertEquals("outlook-main-imap", response.recentEvents().getFirst().sourceId());
+    }
+
+    private static final class FakePollingSettingsService extends PollingSettingsService {
+        @Override
+        public EffectivePollingSettings effectiveSettings() {
+            return new EffectivePollingSettings(true, "3m", java.time.Duration.ofMinutes(3), 25);
+        }
+
+        @Override
+        public dev.inboxbridge.dto.AdminPollingSettingsView view() {
+            return new dev.inboxbridge.dto.AdminPollingSettingsView(
+                    false,
+                    Boolean.TRUE,
+                    true,
+                    "5m",
+                    "3m",
+                    "3m",
+                    50,
+                    Integer.valueOf(25),
+                    25);
+        }
     }
 
     private static final class FakeImportedMessageRepository extends ImportedMessageRepository {
@@ -119,7 +145,7 @@ class AdminDashboardServiceTest {
     private static final class TestConfig implements BridgeConfig {
         @Override
         public boolean pollEnabled() {
-            return true;
+            return false;
         }
 
         @Override
@@ -130,6 +156,41 @@ class AdminDashboardServiceTest {
         @Override
         public int fetchWindow() {
             return 50;
+        }
+
+        @Override
+        public Security security() {
+            return new Security() {
+                @Override
+                public Passkeys passkeys() {
+                    return new Passkeys() {
+                        @Override
+                        public boolean enabled() {
+                            return true;
+                        }
+
+                        @Override
+                        public String rpId() {
+                            return "localhost";
+                        }
+
+                        @Override
+                        public String rpName() {
+                            return "InboxBridge";
+                        }
+
+                        @Override
+                        public String origins() {
+                            return "https://localhost:3000";
+                        }
+
+                        @Override
+                        public String challengeTtl() {
+                            return "PT5M";
+                        }
+                    };
+                }
+            };
         }
 
         @Override

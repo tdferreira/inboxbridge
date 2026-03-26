@@ -9,5 +9,6 @@ public record UpdateUserUiPreferenceRequest(
         Boolean gmailDestinationCollapsed,
         Boolean sourceBridgesCollapsed,
         Boolean systemDashboardCollapsed,
-        Boolean userManagementCollapsed) {
+        Boolean userManagementCollapsed,
+        String language) {
 }

@@ -1,6 +1,7 @@
 package dev.inboxbridge.service;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 
 import java.time.Instant;
@@ -16,7 +17,7 @@ class AuthServiceTest {
     @Test
     void loginRejectsUnapprovedUsers() {
         AuthService service = new AuthService();
-        service.appUserService = fakeUsers("alice@example.com", "secret-123", true, false);
+        service.appUserService = fakeUsers("alice@example.com", "secret-123", true, false, 0);
         service.userSessionService = new FakeUserSessionService();
 
         IllegalArgumentException error = assertThrows(
@@ -29,7 +30,7 @@ class AuthServiceTest {
     @Test
     void requireAuthenticatedUserRejectsSessionForInactiveUser() {
         AuthService service = new AuthService();
-        service.appUserService = fakeUsers("alice@example.com", "secret-123", false, true);
+        service.appUserService = fakeUsers("alice@example.com", "secret-123", false, true, 0);
         service.userSessionService = new FakeUserSessionService();
 
         IllegalArgumentException error = assertThrows(
@@ -39,12 +40,38 @@ class AuthServiceTest {
         assertEquals("Not authenticated", error.getMessage());
     }
 
-    private AppUserService fakeUsers(String username, String password, boolean active, boolean approved) {
-        PasswordHashService passwordHashService = new PasswordHashService();
+    @Test
+    void loginRejectsPasswordWhenAccountHasPasskey() {
+        AuthService service = new AuthService();
+        service.appUserService = fakeUsers("alice@example.com", "secret-123", true, true, 1);
+        service.userSessionService = new FakeUserSessionService();
+        service.passkeyService = new FakePasskeyService();
+
+        AuthService.LoginResult result = service.login("alice@example.com", "secret-123");
+
+        assertEquals(AuthService.LoginStatus.PASSKEY_REQUIRED, result.status());
+        assertNotNull(result.passkeyChallenge());
+    }
+
+    @Test
+    void loginRequestsPasskeyForPasswordlessPasskeyAccount() {
+        AuthService service = new AuthService();
+        service.appUserService = fakeUsers("alice@example.com", null, true, true, 1);
+        service.userSessionService = new FakeUserSessionService();
+        service.passkeyService = new FakePasskeyService();
+
+        AuthService.LoginResult result = service.login("alice@example.com", "anything");
+
+        assertEquals(AuthService.LoginStatus.PASSKEY_REQUIRED, result.status());
+        assertNotNull(result.passkeyChallenge());
+    }
+
+    private AppUserService fakeUsers(String username, String password, boolean active, boolean approved, long passkeyCount) {
+        PasswordHashService hasher = new PasswordHashService();
         AppUser user = new AppUser();
         user.id = 1L;
         user.username = username;
-        user.passwordHash = passwordHashService.hash(password);
+        user.passwordHash = password == null ? null : hasher.hash(password);
         user.role = AppUser.Role.USER;
         user.active = active;
         user.approved = approved;
@@ -53,7 +80,7 @@ class AuthServiceTest {
 
         return new AppUserService() {
             {
-                this.passwordHashService = passwordHashService;
+                this.passwordHashService = hasher;
             }
 
             @Override
@@ -64,6 +91,21 @@ class AuthServiceTest {
             @Override
             public Optional<AppUser> findById(Long id) {
                 return user.id.equals(id) ? Optional.of(user) : Optional.empty();
+            }
+
+            @Override
+            public boolean requiresPasskey(AppUser candidate) {
+                return passkeyCount > 0;
+            }
+
+            @Override
+            public boolean hasPassword(AppUser candidate) {
+                return candidate.passwordHash != null && !candidate.passwordHash.isBlank();
+            }
+
+            @Override
+            public boolean passwordMatches(AppUser candidate, String rawPassword) {
+                return hasPassword(candidate) && rawPassword != null && hasher.matches(rawPassword, candidate.passwordHash);
             }
         };
     }
@@ -79,6 +121,13 @@ class AuthServiceTest {
             UserSession session = new UserSession();
             session.userId = 1L;
             return Optional.of(session);
+        }
+    }
+
+    private static final class FakePasskeyService extends PasskeyService {
+        @Override
+        public dev.inboxbridge.dto.StartPasskeyCeremonyResponse startAuthenticationForUser(AppUser user, boolean passwordVerified) {
+            return new dev.inboxbridge.dto.StartPasskeyCeremonyResponse("ceremony-1", "{\"challenge\":\"abc\"}");
         }
     }
 }

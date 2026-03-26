@@ -9,10 +9,13 @@ import java.net.http.HttpResponse;
 import java.nio.charset.StandardCharsets;
 import java.time.Duration;
 import java.time.Instant;
+import java.util.Arrays;
 import java.util.Map;
+import java.util.Set;
 import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentMap;
+import java.util.stream.Collectors;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 
@@ -94,6 +97,7 @@ public class GoogleOAuthService {
                 "grant_type", "authorization_code"));
         GoogleTokenResponse token = executeTokenRequest(body);
         requireRefreshToken(token.refreshToken(), "Google");
+        validateGrantedScopes(token.scope());
         return storeExchangeResult(profile, token);
     }
 
@@ -204,6 +208,32 @@ public class GoogleOAuthService {
             throw new IllegalStateException(
                     provider + " did not return a refresh token. Ensure offline access is granted and repeat consent.");
         }
+    }
+
+    void validateGrantedScopes(String grantedScopes) {
+        validateGrantedScopes(grantedScopes, OAUTH_SCOPE, "Google", "Retry the Google OAuth flow and grant every requested Gmail permission.");
+    }
+
+    static void validateGrantedScopes(String grantedScopes, String requiredScopes, String provider, String retryHint) {
+        Set<String> granted = tokenizeScopes(grantedScopes);
+        Set<String> required = tokenizeScopes(requiredScopes);
+        if (!granted.containsAll(required)) {
+            Set<String> missing = required.stream()
+                    .filter(scope -> !granted.contains(scope))
+                    .collect(Collectors.toCollection(java.util.LinkedHashSet::new));
+            throw new IllegalStateException(
+                    provider + " did not grant all required permissions. Missing scopes: "
+                            + String.join(", ", missing) + ". " + retryHint);
+        }
+    }
+
+    private static Set<String> tokenizeScopes(String scopes) {
+        if (scopes == null || scopes.isBlank()) {
+            return Set.of();
+        }
+        return Arrays.stream(scopes.trim().split("\\s+"))
+                .filter(value -> !value.isBlank())
+                .collect(Collectors.toCollection(java.util.LinkedHashSet::new));
     }
 
     private GoogleTokenResponse executeTokenRequest(String body) {

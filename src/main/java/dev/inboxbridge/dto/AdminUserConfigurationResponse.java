@@ -5,5 +5,6 @@ import java.util.List;
 public record AdminUserConfigurationResponse(
         UserSummaryResponse user,
         UserGmailConfigView gmailConfig,
-        List<UserBridgeView> bridges) {
+        List<UserBridgeView> bridges,
+        List<PasskeyView> passkeys) {
 }

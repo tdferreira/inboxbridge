@@ -1,5 +1,8 @@
 import { render, screen } from '@testing-library/react'
 import SetupGuidePanel from './SetupGuidePanel'
+import { translate } from '../../lib/i18n'
+
+const t = (key, params) => translate('en', key, params)
 
 describe('SetupGuidePanel', () => {
   it('renders role-aware bootstrap guidance and live setup status', () => {
@@ -31,6 +34,7 @@ describe('SetupGuidePanel', () => {
             targetId: 'source-bridges-section'
           }
         ]}
+        t={t}
       />
     )
 

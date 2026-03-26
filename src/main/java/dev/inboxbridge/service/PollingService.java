@@ -4,10 +4,10 @@ import java.time.Instant;
 import java.util.List;
 import java.util.Optional;
 import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.concurrent.atomic.AtomicReference;
 
 import org.jboss.logging.Logger;
 
-import dev.inboxbridge.config.BridgeConfig;
 import dev.inboxbridge.domain.FetchedMessage;
 import dev.inboxbridge.domain.RuntimeBridge;
 import dev.inboxbridge.dto.GmailImportResponse;
@@ -20,9 +20,6 @@ import jakarta.inject.Inject;
 public class PollingService {
 
     private static final Logger LOG = Logger.getLogger(PollingService.class);
-
-    @Inject
-    BridgeConfig config;
 
     @Inject
     MailSourceClient mailSourceClient;
@@ -42,13 +39,23 @@ public class PollingService {
     @Inject
     RuntimeBridgeService runtimeBridgeService;
 
-    private final AtomicBoolean running = new AtomicBoolean(false);
+    @Inject
+    PollingSettingsService pollingSettingsService;
 
-    @Scheduled(every = "{bridge.poll-interval}")
+    private final AtomicBoolean running = new AtomicBoolean(false);
+    private final AtomicReference<Instant> lastPollStartedAt = new AtomicReference<>();
+
+    @Scheduled(every = "5s")
     void scheduledPoll() {
-        if (!config.pollEnabled()) {
+        PollingSettingsService.EffectivePollingSettings settings = pollingSettingsService.effectiveSettings();
+        if (!settings.pollEnabled()) {
             return;
         }
+        Instant lastPollStarted = lastPollStartedAt.get();
+        if (lastPollStarted != null && lastPollStarted.plus(settings.pollInterval()).isAfter(Instant.now())) {
+            return;
+        }
+        lastPollStartedAt.set(Instant.now());
         runPoll("scheduler");
     }
 
@@ -62,6 +69,7 @@ public class PollingService {
 
         PollRunResult result = new PollRunResult();
         try {
+            lastPollStartedAt.set(Instant.now());
             LOG.infof("Starting poll triggered by %s", trigger);
             for (RuntimeBridge bridge : runtimeBridgeService.listEnabledForPolling()) {
                 pollSource(bridge, trigger, result);

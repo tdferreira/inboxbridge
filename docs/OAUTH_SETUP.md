@@ -71,11 +71,12 @@ ${PUBLIC_BASE_URL}/api/google-oauth/callback
 2. Use `Connect My Gmail OAuth` for a user-managed Gmail destination
 3. Or use `Connect System Gmail OAuth` for the env-managed system destination
 4. Complete Google consent
-5. Use the callback page button to exchange the code
+5. The callback page automatically tries to exchange the code in the browser as soon as it loads
 6. After exchange succeeds, the callback page starts a 10-second countdown and returns to the admin UI automatically
-7. Use `Return To Admin UI` if you want to go back immediately instead of waiting for the countdown
-8. If you try to leave before exchanging, the callback page warns that you must handle the code or token manually later
-9. If secure storage is enabled, InboxBridge stores the token encrypted in PostgreSQL
+7. If the automatic attempt fails, use the callback page button to retry the exchange manually
+8. Use `Return To Admin UI` if you want to go back immediately instead of waiting for the countdown
+9. If you try to leave before exchanging, the callback page warns that you must handle the code or token manually later
+10. If secure storage is enabled, InboxBridge stores the token encrypted in PostgreSQL
 
 If the deployment already has a shared Google client configured, users can leave the per-user client ID and secret blank and still start the Gmail OAuth flow successfully.
 
@@ -217,10 +218,11 @@ BRIDGE_SOURCES_0__CUSTOM_LABEL=Imported/Outlook
 1. Sign in to `https://localhost:3000`
 2. Use the Microsoft OAuth button on the relevant bridge
 3. Complete Microsoft consent
-4. Use the callback page button to exchange the code
+4. The callback page automatically tries to exchange the code in the browser as soon as it loads
 5. After exchange succeeds, the callback page starts a 10-second countdown and returns to the admin UI automatically
-6. Use `Return To Admin UI` if you want to go back immediately instead of waiting for the countdown
-7. If you try to leave before exchanging, the callback page warns that you must handle the code or token manually later
+6. If the automatic attempt fails, use the callback page button to retry the exchange manually
+7. Use `Return To Admin UI` if you want to go back immediately instead of waiting for the countdown
+8. If you try to leave before exchanging, the callback page warns that you must handle the code or token manually later
 8. If secure storage is enabled, InboxBridge stores the token encrypted in PostgreSQL
 
 Example manual exchange:

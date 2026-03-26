@@ -9,11 +9,13 @@ function BridgeCard({
   editLabel = 'Edit',
   connectLoading = false,
   deleteLoading = false,
+  locale = 'en',
   onConnectMicrosoft,
   onDelete,
   onEdit,
   showDelete = false,
-  showEdit = false
+  showEdit = false,
+  t
 }) {
   const bridgeId = bridge.bridgeId || bridge.id
 
@@ -24,43 +26,43 @@ function BridgeCard({
           <h2>{bridgeId}</h2>
           <p className="section-copy">{bridge.protocol} via {bridge.authMethod}{bridge.oauthProvider !== 'NONE' ? ` / ${bridge.oauthProvider}` : ''}</p>
         </div>
-        <span className={`status-pill ${statusTone(bridge.lastEvent?.status)}`}>{bridge.lastEvent?.status || 'NOT RUN'}</span>
+        <span className={`status-pill ${statusTone(bridge.lastEvent?.status)}`}>{bridge.lastEvent?.status || t('bridge.notRun')}</span>
       </div>
 
       <dl className="bridge-card-config">
-        <div><dt>Host</dt><dd>{bridge.host}:{bridge.port}</dd></div>
-        <div><dt>TLS</dt><dd>{bridge.tls ? 'Required' : 'Off'}</dd></div>
-        <div><dt>Token storage</dt><dd>{tokenStorageLabel(bridge.tokenStorageMode)}</dd></div>
-        <div><dt>Total imported</dt><dd>{bridge.totalImportedMessages}</dd></div>
-        <div><dt>Last import</dt><dd>{formatDate(bridge.lastImportedAt)}</dd></div>
-        <div><dt>Folder</dt><dd>{bridge.folder || 'INBOX'}</dd></div>
+        <div><dt>{t('bridge.host')}</dt><dd>{bridge.host}:{bridge.port}</dd></div>
+        <div><dt>{t('bridge.tls')}</dt><dd>{bridge.tls ? t('bridge.tlsRequired') : t('bridge.tlsOff')}</dd></div>
+        <div><dt>{t('bridge.tokenStorage')}</dt><dd>{tokenStorageLabel(bridge.tokenStorageMode, locale)}</dd></div>
+        <div><dt>{t('bridge.totalImported')}</dt><dd>{bridge.totalImportedMessages}</dd></div>
+        <div><dt>{t('bridge.lastImport')}</dt><dd>{formatDate(bridge.lastImportedAt, locale)}</dd></div>
+        <div><dt>{t('bridge.folder')}</dt><dd>{bridge.folder || 'INBOX'}</dd></div>
       </dl>
 
       {bridge.lastEvent ? (
         <div className="event-box">
-          <div className="section-copy">{formatDate(bridge.lastEvent.finishedAt)} via {bridge.lastEvent.trigger}</div>
-          <div className="section-copy">Fetched {bridge.lastEvent.fetched}, imported {bridge.lastEvent.imported}, duplicates {bridge.lastEvent.duplicates}</div>
+          <div className="section-copy">{t('bridge.viaTrigger', { time: formatDate(bridge.lastEvent.finishedAt, locale), trigger: bridge.lastEvent.trigger })}</div>
+          <div className="section-copy">{t('bridge.results', { fetched: bridge.lastEvent.fetched, imported: bridge.lastEvent.imported, duplicates: bridge.lastEvent.duplicates })}</div>
           {bridge.lastEvent.error ? (
             <div className="bridge-card-error-block">
               <div className="bridge-card-error">{bridge.lastEvent.error}</div>
-              <CopyButton label="Copy Error" text={bridge.lastEvent.error} />
+              <CopyButton copiedLabel={t('common.copied')} label={t('common.copyError')} text={bridge.lastEvent.error} />
             </div>
           ) : null}
         </div>
       ) : (
-        <div className="muted-box">No poll activity recorded yet.</div>
+        <div className="muted-box">{t('bridge.noPollActivity')}</div>
       )}
 
       <div className="action-row">
         {showEdit ? <button className="secondary" type="button" onClick={() => onEdit(bridge)}>{editLabel}</button> : null}
         {bridge.oauthProvider === 'MICROSOFT' && bridge.authMethod === 'OAUTH2' ? (
-          <LoadingButton className="secondary" isLoading={connectLoading} loadingLabel="Starting Microsoft OAuth…" onClick={() => onConnectMicrosoft(bridgeId)} type="button">
+          <LoadingButton className="secondary" isLoading={connectLoading} loadingLabel={t('bridge.startingMicrosoftOAuth')} onClick={() => onConnectMicrosoft(bridgeId)} type="button">
             {connectLabel}
           </LoadingButton>
         ) : null}
         {showDelete ? (
-          <LoadingButton className="danger" isLoading={deleteLoading} loadingLabel="Deleting Bridge…" onClick={() => onDelete(bridgeId)} type="button">
-            Delete
+          <LoadingButton className="danger" isLoading={deleteLoading} loadingLabel={t('bridge.deleteLoading')} onClick={() => onDelete(bridgeId)} type="button">
+            {t('bridge.delete')}
           </LoadingButton>
         ) : null}
       </div>

@@ -3,7 +3,9 @@ package dev.inboxbridge.service;
 import java.time.Instant;
 import java.util.List;
 import java.util.Optional;
+import java.util.UUID;
 
+import dev.inboxbridge.dto.AdminResetPasswordRequest;
 import dev.inboxbridge.dto.CreateUserRequest;
 import dev.inboxbridge.dto.RegisterUserRequest;
 import dev.inboxbridge.dto.UpdateUserRequest;
@@ -12,6 +14,7 @@ import dev.inboxbridge.persistence.AppUser;
 import dev.inboxbridge.persistence.AppUserRepository;
 import dev.inboxbridge.persistence.UserBridgeRepository;
 import dev.inboxbridge.persistence.UserGmailConfigRepository;
+import dev.inboxbridge.persistence.UserPasskeyRepository;
 import io.quarkus.runtime.StartupEvent;
 import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.enterprise.event.Observes;
@@ -38,8 +41,12 @@ public class AppUserService {
     @Inject
     UserBridgeRepository userBridgeRepository;
 
+    @Inject
+    UserPasskeyRepository userPasskeyRepository;
+
     void onStartup(@Observes StartupEvent event) {
         ensureBootstrapAdmin();
+        ensureUserHandles();
     }
 
     public Optional<AppUser> findByUsername(String username) {
@@ -61,6 +68,7 @@ public class AppUserService {
         String username = validateNewUsername(request.username());
         AppUser user = new AppUser();
         user.username = username;
+        user.userHandle = generateUserHandle();
         user.passwordHash = passwordHashService.hash(validatePasswordStrength(request.password(), null));
         user.role = parseRole(request.role());
         user.mustChangePassword = true;
@@ -75,8 +83,10 @@ public class AppUserService {
     @Transactional
     public AppUser registerUser(RegisterUserRequest request) {
         String username = validateNewUsername(request.username());
+        requirePasswordConfirmation(request.password(), request.confirmPassword());
         AppUser user = new AppUser();
         user.username = username;
+        user.userHandle = generateUserHandle();
         user.passwordHash = passwordHashService.hash(validatePasswordStrength(request.password(), null));
         user.role = AppUser.Role.USER;
         user.mustChangePassword = false;
@@ -92,12 +102,10 @@ public class AppUserService {
     public void changePassword(AppUser user, String currentPassword, String newPassword, String confirmNewPassword) {
         AppUser managedUser = repository.findByIdOptional(user.id)
                 .orElseThrow(() -> new IllegalArgumentException("Unknown user id"));
-        if (!passwordMatches(managedUser, currentPassword)) {
+        if (hasPassword(managedUser) && !passwordMatches(managedUser, currentPassword)) {
             throw new IllegalArgumentException("Current password is incorrect");
         }
-        if (confirmNewPassword == null || !newPassword.equals(confirmNewPassword)) {
-            throw new IllegalArgumentException("New password confirmation does not match");
-        }
+        requirePasswordConfirmation(newPassword, confirmNewPassword);
         String validatedPassword = validatePasswordStrength(newPassword, currentPassword);
         managedUser.passwordHash = passwordHashService.hash(validatedPassword);
         managedUser.mustChangePassword = false;
@@ -105,7 +113,34 @@ public class AppUserService {
     }
 
     public boolean passwordMatches(AppUser user, String rawPassword) {
-        return passwordHashService.matches(rawPassword, user.passwordHash);
+        return hasPassword(user) && rawPassword != null && passwordHashService.matches(rawPassword, user.passwordHash);
+    }
+
+    public boolean hasPassword(AppUser user) {
+        return user != null && user.passwordHash != null && !user.passwordHash.isBlank();
+    }
+
+    public boolean requiresPasskey(AppUser user) {
+        return user != null && user.id != null && userPasskeyRepository.countByUserId(user.id) > 0;
+    }
+
+    public long passkeyCount(Long userId) {
+        return userPasskeyRepository.countByUserId(userId);
+    }
+
+    @Transactional
+    public void removePassword(AppUser user) {
+        AppUser managedUser = repository.findByIdOptional(user.id)
+                .orElseThrow(() -> new IllegalArgumentException("Unknown user id"));
+        if (!hasPassword(managedUser)) {
+            throw new IllegalArgumentException("This account does not have a password configured.");
+        }
+        if (passkeyCount(managedUser.id) == 0) {
+            throw new IllegalArgumentException("Register a passkey before removing the password.");
+        }
+        managedUser.passwordHash = null;
+        managedUser.mustChangePassword = false;
+        managedUser.updatedAt = Instant.now();
     }
 
     @Transactional
@@ -115,6 +150,7 @@ public class AppUserService {
         }
         AppUser admin = new AppUser();
         admin.username = "admin";
+        admin.userHandle = generateUserHandle();
         admin.passwordHash = passwordHashService.hash("nimda");
         admin.role = AppUser.Role.ADMIN;
         admin.mustChangePassword = true;
@@ -126,12 +162,20 @@ public class AppUserService {
     }
 
     @Transactional
-    public AppUser updateUser(Long userId, UpdateUserRequest request) {
+    public AppUser updateUser(AppUser actor, Long userId, UpdateUserRequest request) {
         AppUser user = repository.findByIdOptional(userId)
                 .orElseThrow(() -> new IllegalArgumentException("Unknown user id"));
         AppUser.Role newRole = request.role() == null || request.role().isBlank() ? user.role : parseRole(request.role());
         boolean newActive = request.active() == null ? user.active : request.active();
         boolean newApproved = request.approved() == null ? user.approved : request.approved();
+
+        if (actor != null
+                && actor.id != null
+                && actor.id.equals(user.id)
+                && user.role == AppUser.Role.ADMIN
+                && newRole != AppUser.Role.ADMIN) {
+            throw new IllegalArgumentException("Admins cannot remove their own admin rights.");
+        }
 
         if (user.role == AppUser.Role.ADMIN && repository.countApprovedAdmins() == 1) {
             if (newRole != AppUser.Role.ADMIN || !newActive || !newApproved) {
@@ -149,6 +193,41 @@ public class AppUserService {
         return user;
     }
 
+    @Transactional
+    public AppUser adminResetPassword(AppUser actor, Long userId, AdminResetPasswordRequest request) {
+        if (actor == null || actor.role != AppUser.Role.ADMIN) {
+            throw new IllegalArgumentException("Admin access is required");
+        }
+        AppUser user = repository.findByIdOptional(userId)
+                .orElseThrow(() -> new IllegalArgumentException("Unknown user id"));
+        requirePasswordConfirmation(request.newPassword(), request.confirmNewPassword());
+        user.passwordHash = passwordHashService.hash(validatePasswordStrength(request.newPassword(), null));
+        user.mustChangePassword = true;
+        user.updatedAt = Instant.now();
+        return user;
+    }
+
+    @Transactional
+    public AppUser ensureUserHandle(Long userId) {
+        AppUser user = repository.findByIdOptional(userId)
+                .orElseThrow(() -> new IllegalArgumentException("Unknown user id"));
+        if (user.userHandle == null || user.userHandle.isBlank()) {
+            user.userHandle = generateUserHandle();
+            user.updatedAt = Instant.now();
+        }
+        return user;
+    }
+
+    @Transactional
+    public void ensureUserHandles() {
+        for (AppUser user : repository.listAll()) {
+            if (user.userHandle == null || user.userHandle.isBlank()) {
+                user.userHandle = generateUserHandle();
+                user.updatedAt = Instant.now();
+            }
+        }
+    }
+
     private AppUser.Role parseRole(String role) {
         if (role == null || role.isBlank()) {
             return AppUser.Role.USER;
@@ -164,8 +243,16 @@ public class AppUserService {
                 user.active,
                 user.approved,
                 user.mustChangePassword,
+                hasPassword(user),
                 userGmailConfigRepository.findByUserId(user.id).isPresent(),
-                userBridgeRepository.listByUserId(user.id).size());
+                userBridgeRepository.listByUserId(user.id).size(),
+                (int) passkeyCount(user.id));
+    }
+
+    private void requirePasswordConfirmation(String password, String confirmPassword) {
+        if (confirmPassword == null || password == null || !password.equals(confirmPassword)) {
+            throw new IllegalArgumentException("New password confirmation does not match");
+        }
     }
 
     private String validateNewUsername(String username) {
@@ -204,5 +291,9 @@ public class AppUserService {
             throw new IllegalArgumentException("Password must contain at least one special character");
         }
         return normalized;
+    }
+
+    private String generateUserHandle() {
+        return UUID.randomUUID().toString().replace("-", "") + UUID.randomUUID().toString().replace("-", "");
     }
 }

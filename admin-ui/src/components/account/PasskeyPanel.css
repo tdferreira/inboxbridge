@@ -1,0 +1,22 @@
+.passkey-panel {
+  padding: 24px;
+  display: grid;
+  gap: 16px;
+}
+
+.passkey-card {
+  border-radius: 18px;
+  border: 1px solid var(--line);
+  background: rgba(255, 255, 255, 0.8);
+  padding: 16px;
+  display: flex;
+  justify-content: space-between;
+  gap: 14px;
+  align-items: start;
+}
+
+@media (max-width: 760px) {
+  .passkey-card {
+    flex-direction: column;
+  }
+}

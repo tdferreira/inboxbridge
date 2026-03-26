@@ -13,4 +13,21 @@ describe('Banner', () => {
     await waitFor(() => expect(writeText).toHaveBeenCalledWith('payload-123'))
     expect(screen.getByRole('button', { name: 'Copied' })).toBeInTheDocument()
   })
+
+  it('supports focusing and dismissing actionable notifications', () => {
+    const onDismiss = vi.fn()
+    const onFocus = vi.fn()
+
+    render(
+      <Banner onDismiss={onDismiss} onFocus={onFocus} tone="warning">
+        Password must be updated.
+      </Banner>
+    )
+
+    fireEvent.click(screen.getByRole('button', { name: 'Focus the related section' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Dismiss notification' }))
+
+    expect(onFocus).toHaveBeenCalledTimes(1)
+    expect(onDismiss).toHaveBeenCalledTimes(1)
+  })
 })

@@ -29,6 +29,13 @@ bridge:
   poll-enabled: ${BRIDGE_POLL_ENABLED:true}
   poll-interval: ${BRIDGE_POLL_INTERVAL:5m}
   fetch-window: ${BRIDGE_FETCH_WINDOW:50}
+  security:
+    passkeys:
+      enabled: ${BRIDGE_SECURITY_PASSKEYS_ENABLED:true}
+      rp-id: ${BRIDGE_SECURITY_PASSKEY_RP_ID:localhost}
+      rp-name: ${BRIDGE_SECURITY_PASSKEY_RP_NAME:InboxBridge}
+      origins: ${BRIDGE_SECURITY_PASSKEY_ORIGINS:${PUBLIC_BASE_URL:https://localhost:3000}}
+      challenge-ttl: ${BRIDGE_SECURITY_PASSKEY_CHALLENGE_TTL:PT5M}
   gmail:
     destination-user: ${BRIDGE_GMAIL_DESTINATION_USER:me}
     client-id: ${GOOGLE_CLIENT_ID:replace-me}

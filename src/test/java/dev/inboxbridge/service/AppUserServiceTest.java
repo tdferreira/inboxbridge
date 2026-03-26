@@ -18,6 +18,7 @@ import dev.inboxbridge.persistence.AppUser;
 import dev.inboxbridge.persistence.AppUserRepository;
 import dev.inboxbridge.persistence.UserBridgeRepository;
 import dev.inboxbridge.persistence.UserGmailConfigRepository;
+import dev.inboxbridge.persistence.UserPasskeyRepository;
 
 class AppUserServiceTest {
 
@@ -25,7 +26,7 @@ class AppUserServiceTest {
     void registerUserCreatesPendingInactiveAccount() {
         AppUserService service = service();
 
-        AppUser user = service.registerUser(new RegisterUserRequest("alice@example.com", "Secret#123"));
+        AppUser user = service.registerUser(new RegisterUserRequest("alice@example.com", "Secret#123", "Secret#123"));
 
         assertEquals(AppUser.Role.USER, user.role);
         assertFalse(user.active);
@@ -52,9 +53,22 @@ class AppUserServiceTest {
 
         IllegalArgumentException error = assertThrows(
                 IllegalArgumentException.class,
-                () -> service.updateUser(admin.id, new UpdateUserRequest("USER", null, null, null)));
+                () -> service.updateUser(null, admin.id, new UpdateUserRequest("USER", null, null, null)));
 
         assertEquals("At least one approved active admin must remain.", error.getMessage());
+    }
+
+    @Test
+    void adminCannotDemoteSelfEvenWhenAnotherAdminExists() {
+        AppUserService service = service();
+        AppUser admin = service.createUser(new CreateUserRequest("owner@example.com", "Secret#123", "ADMIN"));
+        service.createUser(new CreateUserRequest("backup@example.com", "Secret#123", "ADMIN"));
+
+        IllegalArgumentException error = assertThrows(
+                IllegalArgumentException.class,
+                () -> service.updateUser(admin, admin.id, new UpdateUserRequest("USER", null, null, null)));
+
+        assertEquals("Admins cannot remove their own admin rights.", error.getMessage());
     }
 
     @Test
@@ -86,12 +100,65 @@ class AppUserServiceTest {
         assertEquals("Password must contain at least one uppercase letter", weak.getMessage());
     }
 
+    @Test
+    void registerUserRequiresMatchingPasswordConfirmation() {
+        AppUserService service = service();
+
+        IllegalArgumentException error = assertThrows(
+                IllegalArgumentException.class,
+                () -> service.registerUser(new RegisterUserRequest("eve@example.com", "Secret#123", "Other#123")));
+
+        assertEquals("New password confirmation does not match", error.getMessage());
+    }
+
+    @Test
+    void removePasswordRequiresPasskey() {
+        AppUserService service = service();
+        AppUser user = service.createUser(new CreateUserRequest("frank@example.com", "Secret#123", "USER"));
+
+        IllegalArgumentException error = assertThrows(
+                IllegalArgumentException.class,
+                () -> service.removePassword(user));
+
+        assertEquals("Register a passkey before removing the password.", error.getMessage());
+    }
+
+    @Test
+    void removePasswordAllowsPasskeyOnlyAccount() {
+        AppUserService service = service(1);
+        AppUser user = service.createUser(new CreateUserRequest("grace@example.com", "Secret#123", "USER"));
+
+        service.removePassword(user);
+
+        AppUser reloaded = service.findById(user.id).orElseThrow();
+        assertFalse(service.hasPassword(reloaded));
+        assertFalse(reloaded.mustChangePassword);
+    }
+
+    @Test
+    void changePasswordAllowsPasswordlessAccountToSetNewPassword() {
+        AppUserService service = service(1);
+        AppUser user = service.createUser(new CreateUserRequest("heidi@example.com", "Secret#123", "USER"));
+        service.removePassword(user);
+
+        service.changePassword(user, "", "Better#456", "Better#456");
+
+        AppUser reloaded = service.findById(user.id).orElseThrow();
+        assertTrue(service.passwordMatches(reloaded, "Better#456"));
+        assertFalse(reloaded.mustChangePassword);
+    }
+
     private AppUserService service() {
+        return service(0);
+    }
+
+    private AppUserService service(long passkeyCount) {
         AppUserService service = new AppUserService();
         service.repository = new InMemoryAppUserRepository();
         service.passwordHashService = new PasswordHashService();
         service.userBridgeRepository = new EmptyUserBridgeRepository();
         service.userGmailConfigRepository = new EmptyUserGmailConfigRepository();
+        service.userPasskeyRepository = new FixedPasskeyRepository(passkeyCount);
         return service;
     }
 
@@ -146,6 +213,19 @@ class AppUserServiceTest {
         @Override
         public Optional<dev.inboxbridge.persistence.UserGmailConfig> findByUserId(Long userId) {
             return Optional.empty();
+        }
+    }
+
+    private static class FixedPasskeyRepository extends UserPasskeyRepository {
+        private final long count;
+
+        private FixedPasskeyRepository(long count) {
+            this.count = count;
+        }
+
+        @Override
+        public long countByUserId(Long userId) {
+            return count;
         }
     }
 }

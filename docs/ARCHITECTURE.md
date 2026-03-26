@@ -27,6 +27,12 @@ That gives a strong baseline while keeping the code easy to understand.
 
 This starter scans the latest configured message window rather than maintaining a high-fidelity mailbox cursor.
 
+The fetch window and scheduler interval now come from effective runtime polling settings:
+
+- environment values provide defaults
+- PostgreSQL stores optional admin overrides
+- the running poller merges both at runtime
+
 That is deliberately simple for a first self-hosted version. The next evolution should be:
 
 - persistent IMAP UID / UIDVALIDITY checkpoints
@@ -42,3 +48,10 @@ That is deliberately simple for a first self-hosted version. The next evolution 
 - `persistence`: database entities and repositories
 - `service`: fetch, import, dedupe, label, and OAuth logic
 - `web`: REST resources
+
+## Admin UI layout
+
+The React admin UI now separates:
+
+- `My Email Fetchers`: a unified operational list of DB-managed and env-managed fetchers, with add/edit work happening in a modal dialog
+- `Poller Settings`: global polling controls, health metrics, and runtime overrides

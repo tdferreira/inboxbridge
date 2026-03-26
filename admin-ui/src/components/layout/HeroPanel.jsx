@@ -1,25 +1,42 @@
 import LoadingButton from '../common/LoadingButton'
 import './HeroPanel.css'
 
-function HeroPanel({ loadingData, onChangePasswordAccess, onRefresh, onSignOut, passwordPanelVisible, refreshLoading, session, signOutLoading }) {
+function HeroPanel({
+  language,
+  languageOptions,
+  loadingData,
+  onLanguageChange,
+  onToggleSecurityPanel,
+  onRefresh,
+  onSignOut,
+  refreshLoading,
+  securityPanelVisible,
+  session,
+  signOutLoading,
+  t
+}) {
   return (
     <section className="hero-panel">
       <div>
-        <div className="eyebrow">InboxBridge Control Plane</div>
-        <h1>Multi-user bridge administration with secure OAuth and per-user mail routing.</h1>
-        <p className="section-copy">
-          Signed in as <strong>{session.username}</strong> ({session.role}). The admin UI runs separately from Quarkus and talks to it over the proxied REST API.
-        </p>
+        <div className="eyebrow">{t('hero.eyebrow')}</div>
+        <h1>InboxBridge</h1>
+        <p className="section-copy">{t('hero.signedInAs', { username: session.username, role: session.role })}</p>
       </div>
       <div className="action-row">
-        <LoadingButton className="secondary" disabled={loadingData} isLoading={refreshLoading} loadingLabel="Refreshing…" onClick={onRefresh}>
-          Refresh
+        <label className="hero-language-select">
+          <span>{t('hero.language')}</span>
+          <select value={language} onChange={(event) => onLanguageChange(event.target.value)}>
+            {languageOptions.map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}
+          </select>
+        </label>
+        <LoadingButton className="secondary" disabled={loadingData} hint={t('hero.refreshHint')} isLoading={refreshLoading} loadingLabel={t('hero.refreshLoading')} onClick={onRefresh}>
+          {t('hero.refresh')}
         </LoadingButton>
-        <button className="secondary" onClick={onChangePasswordAccess} type="button">
-          {passwordPanelVisible ? 'Hide Password' : 'Change Password'}
+        <button className="secondary" onClick={onToggleSecurityPanel} title={securityPanelVisible ? t('hero.hideSecurityHint') : t('hero.showSecurityHint')} type="button">
+          {securityPanelVisible ? t('hero.hideSecurity') : t('hero.security')}
         </button>
-        <LoadingButton className="secondary" isLoading={signOutLoading} loadingLabel="Signing Out…" onClick={onSignOut}>
-          Sign out
+        <LoadingButton className="secondary" hint={t('hero.signOutHint')} isLoading={signOutLoading} loadingLabel={t('hero.signOutLoading')} onClick={onSignOut}>
+          {t('hero.signOut')}
         </LoadingButton>
       </div>
     </section>
