@@ -5,7 +5,17 @@ import './SetupGuidePanel.css'
  * Gives first-time operators and regular users a compact, in-app checklist for
  * the minimum steps needed to make InboxBridge usable.
  */
-function SetupGuidePanel({ collapsed, onFocusSection, onToggleCollapse, savingLayout, sectionLoading = false, steps, t }) {
+function SetupGuidePanel({
+  collapsed,
+  dismissable = false,
+  onDismiss,
+  onFocusSection,
+  onToggleCollapse,
+  savingLayout,
+  sectionLoading = false,
+  steps,
+  t
+}) {
   return (
     <section className="surface-card setup-guide-panel section-with-corner-toggle" id="quick-setup-guide-section" tabIndex="-1">
       <div className="panel-header">
@@ -15,6 +25,11 @@ function SetupGuidePanel({ collapsed, onFocusSection, onToggleCollapse, savingLa
             {t('setup.copy')}
           </p>
         </div>
+        {dismissable ? (
+          <button className="secondary" onClick={onDismiss} title={t('setup.dismissHint')} type="button">
+            {t('setup.dismiss')}
+          </button>
+        ) : null}
       </div>
       <PaneToggleButton className="pane-toggle-button-corner" collapseLabel={t('common.collapseSection')} collapsed={collapsed} disabled={savingLayout} expandLabel={t('common.expandSection')} isLoading={savingLayout} onClick={onToggleCollapse} />
       {savingLayout ? <div className="section-copy">{t('common.savingLayoutPreference')}</div> : null}

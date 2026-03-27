@@ -66,4 +66,30 @@ public class ImportedMessageRepository implements PanacheRepository<ImportedMess
                 .project(Instant.class)
                 .list();
     }
+
+    public long countByDestinationKeyAndSourceAccountId(String destinationKey, String sourceAccountId) {
+        return count("destinationKey = ?1 and sourceAccountId = ?2", destinationKey, sourceAccountId);
+    }
+
+    public List<Object[]> summarizeByImportedDayForDestinationKeyAndSourceAccountId(String destinationKey, String sourceAccountId) {
+        return getEntityManager().createNativeQuery(
+                "select date_trunc('day', imported_at) as bucket_start, count(*) as imported_count "
+                        + "from imported_message "
+                        + "where destination_key = ?1 and source_account_id = ?2 "
+                        + "group by bucket_start "
+                        + "order by bucket_start")
+                .setParameter(1, destinationKey)
+                .setParameter(2, sourceAccountId)
+                .getResultList();
+    }
+
+    public List<Instant> listImportedAtSinceForDestinationKeyAndSourceAccountId(String destinationKey, String sourceAccountId, Instant since) {
+        return find(
+                "select importedAt from ImportedMessage where destinationKey = ?1 and sourceAccountId = ?2 and importedAt >= ?3 order by importedAt",
+                destinationKey,
+                sourceAccountId,
+                since)
+                .project(Instant.class)
+                .list();
+    }
 }

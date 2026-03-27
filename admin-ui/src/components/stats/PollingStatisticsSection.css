@@ -1,0 +1,50 @@
+.polling-statistics-section {
+  display: grid;
+  gap: 1rem;
+  padding: 1.25rem;
+}
+
+.polling-statistics-grid {
+  display: grid;
+  gap: 1rem;
+  grid-template-columns: repeat(auto-fit, minmax(16rem, 1fr));
+}
+
+.polling-statistics-card {
+  padding: 1rem;
+}
+
+.polling-statistics-card-title {
+  font-size: 0.95rem;
+  font-weight: 700;
+  margin-bottom: 0.75rem;
+}
+
+.polling-statistics-breakdown {
+  display: grid;
+  gap: 0.65rem;
+}
+
+.polling-statistics-breakdown > div {
+  align-items: baseline;
+  display: flex;
+  gap: 0.75rem;
+  justify-content: space-between;
+  min-width: 0;
+}
+
+.polling-statistics-breakdown span {
+  color: var(--muted-text);
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.polling-statistics-breakdown strong {
+  flex-shrink: 0;
+}
+
+@media (max-width: 720px) {
+  .polling-statistics-section {
+    padding: 1rem;
+  }
+}

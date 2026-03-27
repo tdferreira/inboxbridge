@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { Suspense, lazy, useEffect, useMemo, useRef, useState } from 'react'
 import AuthScreen from './components/auth/AuthScreen'
 import Banner from './components/common/Banner'
 import ConfirmationDialog from './components/common/ConfirmationDialog'
@@ -12,6 +12,7 @@ import GmailAccountSection from './components/gmail/GmailAccountSection'
 import HeroPanel from './components/layout/HeroPanel'
 import PreferencesDialog from './components/layout/PreferencesDialog'
 import SetupGuidePanel from './components/layout/SetupGuidePanel'
+import WorkspaceSectionWindow from './components/layout/WorkspaceSectionWindow'
 import SystemDashboardSection from './components/admin/SystemDashboardSection'
 import SystemPollingSettingsDialog from './components/admin/SystemPollingSettingsDialog'
 import UserPollingSettingsSection from './components/polling/UserPollingSettingsSection'
@@ -60,12 +61,18 @@ const DEFAULT_BRIDGE_FORM = {
 }
 const DEFAULT_UI_PREFERENCES = {
   persistLayout: false,
+  layoutEditEnabled: false,
   quickSetupCollapsed: false,
+  quickSetupDismissed: false,
   gmailDestinationCollapsed: false,
   userPollingCollapsed: false,
+  userStatsCollapsed: false,
   sourceBridgesCollapsed: false,
   systemDashboardCollapsed: false,
+  globalStatsCollapsed: false,
   userManagementCollapsed: false,
+  userSectionOrder: ['quickSetup', 'gmail', 'userPolling', 'userStats', 'sourceBridges'],
+  adminSectionOrder: ['systemDashboard', 'globalStats', 'userManagement'],
   language: 'en'
 }
 const DEFAULT_SYSTEM_POLLING_FORM = {
@@ -83,8 +90,23 @@ const DEFAULT_USER_POLLING_STATS = {
   configuredMailFetchers: 0,
   enabledMailFetchers: 0,
   sourcesWithErrors: 0,
+  errorPolls: 0,
   importsByDay: [],
-  importTimelines: {}
+  importTimelines: {},
+  duplicateTimelines: {},
+  errorTimelines: {},
+  manualRunTimelines: {},
+  scheduledRunTimelines: {},
+  health: {
+    activeMailFetchers: 0,
+    coolingDownMailFetchers: 0,
+    failingMailFetchers: 0,
+    disabledMailFetchers: 0
+  },
+  providerBreakdown: [],
+  manualRuns: 0,
+  scheduledRuns: 0,
+  averagePollDurationMillis: 0
 }
 const DEFAULT_SOURCE_POLLING_FORM = {
   pollEnabledMode: 'DEFAULT',
@@ -101,6 +123,8 @@ const DEFAULT_SOURCE_POLLING_FORM = {
 const DEFAULT_AUTH_OPTIONS = {
   multiUserEnabled: true
 }
+const DEFAULT_ADMIN_WORKSPACE = 'user'
+const PollingStatisticsSection = lazy(() => import('./components/stats/PollingStatisticsSection'))
 
 /**
  * Coordinates admin-ui data fetching and browser interactions while delegating
@@ -117,6 +141,8 @@ function App() {
   const [pendingActions, setPendingActions] = useState({})
   const [selectedUserLoading, setSelectedUserLoading] = useState(false)
   const [expandedFetcherLoadingId, setExpandedFetcherLoadingId] = useState(null)
+  const [fetcherStatsById, setFetcherStatsById] = useState({})
+  const [fetcherStatsLoadingId, setFetcherStatsLoadingId] = useState(null)
 
   const [loginForm, setLoginForm] = useState(DEFAULT_LOGIN_FORM)
   const [registerForm, setRegisterForm] = useState(DEFAULT_REGISTER_FORM)
@@ -165,6 +191,8 @@ function App() {
   const [showPreferencesDialog, setShowPreferencesDialog] = useState(false)
   const [showUserPollingDialog, setShowUserPollingDialog] = useState(false)
   const [showSystemPollingDialog, setShowSystemPollingDialog] = useState(false)
+  const [adminWorkspace, setAdminWorkspace] = useState(DEFAULT_ADMIN_WORKSPACE)
+  const [dragState, setDragState] = useState(null)
   const notificationTimersRef = useRef(new Map())
   const t = useMemo(() => (key, params) => translate(language, key, params), [language])
   const selectableLanguages = useMemo(() => languageOptions.map((value) => ({
@@ -176,6 +204,7 @@ function App() {
     || passwordForm.newPassword.trim()
     || passwordForm.confirmNewPassword.trim()
   )
+  const isAdmin = session?.role === 'ADMIN'
 
   function normalizeUiPreferences(payload) {
     const nextUiPreferences = {
@@ -185,13 +214,23 @@ function App() {
     return {
       ...nextUiPreferences,
       ...(nextUiPreferences.persistLayout ? {} : {
+        layoutEditEnabled: false,
         quickSetupCollapsed: false,
+        quickSetupDismissed: false,
         gmailDestinationCollapsed: false,
         userPollingCollapsed: false,
+        userStatsCollapsed: false,
         sourceBridgesCollapsed: false,
         systemDashboardCollapsed: false,
+        globalStatsCollapsed: false,
         userManagementCollapsed: false
       }),
+      userSectionOrder: Array.isArray(nextUiPreferences.userSectionOrder) && nextUiPreferences.userSectionOrder.length
+        ? [...nextUiPreferences.userSectionOrder]
+        : [...DEFAULT_UI_PREFERENCES.userSectionOrder],
+      adminSectionOrder: Array.isArray(nextUiPreferences.adminSectionOrder) && nextUiPreferences.adminSectionOrder.length
+        ? [...nextUiPreferences.adminSectionOrder]
+        : [...DEFAULT_UI_PREFERENCES.adminSectionOrder],
       language: normalizeLocale(nextUiPreferences.language)
     }
   }
@@ -331,7 +370,78 @@ function App() {
     }
   }
 
-  async function loadAppData() {
+  async function loadFetcherStats(fetcher, options = {}) {
+    if (!fetcher?.bridgeId) return
+    const { suppressErrors = false } = options
+    setFetcherStatsLoadingId(fetcher.bridgeId)
+    try {
+      const endpointPrefix = fetcher.managementSource === 'ENVIRONMENT' ? '/api/admin/bridges' : '/api/app/bridges'
+      const response = await fetch(`${endpointPrefix}/${encodeURIComponent(fetcher.bridgeId)}/polling-stats`)
+      if (!response.ok) {
+        throw new Error(await apiErrorText(response, 'Unable to load mail account statistics'))
+      }
+      const payload = await response.json()
+      setFetcherStatsById((current) => ({ ...current, [fetcher.bridgeId]: payload }))
+    } catch (err) {
+      if (!suppressErrors) {
+        pushNotification({
+          autoCloseMs: null,
+          copyText: err.message || 'Unable to load mail account statistics',
+          message: err.message || 'Unable to load mail account statistics',
+          targetId: 'source-bridges-section',
+          tone: 'error'
+        })
+      }
+    } finally {
+      setFetcherStatsLoadingId((current) => current === fetcher.bridgeId ? null : current)
+    }
+  }
+
+  async function loadScopedTimelineBundle(endpoint, fallbackMessage) {
+    const response = await fetch(endpoint)
+    if (!response.ok) {
+      throw new Error(await apiErrorText(response, fallbackMessage))
+    }
+    const payload = await response.json()
+    return {
+      imports: payload.importTimelines?.custom || [],
+      duplicates: payload.duplicateTimelines?.custom || [],
+      errors: payload.errorTimelines?.custom || [],
+      manualRuns: payload.manualRunTimelines?.custom || [],
+      scheduledRuns: payload.scheduledRunTimelines?.custom || []
+    }
+  }
+
+  async function loadUserCustomRange(range) {
+    const search = new URLSearchParams({ from: range.from })
+    if (range.to) search.set('to', range.to)
+    return loadScopedTimelineBundle(`/api/app/polling-stats/range?${search.toString()}`, 'Unable to load custom polling range')
+  }
+
+  async function loadGlobalCustomRange(range) {
+    const search = new URLSearchParams({ from: range.from })
+    if (range.to) search.set('to', range.to)
+    return loadScopedTimelineBundle(`/api/admin/polling-stats/range?${search.toString()}`, 'Unable to load custom polling range')
+  }
+
+  async function loadFetcherCustomRange(fetcher, range) {
+    const search = new URLSearchParams({ from: range.from })
+    if (range.to) search.set('to', range.to)
+    const endpointPrefix = fetcher.managementSource === 'ENVIRONMENT' ? '/api/admin/bridges' : '/api/app/bridges'
+    return loadScopedTimelineBundle(
+      `${endpointPrefix}/${encodeURIComponent(fetcher.bridgeId)}/polling-stats/range?${search.toString()}`,
+      'Unable to load custom mail account range'
+    )
+  }
+
+  async function loadAdminUserCustomRange(userId, range) {
+    const search = new URLSearchParams({ from: range.from })
+    if (range.to) search.set('to', range.to)
+    return loadScopedTimelineBundle(`/api/admin/users/${userId}/polling-stats/range?${search.toString()}`, 'Unable to load custom user range')
+  }
+
+  async function loadAppData(options = {}) {
+    const { suppressErrors = false } = options
     if (!session) return
     setLoadingData(true)
     try {
@@ -384,6 +494,13 @@ function App() {
         })
       }
       setMyBridges(Array.isArray(bridgesPayload) ? bridgesPayload : [])
+      setFetcherStatsById((current) => {
+        const validIds = new Set((Array.isArray(bridgesPayload) ? bridgesPayload : []).map((bridge) => bridge.bridgeId))
+        for (const bridge of (adminPayload?.bridges || [])) {
+          validIds.add(bridge.id)
+        }
+        return Object.fromEntries(Object.entries(current).filter(([bridgeId]) => validIds.has(bridgeId)))
+      })
       setMyPasskeys(Array.isArray(passkeysPayload) ? passkeysPayload : [])
       if (uiPreferencesLoadedForUserId !== session.id) {
         const nextUiPreferences = normalizeUiPreferences(uiPreferencesPayload)
@@ -417,8 +534,13 @@ function App() {
         setSelectedUserId(null)
         setSelectedUserConfig(null)
       }
+      if (session.role !== 'ADMIN') {
+        setAdminWorkspace(DEFAULT_ADMIN_WORKSPACE)
+      }
     } catch (err) {
-      pushNotification({ autoCloseMs: null, copyText: err.message || 'Unable to load application data', message: err.message || 'Unable to load application data', tone: 'error' })
+      if (!suppressErrors) {
+        pushNotification({ autoCloseMs: null, copyText: err.message || 'Unable to load application data', message: err.message || 'Unable to load application data', tone: 'error' })
+      }
     } finally {
       setLoadingData(false)
     }
@@ -456,6 +578,12 @@ function App() {
   useEffect(() => {
     window.localStorage.setItem('inboxbridge.language', language)
   }, [language])
+
+  useEffect(() => {
+    if (!uiPreferences.layoutEditEnabled && dragState) {
+      setDragState(null)
+    }
+  }, [dragState, uiPreferences.layoutEditEnabled])
 
   useEffect(() => {
     if (selectedUserId) {
@@ -1017,7 +1145,10 @@ function App() {
       } catch (err) {
         pushNotification({ autoCloseMs: null, copyText: err.message || 'Unable to run mail fetcher poll', message: err.message || 'Unable to run mail fetcher poll', targetId: 'source-bridges-section', tone: 'error' })
       } finally {
-        await loadAppData()
+        await loadAppData({ suppressErrors: true })
+        if (fetcher) {
+          await loadFetcherStats(fetcher, { suppressErrors: true })
+        }
       }
     })
   }
@@ -1028,7 +1159,10 @@ function App() {
     }
     setExpandedFetcherLoadingId(_fetcher.bridgeId)
     try {
-      await refreshSectionData('sourceBridgesCollapsed', loadAppData)
+      await Promise.all([
+        refreshSectionData('sourceBridgesCollapsed', () => loadAppData({ suppressErrors: true })),
+        loadFetcherStats(_fetcher, { suppressErrors: true })
+      ])
     } finally {
       setExpandedFetcherLoadingId((current) => current === _fetcher.bridgeId ? null : current)
     }
@@ -1338,7 +1472,7 @@ function App() {
     })
   }
 
-  function startGoogleOAuthSelf() {
+  function navigateToGoogleOAuthSelf() {
     withPending('googleOAuthSelf', async () => {
       await new Promise((resolve) => {
         window.setTimeout(() => {
@@ -1346,6 +1480,25 @@ function App() {
           resolve()
         }, 75)
       })
+    })
+  }
+
+  function startGoogleOAuthSelf() {
+    if (!gmailMeta?.refreshTokenConfigured) {
+      navigateToGoogleOAuthSelf()
+      return
+    }
+    openConfirmation({
+      actionKey: 'googleOAuthSelf',
+      body: t('gmail.reconnectConfirmBody'),
+      confirmLabel: t('gmail.reconnect'),
+      confirmLoadingLabel: t('gmail.reconnectLoading'),
+      confirmTone: 'danger',
+      onConfirm: async () => {
+        setConfirmationDialog(null)
+        navigateToGoogleOAuthSelf()
+      },
+      title: t('gmail.reconnectConfirmTitle')
     })
   }
 
@@ -1398,6 +1551,66 @@ function App() {
     })
   }
 
+  function applyOrderedSectionIds(availableIds, preferredIds) {
+    const ordered = preferredIds.filter((sectionId) => availableIds.includes(sectionId))
+    return [...ordered, ...availableIds.filter((sectionId) => !ordered.includes(sectionId))]
+  }
+
+  async function updateUiPreferencesLocally(nextPreferences) {
+    const normalized = normalizeUiPreferences(nextPreferences)
+    setUiPreferences(normalized)
+    setLanguage(normalized.language)
+    if (normalized.persistLayout) {
+      await persistUiPreferences(normalized)
+    }
+  }
+
+  async function moveSection(workspaceKey, sectionId, direction) {
+    const preferenceKey = workspaceKey === 'admin' ? 'adminSectionOrder' : 'userSectionOrder'
+    const currentOrder = [...uiPreferences[preferenceKey]]
+    const currentIndex = currentOrder.indexOf(sectionId)
+    if (currentIndex < 0) {
+      return
+    }
+    const targetIndex = direction === 'up' ? currentIndex - 1 : currentIndex + 1
+    if (targetIndex < 0 || targetIndex >= currentOrder.length) {
+      return
+    }
+    const nextOrder = [...currentOrder]
+    ;[nextOrder[currentIndex], nextOrder[targetIndex]] = [nextOrder[targetIndex], nextOrder[currentIndex]]
+    await updateUiPreferencesLocally({
+      ...uiPreferences,
+      [preferenceKey]: nextOrder
+    })
+  }
+
+  async function reorderSections(workspaceKey, draggedId, targetIndex) {
+    const preferenceKey = workspaceKey === 'admin' ? 'adminSectionOrder' : 'userSectionOrder'
+    const currentOrder = [...uiPreferences[preferenceKey]]
+    const currentIndex = currentOrder.indexOf(draggedId)
+    if (currentIndex < 0) {
+      return
+    }
+    const boundedTargetIndex = Math.max(0, Math.min(targetIndex, currentOrder.length))
+    const [movedSection] = currentOrder.splice(currentIndex, 1)
+    const adjustedTargetIndex = currentIndex < boundedTargetIndex ? boundedTargetIndex - 1 : boundedTargetIndex
+    currentOrder.splice(adjustedTargetIndex, 0, movedSection)
+    await updateUiPreferencesLocally({
+      ...uiPreferences,
+      [preferenceKey]: currentOrder
+    })
+  }
+
+  async function resetLayoutPreferences() {
+    await updateUiPreferencesLocally({
+      ...uiPreferences,
+      ...DEFAULT_UI_PREFERENCES,
+      persistLayout: uiPreferences.persistLayout,
+      language
+    })
+    pushNotification({ message: t('notifications.layoutReset'), tone: 'success' })
+  }
+
   async function toggleSection(sectionKey) {
     setTouchedSections((current) => ({ ...current, [sectionKey]: true }))
     const expanding = uiPreferences[sectionKey]
@@ -1419,6 +1632,10 @@ function App() {
     }
   }
 
+  async function dismissQuickSetupGuide() {
+    handleQuickSetupVisibilityChange(false)
+  }
+
   function handlePersistLayoutChange(enabled) {
     const nextPreferences = {
       ...uiPreferences,
@@ -1426,6 +1643,32 @@ function App() {
     }
     setUiPreferences(nextPreferences)
     persistUiPreferences(nextPreferences)
+  }
+
+  function handleLayoutEditChange(enabled) {
+    const nextPreferences = {
+      ...uiPreferences,
+      layoutEditEnabled: enabled
+    }
+    setUiPreferences(nextPreferences)
+    persistUiPreferences(nextPreferences)
+  }
+
+  function startLayoutEditingFromPreferences() {
+    setShowPreferencesDialog(false)
+    handleLayoutEditChange(true)
+  }
+
+  function handleQuickSetupVisibilityChange(visible) {
+    const nextPreferences = {
+      ...uiPreferences,
+      quickSetupDismissed: !visible,
+      quickSetupCollapsed: visible ? false : true
+    }
+    setUiPreferences(nextPreferences)
+    if (nextPreferences.persistLayout) {
+      persistUiPreferences(nextPreferences)
+    }
   }
 
   function handleLanguageChange(nextLanguage) {
@@ -1448,8 +1691,10 @@ function App() {
     const derivedSectionKey = sectionKey || ({
       'gmail-destination-section': 'gmailDestinationCollapsed',
       'user-polling-section': 'userPollingCollapsed',
+      'user-polling-stats-section': 'userStatsCollapsed',
       'source-bridges-section': 'sourceBridgesCollapsed',
       'system-dashboard-section': 'systemDashboardCollapsed',
+      'global-polling-stats-section': 'globalStatsCollapsed',
       'user-management-section': 'userManagementCollapsed'
     }[targetId] || null)
     if (derivedSectionKey && uiPreferences[derivedSectionKey]) {
@@ -1470,6 +1715,12 @@ function App() {
     if (targetId === 'passkey-panel-section') {
       setShowSecurityPanel(true)
       setSecurityTab('passkeys')
+    }
+    if (targetId === 'user-management-section' || targetId === 'system-dashboard-section' || targetId === 'global-polling-stats-section') {
+      setAdminWorkspace('admin')
+    }
+    if (targetId === 'gmail-destination-section' || targetId === 'user-polling-section' || targetId === 'user-polling-stats-section' || targetId === 'source-bridges-section') {
+      setAdminWorkspace('user')
     }
     window.setTimeout(() => {
       const target = document.getElementById(targetId)
@@ -1573,25 +1824,71 @@ function App() {
   })
 
   useEffect(() => {
-    if (!session || !setupGuideState.allStepsComplete) {
+    if (!session) {
       return
     }
-    setUiPreferences((current) => {
-      if (current.quickSetupCollapsed) {
-        return current
+    if (!setupGuideState.allStepsComplete && uiPreferences.quickSetupDismissed) {
+      const next = {
+        ...uiPreferences,
+        quickSetupDismissed: false,
+        quickSetupCollapsed: false
       }
-      return {
-        ...current,
+      setUiPreferences(next)
+      if (next.persistLayout) {
+        persistUiPreferences(next)
+      }
+      return
+    }
+    if (setupGuideState.allStepsComplete && !uiPreferences.quickSetupCollapsed && !touchedSections.quickSetupCollapsed) {
+      const next = {
+        ...uiPreferences,
         quickSetupCollapsed: true
       }
-    })
-  }, [session, setupGuideState.allStepsComplete])
+      setUiPreferences(next)
+      if (next.persistLayout) {
+        persistUiPreferences(next)
+      }
+    }
+  }, [session, setupGuideState.allStepsComplete, touchedSections.quickSetupCollapsed, uiPreferences])
 
   useEffect(() => {
     setShowPasswordResetDialog(false)
     setAdminResetPasswordForm(DEFAULT_ADMIN_RESET_PASSWORD_FORM)
     setPasswordResetTarget(null)
   }, [selectedUserId])
+
+  useEffect(() => {
+    if (!dragState) {
+      return undefined
+    }
+
+    document.body.classList.add('workspace-layout-dragging')
+
+    async function finishDrag() {
+      const current = dragState
+      setDragState(null)
+      await reorderSections(current.workspaceKey, current.draggedId, current.targetIndex)
+    }
+
+    function handlePointerUp() {
+      finishDrag()
+    }
+
+    function handleKeyDown(event) {
+      if (event.key === 'Escape') {
+        document.body.classList.remove('workspace-layout-dragging')
+        setDragState(null)
+      }
+    }
+
+    window.addEventListener('pointerup', handlePointerUp)
+    window.addEventListener('keydown', handleKeyDown)
+    return () => {
+      document.body.classList.remove('workspace-layout-dragging')
+      window.removeEventListener('pointerup', handlePointerUp)
+      window.removeEventListener('keydown', handleKeyDown)
+    }
+  }, [dragState])
 
   useEffect(() => {
     if (!showFetcherDialog) {
@@ -1620,6 +1917,286 @@ function App() {
     }
     return users.some((user) => user.username.toLowerCase() === normalized)
   }, [createUserForm.username, users])
+
+  const userWorkspaceSections = [
+    {
+      id: 'quickSetup',
+      render: () => setupGuideState.allStepsComplete && uiPreferences.quickSetupDismissed ? null : (
+        <SetupGuidePanel
+          collapsed={uiPreferences.quickSetupCollapsed}
+          dismissable={setupGuideState.allStepsComplete}
+          onDismiss={dismissQuickSetupGuide}
+          onFocusSection={focusSection}
+          sectionLoading={isSectionRefreshing('quickSetupCollapsed')}
+          onToggleCollapse={() => toggleSection('quickSetupCollapsed')}
+          savingLayout={isPending('uiPreferences')}
+          steps={setupGuideState.steps}
+          t={t}
+        />
+      )
+    },
+    {
+      id: 'gmail',
+      render: () => (
+        <GmailAccountSection
+          collapsed={uiPreferences.gmailDestinationCollapsed}
+          collapseLoading={isPending('uiPreferences') && uiPreferences.persistLayout}
+          gmailConfig={gmailConfig}
+          gmailMeta={gmailMeta}
+          isAdmin={session.role === 'ADMIN'}
+          locale={language}
+          oauthLoading={isPending('googleOAuthSelf')}
+          onCollapseToggle={() => toggleSection('gmailDestinationCollapsed')}
+          onConnectOAuth={startGoogleOAuthSelf}
+          onUnlinkOAuth={unlinkGmailAccount}
+          onSave={saveGmailConfig}
+          saveLoading={isPending('gmailSave')}
+          sectionLoading={isSectionRefreshing('gmailDestinationCollapsed')}
+          setGmailConfig={setGmailConfig}
+          t={t}
+          unlinkLoading={isPending('gmailUnlink')}
+        />
+      )
+    },
+    {
+      id: 'userPolling',
+      render: () => (
+        <UserPollingSettingsSection
+          collapsed={uiPreferences.userPollingCollapsed}
+          collapseLoading={isPending('uiPreferences') && uiPreferences.persistLayout}
+          hasFetchers={myBridges.length > 0}
+          onCollapseToggle={() => toggleSection('userPollingCollapsed')}
+          onOpenEditor={() => setShowUserPollingDialog(true)}
+          pollingSettings={userPollingSettings}
+          sectionLoading={isSectionRefreshing('userPollingCollapsed')}
+          t={t}
+        />
+      )
+    },
+    {
+      id: 'userStats',
+      render: () => (
+        <Suspense fallback={<div className="muted-box">{t('common.refreshingSection')}</div>}>
+          <PollingStatisticsSection
+            collapsed={uiPreferences.userStatsCollapsed}
+            collapseLoading={isPending('uiPreferences') && uiPreferences.persistLayout}
+            copy={t('pollingStats.userCopy')}
+            customRangeLoader={loadUserCustomRange}
+            id="user-polling-stats-section"
+            onCollapseToggle={() => toggleSection('userStatsCollapsed')}
+            sectionLoading={isSectionRefreshing('userPollingCollapsed')}
+            stats={userPollingStats}
+            t={t}
+            title={t('pollingStats.userTitle')}
+          />
+        </Suspense>
+      )
+    },
+    {
+      id: 'sourceBridges',
+      render: () => (
+        <UserBridgesSection
+          bridgeForm={bridgeForm}
+          collapsed={uiPreferences.sourceBridgesCollapsed}
+          collapseLoading={isPending('uiPreferences') && uiPreferences.persistLayout}
+          connectingBridgeId={visibleFetchers.find((bridge) => isPending(`microsoftOAuth:${bridge.bridgeId}`))?.bridgeId || null}
+          deletingBridgeId={myBridges.find((bridge) => isPending(`bridgeDelete:${bridge.bridgeId}`))?.bridgeId || null}
+          duplicateIdError={bridgeDuplicateError}
+          fetcherDialogOpen={showFetcherDialog}
+          fetcherPollLoadingId={visibleFetchers.find((bridge) => isPending(`bridgePoll:${bridge.bridgeId}`))?.bridgeId || null}
+          fetcherPollingDialog={showFetcherPollingDialog ? fetcherPollingTarget : null}
+          fetcherPollingForm={fetcherPollingForm}
+          fetcherPollingLoading={fetcherPollingTarget ? isPending(`fetcherPollingSave:${fetcherPollingTarget.bridgeId}`) || isPending(`fetcherPollingLoad:${fetcherPollingTarget.bridgeId}`) : false}
+          fetcherRefreshLoadingId={expandedFetcherLoadingId}
+          fetcherStatsById={fetcherStatsById}
+          fetcherStatsLoadingId={fetcherStatsLoadingId}
+          fetchers={visibleFetchers}
+          onLoadFetcherCustomRange={loadFetcherCustomRange}
+          onAddFetcher={openAddFetcherDialog}
+          onApplyPreset={applyBridgePreset}
+          onBridgeFormChange={handleBridgeFormChange}
+          onCloseDialog={() => {
+            setBridgeTestResult(null)
+            setShowFetcherDialog(false)
+          }}
+          onClosePollingDialog={closeFetcherPollingDialog}
+          onCollapseToggle={() => toggleSection('sourceBridgesCollapsed')}
+          onConfigureFetcherPolling={openFetcherPollingDialog}
+          onConnectMicrosoft={startMicrosoftOAuth}
+          onDeleteBridge={deleteBridge}
+          onEditBridge={editBridge}
+          onFetcherPollingFormChange={(updater) => setFetcherPollingForm((current) => typeof updater === 'function' ? updater(current) : updater)}
+          onFetcherToggleExpand={refreshFetcherState}
+          onResetFetcherPollingSettings={resetFetcherPollingSettings}
+          onRunFetcherPoll={runFetcherPoll}
+          onSaveBridge={saveBridge}
+          onSaveFetcherPollingSettings={saveFetcherPollingSettings}
+          onTestConnection={testBridgeConnection}
+          saveLoading={isPending('bridgeSave')}
+          testConnectionLoading={isPending('bridgeConnectionTest')}
+          testResult={bridgeTestResult}
+          sectionLoading={isSectionRefreshing('sourceBridgesCollapsed')}
+          t={t}
+          locale={language}
+        />
+      )
+    }
+  ]
+
+  const adminWorkspaceSections = [
+    {
+      id: 'systemDashboard',
+      render: () => (
+        <SystemDashboardSection
+          collapsed={uiPreferences.systemDashboardCollapsed}
+          collapseLoading={isPending('uiPreferences') && uiPreferences.persistLayout}
+          dashboard={systemDashboard}
+          onCollapseToggle={() => toggleSection('systemDashboardCollapsed')}
+          onOpenEditor={() => setShowSystemPollingDialog(true)}
+          onRunPoll={runPoll}
+          runningPoll={runningPoll}
+          sectionLoading={isSectionRefreshing('systemDashboardCollapsed')}
+          t={t}
+          locale={language}
+        />
+      )
+    },
+    {
+      id: 'globalStats',
+      render: () => (
+        <Suspense fallback={<div className="muted-box">{t('common.refreshingSection')}</div>}>
+          <PollingStatisticsSection
+            collapsed={uiPreferences.globalStatsCollapsed}
+            collapseLoading={isPending('uiPreferences') && uiPreferences.persistLayout}
+            copy={t('pollingStats.globalCopy')}
+            customRangeLoader={loadGlobalCustomRange}
+            id="global-polling-stats-section"
+            onCollapseToggle={() => toggleSection('globalStatsCollapsed')}
+            sectionLoading={isSectionRefreshing('systemDashboardCollapsed')}
+            stats={systemDashboard?.stats || null}
+            t={t}
+            title={t('pollingStats.globalTitle')}
+          />
+        </Suspense>
+      )
+    },
+    {
+      id: 'userManagement',
+      render: () => authOptions.multiUserEnabled ? (
+        <UserManagementSection
+          collapsed={uiPreferences.userManagementCollapsed}
+          collapseLoading={isPending('uiPreferences') && uiPreferences.persistLayout}
+          createUserDialogOpen={showCreateUserDialog}
+          createUserForm={createUserForm}
+          createUserLoading={isPending('createUser')}
+          duplicateUsername={duplicateCreateUsername}
+          expandedUserId={selectedUserId}
+          onCloseCreateUserDialog={() => {
+            setShowCreateUserDialog(false)
+            setCreateUserForm(DEFAULT_CREATE_USER_FORM)
+          }}
+          onCollapseToggle={() => toggleSection('userManagementCollapsed')}
+          onCreateUser={createUser}
+          onCreateUserFormChange={setCreateUserForm}
+          onForcePasswordChange={requestForcePasswordChange}
+          onOpenCreateUserDialog={() => {
+            setCreateUserForm(DEFAULT_CREATE_USER_FORM)
+            setShowCreateUserDialog(true)
+          }}
+          onOpenResetPasswordDialog={(user) => {
+            setPasswordResetTarget(user)
+            setShowPasswordResetDialog(true)
+          }}
+          onLoadUserCustomRange={loadAdminUserCustomRange}
+          onResetUserPasskeys={resetUserPasskeys}
+          onToggleExpandUser={toggleExpandedUser}
+          onToggleUserActive={requestToggleUserActive}
+          onUpdateUser={updateUser}
+          selectedUserConfig={selectedUserConfig}
+          selectedUserLoading={selectedUserLoading}
+          session={session}
+          updatingPasskeysResetUserId={selectedUserConfig && isPending(`resetPasskeys:${selectedUserConfig.user.id}`) ? selectedUserConfig.user.id : null}
+          updatingUserId={selectedUserConfig && isPending(`updateUser:${selectedUserConfig.user.id}`) ? selectedUserConfig.user.id : null}
+          users={users}
+          sectionLoading={isSectionRefreshing('userManagementCollapsed')}
+          t={t}
+          locale={language}
+        />
+      ) : null
+    }
+  ].filter((section) => section.render() !== null)
+
+  const orderedUserWorkspaceSections = applyOrderedSectionIds(
+    userWorkspaceSections.map((section) => section.id),
+    uiPreferences.userSectionOrder
+  )
+  const orderedAdminWorkspaceSections = applyOrderedSectionIds(
+    adminWorkspaceSections.map((section) => section.id),
+    uiPreferences.adminSectionOrder
+  )
+
+  function renderWorkspaceSections(workspaceKey, sections, orderedIds) {
+    function renderDropPlaceholder(key) {
+      return (
+        <div className="workspace-section-drop-placeholder" key={key}>
+          <div className="workspace-section-drop-placeholder-inner" />
+        </div>
+      )
+    }
+
+    const visibleSections = orderedIds
+      .map((sectionId) => sections.find((entry) => entry.id === sectionId))
+      .filter(Boolean)
+      .map((section) => ({ section, content: section.render() }))
+      .filter((entry) => Boolean(entry.content))
+    const renderedSections = []
+    visibleSections.forEach(({ section, content }, index) => {
+      if (dragState?.workspaceKey === workspaceKey && dragState.targetIndex === index) {
+        renderedSections.push(renderDropPlaceholder(`${workspaceKey}-${section.id}-placeholder-before`))
+      }
+      renderedSections.push(
+        <WorkspaceSectionWindow
+          canMoveDown={index < orderedIds.length - 1}
+          canMoveUp={index > 0}
+          dragHandleLabel={t('preferences.dragSection')}
+          dragging={dragState?.workspaceKey === workspaceKey && dragState.draggedId === section.id}
+          key={section.id}
+          layoutEditing={uiPreferences.layoutEditEnabled}
+          moveDownLabel={t('preferences.moveSectionDown')}
+          moveUpLabel={t('preferences.moveSectionUp')}
+          onDragHandlePointerDown={(event) => {
+            if (!uiPreferences.layoutEditEnabled) {
+              return
+            }
+            event.preventDefault()
+            setDragState({
+              workspaceKey,
+              draggedId: section.id,
+              targetIndex: index
+            })
+          }}
+          onPointerMove={(event) => {
+            if (!dragState || dragState.workspaceKey !== workspaceKey) {
+              return
+            }
+            const bounds = event.currentTarget.getBoundingClientRect()
+            const nextTargetIndex = event.clientY < (bounds.top + bounds.height / 2) ? index : index + 1
+            setDragState((current) => current && current.workspaceKey === workspaceKey
+              ? { ...current, targetIndex: nextTargetIndex }
+              : current)
+          }}
+          onMoveDown={() => moveSection(workspaceKey, section.id, 'down')}
+          onMoveUp={() => moveSection(workspaceKey, section.id, 'up')}
+        >
+          {content}
+        </WorkspaceSectionWindow>
+      )
+    })
+    if (dragState?.workspaceKey === workspaceKey && dragState.targetIndex === visibleSections.length) {
+      renderedSections.push(renderDropPlaceholder(`${workspaceKey}-placeholder-end`))
+    }
+    return renderedSections
+  }
 
   if (authLoading) {
     return <LoadingScreen label={t('app.loading')} />
@@ -1654,8 +2231,10 @@ function App() {
     <div className="page-shell">
       <main className="dashboard">
         <HeroPanel
+          layoutEditing={uiPreferences.layoutEditEnabled}
           language={language}
           loadingData={loadingData}
+          onExitLayoutEditing={() => handleLayoutEditChange(false)}
           onOpenPreferences={() => setShowPreferencesDialog(true)}
           onOpenSecurityDialog={() => {
             setSecurityTab('password')
@@ -1671,12 +2250,19 @@ function App() {
 
         {showPreferencesDialog ? (
           <PreferencesDialog
+            canHideQuickSetup={setupGuideState.allStepsComplete}
+            layoutEditEnabled={uiPreferences.layoutEditEnabled}
             language={language}
             languageOptions={selectableLanguages}
             onClose={() => setShowPreferencesDialog(false)}
+            onExitLayoutEditing={() => handleLayoutEditChange(false)}
             onLanguageChange={handleLanguageChange}
             onPersistLayoutChange={handlePersistLayoutChange}
+            onQuickSetupVisibilityChange={handleQuickSetupVisibilityChange}
+            onResetLayout={resetLayoutPreferences}
+            onStartLayoutEditing={startLayoutEditingFromPreferences}
             persistLayout={uiPreferences.persistLayout}
+            quickSetupVisible={!uiPreferences.quickSetupDismissed || !setupGuideState.allStepsComplete}
             savingLayout={isPending('uiPreferences')}
             t={t}
           />
@@ -1762,16 +2348,6 @@ function App() {
           />
         ) : null}
 
-        <SetupGuidePanel
-          collapsed={uiPreferences.quickSetupCollapsed}
-          onFocusSection={focusSection}
-          sectionLoading={isSectionRefreshing('quickSetupCollapsed')}
-          onToggleCollapse={() => toggleSection('quickSetupCollapsed')}
-          savingLayout={isPending('uiPreferences')}
-          steps={setupGuideState.steps}
-          t={t}
-        />
-
         <div className="notification-stack" aria-live="polite">
           {[...persistentNotifications, ...notifications].map((notification) => (
             <Banner
@@ -1796,36 +2372,32 @@ function App() {
           ))}
         </div>
 
-        <GmailAccountSection
-          collapsed={uiPreferences.gmailDestinationCollapsed}
-          collapseLoading={isPending('uiPreferences') && uiPreferences.persistLayout}
-          gmailConfig={gmailConfig}
-          gmailMeta={gmailMeta}
-          isAdmin={session.role === 'ADMIN'}
-          locale={language}
-          oauthLoading={isPending('googleOAuthSelf')}
-          onCollapseToggle={() => toggleSection('gmailDestinationCollapsed')}
-          onConnectOAuth={startGoogleOAuthSelf}
-          onUnlinkOAuth={unlinkGmailAccount}
-          onSave={saveGmailConfig}
-          saveLoading={isPending('gmailSave')}
-          sectionLoading={isSectionRefreshing('gmailDestinationCollapsed')}
-          setGmailConfig={setGmailConfig}
-          t={t}
-          unlinkLoading={isPending('gmailUnlink')}
-        />
+        {isAdmin ? (
+          <div aria-label={t('workspace.title')} className="workspace-switcher surface-card" role="tablist">
+            <button
+              aria-selected={adminWorkspace === 'user'}
+              className={`workspace-switcher-button ${adminWorkspace === 'user' ? 'workspace-switcher-button-active' : ''}`.trim()}
+              onClick={() => setAdminWorkspace('user')}
+              role="tab"
+              type="button"
+            >
+              {t('workspace.user')}
+            </button>
+            <button
+              aria-selected={adminWorkspace === 'admin'}
+              className={`workspace-switcher-button ${adminWorkspace === 'admin' ? 'workspace-switcher-button-active' : ''}`.trim()}
+              onClick={() => setAdminWorkspace('admin')}
+              role="tab"
+              type="button"
+            >
+              {t('workspace.admin')}
+            </button>
+          </div>
+        ) : null}
 
-        <UserPollingSettingsSection
-          collapsed={uiPreferences.userPollingCollapsed}
-          collapseLoading={isPending('uiPreferences') && uiPreferences.persistLayout}
-          hasFetchers={myBridges.length > 0}
-          onCollapseToggle={() => toggleSection('userPollingCollapsed')}
-          onOpenEditor={() => setShowUserPollingDialog(true)}
-          pollingStats={userPollingStats}
-          pollingSettings={userPollingSettings}
-          sectionLoading={isSectionRefreshing('userPollingCollapsed')}
-          t={t}
-        />
+        {!isAdmin || adminWorkspace === 'user'
+          ? renderWorkspaceSections('user', userWorkspaceSections, orderedUserWorkspaceSections).filter(Boolean)
+          : null}
 
         {showUserPollingDialog && userPollingSettings ? (
           <UserPollingSettingsDialog
@@ -1861,104 +2433,9 @@ function App() {
           />
         ) : null}
 
-        <UserBridgesSection
-          bridgeForm={bridgeForm}
-          collapsed={uiPreferences.sourceBridgesCollapsed}
-          collapseLoading={isPending('uiPreferences') && uiPreferences.persistLayout}
-          connectingBridgeId={visibleFetchers.find((bridge) => isPending(`microsoftOAuth:${bridge.bridgeId}`))?.bridgeId || null}
-          deletingBridgeId={myBridges.find((bridge) => isPending(`bridgeDelete:${bridge.bridgeId}`))?.bridgeId || null}
-          duplicateIdError={bridgeDuplicateError}
-          fetcherDialogOpen={showFetcherDialog}
-          fetcherPollLoadingId={visibleFetchers.find((bridge) => isPending(`bridgePoll:${bridge.bridgeId}`))?.bridgeId || null}
-          fetcherPollingDialog={showFetcherPollingDialog ? fetcherPollingTarget : null}
-          fetcherPollingForm={fetcherPollingForm}
-          fetcherPollingLoading={fetcherPollingTarget ? isPending(`fetcherPollingSave:${fetcherPollingTarget.bridgeId}`) || isPending(`fetcherPollingLoad:${fetcherPollingTarget.bridgeId}`) : false}
-          fetcherRefreshLoadingId={expandedFetcherLoadingId}
-          fetchers={visibleFetchers}
-          onAddFetcher={openAddFetcherDialog}
-          onApplyPreset={applyBridgePreset}
-          onBridgeFormChange={handleBridgeFormChange}
-          onCloseDialog={() => {
-            setBridgeTestResult(null)
-            setShowFetcherDialog(false)
-          }}
-          onClosePollingDialog={closeFetcherPollingDialog}
-          onCollapseToggle={() => toggleSection('sourceBridgesCollapsed')}
-          onConfigureFetcherPolling={openFetcherPollingDialog}
-          onConnectMicrosoft={startMicrosoftOAuth}
-          onDeleteBridge={deleteBridge}
-          onEditBridge={editBridge}
-          onFetcherPollingFormChange={(updater) => setFetcherPollingForm((current) => typeof updater === 'function' ? updater(current) : updater)}
-          onFetcherToggleExpand={refreshFetcherState}
-          onResetFetcherPollingSettings={resetFetcherPollingSettings}
-          onRunFetcherPoll={runFetcherPoll}
-          onSaveBridge={saveBridge}
-          onSaveFetcherPollingSettings={saveFetcherPollingSettings}
-          onTestConnection={testBridgeConnection}
-          saveLoading={isPending('bridgeSave')}
-          testConnectionLoading={isPending('bridgeConnectionTest')}
-          testResult={bridgeTestResult}
-          sectionLoading={isSectionRefreshing('sourceBridgesCollapsed')}
-          t={t}
-          locale={language}
-        />
-
-        {session.role === 'ADMIN' ? (
-          <SystemDashboardSection
-            collapsed={uiPreferences.systemDashboardCollapsed}
-            collapseLoading={isPending('uiPreferences') && uiPreferences.persistLayout}
-            dashboard={systemDashboard}
-            onCollapseToggle={() => toggleSection('systemDashboardCollapsed')}
-            onOpenEditor={() => setShowSystemPollingDialog(true)}
-            onRunPoll={runPoll}
-            runningPoll={runningPoll}
-            sectionLoading={isSectionRefreshing('systemDashboardCollapsed')}
-            t={t}
-            locale={language}
-          />
-        ) : null}
-        {session.role === 'ADMIN' && authOptions.multiUserEnabled ? (
-          <>
-            <UserManagementSection
-              collapsed={uiPreferences.userManagementCollapsed}
-              collapseLoading={isPending('uiPreferences') && uiPreferences.persistLayout}
-              createUserDialogOpen={showCreateUserDialog}
-              createUserForm={createUserForm}
-              createUserLoading={isPending('createUser')}
-              duplicateUsername={duplicateCreateUsername}
-              expandedUserId={selectedUserId}
-              onCloseCreateUserDialog={() => {
-                setShowCreateUserDialog(false)
-                setCreateUserForm(DEFAULT_CREATE_USER_FORM)
-              }}
-              onCollapseToggle={() => toggleSection('userManagementCollapsed')}
-              onCreateUser={createUser}
-              onCreateUserFormChange={setCreateUserForm}
-              onForcePasswordChange={requestForcePasswordChange}
-              onOpenCreateUserDialog={() => {
-                setCreateUserForm(DEFAULT_CREATE_USER_FORM)
-                setShowCreateUserDialog(true)
-              }}
-              onOpenResetPasswordDialog={(user) => {
-                setPasswordResetTarget(user)
-                setShowPasswordResetDialog(true)
-              }}
-              onResetUserPasskeys={resetUserPasskeys}
-              onToggleExpandUser={toggleExpandedUser}
-              onToggleUserActive={requestToggleUserActive}
-              onUpdateUser={updateUser}
-              selectedUserConfig={selectedUserConfig}
-              selectedUserLoading={selectedUserLoading}
-              session={session}
-              updatingPasskeysResetUserId={selectedUserConfig && isPending(`resetPasskeys:${selectedUserConfig.user.id}`) ? selectedUserConfig.user.id : null}
-              updatingUserId={selectedUserConfig && isPending(`updateUser:${selectedUserConfig.user.id}`) ? selectedUserConfig.user.id : null}
-              users={users}
-              sectionLoading={isSectionRefreshing('userManagementCollapsed')}
-              t={t}
-              locale={language}
-            />
-          </>
-        ) : null}
+        {isAdmin && adminWorkspace === 'admin'
+          ? renderWorkspaceSections('admin', adminWorkspaceSections, orderedAdminWorkspaceSections).filter(Boolean)
+          : null}
 
         {showPasswordResetDialog && passwordResetTarget ? (
           <PasswordResetDialog

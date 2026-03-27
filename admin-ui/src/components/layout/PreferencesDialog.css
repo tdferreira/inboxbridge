@@ -12,3 +12,9 @@
   grid-template-columns: auto 1fr;
   align-items: start;
 }
+
+@media (max-width: 560px) {
+  .preferences-dialog .action-row > * {
+    width: 100%;
+  }
+}

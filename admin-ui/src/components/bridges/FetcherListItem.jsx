@@ -1,9 +1,35 @@
-import { useEffect, useLayoutEffect, useRef, useState } from 'react'
+import { Suspense, lazy, useEffect, useLayoutEffect, useRef, useState } from 'react'
 import { authMethodLabel, formatDate, oauthProviderLabel, protocolLabel, statusLabel, statusTone, tokenStorageLabel, triggerLabel } from '../../lib/formatters'
 import { resolveFloatingMenuPosition } from '../../lib/floatingMenu'
 import CopyButton from '../common/CopyButton'
 import './BridgeCard.css'
 import './FetcherListItem.css'
+
+const PollingStatisticsSection = lazy(() => import('../stats/PollingStatisticsSection'))
+
+function inferProviderLabel(fetcher, locale, t) {
+  if (fetcher.oauthProvider && fetcher.oauthProvider !== 'NONE') {
+    return oauthProviderLabel(fetcher.oauthProvider, locale)
+  }
+  const host = (fetcher.host || '').toLowerCase()
+  if (host.includes('gmail')) return t('bridge.providerGmail')
+  if (host.includes('office365') || host.includes('outlook') || host.includes('hotmail') || host.includes('live.com')) {
+    return t('bridge.providerMicrosoft')
+  }
+  if (host.includes('yahoo')) return t('bridge.providerYahoo')
+  if (host === '127.0.0.1' && fetcher.port === 1143) return t('bridge.providerProton')
+  return fetcher.protocol === 'POP3' ? t('bridge.providerGenericPop3') : t('bridge.providerGenericImap')
+}
+
+function hasMeaningfulStats(stats) {
+  if (!stats) return false
+  return (stats.totalImportedMessages || 0) > 0
+    || (stats.manualRuns || 0) > 0
+    || (stats.scheduledRuns || 0) > 0
+    || (stats.errorPolls || 0) > 0
+    || (stats.sourcesWithErrors || 0) > 0
+    || (stats.providerBreakdown?.length || 0) > 0
+}
 
 function FetcherListItem({
   connectLoading = false,
@@ -14,10 +40,13 @@ function FetcherListItem({
   onConnectMicrosoft,
   onDelete,
   onEdit,
+  onLoadCustomRange,
   onRunPoll,
   onToggleExpand,
   pollLoading = false,
   refreshLoading = false,
+  stats = null,
+  statsLoading = false,
   t
 }) {
   const [expanded, setExpanded] = useState(false)
@@ -29,6 +58,12 @@ function FetcherListItem({
   const menuButtonRef = useRef(null)
   const isEnvManaged = fetcher.managementSource === 'ENVIRONMENT'
   const oauthConnected = fetcher.authMethod === 'OAUTH2' && fetcher.oauthConnected === true
+  const statsAvailable = hasMeaningfulStats(stats)
+  const [statsCollapsed, setStatsCollapsed] = useState(!statsAvailable)
+
+  useEffect(() => {
+    setStatsCollapsed(!statsAvailable)
+  }, [fetcher.bridgeId, statsAvailable])
 
   function toggleExpanded() {
     setExpanded((current) => {
@@ -131,7 +166,11 @@ function FetcherListItem({
         </button>
         <div ref={menuContainerRef} className="fetcher-list-item-menu">
           <button aria-label={t('bridges.actions')} className="secondary fetcher-menu-button" onClick={() => setMenuOpen((current) => !current)} ref={menuButtonRef} title={t('bridges.actions')} type="button">
-            {t('bridges.actionsIcon')}
+            <span aria-hidden="true" className="menu-icon-hamburger">
+              <span />
+              <span />
+              <span />
+            </span>
           </button>
           {menuOpen ? (
             <div className="fetcher-menu" data-placement={menuPlacement} ref={menuPanelRef} style={menuStyle}>
@@ -155,6 +194,7 @@ function FetcherListItem({
           ) : null}
           {isEnvManaged ? <div className="muted-box">{t('bridges.envManagedNote')}</div> : null}
           <dl className="bridge-card-config">
+            <div><dt>{t('bridge.provider')}</dt><dd>{inferProviderLabel(fetcher, locale, t)}</dd></div>
             <div><dt>{t('bridge.host')}</dt><dd>{fetcher.host}:{fetcher.port}</dd></div>
             <div><dt>{t('bridge.tls')}</dt><dd>{fetcher.tls ? t('bridge.tlsRequired') : t('bridge.tlsOff')}</dd></div>
             <div><dt>{t('bridge.tokenStorage')}</dt><dd>{tokenStorageLabel(fetcher.tokenStorageMode, locale)}</dd></div>
@@ -192,6 +232,21 @@ function FetcherListItem({
           ) : (
             <div className="muted-box">{t('bridge.noPollActivity')}</div>
           )}
+          <Suspense fallback={<div className="muted-box">{t('common.refreshingSection')}</div>}>
+            <PollingStatisticsSection
+              collapsed={statsCollapsed}
+              copy={t('pollingStats.sourceCopy')}
+              customRangeLoader={onLoadCustomRange ? (range) => onLoadCustomRange(fetcher, range) : null}
+              onCollapseToggle={() => setStatsCollapsed((current) => !current)}
+              id={null}
+              sectionLoading={statsLoading}
+              showCollapseToggle={true}
+              stats={stats}
+              t={t}
+              title={t('pollingStats.sourceTitle', { bridgeId: fetcher.bridgeId })}
+              variant="source"
+            />
+          </Suspense>
         </div>
       ) : null}
     </article>

@@ -50,6 +50,14 @@ public class SourcePollEventService {
                 .toList();
     }
 
+    public List<SourcePollEvent> listSince(Instant since) {
+        return repository.listSince(since);
+    }
+
+    public List<SourcePollEvent> listBySourceIdsSince(List<String> sourceIds, Instant since) {
+        return repository.listBySourceIdsSince(sourceIds, since);
+    }
+
     private AdminPollEventSummary toSummary(SourcePollEvent event) {
         return new AdminPollEventSummary(
                 event.sourceId,

@@ -1,4 +1,3 @@
-import ImportTimelineChart from '../common/ImportTimelineChart'
 import LoadingButton from '../common/LoadingButton'
 import PaneToggleButton from '../common/PaneToggleButton'
 import './UserPollingSettingsSection.css'
@@ -13,7 +12,6 @@ function UserPollingSettingsSection({
   hasFetchers,
   onCollapseToggle,
   onOpenEditor,
-  pollingStats,
   pollingSettings,
   sectionLoading = false,
   t
@@ -39,24 +37,6 @@ function UserPollingSettingsSection({
           {!hasFetchers ? (
             <div className="muted-box user-polling-empty-state">{t('userPolling.noFetchers')}</div>
           ) : null}
-
-          {pollingStats ? (
-            <>
-              <div className="system-dashboard-summary">
-                <article className="surface-card metric-card"><span className="metric-label">{t('userPolling.configuredBridges')}</span><strong>{pollingStats.configuredMailFetchers}</strong></article>
-                <article className="surface-card metric-card"><span className="metric-label">{t('userPolling.enabledBridges')}</span><strong>{pollingStats.enabledMailFetchers}</strong></article>
-                <article className="surface-card metric-card"><span className="metric-label">{t('userPolling.importedMessages')}</span><strong>{pollingStats.totalImportedMessages}</strong></article>
-                <article className="surface-card metric-card"><span className="metric-label">{t('userPolling.sourcesWithErrors')}</span><strong>{pollingStats.sourcesWithErrors}</strong></article>
-              </div>
-              <ImportTimelineChart
-                points={pollingStats.importsByDay || []}
-                timelines={pollingStats.importTimelines || null}
-                t={t}
-                title={t('pollingStats.userTimelineTitle')}
-              />
-            </>
-          ) : null}
-
           <div className="muted-box full user-polling-summary">
             {t('userPolling.effectivePolling', { value: pollingSettings.effectivePollEnabled ? t('common.yes') : t('common.no') })}<br />
             {t('userPolling.effectiveInterval', { value: pollingSettings.effectivePollInterval })}<br />

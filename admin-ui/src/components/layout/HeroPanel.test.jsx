@@ -39,4 +39,28 @@ describe('HeroPanel', () => {
     expect(onOpenSecurityDialog).toHaveBeenCalledTimes(1)
     expect(onSignOut).toHaveBeenCalledTimes(1)
   })
+
+  it('shows an exit action while layout editing is enabled', () => {
+    const onExitLayoutEditing = vi.fn()
+
+    render(
+      <HeroPanel
+        language="en"
+        layoutEditing
+        loadingData={false}
+        onExitLayoutEditing={onExitLayoutEditing}
+        onOpenPreferences={vi.fn()}
+        onOpenSecurityDialog={vi.fn()}
+        onRefresh={vi.fn()}
+        onSignOut={vi.fn()}
+        refreshLoading={false}
+        session={{ username: 'admin', role: 'ADMIN' }}
+        signOutLoading={false}
+        t={(key, params) => translate('en', key, params)}
+      />
+    )
+
+    fireEvent.click(screen.getByRole('button', { name: 'Exit Layout Editing' }))
+    expect(onExitLayoutEditing).toHaveBeenCalledTimes(1)
+  })
 })

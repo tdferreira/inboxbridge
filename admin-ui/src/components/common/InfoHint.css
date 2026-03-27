@@ -1,5 +1,4 @@
 .info-hint {
-  position: relative;
   display: inline-flex;
   align-items: center;
   justify-content: center;
@@ -18,11 +17,6 @@
 }
 
 .info-hint-tooltip {
-  position: absolute;
-  z-index: 20;
-  left: 50%;
-  bottom: calc(100% + 10px);
-  transform: translateX(-50%);
   min-width: 220px;
   max-width: 280px;
   padding: 10px 12px;
@@ -32,12 +26,10 @@
   font-size: 0.84rem;
   line-height: 1.45;
   box-shadow: 0 12px 24px rgba(36, 26, 20, 0.2);
-  opacity: 0;
   pointer-events: none;
-  transition: opacity 140ms ease;
 }
 
-.info-hint:hover .info-hint-tooltip,
-.info-hint:focus-visible .info-hint-tooltip {
-  opacity: 1;
+.info-hint-tooltip-floating {
+  position: fixed;
+  z-index: 200;
 }

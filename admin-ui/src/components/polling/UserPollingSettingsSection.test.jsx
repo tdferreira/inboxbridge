@@ -21,17 +21,6 @@ function renderSection(props = {}) {
         fetchWindowOverride: null,
         effectiveFetchWindow: 50
       }}
-      pollingStats={{
-        totalImportedMessages: 2,
-        configuredMailFetchers: 1,
-        enabledMailFetchers: 1,
-        sourcesWithErrors: 0,
-        importsByDay: [{ bucketLabel: '2026-03-26', importedMessages: 2 }],
-        importTimelines: {
-          day: [{ bucketLabel: '2026-03-26', importedMessages: 2 }],
-          month: [{ bucketLabel: '2026-03', importedMessages: 2 }]
-        }
-      }}
       sectionLoading={false}
       t={(key, params) => translate('en', key, params)}
       {...props}
@@ -70,16 +59,6 @@ describe('UserPollingSettingsSection', () => {
           defaultFetchWindow: 50,
           fetchWindowOverride: null,
           effectiveFetchWindow: 50
-        }}
-        pollingStats={{
-          totalImportedMessages: 2,
-          configuredMailFetchers: 1,
-          enabledMailFetchers: 1,
-          sourcesWithErrors: 0,
-          importsByDay: [{ bucketLabel: '2026-03-26', importedMessages: 2 }],
-          importTimelines: {
-            day: [{ bucketLabel: '2026-03-26', importedMessages: 2 }]
-          }
         }}
         sectionLoading={false}
         t={(key, params) => translate('pt-PT', key, params)}

@@ -100,7 +100,7 @@ describe('FetcherListItem', () => {
     expect(onToggleExpand).toHaveBeenCalledWith(expect.objectContaining({ bridgeId: 'fetcher-1' }), true)
   })
 
-  it('renders translated fetcher labels in portuguese', () => {
+  it('renders translated fetcher labels in portuguese', async () => {
     render(
       <FetcherListItem
         fetcher={{
@@ -133,6 +133,20 @@ describe('FetcherListItem', () => {
           onDelete={vi.fn()}
           onEdit={vi.fn()}
           onRunPoll={vi.fn()}
+          stats={{
+            totalImportedMessages: 2,
+            configuredMailFetchers: 1,
+            enabledMailFetchers: 1,
+            sourcesWithErrors: 0,
+            importTimelines: {},
+            duplicateTimelines: {},
+            errorTimelines: {},
+            health: { activeMailFetchers: 1, coolingDownMailFetchers: 0, failingMailFetchers: 0, disabledMailFetchers: 0 },
+            providerBreakdown: [],
+            manualRuns: 1,
+            scheduledRuns: 0,
+            averagePollDurationMillis: 1000
+          }}
           t={(key, params) => translate('pt-PT', key, params)}
         />
       )
@@ -149,6 +163,7 @@ describe('FetcherListItem', () => {
     expect(screen.getByText('Armazenamento do token')).toBeInTheDocument()
     expect(screen.getByText('BD encriptada')).toBeInTheDocument()
     expect(screen.getByText('Ainda não existe atividade de polling registada.')).toBeInTheDocument()
+    expect(await screen.findByText('Estatísticas da conta de email: fetcher-1')).toBeInTheDocument()
   })
 
   it('shows running state and OAuth connection details for OAuth fetchers', () => {
@@ -193,11 +208,74 @@ describe('FetcherListItem', () => {
 
     fireEvent.click(screen.getByRole('button', { name: /outlook-main/i }))
 
+    expect(screen.getByText('Provider')).toBeInTheDocument()
+    expect(screen.getByText('Microsoft')).toBeInTheDocument()
     expect(screen.getByText('OAuth connected')).toBeInTheDocument()
     expect(screen.getAllByText('Yes').length).toBeGreaterThan(0)
 
     fireEvent.click(screen.getByRole('button', { name: 'Source email account actions' }))
     expect(screen.getByRole('button', { name: 'Reconnect Microsoft OAuth' })).toBeInTheDocument()
+  })
+
+  it('does not show provider breakdown inside single-account statistics', async () => {
+    render(
+      <FetcherListItem
+        fetcher={{
+          bridgeId: 'gmail-source',
+          customLabel: '',
+          managementSource: 'DATABASE',
+          protocol: 'IMAP',
+          host: 'imap.gmail.com',
+          port: 993,
+          authMethod: 'PASSWORD',
+          oauthProvider: 'NONE',
+          tls: true,
+          folder: 'INBOX',
+          tokenStorageMode: 'PASSWORD',
+          oauthConnected: false,
+          totalImportedMessages: 12,
+          lastImportedAt: null,
+          effectivePollEnabled: true,
+          effectivePollInterval: '5m',
+          effectiveFetchWindow: 50,
+          pollingState: null,
+          lastEvent: null,
+          canEdit: true,
+          canDelete: true,
+          canConnectMicrosoft: false
+        }}
+        locale="en"
+        onConfigurePolling={vi.fn()}
+        onConnectMicrosoft={vi.fn()}
+        onDelete={vi.fn()}
+        onEdit={vi.fn()}
+        onLoadCustomRange={vi.fn()}
+        onRunPoll={vi.fn()}
+        stats={{
+          totalImportedMessages: 12,
+          configuredMailFetchers: 1,
+          enabledMailFetchers: 1,
+          sourcesWithErrors: 0,
+          errorPolls: 1,
+          importTimelines: {},
+          duplicateTimelines: {},
+          errorTimelines: {},
+          manualRunTimelines: {},
+          scheduledRunTimelines: {},
+          providerBreakdown: [{ key: 'gmail', label: 'Gmail', count: 12 }],
+          manualRuns: 2,
+          scheduledRuns: 4,
+          averagePollDurationMillis: 1000
+        }}
+        t={t}
+      />
+    )
+
+    fireEvent.click(screen.getByRole('button', { name: /gmail-source/i }))
+
+    expect(await screen.findByText('Provider')).toBeInTheDocument()
+    expect(screen.getByText('Gmail')).toBeInTheDocument()
+    expect(screen.queryByText('Provider breakdown')).not.toBeInTheDocument()
   })
 
   it('keeps the contextual menu attached to the trigger and flips above when needed', async () => {
@@ -265,5 +343,65 @@ describe('FetcherListItem', () => {
     Object.defineProperty(window, 'innerWidth', { configurable: true, value: originalInnerWidth })
     Object.defineProperty(window, 'innerHeight', { configurable: true, value: originalInnerHeight })
     HTMLElement.prototype.getBoundingClientRect = originalGetBoundingClientRect
+  })
+
+  it('starts the nested statistics section collapsed when the mail account has no meaningful stats', () => {
+    render(
+      <FetcherListItem
+        fetcher={{
+          bridgeId: 'fetcher-1',
+          customLabel: '',
+          managementSource: 'DATABASE',
+          protocol: 'IMAP',
+          host: 'imap.example.com',
+          port: 993,
+          authMethod: 'PASSWORD',
+          oauthProvider: 'NONE',
+          tls: true,
+          folder: 'INBOX',
+          tokenStorageMode: 'PASSWORD',
+          oauthConnected: false,
+          totalImportedMessages: 0,
+          lastImportedAt: null,
+          effectivePollEnabled: true,
+          effectivePollInterval: '5m',
+          effectiveFetchWindow: 50,
+          pollingState: null,
+          lastEvent: null,
+          canEdit: true,
+          canDelete: true,
+          canConnectMicrosoft: false
+        }}
+        locale="en"
+        onConfigurePolling={vi.fn()}
+        onConnectMicrosoft={vi.fn()}
+        onDelete={vi.fn()}
+        onEdit={vi.fn()}
+        onRunPoll={vi.fn()}
+        stats={{
+          totalImportedMessages: 0,
+          configuredMailFetchers: 0,
+          enabledMailFetchers: 0,
+          sourcesWithErrors: 0,
+          errorPolls: 0,
+          importTimelines: {},
+          duplicateTimelines: {},
+          errorTimelines: {},
+          manualRunTimelines: {},
+          scheduledRunTimelines: {},
+          health: { activeMailFetchers: 0, coolingDownMailFetchers: 0, failingMailFetchers: 0, disabledMailFetchers: 0 },
+          providerBreakdown: [],
+          manualRuns: 0,
+          scheduledRuns: 0,
+          averagePollDurationMillis: 0
+        }}
+        t={t}
+      />
+    )
+
+    fireEvent.click(screen.getByRole('button', { name: /fetcher-1/i }))
+
+    expect(screen.getByText('Mail Account Statistics: fetcher-1')).toBeInTheDocument()
+    expect(screen.queryByText('Import activity over time')).not.toBeInTheDocument()
   })
 })

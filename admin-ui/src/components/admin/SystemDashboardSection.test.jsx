@@ -23,9 +23,16 @@ function renderSection(props = {}) {
           sourcesWithErrors: 0,
           importsByDay: [{ bucketLabel: '2026-03-26', importedMessages: 4 }],
           importTimelines: {
-            day: [{ bucketLabel: '2026-03-26', importedMessages: 4 }],
-            month: [{ bucketLabel: '2026-03', importedMessages: 4 }]
-          }
+            pastWeek: [{ bucketLabel: '2026-03-26', importedMessages: 4 }],
+            pastMonth: [{ bucketLabel: '2026-03', importedMessages: 4 }]
+          },
+          duplicateTimelines: {},
+          errorTimelines: {},
+          health: { activeMailFetchers: 1, coolingDownMailFetchers: 0, failingMailFetchers: 0, disabledMailFetchers: 0 },
+          providerBreakdown: [],
+          manualRuns: 0,
+          scheduledRuns: 1,
+          averagePollDurationMillis: 1200
         },
         polling: {
           defaultPollEnabled: true,
@@ -91,8 +98,15 @@ describe('SystemDashboardSection', () => {
             sourcesWithErrors: 0,
             importsByDay: [{ bucketLabel: '2026-03-26', importedMessages: 4 }],
             importTimelines: {
-              day: [{ bucketLabel: '2026-03-26', importedMessages: 4 }]
-            }
+              pastWeek: [{ bucketLabel: '2026-03-26', importedMessages: 4 }]
+            },
+            duplicateTimelines: {},
+            errorTimelines: {},
+            health: { activeMailFetchers: 1, coolingDownMailFetchers: 0, failingMailFetchers: 0, disabledMailFetchers: 0 },
+            providerBreakdown: [],
+            manualRuns: 0,
+            scheduledRuns: 1,
+            averagePollDurationMillis: 1200
           },
           polling: {
             defaultPollEnabled: true,

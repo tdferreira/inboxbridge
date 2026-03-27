@@ -23,6 +23,9 @@ function UserBridgesSection({
   fetcherPollingLoading,
   fetcherPollingForm,
   fetcherRefreshLoadingId,
+  fetcherStatsById,
+  fetcherStatsLoadingId,
+  onLoadFetcherCustomRange,
   onAddFetcher,
   onApplyPreset,
   onBridgeFormChange,
@@ -83,10 +86,13 @@ function UserBridgesSection({
                 onConnectMicrosoft={onConnectMicrosoft}
                 onDelete={onDeleteBridge}
                 onEdit={onEditBridge}
+                onLoadCustomRange={onLoadFetcherCustomRange}
                 onRunPoll={onRunFetcherPoll}
                 onToggleExpand={onFetcherToggleExpand}
                 pollLoading={fetcherPollLoadingId === fetcher.bridgeId}
                 refreshLoading={fetcherRefreshLoadingId === fetcher.bridgeId}
+                stats={fetcherStatsById?.[fetcher.bridgeId] || null}
+                statsLoading={fetcherStatsLoadingId === fetcher.bridgeId}
                 t={t}
               />
             ))}

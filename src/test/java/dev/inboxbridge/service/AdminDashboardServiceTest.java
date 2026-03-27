@@ -8,6 +8,7 @@ import static org.junit.jupiter.api.Assertions.assertNull;
 import java.time.Instant;
 import java.util.Collections;
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 
 import org.junit.jupiter.api.Test;
@@ -17,6 +18,7 @@ import dev.inboxbridge.dto.AdminDashboardResponse;
 import dev.inboxbridge.dto.AdminPollEventSummary;
 import dev.inboxbridge.dto.SourcePollingStateView;
 import dev.inboxbridge.persistence.ImportedMessageRepository;
+import dev.inboxbridge.persistence.SourcePollEvent;
 
 class AdminDashboardServiceTest {
 
@@ -46,6 +48,8 @@ class AdminDashboardServiceTest {
         assertEquals(2, response.stats().configuredMailFetchers());
         assertEquals(1, response.stats().enabledMailFetchers());
         assertEquals(4L, response.stats().totalImportedMessages());
+        assertEquals(1, response.stats().health().failingMailFetchers());
+        assertEquals(1L, response.stats().scheduledRuns());
 
         assertEquals("DATABASE", response.destination().tokenStorageMode());
         assertEquals(2, response.bridges().size());
@@ -122,6 +126,11 @@ class AdminDashboardServiceTest {
 
             @Override
             public List<AdminPollEventSummary> recentEvents(int limit) {
+                return List.of();
+            }
+
+            @Override
+            public List<SourcePollEvent> listSince(Instant since) {
                 return List.of();
             }
         };
@@ -205,7 +214,13 @@ class AdminDashboardServiceTest {
             public long count(String query, Object... params) {
                 return 0L;
             }
+
+            @Override
+            public List<dev.inboxbridge.persistence.UserBridge> listAll() {
+                return List.of();
+            }
         };
+        service.sourcePollingStateService = new FakeSourcePollingStateService();
         return service;
     }
 
@@ -292,6 +307,21 @@ class AdminDashboardServiceTest {
         @Override
         public List<AdminPollEventSummary> recentEvents(int limit) {
             return List.of(EVENT);
+        }
+
+        @Override
+        public List<SourcePollEvent> listSince(Instant since) {
+            SourcePollEvent event = new SourcePollEvent();
+            event.sourceId = EVENT.sourceId();
+            event.triggerName = EVENT.trigger();
+            event.status = EVENT.status();
+            event.startedAt = EVENT.startedAt();
+            event.finishedAt = EVENT.finishedAt();
+            event.fetchedCount = EVENT.fetched();
+            event.importedCount = EVENT.imported();
+            event.duplicateCount = EVENT.duplicates();
+            event.errorMessage = EVENT.error();
+            return List.of(event);
         }
     }
 

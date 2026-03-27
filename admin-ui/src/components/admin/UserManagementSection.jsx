@@ -23,6 +23,7 @@ function UserManagementSection({
   onCreateUserFormChange,
   onForcePasswordChange,
   onOpenCreateUserDialog,
+  onLoadUserCustomRange,
   onOpenResetPasswordDialog,
   onResetUserPasskeys,
   onToggleExpandUser,
@@ -85,6 +86,7 @@ function UserManagementSection({
                       pollIntervalOverride: null,
                       fetchWindowOverride: null
                     },
+                    pollingStats: null,
                     passkeys: [],
                     bridges: []
                   }
@@ -97,6 +99,7 @@ function UserManagementSection({
                   isLoading={isExpanded && selectedUserLoading}
                   locale={locale}
                   onForcePasswordChange={onForcePasswordChange}
+                  onLoadCustomRange={onLoadUserCustomRange}
                   onOpenResetPasswordDialog={onOpenResetPasswordDialog}
                   onResetUserPasskeys={onResetUserPasskeys}
                   onToggleExpand={() => onToggleExpandUser(user.id)}

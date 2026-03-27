@@ -3,8 +3,10 @@ import LoadingButton from '../common/LoadingButton'
 import './HeroPanel.css'
 
 function HeroPanel({
+  layoutEditing = false,
   language,
   loadingData,
+  onExitLayoutEditing,
   onOpenPreferences,
   onOpenSecurityDialog,
   onRefresh,
@@ -25,6 +27,11 @@ function HeroPanel({
         <LoadingButton className="secondary" disabled={loadingData} hint={t('hero.refreshHint')} isLoading={refreshLoading} loadingLabel={t('hero.refreshLoading')} onClick={onRefresh}>
           {t('hero.refresh')}
         </LoadingButton>
+        {layoutEditing ? (
+          <button className="secondary" onClick={onExitLayoutEditing} title={t('hero.exitLayoutEditingHint')} type="button">
+            {t('hero.exitLayoutEditing')}
+          </button>
+        ) : null}
         <button className="secondary" onClick={onOpenPreferences} title={t('hero.preferencesHint')} type="button">
           {t('hero.preferences')}
         </button>

@@ -20,10 +20,20 @@ body {
   min-height: 100vh;
   font-family: "IBM Plex Sans", "Avenir Next", sans-serif;
   color: var(--ink);
+  overflow-x: hidden;
   background:
     radial-gradient(circle at top left, rgba(23, 101, 75, 0.16), transparent 28%),
     radial-gradient(circle at bottom right, rgba(194, 122, 46, 0.14), transparent 34%),
     linear-gradient(160deg, #fbf4ea, #efe4d3);
+}
+
+body.workspace-layout-dragging {
+  cursor: grabbing;
+  user-select: none;
+}
+
+body.workspace-layout-dragging * {
+  cursor: grabbing !important;
 }
 
 button,
@@ -92,6 +102,24 @@ button.secondary:hover:not(:disabled),
 button.secondary:focus-visible:not(:disabled) {
   background: rgba(255, 255, 255, 0.98);
   border-color: rgba(23, 101, 75, 0.2);
+}
+
+.menu-icon-hamburger {
+  display: inline-flex;
+  flex-direction: column;
+  justify-content: center;
+  gap: 3px;
+  width: 14px;
+  height: 14px;
+}
+
+.menu-icon-hamburger span {
+  background: currentColor;
+  border-radius: 999px;
+  display: block;
+  height: 2px;
+  width: 14px;
+  flex: 0 0 2px;
 }
 
 button.danger:hover:not(:disabled),
@@ -178,6 +206,41 @@ code {
   padding-right: 3.5rem;
 }
 
+.workspace-switcher {
+  align-items: center;
+  display: inline-flex;
+  gap: 0.5rem;
+  padding: 0.4rem;
+}
+
+.workspace-switcher-button {
+  background: transparent;
+  border: 1px solid transparent;
+  border-radius: 999px;
+  color: var(--muted);
+  font-weight: 700;
+  padding: 0.65rem 1rem;
+  transition: background-color 160ms ease, border-color 160ms ease, color 160ms ease, transform 120ms ease;
+  white-space: nowrap;
+}
+
+.workspace-switcher-button:hover,
+.workspace-switcher-button:focus-visible {
+  background: rgba(255, 255, 255, 0.72);
+  border-color: rgba(15, 23, 42, 0.08);
+  color: var(--text);
+}
+
+.workspace-switcher-button:active {
+  transform: translateY(1px);
+}
+
+.workspace-switcher-button-active {
+  background: rgba(180, 83, 9, 0.12);
+  border-color: rgba(180, 83, 9, 0.22);
+  color: var(--accent);
+}
+
 .eyebrow {
   text-transform: uppercase;
   letter-spacing: 0.16em;
@@ -204,6 +267,7 @@ h2 {
 
 .section-copy {
   color: var(--muted);
+  overflow-wrap: anywhere;
 }
 
 .action-row {
@@ -381,5 +445,45 @@ h2 {
 
   .settings-grid {
     grid-template-columns: 1fr;
+  }
+
+  .panel-header {
+    flex-direction: column;
+  }
+
+  .panel-header-actions {
+    margin-right: 0;
+    justify-content: flex-start;
+    width: 100%;
+  }
+
+  .workspace-switcher {
+    flex-wrap: wrap;
+    width: 100%;
+  }
+}
+
+@media (max-width: 640px) {
+  .surface-card {
+    border-radius: 20px;
+  }
+
+  .action-row {
+    width: 100%;
+  }
+
+  .action-row > * {
+    flex: 1 1 100%;
+  }
+
+  button,
+  input,
+  select {
+    min-height: 46px;
+  }
+
+  .status-pill {
+    max-width: 100%;
+    white-space: normal;
   }
 }

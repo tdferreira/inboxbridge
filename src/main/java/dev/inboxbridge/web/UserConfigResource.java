@@ -1,5 +1,6 @@
 package dev.inboxbridge.web;
 
+import java.time.Instant;
 import java.util.List;
 
 import dev.inboxbridge.dto.UpdateUserBridgeRequest;
@@ -8,9 +9,11 @@ import dev.inboxbridge.dto.UpdateUserPollingSettingsRequest;
 import dev.inboxbridge.dto.UpdateSourcePollingSettingsRequest;
 import dev.inboxbridge.dto.UpdateUserUiPreferenceRequest;
 import dev.inboxbridge.dto.BridgeConnectionTestResult;
+import dev.inboxbridge.dto.PollingTimelineBundleView;
 import dev.inboxbridge.dto.UserBridgeView;
 import dev.inboxbridge.dto.UserGmailConfigView;
 import dev.inboxbridge.dto.SourcePollingSettingsView;
+import dev.inboxbridge.dto.SourcePollingStatsView;
 import dev.inboxbridge.dto.UserPollingStatsView;
 import dev.inboxbridge.dto.UserPollingSettingsView;
 import dev.inboxbridge.dto.UserUiPreferenceView;
@@ -34,6 +37,7 @@ import jakarta.ws.rs.POST;
 import jakarta.ws.rs.PUT;
 import jakarta.ws.rs.Path;
 import jakarta.ws.rs.PathParam;
+import jakarta.ws.rs.QueryParam;
 import jakarta.ws.rs.Produces;
 import jakarta.ws.rs.core.MediaType;
 
@@ -104,6 +108,50 @@ public class UserConfigResource {
     @Path("/polling-stats")
     public UserPollingStatsView pollingStats() {
         return pollingStatsService.userStats(currentUserContext.user().id);
+    }
+
+    @GET
+    @Path("/polling-stats/range")
+    public PollingTimelineBundleView pollingStatsRange(
+            @QueryParam("from") String from,
+            @QueryParam("to") String to) {
+        try {
+            return pollingStatsService.userTimelineBundle(
+                    currentUserContext.user().id,
+                    parseInstant(from, true),
+                    parseInstant(to, false));
+        } catch (IllegalArgumentException e) {
+            throw new BadRequestException(e.getMessage(), e);
+        }
+    }
+
+    @GET
+    @Path("/bridges/{bridgeId}/polling-stats")
+    public SourcePollingStatsView bridgePollingStats(@PathParam("bridgeId") String bridgeId) {
+        try {
+            return pollingStatsService.sourceStats(
+                    runtimeBridgeService.findAccessibleForUser(currentUserContext.user(), bridgeId)
+                            .orElseThrow(() -> new IllegalArgumentException("Unknown mail fetcher id")));
+        } catch (IllegalArgumentException e) {
+            throw new BadRequestException(e.getMessage(), e);
+        }
+    }
+
+    @GET
+    @Path("/bridges/{bridgeId}/polling-stats/range")
+    public PollingTimelineBundleView bridgePollingStatsRange(
+            @PathParam("bridgeId") String bridgeId,
+            @QueryParam("from") String from,
+            @QueryParam("to") String to) {
+        try {
+            return pollingStatsService.sourceTimelineBundle(
+                    runtimeBridgeService.findAccessibleForUser(currentUserContext.user(), bridgeId)
+                            .orElseThrow(() -> new IllegalArgumentException("Unknown mail fetcher id")),
+                    parseInstant(from, true),
+                    parseInstant(to, false));
+        } catch (IllegalArgumentException e) {
+            throw new BadRequestException(e.getMessage(), e);
+        }
     }
 
     @PUT
@@ -197,6 +245,20 @@ public class UserConfigResource {
                     "app-fetcher");
         } catch (IllegalArgumentException e) {
             throw new BadRequestException(e.getMessage(), e);
+        }
+    }
+
+    private Instant parseInstant(String value, boolean required) {
+        if (value == null || value.isBlank()) {
+            if (required) {
+                throw new IllegalArgumentException("The \"from\" date-time is required");
+            }
+            return null;
+        }
+        try {
+            return Instant.parse(value);
+        } catch (Exception e) {
+            throw new IllegalArgumentException("Invalid ISO-8601 date-time: " + value, e);
         }
     }
 }

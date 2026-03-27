@@ -6,6 +6,7 @@ public record AdminUserConfigurationResponse(
         UserSummaryResponse user,
         UserGmailConfigView gmailConfig,
         UserPollingSettingsView pollingSettings,
+        UserPollingStatsView pollingStats,
         List<UserBridgeView> bridges,
         List<PasskeyView> passkeys) {
 }

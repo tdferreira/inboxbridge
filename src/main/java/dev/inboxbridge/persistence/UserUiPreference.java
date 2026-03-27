@@ -37,8 +37,14 @@ public class UserUiPreference extends PanacheEntityBase {
     @Column(name = "persist_layout", nullable = false)
     public boolean persistLayout;
 
+    @Column(name = "layout_edit_enabled", nullable = false)
+    public boolean layoutEditEnabled;
+
     @Column(name = "quick_setup_collapsed", nullable = false)
     public boolean quickSetupCollapsed;
+
+    @Column(name = "quick_setup_dismissed", nullable = false)
+    public boolean quickSetupDismissed;
 
     @Column(name = "gmail_destination_collapsed", nullable = false)
     public boolean gmailDestinationCollapsed;
@@ -46,14 +52,26 @@ public class UserUiPreference extends PanacheEntityBase {
     @Column(name = "user_polling_collapsed", nullable = false)
     public boolean userPollingCollapsed;
 
+    @Column(name = "user_stats_collapsed", nullable = false)
+    public boolean userStatsCollapsed;
+
     @Column(name = "source_bridges_collapsed", nullable = false)
     public boolean sourceBridgesCollapsed;
 
     @Column(name = "system_dashboard_collapsed", nullable = false)
     public boolean systemDashboardCollapsed;
 
+    @Column(name = "global_stats_collapsed", nullable = false)
+    public boolean globalStatsCollapsed;
+
     @Column(name = "user_management_collapsed", nullable = false)
     public boolean userManagementCollapsed;
+
+    @Column(name = "user_section_order", nullable = false, length = 255)
+    public String userSectionOrder;
+
+    @Column(name = "admin_section_order", nullable = false, length = 255)
+    public String adminSectionOrder;
 
     @Column(name = "language", nullable = false, length = 32)
     public String language;

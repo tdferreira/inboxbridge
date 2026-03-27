@@ -1,0 +1,124 @@
+import { render, screen } from '@testing-library/react'
+import { vi } from 'vitest'
+import PollingStatisticsSection from './PollingStatisticsSection'
+import { translate } from '../../lib/i18n'
+
+vi.mock('recharts', async () => {
+  const actual = await vi.importActual('recharts')
+  return {
+    ...actual,
+    ResponsiveContainer: ({ children }) => (
+      <div style={{ height: '288px', width: '100%' }}>
+        {children}
+      </div>
+    )
+  }
+})
+
+function renderSection(props = {}) {
+  return render(
+    <PollingStatisticsSection
+      copy="Track the service."
+      id="stats-section"
+      stats={{
+        totalImportedMessages: 14,
+        configuredMailFetchers: 3,
+        enabledMailFetchers: 2,
+        sourcesWithErrors: 1,
+        errorPolls: 2,
+        importsByDay: [{ bucketLabel: '2026-03-26', importedMessages: 5 }],
+        importTimelines: {
+          today: [
+            { bucketLabel: '09:00', importedMessages: 1 },
+            { bucketLabel: '10:00', importedMessages: 4 }
+          ],
+          pastWeek: [
+            { bucketLabel: '2026-03-26', importedMessages: 5 },
+            { bucketLabel: '2026-03-27', importedMessages: 9 }
+          ]
+        },
+        duplicateTimelines: {
+          today: [
+            { bucketLabel: '09:00', importedMessages: 0 },
+            { bucketLabel: '10:00', importedMessages: 2 }
+          ],
+          pastWeek: [
+            { bucketLabel: '2026-03-26', importedMessages: 2 },
+            { bucketLabel: '2026-03-27', importedMessages: 3 }
+          ]
+        },
+        errorTimelines: {
+          today: [
+            { bucketLabel: '09:00', importedMessages: 0 },
+            { bucketLabel: '10:00', importedMessages: 1 }
+          ],
+          pastWeek: [
+            { bucketLabel: '2026-03-26', importedMessages: 1 },
+            { bucketLabel: '2026-03-27', importedMessages: 0 }
+          ]
+        },
+        manualRunTimelines: {
+          today: [
+            { bucketLabel: '09:00', importedMessages: 1 },
+            { bucketLabel: '10:00', importedMessages: 1 }
+          ]
+        },
+        scheduledRunTimelines: {
+          today: [
+            { bucketLabel: '09:00', importedMessages: 0 },
+            { bucketLabel: '10:00', importedMessages: 2 }
+          ]
+        },
+        health: {
+          activeMailFetchers: 1,
+          coolingDownMailFetchers: 1,
+          failingMailFetchers: 1,
+          disabledMailFetchers: 0
+        },
+        providerBreakdown: [
+          { key: 'microsoft', label: 'Microsoft', count: 2 },
+          { key: 'generic-imap', label: 'Generic IMAP', count: 1 }
+        ],
+        manualRuns: 3,
+        scheduledRuns: 8,
+        averagePollDurationMillis: 2100
+      }}
+      t={(key, params) => translate('en', key, params)}
+      title="My Statistics"
+      {...props}
+    />
+  )
+}
+
+describe('PollingStatisticsSection', () => {
+  it('renders the richer statistics cards and breakdowns', () => {
+    renderSection()
+
+    expect(screen.getByText('Import activity over time')).toBeInTheDocument()
+    expect(screen.getByText('Healthy accounts')).toBeInTheDocument()
+    expect(screen.getByText('Provider breakdown')).toBeInTheDocument()
+    expect(screen.getByText('Microsoft')).toBeInTheDocument()
+    expect(screen.getByText('Scheduled runs')).toBeInTheDocument()
+    expect(screen.getByText('Poll activity over time')).toBeInTheDocument()
+  })
+
+  it('renders translated statistics labels in portuguese', () => {
+    renderSection({
+      copy: 'Acompanhe o serviço.',
+      t: (key, params) => translate('pt-PT', key, params),
+      title: 'As minhas estatísticas'
+    })
+
+    expect(screen.getByText('Atividade de importação ao longo do tempo')).toBeInTheDocument()
+    expect(screen.getByText('Distribuição por fornecedor')).toBeInTheDocument()
+    expect(screen.getByText('Contas saudáveis')).toBeInTheDocument()
+  })
+
+  it('uses source-specific metrics for mail account statistics', () => {
+    renderSection({ title: 'Mail Account Statistics', variant: 'source' })
+
+    expect(screen.getAllByText('Error polls').length).toBeGreaterThan(0)
+    expect(screen.queryByText('Healthy accounts')).not.toBeInTheDocument()
+    expect(screen.queryByText('Configured email accounts')).not.toBeInTheDocument()
+  })
+})

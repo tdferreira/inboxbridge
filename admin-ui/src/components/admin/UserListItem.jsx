@@ -1,7 +1,19 @@
-import { useEffect, useLayoutEffect, useRef, useState } from 'react'
+import { Suspense, lazy, useEffect, useLayoutEffect, useRef, useState } from 'react'
 import { authMethodLabel, formatDate, oauthProviderLabel, protocolLabel, roleLabel, tokenStorageLabel } from '../../lib/formatters'
 import { resolveFloatingMenuPosition } from '../../lib/floatingMenu'
 import LoadingButton from '../common/LoadingButton'
+
+const PollingStatisticsSection = lazy(() => import('../stats/PollingStatisticsSection'))
+
+function hasMeaningfulStats(stats) {
+  if (!stats) return false
+  return (stats.totalImportedMessages || 0) > 0
+    || (stats.manualRuns || 0) > 0
+    || (stats.scheduledRuns || 0) > 0
+    || (stats.errorPolls || 0) > 0
+    || (stats.sourcesWithErrors || 0) > 0
+    || (stats.providerBreakdown?.length || 0) > 0
+}
 
 function UserListItem({
   config,
@@ -9,6 +21,7 @@ function UserListItem({
   isLoading,
   locale,
   onForcePasswordChange,
+  onLoadCustomRange,
   onOpenResetPasswordDialog,
   onResetUserPasskeys,
   onToggleExpand,
@@ -28,6 +41,12 @@ function UserListItem({
   const user = config.user
   const viewingSelfAdmin = user.id === session.id && user.role === 'ADMIN'
   const userHasPasskeys = (config.passkeys?.length || 0) > 0
+  const statsAvailable = hasMeaningfulStats(config.pollingStats)
+  const [statsCollapsed, setStatsCollapsed] = useState(!statsAvailable)
+
+  useEffect(() => {
+    setStatsCollapsed(!statsAvailable)
+  }, [statsAvailable, user.id])
 
   useEffect(() => {
     if (!menuOpen) {
@@ -113,7 +132,11 @@ function UserListItem({
         </button>
         <div ref={menuContainerRef} className="user-list-entry-menu">
           <button aria-label={t('users.actions')} className="secondary fetcher-menu-button" onClick={() => setMenuOpen((current) => !current)} ref={menuButtonRef} title={t('users.actions')} type="button">
-            {t('bridges.actionsIcon')}
+            <span aria-hidden="true" className="menu-icon-hamburger">
+              <span />
+              <span />
+              <span />
+            </span>
           </button>
           {menuOpen ? (
             <div className="fetcher-menu" data-placement={menuPlacement} ref={menuPanelRef} style={menuStyle}>
@@ -225,6 +248,21 @@ function UserListItem({
             )) : <div className="muted-box">{t('users.noMailFetchers')}</div>}
             </div>
           </section>
+
+          <Suspense fallback={<div className="muted-box">{t('common.refreshingSection')}</div>}>
+            <PollingStatisticsSection
+              collapsed={statsCollapsed}
+              copy={t('pollingStats.userDetailCopy')}
+              customRangeLoader={onLoadCustomRange ? (range) => onLoadCustomRange(user.id, range) : null}
+              id={null}
+              onCollapseToggle={() => setStatsCollapsed((current) => !current)}
+              sectionLoading={isLoading}
+              showCollapseToggle={true}
+              stats={config.pollingStats || null}
+              t={t}
+              title={t('pollingStats.userDetailTitle', { username: user.username })}
+            />
+          </Suspense>
 
           {isLoading ? <div className="muted-box">{t('users.loadingDetails')}</div> : null}
           {updatingPasskeysReset ? <div className="muted-box">{t('users.resetPasskeysLoading')}</div> : null}

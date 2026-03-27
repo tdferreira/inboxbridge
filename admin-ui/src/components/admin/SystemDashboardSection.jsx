@@ -1,4 +1,3 @@
-import ImportTimelineChart from '../common/ImportTimelineChart'
 import LoadingButton from '../common/LoadingButton'
 import PaneToggleButton from '../common/PaneToggleButton'
 import './SystemDashboardSection.css'
@@ -45,21 +44,6 @@ function SystemDashboardSection({
 
       {!collapsed && dashboard ? (
         <>
-          <div className="system-dashboard-summary">
-            <article className="surface-card metric-card"><span className="metric-label">{t('system.configuredBridges')}</span><strong>{dashboard.stats?.configuredMailFetchers ?? dashboard.overall.configuredSources}</strong></article>
-            <article className="surface-card metric-card"><span className="metric-label">{t('system.enabledBridges')}</span><strong>{dashboard.stats?.enabledMailFetchers ?? dashboard.overall.enabledSources}</strong></article>
-            <article className="surface-card metric-card"><span className="metric-label">{t('system.importedMessages')}</span><strong>{dashboard.stats?.totalImportedMessages ?? dashboard.overall.totalImportedMessages}</strong></article>
-            <article className="surface-card metric-card"><span className="metric-label">{t('system.sourcesWithErrors')}</span><strong>{dashboard.stats?.sourcesWithErrors ?? dashboard.overall.sourcesWithErrors}</strong></article>
-            <article className="surface-card metric-card"><span className="metric-label">{t('system.pollInterval')}</span><strong>{dashboard.overall.pollInterval}</strong></article>
-            <article className="surface-card metric-card"><span className="metric-label">{t('system.fetchWindow')}</span><strong>{dashboard.overall.fetchWindow}</strong></article>
-          </div>
-
-          <ImportTimelineChart
-            points={dashboard.stats?.importsByDay || []}
-            timelines={dashboard.stats?.importTimelines || null}
-            t={t}
-            title={t('pollingStats.globalTimelineTitle')}
-          />
           <div className="muted-box full user-polling-summary">
             {t('system.effectivePolling', { value: dashboard.polling.effectivePollEnabled ? t('common.yes') : t('common.no') })}<br />
             {t('system.effectiveInterval', { value: dashboard.polling.effectivePollInterval })}<br />

@@ -11,7 +11,11 @@ import dev.inboxbridge.dto.UpdateUserPollingSettingsRequest;
 import dev.inboxbridge.dto.UpdateSourcePollingSettingsRequest;
 import dev.inboxbridge.dto.UpdateUserBridgeRequest;
 import dev.inboxbridge.dto.BridgeConnectionTestResult;
+import dev.inboxbridge.dto.PollingTimelineBundleView;
+import dev.inboxbridge.dto.PollingBreakdownItemView;
+import dev.inboxbridge.dto.PollingHealthSummaryView;
 import dev.inboxbridge.dto.SourcePollingSettingsView;
+import dev.inboxbridge.dto.SourcePollingStatsView;
 import dev.inboxbridge.dto.UserPollingStatsView;
 import dev.inboxbridge.dto.UserPollingSettingsView;
 import dev.inboxbridge.dto.PollRunResult;
@@ -70,7 +74,31 @@ class UserConfigResourceTest {
 
         assertEquals(2L, response.totalImportedMessages());
         assertEquals(1, response.configuredMailFetchers());
+        assertEquals(0L, response.errorPolls());
         assertEquals(1, response.importsByDay().size());
+    }
+
+    @Test
+    void bridgePollingStatsReturnsSourceScopedView() {
+        UserConfigResource resource = resource();
+        resource.runtimeBridgeService = new FakeRuntimeBridgeService();
+        resource.pollingStatsService = new FakePollingStatsService();
+
+        SourcePollingStatsView response = resource.bridgePollingStats("fetcher-1");
+
+        assertEquals(5L, response.totalImportedMessages());
+        assertEquals(1, response.configuredMailFetchers());
+        assertEquals(0L, response.errorPolls());
+    }
+
+    @Test
+    void pollingStatsRangeReturnsCustomTimelineBundle() {
+        UserConfigResource resource = resource();
+        resource.pollingStatsService = new FakePollingStatsService();
+
+        PollingTimelineBundleView response = resource.pollingStatsRange("2026-03-26T00:00:00Z", "2026-03-27T00:00:00Z");
+
+        assertEquals(1, response.importTimelines().get("custom").size());
     }
 
     @Test
@@ -162,10 +190,51 @@ class UserConfigResourceTest {
                     1,
                     1,
                     0,
+                    0L,
                     java.util.List.of(new dev.inboxbridge.dto.ImportTimelinePointView("2026-03-26", 2L)),
                     java.util.Map.of(
-                            "day", java.util.List.of(new dev.inboxbridge.dto.ImportTimelinePointView("2026-03-26", 2L)),
-                            "month", java.util.List.of(new dev.inboxbridge.dto.ImportTimelinePointView("2026-03", 2L))));
+                            "pastWeek", java.util.List.of(new dev.inboxbridge.dto.ImportTimelinePointView("2026-03-26", 2L)),
+                            "pastMonth", java.util.List.of(new dev.inboxbridge.dto.ImportTimelinePointView("2026-03", 2L))),
+                    java.util.Map.of(),
+                    java.util.Map.of(),
+                    java.util.Map.of(),
+                    java.util.Map.of(),
+                    new PollingHealthSummaryView(1, 0, 0, 0),
+                    java.util.List.of(new PollingBreakdownItemView("generic-imap", "Generic IMAP", 1L)),
+                    1L,
+                    0L,
+                    1200L);
+        }
+
+        @Override
+        public SourcePollingStatsView sourceStats(dev.inboxbridge.domain.RuntimeBridge bridge) {
+            return new SourcePollingStatsView(
+                    5L,
+                    1,
+                    1,
+                    0,
+                    0L,
+                    java.util.List.of(new dev.inboxbridge.dto.ImportTimelinePointView("2026-03-26", 5L)),
+                    java.util.Map.of("pastWeek", java.util.List.of(new dev.inboxbridge.dto.ImportTimelinePointView("2026-03-26", 5L))),
+                    java.util.Map.of(),
+                    java.util.Map.of(),
+                    java.util.Map.of(),
+                    java.util.Map.of(),
+                    new PollingHealthSummaryView(1, 0, 0, 0),
+                    java.util.List.of(new PollingBreakdownItemView("microsoft", "Microsoft", 1L)),
+                    1L,
+                    0L,
+                    1500L);
+        }
+
+        @Override
+        public PollingTimelineBundleView userTimelineBundle(Long userId, java.time.Instant fromInclusive, java.time.Instant toExclusive) {
+            return new PollingTimelineBundleView(
+                    java.util.Map.of("custom", java.util.List.of(new dev.inboxbridge.dto.ImportTimelinePointView("2026-03-26", 2L))),
+                    java.util.Map.of("custom", java.util.List.of()),
+                    java.util.Map.of("custom", java.util.List.of()),
+                    java.util.Map.of("custom", java.util.List.of(new dev.inboxbridge.dto.ImportTimelinePointView("2026-03-26", 1L))),
+                    java.util.Map.of("custom", java.util.List.of()));
         }
     }
 

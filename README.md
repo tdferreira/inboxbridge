@@ -44,9 +44,9 @@ Google help: https://support.google.com/accounts/answer/13533235
 
 ## Stack
 
-- Java 21
-- Quarkus 3.32.3
-- React 18 + Vite
+- Java 25
+- Quarkus 3.33.1 (LTS)
+- React 19 + Vite 7
 - PostgreSQL 16
 - Flyway
 - Hibernate ORM Panache
@@ -159,6 +159,9 @@ The `Quick Setup Guide` cards in the admin UI are clickable and jump to the sect
 - the provider OAuth step only appears when at least one configured source email account actually uses OAuth
 - the guide auto-collapses when all tracked steps are complete
 - users can opt into persisting collapsed/expanded section state across sign-ins from the `Preferences` dialog
+- users can enable `layout editing` from `Preferences`, which reveals drag-and-drop and move controls for the movable workspace sections
+- users can now also reset the section layout back to the default arrangement from `Preferences`
+- the main page sections in each workspace can now be rearranged and that custom order can be remembered per account
 - expanding any major section now refreshes its data immediately and shows a loading indicator while the refresh runs
 - the step numbering is assigned dynamically, so conditional steps never leave numbering gaps
 
@@ -192,8 +195,9 @@ The admin UI also supports these languages, with the user preference stored per 
 - Portuguese (Brazil)
 - Spanish
 
-User preferences now live behind the `Preferences` button in the header, which opens a modal for language selection and the `Remember layout on this account` option.
+User preferences now live behind the `Preferences` button in the header, which opens a modal for language selection, the `Remember layout on this account` option, a `Show Quick Setup Guide` toggle, and `layout editing` controls.
 The `Security` tools also open in a dedicated dialog instead of occupying permanent space in the main page layout, with separate tabs for `Password` and `Passkeys`.
+The `Quick Setup Guide` can now be hidden once every step is complete, and it automatically comes back if one of those requirements later becomes invalid again.
 
 ## Admin UI capabilities
 
@@ -252,11 +256,25 @@ Current features:
 - the last passkey on a passwordless account cannot be removed until a password is set again or another passkey is added
 - self-service password removal and passkey deletion now require an explicit confirmation modal before the backend call is made
 - admin-managed runtime overrides for polling enablement, poll interval, and fetch window while still showing the `.env` defaults
-- an admin-only `Global Poller Settings` section for deployment-wide polling controls, totals, and import-history charts instead of rendering env-managed fetchers there
+- an admin-only `Global Poller Settings` section for deployment-wide polling controls, with a separate `Global Statistics` section for the all-users analytics
 - the admin-facing `Global Poller Settings` area now shows effective settings in-page and opens a dedicated modal dialog for editing the deployment-wide overrides
-- a dedicated `My Poller Settings` section so each user can override polling enablement, interval, and fetch window for their own UI-managed fetchers, while only seeing statistics scoped to their own account
+- a dedicated `My Poller Settings` section so each user can override polling enablement, interval, and fetch window for their own UI-managed fetchers, with a separate `My Statistics` section that only shows analytics for the current account
 - the user-facing `My Poller Settings` area now shows the effective settings as a compact summary and opens a dedicated modal dialog for editing overrides
-- imported-message history is retained with timestamps in PostgreSQL and is now surfaced as selectable line charts with preset ranges such as today, yesterday, past week, past month, past trimester, past semester, and past year in both the global admin view and the per-user poller view
+- mail-account statistics now use source-specific cards instead of deployment-wide account-health counters, and include error-poll totals plus manual-vs-scheduled poll activity for that one account
+- the polling charts also support a `Custom` date-time range modal, with a required `from` value and an optional `to` value that defaults to the current time
+- imported-message history is retained with timestamps in PostgreSQL and is now surfaced as selectable line charts with preset ranges such as today, yesterday, past week, past month, past trimester, past semester, and past year in both the global and per-user statistics views
+- polling statistics now also include provider breakdowns, current fetcher health buckets, manual-vs-scheduled run counts, duplicate trends, error trends, and average poll duration
+- admin users now switch between a `User` workspace and an `Administration` workspace so their own Gmail / fetcher setup is separated from deployment-wide controls
+- inside each workspace, the movable content sections can now be rearranged independently while the header and workspace switcher stay fixed
+- the statistics charts now use `Recharts 3.x`, including shared hover tooltips that show all visible series for the active time bucket
+- the admin UI dependency stack is kept on current stable major versions, including React 19, Vite 7, Vitest 3, and Recharts 3.x
+- shared action-menu triggers now use one common hamburger icon style across both user rows and source-email-account rows, so the menu affordance stays visually consistent
+- expanded source email account cards in the user workspace now show account-scoped statistics, while expanded user cards in the admin workspace show statistics scoped to that selected user only
+- nested statistics cards inside expanded source email accounts and expanded admin user rows can now be collapsed independently, and they start collapsed when there is no meaningful data to show yet
+- reconnecting the same Gmail account no longer revokes the existing Google grant; InboxBridge only replaces and revokes the previous grant when the newly linked Gmail account is actually different
+- the admin UI now includes a dedicated responsive pass for phones and narrow tablets, stacking header actions, section summaries, dialogs, and metric grids more safely on small screens
+- reconnecting a Gmail account now warns that the currently linked Gmail account will be replaced; a successful Google OAuth exchange also reports when the previous linked account was automatically replaced and its old Google grant was revoked
+- contextual menu triggers in the mail-account and user lists now use a compact hamburger menu icon instead of a literal `...` label
 - manual poll trigger for admins
 - per-source cooldown/backoff state that pauses only the affected fetcher after repeated auth, quota, or transient provider failures
 - floating viewport-level notifications so action feedback stays visible while scrolling long pages

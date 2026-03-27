@@ -35,4 +35,18 @@
     flex-direction: column;
     padding: 18px;
   }
+
+  .hero-panel .action-row {
+    width: 100%;
+  }
+}
+
+@media (max-width: 560px) {
+  .hero-panel {
+    padding: 16px;
+  }
+
+  .hero-panel .action-row > * {
+    width: 100%;
+  }
 }

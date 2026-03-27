@@ -90,3 +90,21 @@
   display: grid;
   gap: 12px;
 }
+
+@media (max-width: 760px) {
+  .fetcher-list-item {
+    padding: 16px;
+  }
+
+  .fetcher-list-item-summary {
+    grid-template-columns: 1fr;
+  }
+
+  .fetcher-list-item-main {
+    flex-direction: column;
+  }
+
+  .fetcher-list-item-menu {
+    justify-self: end;
+  }
+}

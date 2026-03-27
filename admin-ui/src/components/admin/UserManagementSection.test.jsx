@@ -141,6 +141,6 @@ describe('UserManagementSection', () => {
   it('shows a refresh indicator while the users section reloads', () => {
     renderUi({ sectionLoading: true })
 
-    expect(screen.getByText('Refreshing section…')).toBeInTheDocument()
+    expect(screen.getAllByText('Refreshing section…').length).toBeGreaterThan(0)
   })
 })

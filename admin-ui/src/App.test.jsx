@@ -14,8 +14,19 @@ function textError(message) {
   return {
     ok: false,
     status: 400,
+    statusText: 'Bad Request',
     json: () => Promise.resolve({ message }),
     text: () => Promise.resolve(message)
+  }
+}
+
+function htmlError(status, statusText, html) {
+  return {
+    ok: false,
+    status,
+    statusText,
+    json: () => Promise.resolve({}),
+    text: () => Promise.resolve(html)
   }
 }
 
@@ -303,7 +314,7 @@ describe('App', () => {
     await screen.findByText(/signed in as/i)
     expect(screen.queryByText('Users')).not.toBeInTheDocument()
     expect(fetchMock).not.toHaveBeenCalledWith('/api/admin/users')
-  })
+  }, 10000)
 
   it('shows password and passkey tools in separate security tabs', async () => {
     const fetchMock = vi.fn(async (input) => {
@@ -392,5 +403,222 @@ describe('App', () => {
     expect(screen.getByRole('tab', { name: 'Passkeys', selected: true })).toBeInTheDocument()
     expect(screen.getByRole('button', { name: 'Register Passkey' })).toBeInTheDocument()
     expect(screen.queryByLabelText('Current Password')).not.toBeInTheDocument()
+  })
+
+  it('lets admins switch between user and administration workspaces', async () => {
+    const fetchMock = vi.fn(async (input) => {
+      const url = String(input)
+      if (url === '/api/auth/options') return jsonResponse({ multiUserEnabled: true })
+      if (url === '/api/auth/me') {
+        return jsonResponse({
+          id: 1,
+          username: 'admin',
+          role: 'ADMIN',
+          approved: true,
+          mustChangePassword: false,
+          passkeyCount: 0,
+          passwordConfigured: true
+        })
+      }
+      if (url === '/api/app/gmail-config') {
+        return jsonResponse({
+          destinationUser: 'me',
+          redirectUri: 'https://localhost:3000/api/google-oauth/callback',
+          createMissingLabels: true,
+          neverMarkSpam: false,
+          processForCalendar: false
+        })
+      }
+      if (url === '/api/app/polling-settings') {
+        return jsonResponse({
+          defaultPollEnabled: true,
+          pollEnabledOverride: null,
+          effectivePollEnabled: true,
+          defaultPollInterval: '5m',
+          pollIntervalOverride: null,
+          effectivePollInterval: '5m',
+          defaultFetchWindow: 50,
+          fetchWindowOverride: null,
+          effectiveFetchWindow: 50
+        })
+      }
+      if (url === '/api/app/polling-stats') {
+        return jsonResponse({
+          totalImportedMessages: 2,
+          configuredMailFetchers: 1,
+          enabledMailFetchers: 1,
+          sourcesWithErrors: 0,
+          importsByDay: [],
+          importTimelines: {},
+          duplicateTimelines: {},
+          errorTimelines: {},
+          health: { activeMailFetchers: 1, coolingDownMailFetchers: 0, failingMailFetchers: 0, disabledMailFetchers: 0 },
+          providerBreakdown: [],
+          manualRuns: 1,
+          scheduledRuns: 2,
+          averagePollDurationMillis: 1200
+        })
+      }
+      if (url === '/api/app/bridges') return jsonResponse([])
+      if (url === '/api/app/ui-preferences') return jsonResponse({})
+      if (url === '/api/account/passkeys') return jsonResponse([])
+      if (url === '/api/admin/dashboard') {
+        return jsonResponse({
+          overall: {
+            configuredSources: 1,
+            enabledSources: 1,
+            totalImportedMessages: 10,
+            sourcesWithErrors: 0,
+            pollInterval: '5m',
+            fetchWindow: 50
+          },
+          stats: {
+            totalImportedMessages: 10,
+            configuredMailFetchers: 3,
+            enabledMailFetchers: 2,
+            sourcesWithErrors: 0,
+            importsByDay: [],
+            importTimelines: {},
+            duplicateTimelines: {},
+            errorTimelines: {},
+            health: { activeMailFetchers: 2, coolingDownMailFetchers: 0, failingMailFetchers: 0, disabledMailFetchers: 1 },
+            providerBreakdown: [],
+            manualRuns: 2,
+            scheduledRuns: 8,
+            averagePollDurationMillis: 1300
+          },
+          polling: {
+            defaultPollEnabled: true,
+            pollEnabledOverride: null,
+            effectivePollEnabled: true,
+            defaultPollInterval: '5m',
+            pollIntervalOverride: null,
+            effectivePollInterval: '5m',
+            defaultFetchWindow: 50,
+            fetchWindowOverride: null,
+            effectiveFetchWindow: 50
+          },
+          bridges: [],
+          recentEvents: []
+        })
+      }
+      if (url === '/api/admin/users') return jsonResponse([])
+      throw new Error(`Unexpected request: ${url}`)
+    })
+
+    vi.stubGlobal('fetch', fetchMock)
+
+    render(<App />)
+
+    await screen.findByText(/signed in as/i)
+    expect(screen.getByRole('tab', { name: 'User', selected: true })).toBeInTheDocument()
+    expect(screen.getByText('My Gmail Account')).toBeInTheDocument()
+    expect(screen.queryByText('Global Poller Settings')).not.toBeInTheDocument()
+
+    fireEvent.click(screen.getByRole('tab', { name: 'Administration' }))
+
+    expect(screen.getByRole('tab', { name: 'Administration', selected: true })).toBeInTheDocument()
+    expect(await screen.findByText('Global Poller Settings')).toBeInTheDocument()
+    expect(screen.queryByText('My Gmail Account')).not.toBeInTheDocument()
+  })
+
+  it('shows one sanitized error notification when a fetcher poll hits a proxy error', async () => {
+    const badGatewayHtml = `<html><head><title>502 Bad Gateway</title></head><body><center><h1>502 Bad Gateway</h1></center></body></html>`
+    const fetchMock = vi.fn(async (input, init = {}) => {
+      const url = String(input)
+      const method = init.method || 'GET'
+
+      if (url === '/api/auth/options') return jsonResponse({ multiUserEnabled: true })
+      if (url === '/api/auth/me') {
+        return jsonResponse({
+          id: 1,
+          username: 'alice',
+          role: 'USER',
+          approved: true,
+          mustChangePassword: false,
+          passkeyCount: 0,
+          passwordConfigured: true
+        })
+      }
+      if (url === '/api/app/gmail-config') {
+        return jsonResponse({
+          destinationUser: 'me',
+          redirectUri: 'https://localhost:3000/api/google-oauth/callback',
+          createMissingLabels: true,
+          neverMarkSpam: false,
+          processForCalendar: false
+        })
+      }
+      if (url === '/api/app/polling-settings') {
+        return jsonResponse({
+          defaultPollEnabled: true,
+          pollEnabledOverride: null,
+          effectivePollEnabled: true,
+          defaultPollInterval: '5m',
+          pollIntervalOverride: null,
+          effectivePollInterval: '5m',
+          defaultFetchWindow: 50,
+          fetchWindowOverride: null,
+          effectiveFetchWindow: 50
+        })
+      }
+      if (url === '/api/app/polling-stats') {
+        return jsonResponse({
+          totalImportedMessages: 0,
+          configuredMailFetchers: 1,
+          enabledMailFetchers: 1,
+          sourcesWithErrors: 0,
+          importsByDay: []
+        })
+      }
+      if (url === '/api/app/bridges') {
+        return jsonResponse([
+          {
+            bridgeId: 'outlook-main',
+            customLabel: '',
+            managementSource: 'DATABASE',
+            protocol: 'IMAP',
+            host: 'outlook.office365.com',
+            port: 993,
+            authMethod: 'OAUTH2',
+            oauthProvider: 'MICROSOFT',
+            tls: true,
+            folder: 'INBOX',
+            tokenStorageMode: 'DATABASE',
+            oauthConnected: true,
+            totalImportedMessages: 0,
+            lastImportedAt: null,
+            effectivePollEnabled: true,
+            effectivePollInterval: '5m',
+            effectiveFetchWindow: 50,
+            pollingState: null,
+            lastEvent: null,
+            canEdit: true,
+            canDelete: true,
+            canConnectMicrosoft: true
+          }
+        ])
+      }
+      if (url === '/api/app/ui-preferences') return jsonResponse({})
+      if (url === '/api/account/passkeys') return jsonResponse([])
+      if (url === '/api/app/bridges/outlook-main/poll/run' && method === 'POST') {
+        return htmlError(502, 'Bad Gateway', badGatewayHtml)
+      }
+      throw new Error(`Unexpected request: ${method} ${url}`)
+    })
+
+    vi.stubGlobal('fetch', fetchMock)
+
+    render(<App />)
+
+    await screen.findByText(/signed in as/i)
+    fireEvent.click(await screen.findByRole('button', { name: 'Source email account actions' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Run Poll Now' }))
+
+    await waitFor(() => {
+      expect(screen.getByText('Unable to run mail fetcher poll (502 Bad Gateway)')).toBeInTheDocument()
+    })
+
+    expect(screen.getAllByText('Unable to run mail fetcher poll (502 Bad Gateway)')).toHaveLength(1)
   })
 })

@@ -125,7 +125,7 @@ describe('GmailAccountSection', () => {
       />
     )
 
-    expect(screen.getByRole('button', { name: 'Reconnect My Gmail OAuth' })).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Reconnect Gmail Account' })).toBeInTheDocument()
     expect(screen.getByRole('button', { name: 'Unlink Gmail Account' })).toBeInTheDocument()
     expect(screen.queryByLabelText('Gmail API User')).not.toBeInTheDocument()
     expect(screen.queryByText(/google setup/i)).not.toBeInTheDocument()
@@ -174,7 +174,7 @@ describe('GmailAccountSection', () => {
     expect(screen.getByLabelText('Utilizador da API Gmail')).toBeInTheDocument()
     expect(screen.getByLabelText('URI de redirecionamento')).toBeInTheDocument()
     expect(screen.getByRole('note', { name: /identificador do utilizador da api gmail/i })).toBeInTheDocument()
-    expect(screen.getByRole('button', { name: 'Ligar o meu OAuth Gmail' })).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Ligar conta Gmail' })).toBeInTheDocument()
     expect(screen.getByText('Configuração Google')).toBeInTheDocument()
   })
 

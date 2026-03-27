@@ -2,6 +2,8 @@
 
 The admin UI is a separate React + Vite application served by Nginx in its own container. It talks to the Quarkus backend through proxied REST endpoints under `/api/...`.
 
+The frontend dependency set is intentionally kept on current stable major versions, and now targets React 19, Vite 7, Vitest 3, and Recharts 3.x.
+
 ## Structure
 
 ```text
@@ -28,7 +30,10 @@ Key design choices:
 - the setup guide entries are clickable links that focus the corresponding working section
 - the setup guide uses neutral / green / red state styling to reflect pending, complete, and error conditions
 - the setup guide auto-collapses once every tracked step is complete
+- once every tracked step is complete, the setup guide can also be hidden entirely and it automatically reappears if any requirement later becomes invalid again
 - users can opt into per-account persisted collapse state for the major admin-ui sections
+- users can now also persist a custom per-workspace section order and reset it back to the default arrangement from `Preferences`
+- section reordering controls are only shown while `layout editing` is enabled from `Preferences`, and sections can then also be rearranged by drag-and-drop with a dotted placeholder
 - expanding any major section now forces a fresh data reload for that section and shows an inline loading indicator while the refresh is running
 - password changes are exposed from the hero/header controls instead of being buried inside Gmail setup
 - the same hero/header security area now also handles passkey enrollment and removal
@@ -53,9 +58,19 @@ Key design choices:
 - expanded user entries are now split into clear detail subsections such as `User Configuration`, `Gmail Destination`, `Poller Settings`, `Passkeys`, and `Mail Fetchers`
 - contextual `...` menus no longer duplicate expand/collapse actions; expansion is handled directly by clicking the row itself
 - admins can override scheduled polling enablement, poll interval, and fetch window without changing `.env`
-- admins now see an admin-only `Global Poller Settings` section with deployment-wide polling controls, totals, and import-history charts, while the actual global override form lives in a focused modal dialog opened from `Edit Poller Settings`
-- each user now gets a dedicated `My Poller Settings` section with statistics and import-history charts scoped only to that account, while the actual override form lives in a focused modal dialog opened from `Edit Poller Settings`
-- both the global and user import-history charts now use line charts with preset ranges such as today, yesterday, past week, past month, past trimester, past semester, and past year
+- admins now see an admin-only `Global Poller Settings` section for deployment-wide polling controls, while the actual global override form lives in a focused modal dialog opened from `Edit Poller Settings`
+- each user now gets a dedicated `My Poller Settings` section whose main page stays focused on effective values while the actual override form lives in a focused modal dialog opened from `Edit Poller Settings`
+- polling analytics now live in separate `Global Statistics` and `My Statistics` sections instead of being mixed into the settings editors
+- those statistics views now show line-chart trends for imports, duplicates, and errors, along with provider breakdowns, fetcher-health buckets, manual-vs-scheduled run counts, and average poll duration
+- expanded source-email-account rows now also show the same statistics model scoped to that single account, and expanded admin user rows now show the same statistics model scoped to that selected user
+- source-email-account statistics now suppress deployment-wide account-health counters and instead show source-relevant values such as imported-message totals, error-poll counts, provider breakdown, and manual-vs-scheduled poll activity
+- the nested statistics cards inside each expanded source-email-account row and each expanded admin user row can now be collapsed independently, and they default to collapsed when there is not yet any meaningful data to render
+- the statistics charts now support a `Custom` range that opens a modal dialog for `date-time from` and optional `date-time to`; the charts then reload scoped timeline data for that selected window
+- admin users now get a workspace switcher that separates their normal user-facing setup flow from the deployment `Administration` controls
+- inside those workspaces, the movable content sections can now be reordered independently while the header and workspace switcher remain fixed in place
+- the statistics charts now use `Recharts 3.x`, which adds shared hover tooltips and cleaner multi-series trend rendering without migrating the whole UI to Material UI
+- contextual `actions` buttons now render as compact hamburger menu icons while keeping the same translated accessibility labels and tooltips
+- that hamburger icon styling now comes from the shared global stylesheet so the user list and source-email-account list render the same menu trigger
 - each mail fetcher now also has its own poller-settings dialog and `Run Poll Now` action in the contextual `...` menu
 - while a single mail fetcher poll is running, that fetcher’s status pill switches to a spinner-backed running state instead of still showing the previous success/error label
 - the running status pill now keeps its spinner visibly aligned next to the label instead of shrinking inside the badge
@@ -81,6 +96,9 @@ Key design choices:
 - the mail-fetcher list now reloads after manual poll attempts and whenever a fetcher row is expanded so the details panel reflects the latest polling state and last-event status
 - expanding an individual mail fetcher or user entry now also triggers a fresh data load for that item, with visible loading feedback while the refresh is in progress
 - the Gmail account panel distinguishes deployment-shared Google OAuth client credentials from user-specific overrides, but regular users now only see Gmail connection status plus connect/reconnect OAuth while admins keep the advanced override form
+- reconnecting Gmail now uses a friendlier `Reconnect Gmail Account` action, warns before replacing the currently linked Gmail account, and the Google callback page reports when the previous linked account was automatically replaced and its old grant revoked
+- reconnecting Gmail to the same already-linked account keeps the existing Google grant instead of revoking it; revocation only happens when the newly linked Gmail account is actually different
+- the admin UI layout now has an explicit mobile pass, so header controls, section cards, user/mail-account rows, and modal dialogs stack and resize more safely on phones and narrow tablets
 - when a source depends on Gmail import but the current account has unlinked Gmail, polling now reports that the Gmail account is not linked instead of surfacing a less clear downstream API failure
 - if Gmail unlink cannot revoke the Google-side grant automatically, the UI now tells the user how to remove InboxBridge manually from `myaccount.google.com -> Security -> Manage third-party access -> InboxBridge -> Delete All Connections`
 - when that admin-only setup sidebar is absent, the Gmail account panel now expands to the full available width instead of keeping an empty second column
@@ -89,7 +107,7 @@ Key design choices:
 - in the normal operating model, that shared Google OAuth client comes from one deployment-wide Google Cloud project reused across many users
 - the polling area is now framed as `Poller Settings` and focuses on runtime scheduler controls plus polling-health metrics
 - the user poller settings card now uses the same padded section shell as the main dashboard cards, so the form content stays fully inside the card boundaries
-- the hero/header now includes a `Preferences` button that opens a modal for language selection and the persisted `Remember layout on this account` toggle
+- the hero/header now includes a `Preferences` button that opens a modal for language selection, the persisted `Remember layout on this account` toggle, the `Show Quick Setup Guide` toggle, layout-edit controls, and a reset-layout action
 - the hero/header `Security` button now opens the password and passkey tools in a dedicated modal dialog, with separate tabs so the modal stays less crowded
 - the Security dialog now confirms before closing when the password form has in-progress input
 - visible labels route through the in-repo translation dictionary instead of mixing translated and raw JSX text

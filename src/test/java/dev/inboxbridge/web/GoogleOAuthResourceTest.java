@@ -84,6 +84,9 @@ class GoogleOAuthResourceTest {
             return new GoogleTokenExchangeResponse(
                     true,
                     false,
+                    false,
+                    true,
+                    true,
                     null,
                     "db:GOOGLE:gmail-destination",
                     "gmail.insert gmail.labels",

@@ -7,12 +7,19 @@ import './PreferencesDialog.css'
  * header stays compact while preferences remain discoverable.
  */
 function PreferencesDialog({
+  canHideQuickSetup,
+  layoutEditEnabled,
   language,
   languageOptions,
   onClose,
+  onExitLayoutEditing,
+  onStartLayoutEditing,
   onLanguageChange,
   onPersistLayoutChange,
+  onQuickSetupVisibilityChange,
+  onResetLayout,
   persistLayout,
+  quickSetupVisible,
   savingLayout,
   t
 }) {
@@ -33,6 +40,24 @@ function PreferencesDialog({
         </label>
         <label className="preferences-checkbox-row">
           <input
+            checked={quickSetupVisible}
+            disabled={savingLayout || !canHideQuickSetup}
+            onChange={(event) => onQuickSetupVisibilityChange(event.target.checked)}
+            type="checkbox"
+          />
+          <span className="field-label-row">
+            <span>{t('preferences.showQuickSetup')}</span>
+            <InfoHint text={canHideQuickSetup ? t('preferences.showQuickSetupHelp') : t('preferences.showQuickSetupForcedHelp')} />
+          </span>
+        </label>
+        <div className="preferences-checkbox-row">
+          <span className="field-label-row">
+            <span>{t('preferences.layout')}</span>
+            <InfoHint text={t('preferences.editLayoutHelp')} />
+          </span>
+        </div>
+        <label className="preferences-checkbox-row">
+          <input
             checked={persistLayout}
             disabled={savingLayout}
             onChange={(event) => onPersistLayoutChange(event.target.checked)}
@@ -43,6 +68,20 @@ function PreferencesDialog({
             <InfoHint text={t('preferences.rememberLayoutHelp')} />
           </span>
         </label>
+        <div className="action-row">
+          <button
+            className="secondary"
+            disabled={savingLayout}
+            onClick={layoutEditEnabled ? onExitLayoutEditing : onStartLayoutEditing}
+            title={layoutEditEnabled ? t('preferences.exitLayoutEditingHint') : t('preferences.editLayoutHint')}
+            type="button"
+          >
+            {layoutEditEnabled ? t('preferences.exitLayoutEditing') : t('preferences.editLayout')}
+          </button>
+          <button className="secondary" disabled={savingLayout} onClick={onResetLayout} title={t('preferences.resetLayoutHint')} type="button">
+            {t('preferences.resetLayout')}
+          </button>
+        </div>
         {savingLayout ? <div className="section-copy">{t('common.savingLayoutPreference')}</div> : null}
       </div>
     </ModalDialog>

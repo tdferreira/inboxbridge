@@ -32,6 +32,25 @@ function buildConfig() {
       pollIntervalOverride: null,
       fetchWindowOverride: null
     },
+    pollingStats: {
+      totalImportedMessages: 8,
+      configuredMailFetchers: 1,
+      enabledMailFetchers: 1,
+      sourcesWithErrors: 0,
+      importTimelines: {},
+      duplicateTimelines: {},
+      errorTimelines: {},
+      health: {
+        activeMailFetchers: 1,
+        coolingDownMailFetchers: 0,
+        failingMailFetchers: 0,
+        disabledMailFetchers: 0
+      },
+      providerBreakdown: [],
+      manualRuns: 2,
+      scheduledRuns: 3,
+      averagePollDurationMillis: 1400
+    },
     passkeys: [{
       id: 1,
       label: 'Portatil',
@@ -57,7 +76,7 @@ function buildConfig() {
 }
 
 describe('UserListItem', () => {
-  it('renders translated subsection details in portuguese', () => {
+  it('renders translated subsection details in portuguese', async () => {
     render(
       <UserListItem
         config={buildConfig()}
@@ -82,6 +101,7 @@ describe('UserListItem', () => {
     expect(screen.getByText('Definições do poller')).toBeInTheDocument()
     expect(screen.getByText('Passkeys')).toBeInTheDocument()
     const mailFetchersSectionTitle = screen.getByText('Contas de email de origem')
+    expect(await screen.findByText('Estatísticas do utilizador: admin')).toBeInTheDocument()
     expect(screen.getByText(/Utilizador da API Gmail: me/)).toBeInTheDocument()
     expect(screen.getByText(/armazenamento do token:/i)).toBeInTheDocument()
     expect(mailFetchersSectionTitle.closest('section')).toHaveTextContent('BD encriptada')
@@ -168,5 +188,48 @@ describe('UserListItem', () => {
     Object.defineProperty(window, 'innerWidth', { configurable: true, value: originalInnerWidth })
     Object.defineProperty(window, 'innerHeight', { configurable: true, value: originalInnerHeight })
     HTMLElement.prototype.getBoundingClientRect = originalGetBoundingClientRect
+  })
+
+  it('starts the nested statistics section collapsed when the user has no meaningful stats', async () => {
+    const config = buildConfig()
+    config.pollingStats = {
+      totalImportedMessages: 0,
+      configuredMailFetchers: 0,
+      enabledMailFetchers: 0,
+      sourcesWithErrors: 0,
+      errorPolls: 0,
+      importTimelines: {},
+      duplicateTimelines: {},
+      errorTimelines: {},
+      manualRunTimelines: {},
+      scheduledRunTimelines: {},
+      health: { activeMailFetchers: 0, coolingDownMailFetchers: 0, failingMailFetchers: 0, disabledMailFetchers: 0 },
+      providerBreakdown: [],
+      manualRuns: 0,
+      scheduledRuns: 0,
+      averagePollDurationMillis: 0
+    }
+
+    render(
+      <UserListItem
+        config={config}
+        isExpanded
+        isLoading={false}
+        locale="en"
+        onForcePasswordChange={vi.fn()}
+        onOpenResetPasswordDialog={vi.fn()}
+        onResetUserPasskeys={vi.fn()}
+        onToggleExpand={vi.fn()}
+        onToggleUserActive={vi.fn()}
+        onUpdateUser={vi.fn()}
+        session={{ id: 99, role: 'ADMIN' }}
+        t={(key, params) => translate('en', key, params)}
+        updatingPasskeysReset={false}
+        updatingUser={false}
+      />
+    )
+
+    expect(screen.getByText('User Statistics: admin')).toBeInTheDocument()
+    expect(screen.queryByText('Import activity over time')).not.toBeInTheDocument()
   })
 })

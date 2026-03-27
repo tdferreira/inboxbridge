@@ -180,6 +180,19 @@ public class GoogleOAuthService {
     }
 
     private GoogleTokenExchangeResponse storeExchangeResult(GoogleOAuthProfile profile, GoogleTokenResponse token) {
+        String previousRefreshToken = resolveRefreshToken(profile);
+        String previousAccountAddress = previousRefreshToken == null || previousRefreshToken.isBlank()
+                ? null
+                : resolveAccountAddress(profile);
+        String newAccountAddress = resolveAccountAddress(token.accessToken());
+        boolean sameLinkedAccount = previousAccountAddress != null
+                && newAccountAddress != null
+                && previousAccountAddress.equalsIgnoreCase(newAccountAddress);
+        boolean replacedExistingAccount = previousRefreshToken != null
+                && !previousRefreshToken.isBlank()
+                && !sameLinkedAccount
+                && !previousRefreshToken.equals(token.refreshToken());
+        boolean previousGrantRevoked = !replacedExistingAccount || revokeToken(previousRefreshToken);
         Instant expiresAt = Instant.now().plusSeconds(token.expiresIn() == null ? 300 : token.expiresIn());
         cachedTokens.put(profile.subjectKey(), new CachedToken(token.accessToken(), expiresAt));
 
@@ -187,6 +200,9 @@ public class GoogleOAuthService {
             return new GoogleTokenExchangeResponse(
                     false,
                     true,
+                    replacedExistingAccount,
+                    sameLinkedAccount,
+                    previousGrantRevoked,
                     token.refreshToken(),
                     "env:" + profile.subjectKey(),
                     token.scope(),
@@ -206,12 +222,49 @@ public class GoogleOAuthService {
         return new GoogleTokenExchangeResponse(
                 true,
                 false,
+                replacedExistingAccount,
+                sameLinkedAccount,
+                previousGrantRevoked,
                 null,
                 "db:GOOGLE:" + profile.subjectKey(),
                 token.scope(),
                 token.tokenType(),
                 expiresAt,
                 "Stored securely in the database. Future Google access token refreshes will be handled automatically.");
+    }
+
+    protected String resolveAccountAddress(GoogleOAuthProfile profile) {
+        try {
+            return resolveAccountAddress(getAccessToken(profile));
+        } catch (Exception ignored) {
+            return null;
+        }
+    }
+
+    protected String resolveAccountAddress(String accessToken) {
+        if (accessToken == null || accessToken.isBlank()) {
+            return null;
+        }
+        HttpRequest request = HttpRequest.newBuilder(URI.create("https://gmail.googleapis.com/gmail/v1/users/me/profile"))
+                .timeout(Duration.ofSeconds(20))
+                .header("Authorization", "Bearer " + accessToken)
+                .GET()
+                .build();
+        try {
+            HttpResponse<String> response = httpClient.send(request, HttpResponse.BodyHandlers.ofString(StandardCharsets.UTF_8));
+            if (response.statusCode() / 100 != 2) {
+                return null;
+            }
+            @SuppressWarnings("unchecked")
+            Map<String, Object> payload = objectMapper.readValue(response.body(), Map.class);
+            Object emailAddress = payload.get("emailAddress");
+            return emailAddress == null ? null : emailAddress.toString();
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+            return null;
+        } catch (IOException e) {
+            return null;
+        }
     }
 
     private void persistRefreshedToken(GoogleOAuthProfile profile, GoogleTokenResponse token, Instant expiresAt) {
@@ -260,7 +313,7 @@ public class GoogleOAuthService {
                 .collect(Collectors.toCollection(java.util.LinkedHashSet::new));
     }
 
-    private GoogleTokenResponse executeTokenRequest(String body) {
+    protected GoogleTokenResponse executeTokenRequest(String body) {
         HttpRequest request = HttpRequest.newBuilder(URI.create("https://oauth2.googleapis.com/token"))
                 .timeout(Duration.ofSeconds(20))
                 .header("Content-Type", "application/x-www-form-urlencoded")

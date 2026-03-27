@@ -26,9 +26,9 @@ Deployment-wide browser callback defaults can now be anchored on `PUBLIC_BASE_UR
 
 ## Technical stack
 
-- Java 21
-- Quarkus 3.32.3
-- React 18 + Vite
+- Java 25
+- Quarkus 3.33.1 (LTS)
+- React 19 + Vite 7
 - PostgreSQL 16
 - Flyway
 - Hibernate ORM Panache
@@ -102,11 +102,27 @@ System polling behavior:
 - env-managed system fetchers use the global effective settings, while DB-managed user fetchers use the owning user's effective settings
 - source-level overrides take precedence over both per-user and global polling settings
 - the admin UI now splits polling into admin-only `Global Poller Settings` and user-scoped `My Poller Settings`
-- `Global Poller Settings` shows deployment-wide totals and import-history charts across all users
+- `Global Poller Settings` now focuses on effective deployment-wide polling controls, while a separate `Global Statistics` section shows deployment-wide analytics across all users
 - `Global Poller Settings` now keeps only the effective summary in-page and opens a dedicated modal dialog for editing the deployment-wide overrides
-- `My Poller Settings` shows only per-user totals and import-history charts for that user's own Gmail destination / imported messages
+- `My Poller Settings` now focuses on the current user's effective polling overrides, while a separate `My Statistics` section shows analytics scoped only to that user's own imported mail
 - the user poller section now presents a compact effective-settings summary in-page and opens a dedicated modal dialog when the user wants to edit overrides
-- import-history charts now use line charts with preset ranges like today, yesterday, past week, past month, past trimester, past semester, and past year, derived from persisted `imported_at` timestamps
+- expanded source-email-account cards now also render analytics scoped only to that single mail fetcher
+- expanded admin user cards now also render analytics scoped only to that selected user
+- source-email-account statistics intentionally avoid deployment-wide account counters like `healthy accounts` and instead focus on source-scoped values such as imported totals, error polls, and manual-vs-scheduled poll activity
+- all polling statistics charts now expose a `Custom` date-time range flow that opens a modal dialog, requires a `from` value, and defaults `to` to the current time when it is omitted
+- statistics charts now use multi-series line charts with preset ranges like today, yesterday, past week, past month, past trimester, past semester, and past year, derived from persisted `imported_at` timestamps and recent poll-event history
+- polling statistics now also expose provider mix, current health buckets, duplicate trends, error trends, manual-vs-scheduled runs, and average poll duration
+- nested statistics sections inside expanded source-email-account cards and expanded admin user cards are independently collapsible, and should default to collapsed when there is no meaningful data to display yet
+- the admin UI now separates admin users into `User` and `Administration` workspaces so personal account setup is distinct from deployment-wide controls
+- the movable content sections inside each workspace now support per-account reordering, while the header and workspace switcher stay fixed
+- the movable workspace sections can now also be rearranged by drag-and-drop when the user enables layout editing from `Preferences`, and a dotted placeholder shows the drop position
+- reconnecting Gmail to the same already-linked account should not revoke that account's Google grant; replacement and revocation only happen when the user actually links a different Gmail account
+- the frontend layout now includes explicit responsive behavior for small screens, especially for hero actions, section headers, mail-account and user list rows, modal dialogs, and metric/stat cards
+- the preferences model now also stores dismissible quick-setup state, a persisted layout-edit toggle, and separate user/admin workspace section order
+- statistics rendering now uses `Recharts 3.x`, giving the polling dashboards shared hover tooltips and more maintainable chart behavior than the previous custom SVG chart
+- the frontend package set is intentionally kept on current stable major versions, including React 19, Vite 7, Vitest 3, and Recharts 3.x
+- the contextual menu trigger used in user/mail-account lists now renders as a hamburger menu icon instead of a visible `...` text label
+- that hamburger icon now uses one shared global style so both lists render the same equal-width menu glyph
 - each fetcher now has its own persisted polling state, including next poll time, cooldown-until timestamp, consecutive failure count, and last failure reason
 - repeated provider failures now trigger automatic cooldown/backoff so one blocked mailbox does not cause InboxBridge to hammer that provider
 - polling now fails early with a clear `Gmail account is not linked` error when a source depends on Gmail import but the current account has unlinked Gmail
@@ -151,6 +167,7 @@ Why:
 - preserves explicit operator control over env-managed values
 - lets user Gmail accounts inherit a shared deployment-level Google OAuth client when that is the intended operating model, while keeping the non-admin UI path as a simple connect/reconnect consent flow
 - users can now also unlink their Gmail account from the admin UI, which removes InboxBridge's stored Gmail OAuth tokens and attempts a Google-side token revocation when the token is available
+- reconnecting Gmail now warns that the currently linked Gmail account will be replaced, and a successful Google OAuth exchange reports when the previous linked account was automatically replaced and whether its older Google grant was revoked
 - if that Google-side revocation fails, the admin UI now gives the user the manual cleanup path: `myaccount.google.com -> Security -> Manage third-party access -> InboxBridge -> Delete All Connections`
 - the intended default is one deployment-level Google Cloud OAuth client reused across many users; per-user Gmail client overrides exist only as an advanced admin escape hatch
 - keeps the operational fetcher list unified in the UI while still separating writable DB state from read-only env state
@@ -598,9 +615,10 @@ Current live config issue in this workspace:
 - that is a provider consent/config issue, not a startup/runtime wiring failure
 - Password removal is a confirmed passkey-only transition: the admin UI requires the current password before enabling removal, and the backend verifies that password again before clearing the stored hash.
 - The Quick Setup Guide now auto-collapses immediately once all tracked setup steps are complete.
+- Once all setup steps are complete, the guide can also be hidden entirely; if any step later becomes invalid again, the guide is shown again automatically.
 - The Quick Setup Guide now says `Add at least one email account`, and its provider OAuth step is only rendered when at least one configured source account actually uses OAuth.
 - The Quick Setup Guide now renumbers visible steps dynamically, so conditional steps never leave numbering gaps.
-- Language selection and the `Remember layout on this account` toggle now live in a dedicated preferences modal opened from the header instead of an always-visible inline selector.
+- Language selection, layout persistence, and reset-layout controls now live in a dedicated preferences modal opened from the header instead of an always-visible inline selector.
 - The header `Security` action now opens the password and passkey tools in a dedicated modal with separate tabs, instead of rendering both tools inline in the page.
 - The Google setup help panel is fully localized across the supported admin-ui languages.
 - The Gmail account layout now collapses to a single full-width column whenever the admin-only setup sidebar is not being shown.

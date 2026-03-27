@@ -35,3 +35,17 @@
 .metric-card-accent {
   background: linear-gradient(135deg, rgba(23, 101, 75, 0.14), rgba(255, 252, 247, 0.92));
 }
+
+@media (max-width: 760px) {
+  .system-dashboard-section {
+    padding: 16px;
+  }
+
+  .system-dashboard-summary {
+    grid-template-columns: 1fr;
+  }
+
+  .metric-card strong {
+    font-size: 1.7rem;
+  }
+}

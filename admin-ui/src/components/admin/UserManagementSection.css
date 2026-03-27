@@ -131,3 +131,22 @@
     transform: rotate(360deg);
   }
 }
+
+@media (max-width: 760px) {
+  .user-management-panel,
+  .user-list-entry {
+    padding: 16px;
+  }
+
+  .user-list-entry-summary {
+    grid-template-columns: 1fr;
+  }
+
+  .user-list-entry-main {
+    flex-direction: column;
+  }
+
+  .user-list-entry-menu {
+    justify-self: end;
+  }
+}

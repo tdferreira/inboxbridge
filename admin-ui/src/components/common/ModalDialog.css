@@ -40,3 +40,19 @@
   background: rgba(255, 255, 255, 0.8);
   color: var(--ink);
 }
+
+@media (max-width: 760px) {
+  .modal-backdrop {
+    align-items: flex-end;
+    padding: 12px;
+  }
+
+  .modal-surface,
+  .modal-surface-wide {
+    width: 100%;
+    max-height: calc(100dvh - 24px);
+    padding: 18px;
+    border-bottom-left-radius: 0;
+    border-bottom-right-radius: 0;
+  }
+}

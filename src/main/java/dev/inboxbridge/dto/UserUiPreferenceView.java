@@ -1,15 +1,23 @@
 package dev.inboxbridge.dto;
 
+import java.util.List;
+
 /**
  * Describes the authenticated user's persisted admin-ui layout preferences.
  */
 public record UserUiPreferenceView(
         boolean persistLayout,
+        boolean layoutEditEnabled,
         boolean quickSetupCollapsed,
+        boolean quickSetupDismissed,
         boolean gmailDestinationCollapsed,
         boolean userPollingCollapsed,
+        boolean userStatsCollapsed,
         boolean sourceBridgesCollapsed,
         boolean systemDashboardCollapsed,
+        boolean globalStatsCollapsed,
         boolean userManagementCollapsed,
+        List<String> userSectionOrder,
+        List<String> adminSectionOrder,
         String language) {
 }

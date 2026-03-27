@@ -236,6 +236,9 @@ public class GoogleOAuthResource {
                         resultValue.hidden = false;
                         resultValue.textContent = [
                           'Storage: ' + (payload.storedInDatabase ? 'Encrypted database' : 'Environment fallback'),
+                          'Previous Gmail account replaced: ' + (payload.replacedExistingAccount ? 'Yes' : 'No'),
+                          'Same Gmail account reauthorized: ' + (payload.sameLinkedAccount ? 'Yes' : 'No'),
+                          'Previous Google grant revoked: ' + (payload.previousGrantRevoked ? 'Yes' : 'No'),
                           'Credential Key: ' + (payload.credentialKey || ''),
                           'Scope: ' + (payload.scope || ''),
                           'Token Type: ' + (payload.tokenType || ''),
@@ -245,9 +248,23 @@ public class GoogleOAuthResource {
                         ].filter(Boolean).join('\\n');
                         exchanged = true;
                         startAutoReturn();
-                        status.textContent = payload.storedInDatabase
-                          ? 'Exchange completed. Token stored encrypted in PostgreSQL.'
-                          : 'Exchange completed. Copy the refresh token into your local .env if you are using env fallback.';
+                        if (payload.storedInDatabase) {
+                          if (payload.sameLinkedAccount) {
+                            status.textContent = 'Exchange completed. The same Gmail account was reauthorized, so the existing Google grant was kept in place.'
+                          } else if (payload.replacedExistingAccount) {
+                            status.textContent = payload.previousGrantRevoked
+                              ? 'Exchange completed. Token stored encrypted in PostgreSQL. The previously linked Gmail account was automatically unlinked and its Google grant was revoked.'
+                              : 'Exchange completed. Token stored encrypted in PostgreSQL. The previously linked Gmail account was replaced here, but you may still need to remove the old Google grant manually from myaccount.google.com.'
+                          } else {
+                            status.textContent = 'Exchange completed. Token stored encrypted in PostgreSQL.'
+                          }
+                        } else {
+                          status.textContent = payload.sameLinkedAccount
+                            ? 'Exchange completed. The same Gmail account was reauthorized. Copy the refresh token into your local .env if you are using env fallback.'
+                            : payload.replacedExistingAccount
+                            ? 'Exchange completed. The previously linked Gmail account was replaced. Copy the new refresh token into your local .env if you are using env fallback.'
+                            : 'Exchange completed. Copy the refresh token into your local .env if you are using env fallback.'
+                        }
                       } catch (error) {
                         exchangeAttempted = false;
                         status.textContent = 'Exchange failed. Check the server logs and OAuth client settings.';

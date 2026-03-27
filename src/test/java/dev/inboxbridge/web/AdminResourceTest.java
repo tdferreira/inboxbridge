@@ -9,12 +9,15 @@ import org.junit.jupiter.api.Test;
 
 import dev.inboxbridge.dto.AdminPollingSettingsView;
 import dev.inboxbridge.dto.PollRunResult;
+import dev.inboxbridge.dto.PollingTimelineBundleView;
 import dev.inboxbridge.dto.SourcePollingSettingsView;
+import dev.inboxbridge.dto.SourcePollingStatsView;
 import dev.inboxbridge.dto.UpdateAdminPollingSettingsRequest;
 import dev.inboxbridge.dto.UpdateSourcePollingSettingsRequest;
 import dev.inboxbridge.domain.RuntimeBridge;
 import dev.inboxbridge.service.PollingService;
 import dev.inboxbridge.service.PollingSettingsService;
+import dev.inboxbridge.service.PollingStatsService;
 import dev.inboxbridge.service.RuntimeBridgeService;
 import dev.inboxbridge.service.SourcePollingSettingsService;
 import jakarta.ws.rs.BadRequestException;
@@ -65,6 +68,30 @@ class AdminResourceTest {
 
         assertEquals(1, response.getFetched());
         assertEquals(1, response.getImported());
+    }
+
+    @Test
+    void bridgePollingStatsReturnsSourceScopedView() {
+        AdminResource resource = new AdminResource();
+        resource.runtimeBridgeService = new FakeRuntimeBridgeService();
+        resource.pollingStatsService = new FakePollingStatsService();
+
+        SourcePollingStatsView response = resource.bridgePollingStats("system-fetcher");
+
+        assertEquals(4L, response.totalImportedMessages());
+        assertEquals(1, response.configuredMailFetchers());
+        assertEquals(0L, response.errorPolls());
+    }
+
+    @Test
+    void bridgePollingStatsRangeReturnsCustomTimelineBundle() {
+        AdminResource resource = new AdminResource();
+        resource.runtimeBridgeService = new FakeRuntimeBridgeService();
+        resource.pollingStatsService = new FakePollingStatsService();
+
+        PollingTimelineBundleView response = resource.bridgePollingStatsRange("system-fetcher", "2026-03-26T00:00:00Z", "2026-03-27T00:00:00Z");
+
+        assertEquals(1, response.importTimelines().get("custom").size());
     }
 
     private static class FakePollingSettingsService extends PollingSettingsService {
@@ -126,6 +153,39 @@ class AdminResourceTest {
         @Override
         public AdminPollingSettingsView update(UpdateAdminPollingSettingsRequest request) {
             throw new IllegalArgumentException("Poll interval must be at least 5 seconds");
+        }
+    }
+
+    private static final class FakePollingStatsService extends PollingStatsService {
+        @Override
+        public SourcePollingStatsView sourceStats(RuntimeBridge bridge) {
+            return new SourcePollingStatsView(
+                    4L,
+                    1,
+                    1,
+                    0,
+                    0L,
+                    java.util.List.of(new dev.inboxbridge.dto.ImportTimelinePointView("2026-03-26", 4L)),
+                    java.util.Map.of("pastWeek", java.util.List.of(new dev.inboxbridge.dto.ImportTimelinePointView("2026-03-26", 4L))),
+                    java.util.Map.of(),
+                    java.util.Map.of(),
+                    java.util.Map.of(),
+                    java.util.Map.of(),
+                    new dev.inboxbridge.dto.PollingHealthSummaryView(1, 0, 0, 0),
+                    java.util.List.of(new dev.inboxbridge.dto.PollingBreakdownItemView("generic-imap", "Generic IMAP", 1L)),
+                    0L,
+                    1L,
+                    900L);
+        }
+
+        @Override
+        public PollingTimelineBundleView sourceTimelineBundle(RuntimeBridge bridge, java.time.Instant fromInclusive, java.time.Instant toExclusive) {
+            return new PollingTimelineBundleView(
+                    java.util.Map.of("custom", java.util.List.of(new dev.inboxbridge.dto.ImportTimelinePointView("2026-03-26", 4L))),
+                    java.util.Map.of("custom", java.util.List.of()),
+                    java.util.Map.of("custom", java.util.List.of()),
+                    java.util.Map.of("custom", java.util.List.of()),
+                    java.util.Map.of("custom", java.util.List.of(new dev.inboxbridge.dto.ImportTimelinePointView("2026-03-26", 1L))));
         }
     }
 }

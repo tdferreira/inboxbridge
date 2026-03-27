@@ -12,3 +12,9 @@
 .user-bridges-empty-state {
   line-height: 1.6;
 }
+
+@media (max-width: 760px) {
+  .user-bridges-section {
+    padding: 16px;
+  }
+}

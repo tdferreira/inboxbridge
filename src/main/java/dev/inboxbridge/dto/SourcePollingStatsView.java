@@ -4,9 +4,9 @@ import java.util.List;
 import java.util.Map;
 
 /**
- * Polling/import metrics scoped to one authenticated user only.
+ * Polling/import metrics scoped to one mail fetcher only.
  */
-public record UserPollingStatsView(
+public record SourcePollingStatsView(
         long totalImportedMessages,
         int configuredMailFetchers,
         int enabledMailFetchers,

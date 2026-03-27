@@ -25,10 +25,18 @@ class UserUiPreferenceServiceTest {
         UserUiPreferenceView view = service.defaultView();
 
         assertFalse(view.persistLayout());
+        assertFalse(view.layoutEditEnabled());
         assertFalse(view.quickSetupCollapsed());
+        assertFalse(view.quickSetupDismissed());
         assertFalse(view.gmailDestinationCollapsed());
         assertFalse(view.userPollingCollapsed());
+        assertFalse(view.userStatsCollapsed());
         assertFalse(view.sourceBridgesCollapsed());
+        assertFalse(view.systemDashboardCollapsed());
+        assertFalse(view.globalStatsCollapsed());
+        assertFalse(view.userManagementCollapsed());
+        assertEquals(UserUiPreferenceService.DEFAULT_USER_SECTION_ORDER, view.userSectionOrder());
+        assertEquals(UserUiPreferenceService.DEFAULT_ADMIN_SECTION_ORDER, view.adminSectionOrder());
         assertEquals("en", view.language());
     }
 
@@ -43,19 +51,32 @@ class UserUiPreferenceServiceTest {
         UserUiPreferenceView updated = service.update(user, new UpdateUserUiPreferenceRequest(
                 true,
                 true,
+                true,
+                false,
                 false,
                 false,
                 true,
+                true,
                 false,
                 true,
+                true,
+                java.util.List.of("sourceBridges", "gmail"),
+                java.util.List.of("userManagement"),
                 "pt-PT"));
 
         assertTrue(updated.persistLayout());
+        assertTrue(updated.layoutEditEnabled());
         assertTrue(updated.quickSetupCollapsed());
+        assertFalse(updated.quickSetupDismissed());
         assertFalse(updated.userPollingCollapsed());
+        assertTrue(updated.userStatsCollapsed());
         assertTrue(updated.sourceBridgesCollapsed());
+        assertFalse(updated.systemDashboardCollapsed());
+        assertTrue(updated.globalStatsCollapsed());
         assertTrue(updated.userManagementCollapsed());
         assertFalse(updated.gmailDestinationCollapsed());
+        assertEquals(java.util.List.of("sourceBridges", "gmail", "quickSetup", "userPolling", "userStats"), updated.userSectionOrder());
+        assertEquals(java.util.List.of("userManagement", "systemDashboard", "globalStats"), updated.adminSectionOrder());
         assertEquals("pt-PT", updated.language());
         assertEquals(Optional.of(updated), service.viewForUser(user.id));
     }
