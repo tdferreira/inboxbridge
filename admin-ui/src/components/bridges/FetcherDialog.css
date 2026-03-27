@@ -1,3 +1,36 @@
 .fetcher-dialog-form {
   margin-top: 14px;
 }
+
+.fetcher-test-result {
+  display: grid;
+  gap: 10px;
+}
+
+.fetcher-test-result-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px 16px;
+  margin: 0;
+}
+
+.fetcher-test-result-grid div {
+  display: grid;
+  gap: 4px;
+}
+
+.fetcher-test-result-grid dt {
+  font-size: 0.82rem;
+  font-weight: 700;
+  color: var(--accent-strong);
+}
+
+.fetcher-test-result-grid dd {
+  margin: 0;
+}
+
+@media (max-width: 760px) {
+  .fetcher-test-result-grid {
+    grid-template-columns: 1fr;
+  }
+}

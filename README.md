@@ -11,6 +11,15 @@ By default, Docker Compose starts both over HTTPS with locally generated self-si
 
 InboxBridge supports both operator-managed system configuration from `.env` and per-user configuration stored securely in PostgreSQL through the admin UI.
 
+If a Gmail account unlink removes InboxBridge's local tokens but Google-side revocation fails, the user can remove the remaining grant manually from `myaccount.google.com`:
+
+- open `Security`
+- open `Manage third-party access` under `Your connections to third-party apps & services`
+- select `InboxBridge`
+- choose `Delete All Connections`
+
+Google help: https://support.google.com/accounts/answer/13533235
+
 ## What it already does
 
 1. Polls env-managed system bridges and DB-managed user bridges.
@@ -19,7 +28,7 @@ InboxBridge supports both operator-managed system configuration from `.env` and 
 4. Stores OAuth tokens encrypted in PostgreSQL when secure storage is enabled.
 5. Stores user-managed Gmail and bridge secrets encrypted in PostgreSQL.
 6. Provides a separate React admin UI with login, self-registration, approval workflow, user management, Gmail config, and bridge config.
-7. Supports Google OAuth for Gmail destinations and Microsoft OAuth for Outlook / Hotmail / Live sources.
+7. Supports Google OAuth for Gmail accounts and Microsoft OAuth for Outlook / Hotmail / Live sources.
 8. Organizes the admin UI into reusable React components with component-scoped styles and frontend unit tests.
 9. Supports WebAuthn passkeys for browser sign-in after a user enrolls one from the security panel.
 10. Supports per-user poller overrides plus automatic per-source cooldown/backoff when providers start rejecting or throttling requests.
@@ -75,8 +84,11 @@ With only that configuration, you can:
 - sign in with `admin` / `nimda`
 - change the bootstrap password
 - register passkeys from the `Security` panel if the browser supports them
+- register passkeys through a focused modal dialog so the security panel stays compact
 - create users
 - configure Gmail and mail fetchers from the admin UI
+- test mail fetcher connectivity from the add/edit dialog before saving IMAP/POP3 settings, including protocol, TLS, authentication, and mailbox reachability details
+- fetcher test diagnostics now render below the dialog action row, and long modal content scrolls inside the viewport instead of hiding the buttons off-screen
 - access password changes from the top header via `Change Password`
 
 You do not need to prefill `GOOGLE_*` or `MICROSOFT_*` just to bring the stack up.
@@ -85,7 +97,7 @@ You do not need to prefill `GOOGLE_*` or `MICROSOFT_*` just to bring the stack u
 
 To actually import mail, you need the bootstrap config above plus:
 
-- a Gmail destination configured either through shared `GOOGLE_*` env vars or per-user Gmail settings in the admin UI
+- a Gmail account configured either through shared `GOOGLE_*` env vars or per-user Gmail account settings in the admin UI
 - provider OAuth app credentials for any OAuth-based source or destination flow
 - at least one mail fetcher, either from `.env` or from the admin UI
 
@@ -102,9 +114,11 @@ Important values when you want a shared, env-managed deployment setup:
 - `BRIDGE_SECURITY_TOKEN_ENCRYPTION_KEY`
 - `BRIDGE_SECURITY_TOKEN_ENCRYPTION_KEY_ID`
 - `BRIDGE_SOURCES_<index>__...` for env-managed system bridges
-- `GOOGLE_*` only if you want an env-managed system Gmail destination
+- `GOOGLE_*` only if you want a deployment-level shared Gmail account configuration
 - `MICROSOFT_*` for Microsoft OAuth sources
 - `BRIDGE_SECURITY_PASSKEY_*` if you need to override the default local WebAuthn relying-party settings
+
+For the clearest end-to-end bootstrap instructions, see [docs/SETUP.md](/Users/tdferreira/Developer/inboxbridge/docs/SETUP.md).
 
 Generate a local encryption key with:
 
@@ -133,8 +147,8 @@ After the stack is up:
 2. Sign in with the bootstrap admin
 3. Change the bootstrap password
 4. Follow the `Quick Setup Guide` panel in the admin UI
-5. Configure Gmail destination OAuth
-6. Add at least one bridge
+5. Connect your Gmail account
+6. Add at least one source email account
 7. Run a poll and verify the dashboard counters
 
 The `Quick Setup Guide` cards in the admin UI are clickable and jump to the section where each action is performed. They also reflect live state:
@@ -142,8 +156,11 @@ The `Quick Setup Guide` cards in the admin UI are clickable and jump to the sect
 - green when the step is complete
 - red when InboxBridge has a recorded error associated with that step
 - neutral when the step has not been completed yet
+- the provider OAuth step only appears when at least one configured source email account actually uses OAuth
 - the guide auto-collapses when all tracked steps are complete
-- users can opt into persisting collapsed/expanded section state across sign-ins on their own account
+- users can opt into persisting collapsed/expanded section state across sign-ins from the `Preferences` dialog
+- expanding any major section now refreshes its data immediately and shows a loading indicator while the refresh runs
+- the step numbering is assigned dynamically, so conditional steps never leave numbering gaps
 
 ## Admin UI login
 
@@ -175,6 +192,9 @@ The admin UI also supports these languages, with the user preference stored per 
 - Portuguese (Brazil)
 - Spanish
 
+User preferences now live behind the `Preferences` button in the header, which opens a modal for language selection and the `Remember layout on this account` option.
+The `Security` tools also open in a dedicated dialog instead of occupying permanent space in the main page layout, with separate tabs for `Password` and `Passkeys`.
+
 ## Admin UI capabilities
 
 The React admin UI lives in `admin-ui/` and runs in its own container/server.
@@ -193,32 +213,62 @@ Current features:
 - the admin reset-password dialog shows the temporary-password rules inline so the operator can see when the new password satisfies the policy before submitting
 - admin actions that can suspend a user, force a password change, wipe passkeys, or remove stored mail-fetcher data now require an explicit confirmation modal before execution
 - admins cannot remove their own admin rights
-- admin-managed per-user Gmail destination overrides when advanced customization is really needed
-- non-admin users get a simplified Gmail destination status panel with connect/reconnect OAuth, while shared Google OAuth client reuse still lets each user grant consent for their own Gmail mailbox refresh token
+- admin-managed per-user Gmail account overrides when advanced customization is really needed
+- non-admin users get a simplified Gmail account status panel with connect/reconnect OAuth, while shared Google OAuth client reuse still lets each user grant consent for their own Gmail mailbox refresh token
+- when the Gmail account area has no admin-only setup sidebar to show, it now expands to the full available width instead of reserving an empty right column
+- the admin Gmail account form now shows inline `(i)` help hints for every configurable field so operators can understand what each setting does without leaving the page
+- connected Gmail accounts can also be unlinked from the admin UI, which clears InboxBridge's stored Gmail OAuth tokens and attempts to revoke the Google grant automatically when possible
+- the Security dialog confirms before closing when the password form contains in-progress input
+- when dialogs are stacked, the `Escape` key now closes only the front-most dialog first
 - per-user email fetcher create/update/delete through a dedicated modal dialog
+- per-fetcher polling controls from the fetcher contextual menu, including `Run Poll Now` and source-specific poller overrides
+- env-managed fetchers route those per-fetcher poller actions through admin-only backend endpoints, while UI-managed fetchers use user-scoped endpoints
+- user-scoped fetcher actions no longer fall back to env-managed sources with the same ID, so a contextual action always targets the DB-managed fetcher the user clicked
+- expanded user-management entries are split into clearer subsections for user configuration, Gmail account, poller settings, passkeys, and mail fetchers
+- expandable mail-fetcher and user rows now use the row itself for expand/collapse, while the `...` menu is reserved for actions only
+- the bundled admin-ui locales now cover quick-setup content, Gmail account fields, poller-setting forms, and mail-fetcher labels more completely instead of leaving those section bodies in English
 - common provider presets for Outlook / Hotmail / Live, Gmail, Yahoo Mail, and Proton Mail Bridge when creating a fetcher
 - auth-aware fetcher forms that hide password-only or OAuth-only fields when they are not relevant
 - inline help tooltips for fetcher and poller fields so each control explains what it does
 - env-managed fetchers shown in the same operational list with a read-only `.env` badge, but only for the account named `admin`
 - placeholder fallback values from `application.yaml` are now filtered out, so if no `BRIDGE_SOURCES_*` values are configured then no env-managed fetcher appears in the UI or runtime
+- DB-managed mail fetcher IDs are also rejected if they collide with an env-managed `.env` fetcher ID
 - per-user mail-fetcher passwords and OAuth refresh tokens are stored encrypted in PostgreSQL by default when saved from the admin UI
 - the add/edit mail fetcher dialog is wider, rejects duplicate IDs before submit, and only shows the `.env` badge for environment-managed entries
+- each mail fetcher can now override its own polling enabled state, interval, and fetch window on top of the inherited user/global defaults
+- polling now fails early with a clear message when a source depends on a Gmail account that is no longer linked, instead of surfacing a vaguer downstream Gmail API failure
+- IMAP message reads now retry once after a `FolderClosedException` by reopening the folder and reacquiring the message before the fetch batch is failed
+- Microsoft IMAP/POP connects now invalidate the cached access token and refresh once automatically if Outlook rejects the current token as invalid before the normal expiry time
+- when a manual run collides with an active scheduler/manual run, the busy error now includes the current trigger, source when relevant, and start time
+- copyable error/details affordances in the admin UI now use compact icon buttons with tooltip text instead of wide visible copy labels, and floating notifications become more opaque on hover for easier reading
+- floating notifications now keep a stronger default opacity plus a light blur backdrop so underlying UI does not compete with long error text
+- mail-fetcher detail refresh now reloads automatically after manual poll attempts and when a fetcher row is expanded so the latest status is reflected without a manual page refresh
+- expanded user-management rows now also refresh their backing data when opened, and both section-level and row-level refreshes show visible loading feedback
+- IMAP message metadata needed for dedupe/import identity is now captured before reading raw MIME so a later folder invalidation does not fail an otherwise readable message
 - password changes are available from the top header security panel and enforce confirmation, minimum length, uppercase, lowercase, number, special character, and “must differ from current password” rules
 - users can remove their password entirely and operate in passkey-only mode
 - passkeys can be registered and removed from that same top-header security panel
+- passkey registration now opens in a dedicated modal dialog instead of expanding the security panel inline
 - the last passkey on a passwordless account cannot be removed until a password is set again or another passkey is added
 - self-service password removal and passkey deletion now require an explicit confirmation modal before the backend call is made
 - admin-managed runtime overrides for polling enablement, poll interval, and fetch window while still showing the `.env` defaults
-- a dedicated `Poller Settings` section for global polling controls and health metrics instead of rendering env-managed fetchers there
-- a dedicated `My Poller Settings` section so each user can override polling enablement, interval, and fetch window for their own UI-managed fetchers
+- an admin-only `Global Poller Settings` section for deployment-wide polling controls, totals, and import-history charts instead of rendering env-managed fetchers there
+- the admin-facing `Global Poller Settings` area now shows effective settings in-page and opens a dedicated modal dialog for editing the deployment-wide overrides
+- a dedicated `My Poller Settings` section so each user can override polling enablement, interval, and fetch window for their own UI-managed fetchers, while only seeing statistics scoped to their own account
+- the user-facing `My Poller Settings` area now shows the effective settings as a compact summary and opens a dedicated modal dialog for editing overrides
+- imported-message history is retained with timestamps in PostgreSQL and is now surfaced as selectable line charts with preset ranges such as today, yesterday, past week, past month, past trimester, past semester, and past year in both the global admin view and the per-user poller view
 - manual poll trigger for admins
 - per-source cooldown/backoff state that pauses only the affected fetcher after repeated auth, quota, or transient provider failures
+- floating viewport-level notifications so action feedback stays visible while scrolling long pages
 - cooldown visibility in the UI, including next poll time, cooldown-until, failure count, and the last failure reason for each fetcher
-- Google OAuth launch for the system Gmail destination and for the current user
+- Google OAuth launch for the shared Gmail account and for the current user
 - Microsoft OAuth launch for visible Microsoft bridges
 - import totals and latest poll outcome per bridge
 - reusable component-based frontend sections with local CSS files
 - frontend unit tests for key auth, Gmail, bridge-card, and utility behavior
+- frontend translation coverage tests for the major admin-ui surfaces plus a critical-key locale catalog check
+- viewport-aware contextual menus in both mail fetchers and user management that stay attached while scrolling, plus translated password-policy / passkey-error copy in the admin UI
+- compact `...` action buttons now keep a fixed square size, and shared button labels stay on a single line to avoid accidental height expansion
 - one-click copy actions for API error banners and bridge error payloads
 - dismissable notifications that can focus the related section, with non-critical notices auto-closing after 10 seconds
 - per-user admin-ui language selection persisted in PostgreSQL and mirrored to the browser for future visits
@@ -270,10 +320,16 @@ OAuth callback usability notes:
 
 - the callback page includes a `Copy Code` button
 - the callback page automatically attempts the code exchange when it loads
-- the Google callback page now also re-reads the browser query string directly, so it can recover if the reverse proxy or callback rendering path did not populate the code into the initial HTML
+- the Google and Microsoft callback pages now also re-read the browser query string directly, so they can recover if the reverse proxy or callback rendering path did not populate the code/state into the initial HTML
 - both Google and Microsoft callback pages now detect consent denial and tell the user to retry the OAuth flow while approving every requested permission
+- the Microsoft callback exchange endpoint now returns a structured JSON error body, so the callback page shows the real exchange failure reason instead of an empty generic error
+- Microsoft OAuth validation now treats the mailbox protocol scope plus the returned refresh token as the real success signal, so it does not fail merely because Microsoft omitted `offline_access` from the echoed scope string
+- when a Microsoft OAuth exchange stores a newer encrypted refresh token successfully, the admin dashboard suppresses any older stale `has no refresh token` error for that same source instead of continuing to present it as the current state
+- UI-managed Microsoft mail fetchers now also reuse that encrypted credential store by `bridgeId`, so a successful browser OAuth exchange can immediately satisfy the fetcher runtime even when the `user_bridge` row itself does not yet hold a duplicated refresh token copy
+- if secure token storage is not configured, an env-managed Microsoft source still needs the returned `BRIDGE_SOURCES_<n>__OAUTH_REFRESH_TOKEN` copied into `.env` and a restart before polling can actually use the token
 - the callback page includes a `Return To Admin UI` button
 - returning to the admin UI before exchange asks for confirmation
+- once you confirm that leave action, the page suppresses the browser's second generic `beforeunload` prompt so you are not asked twice
 - after a successful in-browser exchange, the callback page shows a 10-second auto-return countdown
 - if you leave without exchanging, you must add the code or resulting token manually later
 
@@ -321,6 +377,7 @@ What can be overridden:
 - whether scheduled polling is enabled
 - the scheduled poll interval
 - the mailbox fetch window
+- source-specific polling enabled state, interval, and fetch window for each mail fetcher
 
 Behavior:
 
@@ -328,6 +385,8 @@ Behavior:
 - the admin UI stores only overrides in PostgreSQL
 - clearing an override falls back to the `.env` default again
 - the scheduler checks the effective interval dynamically, so changes apply without editing `.env`
+- source-level overrides take precedence over both per-user and global polling settings
+- each mail fetcher also exposes a `Run Poll Now` action in its contextual menu
 
 Accepted poll interval formats:
 
@@ -363,10 +422,10 @@ Core runtime:
 - `HTTP_PORT`, `HTTPS_PORT`: backend listener ports.
 - `HTTPS_CERT_FILE`, `HTTPS_KEY_FILE`: backend TLS certificate and private key paths.
 
-Shared Google destination:
+Shared Google account configuration:
 
 - `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET`: deployment-shared Google Cloud OAuth client for the Gmail API. In the normal deployment model, one Google Cloud project/client is enough for many users. Each user still needs their own Gmail OAuth consent and refresh token for their own destination mailbox. These values belong to the deployment, not to one specific end user.
-- `GOOGLE_REFRESH_TOKEN`: refresh token for the system Gmail destination.
+- `GOOGLE_REFRESH_TOKEN`: refresh token for the shared Gmail account used by the deployment.
 - `GOOGLE_REDIRECT_URI`: optional explicit Google callback override.
 - `BRIDGE_GMAIL_DESTINATION_USER`: Gmail API target user for the shared/system destination. In most cases this should stay `me`, which tells Gmail to import into the mailbox that granted the token.
 - `BRIDGE_GMAIL_CREATE_MISSING_LABELS`: create configured Gmail labels automatically if they do not exist yet.
@@ -418,7 +477,7 @@ In practice, each deployment must choose one of these patterns:
 
 Pattern `1` is the intended default for most InboxBridge deployments.
 
-The admin UI now explains those setup steps next to the Gmail destination area. For regular users the UI is simplified to Gmail status plus connect/reconnect OAuth, while admins can still access the advanced override form when that is actually needed.
+The admin UI now explains those setup steps next to the Gmail account area. For regular users the UI is simplified to Gmail status plus connect/reconnect OAuth, while admins can still access the advanced override form when that is actually needed.
 
 ## Secure token storage
 
@@ -442,11 +501,11 @@ Important nuance:
 
 For the user Gmail screen specifically:
 
-- `Destination User` should usually stay `me`
+- `Gmail API User` should usually stay `me`
 - `Redirect URI` now defaults to the deployment callback URL and is prefilled in the UI
-- the actual Gmail destination mailbox is the Google account that completed OAuth consent; `Destination User=me` just tells the Gmail API to use that authenticated mailbox
+- the actual Gmail mailbox used for imports is the Google account that completed OAuth consent; `Gmail API User=me` just tells the Gmail API to use that authenticated mailbox
 - per-user `Client ID` / `Client Secret` are optional admin-only overrides when the deployment already has a shared Google OAuth client configured; most deployments should not need these overrides
-- the Gmail destination panel now shows deployment-shared Google client availability separately from user-specific client overrides and refresh-token storage, but non-admin users only see the simplified connection status they actually need
+- the Gmail account panel now shows deployment-shared Google client availability separately from user-specific client overrides and refresh-token storage, but non-admin users only see the simplified connection status they actually need
 
 When disabled:
 
@@ -493,3 +552,7 @@ Verified on 2026-03-26:
 - Microsoft and Gmail provider setup: [docs/OAUTH_SETUP.md](/Users/tdferreira/Developer/inboxbridge/docs/OAUTH_SETUP.md)
 - architectural summary and code structure: [CONTEXT.md](/Users/tdferreira/Developer/inboxbridge/CONTEXT.md)
 - frontend component structure and frontend tests: [admin-ui/README.md](/Users/tdferreira/Developer/inboxbridge/admin-ui/README.md)
+Password removal now requires the current password as confirmation before an account can switch to passkey-only sign-in.
+Form dialogs now support `Escape` to close, and dialogs with unsaved changes ask for confirmation before dismissing the in-progress form.
+Floating notifications now wrap long text inside the card instead of overflowing past the viewport edges.
+When a single mail fetcher poll is running, that fetcher now shows an explicit running spinner in its own status pill, and OAuth2 fetchers expose whether their provider connection is already established.

@@ -3,11 +3,20 @@ package dev.inboxbridge.web;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 
+import java.util.Optional;
+
 import org.junit.jupiter.api.Test;
 
 import dev.inboxbridge.dto.AdminPollingSettingsView;
+import dev.inboxbridge.dto.PollRunResult;
+import dev.inboxbridge.dto.SourcePollingSettingsView;
 import dev.inboxbridge.dto.UpdateAdminPollingSettingsRequest;
+import dev.inboxbridge.dto.UpdateSourcePollingSettingsRequest;
+import dev.inboxbridge.domain.RuntimeBridge;
+import dev.inboxbridge.service.PollingService;
 import dev.inboxbridge.service.PollingSettingsService;
+import dev.inboxbridge.service.RuntimeBridgeService;
+import dev.inboxbridge.service.SourcePollingSettingsService;
 import jakarta.ws.rs.BadRequestException;
 
 class AdminResourceTest {
@@ -35,10 +44,81 @@ class AdminResourceTest {
         assertEquals("Poll interval must be at least 5 seconds", error.getMessage());
     }
 
+    @Test
+    void bridgePollingSettingsReturnsSourceView() {
+        AdminResource resource = new AdminResource();
+        resource.sourcePollingSettingsService = new FakeSourcePollingSettingsService();
+
+        SourcePollingSettingsView response = resource.bridgePollingSettings("system-fetcher");
+
+        assertEquals("system-fetcher", response.sourceId());
+        assertEquals("2m", response.effectivePollInterval());
+    }
+
+    @Test
+    void runBridgePollDelegatesToPollingService() {
+        AdminResource resource = new AdminResource();
+        resource.runtimeBridgeService = new FakeRuntimeBridgeService();
+        resource.pollingService = new FakeRunPollingService();
+
+        PollRunResult response = resource.runBridgePoll("system-fetcher");
+
+        assertEquals(1, response.getFetched());
+        assertEquals(1, response.getImported());
+    }
+
     private static class FakePollingSettingsService extends PollingSettingsService {
         @Override
         public AdminPollingSettingsView view() {
             return new AdminPollingSettingsView(true, Boolean.TRUE, true, "5m", "3m", "3m", 50, Integer.valueOf(25), 25);
+        }
+    }
+
+    private static final class FakeSourcePollingSettingsService extends SourcePollingSettingsService {
+        @Override
+        public Optional<SourcePollingSettingsView> viewForSystemSource(String sourceId) {
+            return Optional.of(new SourcePollingSettingsView(sourceId, true, Boolean.FALSE, false, "5m", "2m", "2m", 50, Integer.valueOf(20), 20));
+        }
+
+        @Override
+        public SourcePollingSettingsView updateForSystemSource(String sourceId, UpdateSourcePollingSettingsRequest request) {
+            return viewForSystemSource(sourceId).orElseThrow();
+        }
+    }
+
+    private static final class FakeRuntimeBridgeService extends RuntimeBridgeService {
+        @Override
+        public Optional<RuntimeBridge> findSystemBridge(String sourceId) {
+            return Optional.of(new RuntimeBridge(
+                    sourceId,
+                    "SYSTEM",
+                    null,
+                    "system",
+                    true,
+                    dev.inboxbridge.config.BridgeConfig.Protocol.IMAP,
+                    "imap.example.com",
+                    993,
+                    true,
+                    dev.inboxbridge.config.BridgeConfig.AuthMethod.PASSWORD,
+                    dev.inboxbridge.config.BridgeConfig.OAuthProvider.NONE,
+                    "admin@example.com",
+                    "secret",
+                    "",
+                    Optional.of("INBOX"),
+                    false,
+                    Optional.empty(),
+                    null));
+        }
+    }
+
+    private static final class FakeRunPollingService extends PollingService {
+        @Override
+        public PollRunResult runPollForSource(RuntimeBridge bridge, String trigger) {
+            PollRunResult result = new PollRunResult();
+            result.incrementFetched();
+            result.incrementImported();
+            result.finish();
+            return result;
         }
     }
 

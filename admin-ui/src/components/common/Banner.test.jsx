@@ -14,6 +14,14 @@ describe('Banner', () => {
     expect(screen.getByRole('button', { name: 'Copied' })).toBeInTheDocument()
   })
 
+  it('uses the accessible copy label as a tooltip while rendering an icon button', () => {
+    render(<Banner tone="error" copyText="payload-123">payload-123</Banner>)
+
+    const copyButton = screen.getByRole('button', { name: 'Copy Error' })
+    expect(copyButton).toHaveAttribute('title', 'Copy Error')
+    expect(copyButton).not.toHaveTextContent('Copy Error')
+  })
+
   it('supports focusing and dismissing actionable notifications', () => {
     const onDismiss = vi.fn()
     const onFocus = vi.fn()

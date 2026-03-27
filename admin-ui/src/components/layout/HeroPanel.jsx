@@ -4,14 +4,12 @@ import './HeroPanel.css'
 
 function HeroPanel({
   language,
-  languageOptions,
   loadingData,
-  onLanguageChange,
-  onToggleSecurityPanel,
+  onOpenPreferences,
+  onOpenSecurityDialog,
   onRefresh,
   onSignOut,
   refreshLoading,
-  securityPanelVisible,
   session,
   signOutLoading,
   t
@@ -24,17 +22,14 @@ function HeroPanel({
         <p className="section-copy">{t('hero.signedInAs', { username: session.username, role: roleLabel(session.role, language) })}</p>
       </div>
       <div className="action-row">
-        <label className="hero-language-select">
-          <span>{t('hero.language')}</span>
-          <select value={language} onChange={(event) => onLanguageChange(event.target.value)}>
-            {languageOptions.map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}
-          </select>
-        </label>
         <LoadingButton className="secondary" disabled={loadingData} hint={t('hero.refreshHint')} isLoading={refreshLoading} loadingLabel={t('hero.refreshLoading')} onClick={onRefresh}>
           {t('hero.refresh')}
         </LoadingButton>
-        <button className="secondary" onClick={onToggleSecurityPanel} title={securityPanelVisible ? t('hero.hideSecurityHint') : t('hero.showSecurityHint')} type="button">
-          {securityPanelVisible ? t('hero.hideSecurity') : t('hero.security')}
+        <button className="secondary" onClick={onOpenPreferences} title={t('hero.preferencesHint')} type="button">
+          {t('hero.preferences')}
+        </button>
+        <button className="secondary" onClick={onOpenSecurityDialog} title={t('hero.showSecurityHint')} type="button">
+          {t('hero.security')}
         </button>
         <LoadingButton className="secondary" hint={t('hero.signOutHint')} isLoading={signOutLoading} loadingLabel={t('hero.signOutLoading')} onClick={onSignOut}>
           {t('hero.signOut')}

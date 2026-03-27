@@ -167,6 +167,10 @@ public class MicrosoftOAuthService {
         }
     }
 
+    public void invalidateCachedToken(String sourceId) {
+        cachedTokens.remove(sourceId);
+    }
+
     private MicrosoftTokenExchangeResponse exchangeAuthorizationCode(SourceRef sourceRef, String code) {
         requireConfiguredClient();
         String body = formBody(Map.of(
@@ -268,7 +272,7 @@ public class MicrosoftOAuthService {
     void validateGrantedScopes(String grantedScopes, BridgeConfig.Protocol protocol) {
         GoogleOAuthService.validateGrantedScopes(
                 grantedScopes,
-                authorizationScopes(new SourceRef("ignored", protocol, "", null, false)),
+                protocolScope(protocol),
                 "Microsoft",
                 "Retry the Microsoft OAuth flow and approve every requested mailbox permission.");
     }

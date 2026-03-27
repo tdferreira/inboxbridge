@@ -102,6 +102,40 @@ class MicrosoftOAuthServiceTest {
         assertTrue(error.getMessage().contains("IMAP.AccessAsUser.All"));
     }
 
+    @Test
+    void validateGrantedScopesAllowsMicrosoftResponsesThatOmitOfflineAccessFromScopeEcho() {
+        MicrosoftOAuthService service = new MicrosoftOAuthService();
+
+        service.validateGrantedScopes("https://outlook.office.com/IMAP.AccessAsUser.All", BridgeConfig.Protocol.IMAP);
+    }
+
+    @Test
+    void invalidateCachedTokenRemovesExistingCacheEntry() throws Exception {
+        MicrosoftOAuthService service = new MicrosoftOAuthService();
+        service.config = new TestConfig(
+                new TestMicrosoft("consumers", "client-id", "client-secret", "http://localhost:8080/api/microsoft-oauth/callback"),
+                List.of(new TestSource(
+                        "outlook-main-imap",
+                        BridgeConfig.Protocol.IMAP,
+                        BridgeConfig.AuthMethod.OAUTH2,
+                        BridgeConfig.OAuthProvider.MICROSOFT)));
+
+        java.lang.reflect.Field cacheField = MicrosoftOAuthService.class.getDeclaredField("cachedTokens");
+        cacheField.setAccessible(true);
+        @SuppressWarnings("unchecked")
+        java.util.concurrent.ConcurrentMap<String, Object> cache =
+                (java.util.concurrent.ConcurrentMap<String, Object>) cacheField.get(service);
+        java.lang.reflect.Constructor<?> constructor = Class
+                .forName("dev.inboxbridge.service.MicrosoftOAuthService$CachedToken")
+                .getDeclaredConstructors()[0];
+        constructor.setAccessible(true);
+        cache.put("outlook-main-imap", constructor.newInstance("token", java.time.Instant.now().plusSeconds(300)));
+
+        service.invalidateCachedToken("outlook-main-imap");
+
+        assertTrue(cache.isEmpty());
+    }
+
     private static Map<String, String> queryParams(String url) {
         String query = URI.create(url).getRawQuery();
         Map<String, String> params = new HashMap<>();

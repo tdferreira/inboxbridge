@@ -190,4 +190,36 @@ describe('AuthScreen', () => {
     expect(screen.queryByRole('button', { name: 'Register for access' })).not.toBeInTheDocument()
     expect(screen.getByText(/single-user mode/i)).toBeInTheDocument()
   })
+
+  it('renders translated login and registration copy in portuguese', () => {
+    render(
+      <AuthScreen
+        authError=""
+        loginLoading={false}
+        loginForm={{ username: '', password: '' }}
+        multiUserEnabled
+        notice=""
+        onCloseRegisterDialog={vi.fn()}
+        onLogin={vi.fn()}
+        onLoginChange={vi.fn()}
+        onPasskeyLogin={vi.fn()}
+        onOpenRegisterDialog={vi.fn()}
+        onRegister={vi.fn()}
+        onRegisterChange={vi.fn()}
+        registerOpen
+        passkeyLoading={false}
+        passkeysSupported={true}
+        registerForm={{ username: '', password: '', confirmPassword: '' }}
+        registerLoading={false}
+        t={(key, params) => translate('pt-PT', key, params)}
+      />
+    )
+
+    expect(screen.getByText('Início de sessão administrativo seguro')).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Entrar' })).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Entrar com passkey' })).toBeInTheDocument()
+    expect(screen.getByRole('dialog', { name: 'Pedir acesso' })).toBeInTheDocument()
+    expect(screen.getByLabelText('Nome de utilizador pedido')).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Registar para aprovação' })).toBeInTheDocument()
+  })
 })

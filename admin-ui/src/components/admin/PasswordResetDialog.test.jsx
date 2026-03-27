@@ -57,4 +57,24 @@ describe('PasswordResetDialog', () => {
       )
     }
   })
+
+  it('renders translated reset-password copy in portuguese', () => {
+    render(
+      <PasswordResetDialog
+        onClose={vi.fn()}
+        onFormChange={vi.fn()}
+        onSubmit={vi.fn()}
+        passwordLoading={false}
+        resetPasswordForm={{ newPassword: '', confirmNewPassword: '' }}
+        t={(key, params) => translate('pt-PT', key, params)}
+        username="alice"
+      />
+    )
+
+    expect(screen.getByText('Repor palavra-passe de alice')).toBeInTheDocument()
+    expect(screen.getByText('Defina uma palavra-passe temporária. O utilizador terá de a alterar após o próximo início de sessão com sucesso.')).toBeInTheDocument()
+    expect(screen.getByText('Pelo menos 8 caracteres')).toBeInTheDocument()
+    expect(screen.getByText('Letra maiúscula')).toBeInTheDocument()
+    expect(screen.getByText('A repetição da palavra-passe coincide')).toBeInTheDocument()
+  })
 })

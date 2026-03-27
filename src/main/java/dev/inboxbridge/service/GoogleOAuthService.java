@@ -136,6 +136,30 @@ public class GoogleOAuthService {
         }
     }
 
+    public void clearCachedToken(String subjectKey) {
+        cachedTokens.remove(subjectKey);
+    }
+
+    public boolean revokeToken(String token) {
+        if (token == null || token.isBlank()) {
+            return false;
+        }
+        HttpRequest request = HttpRequest.newBuilder(URI.create("https://oauth2.googleapis.com/revoke"))
+                .timeout(Duration.ofSeconds(20))
+                .header("Content-Type", "application/x-www-form-urlencoded")
+                .POST(HttpRequest.BodyPublishers.ofString(formBody(Map.of("token", token))))
+                .build();
+        try {
+            HttpResponse<String> response = httpClient.send(request, HttpResponse.BodyHandlers.ofString(StandardCharsets.UTF_8));
+            return response.statusCode() / 100 == 2;
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+            return false;
+        } catch (IOException e) {
+            return false;
+        }
+    }
+
     private GoogleTokenResponse refreshAccessToken(GoogleOAuthProfile profile) {
         String body = formBody(Map.of(
                 "client_id", profile.clientId(),

@@ -21,7 +21,7 @@ function PasswordPanel({
     requireCurrentPassword: passwordConfigured,
     requireDifferent: passwordConfigured
   })
-  const canRemovePassword = passwordConfigured && passkeyCount > 0
+  const canRemovePassword = passwordConfigured && passkeyCount > 0 && passwordForm.currentPassword.trim().length > 0
 
   return (
     <section className="surface-card password-panel" id="password-panel-section" tabIndex="-1">
@@ -54,7 +54,7 @@ function PasswordPanel({
       ) : null}
       {passwordConfigured && !canRemovePassword ? (
         <div className="muted-box">
-          {t('password.registerPasskeyFirst')}
+          {passkeyCount > 0 ? t('password.enterCurrentToRemove') : t('password.registerPasskeyFirst')}
         </div>
       ) : null}
       <form className="stack-form" onSubmit={onPasswordChange}>

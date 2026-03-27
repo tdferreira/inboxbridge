@@ -3,12 +3,14 @@ package dev.inboxbridge.web;
 import dev.inboxbridge.dto.ChangePasswordRequest;
 import dev.inboxbridge.dto.FinishPasskeyCeremonyRequest;
 import dev.inboxbridge.dto.PasskeyView;
+import dev.inboxbridge.dto.RemovePasswordRequest;
 import dev.inboxbridge.dto.StartPasskeyCeremonyResponse;
 import dev.inboxbridge.dto.StartPasskeyRegistrationRequest;
 import dev.inboxbridge.security.CurrentUserContext;
 import dev.inboxbridge.security.RequireAuth;
 import dev.inboxbridge.service.AppUserService;
 import dev.inboxbridge.service.PasskeyService;
+import dev.inboxbridge.service.UserGmailConfigService;
 import jakarta.inject.Inject;
 import jakarta.ws.rs.BadRequestException;
 import jakarta.ws.rs.Consumes;
@@ -39,6 +41,9 @@ public class AccountResource {
     @Inject
     PasskeyService passkeyService;
 
+    @Inject
+    UserGmailConfigService userGmailConfigService;
+
     @POST
     @Path("/password")
     @Consumes(MediaType.APPLICATION_JSON)
@@ -56,9 +61,10 @@ public class AccountResource {
 
     @DELETE
     @Path("/password")
-    public void removePassword() {
+    @Consumes(MediaType.APPLICATION_JSON)
+    public void removePassword(RemovePasswordRequest request) {
         try {
-            appUserService.removePassword(currentUserContext.user());
+            appUserService.removePassword(currentUserContext.user(), request == null ? null : request.currentPassword());
         } catch (IllegalArgumentException e) {
             throw new BadRequestException(e.getMessage(), e);
         }
@@ -100,5 +106,11 @@ public class AccountResource {
         } catch (IllegalArgumentException e) {
             throw new BadRequestException(e.getMessage(), e);
         }
+    }
+
+    @DELETE
+    @Path("/gmail-link")
+    public UserGmailConfigService.GmailUnlinkResult unlinkGmailAccount() {
+        return userGmailConfigService.unlinkForUser(currentUserContext.user().id);
     }
 }

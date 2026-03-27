@@ -61,7 +61,7 @@ class UserGmailConfigServiceTest {
                         false,
                         false)));
 
-        assertEquals("Only admins can override Gmail destination settings from the admin UI.", error.getMessage());
+        assertEquals("Only admins can override advanced Gmail account settings from the admin UI.", error.getMessage());
     }
 
     @Test
@@ -124,6 +124,67 @@ class UserGmailConfigServiceTest {
         assertFalse(view.clientIdConfigured());
         assertFalse(view.clientSecretConfigured());
         assertTrue(view.sharedClientConfigured());
+    }
+
+    @Test
+    void resolveForUserFallsBackToSharedClientAndStoredOAuthCredentialWithoutConfigRow() {
+        OAuthCredentialService.StoredOAuthCredential credential = new OAuthCredentialService.StoredOAuthCredential(
+                OAuthCredentialService.GOOGLE_PROVIDER,
+                "user-gmail:12",
+                "refresh-token-xyz",
+                "access-token-xyz",
+                java.time.Instant.parse("2026-03-27T09:00:00Z"),
+                "scope",
+                "Bearer",
+                java.time.Instant.parse("2026-03-27T09:00:00Z"));
+
+        UserGmailConfigService service = service(true, repositoryWithNoRow(), Optional.of(credential));
+
+        UserGmailConfigService.ResolvedUserGmailConfig resolved = service.resolveForUser(12L).orElseThrow();
+
+        assertEquals("me", resolved.destinationUser());
+        assertEquals("shared-client-id", resolved.clientId());
+        assertEquals("shared-client-secret", resolved.clientSecret());
+        assertEquals("refresh-token-xyz", resolved.refreshToken());
+        assertEquals("https://mail.example.test/api/google-oauth/callback", resolved.redirectUri());
+        assertTrue(resolved.createMissingLabels());
+        assertFalse(resolved.neverMarkSpam());
+        assertFalse(resolved.processForCalendar());
+    }
+
+    @Test
+    void unlinkForUserClearsStoredRefreshTokensAndRevokesProviderAccess() {
+        InMemoryUserGmailConfigRepository repository = repositoryWithNoRow();
+        UserGmailConfig stored = new UserGmailConfig();
+        stored.userId = 15L;
+        stored.destinationUser = "me";
+        stored.redirectUri = "https://mail.example.test/api/google-oauth/callback";
+        stored.updatedAt = java.time.Instant.parse("2026-03-27T10:00:00Z");
+        repository.persist(stored);
+
+        OAuthCredentialService.StoredOAuthCredential credential = new OAuthCredentialService.StoredOAuthCredential(
+                OAuthCredentialService.GOOGLE_PROVIDER,
+                "user-gmail:15",
+                "refresh-token-xyz",
+                "access-token-xyz",
+                java.time.Instant.parse("2026-03-27T09:00:00Z"),
+                "scope",
+                "Bearer",
+                java.time.Instant.parse("2026-03-27T09:00:00Z"));
+
+        FakeOAuthCredentialService credentialService = new FakeOAuthCredentialService(Optional.of(credential));
+        FakeGoogleOAuthService googleOAuthService = new FakeGoogleOAuthService(true);
+        UserGmailConfigService service = service(true, repository, Optional.of(credential));
+        service.oAuthCredentialService = credentialService;
+        service.googleOAuthService = googleOAuthService;
+
+        UserGmailConfigService.GmailUnlinkResult result = service.unlinkForUser(15L);
+
+        assertTrue(result.providerRevocationAttempted());
+        assertTrue(result.providerRevoked());
+        assertEquals("refresh-token-xyz", googleOAuthService.revokedToken);
+        assertEquals("user-gmail:15", googleOAuthService.clearedSubjectKey);
+        assertEquals("user-gmail:15", credentialService.deletedSubjectKey);
     }
 
     private UserGmailConfigService service(
@@ -284,6 +345,7 @@ class UserGmailConfigServiceTest {
 
     private static final class FakeOAuthCredentialService extends OAuthCredentialService {
         private final Optional<StoredOAuthCredential> googleCredential;
+        private String deletedSubjectKey;
 
         private FakeOAuthCredentialService(Optional<StoredOAuthCredential> googleCredential) {
             this.googleCredential = googleCredential;
@@ -292,6 +354,33 @@ class UserGmailConfigServiceTest {
         @Override
         public Optional<StoredOAuthCredential> findGoogleCredential(String subjectKey) {
             return googleCredential.filter(credential -> credential.subjectKey().equals(subjectKey));
+        }
+
+        @Override
+        public boolean deleteGoogleCredential(String subjectKey) {
+            this.deletedSubjectKey = subjectKey;
+            return googleCredential.isPresent();
+        }
+    }
+
+    private static final class FakeGoogleOAuthService extends GoogleOAuthService {
+        private final boolean revokeResult;
+        private String revokedToken;
+        private String clearedSubjectKey;
+
+        private FakeGoogleOAuthService(boolean revokeResult) {
+            this.revokeResult = revokeResult;
+        }
+
+        @Override
+        public boolean revokeToken(String token) {
+            this.revokedToken = token;
+            return revokeResult;
+        }
+
+        @Override
+        public void clearCachedToken(String subjectKey) {
+            this.clearedSubjectKey = subjectKey;
         }
     }
 }

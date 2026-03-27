@@ -1,5 +1,6 @@
 import FetcherDialog from './FetcherDialog'
 import FetcherListItem from './FetcherListItem'
+import FetcherPollingDialog from './FetcherPollingDialog'
 import LoadingButton from '../common/LoadingButton'
 import PaneToggleButton from '../common/PaneToggleButton'
 import './UserBridgesSection.css'
@@ -17,17 +18,33 @@ function UserBridgesSection({
   duplicateIdError,
   fetchers,
   fetcherDialogOpen,
+  fetcherPollLoadingId,
+  fetcherPollingDialog,
+  fetcherPollingLoading,
+  fetcherPollingForm,
+  fetcherRefreshLoadingId,
   onAddFetcher,
   onApplyPreset,
   onBridgeFormChange,
   onCloseDialog,
+  onClosePollingDialog,
   onCollapseToggle,
+  onConfigureFetcherPolling,
   onConnectMicrosoft,
   onDeleteBridge,
   onEditBridge,
+  onFetcherPollingFormChange,
+  onFetcherToggleExpand,
+  onResetFetcherPollingSettings,
+  onRunFetcherPoll,
   onSaveBridge,
+  onSaveFetcherPollingSettings,
+  onTestConnection,
   saveLoading,
+  sectionLoading = false,
   t,
+  testConnectionLoading = false,
+  testResult = null,
   locale
 }) {
   return (
@@ -46,6 +63,12 @@ function UserBridgesSection({
         ) : null}
       </div>
       <PaneToggleButton className="pane-toggle-button-corner" collapseLabel={t('common.collapseSection')} collapsed={collapsed} disabled={collapseLoading} expandLabel={t('common.expandSection')} isLoading={collapseLoading} onClick={onCollapseToggle} />
+      {sectionLoading ? (
+        <div className="section-refresh-indicator" role="status">
+          <span aria-hidden="true" className="section-refresh-spinner" />
+          {t('common.refreshingSection')}
+        </div>
+      ) : null}
       {!collapsed ? (
         fetchers.length > 0 ? (
           <div className="fetcher-list">
@@ -56,9 +79,14 @@ function UserBridgesSection({
                 deleteLoading={deletingBridgeId === fetcher.bridgeId}
                 fetcher={fetcher}
                 locale={locale}
+                onConfigurePolling={onConfigureFetcherPolling}
                 onConnectMicrosoft={onConnectMicrosoft}
                 onDelete={onDeleteBridge}
                 onEdit={onEditBridge}
+                onRunPoll={onRunFetcherPoll}
+                onToggleExpand={onFetcherToggleExpand}
+                pollLoading={fetcherPollLoadingId === fetcher.bridgeId}
+                refreshLoading={fetcherRefreshLoadingId === fetcher.bridgeId}
                 t={t}
               />
             ))}
@@ -78,7 +106,22 @@ function UserBridgesSection({
           onBridgeFormChange={onBridgeFormChange}
           onClose={onCloseDialog}
           onSave={onSaveBridge}
+          onTestConnection={onTestConnection}
           saveLoading={saveLoading}
+          t={t}
+          testConnectionLoading={testConnectionLoading}
+          testResult={testResult}
+        />
+      ) : null}
+      {fetcherPollingDialog ? (
+        <FetcherPollingDialog
+          fetcher={fetcherPollingDialog}
+          form={fetcherPollingForm}
+          loading={fetcherPollingLoading}
+          onChange={onFetcherPollingFormChange}
+          onClose={onClosePollingDialog}
+          onReset={onResetFetcherPollingSettings}
+          onSave={onSaveFetcherPollingSettings}
           t={t}
         />
       ) : null}

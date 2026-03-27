@@ -44,7 +44,7 @@ public class GoogleOAuthResource {
         return Response.seeOther(java.net.URI.create(
                 googleOAuthService.buildAuthorizationUrlWithState(
                         googleOAuthService.systemProfileForCallbacks(),
-                        "System Gmail destination"))).build();
+                        "Shared Gmail account"))).build();
     }
 
     @GET
@@ -55,7 +55,7 @@ public class GoogleOAuthResource {
                 .orElseThrow(() -> new jakarta.ws.rs.BadRequestException(
                         "Configure your Gmail redirect URI or a shared Google OAuth client before starting Google OAuth."));
         return Response.seeOther(java.net.URI.create(
-                googleOAuthService.buildAuthorizationUrlWithState(profile, "User Gmail destination"))).build();
+                googleOAuthService.buildAuthorizationUrlWithState(profile, "User Gmail account"))).build();
     }
 
     @POST
@@ -138,6 +138,7 @@ public class GoogleOAuthResource {
                     const oauthErrorDescription = callbackParams.get('error_description') || '';
                     let exchanged = false;
                     let exchangeAttempted = false;
+                    let allowLeave = false;
                     let redirectTimerId = null;
                     let countdownIntervalId = null;
                     document.getElementById('codeValue').textContent = oauthCode || '(no authorization code received)';
@@ -264,7 +265,7 @@ public class GoogleOAuthResource {
                       status.textContent = 'Authorization code received, but callback state is missing. Use the exchange button if you are completing a manual flow.';
                     }
                     window.addEventListener('beforeunload', (event) => {
-                      if (exchanged) {
+                      if (exchanged || allowLeave) {
                         return;
                       }
                       event.preventDefault();
@@ -275,6 +276,9 @@ public class GoogleOAuthResource {
                         return;
                       }
                       const confirmed = window.confirm('Leave this page without exchanging the code? If you continue, you will need to add it manually from the admin UI later.');
+                      if (confirmed) {
+                        allowLeave = true;
+                      }
                       if (!confirmed) {
                         event.preventDefault();
                         status.textContent = 'Exchange the code here, or copy it before leaving so you can add it manually later.';

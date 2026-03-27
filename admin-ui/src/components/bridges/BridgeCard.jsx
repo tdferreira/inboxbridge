@@ -49,7 +49,7 @@ function BridgeCard({
       {bridge.lastEvent ? (
         <div className="event-box">
           <div className="section-copy">{t('bridge.viaTrigger', { time: formatDate(bridge.lastEvent.finishedAt, locale), trigger: triggerLabel(bridge.lastEvent.trigger, locale) })}</div>
-          <div className="section-copy">{t('bridge.results', { fetched: bridge.lastEvent.fetched, imported: bridge.lastEvent.imported, duplicates: bridge.lastEvent.duplicates })}</div>
+          <div className="section-copy">{t('bridge.results', { fetched: bridge.lastEvent.fetched, imported: bridge.lastEvent.imported, duplicates: bridge.lastEvent.duplicates, spamJunkSuffix: '' })}</div>
           {bridge.lastEvent.error ? (
             <div className="bridge-card-error-block">
               <div className="bridge-card-error">{bridge.lastEvent.error}</div>

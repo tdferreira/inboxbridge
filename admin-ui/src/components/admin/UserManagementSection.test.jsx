@@ -1,90 +1,146 @@
-import { fireEvent, render, screen } from '@testing-library/react'
+import { fireEvent, render, screen, within } from '@testing-library/react'
 import UserManagementSection from './UserManagementSection'
 import { translate } from '../../lib/i18n'
 
-const t = (key, params) => translate('en', key, params)
+function renderUi(overrides = {}) {
+  const locale = overrides.locale || 'en'
+  return render(
+    <UserManagementSection
+      collapsed={false}
+      collapseLoading={false}
+      createUserDialogOpen={false}
+      createUserForm={{ username: '', password: '', confirmPassword: '', role: 'USER' }}
+      createUserLoading={false}
+      duplicateUsername={false}
+      expandedUserId={7}
+      onCloseCreateUserDialog={vi.fn()}
+      onCollapseToggle={vi.fn()}
+      onCreateUser={vi.fn()}
+      onCreateUserFormChange={vi.fn()}
+      onForcePasswordChange={vi.fn()}
+      onOpenCreateUserDialog={vi.fn()}
+      onOpenResetPasswordDialog={vi.fn()}
+      onResetUserPasskeys={vi.fn()}
+      onToggleExpandUser={vi.fn()}
+      onToggleUserActive={vi.fn()}
+      onUpdateUser={vi.fn()}
+      session={{ id: 7, role: 'ADMIN' }}
+      selectedUserConfig={{
+        user: {
+          id: 7,
+          username: 'admin',
+          role: 'ADMIN',
+          approved: true,
+          active: true,
+          gmailConfigured: true,
+          passwordConfigured: true,
+          mustChangePassword: false,
+          passkeyCount: 0,
+          bridgeCount: 0
+        },
+        gmailConfig: {
+          destinationUser: 'me',
+          redirectUri: 'https://localhost:3000/api/google-oauth/callback',
+          sharedClientConfigured: true,
+          clientIdConfigured: false,
+          clientSecretConfigured: false,
+          refreshTokenConfigured: true
+        },
+        pollingSettings: {
+          defaultPollEnabled: true,
+          pollEnabledOverride: null,
+          effectivePollEnabled: true,
+          defaultPollInterval: '5m',
+          pollIntervalOverride: null,
+          effectivePollInterval: '5m',
+          defaultFetchWindow: 50,
+          fetchWindowOverride: null,
+          effectiveFetchWindow: 50
+        },
+        passkeys: [],
+        bridges: []
+      }}
+      selectedUserLoading={false}
+      updatingPasskeysResetUserId={null}
+      updatingUserId={null}
+      users={[{ id: 7, username: 'admin', role: 'ADMIN', approved: true, active: true, bridgeCount: 0 }]}
+      locale={locale}
+      t={(key, params) => translate(locale, key, params)}
+      {...overrides}
+    />
+  )
+}
 
 describe('UserManagementSection', () => {
-  it('disables self-demotion and forwards sensitive user actions through callbacks', () => {
-    const onResetUserPasskeys = vi.fn()
-    const onOpenResetPasswordDialog = vi.fn()
+  it('opens the create-user modal instead of showing the form inline', () => {
+    const onOpenCreateUserDialog = vi.fn()
+    renderUi({ onOpenCreateUserDialog })
+
+    expect(screen.queryByText('Create a fully approved account and assign its initial role. The temporary password must follow the same policy as every other account.')).not.toBeInTheDocument()
+    fireEvent.click(screen.getByRole('button', { name: 'Create User' }))
+    expect(onOpenCreateUserDialog).toHaveBeenCalled()
+  })
+
+  it('routes contextual menu actions for the expanded user', () => {
     const onToggleUserActive = vi.fn()
     const onForcePasswordChange = vi.fn()
+    const onOpenResetPasswordDialog = vi.fn()
+    const onResetUserPasskeys = vi.fn()
 
-    renderUi()
+    renderUi({
+      onToggleUserActive,
+      onForcePasswordChange,
+      onOpenResetPasswordDialog,
+      onResetUserPasskeys
+    })
 
-    expect(screen.getByRole('button', { name: 'Make regular user' })).toBeDisabled()
-    expect(screen.getByRole('button', { name: 'Reset passkeys' })).toBeDisabled()
+    fireEvent.click(screen.getByRole('button', { name: 'User actions' }))
+    const menu = screen.getByRole('button', { name: 'User actions' }).parentElement
+    const menuQueries = within(menu)
 
-    fireEvent.click(screen.getByRole('button', { name: 'Suspend user' }))
-    fireEvent.click(screen.getByRole('button', { name: 'Force password change' }))
-    fireEvent.click(screen.getByRole('button', { name: 'Reset password' }))
-    fireEvent.click(screen.getByRole('button', { name: 'Reset passkeys' }))
+    expect(menuQueries.queryByRole('button', { name: 'Expand section' })).not.toBeInTheDocument()
+    expect(menuQueries.queryByRole('button', { name: 'Collapse section' })).not.toBeInTheDocument()
+    expect(menuQueries.getByRole('button', { name: 'Make regular user' })).toBeDisabled()
+    expect(menuQueries.getByRole('button', { name: 'Reset passkeys' })).toBeDisabled()
+
+    fireEvent.click(menuQueries.getByRole('button', { name: 'Suspend user' }))
+    fireEvent.click(screen.getByRole('button', { name: 'User actions' }))
+    fireEvent.click(within(screen.getByRole('button', { name: 'User actions' }).parentElement).getByRole('button', { name: 'Force password change' }))
+    fireEvent.click(screen.getByRole('button', { name: 'User actions' }))
+    fireEvent.click(within(screen.getByRole('button', { name: 'User actions' }).parentElement).getByRole('button', { name: 'Reset password' }))
+    fireEvent.click(screen.getByRole('button', { name: 'User actions' }))
+    fireEvent.click(within(screen.getByRole('button', { name: 'User actions' }).parentElement).getByRole('button', { name: 'Reset passkeys' }))
 
     expect(onToggleUserActive).toHaveBeenCalledWith(expect.objectContaining({ username: 'admin' }))
     expect(onForcePasswordChange).toHaveBeenCalledWith(expect.objectContaining({ username: 'admin' }))
+    expect(onOpenResetPasswordDialog).toHaveBeenCalledWith(expect.objectContaining({ username: 'admin' }))
     expect(onResetUserPasskeys).not.toHaveBeenCalled()
-    expect(onOpenResetPasswordDialog).toHaveBeenCalled()
+  })
 
-    function renderUi() {
-      return render(
-        <UserManagementSection
-          collapsed={false}
-          collapseLoading={false}
-          createUserForm={{ username: '', password: '', role: 'USER' }}
-          createUserLoading={false}
-          onCollapseToggle={vi.fn()}
-          onCreateUser={vi.fn()}
-          onCreateUserFormChange={vi.fn()}
-          onForcePasswordChange={onForcePasswordChange}
-          onOpenResetPasswordDialog={onOpenResetPasswordDialog}
-          onResetUserPasskeys={onResetUserPasskeys}
-          onSelectUser={vi.fn()}
-          onToggleUserActive={onToggleUserActive}
-          onUpdateUser={vi.fn()}
-          session={{ id: 7, role: 'ADMIN' }}
-          selectedUserConfig={{
-            user: {
-              id: 7,
-              username: 'admin',
-              role: 'ADMIN',
-              approved: true,
-              active: true,
-              gmailConfigured: true,
-              passwordConfigured: true,
-              mustChangePassword: false,
-              passkeyCount: 1
-            },
-            gmailConfig: {
-              redirectUri: 'https://localhost:3000/api/google-oauth/callback',
-              sharedClientConfigured: true,
-              clientIdConfigured: false,
-              clientSecretConfigured: false,
-              refreshTokenConfigured: true
-            },
-            pollingSettings: {
-              defaultPollEnabled: true,
-              pollEnabledOverride: null,
-              effectivePollEnabled: true,
-              defaultPollInterval: '5m',
-              pollIntervalOverride: null,
-              effectivePollInterval: '5m',
-              defaultFetchWindow: 50,
-              fetchWindowOverride: null,
-              effectiveFetchWindow: 50
-            },
-            passkeys: [],
-            bridges: []
-          }}
-          selectedUserId={7}
-          selectedUserLoading={false}
-          updatingPasskeysResetUserId={null}
-          updatingUserId={null}
-          users={[{ id: 7, username: 'admin', role: 'ADMIN', approved: true, active: true, bridgeCount: 0 }]}
-          locale="en"
-          t={t}
-        />
-      )
-    }
+  it('opens the user contextual menu when the actions button is clicked', () => {
+    renderUi()
+
+    fireEvent.click(screen.getByRole('button', { name: 'User actions' }))
+
+    const menu = screen.getByRole('button', { name: 'User actions' }).parentElement
+
+    expect(within(menu).getByRole('button', { name: 'Suspend user' })).toBeInTheDocument()
+    expect(within(menu).getByRole('button', { name: 'Force password change' })).toBeInTheDocument()
+    expect(within(menu).getByRole('button', { name: 'Reset password' })).toBeInTheDocument()
+  })
+
+  it('renders translated subsection titles inside the expanded user pane', () => {
+    renderUi({ locale: 'pt-PT' })
+
+    expect(screen.getByText('Configuração do utilizador')).toBeInTheDocument()
+    const gmailSectionTitle = screen.getByText('Destino Gmail')
+    expect(screen.getByText('Contas de email de origem')).toBeInTheDocument()
+    expect(gmailSectionTitle.parentElement).toHaveTextContent('Utilizador da API Gmail: me')
+  })
+
+  it('shows a refresh indicator while the users section reloads', () => {
+    renderUi({ sectionLoading: true })
+
+    expect(screen.getByText('Refreshing section…')).toBeInTheDocument()
   })
 })

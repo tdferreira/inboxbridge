@@ -28,6 +28,9 @@ public class UserGmailConfigService {
     @Inject
     OAuthCredentialService oAuthCredentialService;
 
+    @Inject
+    GoogleOAuthService googleOAuthService;
+
     public Optional<UserGmailConfigView> viewForUser(Long userId) {
         return repository.findByUserId(userId).map(config -> toView(userId, config));
     }
@@ -48,29 +51,60 @@ public class UserGmailConfigService {
                 bridgeConfig.gmail().processForCalendar());
     }
 
+    @Transactional
+    public GmailUnlinkResult unlinkForUser(Long userId) {
+        Optional<UserGmailConfig> storedConfig = repository.findByUserId(userId);
+        String subjectKey = "user-gmail:" + userId;
+        String refreshToken = effectiveRefreshToken(userId, storedConfig.orElse(null));
+
+        boolean providerRevocationAttempted = refreshToken != null && !refreshToken.isBlank();
+        boolean providerRevoked = !providerRevocationAttempted || googleOAuthService.revokeToken(refreshToken);
+
+        storedConfig.ifPresent(config -> {
+            config.refreshTokenCiphertext = null;
+            config.refreshTokenNonce = null;
+            config.updatedAt = Instant.now();
+            repository.persist(config);
+        });
+
+        oAuthCredentialService.deleteGoogleCredential(subjectKey);
+        googleOAuthService.clearCachedToken(subjectKey);
+
+        return new GmailUnlinkResult(providerRevocationAttempted, providerRevoked);
+    }
+
     public Optional<ResolvedUserGmailConfig> resolveForUser(Long userId) {
         if (!secretEncryptionService.isConfigured()) {
             return Optional.empty();
         }
-        return repository.findByUserId(userId).map(config -> new ResolvedUserGmailConfig(
-                config.userId,
-                config.destinationUser,
-                decrypt(config.clientIdCiphertext, config.clientIdNonce, config.keyVersion, "user-gmail:" + config.userId + ":client-id"),
-                decrypt(config.clientSecretCiphertext, config.clientSecretNonce, config.keyVersion, "user-gmail:" + config.userId + ":client-secret"),
-                decrypt(config.refreshTokenCiphertext, config.refreshTokenNonce, config.keyVersion, "user-gmail:" + config.userId + ":refresh-token"),
-                config.redirectUri,
-                config.createMissingLabels,
-                config.neverMarkSpam,
-                config.processForCalendar));
+        Optional<UserGmailConfig> storedConfig = repository.findByUserId(userId);
+        boolean hasStoredGoogleRefreshToken = oAuthCredentialService.findGoogleCredential("user-gmail:" + userId)
+                .map(credential -> credential.refreshToken() != null && !credential.refreshToken().isBlank())
+                .orElse(false);
+        if (storedConfig.isEmpty() && !hasStoredGoogleRefreshToken) {
+            return Optional.empty();
+        }
+
+        UserGmailConfig config = storedConfig.orElse(null);
+        return Optional.of(new ResolvedUserGmailConfig(
+                userId,
+                config == null ? bridgeConfig.gmail().destinationUser() : config.destinationUser,
+                effectiveClientId(userId, config),
+                effectiveClientSecret(userId, config),
+                effectiveRefreshToken(userId, config),
+                config == null ? defaultRedirectUri() : nonBlankOrDefault(config.redirectUri, defaultRedirectUri()),
+                config == null ? bridgeConfig.gmail().createMissingLabels() : config.createMissingLabels,
+                config == null ? bridgeConfig.gmail().neverMarkSpam() : config.neverMarkSpam,
+                config == null ? bridgeConfig.gmail().processForCalendar() : config.processForCalendar));
     }
 
     @Transactional
     public UserGmailConfigView update(AppUser user, UpdateUserGmailConfigRequest request) {
         // User-owned Gmail OAuth for regular accounts is intentionally a
         // button-driven consent flow. Only admins can override the advanced
-        // destination settings or secret material from the UI.
+        // Gmail account settings or secret material from the UI.
         if (user.role != AppUser.Role.ADMIN) {
-            throw new IllegalStateException("Only admins can override Gmail destination settings from the admin UI.");
+            throw new IllegalStateException("Only admins can override advanced Gmail account settings from the admin UI.");
         }
         if (!secretEncryptionService.isConfigured() && containsSecrets(request)) {
             throw new IllegalStateException("Secure secret storage must be configured before storing user Gmail credentials in the database.");
@@ -162,6 +196,32 @@ public class UserGmailConfigService {
         return secretEncryptionService.decrypt(ciphertext, nonce, keyVersion, context);
     }
 
+    private String effectiveClientId(Long userId, UserGmailConfig config) {
+        String stored = config == null ? "" : decrypt(config.clientIdCiphertext, config.clientIdNonce, config.keyVersion, "user-gmail:" + userId + ":client-id");
+        if (!stored.isBlank()) {
+            return stored;
+        }
+        return sharedGoogleClientConfigured() ? bridgeConfig.gmail().clientId() : "";
+    }
+
+    private String effectiveClientSecret(Long userId, UserGmailConfig config) {
+        String stored = config == null ? "" : decrypt(config.clientSecretCiphertext, config.clientSecretNonce, config.keyVersion, "user-gmail:" + userId + ":client-secret");
+        if (!stored.isBlank()) {
+            return stored;
+        }
+        return sharedGoogleClientConfigured() ? bridgeConfig.gmail().clientSecret() : "";
+    }
+
+    private String effectiveRefreshToken(Long userId, UserGmailConfig config) {
+        String stored = config == null ? "" : decrypt(config.refreshTokenCiphertext, config.refreshTokenNonce, config.keyVersion, "user-gmail:" + userId + ":refresh-token");
+        if (!stored.isBlank()) {
+            return stored;
+        }
+        return oAuthCredentialService.findGoogleCredential("user-gmail:" + userId)
+                .map(OAuthCredentialService.StoredOAuthCredential::refreshToken)
+                .orElse("");
+    }
+
     private UserGmailConfigView toView(Long userId, UserGmailConfig config) {
         boolean sharedClientConfigured = sharedGoogleClientConfigured();
         return new UserGmailConfigView(
@@ -209,5 +269,10 @@ public class UserGmailConfigService {
             boolean createMissingLabels,
             boolean neverMarkSpam,
             boolean processForCalendar) {
+    }
+
+    public record GmailUnlinkResult(
+            boolean providerRevocationAttempted,
+            boolean providerRevoked) {
     }
 }

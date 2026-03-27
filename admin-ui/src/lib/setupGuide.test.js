@@ -50,4 +50,53 @@ describe('buildSetupGuideState', () => {
 
     expect(result.steps[2].status).toBe('pending')
   })
+
+  it('reports the full guide complete when all meaningful setup steps are finished', () => {
+    const result = buildSetupGuideState({
+      gmailMeta: { refreshTokenConfigured: true },
+      myBridges: [{
+        bridgeId: 'source-main',
+        authMethod: 'PASSWORD',
+        tokenStorageMode: 'PASSWORD',
+        totalImportedMessages: 2,
+        lastEvent: { status: 'SUCCESS', error: null }
+      }],
+      session: { username: 'alice', role: 'USER', mustChangePassword: false },
+      systemDashboard: {
+        overall: {
+          totalImportedMessages: 2
+        }
+      },
+      t
+    })
+
+    expect(result.allStepsComplete).toBe(true)
+  })
+
+  it('renumbers the visible steps sequentially when the oauth step is omitted', () => {
+    const result = buildSetupGuideState({
+      gmailMeta: { refreshTokenConfigured: true },
+      myBridges: [{
+        bridgeId: 'source-main',
+        authMethod: 'PASSWORD',
+        tokenStorageMode: 'PASSWORD',
+        totalImportedMessages: 2,
+        lastEvent: { status: 'SUCCESS', error: null }
+      }],
+      session: { username: 'alice', role: 'USER', mustChangePassword: false },
+      systemDashboard: {
+        overall: {
+          totalImportedMessages: 2
+        }
+      },
+      t
+    })
+
+    expect(result.steps.map((step) => step.title)).toEqual([
+      '1. Secure your session',
+      '2. Connect your Gmail account',
+      '3. Add at least one email account',
+      '4. Run and verify imports'
+    ])
+  })
 })

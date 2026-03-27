@@ -9,11 +9,9 @@ import './PasskeyPanel.css'
 function PasskeyPanel({
   createLoading,
   deleteLoadingId,
-  onCreatePasskey,
   onDeletePasskey,
-  onPasskeyLabelChange,
+  onOpenRegistrationDialog,
   passwordConfigured,
-  passkeyLabel,
   passkeys,
   supported,
   t,
@@ -28,24 +26,23 @@ function PasskeyPanel({
             {t('passkey.copy')}
           </p>
         </div>
-        <div className={`status-pill ${supported ? 'tone-success' : 'tone-error'}`}>
-          {supported ? t('common.browserReady') : t('common.unavailable')}
+        <div className="panel-header-actions">
+          <div className={`status-pill ${supported ? 'tone-success' : 'tone-error'}`}>
+            {supported ? t('common.browserReady') : t('common.unavailable')}
+          </div>
+          <LoadingButton
+            className="primary"
+            disabled={!supported}
+            hint={t('passkey.registerHint')}
+            isLoading={createLoading}
+            loadingLabel={t('passkey.registerLoading')}
+            onClick={onOpenRegistrationDialog}
+            type="button"
+          >
+            {t('passkey.register')}
+          </LoadingButton>
         </div>
       </div>
-
-      <form className="stack-form" onSubmit={onCreatePasskey}>
-        <label>
-          <span>{t('passkey.label')}</span>
-          <input
-            placeholder={t('passkey.placeholder')}
-            value={passkeyLabel}
-            onChange={(event) => onPasskeyLabelChange(event.target.value)}
-          />
-        </label>
-        <LoadingButton className="primary" disabled={!supported} isLoading={createLoading} loadingLabel={t('passkey.registerLoading')} type="submit">
-          {t('passkey.register')}
-        </LoadingButton>
-      </form>
 
       {!supported ? (
         <div className="muted-box">

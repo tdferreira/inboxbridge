@@ -4,18 +4,104 @@
   gap: 18px;
 }
 
-.user-list-item {
+.user-list-entry {
+  padding: 18px;
+  display: grid;
+  gap: 14px;
+}
+
+.user-detail-section {
+  display: grid;
+  gap: 10px;
+}
+
+.user-detail-section-title {
+  font-size: 0.82rem;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--accent);
+  font-weight: 700;
+}
+
+.user-list-entry.expanded {
+  border-color: rgba(23, 101, 75, 0.35);
+  box-shadow: inset 0 0 0 1px rgba(23, 101, 75, 0.16), 0 20px 60px var(--shadow);
+}
+
+.user-list-entry-summary {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 12px;
+  align-items: start;
+}
+
+.user-list-entry-main {
   text-align: left;
   display: flex;
   justify-content: space-between;
   gap: 12px;
-  background: rgba(255, 255, 255, 0.82);
-  border: 1px solid var(--line);
+  width: 100%;
+  background: transparent;
+  border: none;
+  padding: 8px 10px;
+  margin: -8px -10px;
+  border-radius: 18px;
+  box-shadow: none;
 }
 
-.user-list-item.selected {
-  border-color: rgba(23, 101, 75, 0.4);
-  box-shadow: inset 0 0 0 1px rgba(23, 101, 75, 0.22);
+.user-list-entry-main:hover:not(:disabled),
+.user-list-entry-main:focus-visible:not(:disabled) {
+  background: rgba(23, 101, 75, 0.07);
+  box-shadow: inset 0 0 0 1px rgba(23, 101, 75, 0.08);
+}
+
+.user-list-entry-main:active:not(:disabled) {
+  background: rgba(23, 101, 75, 0.11);
+  box-shadow: inset 0 0 0 1px rgba(23, 101, 75, 0.12);
+}
+
+.user-list-entry-title-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 6px;
+}
+
+.user-list-entry-menu {
+  position: relative;
+}
+
+.user-list-entry-menu .fetcher-menu-button {
+  width: 2.75rem;
+  min-width: 2.75rem;
+  height: 2.75rem;
+  min-height: 2.75rem;
+  padding: 0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  align-self: start;
+  line-height: 1;
+}
+
+.user-list-entry-menu .fetcher-menu {
+  position: fixed;
+  z-index: 1000;
+  display: grid;
+  gap: 8px;
+  min-width: 220px;
+  max-width: min(320px, calc(100vw - 24px));
+  padding: 12px;
+  border-radius: 16px;
+  border: 1px solid var(--line);
+  background: rgba(255, 252, 247, 0.98);
+  box-shadow: 0 16px 32px rgba(36, 26, 20, 0.16);
+}
+
+.user-list-entry-menu .fetcher-menu button {
+  width: 100%;
+  justify-content: flex-start;
 }
 
 .user-list-inline-loading {

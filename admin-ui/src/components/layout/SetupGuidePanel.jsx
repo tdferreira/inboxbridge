@@ -5,7 +5,7 @@ import './SetupGuidePanel.css'
  * Gives first-time operators and regular users a compact, in-app checklist for
  * the minimum steps needed to make InboxBridge usable.
  */
-function SetupGuidePanel({ collapsed, onFocusSection, onPersistLayoutChange, onToggleCollapse, persistLayout, savingLayout, steps, t }) {
+function SetupGuidePanel({ collapsed, onFocusSection, onToggleCollapse, savingLayout, sectionLoading = false, steps, t }) {
   return (
     <section className="surface-card setup-guide-panel section-with-corner-toggle" id="quick-setup-guide-section" tabIndex="-1">
       <div className="panel-header">
@@ -15,20 +15,15 @@ function SetupGuidePanel({ collapsed, onFocusSection, onPersistLayoutChange, onT
             {t('setup.copy')}
           </p>
         </div>
-        <div className="panel-header-actions">
-          <label className="setup-guide-persist-toggle">
-            <input
-              checked={persistLayout}
-              disabled={savingLayout}
-              onChange={(event) => onPersistLayoutChange(event.target.checked)}
-              type="checkbox"
-            />
-            <span>{t('setup.rememberLayout')}</span>
-          </label>
-        </div>
       </div>
-      <PaneToggleButton className="pane-toggle-button-corner" collapseLabel={t('common.collapseSection')} collapsed={collapsed} disabled={savingLayout} expandLabel={t('common.expandSection')} isLoading={savingLayout && persistLayout} onClick={onToggleCollapse} />
+      <PaneToggleButton className="pane-toggle-button-corner" collapseLabel={t('common.collapseSection')} collapsed={collapsed} disabled={savingLayout} expandLabel={t('common.expandSection')} isLoading={savingLayout} onClick={onToggleCollapse} />
       {savingLayout ? <div className="section-copy">{t('common.savingLayoutPreference')}</div> : null}
+      {sectionLoading ? (
+        <div className="section-refresh-indicator" role="status">
+          <span aria-hidden="true" className="section-refresh-spinner" />
+          {t('common.refreshingSection')}
+        </div>
+      ) : null}
       {!collapsed ? (
         <div className="setup-guide-grid">
           {steps.map((step) => (

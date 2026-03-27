@@ -6,6 +6,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 import java.net.URI;
 import java.util.List;
 import java.util.Optional;
+import java.util.Map;
 
 import org.junit.jupiter.api.Test;
 
@@ -55,6 +56,12 @@ class MicrosoftOAuthResourceTest {
         assertTrue(html.contains("Return To Admin UI"));
         assertTrue(html.contains("Leave this page without exchanging the code?"));
         assertTrue(html.contains("Attempting automatic exchange"));
+        assertTrue(html.contains("const callbackParams = new URLSearchParams(window.location.search);"));
+        assertTrue(html.contains("const oauthCode = callbackParams.get(\"code\") || serverRenderedCode;"));
+        assertTrue(html.contains("const oauthState = callbackParams.get(\"state\") || serverRenderedState;"));
+        assertTrue(html.contains("let allowLeave = false;"));
+        assertTrue(html.contains("if (exchanged || allowLeave) {"));
+        assertTrue(html.contains("allowLeave = true;"));
         assertTrue(html.contains("window.setTimeout(() => {"));
         assertTrue(html.contains("Returning to the admin UI in"));
         assertTrue(html.contains("encrypted in PostgreSQL"));
@@ -126,6 +133,24 @@ class MicrosoftOAuthResourceTest {
         assertEquals(1, sources.size());
         assertEquals("outlook-main-imap", sources.getFirst().id());
         assertEquals("IMAP", sources.getFirst().protocol());
+    }
+
+    @Test
+    void exchangeReturnsJsonErrorBodyForBrowserCallbackFailures() throws Exception {
+        MicrosoftOAuthResource resource = new MicrosoftOAuthResource();
+        resource.microsoftOAuthService = new FakeMicrosoftOAuthService() {
+            @Override
+            public dev.inboxbridge.dto.MicrosoftTokenExchangeResponse exchangeAuthorizationCodeByState(String state, String code) {
+                throw new IllegalStateException("Invalid or expired OAuth state");
+            }
+        };
+
+        Response response = resource.exchange(new dev.inboxbridge.dto.MicrosoftOAuthCodeRequest(null, "code-1", "state-1"));
+
+        assertEquals(400, response.getStatus());
+        @SuppressWarnings("unchecked")
+        Map<String, String> payload = (Map<String, String>) response.getEntity();
+        assertEquals("Invalid or expired OAuth state", payload.get("error"));
     }
 
     private CurrentUserContext adminContext() {

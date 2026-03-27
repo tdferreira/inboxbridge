@@ -95,3 +95,31 @@ export function serializeCredential(credential) {
 
   return JSON.stringify(serialized)
 }
+
+export function normalizePasskeyError(error, t, mode = 'login') {
+  if (!error) {
+    return mode === 'registration'
+      ? t('errors.passkeyRegistrationFailed')
+      : t('errors.passkeyLoginFailed')
+  }
+
+  const isDomException = typeof DOMException !== 'undefined' && error instanceof DOMException
+  const name = error.name || ''
+  const message = error.message || ''
+
+  if (isDomException || name === 'NotAllowedError') {
+    return mode === 'registration'
+      ? t('errors.passkeyRegistrationCancelled')
+      : t('errors.passkeyCancelled')
+  }
+
+  if (name === 'InvalidStateError') {
+    return mode === 'registration'
+      ? t('errors.passkeyAlreadyRegistered')
+      : t('errors.passkeyLoginFailed')
+  }
+
+  return message || (mode === 'registration'
+    ? t('errors.passkeyRegistrationFailed')
+    : t('errors.passkeyLoginFailed'))
+}

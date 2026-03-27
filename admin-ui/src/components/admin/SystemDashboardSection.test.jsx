@@ -2,120 +2,124 @@ import { fireEvent, render, screen } from '@testing-library/react'
 import SystemDashboardSection from './SystemDashboardSection'
 import { translate } from '../../lib/i18n'
 
-const t = (key, params) => translate('en', key, params)
+function renderSection(props = {}) {
+  return render(
+    <SystemDashboardSection
+      collapsed={false}
+      collapseLoading={false}
+      dashboard={{
+        overall: {
+          configuredSources: 1,
+          enabledSources: 1,
+          totalImportedMessages: 4,
+          sourcesWithErrors: 0,
+          pollInterval: '2m',
+          fetchWindow: 25
+        },
+        stats: {
+          totalImportedMessages: 4,
+          configuredMailFetchers: 1,
+          enabledMailFetchers: 1,
+          sourcesWithErrors: 0,
+          importsByDay: [{ bucketLabel: '2026-03-26', importedMessages: 4 }],
+          importTimelines: {
+            day: [{ bucketLabel: '2026-03-26', importedMessages: 4 }],
+            month: [{ bucketLabel: '2026-03', importedMessages: 4 }]
+          }
+        },
+        polling: {
+          defaultPollEnabled: true,
+          pollEnabledOverride: false,
+          effectivePollEnabled: false,
+          defaultPollInterval: '5m',
+          pollIntervalOverride: '2m',
+          effectivePollInterval: '2m',
+          defaultFetchWindow: 50,
+          fetchWindowOverride: 25,
+          effectiveFetchWindow: 25
+        },
+        destination: { tokenStorageMode: 'DATABASE' },
+        bridges: [],
+        recentEvents: []
+      }}
+      onCollapseToggle={vi.fn()}
+      onOpenEditor={vi.fn()}
+      onRunPoll={vi.fn()}
+      runningPoll={false}
+      locale="en"
+      t={(key, params) => translate('en', key, params)}
+      {...props}
+    />
+  )
+}
 
 describe('SystemDashboardSection', () => {
-  it('renders polling settings controls and submits override actions', () => {
-    const onSavePollingSettings = vi.fn((event) => event.preventDefault())
-    const onResetPollingSettings = vi.fn()
-    let form = {
-      pollEnabledMode: 'DEFAULT',
-      pollIntervalOverride: '',
-      fetchWindowOverride: ''
-    }
+  it('renders a summary and forwards edit and run actions', () => {
+    const onOpenEditor = vi.fn()
+    const onRunPoll = vi.fn()
+    renderSection({ onOpenEditor, onRunPoll })
 
-    const { rerender } = renderUi()
+    expect(screen.getByText(/Effective polling:/)).toBeInTheDocument()
+    expect(screen.getByText(/Effective interval:/)).toBeInTheDocument()
+    expect(screen.getByText(/Effective fetch window:/)).toBeInTheDocument()
 
-    fireEvent.change(screen.getByLabelText(/Polling Mode/), { target: { value: 'DISABLED' } })
-    fireEvent.change(screen.getByLabelText(/Poll Interval Override/), { target: { value: '2m' } })
-    fireEvent.change(screen.getByLabelText(/Fetch Window Override/), { target: { value: '25' } })
-    fireEvent.submit(screen.getByRole('button', { name: 'Save Poll Settings' }).closest('form'))
-    fireEvent.click(screen.getByRole('button', { name: 'Use Environment Defaults' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Edit Poller Settings' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Run Poll Now' }))
 
-    expect(onSavePollingSettings).toHaveBeenCalledTimes(1)
-    expect(onResetPollingSettings).toHaveBeenCalledTimes(1)
-    expect(form.pollEnabledMode).toBe('DISABLED')
-    expect(form.pollIntervalOverride).toBe('2m')
-    expect(form.fetchWindowOverride).toBe('25')
+    expect(onOpenEditor).toHaveBeenCalled()
+    expect(onRunPoll).toHaveBeenCalled()
+  })
 
-    function renderUi() {
-      return render(
-        <SystemDashboardSection
-          collapsed={false}
-          collapseLoading={false}
-          dashboard={{
-            overall: {
-              configuredSources: 1,
-              totalImportedMessages: 4,
-              sourcesWithErrors: 0,
-              pollInterval: '2m',
-              fetchWindow: 25
-            },
-            polling: {
-              defaultPollEnabled: true,
-              pollEnabledOverride: false,
-              effectivePollEnabled: false,
-              defaultPollInterval: '5m',
-              pollIntervalOverride: '2m',
-              effectivePollInterval: '2m',
-              defaultFetchWindow: 50,
-              fetchWindowOverride: 25,
-              effectiveFetchWindow: 25
-            },
-            destination: { tokenStorageMode: 'DATABASE' },
-            bridges: [],
-            recentEvents: []
-          }}
-          onCollapseToggle={vi.fn()}
-          onPollingFormChange={(updater) => {
-            form = typeof updater === 'function' ? updater(form) : updater
-            rerenderUi()
-          }}
-          onResetPollingSettings={onResetPollingSettings}
-          onRunPoll={vi.fn()}
-          onSavePollingSettings={onSavePollingSettings}
-          pollingSettingsForm={form}
-          pollingSettingsLoading={false}
-          runningPoll={false}
-          locale="en"
-          t={t}
-        />
-      )
-    }
+  it('renders translated system polling labels in portuguese', () => {
+    render(
+      <SystemDashboardSection
+        collapsed={false}
+        collapseLoading={false}
+        dashboard={{
+          overall: {
+            configuredSources: 1,
+            enabledSources: 1,
+            totalImportedMessages: 4,
+            sourcesWithErrors: 0,
+            pollInterval: '2m',
+            fetchWindow: 25
+          },
+          stats: {
+            totalImportedMessages: 4,
+            configuredMailFetchers: 1,
+            enabledMailFetchers: 1,
+            sourcesWithErrors: 0,
+            importsByDay: [{ bucketLabel: '2026-03-26', importedMessages: 4 }],
+            importTimelines: {
+              day: [{ bucketLabel: '2026-03-26', importedMessages: 4 }]
+            }
+          },
+          polling: {
+            defaultPollEnabled: true,
+            pollEnabledOverride: false,
+            effectivePollEnabled: false,
+            defaultPollInterval: '5m',
+            pollIntervalOverride: '2m',
+            effectivePollInterval: '2m',
+            defaultFetchWindow: 50,
+            fetchWindowOverride: 25,
+            effectiveFetchWindow: 25
+          },
+          destination: { tokenStorageMode: 'DATABASE' },
+          bridges: [],
+          recentEvents: []
+        }}
+        onCollapseToggle={vi.fn()}
+        onOpenEditor={vi.fn()}
+        onRunPoll={vi.fn()}
+        runningPoll={false}
+        locale="pt-PT"
+        t={(key, params) => translate('pt-PT', key, params)}
+      />
+    )
 
-    function rerenderUi() {
-      rerender(
-        <SystemDashboardSection
-          collapsed={false}
-          collapseLoading={false}
-          dashboard={{
-            overall: {
-              configuredSources: 1,
-              totalImportedMessages: 4,
-              sourcesWithErrors: 0,
-              pollInterval: '2m',
-              fetchWindow: 25
-            },
-            polling: {
-              defaultPollEnabled: true,
-              pollEnabledOverride: false,
-              effectivePollEnabled: false,
-              defaultPollInterval: '5m',
-              pollIntervalOverride: '2m',
-              effectivePollInterval: '2m',
-              defaultFetchWindow: 50,
-              fetchWindowOverride: 25,
-              effectiveFetchWindow: 25
-            },
-            destination: { tokenStorageMode: 'DATABASE' },
-            bridges: [],
-            recentEvents: []
-          }}
-          onCollapseToggle={vi.fn()}
-          onPollingFormChange={(updater) => {
-            form = typeof updater === 'function' ? updater(form) : updater
-            rerenderUi()
-          }}
-          onResetPollingSettings={onResetPollingSettings}
-          onRunPoll={vi.fn()}
-          onSavePollingSettings={onSavePollingSettings}
-          pollingSettingsForm={form}
-          pollingSettingsLoading={false}
-          runningPoll={false}
-          locale="en"
-          t={t}
-        />
-      )
-    }
+    expect(screen.getByText('Definições globais do poller')).toBeInTheDocument()
+    expect(screen.getByText(/Polling efetivo:/)).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Editar definições do poller' })).toBeInTheDocument()
   })
 })

@@ -47,6 +47,18 @@ class AppUserServiceTest {
     }
 
     @Test
+    void createUserRejectsDuplicateUsername() {
+        AppUserService service = service();
+        service.createUser(new CreateUserRequest("bob@example.com", "Secret#123", "USER"));
+
+        IllegalArgumentException error = assertThrows(
+                IllegalArgumentException.class,
+                () -> service.createUser(new CreateUserRequest("bob@example.com", "Secret#123", "USER")));
+
+        assertEquals("Username already exists", error.getMessage());
+    }
+
+    @Test
     void cannotRemoveLastApprovedAdmin() {
         AppUserService service = service();
         AppUser admin = service.createUser(new CreateUserRequest("admin2@example.com", "Secret#123", "ADMIN"));
@@ -118,7 +130,7 @@ class AppUserServiceTest {
 
         IllegalArgumentException error = assertThrows(
                 IllegalArgumentException.class,
-                () -> service.removePassword(user));
+                () -> service.removePassword(user, "Secret#123"));
 
         assertEquals("Register a passkey before removing the password.", error.getMessage());
     }
@@ -128,7 +140,7 @@ class AppUserServiceTest {
         AppUserService service = service(1);
         AppUser user = service.createUser(new CreateUserRequest("grace@example.com", "Secret#123", "USER"));
 
-        service.removePassword(user);
+        service.removePassword(user, "Secret#123");
 
         AppUser reloaded = service.findById(user.id).orElseThrow();
         assertFalse(service.hasPassword(reloaded));
@@ -139,13 +151,25 @@ class AppUserServiceTest {
     void changePasswordAllowsPasswordlessAccountToSetNewPassword() {
         AppUserService service = service(1);
         AppUser user = service.createUser(new CreateUserRequest("heidi@example.com", "Secret#123", "USER"));
-        service.removePassword(user);
+        service.removePassword(user, "Secret#123");
 
         service.changePassword(user, "", "Better#456", "Better#456");
 
         AppUser reloaded = service.findById(user.id).orElseThrow();
         assertTrue(service.passwordMatches(reloaded, "Better#456"));
         assertFalse(reloaded.mustChangePassword);
+    }
+
+    @Test
+    void removePasswordRequiresCurrentPasswordConfirmation() {
+        AppUserService service = service(1);
+        AppUser user = service.createUser(new CreateUserRequest("ivan@example.com", "Secret#123", "USER"));
+
+        IllegalArgumentException error = assertThrows(
+                IllegalArgumentException.class,
+                () -> service.removePassword(user, "Wrong#123"));
+
+        assertEquals("Current password is incorrect", error.getMessage());
     }
 
     private AppUserService service() {

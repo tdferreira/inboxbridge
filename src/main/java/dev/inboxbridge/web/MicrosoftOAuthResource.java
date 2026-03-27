@@ -87,14 +87,16 @@ public class MicrosoftOAuthResource {
     @POST
     @Path("/exchange")
     @Consumes(MediaType.APPLICATION_JSON)
-    public MicrosoftTokenExchangeResponse exchange(MicrosoftOAuthCodeRequest request) {
+    public Response exchange(MicrosoftOAuthCodeRequest request) {
         try {
             if (request.state() != null && !request.state().isBlank()) {
-                return microsoftOAuthService.exchangeAuthorizationCodeByState(request.state(), request.code());
+                return Response.ok(microsoftOAuthService.exchangeAuthorizationCodeByState(request.state(), request.code())).build();
             }
-            return microsoftOAuthService.exchangeAuthorizationCode(request.sourceId(), request.code());
+            return Response.ok(microsoftOAuthService.exchangeAuthorizationCode(request.sourceId(), request.code())).build();
         } catch (IllegalArgumentException | IllegalStateException e) {
-            throw new BadRequestException(e.getMessage(), e);
+            return Response.status(Response.Status.BAD_REQUEST)
+                    .entity(Map.of("error", e.getMessage()))
+                    .build();
         }
     }
 
@@ -181,7 +183,7 @@ public class MicrosoftOAuthResource {
         }
 
         String browserExchangeHtml = "";
-        if (success && sourceId != null && code != null && !code.isBlank()) {
+        if (success && state != null && !state.isBlank()) {
             browserExchangeHtml = """
                     <div class="exchange-card">
                       <div class="actions">
@@ -214,12 +216,20 @@ public class MicrosoftOAuthResource {
                       const envField = document.getElementById("envField");
                       const envAssignmentValue = document.getElementById("envAssignmentValue");
                       const returnLink = document.getElementById("returnLink");
-                      const oauthSourceId = %s;
-                      const oauthState = %s;
-                      const oauthConfigKey = %s;
-                      const oauthCode = %s;
+                      const serverRenderedSourceId = %s;
+                      const serverRenderedState = %s;
+                      const serverRenderedConfigKey = %s;
+                      const serverRenderedCode = %s;
+                      const callbackParams = new URLSearchParams(window.location.search);
+                      const oauthCode = callbackParams.get("code") || serverRenderedCode;
+                      const oauthState = callbackParams.get("state") || serverRenderedState;
+                      const oauthSourceId = serverRenderedSourceId;
+                      const oauthConfigKey = serverRenderedConfigKey;
+                      const oauthError = callbackParams.get("error") || "";
+                      const oauthErrorDescription = callbackParams.get("error_description") || "";
                       let exchanged = false;
                       let exchangeAttempted = false;
+                      let allowLeave = false;
                       let redirectTimerId = null;
                       let countdownIntervalId = null;
 
@@ -283,8 +293,16 @@ public class MicrosoftOAuthResource {
                         }
                       });
 
-                      function formatExchangeError(payloadText) {
-                        const normalized = (payloadText || "").toLowerCase();
+                      function formatExchangeError(payloadText, statusCode) {
+                        let parsedMessage = payloadText || "";
+                        try {
+                          const parsed = JSON.parse(payloadText || "{}");
+                          parsedMessage = parsed.error || parsed.message || parsedMessage;
+                        } catch (error) {
+                          // Keep the original payload text when the backend did not return JSON.
+                        }
+
+                        const normalized = parsedMessage.toLowerCase();
                         if (
                           normalized.includes("access_denied") ||
                           normalized.includes("consent_required") ||
@@ -293,12 +311,25 @@ public class MicrosoftOAuthResource {
                           normalized.includes("offline_access") ||
                           normalized.includes("missing scopes")
                         ) {
-                          return "Microsoft OAuth is still missing one or more required permissions. Retry the flow and approve every requested mailbox permission, then try again. Details: " + payloadText;
+                          return "Microsoft OAuth is still missing one or more required permissions. Retry the flow and approve every requested mailbox permission, then try again. Details: " + parsedMessage;
                         }
-                        return "Exchange failed: " + payloadText;
+                        if (!parsedMessage) {
+                          return "Exchange failed with status " + statusCode + ". Check the server logs and Microsoft app settings.";
+                        }
+                        return "Exchange failed: " + parsedMessage;
                       }
 
                       async function exchangeCode() {
+                        if (!oauthCode) {
+                          exchangeStatus.textContent = oauthError
+                            ? "Microsoft OAuth returned " + oauthError + (oauthErrorDescription ? ": " + oauthErrorDescription : ".")
+                            : "No authorization code was present in the callback URL.";
+                          return;
+                        }
+                        if (!oauthState) {
+                          exchangeStatus.textContent = "The callback state is missing or expired. Start the Microsoft OAuth flow again from the admin UI.";
+                          return;
+                        }
                         if (exchangeAttempted) {
                           return;
                         }
@@ -314,7 +345,7 @@ public class MicrosoftOAuthResource {
 
                           const payloadText = await response.text();
                           if (!response.ok) {
-                            exchangeStatus.textContent = formatExchangeError(payloadText);
+                            exchangeStatus.textContent = formatExchangeError(payloadText, response.status);
                             return;
                           }
 
@@ -336,7 +367,7 @@ public class MicrosoftOAuthResource {
                           if (payload.usingEnvironmentFallback && payload.refreshToken) {
                             envAssignmentValue.textContent = oauthConfigKey + "=" + payload.refreshToken;
                             envField.classList.remove("hidden");
-                            exchangeStatus.textContent = "Exchange completed. Copy the env assignment into your local .env and restart InboxBridge.";
+                            exchangeStatus.textContent = "Exchange completed, but this env-managed source cannot poll yet. Copy the env assignment into your local .env, restart InboxBridge, and then polling will be able to use the new refresh token.";
                           } else {
                             envField.classList.add("hidden");
                             envAssignmentValue.textContent = "";
@@ -351,15 +382,19 @@ public class MicrosoftOAuthResource {
                       }
 
                       exchangeButton?.addEventListener("click", exchangeCode);
-                      if (oauthCode && oauthState) {
+                      if (oauthError) {
+                        exchangeStatus.textContent = "Microsoft OAuth returned " + oauthError + (oauthErrorDescription ? ": " + oauthErrorDescription : ".");
+                      } else if (oauthCode && oauthState) {
                         exchangeStatus.textContent = "Authorization code received. Attempting automatic exchange...";
                         window.setTimeout(() => {
                           exchangeCode();
                         }, 0);
+                      } else if (oauthCode) {
+                        exchangeStatus.textContent = "Authorization code received, but callback state is missing. Start the Microsoft OAuth flow again if automatic exchange does not work.";
                       }
 
                       window.addEventListener("beforeunload", (event) => {
-                        if (exchanged) {
+                        if (exchanged || allowLeave) {
                           return;
                         }
                         event.preventDefault();
@@ -371,6 +406,9 @@ public class MicrosoftOAuthResource {
                           return;
                         }
                         const leave = window.confirm("Leave this page without exchanging the code? If you continue, you must copy the code and handle the token exchange manually later.");
+                        if (leave) {
+                          allowLeave = true;
+                        }
                         if (!leave) {
                           event.preventDefault();
                           exchangeStatus.textContent = "Exchange the code in the browser before leaving, or copy it now and complete the token exchange manually later.";

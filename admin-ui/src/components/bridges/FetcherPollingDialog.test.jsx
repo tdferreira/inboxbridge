@@ -1,0 +1,68 @@
+import { fireEvent, render, screen } from '@testing-library/react'
+import FetcherPollingDialog from './FetcherPollingDialog'
+import { translate } from '../../lib/i18n'
+
+describe('FetcherPollingDialog', () => {
+  it('renders translated poller settings labels in portuguese', () => {
+    render(
+      <FetcherPollingDialog
+        fetcher={{ bridgeId: 'outlook-main', customLabel: '' }}
+        form={{
+          pollEnabledMode: 'DEFAULT',
+          pollIntervalOverride: '',
+          fetchWindowOverride: '',
+          basePollEnabled: true,
+          basePollInterval: '5m',
+          baseFetchWindow: 50,
+          effectivePollEnabled: true,
+          effectivePollInterval: '5m',
+          effectiveFetchWindow: 50,
+          isDirty: false
+        }}
+        loading={false}
+        onChange={vi.fn()}
+        onClose={vi.fn()}
+        onReset={vi.fn()}
+        onSave={vi.fn((event) => event.preventDefault())}
+        t={(key, params) => translate('pt-PT', key, params)}
+      />
+    )
+
+    expect(screen.getByText('outlook-main')).toBeInTheDocument()
+    expect(screen.getByText('Modo de polling')).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Guardar definições do poller' })).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Usar predefinições herdadas' })).toBeInTheDocument()
+  })
+
+  it('marks the form dirty when fields change through the parent handler', () => {
+    const onChange = vi.fn()
+
+    render(
+      <FetcherPollingDialog
+        fetcher={{ bridgeId: 'fetcher-1', customLabel: '' }}
+        form={{
+          pollEnabledMode: 'DEFAULT',
+          pollIntervalOverride: '',
+          fetchWindowOverride: '',
+          basePollEnabled: true,
+          basePollInterval: '5m',
+          baseFetchWindow: 50,
+          effectivePollEnabled: true,
+          effectivePollInterval: '5m',
+          effectiveFetchWindow: 50,
+          isDirty: false
+        }}
+        loading={false}
+        onChange={onChange}
+        onClose={vi.fn()}
+        onReset={vi.fn()}
+        onSave={vi.fn((event) => event.preventDefault())}
+        t={(key, params) => translate('en', key, params)}
+      />
+    )
+
+    fireEvent.change(screen.getByRole('combobox'), { target: { value: 'ENABLED' } })
+
+    expect(onChange).toHaveBeenCalled()
+  })
+})

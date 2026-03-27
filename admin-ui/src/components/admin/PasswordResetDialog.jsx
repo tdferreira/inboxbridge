@@ -20,9 +20,15 @@ function PasswordResetDialog({
     requireCurrentPassword: false,
     requireDifferent: false
   })
+  const isDirty = resetPasswordForm.newPassword !== '' || resetPasswordForm.confirmNewPassword !== ''
 
   return (
-    <ModalDialog onClose={onClose} title={t('security.resetPasswordTitle', { username })}>
+    <ModalDialog
+      isDirty={isDirty}
+      onClose={onClose}
+      title={t('security.resetPasswordTitle', { username })}
+      unsavedChangesMessage={t('common.unsavedChangesConfirm')}
+    >
       <p className="section-copy">
         {t('security.resetPasswordCopy')}
       </p>

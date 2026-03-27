@@ -1,4 +1,4 @@
-import { parseCreateOptions, parseGetOptions, serializeCredential } from './passkeys'
+import { normalizePasskeyError, parseCreateOptions, parseGetOptions, serializeCredential } from './passkeys'
 
 describe('passkeys helpers', () => {
   it('hydrates wrapped WebAuthn option payloads and serializes credentials', () => {
@@ -48,5 +48,19 @@ describe('passkeys helpers', () => {
 
     expect(createOptions.challenge).toBeInstanceOf(ArrayBuffer)
     expect(createOptions.user.id).toBeInstanceOf(ArrayBuffer)
+  })
+
+  it('maps browser WebAuthn errors to translated friendly messages', () => {
+    const t = (key) => ({
+      'errors.passkeyCancelled': 'Cancelado',
+      'errors.passkeyRegistrationCancelled': 'Registo cancelado',
+      'errors.passkeyAlreadyRegistered': 'Ja registada',
+      'errors.passkeyLoginFailed': 'Falha no login',
+      'errors.passkeyRegistrationFailed': 'Falha no registo'
+    }[key] || key)
+
+    expect(normalizePasskeyError(new DOMException('raw browser message', 'NotAllowedError'), t, 'registration')).toBe('Registo cancelado')
+    expect(normalizePasskeyError({ name: 'InvalidStateError', message: 'raw browser message' }, t, 'registration')).toBe('Ja registada')
+    expect(normalizePasskeyError({ name: 'UnknownError', message: 'custom failure' }, t, 'login')).toBe('custom failure')
   })
 })

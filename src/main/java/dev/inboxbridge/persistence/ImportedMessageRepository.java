@@ -29,4 +29,41 @@ public class ImportedMessageRepository implements PanacheRepository<ImportedMess
                 Object[].class)
                 .getResultList();
     }
+
+    public long countByDestinationKey(String destinationKey) {
+        return count("destinationKey", destinationKey);
+    }
+
+    public List<Object[]> summarizeByImportedDay() {
+        return getEntityManager().createNativeQuery(
+                "select date_trunc('day', imported_at) as bucket_start, count(*) as imported_count "
+                        + "from imported_message "
+                        + "group by bucket_start "
+                        + "order by bucket_start")
+                .getResultList();
+    }
+
+    public List<Object[]> summarizeByImportedDayForDestinationKey(String destinationKey) {
+        return getEntityManager().createNativeQuery(
+                "select date_trunc('day', imported_at) as bucket_start, count(*) as imported_count "
+                        + "from imported_message "
+                        + "where destination_key = ?1 "
+                        + "group by bucket_start "
+                        + "order by bucket_start")
+                .setParameter(1, destinationKey)
+                .getResultList();
+    }
+
+    public List<Instant> listImportedAtSince(Instant since) {
+        return find("select importedAt from ImportedMessage where importedAt >= ?1 order by importedAt", since)
+                .project(Instant.class)
+                .list();
+    }
+
+    public List<Instant> listImportedAtSinceForDestinationKey(String destinationKey, Instant since) {
+        return find("select importedAt from ImportedMessage where destinationKey = ?1 and importedAt >= ?2 order by importedAt",
+                destinationKey, since)
+                .project(Instant.class)
+                .list();
+    }
 }

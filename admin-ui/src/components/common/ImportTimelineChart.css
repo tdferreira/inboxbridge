@@ -1,0 +1,91 @@
+.timeline-chart-card {
+  padding: 1rem;
+}
+
+.timeline-chart-title {
+  font-weight: 600;
+}
+
+.timeline-chart-header {
+  align-items: end;
+  display: flex;
+  gap: 1rem;
+  justify-content: space-between;
+  margin-bottom: 0.75rem;
+}
+
+.timeline-chart-select-label {
+  align-items: center;
+  color: var(--muted-text);
+  display: flex;
+  gap: 0.5rem;
+  font-size: 0.85rem;
+}
+
+.timeline-chart-select-label select {
+  min-width: 9rem;
+}
+
+.timeline-chart {
+  align-items: end;
+  display: grid;
+  gap: 0.6rem;
+  grid-template-columns: repeat(auto-fit, minmax(3rem, 1fr));
+  min-height: 10rem;
+}
+
+.timeline-chart-line {
+  position: relative;
+  padding-top: 1rem;
+}
+
+.timeline-chart-svg {
+  inset: 0 0 1.7rem 0;
+  position: absolute;
+  width: 100%;
+  height: calc(100% - 1.7rem);
+  overflow: visible;
+  pointer-events: none;
+}
+
+.timeline-chart-column {
+  align-items: center;
+  display: flex;
+  flex-direction: column;
+  gap: 0.45rem;
+  justify-content: end;
+  min-width: 0;
+  position: relative;
+  z-index: 1;
+}
+
+.timeline-chart-polyline {
+  stroke: var(--accent);
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  stroke-width: 2.2;
+}
+
+.timeline-chart-dot {
+  fill: white;
+  stroke: var(--accent);
+  stroke-width: 1.3;
+}
+
+.timeline-chart-count,
+.timeline-chart-label {
+  color: var(--muted-text);
+  font-size: 0.78rem;
+  text-align: center;
+}
+
+@media (max-width: 720px) {
+  .timeline-chart-header {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .timeline-chart-select-label {
+    justify-content: space-between;
+  }
+}

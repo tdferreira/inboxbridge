@@ -4,6 +4,10 @@
   gap: 18px;
 }
 
+.app-columns-single {
+  grid-template-columns: 1fr;
+}
+
 .gmail-destination-panel {
   padding: 24px;
   display: grid;

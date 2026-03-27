@@ -8,8 +8,10 @@ import java.util.Optional;
 
 import dev.inboxbridge.config.BridgeConfig;
 import dev.inboxbridge.dto.AdminPollEventSummary;
+import dev.inboxbridge.dto.BridgeConnectionTestResult;
 import dev.inboxbridge.dto.UpdateUserBridgeRequest;
 import dev.inboxbridge.dto.UserBridgeView;
+import dev.inboxbridge.domain.RuntimeBridge;
 import dev.inboxbridge.persistence.AppUser;
 import dev.inboxbridge.persistence.ImportedMessageRepository;
 import dev.inboxbridge.persistence.UserBridge;
@@ -37,11 +39,22 @@ public class UserBridgeService {
     UserPollingSettingsService userPollingSettingsService;
 
     @Inject
+    SourcePollingSettingsService sourcePollingSettingsService;
+
+    @Inject
     SourcePollingStateService sourcePollingStateService;
+
+    @Inject
+    OAuthCredentialService oAuthCredentialService;
+
+    @Inject
+    EnvSourceService envSourceService;
+
+    @Inject
+    MailSourceClient mailSourceClient;
 
     public List<UserBridgeView> listForUser(Long userId) {
         Map<String, ImportStats> importStatsBySource = importStatsBySource();
-        PollingSettingsService.EffectivePollingSettings effectiveSettings = userPollingSettingsService.effectiveSettingsForUser(userId);
         List<UserBridge> bridges = repository.listByUserId(userId);
         Map<String, dev.inboxbridge.dto.SourcePollingStateView> pollingStateBySource = sourcePollingStateService.viewBySourceIds(
                 bridges.stream()
@@ -50,7 +63,6 @@ public class UserBridgeService {
         return bridges.stream()
                 .map(bridge -> toView(
                         bridge,
-                        effectiveSettings,
                         importStatsBySource.getOrDefault(bridge.bridgeId, ImportStats.EMPTY),
                         pollingStateBySource.get(bridge.bridgeId)))
                 .toList();
@@ -64,25 +76,59 @@ public class UserBridgeService {
         return repository.findByBridgeId(bridgeId);
     }
 
+    public BridgeConnectionTestResult testConnection(AppUser user, UpdateUserBridgeRequest request) {
+        RuntimeBridge candidate = preview(user, request);
+        return mailSourceClient.testConnection(candidate);
+    }
+
+    public RuntimeBridge preview(AppUser user, UpdateUserBridgeRequest request) {
+        String bridgeId = requireNonBlank(request.bridgeId(), "Mail fetcher ID");
+        UserBridge existing = resolveExistingBridge(user, request);
+        BridgeConfig.Protocol protocol = parseProtocol(request.protocol());
+        BridgeConfig.AuthMethod authMethod = parseAuthMethod(request.authMethod());
+        BridgeConfig.OAuthProvider oauthProvider = parseOAuthProvider(request.oauthProvider());
+        return new RuntimeBridge(
+                bridgeId,
+                "USER",
+                user.id,
+                user.username,
+                request.enabled() == null || request.enabled(),
+                protocol,
+                requireNonBlank(request.host(), "Host"),
+                request.port() == null ? defaultPort(protocol) : request.port(),
+                request.tls() == null || request.tls(),
+                authMethod,
+                oauthProvider,
+                requireNonBlank(request.username(), "Username"),
+                resolvePassword(existing, authMethod, request.password()),
+                resolveRefreshToken(existing, authMethod, oauthProvider, request.oauthRefreshToken()),
+                Optional.ofNullable(blankToNull(request.folder())),
+                request.unreadOnly() != null && request.unreadOnly(),
+                Optional.ofNullable(blankToNull(request.customLabel())),
+                null);
+    }
+
     @Transactional
     public UserBridgeView upsert(AppUser user, UpdateUserBridgeRequest request) {
         if (!secretEncryptionService.isConfigured()) {
             throw new IllegalStateException("Secure secret storage must be configured before storing user bridge secrets in the database.");
         }
         String bridgeId = requireNonBlank(request.bridgeId(), "Mail fetcher ID");
-        String originalBridgeId = blankToNull(request.originalBridgeId());
-        UserBridge bridge = originalBridgeId == null
-                ? new UserBridge()
-                : repository.findByBridgeId(originalBridgeId)
-                        .filter(existing -> existing.userId.equals(user.id))
-                        .orElseThrow(() -> new IllegalArgumentException("Unknown mail fetcher id"));
+        UserBridge existing = resolveExistingBridge(user, request);
+        UserBridge bridge = existing == null ? new UserBridge() : existing;
         // Fetcher IDs are global across env-backed runtime config, OAuth state,
         // logs, and imported-message attribution, so renames must stay unique.
         repository.findByBridgeId(bridgeId)
-                .filter(existing -> bridge.id == null || !existing.id.equals(bridge.id))
-                .ifPresent(existing -> {
+                .filter(candidate -> bridge.id == null || !candidate.id.equals(bridge.id))
+                .ifPresent(candidate -> {
                     throw new IllegalArgumentException("Mail fetcher ID already exists");
                 });
+        boolean collidesWithSystemSource = envSourceService.configuredSources().stream()
+                .map(EnvSourceService.IndexedSource::source)
+                .anyMatch(source -> source.id().equals(bridgeId));
+        if (collidesWithSystemSource) {
+            throw new IllegalArgumentException("Mail fetcher ID already exists");
+        }
         boolean isNew = bridge.id == null;
         bridge.userId = user.id;
         bridge.bridgeId = bridgeId;
@@ -122,7 +168,6 @@ public class UserBridgeService {
         repository.persist(bridge);
         return toView(
                 bridge,
-                userPollingSettingsService.effectiveSettingsForUser(user.id),
                 ImportStats.EMPTY,
                 sourcePollEventState(bridge.bridgeId));
     }
@@ -148,7 +193,7 @@ public class UserBridgeService {
 
     public String decryptRefreshToken(UserBridge bridge) {
         if (bridge.oauthRefreshTokenCiphertext == null || bridge.oauthRefreshTokenNonce == null) {
-            return "";
+            return fallbackMicrosoftRefreshToken(bridge).orElse("");
         }
         return secretEncryptionService.decrypt(
                 bridge.oauthRefreshTokenCiphertext,
@@ -159,9 +204,28 @@ public class UserBridgeService {
 
     private UserBridgeView toView(
             UserBridge bridge,
-            PollingSettingsService.EffectivePollingSettings effectiveSettings,
             ImportStats importStats,
             dev.inboxbridge.dto.SourcePollingStateView pollingState) {
+        PollingSettingsService.EffectivePollingSettings effectiveSettings = sourcePollingSettingsService.effectiveSettingsFor(
+                new dev.inboxbridge.domain.RuntimeBridge(
+                        bridge.bridgeId,
+                        "USER",
+                        bridge.userId,
+                        null,
+                        bridge.enabled,
+                        bridge.protocol,
+                        bridge.host,
+                        bridge.port,
+                        bridge.tls,
+                        bridge.authMethod,
+                        bridge.oauthProvider,
+                        bridge.username,
+                        decryptPassword(bridge),
+                        decryptRefreshToken(bridge),
+                        Optional.ofNullable(bridge.folderName),
+                        bridge.unreadOnly,
+                        Optional.ofNullable(bridge.customLabel),
+                        null));
         AdminPollEventSummary lastEvent = sourcePollEventService.latestForSource(bridge.bridgeId).orElse(null);
         return new UserBridgeView(
                 bridge.bridgeId,
@@ -177,14 +241,14 @@ public class UserBridgeService {
                 bridge.oauthProvider.name(),
                 bridge.username,
                 bridge.passwordCiphertext != null,
-                bridge.oauthRefreshTokenCiphertext != null,
+                hasEffectiveOAuthRefreshToken(bridge),
                 bridge.folderName == null ? "INBOX" : bridge.folderName,
                 bridge.unreadOnly,
                 bridge.customLabel == null ? "" : bridge.customLabel,
                 tokenStorageMode(bridge),
                 importStats.totalImported(),
                 importStats.lastImportedAt(),
-                lastEvent,
+                sanitizeLastEvent(bridge, lastEvent),
                 pollingState);
     }
 
@@ -209,7 +273,38 @@ public class UserBridgeService {
         if (bridge.oauthProvider != BridgeConfig.OAuthProvider.MICROSOFT) {
             return "UNKNOWN";
         }
-        return bridge.oauthRefreshTokenCiphertext != null ? "DATABASE" : "NOT_CONFIGURED";
+        return hasEffectiveOAuthRefreshToken(bridge) ? "DATABASE" : "NOT_CONFIGURED";
+    }
+
+    private boolean hasEffectiveOAuthRefreshToken(UserBridge bridge) {
+        return bridge.oauthRefreshTokenCiphertext != null
+                || fallbackMicrosoftRefreshToken(bridge).filter(token -> !token.isBlank()).isPresent();
+    }
+
+    private Optional<String> fallbackMicrosoftRefreshToken(UserBridge bridge) {
+        if (bridge.oauthProvider != BridgeConfig.OAuthProvider.MICROSOFT || !oAuthCredentialService.secureStorageConfigured()) {
+            return Optional.empty();
+        }
+        return oAuthCredentialService.findMicrosoftCredential(bridge.bridgeId)
+                .map(OAuthCredentialService.StoredOAuthCredential::refreshToken)
+                .filter(token -> token != null && !token.isBlank());
+    }
+
+    private AdminPollEventSummary sanitizeLastEvent(UserBridge bridge, AdminPollEventSummary lastEvent) {
+        if (lastEvent == null || !"ERROR".equals(lastEvent.status()) || lastEvent.error() == null) {
+            return lastEvent;
+        }
+        if (!lastEvent.error().contains("configured for OAuth2 but has no refresh token")) {
+            return lastEvent;
+        }
+        OAuthCredentialService.StoredOAuthCredential credential = oAuthCredentialService.findMicrosoftCredential(bridge.bridgeId).orElse(null);
+        if (credential == null || credential.updatedAt() == null || lastEvent.finishedAt() == null) {
+            return lastEvent;
+        }
+        if (credential.updatedAt().isAfter(lastEvent.finishedAt())) {
+            return null;
+        }
+        return lastEvent;
     }
 
     private BridgeConfig.Protocol parseProtocol(String value) {
@@ -226,6 +321,52 @@ public class UserBridgeService {
 
     private int defaultPort(BridgeConfig.Protocol protocol) {
         return protocol == BridgeConfig.Protocol.IMAP ? 993 : 995;
+    }
+
+    private UserBridge resolveExistingBridge(AppUser user, UpdateUserBridgeRequest request) {
+        String originalBridgeId = blankToNull(request.originalBridgeId());
+        if (originalBridgeId == null) {
+            return null;
+        }
+        return repository.findByBridgeId(originalBridgeId)
+                .filter(existing -> existing.userId.equals(user.id))
+                .orElseThrow(() -> new IllegalArgumentException("Unknown mail fetcher id"));
+    }
+
+    private String resolvePassword(UserBridge existing, BridgeConfig.AuthMethod authMethod, String password) {
+        if (authMethod != BridgeConfig.AuthMethod.PASSWORD) {
+            return "";
+        }
+        if (password != null && !password.isBlank()) {
+            return password;
+        }
+        if (existing != null) {
+            String stored = decryptPassword(existing);
+            if (!stored.isBlank()) {
+                return stored;
+            }
+        }
+        throw new IllegalArgumentException("Password is required");
+    }
+
+    private String resolveRefreshToken(
+            UserBridge existing,
+            BridgeConfig.AuthMethod authMethod,
+            BridgeConfig.OAuthProvider oauthProvider,
+            String oauthRefreshToken) {
+        if (authMethod != BridgeConfig.AuthMethod.OAUTH2 || oauthProvider == BridgeConfig.OAuthProvider.NONE) {
+            return "";
+        }
+        if (oauthRefreshToken != null && !oauthRefreshToken.isBlank()) {
+            return oauthRefreshToken;
+        }
+        if (existing != null) {
+            String stored = decryptRefreshToken(existing);
+            if (!stored.isBlank()) {
+                return stored;
+            }
+        }
+        throw new IllegalArgumentException("OAuth refresh token is required or connect provider OAuth first");
     }
 
     private String requireNonBlank(String value, String label) {

@@ -1,0 +1,14 @@
+.preferences-dialog {
+  display: grid;
+  gap: 18px;
+}
+
+.preferences-dialog label {
+  display: grid;
+  gap: 8px;
+}
+
+.preferences-checkbox-row {
+  grid-template-columns: auto 1fr;
+  align-items: start;
+}

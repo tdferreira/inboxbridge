@@ -73,6 +73,16 @@ public class OAuthCredentialService {
         return storeCredential(MICROSOFT_PROVIDER, sourceId, refreshToken, accessToken, accessExpiresAt, scope, tokenType);
     }
 
+    @Transactional
+    public boolean deleteGoogleCredential(String subjectKey) {
+        return deleteCredential(GOOGLE_PROVIDER, subjectKey);
+    }
+
+    @Transactional
+    public boolean deleteMicrosoftCredential(String sourceId) {
+        return deleteCredential(MICROSOFT_PROVIDER, sourceId);
+    }
+
     private Optional<StoredOAuthCredential> findCredential(String provider, String subjectKey) {
         if (!secretEncryptionService.isConfigured()) {
             return Optional.empty();
@@ -172,6 +182,12 @@ public class OAuthCredentialService {
             return null;
         }
         return secretEncryptionService.decrypt(ciphertext, nonce, keyVersion, context);
+    }
+
+    private boolean deleteCredential(String provider, String subjectKey) {
+        Optional<OAuthCredential> credential = repository.findByProviderAndSubject(provider, subjectKey);
+        credential.ifPresent(repository::delete);
+        return credential.isPresent();
     }
 
     private String credentialContext(String provider, String subjectKey, String tokenKind) {

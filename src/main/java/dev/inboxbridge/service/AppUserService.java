@@ -129,11 +129,14 @@ public class AppUserService {
     }
 
     @Transactional
-    public void removePassword(AppUser user) {
+    public void removePassword(AppUser user, String currentPassword) {
         AppUser managedUser = repository.findByIdOptional(user.id)
                 .orElseThrow(() -> new IllegalArgumentException("Unknown user id"));
         if (!hasPassword(managedUser)) {
             throw new IllegalArgumentException("This account does not have a password configured.");
+        }
+        if (!passwordMatches(managedUser, currentPassword)) {
+            throw new IllegalArgumentException("Current password is incorrect");
         }
         if (passkeyCount(managedUser.id) == 0) {
             throw new IllegalArgumentException("Register a passkey before removing the password.");

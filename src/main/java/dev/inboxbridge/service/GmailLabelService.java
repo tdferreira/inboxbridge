@@ -26,6 +26,11 @@ import jakarta.inject.Inject;
 @ApplicationScoped
 public class GmailLabelService {
 
+    @FunctionalInterface
+    interface AuthorizedRequestFactory {
+        HttpRequest create(String accessToken);
+    }
+
     @Inject
     GoogleOAuthService googleOAuthService;
 
@@ -35,7 +40,7 @@ public class GmailLabelService {
     @Inject
     BridgeConfig config;
 
-    private final HttpClient httpClient = HttpClient.newBuilder()
+    HttpClient httpClient = HttpClient.newBuilder()
             .connectTimeout(Duration.ofSeconds(20))
             .build();
 
@@ -65,14 +70,14 @@ public class GmailLabelService {
     }
 
     private Map<String, String> listLabels(GmailTarget target) {
-        String accessToken = googleOAuthService.getAccessToken(target.oauthProfile());
-        HttpRequest request = HttpRequest.newBuilder(URI.create("https://gmail.googleapis.com/gmail/v1/users/" + urlEncode(target.destinationUser()) + "/labels"))
-                .timeout(Duration.ofSeconds(20))
-                .header("Authorization", "Bearer " + accessToken)
-                .GET()
-                .build();
         try {
-            HttpResponse<String> response = httpClient.send(request, HttpResponse.BodyHandlers.ofString(StandardCharsets.UTF_8));
+            HttpResponse<String> response = sendAuthorizedRequestWithRetry(
+                    target,
+                    accessToken -> HttpRequest.newBuilder(URI.create("https://gmail.googleapis.com/gmail/v1/users/" + urlEncode(target.destinationUser()) + "/labels"))
+                            .timeout(Duration.ofSeconds(20))
+                            .header("Authorization", "Bearer " + accessToken)
+                            .GET()
+                            .build());
             if (response.statusCode() / 100 != 2) {
                 throw new IllegalStateException("Failed to list Gmail labels: " + response.statusCode() + " - " + response.body());
             }
@@ -91,20 +96,19 @@ public class GmailLabelService {
     }
 
     private String createLabel(GmailTarget target, String labelName) {
-        String accessToken = googleOAuthService.getAccessToken(target.oauthProfile());
         ObjectNode payload = objectMapper.createObjectNode();
         payload.put("name", labelName);
         payload.put("labelListVisibility", "labelShow");
         payload.put("messageListVisibility", "show");
-
-        HttpRequest request = HttpRequest.newBuilder(URI.create("https://gmail.googleapis.com/gmail/v1/users/" + urlEncode(target.destinationUser()) + "/labels"))
-                .timeout(Duration.ofSeconds(20))
-                .header("Authorization", "Bearer " + accessToken)
-                .header("Content-Type", "application/json")
-                .POST(HttpRequest.BodyPublishers.ofString(payload.toString(), StandardCharsets.UTF_8))
-                .build();
         try {
-            HttpResponse<String> response = httpClient.send(request, HttpResponse.BodyHandlers.ofString(StandardCharsets.UTF_8));
+            HttpResponse<String> response = sendAuthorizedRequestWithRetry(
+                    target,
+                    accessToken -> HttpRequest.newBuilder(URI.create("https://gmail.googleapis.com/gmail/v1/users/" + urlEncode(target.destinationUser()) + "/labels"))
+                            .timeout(Duration.ofSeconds(20))
+                            .header("Authorization", "Bearer " + accessToken)
+                            .header("Content-Type", "application/json")
+                            .POST(HttpRequest.BodyPublishers.ofString(payload.toString(), StandardCharsets.UTF_8))
+                            .build());
             if (response.statusCode() / 100 != 2) {
                 throw new IllegalStateException("Failed to create Gmail label: " + response.statusCode() + " - " + response.body());
             }
@@ -117,6 +121,26 @@ public class GmailLabelService {
             throw new IllegalStateException("Failed to create Gmail label", e);
         }
     }
+
+    private HttpResponse<String> sendAuthorizedRequestWithRetry(
+            GmailTarget target,
+            AuthorizedRequestFactory requestFactory) throws IOException, InterruptedException {
+        HttpResponse<String> response = sendAuthorizedRequest(requestFactory, googleOAuthService.getAccessToken(target.oauthProfile()));
+        if (response.statusCode() == 401) {
+            googleOAuthService.clearCachedToken(target.oauthProfile().subjectKey());
+            response = sendAuthorizedRequest(requestFactory, googleOAuthService.getAccessToken(target.oauthProfile()));
+        }
+        return response;
+    }
+
+    private HttpResponse<String> sendAuthorizedRequest(
+            AuthorizedRequestFactory requestFactory,
+            String accessToken) throws IOException, InterruptedException {
+        return httpClient.send(
+                requestFactory.create(accessToken),
+                HttpResponse.BodyHandlers.ofString(StandardCharsets.UTF_8));
+    }
+
     private String urlEncode(String value) {
         return URLEncoder.encode(value, StandardCharsets.UTF_8);
     }

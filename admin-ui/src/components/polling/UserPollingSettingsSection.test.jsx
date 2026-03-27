@@ -2,50 +2,97 @@ import { fireEvent, render, screen } from '@testing-library/react'
 import UserPollingSettingsSection from './UserPollingSettingsSection'
 import { translate } from '../../lib/i18n'
 
-const t = (key, params) => translate('en', key, params)
+function renderSection(props = {}) {
+  return render(
+    <UserPollingSettingsSection
+      collapsed={false}
+      collapseLoading={false}
+      hasFetchers
+      onCollapseToggle={vi.fn()}
+      onOpenEditor={vi.fn()}
+      pollingSettings={{
+        defaultPollEnabled: true,
+        pollEnabledOverride: null,
+        effectivePollEnabled: true,
+        defaultPollInterval: '5m',
+        pollIntervalOverride: null,
+        effectivePollInterval: '2m',
+        defaultFetchWindow: 50,
+        fetchWindowOverride: null,
+        effectiveFetchWindow: 50
+      }}
+      pollingStats={{
+        totalImportedMessages: 2,
+        configuredMailFetchers: 1,
+        enabledMailFetchers: 1,
+        sourcesWithErrors: 0,
+        importsByDay: [{ bucketLabel: '2026-03-26', importedMessages: 2 }],
+        importTimelines: {
+          day: [{ bucketLabel: '2026-03-26', importedMessages: 2 }],
+          month: [{ bucketLabel: '2026-03', importedMessages: 2 }]
+        }
+      }}
+      sectionLoading={false}
+      t={(key, params) => translate('en', key, params)}
+      {...props}
+    />
+  )
+}
 
 describe('UserPollingSettingsSection', () => {
-  it('renders user polling controls and forwards override edits', () => {
-    let form = {
-      pollEnabledMode: 'DEFAULT',
-      pollIntervalOverride: '',
-      fetchWindowOverride: ''
-    }
+  it('renders a summary and opens the editor flow', () => {
+    const onOpenEditor = vi.fn()
+    renderSection({ onOpenEditor })
 
+    expect(screen.getByText(/Effective polling:/)).toBeInTheDocument()
+    expect(screen.getByText(/Effective interval:/)).toBeInTheDocument()
+    expect(screen.getByText(/Effective fetch window:/)).toBeInTheDocument()
+
+    fireEvent.click(screen.getByRole('button', { name: 'Edit Poller Settings' }))
+    expect(onOpenEditor).toHaveBeenCalled()
+  })
+
+  it('renders translated summary labels in portuguese', () => {
     render(
       <UserPollingSettingsSection
         collapsed={false}
         collapseLoading={false}
         hasFetchers
         onCollapseToggle={vi.fn()}
-        onPollingFormChange={(updater) => {
-          form = typeof updater === 'function' ? updater(form) : updater
-        }}
-        onResetPollingSettings={vi.fn()}
-        onSavePollingSettings={vi.fn((event) => event.preventDefault())}
+        onOpenEditor={vi.fn()}
         pollingSettings={{
           defaultPollEnabled: true,
           pollEnabledOverride: null,
           effectivePollEnabled: true,
           defaultPollInterval: '5m',
           pollIntervalOverride: null,
-          effectivePollInterval: '5m',
+          effectivePollInterval: '2m',
           defaultFetchWindow: 50,
           fetchWindowOverride: null,
           effectiveFetchWindow: 50
         }}
-        pollingSettingsForm={form}
-        pollingSettingsLoading={false}
-        t={t}
+        pollingStats={{
+          totalImportedMessages: 2,
+          configuredMailFetchers: 1,
+          enabledMailFetchers: 1,
+          sourcesWithErrors: 0,
+          importsByDay: [{ bucketLabel: '2026-03-26', importedMessages: 2 }],
+          importTimelines: {
+            day: [{ bucketLabel: '2026-03-26', importedMessages: 2 }]
+          }
+        }}
+        sectionLoading={false}
+        t={(key, params) => translate('pt-PT', key, params)}
       />
     )
 
-    fireEvent.change(screen.getByLabelText(/Polling Mode/), { target: { value: 'DISABLED' } })
-    fireEvent.change(screen.getByLabelText(/Poll Interval Override/), { target: { value: '2m' } })
-    fireEvent.change(screen.getByLabelText(/Fetch Window Override/), { target: { value: '20' } })
+    expect(screen.getByText('As minhas definições do poller')).toBeInTheDocument()
+    expect(screen.getByText(/Polling efetivo:/)).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Editar definições do poller' })).toBeInTheDocument()
+  })
 
-    expect(form.pollEnabledMode).toBe('DISABLED')
-    expect(form.pollIntervalOverride).toBe('2m')
-    expect(form.fetchWindowOverride).toBe('20')
+  it('shows a refresh indicator while loading the latest polling values', () => {
+    renderSection({ sectionLoading: true })
+    expect(screen.getByText('Refreshing section…')).toBeInTheDocument()
   })
 })

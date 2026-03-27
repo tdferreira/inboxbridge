@@ -6,17 +6,25 @@ import java.time.Instant;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Comparator;
+import java.util.HashSet;
 import java.util.List;
+import java.util.Locale;
 import java.util.Optional;
 import java.util.Properties;
+import java.util.Set;
+
+import org.jboss.logging.Logger;
 
 import dev.inboxbridge.config.BridgeConfig;
+import dev.inboxbridge.dto.BridgeConnectionTestResult;
 import dev.inboxbridge.domain.FetchedMessage;
 import dev.inboxbridge.domain.RuntimeBridge;
 import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.inject.Inject;
 import jakarta.mail.Flags;
 import jakarta.mail.Folder;
+import jakarta.mail.FolderClosedException;
+import jakarta.mail.FetchProfile;
 import jakarta.mail.Message;
 import jakarta.mail.MessagingException;
 import jakarta.mail.Session;
@@ -26,6 +34,8 @@ import jakarta.mail.search.FlagTerm;
 
 @ApplicationScoped
 public class MailSourceClient {
+
+    private static final Logger LOG = Logger.getLogger(MailSourceClient.class);
 
     @Inject
     BridgeConfig bridgeConfig;
@@ -61,6 +71,116 @@ public class MailSourceClient {
         };
     }
 
+    public BridgeConnectionTestResult testConnection(RuntimeBridge bridge) {
+        return switch (bridge.protocol()) {
+            case IMAP -> testImapConnection(bridge);
+            case POP3 -> testPop3Connection(bridge);
+        };
+    }
+
+    public Optional<MailboxCountProbe> probeSpamOrJunkFolder(RuntimeBridge bridge) {
+        return switch (bridge.protocol()) {
+            case IMAP -> probeImapSpamOrJunkFolder(bridge);
+            case POP3 -> Optional.empty();
+        };
+    }
+
+    private BridgeConnectionTestResult testImapConnection(RuntimeBridge bridge) {
+        Properties properties = new Properties();
+        properties.put("mail.store.protocol", bridge.tls() ? "imaps" : "imap");
+        properties.put("mail.imap.ssl.enable", bridge.tls());
+        properties.put("mail.imaps.ssl.enable", bridge.tls());
+        properties.put("mail.imap.ssl.checkserveridentity", "true");
+        properties.put("mail.imaps.ssl.checkserveridentity", "true");
+        properties.put("mail.imap.timeout", "20000");
+        properties.put("mail.imaps.timeout", "20000");
+        properties.put("mail.imap.connectiontimeout", "20000");
+        properties.put("mail.imaps.connectiontimeout", "20000");
+        if (usesMicrosoftOAuth(bridge)) {
+            configureImapMicrosoftOAuth(properties);
+        } else {
+            requireSupportedAuth(bridge);
+        }
+
+        Session session = Session.getInstance(properties);
+        Store store = null;
+        Folder folder = null;
+        try {
+            store = session.getStore(bridge.tls() ? "imaps" : "imap");
+            connectStore(store, bridge);
+            String targetFolder = bridge.folder().orElse("INBOX");
+            folder = store.getFolder(targetFolder);
+            if (!folder.exists()) {
+                throw new IllegalStateException("The mailbox path " + targetFolder + " does not exist on " + bridge.host() + ".");
+            }
+            folder.open(Folder.READ_ONLY);
+            int visibleMessageCount = folder.getMessageCount();
+            Message[] unreadMessages = folder.search(new FlagTerm(new Flags(Flags.Flag.SEEN), false));
+            Integer unreadMessageCount = Integer.valueOf(unreadMessages.length);
+            Message[] candidateMessages = bridge.unreadOnly()
+                    ? trimTailMessages(unreadMessages, 1)
+                    : selectTailMessages(folder, 1);
+            boolean sampleMessageAvailable = candidateMessages.length > 0;
+            Boolean sampleMessageMaterialized = null;
+            if (sampleMessageAvailable) {
+                prefetchMessageMetadata(folder, candidateMessages);
+                sampleMessageMaterialized = !toFetchedMessages(bridge.id(), candidateMessages).isEmpty();
+            }
+            return buildProbeResult(
+                    bridge,
+                    targetFolder,
+                    true,
+                    Boolean.TRUE,
+                    bridge.unreadOnly() ? Boolean.TRUE : null,
+                    visibleMessageCount,
+                    unreadMessageCount,
+                    sampleMessageAvailable,
+                    sampleMessageMaterialized);
+        } catch (MessagingException e) {
+            throw new IllegalStateException("Failed to connect to IMAP mail fetcher " + bridge.id(), e);
+        } finally {
+            closeQuietly(folder);
+            closeQuietly(store);
+        }
+    }
+
+    private Optional<MailboxCountProbe> probeImapSpamOrJunkFolder(RuntimeBridge bridge) {
+        Properties properties = new Properties();
+        properties.put("mail.store.protocol", bridge.tls() ? "imaps" : "imap");
+        properties.put("mail.imap.ssl.enable", bridge.tls());
+        properties.put("mail.imaps.ssl.enable", bridge.tls());
+        properties.put("mail.imap.ssl.checkserveridentity", "true");
+        properties.put("mail.imaps.ssl.checkserveridentity", "true");
+        properties.put("mail.imap.timeout", "20000");
+        properties.put("mail.imaps.timeout", "20000");
+        properties.put("mail.imap.connectiontimeout", "20000");
+        properties.put("mail.imaps.connectiontimeout", "20000");
+        if (usesMicrosoftOAuth(bridge)) {
+            configureImapMicrosoftOAuth(properties);
+        } else {
+            requireSupportedAuth(bridge);
+        }
+
+        Session session = Session.getInstance(properties);
+        Store store = null;
+        Folder folder = null;
+        try {
+            store = session.getStore(bridge.tls() ? "imaps" : "imap");
+            connectStore(store, bridge);
+            folder = locateSpamOrJunkFolder(store);
+            if (folder == null || !folder.exists()) {
+                return Optional.empty();
+            }
+            folder.open(Folder.READ_ONLY);
+            return Optional.of(new MailboxCountProbe(folder.getFullName(), folder.getMessageCount()));
+        } catch (MessagingException e) {
+            throw new IllegalStateException("Failed to inspect spam or junk mailbox for source " + bridge.id(), e);
+        } finally {
+            closeQuietly(folder);
+            closeQuietly(store);
+        }
+    }
+
     private List<FetchedMessage> fetchImap(BridgeConfig.Source source, int fetchWindow) {
         Properties properties = new Properties();
         properties.put("mail.store.protocol", source.tls() ? "imaps" : "imap");
@@ -89,6 +209,7 @@ public class MailSourceClient {
             Message[] candidateMessages = source.unreadOnly()
                     ? trimTailMessages(folder.search(new FlagTerm(new Flags(Flags.Flag.SEEN), false)), fetchWindow)
                     : selectTailMessages(folder, fetchWindow);
+            prefetchMessageMetadata(folder, candidateMessages);
             return toFetchedMessages(source, candidateMessages);
         } catch (MessagingException e) {
             throw new IllegalStateException("Failed to fetch IMAP mail for source " + source.id(), e);
@@ -126,6 +247,7 @@ public class MailSourceClient {
             Message[] candidateMessages = bridge.unreadOnly()
                     ? trimTailMessages(folder.search(new FlagTerm(new Flags(Flags.Flag.SEEN), false)), fetchWindow)
                     : selectTailMessages(folder, fetchWindow);
+            prefetchMessageMetadata(folder, candidateMessages);
             return toFetchedMessages(bridge.id(), candidateMessages);
         } catch (MessagingException e) {
             throw new IllegalStateException("Failed to fetch IMAP mail for source " + bridge.id(), e);
@@ -205,6 +327,105 @@ public class MailSourceClient {
         }
     }
 
+    private BridgeConnectionTestResult testPop3Connection(RuntimeBridge bridge) {
+        Properties properties = new Properties();
+        properties.put("mail.store.protocol", bridge.tls() ? "pop3s" : "pop3");
+        properties.put("mail.pop3.ssl.enable", bridge.tls());
+        properties.put("mail.pop3s.ssl.enable", bridge.tls());
+        properties.put("mail.pop3.ssl.checkserveridentity", "true");
+        properties.put("mail.pop3s.ssl.checkserveridentity", "true");
+        properties.put("mail.pop3.timeout", "20000");
+        properties.put("mail.pop3.connectiontimeout", "20000");
+        properties.put("mail.pop3s.timeout", "20000");
+        properties.put("mail.pop3s.connectiontimeout", "20000");
+        if (usesMicrosoftOAuth(bridge)) {
+            configurePop3MicrosoftOAuth(properties);
+        } else {
+            requireSupportedAuth(bridge);
+        }
+
+        Session session = Session.getInstance(properties);
+        Store store = null;
+        Folder folder = null;
+        try {
+            store = session.getStore(bridge.tls() ? "pop3s" : "pop3");
+            connectStore(store, bridge);
+            folder = store.getFolder("INBOX");
+            folder.open(Folder.READ_ONLY);
+            int visibleMessageCount = folder.getMessageCount();
+            Message[] candidateMessages = selectTailMessages(folder, 1);
+            boolean sampleMessageAvailable = candidateMessages.length > 0;
+            Boolean sampleMessageMaterialized = null;
+            if (sampleMessageAvailable) {
+                sampleMessageMaterialized = !toFetchedMessages(bridge.id(), candidateMessages).isEmpty();
+            }
+            return buildProbeResult(
+                    bridge,
+                    "INBOX",
+                    true,
+                    Boolean.FALSE,
+                    bridge.unreadOnly() ? Boolean.FALSE : null,
+                    visibleMessageCount,
+                    null,
+                    sampleMessageAvailable,
+                    sampleMessageMaterialized);
+        } catch (MessagingException e) {
+            throw new IllegalStateException("Failed to connect to POP3 mail fetcher " + bridge.id(), e);
+        } finally {
+            closeQuietly(folder);
+            closeQuietly(store);
+        }
+    }
+
+    private BridgeConnectionTestResult buildProbeResult(
+            RuntimeBridge bridge,
+            String targetFolder,
+            boolean folderAccessible,
+            Boolean unreadFilterSupported,
+            Boolean unreadFilterValidated,
+            Integer visibleMessageCount,
+            Integer unreadMessageCount,
+            Boolean sampleMessageAvailable,
+            Boolean sampleMessageMaterialized) {
+        StringBuilder message = new StringBuilder("Connection test succeeded.");
+        message.append(" Mailbox path ").append(targetFolder).append(" is reachable.");
+        if (Boolean.TRUE.equals(unreadFilterSupported)) {
+            message.append(" Unread filter probing is supported");
+            if (Boolean.TRUE.equals(unreadFilterValidated)) {
+                message.append(" and validated");
+            }
+            message.append('.');
+        } else if (bridge.unreadOnly()) {
+            message.append(" Server-side unread filtering is not supported for this protocol.");
+        }
+        if (Boolean.TRUE.equals(sampleMessageAvailable) && Boolean.TRUE.equals(sampleMessageMaterialized)) {
+            message.append(" A sample message was materialized successfully.");
+        } else if (Boolean.TRUE.equals(sampleMessageAvailable)) {
+            message.append(" A sample message was found but could not be materialized.");
+        } else {
+            message.append(" No sample message was available to materialize.");
+        }
+        return new BridgeConnectionTestResult(
+                true,
+                message.toString(),
+                bridge.protocol().name(),
+                bridge.host(),
+                bridge.port(),
+                bridge.tls(),
+                bridge.authMethod().name(),
+                bridge.oauthProvider().name(),
+                true,
+                targetFolder,
+                folderAccessible,
+                bridge.unreadOnly(),
+                unreadFilterSupported,
+                unreadFilterValidated,
+                visibleMessageCount,
+                unreadMessageCount,
+                sampleMessageAvailable,
+                sampleMessageMaterialized);
+    }
+
     private Message[] selectTailMessages(Folder folder, int fetchWindow) throws MessagingException {
         int count = folder.getMessageCount();
         if (count == 0) {
@@ -232,21 +453,40 @@ public class MailSourceClient {
         sorted.sort(Comparator.comparing(this::messageInstant));
 
         List<FetchedMessage> fetchedMessages = new ArrayList<>();
+        Exception firstFailure = null;
+        int failedMessages = 0;
         for (Message message : sorted) {
             try {
+                MessageMetadata metadata = captureMetadata(message);
                 byte[] raw = toRawBytes(message);
                 String sha = mimeHashService.sha256Hex(raw);
-                String sourceMessageKey = resolveSourceMessageKey(sourceId, message, sha);
-                Optional<String> messageId = Optional.ofNullable(firstHeader(message, "Message-ID"));
+                String sourceMessageKey = resolveSourceMessageKey(sourceId, metadata, sha);
+                Optional<String> messageId = Optional.ofNullable(metadata.messageId());
                 fetchedMessages.add(new FetchedMessage(
                         sourceId,
                         sourceMessageKey,
                         messageId,
-                        messageInstant(message),
+                        metadata.instant(),
                         raw));
             } catch (MessagingException | IOException e) {
-                throw new IllegalStateException("Failed to materialize message from source " + sourceId, e);
+                failedMessages++;
+                if (firstFailure == null) {
+                    firstFailure = e;
+                }
+                LOG.warnf(e,
+                        "Skipping message %s from source %s after materialization failure",
+                        safeMessageNumber(message),
+                        sourceId);
             }
+        }
+        if (failedMessages > 0 && fetchedMessages.isEmpty() && firstFailure != null) {
+            throw new IllegalStateException("Failed to materialize message from source " + sourceId, firstFailure);
+        }
+        if (failedMessages > 0) {
+            LOG.warnf(
+                    "Skipped %d message(s) from source %s because they could not be materialized",
+                    failedMessages,
+                    sourceId);
         }
         return fetchedMessages;
     }
@@ -269,6 +509,37 @@ public class MailSourceClient {
         return mimeHashService.fallbackMessageKey(sourceId, sha);
     }
 
+    private String resolveSourceMessageKey(String sourceId, MessageMetadata metadata, String sha) {
+        if (metadata.uid() != null && metadata.uid() > 0) {
+            return sourceId + ":uid:" + metadata.uid();
+        }
+        if (metadata.messageId() != null && !metadata.messageId().isBlank()) {
+            return sourceId + ":message-id:" + metadata.messageId();
+        }
+        return mimeHashService.fallbackMessageKey(sourceId, sha);
+    }
+
+    private MessageMetadata captureMetadata(Message message) {
+        Long uid = null;
+        String messageId = null;
+        try {
+            if (message.getFolder() instanceof UIDFolder uidFolder) {
+                long resolved = uidFolder.getUID(message);
+                if (resolved > 0) {
+                    uid = resolved;
+                }
+            }
+        } catch (MessagingException e) {
+            LOG.debugf(e, "Unable to resolve UID for message %s", safeMessageNumber(message));
+        }
+        try {
+            messageId = firstHeader(message, "Message-ID");
+        } catch (MessagingException e) {
+            LOG.debugf(e, "Unable to resolve Message-ID for message %s", safeMessageNumber(message));
+        }
+        return new MessageMetadata(uid, messageId, messageInstant(message));
+    }
+
     private String firstHeader(Message message, String name) throws MessagingException {
         String[] values = message.getHeader(name);
         if (values == null || values.length == 0) {
@@ -279,8 +550,86 @@ public class MailSourceClient {
 
     private byte[] toRawBytes(Message message) throws MessagingException, IOException {
         ByteArrayOutputStream outputStream = new ByteArrayOutputStream();
-        message.writeTo(outputStream);
+        try {
+            message.writeTo(outputStream);
+        } catch (FolderClosedException closed) {
+            Message reopenedMessage = reopenMessage(message);
+            if (reopenedMessage == null) {
+                throw closed;
+            }
+            outputStream.reset();
+            reopenedMessage.writeTo(outputStream);
+        }
         return outputStream.toByteArray();
+    }
+
+    private void prefetchMessageMetadata(Folder folder, Message[] messages) throws MessagingException {
+        if (messages.length == 0) {
+            return;
+        }
+        FetchProfile fetchProfile = new FetchProfile();
+        fetchProfile.add(FetchProfile.Item.ENVELOPE);
+        fetchProfile.add(FetchProfile.Item.FLAGS);
+        fetchProfile.add(UIDFolder.FetchProfileItem.UID);
+        fetchProfile.add("Message-ID");
+        folder.fetch(messages, fetchProfile);
+    }
+
+    private Message reopenMessage(Message originalMessage) {
+        try {
+            Folder folder = originalMessage.getFolder();
+            if (folder == null) {
+                return null;
+            }
+            if (!folder.isOpen()) {
+                folder.open(Folder.READ_ONLY);
+            }
+            int messageNumber = originalMessage.getMessageNumber();
+            if (messageNumber <= 0 || messageNumber > folder.getMessageCount()) {
+                return null;
+            }
+            return folder.getMessage(messageNumber);
+        } catch (MessagingException reopenFailure) {
+            LOG.warn("Unable to reopen IMAP folder after a message materialization failure", reopenFailure);
+            return null;
+        }
+    }
+
+    private int safeMessageNumber(Message message) {
+        try {
+            return message.getMessageNumber();
+        } catch (RuntimeException ignored) {
+            return -1;
+        }
+    }
+
+    static boolean isRetryableMicrosoftOAuthFailure(Throwable error) {
+        String normalized = normalizeErrorMessage(error);
+        return normalized.contains("session invalidated")
+                || normalized.contains("authenticate failed")
+                || normalized.contains("authenticationfailed")
+                || normalized.contains("logondenied")
+                || normalized.contains("login failed")
+                || normalized.contains("invalid token")
+                || normalized.contains("invalid_grant")
+                || normalized.contains("invalid")
+                || normalized.contains("oauth");
+    }
+
+    private static String normalizeErrorMessage(Throwable error) {
+        StringBuilder builder = new StringBuilder();
+        Throwable current = error;
+        while (current != null) {
+            String message = current.getMessage();
+            if (message != null && !message.isBlank()) {
+                if (!builder.isEmpty()) {
+                    builder.append(' ');
+                }
+                builder.append(message.toLowerCase(java.util.Locale.ROOT));
+            }
+            current = current.getCause();
+        }
+        return builder.toString();
     }
 
     private Instant messageInstant(Message message) {
@@ -323,8 +672,13 @@ public class MailSourceClient {
 
     private void connectStore(Store store, BridgeConfig.Source source) throws MessagingException {
         if (usesMicrosoftOAuth(source)) {
-            String accessToken = microsoftOAuthService.getAccessToken(source);
-            store.connect(source.host(), source.port(), source.username(), accessToken);
+            connectStoreWithMicrosoftOAuthRetry(
+                    store,
+                    source.id(),
+                    source.host(),
+                    source.port(),
+                    source.username(),
+                    () -> microsoftOAuthService.getAccessToken(source));
             return;
         }
         store.connect(source.host(), source.port(), source.username(), source.password());
@@ -332,11 +686,37 @@ public class MailSourceClient {
 
     private void connectStore(Store store, RuntimeBridge bridge) throws MessagingException {
         if (usesMicrosoftOAuth(bridge)) {
-            String accessToken = microsoftOAuthService.getAccessToken(bridge);
-            store.connect(bridge.host(), bridge.port(), bridge.username(), accessToken);
+            connectStoreWithMicrosoftOAuthRetry(
+                    store,
+                    bridge.id(),
+                    bridge.host(),
+                    bridge.port(),
+                    bridge.username(),
+                    () -> microsoftOAuthService.getAccessToken(bridge));
             return;
         }
         store.connect(bridge.host(), bridge.port(), bridge.username(), bridge.password());
+    }
+
+    private void connectStoreWithMicrosoftOAuthRetry(
+            Store store,
+            String sourceId,
+            String host,
+            int port,
+            String username,
+            TokenSupplier tokenSupplier) throws MessagingException {
+        try {
+            store.connect(host, port, username, tokenSupplier.get());
+        } catch (MessagingException firstFailure) {
+            if (!isRetryableMicrosoftOAuthFailure(firstFailure)) {
+                throw firstFailure;
+            }
+            LOG.warnf(firstFailure,
+                    "Microsoft session for %s was rejected; invalidating the cached token and retrying once",
+                    sourceId);
+            microsoftOAuthService.invalidateCachedToken(sourceId);
+            store.connect(host, port, username, tokenSupplier.get());
+        }
     }
 
     private boolean usesMicrosoftOAuth(BridgeConfig.Source source) {
@@ -384,5 +764,83 @@ public class MailSourceClient {
         properties.put("mail.pop3.auth.xoauth2.two.line.authentication.format", "true");
         properties.put("mail.pop3s.auth.xoauth2.two.line.authentication.format", "true");
     }
+
+    private Folder locateSpamOrJunkFolder(Store store) throws MessagingException {
+        Folder defaultFolder = store.getDefaultFolder();
+        if (defaultFolder == null) {
+            return null;
+        }
+        List<Folder> folders = new ArrayList<>();
+        collectFolders(defaultFolder, folders, new HashSet<>());
+        for (Folder folder : folders) {
+            if (isLikelySpamOrJunkFolder(folder)) {
+                return folder;
+            }
+        }
+        return null;
+    }
+
+    private void collectFolders(Folder folder, List<Folder> collected, Set<String> visited) throws MessagingException {
+        String fullName = folder.getFullName();
+        if (fullName != null && !fullName.isBlank()) {
+            if (!visited.add(fullName)) {
+                return;
+            }
+            collected.add(folder);
+        }
+        for (Folder child : folder.list("*")) {
+            collectFolders(child, collected, visited);
+        }
+    }
+
+    private boolean isLikelySpamOrJunkFolder(Folder folder) {
+        char separator;
+        try {
+            separator = folder.getSeparator();
+        } catch (MessagingException e) {
+            separator = '/';
+        }
+        List<String> candidates = new ArrayList<>();
+        if (folder.getFullName() != null) {
+            candidates.add(folder.getFullName());
+            if (separator != 0) {
+                candidates.addAll(Arrays.asList(folder.getFullName().split(java.util.regex.Pattern.quote(String.valueOf(separator)))));
+            }
+        }
+        if (folder.getName() != null) {
+            candidates.add(folder.getName());
+        }
+        return candidates.stream()
+                .map(this::normalizeFolderToken)
+                .anyMatch(SPAM_OR_JUNK_FOLDER_NAMES::contains);
+    }
+
+    private String normalizeFolderToken(String value) {
+        return value == null
+                ? ""
+                : value.toLowerCase(Locale.ROOT).replaceAll("[^a-z0-9]", "");
+    }
+
+    @FunctionalInterface
+    private interface TokenSupplier {
+        String get();
+    }
+
+    private record MessageMetadata(Long uid, String messageId, Instant instant) {
+    }
+
+    public record MailboxCountProbe(String folderName, int messageCount) {
+    }
+
+    private static final Set<String> SPAM_OR_JUNK_FOLDER_NAMES = Set.of(
+            "spam",
+            "junk",
+            "junkemail",
+            "junkeemail",
+            "junkmail",
+            "bulkmail",
+            "correonodeseado",
+            "correoindeseado",
+            "indesejados");
 
 }

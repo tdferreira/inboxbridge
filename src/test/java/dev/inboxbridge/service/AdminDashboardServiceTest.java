@@ -3,6 +3,7 @@ package dev.inboxbridge.service;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.junit.jupiter.api.Assertions.assertNull;
 
 import java.time.Instant;
 import java.util.Collections;
@@ -27,8 +28,10 @@ class AdminDashboardServiceTest {
         service.oAuthCredentialService = new FakeOAuthCredentialService();
         service.sourcePollEventService = new FakeSourcePollEventService();
         service.pollingSettingsService = new FakePollingSettingsService();
+        service.sourcePollingSettingsService = new FakeSourcePollingSettingsService();
         service.envSourceService = envSourceService(service.config);
         service.sourcePollingStateService = new FakeSourcePollingStateService();
+        service.pollingStatsService = pollingStatsService(service.importedMessageRepository, service.sourcePollEventService, service.envSourceService);
 
         AdminDashboardResponse response = service.dashboard();
 
@@ -40,6 +43,9 @@ class AdminDashboardServiceTest {
         assertEquals(25, response.overall().fetchWindow());
         assertFalse(response.polling().defaultPollEnabled());
         assertEquals("3m", response.polling().effectivePollInterval());
+        assertEquals(2, response.stats().configuredMailFetchers());
+        assertEquals(1, response.stats().enabledMailFetchers());
+        assertEquals(4L, response.stats().totalImportedMessages());
 
         assertEquals("DATABASE", response.destination().tokenStorageMode());
         assertEquals(2, response.bridges().size());
@@ -54,6 +60,82 @@ class AdminDashboardServiceTest {
 
         assertEquals(1, response.recentEvents().size());
         assertEquals("outlook-main-imap", response.recentEvents().getFirst().sourceId());
+    }
+
+    @Test
+    void dashboardHidesStaleNoRefreshTokenErrorWhenNewerMicrosoftCredentialExists() {
+        AdminDashboardService service = new AdminDashboardService();
+        service.config = new TestConfig();
+        service.importedMessageRepository = new FakeImportedMessageRepository();
+        service.oAuthCredentialService = new OAuthCredentialService() {
+            @Override
+            public boolean secureStorageConfigured() {
+                return true;
+            }
+
+            @Override
+            public Optional<StoredOAuthCredential> findGoogleCredential() {
+                return Optional.of(new StoredOAuthCredential(
+                        GOOGLE_PROVIDER,
+                        "gmail-destination",
+                        "refresh",
+                        "access",
+                        Instant.parse("2026-03-26T11:00:00Z"),
+                        "gmail.insert",
+                        "Bearer",
+                        Instant.parse("2026-03-26T10:00:00Z")));
+            }
+
+            @Override
+            public Optional<StoredOAuthCredential> findMicrosoftCredential(String sourceId) {
+                if ("outlook-main-imap".equals(sourceId)) {
+                    return Optional.of(new StoredOAuthCredential(
+                            MICROSOFT_PROVIDER,
+                            sourceId,
+                            "refresh",
+                            "access",
+                            Instant.parse("2026-03-27T11:00:00Z"),
+                            "imap",
+                            "Bearer",
+                            Instant.parse("2026-03-27T10:00:00Z")));
+                }
+                return Optional.empty();
+            }
+        };
+        service.sourcePollEventService = new SourcePollEventService() {
+            @Override
+            public Optional<AdminPollEventSummary> latestForSource(String sourceId) {
+                if (!"outlook-main-imap".equals(sourceId)) {
+                    return Optional.empty();
+                }
+                return Optional.of(new AdminPollEventSummary(
+                        sourceId,
+                        "scheduler",
+                        "ERROR",
+                        Instant.parse("2026-03-26T10:02:00Z"),
+                        Instant.parse("2026-03-26T10:02:05Z"),
+                        0,
+                        0,
+                        0,
+                        "Source outlook-main-imap failed: Source outlook-main-imap is configured for OAuth2 but has no refresh token"));
+            }
+
+            @Override
+            public List<AdminPollEventSummary> recentEvents(int limit) {
+                return List.of();
+            }
+        };
+        service.pollingSettingsService = new FakePollingSettingsService();
+        service.sourcePollingSettingsService = new FakeSourcePollingSettingsService();
+        service.envSourceService = envSourceService(service.config);
+        service.sourcePollingStateService = new FakeSourcePollingStateService();
+        service.pollingStatsService = pollingStatsService(service.importedMessageRepository, service.sourcePollEventService, service.envSourceService);
+
+        AdminDashboardResponse response = service.dashboard();
+
+        assertEquals("DATABASE", response.bridges().getFirst().tokenStorageMode());
+        assertNull(response.bridges().getFirst().lastEvent());
+        assertEquals(0, response.overall().sourcesWithErrors());
     }
 
     private static final class FakeSourcePollingStateService extends SourcePollingStateService {
@@ -92,9 +174,38 @@ class AdminDashboardServiceTest {
         }
     }
 
+    private static final class FakeSourcePollingSettingsService extends SourcePollingSettingsService {
+        @Override
+        public PollingSettingsService.EffectivePollingSettings effectiveSettingsFor(dev.inboxbridge.domain.RuntimeBridge bridge) {
+            return new PollingSettingsService.EffectivePollingSettings(true, "3m", java.time.Duration.ofMinutes(3), 25);
+        }
+    }
+
     private EnvSourceService envSourceService(BridgeConfig config) {
         EnvSourceService service = new EnvSourceService();
         service.setConfigForTest(config);
+        return service;
+    }
+
+    private PollingStatsService pollingStatsService(
+            ImportedMessageRepository importedMessageRepository,
+            SourcePollEventService sourcePollEventService,
+            EnvSourceService envSourceService) {
+        PollingStatsService service = new PollingStatsService();
+        service.importedMessageRepository = importedMessageRepository;
+        service.sourcePollEventService = sourcePollEventService;
+        service.envSourceService = envSourceService;
+        service.userBridgeRepository = new dev.inboxbridge.persistence.UserBridgeRepository() {
+            @Override
+            public long count() {
+                return 0L;
+            }
+
+            @Override
+            public long count(String query, Object... params) {
+                return 0L;
+            }
+        };
         return service;
     }
 
@@ -107,6 +218,21 @@ class AdminDashboardServiceTest {
         @Override
         public long count() {
             return 4L;
+        }
+
+        @Override
+        public List<Object[]> summarizeByImportedDay() {
+            return java.util.Collections.singletonList(
+                    new Object[] { java.sql.Timestamp.from(Instant.parse("2026-03-26T00:00:00Z")), Long.valueOf(4) });
+        }
+
+        @Override
+        public List<Instant> listImportedAtSince(Instant since) {
+            return List.of(
+                    Instant.parse("2026-03-26T10:00:00Z"),
+                    Instant.parse("2026-03-26T11:00:00Z"),
+                    Instant.parse("2026-03-26T12:00:00Z"),
+                    Instant.parse("2026-03-26T13:00:00Z"));
         }
     }
 

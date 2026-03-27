@@ -77,7 +77,13 @@ function AuthScreen({
         {notice ? <Banner tone="success">{notice}</Banner> : null}
       </main>
       {multiUserEnabled && registerOpen ? (
-        <ModalDialog closeLabel={t('auth.closeRegisterDialog')} onClose={onCloseRegisterDialog} title={t('auth.registerDialogTitle')}>
+        <ModalDialog
+          closeLabel={t('auth.closeRegisterDialog')}
+          isDirty={registerForm.username.trim() !== '' || registerForm.password !== '' || registerForm.confirmPassword !== ''}
+          onClose={onCloseRegisterDialog}
+          title={t('auth.registerDialogTitle')}
+          unsavedChangesMessage={t('common.unsavedChangesConfirm')}
+        >
           <p className="section-copy">{t('auth.registerDialogCopy')}</p>
           <form className="stack-form" onSubmit={onRegister}>
             <label>

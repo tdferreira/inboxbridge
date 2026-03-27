@@ -6,9 +6,11 @@ import static org.junit.jupiter.api.Assertions.assertThrows;
 import org.junit.jupiter.api.Test;
 
 import dev.inboxbridge.dto.ChangePasswordRequest;
+import dev.inboxbridge.dto.RemovePasswordRequest;
 import dev.inboxbridge.persistence.AppUser;
 import dev.inboxbridge.security.CurrentUserContext;
 import dev.inboxbridge.service.AppUserService;
+import dev.inboxbridge.service.UserGmailConfigService;
 import jakarta.ws.rs.BadRequestException;
 
 class AccountResourceTest {
@@ -59,9 +61,31 @@ class AccountResourceTest {
 
         BadRequestException error = assertThrows(
                 BadRequestException.class,
-                resource::removePassword);
+                () -> resource.removePassword(new RemovePasswordRequest("Current#123")));
 
         assertEquals("Register a passkey before removing the password.", error.getMessage());
+    }
+
+    @Test
+    void unlinkGmailDelegatesToUserConfigService() {
+        AccountResource resource = new AccountResource();
+        resource.currentUserContext = new CurrentUserContext();
+        AppUser user = new AppUser();
+        user.id = 4L;
+        user.username = "dora";
+        resource.currentUserContext.setUser(user);
+        resource.userGmailConfigService = new UserGmailConfigService() {
+            @Override
+            public GmailUnlinkResult unlinkForUser(Long userId) {
+                assertEquals(4L, userId);
+                return new GmailUnlinkResult(true, true);
+            }
+        };
+
+        UserGmailConfigService.GmailUnlinkResult result = resource.unlinkGmailAccount();
+
+        assertEquals(true, result.providerRevocationAttempted());
+        assertEquals(true, result.providerRevoked());
     }
 
     private static final class FakeAppUserService extends AppUserService {
@@ -88,7 +112,7 @@ class AccountResourceTest {
 
     private static final class RemovePasswordErrorAppUserService extends AppUserService {
         @Override
-        public void removePassword(AppUser user) {
+        public void removePassword(AppUser user, String currentPassword) {
             throw new IllegalArgumentException("Register a passkey before removing the password.");
         }
     }

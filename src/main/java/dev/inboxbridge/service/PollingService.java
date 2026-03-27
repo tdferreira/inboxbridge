@@ -4,6 +4,7 @@ import java.time.Instant;
 import java.util.List;
 import java.util.Optional;
 import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.concurrent.atomic.AtomicReference;
 
 import org.jboss.logging.Logger;
 
@@ -45,9 +46,13 @@ public class PollingService {
     UserPollingSettingsService userPollingSettingsService;
 
     @Inject
+    SourcePollingSettingsService sourcePollingSettingsService;
+
+    @Inject
     SourcePollingStateService sourcePollingStateService;
 
     private final AtomicBoolean running = new AtomicBoolean(false);
+    private final AtomicReference<ActivePoll> activePoll = new AtomicReference<>();
 
     @Scheduled(every = "5s")
     void scheduledPoll() {
@@ -57,13 +62,14 @@ public class PollingService {
     public PollRunResult runPoll(String trigger) {
         if (!running.compareAndSet(false, true)) {
             PollRunResult busy = new PollRunResult();
-            busy.addError("A poll is already running");
+            busy.addError(currentBusyMessage());
             busy.finish();
             return busy;
         }
 
         PollRunResult result = new PollRunResult();
         try {
+            activePoll.set(new ActivePoll(trigger, null, result.getStartedAt()));
             if (!"scheduler".equals(trigger)) {
                 LOG.infof("Starting poll triggered by %s", trigger);
             }
@@ -91,6 +97,7 @@ public class PollingService {
             return result;
         } finally {
             result.finish();
+            activePoll.set(null);
             running.set(false);
             if (!"scheduler".equals(trigger)
                     || result.getFetched() > 0
@@ -100,6 +107,47 @@ public class PollingService {
                 LOG.infof("Poll finished: fetched=%d imported=%d duplicates=%d errors=%d",
                         result.getFetched(), result.getImported(), result.getDuplicates(), result.getErrors().size());
             }
+        }
+    }
+
+    public PollRunResult runPollForSource(RuntimeBridge bridge, String trigger) {
+        if (!running.compareAndSet(false, true)) {
+            PollRunResult busy = new PollRunResult();
+            busy.addError(currentBusyMessage());
+            busy.finish();
+            return busy;
+        }
+
+        PollRunResult result = new PollRunResult();
+        try {
+            activePoll.set(new ActivePoll(trigger, bridge.id(), result.getStartedAt()));
+            LOG.infof("Starting single-source poll for %s triggered by %s", bridge.id(), trigger);
+            PollingSettingsService.EffectivePollingSettings settings = effectiveSettingsFor(bridge);
+            SourcePollingStateService.PollEligibility eligibility = sourcePollingStateService.eligibility(
+                    bridge.id(),
+                    settings,
+                    Instant.now(),
+                    true);
+            if (!bridge.enabled()) {
+                result.addError("Source " + bridge.id() + " is disabled.");
+                return result;
+            }
+            if (!eligibility.shouldPoll()) {
+                result.addError(skipMessage(bridge, eligibility));
+                return result;
+            }
+            pollSource(bridge, trigger, settings, result);
+            return result;
+        } catch (RuntimeException e) {
+            LOG.error("Unexpected single-source polling failure", e);
+            result.addError(Optional.ofNullable(e.getMessage()).orElse(e.getClass().getSimpleName()));
+            return result;
+        } finally {
+            result.finish();
+            activePoll.set(null);
+            running.set(false);
+            LOG.infof("Single-source poll finished for %s: fetched=%d imported=%d duplicates=%d errors=%d",
+                    bridge.id(), result.getFetched(), result.getImported(), result.getDuplicates(), result.getErrors().size());
         }
     }
 
@@ -114,6 +162,17 @@ public class PollingService {
         int duplicates = 0;
         String error = null;
         try {
+            if (!runtimeBridgeService.gmailAccountLinked(bridge)) {
+                throw new IllegalStateException(
+                        "The Gmail account is not linked for this destination. Connect it from My Gmail Account before polling this source.");
+            }
+            try {
+                mailSourceClient.probeSpamOrJunkFolder(bridge)
+                        .filter(probe -> probe.messageCount() > 0)
+                        .ifPresent(probe -> result.addSpamJunkFolderSummary(bridge.id(), probe.folderName(), probe.messageCount()));
+            } catch (RuntimeException spamProbeError) {
+                LOG.debugf(spamProbeError, "Unable to inspect spam/junk mailbox for source %s", bridge.id());
+            }
             List<FetchedMessage> messages = mailSourceClient.fetch(bridge, settings.fetchWindow());
             List<String> labelIds = gmailLabelService.resolveLabelIds(bridge.gmailTarget(), bridge.customLabel());
             for (FetchedMessage message : messages) {
@@ -153,15 +212,12 @@ public class PollingService {
     }
 
     private PollingSettingsService.EffectivePollingSettings effectiveSettingsFor(RuntimeBridge bridge) {
-        if (bridge.ownerUserId() != null) {
-            return userPollingSettingsService.effectiveSettingsForUser(bridge.ownerUserId());
-        }
-        return pollingSettingsService.effectiveSettings();
+        return sourcePollingSettingsService.effectiveSettingsFor(bridge);
     }
 
     private String skipMessage(RuntimeBridge bridge, SourcePollingStateService.PollEligibility eligibility) {
         return switch (eligibility.reason()) {
-            case "DISABLED" -> "Source " + bridge.id() + " is skipped because polling is disabled for this fetcher owner.";
+            case "DISABLED" -> "Source " + bridge.id() + " is skipped because polling is disabled for this fetcher.";
             case "COOLDOWN" -> "Source " + bridge.id() + " is cooling down until "
                     + Optional.ofNullable(eligibility.state())
                             .map(state -> String.valueOf(state.cooldownUntil()))
@@ -172,5 +228,23 @@ public class PollingService {
                             .orElse("a later retry time") + ".";
             default -> "Source " + bridge.id() + " is not ready to poll yet.";
         };
+    }
+
+    private String currentBusyMessage() {
+        ActivePoll current = activePoll.get();
+        if (current == null) {
+            return "A poll is already running";
+        }
+        if (current.sourceId() != null) {
+            return "A poll is already running for source " + current.sourceId()
+                    + " (trigger=" + current.trigger()
+                    + ", startedAt=" + current.startedAt() + ")";
+        }
+        return "A poll is already running"
+                + " (trigger=" + current.trigger()
+                + ", startedAt=" + current.startedAt() + ")";
+    }
+
+    private record ActivePoll(String trigger, String sourceId, Instant startedAt) {
     }
 }

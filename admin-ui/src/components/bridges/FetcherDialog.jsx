@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react'
+import { useMemo, useRef, useState } from 'react'
 import InfoHint from '../common/InfoHint'
 import LoadingButton from '../common/LoadingButton'
 import ModalDialog from '../common/ModalDialog'
@@ -25,13 +25,18 @@ function FetcherDialog({
   onBridgeFormChange,
   onClose,
   onSave,
+  onTestConnection,
   saveLoading,
-  t
+  t,
+  testConnectionLoading = false,
+  testResult = null
 }) {
   const [selectedPreset, setSelectedPreset] = useState('custom')
   const preset = useMemo(() => findEmailProviderPreset(selectedPreset), [selectedPreset])
   const usingPassword = bridgeForm.authMethod === 'PASSWORD'
   const dialogTitle = bridgeForm.bridgeId ? t('bridges.editDialogTitle', { bridgeId: bridgeForm.bridgeId }) : t('bridges.addDialogTitle')
+  const initialSnapshotRef = useRef(JSON.stringify(bridgeForm))
+  const isDirty = initialSnapshotRef.current !== JSON.stringify(bridgeForm)
 
   function applyPreset(presetId) {
     setSelectedPreset(presetId)
@@ -41,7 +46,13 @@ function FetcherDialog({
   }
 
   return (
-    <ModalDialog onClose={onClose} size="wide" title={dialogTitle}>
+    <ModalDialog
+      isDirty={isDirty}
+      onClose={onClose}
+      size="wide"
+      title={dialogTitle}
+      unsavedChangesMessage={t('common.unsavedChangesConfirm')}
+    >
       <p className="section-copy">{t('bridges.dialogCopy')}</p>
       <form className="settings-grid fetcher-dialog-form" onSubmit={onSave}>
         <LabeledField helpText={t('bridges.providerPresetHelp')} label={t('bridges.providerPreset')}>
@@ -135,6 +146,9 @@ function FetcherDialog({
           </span>
         </label>
         <div className="full action-row">
+          <LoadingButton className="secondary" isLoading={testConnectionLoading} loadingLabel={t('bridges.testConnectionLoading')} onClick={onTestConnection} type="button">
+            {t('bridges.testConnection')}
+          </LoadingButton>
           <LoadingButton className="primary" isLoading={saveLoading} loadingLabel={t('bridges.saveLoading')} type="submit">
             {bridgeForm.bridgeId ? t('bridges.save') : t('bridges.add')}
           </LoadingButton>
@@ -142,6 +156,29 @@ function FetcherDialog({
             {t('common.cancel')}
           </button>
         </div>
+        {testResult ? (
+          <div className={`full ${testResult.tone === 'error' ? 'banner-error' : 'muted-box'} fetcher-test-result`}>
+            <strong>{testResult.message}</strong>
+            {testResult.tone !== 'error' && testResult.protocol ? (
+              <dl className="fetcher-test-result-grid">
+                <div><dt>{t('bridges.testProtocol')}</dt><dd>{testResult.protocol}</dd></div>
+                <div><dt>{t('bridges.testEndpoint')}</dt><dd>{testResult.host}:{testResult.port}</dd></div>
+                <div><dt>{t('bridges.testTls')}</dt><dd>{testResult.tls ? t('common.yes') : t('common.no')}</dd></div>
+                <div><dt>{t('bridges.testAuth')}</dt><dd>{t(`authMethod.${testResult.authMethod.toLowerCase()}`)}{testResult.oauthProvider && testResult.oauthProvider !== 'NONE' ? ` / ${t(`oauthProvider.${testResult.oauthProvider.toLowerCase()}`)}` : ''}</dd></div>
+                <div><dt>{t('bridges.testAuthenticated')}</dt><dd>{testResult.authenticated ? t('common.yes') : t('common.no')}</dd></div>
+                <div><dt>{t('bridges.testFolder')}</dt><dd>{testResult.folder || 'INBOX'}</dd></div>
+                <div><dt>{t('bridges.testFolderAccessible')}</dt><dd>{testResult.folderAccessible ? t('common.yes') : t('common.no')}</dd></div>
+                <div><dt>{t('bridges.testUnreadFilterRequested')}</dt><dd>{testResult.unreadFilterRequested ? t('common.yes') : t('common.no')}</dd></div>
+                <div><dt>{t('bridges.testUnreadFilterSupported')}</dt><dd>{testResult.unreadFilterSupported === null ? t('common.unavailable') : testResult.unreadFilterSupported ? t('common.yes') : t('common.no')}</dd></div>
+                <div><dt>{t('bridges.testUnreadFilterValidated')}</dt><dd>{testResult.unreadFilterValidated === null ? t('common.unavailable') : testResult.unreadFilterValidated ? t('common.yes') : t('common.no')}</dd></div>
+                <div><dt>{t('bridges.testVisibleMessages')}</dt><dd>{testResult.visibleMessageCount ?? t('common.unavailable')}</dd></div>
+                <div><dt>{t('bridges.testUnreadMessages')}</dt><dd>{testResult.unreadMessageCount ?? t('common.unavailable')}</dd></div>
+                <div><dt>{t('bridges.testSampleAvailable')}</dt><dd>{testResult.sampleMessageAvailable === null ? t('common.unavailable') : testResult.sampleMessageAvailable ? t('common.yes') : t('common.no')}</dd></div>
+                <div><dt>{t('bridges.testSampleMaterialized')}</dt><dd>{testResult.sampleMessageMaterialized === null ? t('common.unavailable') : testResult.sampleMessageMaterialized ? t('common.yes') : t('common.no')}</dd></div>
+              </dl>
+            ) : null}
+          </div>
+        ) : null}
       </form>
     </ModalDialog>
   )

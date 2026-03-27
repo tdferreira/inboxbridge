@@ -11,7 +11,9 @@ public class PollRunResult {
     private int fetched;
     private int imported;
     private int duplicates;
+    private int spamJunkMessageCount;
     private final List<String> errors = new ArrayList<>();
+    private final List<String> spamJunkFolderSummaries = new ArrayList<>();
 
     public void incrementFetched() {
         fetched++;
@@ -27,6 +29,11 @@ public class PollRunResult {
 
     public void addError(String error) {
         errors.add(error);
+    }
+
+    public void addSpamJunkFolderSummary(String sourceId, String folderName, int messageCount) {
+        spamJunkMessageCount += Math.max(0, messageCount);
+        spamJunkFolderSummaries.add(sourceId + " -> " + folderName + " (" + messageCount + ")");
     }
 
     public void finish() {
@@ -55,5 +62,13 @@ public class PollRunResult {
 
     public List<String> getErrors() {
         return errors;
+    }
+
+    public int getSpamJunkMessageCount() {
+        return spamJunkMessageCount;
+    }
+
+    public List<String> getSpamJunkFolderSummaries() {
+        return spamJunkFolderSummaries;
     }
 }

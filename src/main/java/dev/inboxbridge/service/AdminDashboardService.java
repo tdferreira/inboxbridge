@@ -11,6 +11,7 @@ import dev.inboxbridge.dto.AdminDashboardResponse;
 import dev.inboxbridge.dto.AdminDestinationSummary;
 import dev.inboxbridge.dto.AdminOverallSummary;
 import dev.inboxbridge.dto.AdminPollEventSummary;
+import dev.inboxbridge.dto.GlobalPollingStatsView;
 import dev.inboxbridge.persistence.ImportedMessageRepository;
 import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.inject.Inject;
@@ -39,6 +40,12 @@ public class AdminDashboardService {
     @Inject
     SourcePollingStateService sourcePollingStateService;
 
+    @Inject
+    SourcePollingSettingsService sourcePollingSettingsService;
+
+    @Inject
+    PollingStatsService pollingStatsService;
+
     public AdminDashboardResponse dashboard() {
         PollingSettingsService.EffectivePollingSettings effectivePolling = pollingSettingsService.effectiveSettings();
         Map<String, ImportStats> importStatsBySource = new HashMap<>();
@@ -58,13 +65,36 @@ public class AdminDashboardService {
                 .map(indexedSource -> {
                     BridgeConfig.Source source = indexedSource.source();
                     ImportStats importStats = importStatsBySource.getOrDefault(source.id(), ImportStats.EMPTY);
-                    AdminPollEventSummary lastEvent = sourcePollEventService.latestForSource(source.id()).orElse(null);
+                    OAuthCredentialService.StoredOAuthCredential microsoftCredential = microsoftCredential(source);
+                    AdminPollEventSummary lastEvent = sanitizeLastEvent(
+                            sourcePollEventService.latestForSource(source.id()).orElse(null),
+                            microsoftCredential);
+                    PollingSettingsService.EffectivePollingSettings effectiveSourcePolling = sourcePollingSettingsService.effectiveSettingsFor(
+                            new dev.inboxbridge.domain.RuntimeBridge(
+                                    source.id(),
+                                    "SYSTEM",
+                                    null,
+                                    "system",
+                                    source.enabled(),
+                                    source.protocol(),
+                                    source.host(),
+                                    source.port(),
+                                    source.tls(),
+                                    source.authMethod(),
+                                    source.oauthProvider(),
+                                    source.username(),
+                                    source.password(),
+                                    source.oauthRefreshToken().orElse(""),
+                                    source.folder(),
+                                    source.unreadOnly(),
+                                    source.customLabel(),
+                                    null));
                     return new AdminBridgeSummary(
                             source.id(),
                             source.enabled(),
-                            effectivePolling.pollEnabled(),
-                            effectivePolling.pollIntervalText(),
-                            effectivePolling.fetchWindow(),
+                            effectiveSourcePolling.pollEnabled(),
+                            effectiveSourcePolling.pollIntervalText(),
+                            effectiveSourcePolling.fetchWindow(),
                             source.protocol().name(),
                             source.authMethod().name(),
                             source.oauthProvider().name(),
@@ -75,7 +105,7 @@ public class AdminDashboardService {
                             source.unreadOnly(),
                             source.customLabel().orElse(""),
                             passwordConfigured(source.password()),
-                            tokenStorageMode(source),
+                            tokenStorageMode(source, microsoftCredential),
                             importStats.totalImported(),
                             importStats.lastImportedAt(),
                             lastEvent,
@@ -87,15 +117,18 @@ public class AdminDashboardService {
                 .filter(bridge -> bridge.lastEvent() != null && "ERROR".equals(bridge.lastEvent().status()))
                 .count();
 
+        GlobalPollingStatsView stats = pollingStatsService.globalStats(sourcesWithErrors);
+
         return new AdminDashboardResponse(
                 new AdminOverallSummary(
-                        configuredSources.size(),
-                        (int) configuredSources.stream().map(EnvSourceService.IndexedSource::source).filter(BridgeConfig.Source::enabled).count(),
-                        importedMessageRepository.count(),
+                        stats.configuredMailFetchers(),
+                        stats.enabledMailFetchers(),
+                        stats.totalImportedMessages(),
                         sourcesWithErrors,
                         effectivePolling.pollEnabled(),
                         effectivePolling.pollIntervalText(),
                         effectivePolling.fetchWindow()),
+                stats,
                 pollingSettingsService.view(),
                 new AdminDestinationSummary(
                         gmailClientConfigured(),
@@ -124,20 +157,49 @@ public class AdminDashboardService {
         return oAuthCredentialService.secureStorageConfigured() ? "CONFIGURED_BUT_EMPTY" : "NOT_CONFIGURED";
     }
 
-    private String tokenStorageMode(BridgeConfig.Source source) {
+    private String tokenStorageMode(BridgeConfig.Source source, OAuthCredentialService.StoredOAuthCredential microsoftCredential) {
         if (source.authMethod() == BridgeConfig.AuthMethod.PASSWORD) {
             return "PASSWORD";
         }
         if (source.oauthProvider() != BridgeConfig.OAuthProvider.MICROSOFT) {
             return "UNKNOWN";
         }
-        if (oAuthCredentialService.secureStorageConfigured() && oAuthCredentialService.findMicrosoftCredential(source.id()).isPresent()) {
+        if (microsoftCredential != null) {
             return "DATABASE";
         }
         if (source.oauthRefreshToken().isPresent() && !source.oauthRefreshToken().orElse("").isBlank()) {
             return "ENVIRONMENT";
         }
         return oAuthCredentialService.secureStorageConfigured() ? "CONFIGURED_BUT_EMPTY" : "NOT_CONFIGURED";
+    }
+
+    private OAuthCredentialService.StoredOAuthCredential microsoftCredential(BridgeConfig.Source source) {
+        if (source.oauthProvider() != BridgeConfig.OAuthProvider.MICROSOFT || !oAuthCredentialService.secureStorageConfigured()) {
+            return null;
+        }
+        return oAuthCredentialService.findMicrosoftCredential(source.id()).orElse(null);
+    }
+
+    private AdminPollEventSummary sanitizeLastEvent(
+            AdminPollEventSummary lastEvent,
+            OAuthCredentialService.StoredOAuthCredential microsoftCredential) {
+        if (lastEvent == null || microsoftCredential == null) {
+            return lastEvent;
+        }
+        if (!"ERROR".equals(lastEvent.status())) {
+            return lastEvent;
+        }
+        String errorMessage = lastEvent.error();
+        if (errorMessage == null || !errorMessage.contains("configured for OAuth2 but has no refresh token")) {
+            return lastEvent;
+        }
+        if (lastEvent.finishedAt() == null || microsoftCredential.updatedAt() == null) {
+            return lastEvent;
+        }
+        if (microsoftCredential.updatedAt().isAfter(lastEvent.finishedAt())) {
+            return null;
+        }
+        return lastEvent;
     }
 
     private boolean passwordConfigured(String password) {

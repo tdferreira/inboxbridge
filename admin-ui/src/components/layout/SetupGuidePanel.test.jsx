@@ -22,7 +22,7 @@ describe('SetupGuidePanel', () => {
             targetId: 'password-panel-section'
           },
           {
-            title: '2. Configure the Gmail destination',
+            title: '2. Connect your Gmail account',
             description: 'Ready to continue.',
             status: 'complete',
             targetId: 'gmail-destination-section'
@@ -40,8 +40,34 @@ describe('SetupGuidePanel', () => {
 
     expect(screen.getByText('Quick Setup Guide')).toBeInTheDocument()
     expect(screen.getByRole('link', { name: /secure your session/i })).toHaveAttribute('href', '#password-panel-section')
-    expect(screen.getByRole('link', { name: /configure the gmail destination/i })).toHaveClass('setup-guide-complete')
+    expect(screen.getByRole('link', { name: /connect your gmail account/i })).toHaveClass('setup-guide-complete')
     expect(screen.getByRole('link', { name: /complete provider oauth/i })).toHaveClass('setup-guide-error')
-    expect(screen.getByLabelText(/remember layout on this account/i)).toBeInTheDocument()
+    expect(screen.queryByLabelText(/remember layout on this account/i)).not.toBeInTheDocument()
+  })
+
+  it('renders translated setup guide copy in portuguese', () => {
+    render(
+      <SetupGuidePanel
+        collapsed={false}
+        onFocusSection={vi.fn()}
+        onPersistLayoutChange={vi.fn()}
+        onToggleCollapse={vi.fn()}
+        persistLayout={false}
+        savingLayout={false}
+        steps={[
+          {
+            title: translate('pt-PT', 'setup.step1Title'),
+            description: translate('pt-PT', 'setup.step1Pending'),
+            status: 'pending',
+            targetId: 'password-panel-section'
+          }
+        ]}
+        t={(key, params) => translate('pt-PT', key, params)}
+      />
+    )
+
+    expect(screen.getByText('Guia rápido de configuração')).toBeInTheDocument()
+    expect(screen.getByRole('link', { name: /1\. Proteja a sessão/i })).toBeInTheDocument()
+    expect(screen.queryByLabelText('Memorizar disposição nesta conta')).not.toBeInTheDocument()
   })
 })

@@ -96,4 +96,40 @@ describe('BridgeCard', () => {
     await waitFor(() => expect(writeText).toHaveBeenCalledWith('AADSTS65001 consent_required'))
     await waitFor(() => expect(screen.getByRole('button', { name: 'Copied' })).toBeInTheDocument())
   })
+
+  it('renders translated bridge labels in portuguese', () => {
+    render(
+      <BridgeCard
+        bridge={{
+          bridgeId: 'outlook-main',
+          protocol: 'IMAP',
+          authMethod: 'OAUTH2',
+          oauthProvider: 'MICROSOFT',
+          host: 'outlook.office365.com',
+          port: 993,
+          tls: true,
+          tokenStorageMode: 'DATABASE',
+          totalImportedMessages: 3,
+          lastImportedAt: null,
+          folder: 'INBOX',
+          lastEvent: null
+        }}
+        locale="pt-PT"
+        onConnectMicrosoft={vi.fn()}
+        onDelete={vi.fn()}
+        onEdit={vi.fn()}
+        showDelete
+        showEdit
+        t={(key, params) => translate('pt-PT', key, params)}
+      />
+    )
+
+    expect(screen.getByText('Anfitrião')).toBeInTheDocument()
+    expect(screen.getByText('Armazenamento do token')).toBeInTheDocument()
+    expect(screen.getByText('BD encriptada')).toBeInTheDocument()
+    expect(screen.getByText('Ainda não existe atividade de polling registada.')).toBeInTheDocument()
+    expect(screen.getByText('Pasta')).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Editar' })).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Apagar' })).toBeInTheDocument()
+  })
 })

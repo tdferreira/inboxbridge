@@ -7,15 +7,20 @@
   align-items: start;
   justify-content: space-between;
   gap: 12px;
+  max-width: 100%;
 }
 
 .app-banner-content {
   min-width: 0;
+  flex: 1 1 auto;
+  overflow-wrap: anywhere;
+  word-break: break-word;
 }
 
 .app-banner-actions {
   display: inline-flex;
   align-items: start;
+  flex: 0 0 auto;
   gap: 8px;
 }
 
@@ -28,6 +33,11 @@
   font: inherit;
   font-weight: 600;
   border-radius: 10px;
+  min-width: 0;
+  max-width: 100%;
+  white-space: normal;
+  overflow-wrap: anywhere;
+  word-break: break-word;
 }
 
 .banner-focus-button:hover,

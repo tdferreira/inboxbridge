@@ -1,3 +1,7 @@
+function renumberStepTitle(title, index) {
+  return String(title).replace(/^\d+\.\s*/, `${index}. `)
+}
+
 export function buildSetupGuideState({ gmailMeta, myBridges = [], session, systemDashboard, t }) {
   if (!session) {
     return {
@@ -32,7 +36,6 @@ export function buildSetupGuideState({ gmailMeta, myBridges = [], session, syste
 
   const steps = [
     {
-      title: '1. Secure your session',
       title: t('setup.step1Title'),
       description: t('setup.step1Pending'),
       targetId: 'password-panel-section',
@@ -56,8 +59,11 @@ export function buildSetupGuideState({ gmailMeta, myBridges = [], session, syste
       targetId: 'source-bridges-section',
       sectionKey: 'sourceBridgesCollapsed',
       status: bridgeReady ? 'complete' : 'pending'
-    },
-    {
+    }
+  ]
+
+  if (oauthBridges.length > 0) {
+    steps.push({
       title: t('setup.step4Title'),
       description: oauthErrors.length > 0
         ? t('setup.step4Error')
@@ -67,8 +73,10 @@ export function buildSetupGuideState({ gmailMeta, myBridges = [], session, syste
       targetId: 'source-bridges-section',
       sectionKey: 'sourceBridgesCollapsed',
       status: oauthErrors.length > 0 ? 'error' : oauthReady ? 'complete' : 'pending'
-    },
-    {
+    })
+  }
+
+  steps.push({
       title: t('setup.step5Title'),
       description: importsErrored
         ? t('setup.step5Error')
@@ -78,11 +86,15 @@ export function buildSetupGuideState({ gmailMeta, myBridges = [], session, syste
       targetId: session.role === 'ADMIN' ? 'system-dashboard-section' : 'source-bridges-section',
       sectionKey: session.role === 'ADMIN' ? 'systemDashboardCollapsed' : 'sourceBridgesCollapsed',
       status: importsErrored ? 'error' : importsReady ? 'complete' : 'pending'
-    }
-  ]
+    })
+
+  const numberedSteps = steps.map((step, index) => ({
+    ...step,
+    title: renumberStepTitle(step.title, index + 1)
+  }))
 
   return {
-    steps,
+    steps: numberedSteps,
     allStepsComplete: steps.every((step) => step.status === 'complete')
   }
 }

@@ -3,19 +3,24 @@ import AuthScreen from './components/auth/AuthScreen'
 import Banner from './components/common/Banner'
 import ConfirmationDialog from './components/common/ConfirmationDialog'
 import LoadingScreen from './components/common/LoadingScreen'
+import ModalDialog from './components/common/ModalDialog'
 import PasswordPanel from './components/account/PasswordPanel'
 import PasskeyPanel from './components/account/PasskeyPanel'
+import PasskeyRegistrationDialog from './components/account/PasskeyRegistrationDialog'
 import PasswordResetDialog from './components/admin/PasswordResetDialog'
-import GmailDestinationSection from './components/gmail/GmailDestinationSection'
+import GmailAccountSection from './components/gmail/GmailAccountSection'
 import HeroPanel from './components/layout/HeroPanel'
+import PreferencesDialog from './components/layout/PreferencesDialog'
 import SetupGuidePanel from './components/layout/SetupGuidePanel'
 import SystemDashboardSection from './components/admin/SystemDashboardSection'
+import SystemPollingSettingsDialog from './components/admin/SystemPollingSettingsDialog'
 import UserPollingSettingsSection from './components/polling/UserPollingSettingsSection'
+import UserPollingSettingsDialog from './components/polling/UserPollingSettingsDialog'
 import UserManagementSection from './components/admin/UserManagementSection'
 import UserBridgesSection from './components/bridges/UserBridgesSection'
 import { apiErrorText } from './lib/api'
 import { findEmailProviderPreset } from './lib/emailProviderPresets'
-import { parseCreateOptions, parseGetOptions, passkeysSupported, serializeCredential } from './lib/passkeys'
+import { normalizePasskeyError, parseCreateOptions, parseGetOptions, passkeysSupported, serializeCredential } from './lib/passkeys'
 import { buildSetupGuideState } from './lib/setupGuide'
 import { languageOptions, normalizeLocale, translate } from './lib/i18n'
 
@@ -25,7 +30,7 @@ const DEFAULT_LOGIN_FORM = { username: 'admin', password: 'nimda' }
 const DEFAULT_REGISTER_FORM = { username: '', password: '', confirmPassword: '' }
 const DEFAULT_PASSWORD_FORM = { currentPassword: '', newPassword: '', confirmNewPassword: '' }
 const DEFAULT_ADMIN_RESET_PASSWORD_FORM = { newPassword: '', confirmNewPassword: '' }
-const DEFAULT_CREATE_USER_FORM = { username: '', password: '', role: 'USER' }
+const DEFAULT_CREATE_USER_FORM = { username: '', password: '', confirmPassword: '', role: 'USER' }
 const DEFAULT_GMAIL_CONFIG = {
   destinationUser: 'me',
   clientId: '',
@@ -73,6 +78,26 @@ const DEFAULT_USER_POLLING_FORM = {
   pollIntervalOverride: '',
   fetchWindowOverride: ''
 }
+const DEFAULT_USER_POLLING_STATS = {
+  totalImportedMessages: 0,
+  configuredMailFetchers: 0,
+  enabledMailFetchers: 0,
+  sourcesWithErrors: 0,
+  importsByDay: [],
+  importTimelines: {}
+}
+const DEFAULT_SOURCE_POLLING_FORM = {
+  pollEnabledMode: 'DEFAULT',
+  pollIntervalOverride: '',
+  fetchWindowOverride: '',
+  basePollEnabled: true,
+  basePollInterval: '5m',
+  baseFetchWindow: 50,
+  effectivePollEnabled: true,
+  effectivePollInterval: '5m',
+  effectiveFetchWindow: 50,
+  isDirty: false
+}
 const DEFAULT_AUTH_OPTIONS = {
   multiUserEnabled: true
 }
@@ -88,8 +113,10 @@ function App() {
   const [authError, setAuthError] = useState('')
   const [notifications, setNotifications] = useState([])
   const [loadingData, setLoadingData] = useState(false)
+  const [sectionRefreshLoading, setSectionRefreshLoading] = useState({})
   const [pendingActions, setPendingActions] = useState({})
   const [selectedUserLoading, setSelectedUserLoading] = useState(false)
+  const [expandedFetcherLoadingId, setExpandedFetcherLoadingId] = useState(null)
 
   const [loginForm, setLoginForm] = useState(DEFAULT_LOGIN_FORM)
   const [registerForm, setRegisterForm] = useState(DEFAULT_REGISTER_FORM)
@@ -101,11 +128,13 @@ function App() {
   const [gmailConfig, setGmailConfig] = useState(DEFAULT_GMAIL_CONFIG)
   const [gmailMeta, setGmailMeta] = useState(null)
   const [userPollingSettings, setUserPollingSettings] = useState(null)
+  const [userPollingStats, setUserPollingStats] = useState(DEFAULT_USER_POLLING_STATS)
   const [userPollingForm, setUserPollingForm] = useState(DEFAULT_USER_POLLING_FORM)
   const [userPollingFormDirty, setUserPollingFormDirty] = useState(false)
 
   const [bridgeForm, setBridgeForm] = useState(DEFAULT_BRIDGE_FORM)
   const [bridgeDuplicateError, setBridgeDuplicateError] = useState('')
+  const [bridgeTestResult, setBridgeTestResult] = useState(null)
 
   const [myBridges, setMyBridges] = useState([])
   const [myPasskeys, setMyPasskeys] = useState([])
@@ -118,20 +147,35 @@ function App() {
   const [uiPreferencesLoadedForUserId, setUiPreferencesLoadedForUserId] = useState(null)
   const [touchedSections, setTouchedSections] = useState({})
   const [showSecurityPanel, setShowSecurityPanel] = useState(false)
+  const [securityTab, setSecurityTab] = useState('password')
   const [showPasswordResetDialog, setShowPasswordResetDialog] = useState(false)
+  const [showPasskeyRegistrationDialog, setShowPasskeyRegistrationDialog] = useState(false)
+  const [passwordResetTarget, setPasswordResetTarget] = useState(null)
+  const [showCreateUserDialog, setShowCreateUserDialog] = useState(false)
   const [showFetcherDialog, setShowFetcherDialog] = useState(false)
+  const [showFetcherPollingDialog, setShowFetcherPollingDialog] = useState(false)
+  const [fetcherPollingTarget, setFetcherPollingTarget] = useState(null)
+  const [fetcherPollingForm, setFetcherPollingForm] = useState(DEFAULT_SOURCE_POLLING_FORM)
   const [confirmationDialog, setConfirmationDialog] = useState(null)
   const [systemPollingForm, setSystemPollingForm] = useState(DEFAULT_SYSTEM_POLLING_FORM)
   const [systemPollingFormDirty, setSystemPollingFormDirty] = useState(false)
   const [dismissedPersistentNotifications, setDismissedPersistentNotifications] = useState({})
   const [language, setLanguage] = useState(() => normalizeLocale(window.localStorage.getItem('inboxbridge.language') || navigator.language))
   const [registerOpen, setRegisterOpen] = useState(false)
+  const [showPreferencesDialog, setShowPreferencesDialog] = useState(false)
+  const [showUserPollingDialog, setShowUserPollingDialog] = useState(false)
+  const [showSystemPollingDialog, setShowSystemPollingDialog] = useState(false)
   const notificationTimersRef = useRef(new Map())
   const t = useMemo(() => (key, params) => translate(language, key, params), [language])
   const selectableLanguages = useMemo(() => languageOptions.map((value) => ({
     value,
     label: translate(language, `language.${value}`)
   })), [language])
+  const securityDialogDirty = Boolean(
+    passwordForm.currentPassword.trim()
+    || passwordForm.newPassword.trim()
+    || passwordForm.confirmNewPassword.trim()
+  )
 
   function normalizeUiPreferences(payload) {
     const nextUiPreferences = {
@@ -154,6 +198,10 @@ function App() {
 
   function isPending(actionKey) {
     return Boolean(pendingActions[actionKey])
+  }
+
+  function isSectionRefreshing(sectionKey) {
+    return Boolean(sectionRefreshLoading[sectionKey])
   }
 
   async function withPending(actionKey, action) {
@@ -194,6 +242,7 @@ function App() {
 
   function handleBridgeFormChange(updater) {
     setBridgeDuplicateError('')
+    setBridgeTestResult(null)
     setBridgeForm((current) => normalizeBridgeForm(typeof updater === 'function' ? updater(current) : updater))
   }
 
@@ -202,6 +251,7 @@ function App() {
     if (!preset.values) {
       return
     }
+    setBridgeTestResult(null)
     handleBridgeFormChange((current) => ({
       ...current,
       ...preset.values
@@ -288,6 +338,7 @@ function App() {
       const requests = [
         fetch('/api/app/gmail-config'),
         fetch('/api/app/polling-settings'),
+        fetch('/api/app/polling-stats'),
         fetch('/api/app/bridges'),
         fetch('/api/app/ui-preferences'),
         fetch('/api/account/passkeys')
@@ -307,7 +358,7 @@ function App() {
       }
 
       const payloads = await Promise.all(responses.map((response) => response.json()))
-      const [gmailPayload, userPollingPayload, bridgesPayload, uiPreferencesPayload, passkeysPayload, adminPayload, usersPayload] = payloads
+      const [gmailPayload, userPollingPayload, userPollingStatsPayload, bridgesPayload, uiPreferencesPayload, passkeysPayload, adminPayload, usersPayload] = payloads
 
       setGmailMeta(gmailPayload)
       setGmailConfig({
@@ -319,6 +370,10 @@ function App() {
         processForCalendar: gmailPayload.processForCalendar
       })
       setUserPollingSettings(userPollingPayload)
+      setUserPollingStats({
+        ...DEFAULT_USER_POLLING_STATS,
+        ...(userPollingStatsPayload || {})
+      })
       if (!userPollingFormDirty && userPollingPayload) {
         setUserPollingForm({
           pollEnabledMode: userPollingPayload.pollEnabledOverride === null
@@ -369,6 +424,19 @@ function App() {
     }
   }
 
+  async function refreshSectionData(sectionKey, loader) {
+    setSectionRefreshLoading((current) => ({ ...current, [sectionKey]: true }))
+    try {
+      await loader()
+    } finally {
+      setSectionRefreshLoading((current) => {
+        const next = { ...current }
+        delete next[sectionKey]
+        return next
+      })
+    }
+  }
+
   useEffect(() => {
     loadAuthOptions()
     loadSession()
@@ -391,7 +459,10 @@ function App() {
 
   useEffect(() => {
     if (selectedUserId) {
-      loadSelectedUserConfiguration(selectedUserId)
+      refreshSectionData('userManagementCollapsed', async () => {
+        await loadAppData()
+        await loadSelectedUserConfiguration(selectedUserId)
+      })
     }
   }, [authOptions.multiUserEnabled, selectedUserId, session?.role])
 
@@ -488,6 +559,7 @@ function App() {
       setNotifications([])
       setRegisterOpen(false)
       setConfirmationDialog(null)
+      setShowCreateUserDialog(false)
     })
   }
 
@@ -522,7 +594,11 @@ function App() {
       onConfirm: async () => {
         await withPending('passwordRemove', async () => {
           try {
-            const response = await fetch('/api/account/password', { method: 'DELETE' })
+            const response = await fetch('/api/account/password', {
+              method: 'DELETE',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ currentPassword: passwordForm.currentPassword })
+            })
             if (!response.ok) {
               throw new Error(await apiErrorText(response, 'Unable to remove password'))
             }
@@ -579,7 +655,7 @@ function App() {
         const startPayload = await startResponse.json()
         await completePasskeyLogin(startPayload)
       } catch (err) {
-        setAuthError(err.message || 'Passkey sign-in failed')
+        setAuthError(normalizePasskeyError(err, t, 'login'))
       }
     })
   }
@@ -616,13 +692,25 @@ function App() {
           throw new Error(await apiErrorText(finishResponse, 'Unable to register passkey'))
         }
         setPasskeyLabel('')
+        setShowPasskeyRegistrationDialog(false)
         pushNotification({ message: t('notifications.passkeyRegistered'), targetId: 'passkey-panel-section', tone: 'success' })
         await loadAppData()
         await loadSession()
       } catch (err) {
-        pushNotification({ autoCloseMs: null, copyText: err.message || 'Unable to register passkey', message: err.message || 'Unable to register passkey', targetId: 'passkey-panel-section', tone: 'error' })
+        const message = normalizePasskeyError(err, t, 'registration')
+        pushNotification({ autoCloseMs: null, copyText: message, message, targetId: 'passkey-panel-section', tone: 'error' })
       }
     })
+  }
+
+  function openPasskeyRegistrationDialog() {
+    setPasskeyLabel('')
+    setShowPasskeyRegistrationDialog(true)
+  }
+
+  function closePasskeyRegistrationDialog() {
+    setShowPasskeyRegistrationDialog(false)
+    setPasskeyLabel('')
   }
 
   async function handleDeletePasskey(passkeyId) {
@@ -672,6 +760,43 @@ function App() {
     })
   }
 
+  async function unlinkGmailAccount() {
+    openConfirmation({
+      actionKey: 'gmailUnlink',
+      body: t('gmail.unlinkConfirmBody'),
+      confirmLabel: t('gmail.unlink'),
+      confirmLoadingLabel: t('gmail.unlinkLoading'),
+      confirmTone: 'danger',
+      onConfirm: async () => {
+        await withPending('gmailUnlink', async () => {
+          try {
+            const response = await fetch('/api/account/gmail-link', { method: 'DELETE' })
+            if (!response.ok) {
+              throw new Error(await apiErrorText(response, 'Unable to unlink Gmail account'))
+            }
+            const payload = await response.json()
+            setConfirmationDialog(null)
+            if (payload.providerRevocationAttempted && !payload.providerRevoked) {
+              pushNotification({
+                autoCloseMs: null,
+                copyText: t('notifications.gmailUnlinkedRevokeFailed'),
+                message: t('notifications.gmailUnlinkedRevokeFailed'),
+                targetId: 'gmail-destination-section',
+                tone: 'warning'
+              })
+            } else {
+              pushNotification({ message: t('notifications.gmailUnlinked'), targetId: 'gmail-destination-section', tone: 'success' })
+            }
+            await loadAppData()
+          } catch (err) {
+            pushNotification({ autoCloseMs: null, copyText: err.message || 'Unable to unlink Gmail account', message: err.message || 'Unable to unlink Gmail account', targetId: 'gmail-destination-section', tone: 'error' })
+          }
+        })
+      },
+      title: t('gmail.unlinkConfirmTitle')
+    })
+  }
+
   async function saveBridge(event) {
     event.preventDefault()
     const normalizedBridgeId = bridgeForm.bridgeId.trim()
@@ -696,12 +821,36 @@ function App() {
           throw new Error(await apiErrorText(response, 'Unable to save mail fetcher'))
         }
         setBridgeDuplicateError('')
+        setBridgeTestResult(null)
         pushNotification({ message: t('notifications.bridgeSaved', { bridgeId: bridgeForm.bridgeId }), targetId: 'source-bridges-section', tone: 'success' })
         setBridgeForm(DEFAULT_BRIDGE_FORM)
         setShowFetcherDialog(false)
         await loadAppData()
       } catch (err) {
         pushNotification({ autoCloseMs: null, copyText: err.message || 'Unable to save mail fetcher', message: err.message || 'Unable to save mail fetcher', targetId: 'source-bridges-section', tone: 'error' })
+      }
+    })
+  }
+
+  async function testBridgeConnection() {
+    await withPending('bridgeConnectionTest', async () => {
+      try {
+        const response = await fetch('/api/app/bridges/test-connection', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(bridgeForm)
+        })
+        if (!response.ok) {
+          throw new Error(await apiErrorText(response, 'Unable to test mail fetcher connection'))
+        }
+        const payload = await response.json()
+        const message = payload.message || t('bridges.testSuccess')
+        setBridgeTestResult({ ...payload, message, tone: 'success' })
+        pushNotification({ message, targetId: 'source-bridges-section', tone: 'success' })
+      } catch (err) {
+        const message = err.message || 'Unable to test mail fetcher connection'
+        setBridgeTestResult({ message, tone: 'error' })
+        pushNotification({ autoCloseMs: null, copyText: message, message, targetId: 'source-bridges-section', tone: 'error' })
       }
     })
   }
@@ -732,27 +881,197 @@ function App() {
     })
   }
 
+  function normalizeSourcePollingForm(payload) {
+    return {
+      pollEnabledMode: payload.pollEnabledOverride === null
+        ? 'DEFAULT'
+        : payload.pollEnabledOverride ? 'ENABLED' : 'DISABLED',
+      pollIntervalOverride: payload.pollIntervalOverride || '',
+      fetchWindowOverride: payload.fetchWindowOverride === null ? '' : String(payload.fetchWindowOverride),
+      basePollEnabled: payload.basePollEnabled,
+      basePollInterval: payload.basePollInterval,
+      baseFetchWindow: payload.baseFetchWindow,
+      effectivePollEnabled: payload.effectivePollEnabled,
+      effectivePollInterval: payload.effectivePollInterval,
+      effectiveFetchWindow: payload.effectiveFetchWindow,
+      isDirty: false
+    }
+  }
+
+  async function openFetcherPollingDialog(fetcher) {
+    setFetcherPollingTarget(fetcher)
+    await withPending(`fetcherPollingLoad:${fetcher.bridgeId}`, async () => {
+      try {
+        const endpointPrefix = fetcher.managementSource === 'ENVIRONMENT' ? '/api/admin/bridges' : '/api/app/bridges'
+        const response = await fetch(`${endpointPrefix}/${encodeURIComponent(fetcher.bridgeId)}/polling-settings`)
+        if (!response.ok) {
+          throw new Error(await apiErrorText(response, 'Unable to load fetcher polling settings'))
+        }
+        const payload = await response.json()
+        setFetcherPollingForm(normalizeSourcePollingForm(payload))
+        setShowFetcherPollingDialog(true)
+      } catch (err) {
+        setFetcherPollingTarget(null)
+        pushNotification({ autoCloseMs: null, copyText: err.message || 'Unable to load fetcher polling settings', message: err.message || 'Unable to load fetcher polling settings', targetId: 'source-bridges-section', tone: 'error' })
+      }
+    })
+  }
+
+  function closeFetcherPollingDialog() {
+    setShowFetcherPollingDialog(false)
+    setFetcherPollingTarget(null)
+    setFetcherPollingForm(DEFAULT_SOURCE_POLLING_FORM)
+  }
+
+  async function saveFetcherPollingSettings(event) {
+    event.preventDefault()
+    if (!fetcherPollingTarget) return
+    await withPending(`fetcherPollingSave:${fetcherPollingTarget.bridgeId}`, async () => {
+      try {
+        const endpointPrefix = fetcherPollingTarget.managementSource === 'ENVIRONMENT' ? '/api/admin/bridges' : '/api/app/bridges'
+        const response = await fetch(`${endpointPrefix}/${encodeURIComponent(fetcherPollingTarget.bridgeId)}/polling-settings`, {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            pollEnabledOverride: fetcherPollingForm.pollEnabledMode === 'DEFAULT'
+              ? null
+              : fetcherPollingForm.pollEnabledMode === 'ENABLED',
+            pollIntervalOverride: fetcherPollingForm.pollIntervalOverride.trim() || null,
+            fetchWindowOverride: fetcherPollingForm.fetchWindowOverride === '' ? null : Number(fetcherPollingForm.fetchWindowOverride)
+          })
+        })
+        if (!response.ok) {
+          throw new Error(await apiErrorText(response, 'Unable to save fetcher polling settings'))
+        }
+        const payload = await response.json()
+        setFetcherPollingForm(normalizeSourcePollingForm(payload))
+        pushNotification({ message: t('notifications.fetcherPollingSaved', { bridgeId: fetcherPollingTarget.bridgeId }), targetId: 'source-bridges-section', tone: 'success' })
+        await loadAppData()
+        closeFetcherPollingDialog()
+      } catch (err) {
+        pushNotification({ autoCloseMs: null, copyText: err.message || 'Unable to save fetcher polling settings', message: err.message || 'Unable to save fetcher polling settings', targetId: 'source-bridges-section', tone: 'error' })
+      }
+    })
+  }
+
+  async function resetFetcherPollingSettings() {
+    if (!fetcherPollingTarget) return
+    await withPending(`fetcherPollingSave:${fetcherPollingTarget.bridgeId}`, async () => {
+      try {
+        const endpointPrefix = fetcherPollingTarget.managementSource === 'ENVIRONMENT' ? '/api/admin/bridges' : '/api/app/bridges'
+        const response = await fetch(`${endpointPrefix}/${encodeURIComponent(fetcherPollingTarget.bridgeId)}/polling-settings`, {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            pollEnabledOverride: null,
+            pollIntervalOverride: null,
+            fetchWindowOverride: null
+          })
+        })
+        if (!response.ok) {
+          throw new Error(await apiErrorText(response, 'Unable to reset fetcher polling settings'))
+        }
+        const payload = await response.json()
+        setFetcherPollingForm(normalizeSourcePollingForm(payload))
+        pushNotification({ message: t('notifications.fetcherPollingReset', { bridgeId: fetcherPollingTarget.bridgeId }), targetId: 'source-bridges-section', tone: 'success' })
+        await loadAppData()
+      } catch (err) {
+        pushNotification({ autoCloseMs: null, copyText: err.message || 'Unable to reset fetcher polling settings', message: err.message || 'Unable to reset fetcher polling settings', targetId: 'source-bridges-section', tone: 'error' })
+      }
+    })
+  }
+
+  async function runFetcherPoll(bridgeId) {
+    const fetcher = visibleFetchers.find((entry) => entry.bridgeId === bridgeId)
+    await withPending(`bridgePoll:${bridgeId}`, async () => {
+      try {
+        pushNotification({
+          autoCloseMs: 10000,
+          message: t('notifications.fetcherPollStarted', { bridgeId }),
+          targetId: 'source-bridges-section',
+          tone: 'warning'
+        })
+        const endpointPrefix = fetcher?.managementSource === 'ENVIRONMENT' ? '/api/admin/bridges' : '/api/app/bridges'
+        const response = await fetch(`${endpointPrefix}/${encodeURIComponent(bridgeId)}/poll/run`, { method: 'POST' })
+        if (!response.ok) {
+          throw new Error(await apiErrorText(response, 'Unable to run mail fetcher poll'))
+        }
+        const payload = await response.json()
+        if (payload.errors?.length) {
+          throw new Error(payload.errors.join('\n'))
+        }
+        const completedMessageKey = payload.spamJunkMessageCount > 0
+          ? 'notifications.fetcherPollCompletedWithSpam'
+          : 'notifications.fetcherPollCompleted'
+        pushNotification({
+          message: t(completedMessageKey, {
+            bridgeId,
+            fetched: payload.fetched,
+            imported: payload.imported,
+            duplicates: payload.duplicates,
+            spamJunkCount: payload.spamJunkMessageCount
+          }),
+          targetId: 'source-bridges-section',
+          tone: 'success'
+        })
+      } catch (err) {
+        pushNotification({ autoCloseMs: null, copyText: err.message || 'Unable to run mail fetcher poll', message: err.message || 'Unable to run mail fetcher poll', targetId: 'source-bridges-section', tone: 'error' })
+      } finally {
+        await loadAppData()
+      }
+    })
+  }
+
+  async function refreshFetcherState(_fetcher, expanded) {
+    if (!expanded) {
+      return
+    }
+    setExpandedFetcherLoadingId(_fetcher.bridgeId)
+    try {
+      await refreshSectionData('sourceBridgesCollapsed', loadAppData)
+    } finally {
+      setExpandedFetcherLoadingId((current) => current === _fetcher.bridgeId ? null : current)
+    }
+  }
+
   async function createUser(event) {
     event.preventDefault()
+    const normalizedUsername = createUserForm.username.trim()
+    if (users.some((user) => user.username.toLowerCase() === normalizedUsername.toLowerCase())) {
+      pushNotification({ autoCloseMs: null, message: t('users.duplicateUsername', { username: normalizedUsername }), targetId: 'user-management-section', tone: 'error' })
+      return false
+    }
     await withPending('createUser', async () => {
       try {
         const response = await fetch('/api/admin/users', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify(createUserForm)
+          body: JSON.stringify({
+            username: normalizedUsername,
+            password: createUserForm.password,
+            role: createUserForm.role
+          })
         })
         if (!response.ok) {
           throw new Error(await apiErrorText(response, 'Unable to create user'))
         }
         const payload = await response.json()
         setCreateUserForm(DEFAULT_CREATE_USER_FORM)
+        setShowCreateUserDialog(false)
         pushNotification({ message: t('notifications.userCreated', { username: payload.username }), targetId: 'user-management-section', tone: 'success' })
         await loadAppData()
         setSelectedUserId(payload.id)
+        return true
       } catch (err) {
         pushNotification({ autoCloseMs: null, copyText: err.message || 'Unable to create user', message: err.message || 'Unable to create user', targetId: 'user-management-section', tone: 'error' })
+        return false
       }
     })
+  }
+
+  function toggleExpandedUser(userId) {
+    setSelectedUserConfig((current) => current && current.user.id === userId && selectedUserId === userId ? null : current)
+    setSelectedUserId((current) => current === userId ? null : userId)
   }
 
   async function updateUser(userId, patch, successMessage) {
@@ -831,10 +1150,10 @@ function App() {
 
   async function resetSelectedUserPassword(event) {
     event.preventDefault()
-    if (!selectedUserConfig) return
-    await withPending(`resetPassword:${selectedUserConfig.user.id}`, async () => {
+    if (!passwordResetTarget) return
+    await withPending(`resetPassword:${passwordResetTarget.id}`, async () => {
       try {
-        const response = await fetch(`/api/admin/users/${selectedUserConfig.user.id}/password-reset`, {
+        const response = await fetch(`/api/admin/users/${passwordResetTarget.id}/password-reset`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify(adminResetPasswordForm)
@@ -845,6 +1164,7 @@ function App() {
         const payload = await response.json()
         setAdminResetPasswordForm(DEFAULT_ADMIN_RESET_PASSWORD_FORM)
         setShowPasswordResetDialog(false)
+        setPasswordResetTarget(null)
         pushNotification({ autoCloseMs: null, message: t('notifications.temporaryPasswordSet', { username: payload.username }), targetId: 'user-management-section', tone: 'warning' })
         await loadAppData()
         setSelectedUserId(payload.id)
@@ -855,26 +1175,26 @@ function App() {
     })
   }
 
-  async function resetSelectedUserPasskeys() {
-    if (!selectedUserConfig) return
+  async function resetUserPasskeys(user) {
+    if (!user) return
     openConfirmation({
-      actionKey: `resetPasskeys:${selectedUserConfig.user.id}`,
-      body: t('users.resetPasskeysConfirmBody', { username: selectedUserConfig.user.username }),
+      actionKey: `resetPasskeys:${user.id}`,
+      body: t('users.resetPasskeysConfirmBody', { username: user.username }),
       confirmLabel: t('users.resetPasskeys'),
       confirmLoadingLabel: t('users.resetPasskeysLoading'),
       confirmTone: 'danger',
       onConfirm: async () => {
-        await withPending(`resetPasskeys:${selectedUserConfig.user.id}`, async () => {
+        await withPending(`resetPasskeys:${user.id}`, async () => {
           try {
-            const response = await fetch(`/api/admin/users/${selectedUserConfig.user.id}/passkeys`, { method: 'DELETE' })
+            const response = await fetch(`/api/admin/users/${user.id}/passkeys`, { method: 'DELETE' })
             if (!response.ok) {
               throw new Error(await apiErrorText(response, 'Unable to reset passkeys'))
             }
             const payload = await response.json()
             setConfirmationDialog(null)
-            pushNotification({ message: t('notifications.passkeysRemoved', { count: payload.deleted, username: selectedUserConfig.user.username }), targetId: 'user-management-section', tone: 'success' })
+            pushNotification({ message: t('notifications.passkeysRemoved', { count: payload.deleted, username: user.username }), targetId: 'user-management-section', tone: 'success' })
             await loadAppData()
-            await loadSelectedUserConfiguration(selectedUserConfig.user.id)
+            await loadSelectedUserConfiguration(user.id)
           } catch (err) {
             pushNotification({ autoCloseMs: null, copyText: err.message || 'Unable to reset passkeys', message: err.message || 'Unable to reset passkeys', targetId: 'user-management-section', tone: 'error' })
           }
@@ -893,7 +1213,10 @@ function App() {
           throw new Error(await apiErrorText(response, 'Unable to run poll'))
         }
         const payload = await response.json()
-        pushNotification({ message: t('notifications.pollFinished', { fetched: payload.fetched, imported: payload.imported, duplicates: payload.duplicates, errors: payload.errors.length }), targetId: 'system-dashboard-section', tone: 'success' })
+        const completedMessageKey = payload.spamJunkMessageCount > 0
+          ? 'notifications.pollFinishedWithSpam'
+          : 'notifications.pollFinished'
+        pushNotification({ message: t(completedMessageKey, { fetched: payload.fetched, imported: payload.imported, duplicates: payload.duplicates, errors: payload.errors.length, spamJunkCount: payload.spamJunkMessageCount }), targetId: 'system-dashboard-section', tone: 'success' })
         await loadAppData()
       } catch (err) {
         pushNotification({ autoCloseMs: null, copyText: err.message || 'Unable to run poll', message: err.message || 'Unable to run poll', targetId: 'system-dashboard-section', tone: 'error' })
@@ -924,6 +1247,7 @@ function App() {
           throw new Error(await apiErrorText(response, 'Unable to save polling settings'))
         }
         setSystemPollingFormDirty(false)
+        setShowSystemPollingDialog(false)
         pushNotification({ message: t('notifications.pollingUpdated'), targetId: 'system-dashboard-section', tone: 'success' })
         await loadAppData()
       } catch (err) {
@@ -949,6 +1273,7 @@ function App() {
         }
         setSystemPollingForm(DEFAULT_SYSTEM_POLLING_FORM)
         setSystemPollingFormDirty(false)
+        setShowSystemPollingDialog(false)
         pushNotification({ message: t('notifications.pollingReset'), targetId: 'system-dashboard-section', tone: 'success' })
         await loadAppData()
       } catch (err) {
@@ -978,6 +1303,7 @@ function App() {
           throw new Error(await apiErrorText(response, 'Unable to save your polling settings'))
         }
         setUserPollingFormDirty(false)
+        setShowUserPollingDialog(false)
         pushNotification({ message: t('notifications.userPollingUpdated'), targetId: 'user-polling-section', tone: 'success' })
         await loadAppData()
       } catch (err) {
@@ -1003,6 +1329,7 @@ function App() {
         }
         setUserPollingForm(DEFAULT_USER_POLLING_FORM)
         setUserPollingFormDirty(false)
+        setShowUserPollingDialog(false)
         pushNotification({ message: t('notifications.userPollingReset'), targetId: 'user-polling-section', tone: 'success' })
         await loadAppData()
       } catch (err) {
@@ -1071,15 +1398,24 @@ function App() {
     })
   }
 
-  function toggleSection(sectionKey) {
+  async function toggleSection(sectionKey) {
     setTouchedSections((current) => ({ ...current, [sectionKey]: true }))
+    const expanding = uiPreferences[sectionKey]
     const nextPreferences = {
       ...uiPreferences,
       [sectionKey]: !uiPreferences[sectionKey]
     }
     setUiPreferences(nextPreferences)
     if (nextPreferences.persistLayout) {
-      persistUiPreferences(nextPreferences)
+      await persistUiPreferences(nextPreferences)
+    }
+    if (expanding) {
+      await refreshSectionData(sectionKey, async () => {
+        await loadAppData()
+        if (sectionKey === 'userManagementCollapsed' && selectedUserId) {
+          await loadSelectedUserConfiguration(selectedUserId)
+        }
+      })
     }
   }
 
@@ -1129,9 +1465,11 @@ function App() {
     }
     if (targetId === 'password-panel-section') {
       setShowSecurityPanel(true)
+      setSecurityTab('password')
     }
     if (targetId === 'passkey-panel-section') {
       setShowSecurityPanel(true)
+      setSecurityTab('passkeys')
     }
     window.setTimeout(() => {
       const target = document.getElementById(targetId)
@@ -1144,6 +1482,7 @@ function App() {
   }
 
   function editBridge(bridge) {
+    setBridgeTestResult(null)
     handleBridgeFormChange({
       originalBridgeId: bridge.bridgeId,
       bridgeId: bridge.bridgeId,
@@ -1166,19 +1505,30 @@ function App() {
 
   function openAddFetcherDialog() {
     setBridgeDuplicateError('')
+    setBridgeTestResult(null)
     setBridgeForm(DEFAULT_BRIDGE_FORM)
     setShowFetcherDialog(true)
   }
 
   const visibleFetchers = useMemo(() => {
-    const databaseFetchers = myBridges.map((bridge) => ({
-      ...bridge,
-      bridgeId: bridge.bridgeId,
-      managementSource: 'DATABASE',
-      canDelete: true,
-      canEdit: true,
-      canConnectMicrosoft: bridge.authMethod === 'OAUTH2' && bridge.oauthProvider === 'MICROSOFT'
-    }))
+      const deriveOauthConnected = (bridge) => bridge.authMethod === 'OAUTH2'
+        && (
+          bridge.oauthConnected === true
+          || bridge.oauthRefreshTokenConfigured === true
+          || bridge.tokenStorageMode === 'DATABASE'
+          || bridge.tokenStorageMode === 'ENVIRONMENT'
+        )
+      const databaseFetchers = myBridges.map((bridge) => ({
+        ...bridge,
+        bridgeId: bridge.bridgeId,
+        managementSource: 'DATABASE',
+        oauthConnected: deriveOauthConnected(bridge),
+        canDelete: true,
+        canEdit: true,
+        canConnectMicrosoft: bridge.authMethod === 'OAUTH2' && bridge.oauthProvider === 'MICROSOFT',
+        canConfigurePolling: true,
+        canRunPoll: true
+      }))
     const envFetchers = session?.username === 'admin'
       ? (systemDashboard?.bridges || []).map((bridge) => ({
         bridgeId: bridge.id,
@@ -1200,10 +1550,13 @@ function App() {
         lastImportedAt: bridge.lastImportedAt,
         lastEvent: bridge.lastEvent,
         pollingState: bridge.pollingState,
+        oauthConnected: deriveOauthConnected(bridge),
         managementSource: 'ENVIRONMENT',
         canDelete: false,
         canEdit: false,
-        canConnectMicrosoft: bridge.authMethod === 'OAUTH2' && bridge.oauthProvider === 'MICROSOFT'
+        canConnectMicrosoft: bridge.authMethod === 'OAUTH2' && bridge.oauthProvider === 'MICROSOFT',
+        canConfigurePolling: true,
+        canRunPoll: true
       }))
       : []
 
@@ -1220,7 +1573,7 @@ function App() {
   })
 
   useEffect(() => {
-    if (!session || uiPreferences.persistLayout || touchedSections.quickSetupCollapsed || !setupGuideState.allStepsComplete) {
+    if (!session || !setupGuideState.allStepsComplete) {
       return
     }
     setUiPreferences((current) => {
@@ -1232,11 +1585,12 @@ function App() {
         quickSetupCollapsed: true
       }
     })
-  }, [session, setupGuideState.allStepsComplete, touchedSections.quickSetupCollapsed, uiPreferences.persistLayout])
+  }, [session, setupGuideState.allStepsComplete])
 
   useEffect(() => {
     setShowPasswordResetDialog(false)
     setAdminResetPasswordForm(DEFAULT_ADMIN_RESET_PASSWORD_FORM)
+    setPasswordResetTarget(null)
   }, [selectedUserId])
 
   useEffect(() => {
@@ -1258,6 +1612,14 @@ function App() {
     }
     return items
   }, [dismissedPersistentNotifications.mustChangePassword, session?.mustChangePassword, t])
+
+  const duplicateCreateUsername = useMemo(() => {
+    const normalized = createUserForm.username.trim().toLowerCase()
+    if (!normalized) {
+      return false
+    }
+    return users.some((user) => user.username.toLowerCase() === normalized)
+  }, [createUserForm.username, users])
 
   if (authLoading) {
     return <LoadingScreen label={t('app.loading')} />
@@ -1293,82 +1655,148 @@ function App() {
       <main className="dashboard">
         <HeroPanel
           language={language}
-          languageOptions={selectableLanguages}
           loadingData={loadingData}
-          onLanguageChange={handleLanguageChange}
+          onOpenPreferences={() => setShowPreferencesDialog(true)}
+          onOpenSecurityDialog={() => {
+            setSecurityTab('password')
+            setShowSecurityPanel(true)
+          }}
           onRefresh={handleRefresh}
           onSignOut={handleLogout}
-          onToggleSecurityPanel={() => setShowSecurityPanel((current) => !current)}
           refreshLoading={isPending('refresh')}
-          securityPanelVisible={showSecurityPanel}
           session={session}
           signOutLoading={isPending('logout')}
           t={t}
         />
 
+        {showPreferencesDialog ? (
+          <PreferencesDialog
+            language={language}
+            languageOptions={selectableLanguages}
+            onClose={() => setShowPreferencesDialog(false)}
+            onLanguageChange={handleLanguageChange}
+            onPersistLayoutChange={handlePersistLayoutChange}
+            persistLayout={uiPreferences.persistLayout}
+            savingLayout={isPending('uiPreferences')}
+            t={t}
+          />
+        ) : null}
+
         {showSecurityPanel ? (
-          <section className="app-columns">
-            <PasswordPanel
-              onPasswordChange={handlePasswordChange}
-              onPasswordFormChange={setPasswordForm}
-              onPasswordRemove={handlePasswordRemoval}
-              passkeyCount={session.passkeyCount}
-              passwordConfigured={session.passwordConfigured}
-              passwordForm={passwordForm}
-              passwordLoading={isPending('passwordChange')}
-              passwordRemoveLoading={isPending('passwordRemove')}
-              t={t}
-            />
-            <PasskeyPanel
-              createLoading={isPending('passkeyCreate')}
-              deleteLoadingId={myPasskeys.find((passkey) => isPending(`passkeyDelete:${passkey.id}`))?.id || null}
-              onCreatePasskey={handlePasskeyRegistration}
-              onDeletePasskey={handleDeletePasskey}
-              onPasskeyLabelChange={setPasskeyLabel}
-              passwordConfigured={session.passwordConfigured}
-              passkeyLabel={passkeyLabel}
-              passkeys={myPasskeys}
-              supported={passkeysSupported()}
-              t={t}
-              locale={language}
-            />
-          </section>
+          <ModalDialog
+            className="security-dialog"
+            closeLabel={t('hero.hideSecurity')}
+            isDirty={securityDialogDirty}
+            onClose={() => setShowSecurityPanel(false)}
+            size="wide"
+            title={t('hero.security')}
+            unsavedChangesMessage={t('common.unsavedChangesConfirm')}
+          >
+            <div className="security-dialog-content">
+              <p className="section-copy">{t('hero.showSecurityHint')}</p>
+              <div aria-label={t('hero.security')} className="security-tab-list" role="tablist">
+                <button
+                  aria-controls="security-password-tabpanel"
+                  aria-selected={securityTab === 'password'}
+                  className={`secondary security-tab-button ${securityTab === 'password' ? 'security-tab-button-active' : ''}`.trim()}
+                  id="security-password-tab"
+                  onClick={() => setSecurityTab('password')}
+                  role="tab"
+                  type="button"
+                >
+                  {t('password.title')}
+                </button>
+                <button
+                  aria-controls="security-passkeys-tabpanel"
+                  aria-selected={securityTab === 'passkeys'}
+                  className={`secondary security-tab-button ${securityTab === 'passkeys' ? 'security-tab-button-active' : ''}`.trim()}
+                  id="security-passkeys-tab"
+                  onClick={() => setSecurityTab('passkeys')}
+                  role="tab"
+                  type="button"
+                >
+                  {t('passkey.title')}
+                </button>
+              </div>
+              {securityTab === 'password' ? (
+                <div aria-labelledby="security-password-tab" className="security-tab-panel" id="security-password-tabpanel" role="tabpanel">
+                  <PasswordPanel
+                    onPasswordChange={handlePasswordChange}
+                    onPasswordFormChange={setPasswordForm}
+                    onPasswordRemove={handlePasswordRemoval}
+                    passkeyCount={session.passkeyCount}
+                    passwordConfigured={session.passwordConfigured}
+                    passwordForm={passwordForm}
+                    passwordLoading={isPending('passwordChange')}
+                    passwordRemoveLoading={isPending('passwordRemove')}
+                    t={t}
+                  />
+                </div>
+              ) : (
+                <div aria-labelledby="security-passkeys-tab" className="security-tab-panel" id="security-passkeys-tabpanel" role="tabpanel">
+                  <PasskeyPanel
+                    createLoading={isPending('passkeyCreate')}
+                    deleteLoadingId={myPasskeys.find((passkey) => isPending(`passkeyDelete:${passkey.id}`))?.id || null}
+                    onDeletePasskey={handleDeletePasskey}
+                    onOpenRegistrationDialog={openPasskeyRegistrationDialog}
+                    passwordConfigured={session.passwordConfigured}
+                    passkeys={myPasskeys}
+                    supported={passkeysSupported()}
+                    t={t}
+                    locale={language}
+                  />
+                </div>
+              )}
+            </div>
+          </ModalDialog>
+        ) : null}
+
+        {showPasskeyRegistrationDialog ? (
+          <PasskeyRegistrationDialog
+            isLoading={isPending('passkeyCreate')}
+            onClose={closePasskeyRegistrationDialog}
+            onPasskeyLabelChange={setPasskeyLabel}
+            onSubmit={handlePasskeyRegistration}
+            passkeyLabel={passkeyLabel}
+            t={t}
+          />
         ) : null}
 
         <SetupGuidePanel
           collapsed={uiPreferences.quickSetupCollapsed}
           onFocusSection={focusSection}
-          onPersistLayoutChange={handlePersistLayoutChange}
+          sectionLoading={isSectionRefreshing('quickSetupCollapsed')}
           onToggleCollapse={() => toggleSection('quickSetupCollapsed')}
-          persistLayout={uiPreferences.persistLayout}
           savingLayout={isPending('uiPreferences')}
           steps={setupGuideState.steps}
           t={t}
         />
 
-        {[...persistentNotifications, ...notifications].map((notification) => (
-          <Banner
-            key={notification.id}
-            copyText={notification.copyText}
-            copiedLabel={t('common.copied')}
-            copyLabel={t('common.copyError')}
-            onDismiss={() => {
-              if (notification.persistentKey) {
-                setDismissedPersistentNotifications((current) => ({ ...current, [notification.persistentKey]: true }))
-                return
-              }
-              dismissNotification(notification.id)
-            }}
-            onFocus={notification.targetId ? () => focusTarget(notification.targetId) : undefined}
-            dismissLabel={t('common.dismissNotification')}
-            focusLabel={t('common.focusSection')}
-            tone={notification.tone}
-          >
-            {notification.message}
-          </Banner>
-        ))}
+        <div className="notification-stack" aria-live="polite">
+          {[...persistentNotifications, ...notifications].map((notification) => (
+            <Banner
+              key={notification.id}
+              copyText={notification.copyText}
+              copiedLabel={t('common.copied')}
+              copyLabel={t('common.copyError')}
+              onDismiss={() => {
+                if (notification.persistentKey) {
+                  setDismissedPersistentNotifications((current) => ({ ...current, [notification.persistentKey]: true }))
+                  return
+                }
+                dismissNotification(notification.id)
+              }}
+              onFocus={notification.targetId ? () => focusTarget(notification.targetId) : undefined}
+              dismissLabel={t('common.dismissNotification')}
+              focusLabel={t('common.focusSection')}
+              tone={notification.tone}
+            >
+              {notification.message}
+            </Banner>
+          ))}
+        </div>
 
-        <GmailDestinationSection
+        <GmailAccountSection
           collapsed={uiPreferences.gmailDestinationCollapsed}
           collapseLoading={isPending('uiPreferences') && uiPreferences.persistLayout}
           gmailConfig={gmailConfig}
@@ -1378,10 +1806,13 @@ function App() {
           oauthLoading={isPending('googleOAuthSelf')}
           onCollapseToggle={() => toggleSection('gmailDestinationCollapsed')}
           onConnectOAuth={startGoogleOAuthSelf}
+          onUnlinkOAuth={unlinkGmailAccount}
           onSave={saveGmailConfig}
           saveLoading={isPending('gmailSave')}
+          sectionLoading={isSectionRefreshing('gmailDestinationCollapsed')}
           setGmailConfig={setGmailConfig}
           t={t}
+          unlinkLoading={isPending('gmailUnlink')}
         />
 
         <UserPollingSettingsSection
@@ -1389,17 +1820,46 @@ function App() {
           collapseLoading={isPending('uiPreferences') && uiPreferences.persistLayout}
           hasFetchers={myBridges.length > 0}
           onCollapseToggle={() => toggleSection('userPollingCollapsed')}
-          onPollingFormChange={(updater) => {
-            setUserPollingFormDirty(true)
-            setUserPollingForm((current) => typeof updater === 'function' ? updater(current) : updater)
-          }}
-          onResetPollingSettings={resetUserPollingSettings}
-          onSavePollingSettings={saveUserPollingSettings}
+          onOpenEditor={() => setShowUserPollingDialog(true)}
+          pollingStats={userPollingStats}
           pollingSettings={userPollingSettings}
-          pollingSettingsForm={userPollingForm}
-          pollingSettingsLoading={isPending('userPollingSettingsSave')}
+          sectionLoading={isSectionRefreshing('userPollingCollapsed')}
           t={t}
         />
+
+        {showUserPollingDialog && userPollingSettings ? (
+          <UserPollingSettingsDialog
+            isDirty={userPollingFormDirty}
+            onClose={() => setShowUserPollingDialog(false)}
+            onPollingFormChange={(updater) => {
+              setUserPollingFormDirty(true)
+              setUserPollingForm((current) => typeof updater === 'function' ? updater(current) : updater)
+            }}
+            onResetPollingSettings={resetUserPollingSettings}
+            onSavePollingSettings={saveUserPollingSettings}
+            pollingSettings={userPollingSettings}
+            pollingSettingsForm={userPollingForm}
+            pollingSettingsLoading={isPending('userPollingSettingsSave')}
+            t={t}
+          />
+        ) : null}
+
+        {showSystemPollingDialog && systemDashboard?.polling ? (
+          <SystemPollingSettingsDialog
+            isDirty={systemPollingFormDirty}
+            onClose={() => setShowSystemPollingDialog(false)}
+            onPollingFormChange={(updater) => {
+              setSystemPollingFormDirty(true)
+              setSystemPollingForm((current) => typeof updater === 'function' ? updater(current) : updater)
+            }}
+            onResetPollingSettings={resetPollingSettings}
+            onSavePollingSettings={savePollingSettings}
+            pollingSettings={systemDashboard.polling}
+            pollingSettingsForm={systemPollingForm}
+            pollingSettingsLoading={isPending('pollingSettingsSave')}
+            t={t}
+          />
+        ) : null}
 
         <UserBridgesSection
           bridgeForm={bridgeForm}
@@ -1409,17 +1869,36 @@ function App() {
           deletingBridgeId={myBridges.find((bridge) => isPending(`bridgeDelete:${bridge.bridgeId}`))?.bridgeId || null}
           duplicateIdError={bridgeDuplicateError}
           fetcherDialogOpen={showFetcherDialog}
+          fetcherPollLoadingId={visibleFetchers.find((bridge) => isPending(`bridgePoll:${bridge.bridgeId}`))?.bridgeId || null}
+          fetcherPollingDialog={showFetcherPollingDialog ? fetcherPollingTarget : null}
+          fetcherPollingForm={fetcherPollingForm}
+          fetcherPollingLoading={fetcherPollingTarget ? isPending(`fetcherPollingSave:${fetcherPollingTarget.bridgeId}`) || isPending(`fetcherPollingLoad:${fetcherPollingTarget.bridgeId}`) : false}
+          fetcherRefreshLoadingId={expandedFetcherLoadingId}
           fetchers={visibleFetchers}
           onAddFetcher={openAddFetcherDialog}
           onApplyPreset={applyBridgePreset}
           onBridgeFormChange={handleBridgeFormChange}
-          onCloseDialog={() => setShowFetcherDialog(false)}
+          onCloseDialog={() => {
+            setBridgeTestResult(null)
+            setShowFetcherDialog(false)
+          }}
+          onClosePollingDialog={closeFetcherPollingDialog}
           onCollapseToggle={() => toggleSection('sourceBridgesCollapsed')}
+          onConfigureFetcherPolling={openFetcherPollingDialog}
           onConnectMicrosoft={startMicrosoftOAuth}
           onDeleteBridge={deleteBridge}
           onEditBridge={editBridge}
+          onFetcherPollingFormChange={(updater) => setFetcherPollingForm((current) => typeof updater === 'function' ? updater(current) : updater)}
+          onFetcherToggleExpand={refreshFetcherState}
+          onResetFetcherPollingSettings={resetFetcherPollingSettings}
+          onRunFetcherPoll={runFetcherPoll}
           onSaveBridge={saveBridge}
+          onSaveFetcherPollingSettings={saveFetcherPollingSettings}
+          onTestConnection={testBridgeConnection}
           saveLoading={isPending('bridgeSave')}
+          testConnectionLoading={isPending('bridgeConnectionTest')}
+          testResult={bridgeTestResult}
+          sectionLoading={isSectionRefreshing('sourceBridgesCollapsed')}
           t={t}
           locale={language}
         />
@@ -1430,16 +1909,10 @@ function App() {
             collapseLoading={isPending('uiPreferences') && uiPreferences.persistLayout}
             dashboard={systemDashboard}
             onCollapseToggle={() => toggleSection('systemDashboardCollapsed')}
-            onPollingFormChange={(updater) => {
-              setSystemPollingFormDirty(true)
-              setSystemPollingForm((current) => typeof updater === 'function' ? updater(current) : updater)
-            }}
-            onResetPollingSettings={resetPollingSettings}
+            onOpenEditor={() => setShowSystemPollingDialog(true)}
             onRunPoll={runPoll}
-            onSavePollingSettings={savePollingSettings}
-            pollingSettingsForm={systemPollingForm}
-            pollingSettingsLoading={isPending('pollingSettingsSave')}
             runningPoll={runningPoll}
+            sectionLoading={isSectionRefreshing('systemDashboardCollapsed')}
             t={t}
             locale={language}
           />
@@ -1449,44 +1922,57 @@ function App() {
             <UserManagementSection
               collapsed={uiPreferences.userManagementCollapsed}
               collapseLoading={isPending('uiPreferences') && uiPreferences.persistLayout}
+              createUserDialogOpen={showCreateUserDialog}
               createUserForm={createUserForm}
               createUserLoading={isPending('createUser')}
+              duplicateUsername={duplicateCreateUsername}
+              expandedUserId={selectedUserId}
+              onCloseCreateUserDialog={() => {
+                setShowCreateUserDialog(false)
+                setCreateUserForm(DEFAULT_CREATE_USER_FORM)
+              }}
               onCollapseToggle={() => toggleSection('userManagementCollapsed')}
               onCreateUser={createUser}
               onCreateUserFormChange={setCreateUserForm}
               onForcePasswordChange={requestForcePasswordChange}
-              onOpenResetPasswordDialog={() => setShowPasswordResetDialog(true)}
-              onResetUserPasskeys={resetSelectedUserPasskeys}
-              onSelectUser={setSelectedUserId}
+              onOpenCreateUserDialog={() => {
+                setCreateUserForm(DEFAULT_CREATE_USER_FORM)
+                setShowCreateUserDialog(true)
+              }}
+              onOpenResetPasswordDialog={(user) => {
+                setPasswordResetTarget(user)
+                setShowPasswordResetDialog(true)
+              }}
+              onResetUserPasskeys={resetUserPasskeys}
+              onToggleExpandUser={toggleExpandedUser}
               onToggleUserActive={requestToggleUserActive}
               onUpdateUser={updateUser}
-              resetPasswordForm={adminResetPasswordForm}
-              setResetPasswordForm={setAdminResetPasswordForm}
               selectedUserConfig={selectedUserConfig}
-              selectedUserId={selectedUserId}
               selectedUserLoading={selectedUserLoading}
               session={session}
               updatingPasskeysResetUserId={selectedUserConfig && isPending(`resetPasskeys:${selectedUserConfig.user.id}`) ? selectedUserConfig.user.id : null}
               updatingUserId={selectedUserConfig && isPending(`updateUser:${selectedUserConfig.user.id}`) ? selectedUserConfig.user.id : null}
               users={users}
+              sectionLoading={isSectionRefreshing('userManagementCollapsed')}
               t={t}
               locale={language}
             />
           </>
         ) : null}
 
-        {showPasswordResetDialog && selectedUserConfig ? (
+        {showPasswordResetDialog && passwordResetTarget ? (
           <PasswordResetDialog
             onClose={() => {
               setShowPasswordResetDialog(false)
               setAdminResetPasswordForm(DEFAULT_ADMIN_RESET_PASSWORD_FORM)
+              setPasswordResetTarget(null)
             }}
             onFormChange={setAdminResetPasswordForm}
             onSubmit={resetSelectedUserPassword}
-            passwordLoading={selectedUserConfig && isPending(`resetPassword:${selectedUserConfig.user.id}`)}
+            passwordLoading={passwordResetTarget && isPending(`resetPassword:${passwordResetTarget.id}`)}
             resetPasswordForm={adminResetPasswordForm}
             t={t}
-            username={selectedUserConfig.user.username}
+            username={passwordResetTarget.username}
           />
         ) : null}
 
