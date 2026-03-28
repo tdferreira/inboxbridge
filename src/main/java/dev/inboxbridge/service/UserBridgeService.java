@@ -200,7 +200,7 @@ public class UserBridgeService {
 
     public String decryptRefreshToken(UserBridge bridge) {
         if (bridge.oauthRefreshTokenCiphertext == null || bridge.oauthRefreshTokenNonce == null) {
-            return fallbackMicrosoftRefreshToken(bridge).orElse("");
+            return fallbackStoredRefreshToken(bridge).orElse("");
         }
         return secretEncryptionService.decrypt(
                 bridge.oauthRefreshTokenCiphertext,
@@ -278,15 +278,23 @@ public class UserBridgeService {
         if (bridge.authMethod == BridgeConfig.AuthMethod.PASSWORD) {
             return "PASSWORD";
         }
-        if (bridge.oauthProvider != BridgeConfig.OAuthProvider.MICROSOFT) {
-            return "UNKNOWN";
+        if (bridge.oauthProvider == BridgeConfig.OAuthProvider.NONE) {
+            return "NOT_CONFIGURED";
         }
         return hasEffectiveOAuthRefreshToken(bridge) ? "DATABASE" : "NOT_CONFIGURED";
     }
 
     private boolean hasEffectiveOAuthRefreshToken(UserBridge bridge) {
         return bridge.oauthRefreshTokenCiphertext != null
-                || fallbackMicrosoftRefreshToken(bridge).filter(token -> !token.isBlank()).isPresent();
+                || fallbackStoredRefreshToken(bridge).filter(token -> !token.isBlank()).isPresent();
+    }
+
+    private Optional<String> fallbackStoredRefreshToken(UserBridge bridge) {
+        return switch (bridge.oauthProvider) {
+            case MICROSOFT -> fallbackMicrosoftRefreshToken(bridge);
+            case GOOGLE -> fallbackGoogleRefreshToken(bridge);
+            default -> Optional.empty();
+        };
     }
 
     private Optional<String> fallbackMicrosoftRefreshToken(UserBridge bridge) {
@@ -294,6 +302,15 @@ public class UserBridgeService {
             return Optional.empty();
         }
         return oAuthCredentialService.findMicrosoftCredential(bridge.bridgeId)
+                .map(OAuthCredentialService.StoredOAuthCredential::refreshToken)
+                .filter(token -> token != null && !token.isBlank());
+    }
+
+    private Optional<String> fallbackGoogleRefreshToken(UserBridge bridge) {
+        if (bridge.oauthProvider != BridgeConfig.OAuthProvider.GOOGLE || !oAuthCredentialService.secureStorageConfigured()) {
+            return Optional.empty();
+        }
+        return oAuthCredentialService.findGoogleCredential("source-google:" + bridge.bridgeId)
                 .map(OAuthCredentialService.StoredOAuthCredential::refreshToken)
                 .filter(token -> token != null && !token.isBlank());
     }

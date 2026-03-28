@@ -58,10 +58,42 @@ function SystemPollingSettingsDialog({
             onChange={(event) => onPollingFormChange((current) => ({ ...current, fetchWindowOverride: event.target.value }))}
           />
         </label>
+        <label>
+          <span className="field-label-row">
+            <span>{t('system.manualTriggerLimitCount')}</span>
+            <InfoHint text={t('system.manualTriggerLimitCountHelp')} />
+          </span>
+          <input
+            min="1"
+            max="100"
+            placeholder={t('system.leaveBlank', { value: pollingSettings.defaultManualTriggerLimitCount })}
+            type="number"
+            value={pollingSettingsForm.manualTriggerLimitCountOverride}
+            onChange={(event) => onPollingFormChange((current) => ({ ...current, manualTriggerLimitCountOverride: event.target.value }))}
+          />
+        </label>
+        <label>
+          <span className="field-label-row">
+            <span>{t('system.manualTriggerLimitWindowSeconds')}</span>
+            <InfoHint text={t('system.manualTriggerLimitWindowSecondsHelp')} />
+          </span>
+          <input
+            min="10"
+            max="3600"
+            placeholder={t('system.leaveBlank', { value: pollingSettings.defaultManualTriggerLimitWindowSeconds })}
+            type="number"
+            value={pollingSettingsForm.manualTriggerLimitWindowSecondsOverride}
+            onChange={(event) => onPollingFormChange((current) => ({ ...current, manualTriggerLimitWindowSecondsOverride: event.target.value }))}
+          />
+        </label>
         <div className="muted-box full">
           {t('system.effectivePolling', { value: pollingSettings.effectivePollEnabled ? t('common.yes') : t('common.no') })}<br />
           {t('system.effectiveInterval', { value: pollingSettings.effectivePollInterval })}<br />
           {t('system.effectiveFetchWindow', { value: pollingSettings.effectiveFetchWindow })}<br />
+          {t('system.effectiveManualTriggerLimit', {
+            count: pollingSettings.effectiveManualTriggerLimitCount,
+            seconds: pollingSettings.effectiveManualTriggerLimitWindowSeconds
+          })}<br />
           {t('system.intervalExamples')}
         </div>
         <div className="action-row full">

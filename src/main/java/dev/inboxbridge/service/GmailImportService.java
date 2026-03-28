@@ -34,6 +34,9 @@ public class GmailImportService {
     GoogleOAuthService googleOAuthService;
 
     @Inject
+    SystemOAuthAppSettingsService systemOAuthAppSettingsService;
+
+    @Inject
     ObjectMapper objectMapper;
 
     @Inject
@@ -123,11 +126,11 @@ public class GmailImportService {
                 "gmail-destination",
                 null,
                 "system",
-                config.gmail().destinationUser(),
-                config.gmail().clientId(),
-                config.gmail().clientSecret(),
-                config.gmail().refreshToken(),
-                config.gmail().redirectUri(),
+                systemOAuthAppSettingsService.googleDestinationUser(),
+                systemOAuthAppSettingsService.googleClientId(),
+                systemOAuthAppSettingsService.googleClientSecret(),
+                systemOAuthAppSettingsService.googleRefreshToken(),
+                systemOAuthAppSettingsService.googleRedirectUri(),
                 config.gmail().createMissingLabels(),
                 config.gmail().neverMarkSpam(),
                 config.gmail().processForCalendar());

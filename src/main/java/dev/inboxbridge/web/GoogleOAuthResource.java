@@ -3,10 +3,13 @@ package dev.inboxbridge.web;
 import dev.inboxbridge.dto.GoogleOAuthCodeRequest;
 import dev.inboxbridge.dto.GoogleTokenExchangeResponse;
 import dev.inboxbridge.dto.OAuthUrlResponse;
+import dev.inboxbridge.persistence.AppUser;
 import dev.inboxbridge.security.CurrentUserContext;
 import dev.inboxbridge.security.RequireAdmin;
 import dev.inboxbridge.security.RequireAuth;
+import dev.inboxbridge.service.EnvSourceService;
 import dev.inboxbridge.service.GoogleOAuthService;
+import dev.inboxbridge.service.UserBridgeService;
 import dev.inboxbridge.service.UserGmailConfigService;
 import jakarta.inject.Inject;
 import jakarta.ws.rs.Consumes;
@@ -30,6 +33,12 @@ public class GoogleOAuthResource {
 
     @Inject
     UserGmailConfigService userGmailConfigService;
+
+    @Inject
+    EnvSourceService envSourceService;
+
+    @Inject
+    UserBridgeService userBridgeService;
 
     @GET
     @Path("/url")
@@ -57,6 +66,15 @@ public class GoogleOAuthResource {
                         "Configure your Gmail redirect URI or a shared Google OAuth client before starting Google OAuth."));
         return Response.seeOther(java.net.URI.create(
                 googleOAuthService.buildAuthorizationUrlWithState(profile, "User Gmail account", language))).build();
+    }
+
+    @GET
+    @Path("/start/source")
+    @RequireAuth
+    public Response startSource(@QueryParam("sourceId") String sourceId, @QueryParam("lang") String language) {
+        GoogleOAuthService.GoogleOAuthProfile profile = authorizeGoogleSource(sourceId);
+        return Response.seeOther(java.net.URI.create(
+                googleOAuthService.buildAuthorizationUrlWithState(profile, "Mail account " + sourceId, language))).build();
     }
 
     @POST
@@ -404,6 +422,37 @@ public class GoogleOAuthResource {
                 js(localized(language, "Exchange the code here, or copy it before leaving so you can add it manually later.", "Troque o codigo aqui, ou copie-o antes de sair para o poder adicionar manualmente mais tarde.")),
                 safeCode,
                 safeState);
+    }
+
+    private GoogleOAuthService.GoogleOAuthProfile authorizeGoogleSource(String sourceId) {
+        AppUser actor = currentUserContext.user();
+        return envSourceService.configuredSources().stream()
+                .map(EnvSourceService.IndexedSource::source)
+                .filter(source -> source.id().equals(sourceId))
+                .findFirst()
+                .map(source -> {
+                    if (actor.role != AppUser.Role.ADMIN) {
+                        throw new jakarta.ws.rs.ForbiddenException("Only admins can connect environment-managed Google source OAuth.");
+                    }
+                    if (source.authMethod() != dev.inboxbridge.config.BridgeConfig.AuthMethod.OAUTH2
+                            || source.oauthProvider() != dev.inboxbridge.config.BridgeConfig.OAuthProvider.GOOGLE) {
+                        throw new jakarta.ws.rs.BadRequestException("This mail account is not configured for Google OAuth.");
+                    }
+                    return googleOAuthService.sourceProfile(source);
+                })
+                .orElseGet(() -> userBridgeService.findByBridgeId(sourceId)
+                        .filter(bridge -> bridge.userId.equals(actor.id))
+                        .map(bridge -> {
+                            if (bridge.authMethod != dev.inboxbridge.config.BridgeConfig.AuthMethod.OAUTH2
+                                    || bridge.oauthProvider != dev.inboxbridge.config.BridgeConfig.OAuthProvider.GOOGLE) {
+                                throw new jakarta.ws.rs.BadRequestException("This mail account is not configured for Google OAuth.");
+                            }
+                            return googleOAuthService.sourceProfile(
+                                    bridge.bridgeId,
+                                    userBridgeService.decryptRefreshToken(bridge),
+                                    null);
+                        })
+                        .orElseThrow(() -> new jakarta.ws.rs.BadRequestException("Unknown mail account id")));
     }
 
     private String errorPage(String language, String title, String message, String error, String errorDescription) {

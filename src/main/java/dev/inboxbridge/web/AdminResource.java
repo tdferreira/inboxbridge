@@ -6,15 +6,19 @@ import dev.inboxbridge.dto.PollRunResult;
 import dev.inboxbridge.dto.PollingTimelineBundleView;
 import dev.inboxbridge.dto.SourcePollingSettingsView;
 import dev.inboxbridge.dto.SourcePollingStatsView;
+import dev.inboxbridge.dto.SystemOAuthAppSettingsView;
 import dev.inboxbridge.dto.UpdateSourcePollingSettingsRequest;
 import dev.inboxbridge.dto.UpdateAdminPollingSettingsRequest;
+import dev.inboxbridge.dto.UpdateSystemOAuthAppSettingsRequest;
 import dev.inboxbridge.security.RequireAdmin;
+import dev.inboxbridge.security.CurrentUserContext;
 import dev.inboxbridge.service.AdminDashboardService;
 import dev.inboxbridge.service.PollingSettingsService;
 import dev.inboxbridge.service.PollingStatsService;
 import dev.inboxbridge.service.PollingService;
 import dev.inboxbridge.service.RuntimeBridgeService;
 import dev.inboxbridge.service.SourcePollingSettingsService;
+import dev.inboxbridge.service.SystemOAuthAppSettingsService;
 import jakarta.inject.Inject;
 import jakarta.ws.rs.BadRequestException;
 import jakarta.ws.rs.Consumes;
@@ -31,6 +35,9 @@ import java.time.Instant;
 @Produces(MediaType.APPLICATION_JSON)
 @RequireAdmin
 public class AdminResource {
+
+    @Inject
+    CurrentUserContext currentUserContext;
 
     @Inject
     AdminDashboardService adminDashboardService;
@@ -50,16 +57,36 @@ public class AdminResource {
     @Inject
     RuntimeBridgeService runtimeBridgeService;
 
+    @Inject
+    SystemOAuthAppSettingsService systemOAuthAppSettingsService;
+
     @GET
     @Path("/dashboard")
     public AdminDashboardResponse dashboard() {
         return adminDashboardService.dashboard();
     }
 
+    @GET
+    @Path("/oauth-app-settings")
+    public SystemOAuthAppSettingsView oauthAppSettings() {
+        return systemOAuthAppSettingsService.view();
+    }
+
+    @PUT
+    @Path("/oauth-app-settings")
+    @Consumes(MediaType.APPLICATION_JSON)
+    public SystemOAuthAppSettingsView updateOauthAppSettings(UpdateSystemOAuthAppSettingsRequest request) {
+        try {
+            return systemOAuthAppSettingsService.update(request);
+        } catch (IllegalArgumentException | IllegalStateException e) {
+            throw new BadRequestException(e.getMessage(), e);
+        }
+    }
+
     @POST
     @Path("/poll/run")
     public PollRunResult runPoll() {
-        return pollingService.runPoll("admin-ui");
+        return pollingService.runPollForAllUsers(currentUserContext.user(), "admin-ui");
     }
 
     @GET
@@ -153,7 +180,8 @@ public class AdminResource {
             return pollingService.runPollForSource(
                     runtimeBridgeService.findSystemBridge(bridgeId)
                             .orElseThrow(() -> new IllegalArgumentException("Unknown mail fetcher id")),
-                    "admin-fetcher");
+                    "admin-fetcher",
+                    currentUserContext.user().role + ":" + currentUserContext.user().id);
         } catch (IllegalArgumentException e) {
             throw new BadRequestException(e.getMessage(), e);
         }

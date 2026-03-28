@@ -73,14 +73,6 @@
 }
 
 .user-list-entry-menu .fetcher-menu-button {
-  width: 2.75rem;
-  min-width: 2.75rem;
-  height: 2.75rem;
-  min-height: 2.75rem;
-  padding: 0;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
   align-self: start;
   line-height: 1;
 }

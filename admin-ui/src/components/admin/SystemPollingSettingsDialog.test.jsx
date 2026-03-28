@@ -7,7 +7,9 @@ describe('SystemPollingSettingsDialog', () => {
     let form = {
       pollEnabledMode: 'DEFAULT',
       pollIntervalOverride: '',
-      fetchWindowOverride: ''
+      fetchWindowOverride: '',
+      manualTriggerLimitCountOverride: '',
+      manualTriggerLimitWindowSecondsOverride: ''
     }
 
     render(
@@ -25,7 +27,13 @@ describe('SystemPollingSettingsDialog', () => {
           defaultPollInterval: '5m',
           effectivePollInterval: '2m',
           defaultFetchWindow: 50,
-          effectiveFetchWindow: 25
+          effectiveFetchWindow: 25,
+          defaultManualTriggerLimitCount: 5,
+          manualTriggerLimitCountOverride: null,
+          effectiveManualTriggerLimitCount: 5,
+          defaultManualTriggerLimitWindowSeconds: 60,
+          manualTriggerLimitWindowSecondsOverride: null,
+          effectiveManualTriggerLimitWindowSeconds: 60
         }}
         pollingSettingsForm={form}
         pollingSettingsLoading={false}
@@ -36,9 +44,13 @@ describe('SystemPollingSettingsDialog', () => {
     fireEvent.change(screen.getByLabelText(/Polling Mode/), { target: { value: 'DISABLED' } })
     fireEvent.change(screen.getByLabelText(/Poll Interval Override/), { target: { value: '10m' } })
     fireEvent.change(screen.getByLabelText(/Fetch Window Override/), { target: { value: '25' } })
+    fireEvent.change(screen.getByLabelText(/Manual Run Limit/), { target: { value: '7' } })
+    fireEvent.change(screen.getByLabelText(/Manual Limit Window/), { target: { value: '90' } })
 
     expect(form.pollEnabledMode).toBe('DISABLED')
     expect(form.pollIntervalOverride).toBe('10m')
     expect(form.fetchWindowOverride).toBe('25')
+    expect(form.manualTriggerLimitCountOverride).toBe('7')
+    expect(form.manualTriggerLimitWindowSecondsOverride).toBe('90')
   })
 })

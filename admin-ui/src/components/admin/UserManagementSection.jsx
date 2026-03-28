@@ -5,6 +5,13 @@ import LoadingButton from '../common/LoadingButton'
 import PaneToggleButton from '../common/PaneToggleButton'
 import './UserManagementSection.css'
 
+function sortUsersByUsername(users = []) {
+  return [...users].sort((left, right) => left.username.localeCompare(right.username, undefined, {
+    sensitivity: 'base',
+    numeric: true
+  }))
+}
+
 /**
  * Admin workspace for user lifecycle management and non-sensitive cross-user
  * configuration inspection.
@@ -21,17 +28,21 @@ function UserManagementSection({
   onCollapseToggle,
   onCreateUser,
   onCreateUserFormChange,
+  onDeleteUser,
   onForcePasswordChange,
   onOpenCreateUserDialog,
   onLoadUserCustomRange,
   onOpenResetPasswordDialog,
   onResetUserPasskeys,
+  onToggleMultiUserEnabled,
   onToggleExpandUser,
   onToggleUserActive,
   onUpdateUser,
   selectedUserConfig,
   selectedUserLoading,
   session,
+  multiUserEnabled = true,
+  modeToggleLoading = false,
   updatingPasskeysResetUserId,
   updatingUserId,
   users,
@@ -39,6 +50,8 @@ function UserManagementSection({
   t,
   locale
 }) {
+  const sortedUsers = sortUsersByUsername(users)
+
   return (
     <section className="surface-card user-management-panel section-with-corner-toggle" id="user-management-section" tabIndex="-1">
       <div className="panel-header">
@@ -46,7 +59,7 @@ function UserManagementSection({
           <div className="section-title">{t('users.title')}</div>
           <p className="section-copy">{t('users.copy')}</p>
         </div>
-        {!collapsed ? (
+        {!collapsed && multiUserEnabled ? (
           <div className="panel-header-actions">
             <LoadingButton className="primary" isLoading={false} onClick={onOpenCreateUserDialog} type="button">
               {t('users.create')}
@@ -63,9 +76,25 @@ function UserManagementSection({
       ) : null}
 
       {!collapsed ? (
-        users.length > 0 ? (
+        <>
+          <div className="muted-box">
+            <strong>{t('users.modeTitle')}</strong><br />
+            {multiUserEnabled ? t('users.multiUserEnabledCopy') : t('users.singleUserEnabledCopy')}
+            <div className="action-row" style={{ marginTop: '0.85rem' }}>
+              <LoadingButton
+                className="secondary"
+                isLoading={modeToggleLoading}
+                onClick={() => onToggleMultiUserEnabled(!multiUserEnabled)}
+                type="button"
+              >
+                {multiUserEnabled ? t('users.switchToSingleUser') : t('users.switchToMultiUser')}
+              </LoadingButton>
+            </div>
+          </div>
+          {multiUserEnabled ? (
+        sortedUsers.length > 0 ? (
           <div className="list-stack">
-            {users.map((user) => {
+            {sortedUsers.map((user) => {
               const isExpanded = expandedUserId === user.id
               const config = isExpanded && selectedUserConfig?.user.id === user.id
                 ? selectedUserConfig
@@ -98,6 +127,7 @@ function UserManagementSection({
                   isExpanded={isExpanded}
                   isLoading={isExpanded && selectedUserLoading}
                   locale={locale}
+                  onDeleteUser={onDeleteUser}
                   onForcePasswordChange={onForcePasswordChange}
                   onLoadCustomRange={onLoadUserCustomRange}
                   onOpenResetPasswordDialog={onOpenResetPasswordDialog}
@@ -116,6 +146,10 @@ function UserManagementSection({
         ) : (
           <div className="muted-box">{t('users.emptyState')}</div>
         )
+          ) : (
+            <div className="muted-box">{t('users.singleUserModeNote')}</div>
+          )}
+        </>
       ) : null}
 
       {createUserDialogOpen ? (

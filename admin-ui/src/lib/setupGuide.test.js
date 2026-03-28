@@ -99,4 +99,30 @@ describe('buildSetupGuideState', () => {
       '4. Run and verify imports'
     ])
   })
+
+  it('shows the admin guide without the user mail-account step', () => {
+    const result = buildSetupGuideState({
+      session: { id: 1, username: 'admin', role: 'ADMIN', mustChangePassword: false },
+      systemOAuthSettings: {
+        googleClientId: 'google-client-id',
+        googleClientSecretConfigured: true,
+        googleRefreshTokenConfigured: true,
+        effectiveMultiUserEnabled: true
+      },
+      users: [{ id: 1, username: 'admin' }],
+      systemDashboard: {
+        bridges: [],
+        overall: { totalImportedMessages: 0 }
+      },
+      workspace: 'admin',
+      t
+    })
+
+    expect(result.steps.map((step) => step.title)).toEqual([
+      '1. Configure shared Google OAuth',
+      '2. Create a new user',
+      '3. Verify the first successful import'
+    ])
+    expect(result.steps[1].targetId).toBe('user-management-section')
+  })
 })

@@ -16,9 +16,18 @@ import dev.inboxbridge.dto.RegisterUserRequest;
 import dev.inboxbridge.dto.UpdateUserRequest;
 import dev.inboxbridge.persistence.AppUser;
 import dev.inboxbridge.persistence.AppUserRepository;
+import dev.inboxbridge.persistence.ImportedMessageRepository;
+import dev.inboxbridge.persistence.OAuthCredential;
+import dev.inboxbridge.persistence.OAuthCredentialRepository;
+import dev.inboxbridge.persistence.SourcePollEventRepository;
+import dev.inboxbridge.persistence.SourcePollingSettingRepository;
+import dev.inboxbridge.persistence.SourcePollingStateRepository;
 import dev.inboxbridge.persistence.UserBridgeRepository;
 import dev.inboxbridge.persistence.UserGmailConfigRepository;
 import dev.inboxbridge.persistence.UserPasskeyRepository;
+import dev.inboxbridge.persistence.UserPollingSettingRepository;
+import dev.inboxbridge.persistence.UserSessionRepository;
+import dev.inboxbridge.persistence.UserUiPreferenceRepository;
 
 class AppUserServiceTest {
 
@@ -172,6 +181,53 @@ class AppUserServiceTest {
         assertEquals("Current password is incorrect", error.getMessage());
     }
 
+    @Test
+    void switchToSingleUserModeDisablesOtherAccountsButKeepsActingAdmin() {
+        AppUserService service = service();
+        AppUser actor = service.createUser(new CreateUserRequest("owner@example.com", "Secret#123", "ADMIN"));
+        AppUser activeUser = service.createUser(new CreateUserRequest("alice@example.com", "Secret#123", "USER"));
+        AppUser inactiveUser = service.createUser(new CreateUserRequest("bob@example.com", "Secret#123", "USER"));
+        inactiveUser.active = false;
+
+        service.switchToSingleUserMode(actor);
+
+        assertTrue(service.findById(actor.id).orElseThrow().active);
+        assertFalse(service.findById(actor.id).orElseThrow().disabledBySingleUserMode);
+        assertFalse(service.findById(activeUser.id).orElseThrow().active);
+        assertTrue(service.findById(activeUser.id).orElseThrow().disabledBySingleUserMode);
+        assertFalse(service.findById(inactiveUser.id).orElseThrow().active);
+        assertFalse(service.findById(inactiveUser.id).orElseThrow().disabledBySingleUserMode);
+    }
+
+    @Test
+    void switchToMultiUserModeReactivatesOnlyAccountsDisabledBySingleUserMode() {
+        AppUserService service = service();
+        AppUser actor = service.createUser(new CreateUserRequest("owner@example.com", "Secret#123", "ADMIN"));
+        AppUser activeUser = service.createUser(new CreateUserRequest("alice@example.com", "Secret#123", "USER"));
+        AppUser inactiveUser = service.createUser(new CreateUserRequest("bob@example.com", "Secret#123", "USER"));
+        inactiveUser.active = false;
+
+        service.switchToSingleUserMode(actor);
+        service.switchToMultiUserMode();
+
+        assertTrue(service.findById(activeUser.id).orElseThrow().active);
+        assertFalse(service.findById(activeUser.id).orElseThrow().disabledBySingleUserMode);
+        assertFalse(service.findById(inactiveUser.id).orElseThrow().active);
+        assertFalse(service.findById(inactiveUser.id).orElseThrow().disabledBySingleUserMode);
+    }
+
+    @Test
+    void deleteUserRejectsDeletingSelf() {
+        AppUserService service = service();
+        AppUser actor = service.createUser(new CreateUserRequest("owner@example.com", "Secret#123", "ADMIN"));
+
+        IllegalArgumentException error = assertThrows(
+                IllegalArgumentException.class,
+                () -> service.deleteUser(actor, actor.id));
+
+        assertEquals("Admins cannot delete their own account.", error.getMessage());
+    }
+
     private AppUserService service() {
         return service(0);
     }
@@ -183,6 +239,16 @@ class AppUserServiceTest {
         service.userBridgeRepository = new EmptyUserBridgeRepository();
         service.userGmailConfigRepository = new EmptyUserGmailConfigRepository();
         service.userPasskeyRepository = new FixedPasskeyRepository(passkeyCount);
+        service.userPollingSettingRepository = new EmptyUserPollingSettingRepository();
+        service.userUiPreferenceRepository = new EmptyUserUiPreferenceRepository();
+        service.sourcePollingSettingRepository = new EmptySourcePollingSettingRepository();
+        service.sourcePollingStateRepository = new EmptySourcePollingStateRepository();
+        service.sourcePollEventRepository = new EmptySourcePollEventRepository();
+        service.importedMessageRepository = new EmptyImportedMessageRepository();
+        service.oAuthCredentialService = new OAuthCredentialService();
+        service.oAuthCredentialService.repository = new InMemoryOAuthCredentialRepository();
+        service.userSessionService = new UserSessionService();
+        service.userSessionService.repository = new InMemoryUserSessionRepository();
         return service;
     }
 
@@ -224,6 +290,16 @@ class AppUserServiceTest {
                 users.add(user);
             }
         }
+
+        @Override
+        public void delete(AppUser entity) {
+            users.remove(entity);
+        }
+
+        @Override
+        public List<AppUser> listDisabledBySingleUserMode() {
+            return users.stream().filter(user -> user.disabledBySingleUserMode).toList();
+        }
     }
 
     private static class EmptyUserBridgeRepository extends UserBridgeRepository {
@@ -238,6 +314,11 @@ class AppUserServiceTest {
         public Optional<dev.inboxbridge.persistence.UserGmailConfig> findByUserId(Long userId) {
             return Optional.empty();
         }
+
+        @Override
+        public long deleteByUserId(Long userId) {
+            return 0;
+        }
     }
 
     private static class FixedPasskeyRepository extends UserPasskeyRepository {
@@ -250,6 +331,81 @@ class AppUserServiceTest {
         @Override
         public long countByUserId(Long userId) {
             return count;
+        }
+
+        @Override
+        public long deleteByUserId(Long userId) {
+            return 0;
+        }
+    }
+
+    private static class EmptyUserPollingSettingRepository extends UserPollingSettingRepository {
+        @Override
+        public long deleteByUserId(Long userId) {
+            return 0;
+        }
+    }
+
+    private static class EmptyUserUiPreferenceRepository extends UserUiPreferenceRepository {
+        @Override
+        public long deleteByUserId(Long userId) {
+            return 0;
+        }
+    }
+
+    private static class EmptySourcePollingSettingRepository extends SourcePollingSettingRepository {
+        @Override
+        public long deleteBySourceIds(List<String> sourceIds) {
+            return 0;
+        }
+    }
+
+    private static class EmptySourcePollingStateRepository extends SourcePollingStateRepository {
+        @Override
+        public long deleteBySourceIds(List<String> sourceIds) {
+            return 0;
+        }
+    }
+
+    private static class EmptySourcePollEventRepository extends SourcePollEventRepository {
+        @Override
+        public long deleteBySourceIds(List<String> sourceIds) {
+            return 0;
+        }
+    }
+
+    private static class EmptyImportedMessageRepository extends ImportedMessageRepository {
+        @Override
+        public long deleteBySourceAccountIds(List<String> sourceAccountIds) {
+            return 0;
+        }
+    }
+
+    private static class InMemoryOAuthCredentialRepository extends OAuthCredentialRepository {
+        private final List<OAuthCredential> credentials = new ArrayList<>();
+
+        @Override
+        public Optional<OAuthCredential> findByProviderAndSubject(String provider, String subjectKey) {
+            return credentials.stream()
+                    .filter(credential -> provider.equals(credential.provider) && subjectKey.equals(credential.subjectKey))
+                    .findFirst();
+        }
+
+        @Override
+        public long deleteByProviderAndSubjects(String provider, List<String> subjectKeys) {
+            long before = credentials.size();
+            credentials.removeIf(credential -> provider.equals(credential.provider) && subjectKeys.contains(credential.subjectKey));
+            return before - credentials.size();
+        }
+    }
+
+    private static class InMemoryUserSessionRepository extends UserSessionRepository {
+        @Override
+        public void deleteExpiredSessions() {
+        }
+
+        @Override
+        public void deleteByUserId(Long userId) {
         }
     }
 }

@@ -59,6 +59,9 @@ public class MicrosoftOAuthService {
     @Inject
     EnvSourceService envSourceService;
 
+    @Inject
+    SystemOAuthAppSettingsService systemOAuthAppSettingsService;
+
     private final HttpClient httpClient = HttpClient.newBuilder()
             .connectTimeout(HTTP_TIMEOUT)
             .build();
@@ -67,7 +70,7 @@ public class MicrosoftOAuthService {
     private final ConcurrentMap<String, PendingState> pendingStates = new ConcurrentHashMap<>();
 
     public boolean clientConfigured() {
-        return isConfiguredValue(config.microsoft().clientId()) && isConfiguredValue(config.microsoft().clientSecret());
+        return systemOAuthAppSettingsService.microsoftClientConfigured();
     }
 
     public List<MicrosoftOAuthSourceOption> listMicrosoftOAuthSources() {
@@ -95,7 +98,7 @@ public class MicrosoftOAuthService {
                 + "?response_type=code"
                 + "&response_mode=query"
                 + "&prompt=consent"
-                + "&client_id=" + urlEncode(config.microsoft().clientId())
+                + "&client_id=" + urlEncode(systemOAuthAppSettingsService.microsoftClientId())
                 + "&redirect_uri=" + urlEncode(config.microsoft().redirectUri())
                 + "&scope=" + urlEncode(authorizationScopes(sourceRef))
                 + "&state=" + urlEncode(state);
@@ -214,8 +217,8 @@ public class MicrosoftOAuthService {
     private MicrosoftTokenExchangeResponse exchangeAuthorizationCode(SourceRef sourceRef, String code) {
         requireConfiguredClient();
         String body = formBody(Map.of(
-                "client_id", config.microsoft().clientId(),
-                "client_secret", config.microsoft().clientSecret(),
+                "client_id", systemOAuthAppSettingsService.microsoftClientId(),
+                "client_secret", systemOAuthAppSettingsService.microsoftClientSecret(),
                 "code", code,
                 "grant_type", "authorization_code",
                 "redirect_uri", config.microsoft().redirectUri(),
@@ -269,8 +272,8 @@ public class MicrosoftOAuthService {
         }
 
         String body = formBody(Map.of(
-                "client_id", config.microsoft().clientId(),
-                "client_secret", config.microsoft().clientSecret(),
+                "client_id", systemOAuthAppSettingsService.microsoftClientId(),
+                "client_secret", systemOAuthAppSettingsService.microsoftClientSecret(),
                 "grant_type", "refresh_token",
                 "refresh_token", refreshToken,
                 "scope", protocolScope(sourceRef.protocol())));
@@ -365,10 +368,10 @@ public class MicrosoftOAuthService {
     }
 
     private void requireConfiguredClient() {
-        if (!isConfiguredValue(config.microsoft().clientId())) {
+        if (!isConfiguredValue(systemOAuthAppSettingsService.microsoftClientId())) {
             throw new IllegalStateException("Microsoft OAuth client id is not configured");
         }
-        if (!isConfiguredValue(config.microsoft().clientSecret())) {
+        if (!isConfiguredValue(systemOAuthAppSettingsService.microsoftClientSecret())) {
             throw new IllegalStateException("Microsoft OAuth client secret is not configured");
         }
     }

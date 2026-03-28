@@ -10,10 +10,13 @@ import PasskeyRegistrationDialog from './components/account/PasskeyRegistrationD
 import PasswordResetDialog from './components/admin/PasswordResetDialog'
 import GmailAccountSection from './components/gmail/GmailAccountSection'
 import HeroPanel from './components/layout/HeroPanel'
+import NotificationsDialog from './components/layout/NotificationsDialog'
 import PreferencesDialog from './components/layout/PreferencesDialog'
 import SetupGuidePanel from './components/layout/SetupGuidePanel'
 import WorkspaceSectionWindow from './components/layout/WorkspaceSectionWindow'
+import OAuthAppsSection from './components/admin/OAuthAppsSection'
 import SystemDashboardSection from './components/admin/SystemDashboardSection'
+import SystemOAuthAppsDialog from './components/admin/SystemOAuthAppsDialog'
 import SystemPollingSettingsDialog from './components/admin/SystemPollingSettingsDialog'
 import UserPollingSettingsSection from './components/polling/UserPollingSettingsSection'
 import UserPollingSettingsDialog from './components/polling/UserPollingSettingsDialog'
@@ -65,21 +68,42 @@ const DEFAULT_UI_PREFERENCES = {
   layoutEditEnabled: false,
   quickSetupCollapsed: false,
   quickSetupDismissed: false,
+  quickSetupPinnedVisible: false,
   gmailDestinationCollapsed: false,
   userPollingCollapsed: false,
   userStatsCollapsed: false,
   sourceBridgesCollapsed: false,
+  adminQuickSetupCollapsed: false,
   systemDashboardCollapsed: false,
+  oauthAppsCollapsed: false,
   globalStatsCollapsed: false,
   userManagementCollapsed: false,
   userSectionOrder: ['quickSetup', 'gmail', 'userPolling', 'userStats', 'sourceBridges'],
-  adminSectionOrder: ['systemDashboard', 'globalStats', 'userManagement'],
+  adminSectionOrder: ['adminQuickSetup', 'systemDashboard', 'oauthApps', 'globalStats', 'userManagement'],
   language: 'en'
 }
 const DEFAULT_SYSTEM_POLLING_FORM = {
   pollEnabledMode: 'DEFAULT',
   pollIntervalOverride: '',
-  fetchWindowOverride: ''
+  fetchWindowOverride: '',
+  manualTriggerLimitCountOverride: '',
+  manualTriggerLimitWindowSecondsOverride: ''
+}
+const DEFAULT_SYSTEM_OAUTH_SETTINGS = {
+  effectiveMultiUserEnabled: true,
+  multiUserEnabledOverride: null,
+  googleDestinationUser: 'me',
+  googleRedirectUri: '',
+  googleClientId: '',
+  googleClientSecret: '',
+  googleClientSecretConfigured: false,
+  googleRefreshToken: '',
+  googleRefreshTokenConfigured: false,
+  microsoftClientId: '',
+  microsoftRedirectUri: '',
+  microsoftClientSecret: '',
+  microsoftClientSecretConfigured: false,
+  secureStorageConfigured: true
 }
 const DEFAULT_USER_POLLING_FORM = {
   pollEnabledMode: 'DEFAULT',
@@ -123,9 +147,17 @@ const DEFAULT_SOURCE_POLLING_FORM = {
 }
 const DEFAULT_AUTH_OPTIONS = {
   multiUserEnabled: true,
-  microsoftOAuthAvailable: true
+  microsoftOAuthAvailable: true,
+  googleOAuthAvailable: true,
+  sourceOAuthProviders: ['MICROSOFT', 'GOOGLE']
 }
 const DEFAULT_ADMIN_WORKSPACE = 'user'
+const SECTION_HIGHLIGHT_MS = 2600
+const NOTIFICATION_AUTO_CLOSE_MS = {
+  success: 8000,
+  warning: 12000,
+  error: 16000
+}
 const PollingStatisticsSection = lazy(() => import('./components/stats/PollingStatisticsSection'))
 
 /**
@@ -171,6 +203,7 @@ function App() {
   const [selectedUserId, setSelectedUserId] = useState(null)
   const [selectedUserConfig, setSelectedUserConfig] = useState(null)
   const [runningPoll, setRunningPoll] = useState(false)
+  const [runningUserPoll, setRunningUserPoll] = useState(false)
   const [uiPreferences, setUiPreferences] = useState(DEFAULT_UI_PREFERENCES)
   const [uiPreferencesLoadedForUserId, setUiPreferencesLoadedForUserId] = useState(null)
   const [touchedSections, setTouchedSections] = useState({})
@@ -187,16 +220,25 @@ function App() {
   const [confirmationDialog, setConfirmationDialog] = useState(null)
   const [systemPollingForm, setSystemPollingForm] = useState(DEFAULT_SYSTEM_POLLING_FORM)
   const [systemPollingFormDirty, setSystemPollingFormDirty] = useState(false)
+  const [systemOAuthSettings, setSystemOAuthSettings] = useState(DEFAULT_SYSTEM_OAUTH_SETTINGS)
+  const [systemOAuthSettingsDirty, setSystemOAuthSettingsDirty] = useState(false)
+  const [systemOAuthEditorProvider, setSystemOAuthEditorProvider] = useState('google')
   const [dismissedPersistentNotifications, setDismissedPersistentNotifications] = useState({})
   const [language, setLanguage] = useState(() => normalizeLocale(window.localStorage.getItem('inboxbridge.language') || navigator.language))
   const [registerOpen, setRegisterOpen] = useState(false)
   const [showPreferencesDialog, setShowPreferencesDialog] = useState(false)
+  const [showNotificationsDialog, setShowNotificationsDialog] = useState(false)
   const [showUserPollingDialog, setShowUserPollingDialog] = useState(false)
   const [showSystemPollingDialog, setShowSystemPollingDialog] = useState(false)
+  const [showSystemOAuthAppsDialog, setShowSystemOAuthAppsDialog] = useState(false)
   const [adminWorkspace, setAdminWorkspace] = useState(DEFAULT_ADMIN_WORKSPACE)
   const [dragState, setDragState] = useState(null)
   const notificationTimersRef = useRef(new Map())
   const t = useMemo(() => (key, params) => translate(language, key, params), [language])
+  const notificationTimestampFormatter = useMemo(
+    () => new Intl.DateTimeFormat(language, { dateStyle: 'medium', timeStyle: 'medium' }),
+    [language]
+  )
   const errorText = (key) => t(`errors.${key}`)
   const selectableLanguages = useMemo(() => languageOptions.map((value) => ({
     value,
@@ -220,11 +262,14 @@ function App() {
         layoutEditEnabled: false,
         quickSetupCollapsed: false,
         quickSetupDismissed: false,
+        quickSetupPinnedVisible: false,
         gmailDestinationCollapsed: false,
         userPollingCollapsed: false,
         userStatsCollapsed: false,
         sourceBridgesCollapsed: false,
+        adminQuickSetupCollapsed: false,
         systemDashboardCollapsed: false,
+        oauthAppsCollapsed: false,
         globalStatsCollapsed: false,
         userManagementCollapsed: false
       }),
@@ -269,6 +314,7 @@ function App() {
 
   function normalizeBridgeForm(nextBridgeForm) {
     const next = { ...nextBridgeForm }
+    const availableSourceProviders = Array.isArray(authOptions.sourceOAuthProviders) ? authOptions.sourceOAuthProviders : []
     if (next.authMethod === 'PASSWORD') {
       next.oauthProvider = 'NONE'
       next.oauthRefreshToken = ''
@@ -276,10 +322,10 @@ function App() {
     if (next.authMethod === 'OAUTH2') {
       next.password = ''
       if (!next.oauthProvider || next.oauthProvider === 'NONE') {
-        next.oauthProvider = 'MICROSOFT'
+        next.oauthProvider = availableSourceProviders[0] || 'NONE'
       }
     }
-    if (next.authMethod === 'OAUTH2' && !authOptions.microsoftOAuthAvailable) {
+    if (next.authMethod === 'OAUTH2' && availableSourceProviders.length === 0) {
       next.authMethod = 'PASSWORD'
       next.oauthProvider = 'NONE'
       next.oauthRefreshToken = ''
@@ -301,7 +347,10 @@ function App() {
     setBridgeTestResult(null)
     handleBridgeFormChange((current) => ({
       ...current,
-      ...preset.values
+      ...preset.values,
+      ...(presetId === 'gmail' && authOptions.sourceOAuthProviders.includes('GOOGLE')
+        ? { authMethod: 'OAUTH2', oauthProvider: 'GOOGLE' }
+        : {})
     }))
   }
 
@@ -314,15 +363,58 @@ function App() {
     setNotifications((current) => current.filter((notification) => notification.id !== id))
   }
 
+  function hideFloatingNotification(id) {
+    const timer = notificationTimersRef.current.get(id)
+    if (timer) {
+      window.clearTimeout(timer)
+      notificationTimersRef.current.delete(id)
+    }
+    setNotifications((current) => current.map((notification) => (
+      notification.id === id
+        ? { ...notification, floatingVisible: false }
+        : notification
+    )))
+  }
+
+  function clearAllNotifications() {
+    notificationTimersRef.current.forEach((timer) => window.clearTimeout(timer))
+    notificationTimersRef.current.clear()
+    setNotifications([])
+  }
+
   function pushNotification({
-    autoCloseMs = 10000,
+    autoCloseMs,
     copyText = '',
+    groupKey = null,
     message,
+    replaceGroup = false,
+    supersedesGroupKeys = [],
     targetId = null,
     tone = 'success'
   }) {
     const id = `${Date.now()}-${Math.random().toString(36).slice(2)}`
-    setNotifications((current) => [...current, { autoCloseMs, copyText, id, message, targetId, tone }])
+    const resolvedAutoCloseMs = typeof autoCloseMs === 'number'
+      ? autoCloseMs
+      : (NOTIFICATION_AUTO_CLOSE_MS[tone] || NOTIFICATION_AUTO_CLOSE_MS.success)
+    setNotifications((current) => [...current.filter((notification) => {
+      if (replaceGroup && groupKey && notification.groupKey === groupKey) {
+        return false
+      }
+      if (notification.groupKey && supersedesGroupKeys.includes(notification.groupKey)) {
+        return false
+      }
+      return true
+    }), {
+      autoCloseMs: resolvedAutoCloseMs,
+      copyText,
+      createdAt: Date.now(),
+      floatingVisible: true,
+      groupKey,
+      id,
+      message,
+      targetId,
+      tone
+    }])
   }
 
   async function loadSession() {
@@ -464,6 +556,7 @@ function App() {
 
       if (session.role === 'ADMIN') {
         requests.push(fetch('/api/admin/dashboard'))
+        requests.push(fetch('/api/admin/oauth-app-settings'))
       }
       if (session.role === 'ADMIN' && authOptions.multiUserEnabled) {
         requests.push(fetch('/api/admin/users'))
@@ -476,7 +569,7 @@ function App() {
       }
 
       const payloads = await Promise.all(responses.map((response) => response.json()))
-      const [gmailPayload, userPollingPayload, userPollingStatsPayload, bridgesPayload, uiPreferencesPayload, passkeysPayload, adminPayload, usersPayload] = payloads
+      const [gmailPayload, userPollingPayload, userPollingStatsPayload, bridgesPayload, uiPreferencesPayload, passkeysPayload, adminPayload, oauthSettingsPayload, usersPayload] = payloads
 
       setGmailMeta(gmailPayload)
       setGmailConfig({
@@ -521,16 +614,30 @@ function App() {
       if (adminPayload) {
         setSystemDashboard(adminPayload)
         if (!systemPollingFormDirty && adminPayload.polling) {
-          setSystemPollingForm({
-            pollEnabledMode: adminPayload.polling.pollEnabledOverride === null
-              ? 'DEFAULT'
-              : adminPayload.polling.pollEnabledOverride ? 'ENABLED' : 'DISABLED',
-            pollIntervalOverride: adminPayload.polling.pollIntervalOverride || '',
-            fetchWindowOverride: adminPayload.polling.fetchWindowOverride === null ? '' : String(adminPayload.polling.fetchWindowOverride)
+        setSystemPollingForm({
+          pollEnabledMode: adminPayload.polling.pollEnabledOverride === null
+            ? 'DEFAULT'
+            : adminPayload.polling.pollEnabledOverride ? 'ENABLED' : 'DISABLED',
+          pollIntervalOverride: adminPayload.polling.pollIntervalOverride || '',
+          fetchWindowOverride: adminPayload.polling.fetchWindowOverride === null ? '' : String(adminPayload.polling.fetchWindowOverride),
+          manualTriggerLimitCountOverride: adminPayload.polling.manualTriggerLimitCountOverride === null ? '' : String(adminPayload.polling.manualTriggerLimitCountOverride),
+          manualTriggerLimitWindowSecondsOverride: adminPayload.polling.manualTriggerLimitWindowSecondsOverride === null ? '' : String(adminPayload.polling.manualTriggerLimitWindowSecondsOverride)
+        })
+      }
+        if (oauthSettingsPayload) {
+          setSystemOAuthSettings({
+            ...DEFAULT_SYSTEM_OAUTH_SETTINGS,
+            ...oauthSettingsPayload,
+            googleDestinationUser: oauthSettingsPayload.googleDestinationUser || 'me',
+            googleRedirectUri: oauthSettingsPayload.googleRedirectUri || `${window.location.origin}/api/google-oauth/callback`,
+            googleClientSecret: '',
+            googleRefreshToken: '',
+            microsoftClientSecret: ''
           })
         }
       } else {
         setSystemDashboard(null)
+        setSystemOAuthSettings(DEFAULT_SYSTEM_OAUTH_SETTINGS)
       }
       if (usersPayload) {
         setUsers(usersPayload)
@@ -608,7 +715,7 @@ function App() {
         return
       }
       const timer = window.setTimeout(() => {
-        dismissNotification(notification.id)
+        hideFloatingNotification(notification.id)
       }, notification.autoCloseMs)
       notificationTimersRef.current.set(notification.id, timer)
     })
@@ -933,8 +1040,8 @@ function App() {
     })
   }
 
-  async function saveBridge(event) {
-    event.preventDefault()
+  async function upsertBridgeForm(options = {}) {
+    const { connectMicrosoftAfterSave = false } = options
     const normalizedBridgeId = bridgeForm.bridgeId.trim()
     const originalBridgeId = bridgeForm.originalBridgeId.trim()
     const duplicateFetcher = visibleFetchers.find((fetcher) => (
@@ -944,9 +1051,10 @@ function App() {
       const duplicateMessage = t('bridges.duplicateId', { bridgeId: normalizedBridgeId })
       setBridgeDuplicateError(duplicateMessage)
       pushNotification({ autoCloseMs: null, copyText: duplicateMessage, message: duplicateMessage, targetId: 'source-bridges-section', tone: 'error' })
-      return
+      return null
     }
-    await withPending('bridgeSave', async () => {
+    const actionKey = connectMicrosoftAfterSave ? 'bridgeSaveConnect' : 'bridgeSave'
+    return withPending(actionKey, async () => {
       try {
         const response = await fetch('/api/app/bridges', {
           method: 'PUT',
@@ -956,16 +1064,43 @@ function App() {
         if (!response.ok) {
           throw new Error(await apiErrorText(response, errorText('saveMailFetcher')))
         }
+        const payload = await response.json()
         setBridgeDuplicateError('')
         setBridgeTestResult(null)
-        pushNotification({ message: t('notifications.bridgeSaved', { bridgeId: bridgeForm.bridgeId }), targetId: 'source-bridges-section', tone: 'success' })
-        setBridgeForm(DEFAULT_BRIDGE_FORM)
-        setShowFetcherDialog(false)
-        await loadAppData()
+        if (!connectMicrosoftAfterSave) {
+          pushNotification({ message: t('notifications.bridgeSaved', { bridgeId: bridgeForm.bridgeId }), targetId: 'source-bridges-section', tone: 'success' })
+          setBridgeForm(DEFAULT_BRIDGE_FORM)
+          setShowFetcherDialog(false)
+          await loadAppData()
+        } else {
+          pushNotification({
+            message: t('notifications.bridgeSavedStartingProviderOAuth', {
+              bridgeId: payload.bridgeId || bridgeForm.bridgeId,
+              provider: bridgeForm.oauthProvider === 'GOOGLE' ? t('oauthProvider.google') : t('oauthProvider.microsoft')
+            }),
+            targetId: 'source-bridges-section',
+            tone: 'warning'
+          })
+        }
+        return payload
       } catch (err) {
         pushNotification({ autoCloseMs: null, copyText: err.message || errorText('saveMailFetcher'), message: err.message || errorText('saveMailFetcher'), targetId: 'source-bridges-section', tone: 'error' })
+        return null
       }
     })
+  }
+
+  async function saveBridge(event) {
+    event.preventDefault()
+    await upsertBridgeForm()
+  }
+
+  async function saveBridgeAndConnectOAuth() {
+    const payload = await upsertBridgeForm({ connectMicrosoftAfterSave: true })
+    const savedBridgeId = payload?.bridgeId || bridgeForm.bridgeId?.trim()
+    if (savedBridgeId) {
+      startSourceOAuth(savedBridgeId, bridgeForm.oauthProvider)
+    }
   }
 
   async function testBridgeConnection() {
@@ -1117,12 +1252,20 @@ function App() {
     })
   }
 
-  async function runFetcherPoll(bridgeId) {
-    const fetcher = visibleFetchers.find((entry) => entry.bridgeId === bridgeId)
+  async function runFetcherPoll(fetcherOrBridgeId) {
+    const fetcher = typeof fetcherOrBridgeId === 'string'
+      ? visibleFetchers.find((entry) => entry.bridgeId === fetcherOrBridgeId)
+      : fetcherOrBridgeId
+    const bridgeId = typeof fetcherOrBridgeId === 'string' ? fetcherOrBridgeId : fetcherOrBridgeId?.bridgeId
+    if (!bridgeId) {
+      return
+    }
     await withPending(`bridgePoll:${bridgeId}`, async () => {
       try {
+        const notificationGroup = `fetcher-poll:${bridgeId}`
         pushNotification({
           autoCloseMs: 10000,
+          groupKey: notificationGroup,
           message: t('notifications.fetcherPollStarted', { bridgeId }),
           targetId: 'source-bridges-section',
           tone: 'warning'
@@ -1137,12 +1280,15 @@ function App() {
           const formattedErrors = payload.errorDetails?.length
             ? payload.errorDetails.map((detail) => formatPollError(detail, language))
             : payload.errors.map((message) => formatPollError(message, language))
-          throw new Error(formattedErrors.join('\n'))
+          throw Object.assign(new Error(formattedErrors.join('\n')), {
+            notificationTargetId: notificationTargetForPollErrors(payload.errorDetails, payload.errors)
+          })
         }
         const completedMessageKey = payload.spamJunkMessageCount > 0
           ? 'notifications.fetcherPollCompletedWithSpam'
           : 'notifications.fetcherPollCompleted'
         pushNotification({
+          groupKey: notificationGroup,
           message: t(completedMessageKey, {
             bridgeId,
             fetched: payload.fetched,
@@ -1150,12 +1296,20 @@ function App() {
             duplicates: payload.duplicates,
             spamJunkCount: payload.spamJunkMessageCount
           }),
+          replaceGroup: true,
           targetId: 'source-bridges-section',
           tone: 'success'
         })
       } catch (err) {
         const message = formatPollError(err.message || errorText('runMailFetcherPoll'), language)
-        pushNotification({ autoCloseMs: null, copyText: message, message, targetId: 'source-bridges-section', tone: 'error' })
+        pushNotification({
+          copyText: message,
+          groupKey: `fetcher-poll:${bridgeId}`,
+          message,
+          replaceGroup: true,
+          targetId: err.notificationTargetId || notificationTargetForPollErrors([], [err.message || '']),
+          tone: 'error'
+        })
       } finally {
         await loadAppData({ suppressErrors: true })
         if (fetcher) {
@@ -1241,6 +1395,53 @@ function App() {
         pushNotification({ autoCloseMs: null, copyText: err.message || errorText('updateUser'), message: err.message || errorText('updateUser'), targetId: 'user-management-section', tone: 'error' })
         return false
       }
+    })
+  }
+
+  function requestToggleMultiUserMode(enabled) {
+    const turningOn = Boolean(enabled)
+    openConfirmation({
+      actionKey: 'multiUserModeSave',
+      body: turningOn
+        ? t('users.switchToMultiUserConfirmBody')
+        : t('users.switchToSingleUserConfirmBody', { username: session?.username || 'admin' }),
+      confirmLabel: turningOn ? t('users.switchToMultiUser') : t('users.switchToSingleUser'),
+      confirmLoadingLabel: t('users.confirmLoading'),
+      confirmTone: 'danger',
+      onConfirm: async () => {
+        await withPending('multiUserModeSave', async () => {
+          try {
+            const response = await fetch('/api/admin/users/mode', {
+              method: 'PUT',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ multiUserEnabled: enabled })
+            })
+            if (!response.ok) {
+              throw new Error(await apiErrorText(response, errorText('saveMultiUserMode')))
+            }
+            await response.json()
+            setConfirmationDialog(null)
+            setSelectedUserId(null)
+            setSelectedUserConfig(null)
+            await loadAuthOptions()
+            await loadAppData()
+            pushNotification({
+              message: enabled ? t('notifications.multiUserEnabled') : t('notifications.singleUserEnabled'),
+              targetId: 'user-management-section',
+              tone: 'success'
+            })
+          } catch (err) {
+            pushNotification({
+              autoCloseMs: null,
+              copyText: err.message || errorText('saveMultiUserMode'),
+              message: err.message || errorText('saveMultiUserMode'),
+              targetId: 'user-management-section',
+              tone: 'error'
+            })
+          }
+        })
+      },
+      title: turningOn ? t('users.switchToMultiUserConfirmTitle') : t('users.switchToSingleUserConfirmTitle')
     })
   }
 
@@ -1350,13 +1551,88 @@ function App() {
     })
   }
 
+  function requestDeleteUser(user) {
+    if (!user) return
+    openConfirmation({
+      actionKey: `deleteUser:${user.id}`,
+      body: t('users.deleteConfirmBody', { username: user.username }),
+      confirmLabel: t('users.delete'),
+      confirmLoadingLabel: t('users.deleteLoading'),
+      confirmTone: 'danger',
+      onConfirm: async () => {
+        await withPending(`deleteUser:${user.id}`, async () => {
+          try {
+            const response = await fetch(`/api/admin/users/${user.id}`, { method: 'DELETE' })
+            if (!response.ok) {
+              throw new Error(await apiErrorText(response, errorText('deleteUser')))
+            }
+            setConfirmationDialog(null)
+            if (selectedUserId === user.id) {
+              setSelectedUserId(null)
+              setSelectedUserConfig(null)
+            }
+            await loadAppData()
+            pushNotification({ message: t('notifications.userDeleted', { username: user.username }), targetId: 'user-management-section', tone: 'success' })
+          } catch (err) {
+            pushNotification({ autoCloseMs: null, copyText: err.message || errorText('deleteUser'), message: err.message || errorText('deleteUser'), targetId: 'user-management-section', tone: 'error' })
+          }
+        })
+      },
+      title: t('users.deleteConfirmTitle')
+    })
+  }
+
   async function runPoll() {
-    setRunningPoll(true)
-    await withPending('runPoll', async () => {
+    openConfirmation({
+      actionKey: 'runPoll',
+      body: t('system.runPollConfirmBody'),
+      confirmLabel: t('system.runPollConfirmAction'),
+      confirmLoadingLabel: t('system.runPollLoading'),
+      confirmTone: 'primary',
+      onConfirm: async () => {
+        setConfirmationDialog(null)
+        setRunningPoll(true)
+        await withPending('runPoll', async () => {
+          try {
+            const notificationGroup = 'global-poll'
+            pushNotification({ groupKey: notificationGroup, message: t('notifications.pollStarted'), targetId: 'system-dashboard-section', tone: 'warning' })
+            const response = await fetch('/api/admin/poll/run', { method: 'POST' })
+            if (!response.ok) {
+              throw new Error(await apiErrorText(response, errorText('runPoll')))
+            }
+            const payload = await response.json()
+            if (payload.errorDetails?.length || payload.errors?.length) {
+              const formattedErrors = payload.errorDetails?.length
+                ? payload.errorDetails.map((detail) => formatPollError(detail, language))
+                : payload.errors.map((message) => formatPollError(message, language))
+              throw new Error(formattedErrors.join('\n'))
+            }
+            const completedMessageKey = payload.spamJunkMessageCount > 0
+              ? 'notifications.pollFinishedWithSpam'
+              : 'notifications.pollFinished'
+            pushNotification({ groupKey: notificationGroup, message: t(completedMessageKey, { fetched: payload.fetched, imported: payload.imported, duplicates: payload.duplicates, errors: payload.errors.length, spamJunkCount: payload.spamJunkMessageCount }), replaceGroup: true, targetId: 'system-dashboard-section', tone: 'success' })
+            await loadAppData()
+          } catch (err) {
+            const message = formatPollError(err.message || errorText('runPoll'), language)
+            pushNotification({ copyText: message, groupKey: 'global-poll', message, replaceGroup: true, targetId: 'system-dashboard-section', tone: 'error' })
+          } finally {
+            setRunningPoll(false)
+          }
+        })
+      },
+      title: t('system.runPollConfirmTitle')
+    })
+  }
+
+  async function runUserPoll() {
+    setRunningUserPoll(true)
+    await withPending('runUserPoll', async () => {
       try {
-        const response = await fetch('/api/admin/poll/run', { method: 'POST' })
+        const notificationGroup = 'user-poll'
+        pushNotification({ groupKey: notificationGroup, message: t('notifications.userPollStarted'), targetId: 'user-polling-section', tone: 'warning' })
+        const response = await fetch('/api/app/poll/run', { method: 'POST' })
         if (!response.ok) {
-          throw new Error(await apiErrorText(response, errorText('runPoll')))
+          throw new Error(await apiErrorText(response, errorText('runUserPoll')))
         }
         const payload = await response.json()
         if (payload.errorDetails?.length || payload.errors?.length) {
@@ -1366,15 +1642,15 @@ function App() {
           throw new Error(formattedErrors.join('\n'))
         }
         const completedMessageKey = payload.spamJunkMessageCount > 0
-          ? 'notifications.pollFinishedWithSpam'
-          : 'notifications.pollFinished'
-        pushNotification({ message: t(completedMessageKey, { fetched: payload.fetched, imported: payload.imported, duplicates: payload.duplicates, errors: payload.errors.length, spamJunkCount: payload.spamJunkMessageCount }), targetId: 'system-dashboard-section', tone: 'success' })
+          ? 'notifications.userPollFinishedWithSpam'
+          : 'notifications.userPollFinished'
+        pushNotification({ groupKey: notificationGroup, message: t(completedMessageKey, { fetched: payload.fetched, imported: payload.imported, duplicates: payload.duplicates, errors: payload.errors.length, spamJunkCount: payload.spamJunkMessageCount }), replaceGroup: true, targetId: 'user-polling-section', tone: 'success' })
         await loadAppData()
       } catch (err) {
-        const message = formatPollError(err.message || errorText('runPoll'), language)
-        pushNotification({ autoCloseMs: null, copyText: message, message, targetId: 'system-dashboard-section', tone: 'error' })
+        const message = formatPollError(err.message || errorText('runUserPoll'), language)
+        pushNotification({ copyText: message, groupKey: 'user-poll', message, replaceGroup: true, targetId: 'user-polling-section', tone: 'error' })
       } finally {
-        setRunningPoll(false)
+        setRunningUserPoll(false)
       }
     })
   }
@@ -1393,7 +1669,13 @@ function App() {
             pollIntervalOverride: systemPollingForm.pollIntervalOverride.trim() || null,
             fetchWindowOverride: systemPollingForm.fetchWindowOverride.trim() === ''
               ? null
-              : Number(systemPollingForm.fetchWindowOverride)
+              : Number(systemPollingForm.fetchWindowOverride),
+            manualTriggerLimitCountOverride: systemPollingForm.manualTriggerLimitCountOverride.trim() === ''
+              ? null
+              : Number(systemPollingForm.manualTriggerLimitCountOverride),
+            manualTriggerLimitWindowSecondsOverride: systemPollingForm.manualTriggerLimitWindowSecondsOverride.trim() === ''
+              ? null
+              : Number(systemPollingForm.manualTriggerLimitWindowSecondsOverride)
           })
         })
         if (!response.ok) {
@@ -1418,7 +1700,9 @@ function App() {
           body: JSON.stringify({
             pollEnabledOverride: null,
             pollIntervalOverride: null,
-            fetchWindowOverride: null
+            fetchWindowOverride: null,
+            manualTriggerLimitCountOverride: null,
+            manualTriggerLimitWindowSecondsOverride: null
           })
         })
         if (!response.ok) {
@@ -1431,6 +1715,48 @@ function App() {
         await loadAppData()
       } catch (err) {
         pushNotification({ autoCloseMs: null, copyText: err.message || errorText('resetPollingSettings'), message: err.message || errorText('resetPollingSettings'), targetId: 'system-dashboard-section', tone: 'error' })
+      }
+    })
+  }
+
+  async function saveSystemOAuthSettings(event) {
+    event.preventDefault()
+    await withPending('systemOAuthSettingsSave', async () => {
+      try {
+        const response = await fetch('/api/admin/oauth-app-settings', {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            multiUserEnabledOverride: systemOAuthSettings.multiUserEnabledOverride,
+            googleDestinationUser: systemOAuthSettings.googleDestinationUser,
+            googleRedirectUri: systemOAuthSettings.googleRedirectUri,
+            googleClientId: systemOAuthSettings.googleClientId,
+            googleClientSecret: systemOAuthSettings.googleClientSecret || null,
+            googleRefreshToken: systemOAuthSettings.googleRefreshToken || null,
+            microsoftClientId: systemOAuthSettings.microsoftClientId,
+            microsoftClientSecret: systemOAuthSettings.microsoftClientSecret || null
+          })
+        })
+        if (!response.ok) {
+          throw new Error(await apiErrorText(response, errorText('saveOAuthApps')))
+        }
+        const payload = await response.json()
+        setSystemOAuthSettings({
+          ...DEFAULT_SYSTEM_OAUTH_SETTINGS,
+          ...payload,
+          googleDestinationUser: payload.googleDestinationUser || 'me',
+          googleRedirectUri: payload.googleRedirectUri || `${window.location.origin}/api/google-oauth/callback`,
+          googleClientSecret: '',
+          googleRefreshToken: '',
+          microsoftClientSecret: ''
+        })
+        setSystemOAuthSettingsDirty(false)
+        setShowSystemOAuthAppsDialog(false)
+        pushNotification({ message: t('notifications.oauthAppsUpdated'), targetId: 'oauth-apps-section', tone: 'success' })
+        await loadAuthOptions()
+        await loadAppData()
+      } catch (err) {
+        pushNotification({ copyText: err.message || errorText('saveOAuthApps'), message: err.message || errorText('saveOAuthApps'), targetId: 'oauth-apps-section', tone: 'error' })
       }
     })
   }
@@ -1525,7 +1851,19 @@ function App() {
     withPending('googleOAuthSystem', async () => {
       await new Promise((resolve) => {
         window.setTimeout(() => {
+          setShowSystemOAuthAppsDialog(false)
           window.location.assign(`/api/google-oauth/start/system?lang=${encodeURIComponent(language)}`)
+          resolve()
+        }, 75)
+      })
+    })
+  }
+
+  function startGoogleSourceOAuth(sourceId) {
+    withPending(`googleSourceOAuth:${sourceId}`, async () => {
+      await new Promise((resolve) => {
+        window.setTimeout(() => {
+          window.location.assign(`/api/google-oauth/start/source?sourceId=${encodeURIComponent(sourceId)}&lang=${encodeURIComponent(language)}`)
           resolve()
         }, 75)
       })
@@ -1541,6 +1879,14 @@ function App() {
         }, 75)
       })
     })
+  }
+
+  function startSourceOAuth(sourceId, provider) {
+    if (provider === 'GOOGLE') {
+      startGoogleSourceOAuth(sourceId)
+      return
+    }
+    startMicrosoftOAuth(sourceId)
   }
 
   async function handleRefresh() {
@@ -1681,7 +2027,8 @@ function App() {
   function handleQuickSetupVisibilityChange(visible) {
     const nextPreferences = {
       ...uiPreferences,
-      quickSetupDismissed: !visible,
+      quickSetupPinnedVisible: visible,
+      quickSetupDismissed: visible ? false : userSetupGuideState.allStepsComplete,
       quickSetupCollapsed: visible ? false : true
     }
     setUiPreferences(nextPreferences)
@@ -1706,6 +2053,29 @@ function App() {
     focusTarget(step.targetId, step.sectionKey)
   }
 
+  function notificationTargetForPollErrors(errorDetails = [], messages = [], fallbackTarget = 'source-bridges-section') {
+    const details = Array.isArray(errorDetails) ? errorDetails : []
+    if (details.some((detail) => detail?.code === 'gmail_account_not_linked' || detail?.code === 'gmail_access_revoked')) {
+      return 'gmail-destination-section'
+    }
+    const rawMessages = Array.isArray(messages) ? messages : []
+    if (rawMessages.some((message) => typeof message === 'string'
+      && (message.includes('The Gmail account is not linked for this destination')
+        || message.includes('The linked Gmail account no longer grants InboxBridge access')))) {
+      return 'gmail-destination-section'
+    }
+    return fallbackTarget
+  }
+
+  function highlightTarget(target) {
+    target.classList.remove('section-focus-highlight')
+    void target.offsetWidth
+    target.classList.add('section-focus-highlight')
+    window.setTimeout(() => {
+      target.classList.remove('section-focus-highlight')
+    }, SECTION_HIGHLIGHT_MS)
+  }
+
   function focusTarget(targetId, sectionKey = null) {
     const derivedSectionKey = sectionKey || ({
       'gmail-destination-section': 'gmailDestinationCollapsed',
@@ -1713,6 +2083,7 @@ function App() {
       'user-polling-stats-section': 'userStatsCollapsed',
       'source-bridges-section': 'sourceBridgesCollapsed',
       'system-dashboard-section': 'systemDashboardCollapsed',
+      'oauth-apps-section': 'oauthAppsCollapsed',
       'global-polling-stats-section': 'globalStatsCollapsed',
       'user-management-section': 'userManagementCollapsed'
     }[targetId] || null)
@@ -1735,7 +2106,7 @@ function App() {
       setShowSecurityPanel(true)
       setSecurityTab('passkeys')
     }
-    if (targetId === 'user-management-section' || targetId === 'system-dashboard-section' || targetId === 'global-polling-stats-section') {
+    if (targetId === 'user-management-section' || targetId === 'system-dashboard-section' || targetId === 'oauth-apps-section' || targetId === 'global-polling-stats-section') {
       setAdminWorkspace('admin')
     }
     if (targetId === 'gmail-destination-section' || targetId === 'user-polling-section' || targetId === 'user-polling-stats-section' || targetId === 'source-bridges-section') {
@@ -1748,7 +2119,13 @@ function App() {
       }
       target.scrollIntoView({ behavior: 'smooth', block: 'start' })
       target.focus()
+      highlightTarget(target)
     }, 150)
+  }
+
+  function focusNotificationTarget(targetId) {
+    setShowNotificationsDialog(false)
+    focusTarget(targetId)
   }
 
   function editBridge(bridge) {
@@ -1798,7 +2175,7 @@ function App() {
         oauthConnected: deriveOauthConnected(bridge),
         canDelete: true,
         canEdit: true,
-        canConnectMicrosoft: authOptions.microsoftOAuthAvailable && bridge.authMethod === 'OAUTH2' && bridge.oauthProvider === 'MICROSOFT',
+        canConnectOAuth: authOptions.sourceOAuthProviders.includes(bridge.oauthProvider) && bridge.authMethod === 'OAUTH2',
         canConfigurePolling: true,
         canRunPoll: true
       }))
@@ -1827,7 +2204,7 @@ function App() {
         managementSource: 'ENVIRONMENT',
         canDelete: false,
         canEdit: false,
-        canConnectMicrosoft: authOptions.microsoftOAuthAvailable && bridge.authMethod === 'OAUTH2' && bridge.oauthProvider === 'MICROSOFT',
+        canConnectOAuth: authOptions.sourceOAuthProviders.includes(bridge.oauthProvider) && bridge.authMethod === 'OAUTH2',
         canConfigurePolling: true,
         canRunPoll: true
       }))
@@ -1835,13 +2212,27 @@ function App() {
 
     return [...databaseFetchers, ...envFetchers]
       .sort((left, right) => left.bridgeId.localeCompare(right.bridgeId))
-  }, [authOptions.microsoftOAuthAvailable, myBridges, session?.username, systemDashboard?.bridges])
+  }, [authOptions.sourceOAuthProviders, myBridges, session?.username, systemDashboard?.bridges])
 
-  const setupGuideState = buildSetupGuideState({
+  const userSetupGuideState = buildSetupGuideState({
     gmailMeta,
     myBridges,
     session,
     systemDashboard,
+    users,
+    workspace: 'user',
+    systemOAuthSettings,
+    t
+  })
+
+  const adminSetupGuideState = buildSetupGuideState({
+    gmailMeta,
+    myBridges,
+    session,
+    systemDashboard,
+    users,
+    workspace: 'admin',
+    systemOAuthSettings,
     t
   })
 
@@ -1849,7 +2240,7 @@ function App() {
     if (!session) {
       return
     }
-    if (!setupGuideState.allStepsComplete && uiPreferences.quickSetupDismissed) {
+    if (!userSetupGuideState.allStepsComplete && uiPreferences.quickSetupDismissed) {
       const next = {
         ...uiPreferences,
         quickSetupDismissed: false,
@@ -1861,17 +2252,18 @@ function App() {
       }
       return
     }
-    if (setupGuideState.allStepsComplete && !uiPreferences.quickSetupCollapsed && !touchedSections.quickSetupCollapsed) {
+    if (userSetupGuideState.allStepsComplete && !uiPreferences.quickSetupPinnedVisible && !uiPreferences.quickSetupDismissed) {
       const next = {
         ...uiPreferences,
-        quickSetupCollapsed: true
+        quickSetupCollapsed: true,
+        quickSetupDismissed: true
       }
       setUiPreferences(next)
       if (next.persistLayout) {
         persistUiPreferences(next)
       }
     }
-  }, [session, setupGuideState.allStepsComplete, touchedSections.quickSetupCollapsed, uiPreferences])
+  }, [session, userSetupGuideState.allStepsComplete, uiPreferences])
 
   useEffect(() => {
     setShowPasswordResetDialog(false)
@@ -1932,6 +2324,23 @@ function App() {
     return items
   }, [dismissedPersistentNotifications.mustChangePassword, session?.mustChangePassword, t])
 
+  const visibleNotifications = useMemo(
+    () => notifications.filter((notification) => notification.floatingVisible !== false),
+    [notifications]
+  )
+
+  const notificationHistory = useMemo(
+    () => [...notifications].sort((left, right) => right.createdAt - left.createdAt),
+    [notifications]
+  )
+
+  function notificationTimestamp(notification) {
+    if (!notification?.createdAt) {
+      return ''
+    }
+    return t('notifications.createdAt', { value: notificationTimestampFormatter.format(new Date(notification.createdAt)) })
+  }
+
   const duplicateCreateUsername = useMemo(() => {
     const normalized = createUserForm.username.trim().toLowerCase()
     if (!normalized) {
@@ -1943,16 +2352,16 @@ function App() {
   const userWorkspaceSections = [
     {
       id: 'quickSetup',
-      render: () => setupGuideState.allStepsComplete && uiPreferences.quickSetupDismissed ? null : (
+      render: () => userSetupGuideState.allStepsComplete && uiPreferences.quickSetupDismissed ? null : (
         <SetupGuidePanel
           collapsed={uiPreferences.quickSetupCollapsed}
-          dismissable={setupGuideState.allStepsComplete}
+          dismissable={userSetupGuideState.allStepsComplete}
           onDismiss={dismissQuickSetupGuide}
           onFocusSection={focusSection}
           sectionLoading={isSectionRefreshing('quickSetupCollapsed')}
           onToggleCollapse={() => toggleSection('quickSetupCollapsed')}
           savingLayout={isPending('uiPreferences')}
-          steps={setupGuideState.steps}
+          steps={userSetupGuideState.steps}
           t={t}
         />
       )
@@ -1965,7 +2374,7 @@ function App() {
           collapseLoading={isPending('uiPreferences') && uiPreferences.persistLayout}
           gmailConfig={gmailConfig}
           gmailMeta={gmailMeta}
-          isAdmin={session.role === 'ADMIN'}
+          isAdmin={false}
           locale={language}
           oauthLoading={isPending('googleOAuthSelf')}
           onCollapseToggle={() => toggleSection('gmailDestinationCollapsed')}
@@ -1989,7 +2398,9 @@ function App() {
           hasFetchers={myBridges.length > 0}
           onCollapseToggle={() => toggleSection('userPollingCollapsed')}
           onOpenEditor={() => setShowUserPollingDialog(true)}
+          onRunPoll={runUserPoll}
           pollingSettings={userPollingSettings}
+          runningPoll={runningUserPoll}
           sectionLoading={isSectionRefreshing('userPollingCollapsed')}
           t={t}
         />
@@ -2021,7 +2432,7 @@ function App() {
           bridgeForm={bridgeForm}
           collapsed={uiPreferences.sourceBridgesCollapsed}
           collapseLoading={isPending('uiPreferences') && uiPreferences.persistLayout}
-          connectingBridgeId={visibleFetchers.find((bridge) => isPending(`microsoftOAuth:${bridge.bridgeId}`))?.bridgeId || null}
+          connectingBridgeId={visibleFetchers.find((bridge) => isPending(`microsoftOAuth:${bridge.bridgeId}`) || isPending(`googleSourceOAuth:${bridge.bridgeId}`))?.bridgeId || null}
           deletingBridgeId={myBridges.find((bridge) => isPending(`bridgeDelete:${bridge.bridgeId}`))?.bridgeId || null}
           duplicateIdError={bridgeDuplicateError}
           fetcherDialogOpen={showFetcherDialog}
@@ -2044,7 +2455,7 @@ function App() {
           onClosePollingDialog={closeFetcherPollingDialog}
           onCollapseToggle={() => toggleSection('sourceBridgesCollapsed')}
           onConfigureFetcherPolling={openFetcherPollingDialog}
-          onConnectMicrosoft={startMicrosoftOAuth}
+          onConnectOAuth={startSourceOAuth}
           onDeleteBridge={deleteBridge}
           onEditBridge={editBridge}
           onFetcherPollingFormChange={(updater) => setFetcherPollingForm((current) => typeof updater === 'function' ? updater(current) : updater)}
@@ -2052,21 +2463,39 @@ function App() {
           onResetFetcherPollingSettings={resetFetcherPollingSettings}
           onRunFetcherPoll={runFetcherPoll}
           onSaveBridge={saveBridge}
+          onSaveBridgeAndConnectOAuth={saveBridgeAndConnectOAuth}
           onSaveFetcherPollingSettings={saveFetcherPollingSettings}
           onTestConnection={testBridgeConnection}
           saveLoading={isPending('bridgeSave')}
+          saveAndConnectLoading={isPending('bridgeSaveConnect')}
           testConnectionLoading={isPending('bridgeConnectionTest')}
           testResult={bridgeTestResult}
           sectionLoading={isSectionRefreshing('sourceBridgesCollapsed')}
           t={t}
           locale={language}
-          microsoftOAuthAvailable={authOptions.microsoftOAuthAvailable}
+          availableOAuthProviders={authOptions.sourceOAuthProviders}
         />
       )
     }
   ]
 
   const adminWorkspaceSections = [
+    {
+      id: 'adminQuickSetup',
+      render: () => adminSetupGuideState.allStepsComplete ? null : (
+        <SetupGuidePanel
+          collapsed={uiPreferences.adminQuickSetupCollapsed}
+          dismissable={false}
+          onDismiss={() => {}}
+          onFocusSection={focusSection}
+          sectionLoading={isSectionRefreshing('adminQuickSetupCollapsed')}
+          onToggleCollapse={() => toggleSection('adminQuickSetupCollapsed')}
+          savingLayout={isPending('uiPreferences')}
+          steps={adminSetupGuideState.steps}
+          t={t}
+        />
+      )
+    },
     {
       id: 'systemDashboard',
       render: () => (
@@ -2081,6 +2510,29 @@ function App() {
           sectionLoading={isSectionRefreshing('systemDashboardCollapsed')}
           t={t}
           locale={language}
+        />
+      )
+    },
+    {
+      id: 'oauthApps',
+      render: () => (
+        <OAuthAppsSection
+          collapsed={uiPreferences.oauthAppsCollapsed}
+          collapseLoading={isPending('uiPreferences') && uiPreferences.persistLayout}
+          oauthSettings={systemOAuthSettings}
+          onCollapseToggle={() => toggleSection('oauthAppsCollapsed')}
+          onEditGoogle={() => {
+            setSystemOAuthSettingsDirty(false)
+            setSystemOAuthEditorProvider('google')
+            setShowSystemOAuthAppsDialog(true)
+          }}
+          onEditMicrosoft={() => {
+            setSystemOAuthSettingsDirty(false)
+            setSystemOAuthEditorProvider('microsoft')
+            setShowSystemOAuthAppsDialog(true)
+          }}
+          sectionLoading={isSectionRefreshing('oauthAppsCollapsed')}
+          t={t}
         />
       )
     },
@@ -2105,7 +2557,7 @@ function App() {
     },
     {
       id: 'userManagement',
-      render: () => authOptions.multiUserEnabled ? (
+      render: () => (
         <UserManagementSection
           collapsed={uiPreferences.userManagementCollapsed}
           collapseLoading={isPending('uiPreferences') && uiPreferences.persistLayout}
@@ -2130,6 +2582,7 @@ function App() {
             setPasswordResetTarget(user)
             setShowPasswordResetDialog(true)
           }}
+          onDeleteUser={requestDeleteUser}
           onLoadUserCustomRange={loadAdminUserCustomRange}
           onResetUserPasskeys={resetUserPasskeys}
           onToggleExpandUser={toggleExpandedUser}
@@ -2138,16 +2591,22 @@ function App() {
           selectedUserConfig={selectedUserConfig}
           selectedUserLoading={selectedUserLoading}
           session={session}
+          multiUserEnabled={authOptions.multiUserEnabled}
+          modeToggleLoading={isPending('multiUserModeSave')}
+          onToggleMultiUserEnabled={requestToggleMultiUserMode}
           updatingPasskeysResetUserId={selectedUserConfig && isPending(`resetPasskeys:${selectedUserConfig.user.id}`) ? selectedUserConfig.user.id : null}
-          updatingUserId={selectedUserConfig && isPending(`updateUser:${selectedUserConfig.user.id}`) ? selectedUserConfig.user.id : null}
+          updatingUserId={selectedUserConfig && (
+            isPending(`updateUser:${selectedUserConfig.user.id}`)
+            || isPending(`deleteUser:${selectedUserConfig.user.id}`)
+          ) ? selectedUserConfig.user.id : null}
           users={users}
           sectionLoading={isSectionRefreshing('userManagementCollapsed')}
           t={t}
           locale={language}
         />
-      ) : null
+      )
     }
-  ].filter((section) => section.render() !== null)
+  ]
 
   const orderedUserWorkspaceSections = applyOrderedSectionIds(
     userWorkspaceSections.map((section) => section.id),
@@ -2258,6 +2717,7 @@ function App() {
           language={language}
           loadingData={loadingData}
           onExitLayoutEditing={() => handleLayoutEditChange(false)}
+          onOpenNotifications={() => setShowNotificationsDialog(true)}
           onOpenPreferences={() => setShowPreferencesDialog(true)}
           onOpenSecurityDialog={() => {
             setSecurityTab('password')
@@ -2265,6 +2725,7 @@ function App() {
           }}
           onRefresh={handleRefresh}
           onSignOut={handleLogout}
+          notificationCount={notificationHistory.length}
           refreshLoading={isPending('refresh')}
           session={session}
           signOutLoading={isPending('logout')}
@@ -2273,7 +2734,7 @@ function App() {
 
         {showPreferencesDialog ? (
           <PreferencesDialog
-            canHideQuickSetup={setupGuideState.allStepsComplete}
+            canHideQuickSetup={userSetupGuideState.allStepsComplete}
             layoutEditEnabled={uiPreferences.layoutEditEnabled}
             language={language}
             languageOptions={selectableLanguages}
@@ -2285,8 +2746,40 @@ function App() {
             onResetLayout={resetLayoutPreferences}
             onStartLayoutEditing={startLayoutEditingFromPreferences}
             persistLayout={uiPreferences.persistLayout}
-            quickSetupVisible={!uiPreferences.quickSetupDismissed || !setupGuideState.allStepsComplete}
+            quickSetupVisible={uiPreferences.quickSetupPinnedVisible || !userSetupGuideState.allStepsComplete}
             savingLayout={isPending('uiPreferences')}
+            t={t}
+          />
+        ) : null}
+
+        {showNotificationsDialog ? (
+          <NotificationsDialog
+            notifications={notificationHistory}
+            onClearAll={clearAllNotifications}
+            onClose={() => setShowNotificationsDialog(false)}
+            onDismissNotification={dismissNotification}
+            onFocusNotification={focusNotificationTarget}
+            notificationTitle={notificationTimestamp}
+            t={t}
+          />
+        ) : null}
+
+        {showSystemOAuthAppsDialog ? (
+          <SystemOAuthAppsDialog
+            isDirty={systemOAuthSettingsDirty}
+            oauthSettings={systemOAuthSettings}
+            oauthSettingsLoading={isPending('systemOAuthSettingsSave')}
+            onClose={() => {
+              setSystemOAuthSettingsDirty(false)
+              setShowSystemOAuthAppsDialog(false)
+            }}
+            onOauthSettingsChange={(updater) => {
+              setSystemOAuthSettingsDirty(true)
+              setSystemOAuthSettings((current) => typeof updater === 'function' ? updater(current) : updater)
+            }}
+            onSave={saveSystemOAuthSettings}
+            onStartGoogleOAuth={startGoogleOAuthSystem}
+            provider={systemOAuthEditorProvider}
             t={t}
           />
         ) : null}
@@ -2372,7 +2865,7 @@ function App() {
         ) : null}
 
         <div className="notification-stack" aria-live="polite">
-          {[...persistentNotifications, ...notifications].map((notification) => (
+          {[...persistentNotifications, ...visibleNotifications].map((notification) => (
             <Banner
               key={notification.id}
               copyText={notification.copyText}
@@ -2389,6 +2882,7 @@ function App() {
               dismissLabel={t('common.dismissNotification')}
               focusLabel={t('common.focusSection')}
               tone={notification.tone}
+              title={notificationTimestamp(notification)}
             >
               {notification.message}
             </Banner>

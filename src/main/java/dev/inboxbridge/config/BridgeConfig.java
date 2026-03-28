@@ -133,6 +133,7 @@ public interface BridgeConfig {
 
     enum OAuthProvider {
         NONE,
+        GOOGLE,
         MICROSOFT
     }
 }

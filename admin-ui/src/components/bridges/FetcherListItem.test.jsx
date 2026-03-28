@@ -149,10 +149,10 @@ describe('FetcherListItem', () => {
           }}
           t={(key, params) => translate('pt-PT', key, params)}
         />
-      )
+    )
 
     fireEvent.click(screen.getByRole('button', { name: 'Ações da conta de email de origem' }))
-    expect(screen.getByRole('button', { name: 'Executar polling agora' })).toBeInTheDocument()
+    expect(screen.getAllByRole('button', { name: 'Executar polling agora' }).length).toBeGreaterThan(0)
     expect(screen.getByRole('button', { name: 'Definições de verificação' })).toBeInTheDocument()
     expect(screen.getByRole('button', { name: 'Editar' })).toBeInTheDocument()
     expect(screen.getByRole('button', { name: 'Apagar' })).toBeInTheDocument()
@@ -215,6 +215,97 @@ describe('FetcherListItem', () => {
 
     fireEvent.click(screen.getByRole('button', { name: 'Source email account actions' }))
     expect(screen.getByRole('button', { name: 'Reconnect Microsoft OAuth' })).toBeInTheDocument()
+  })
+
+  it('passes the clicked fetcher object when running a manual poll', () => {
+    const onRunPoll = vi.fn()
+    const fetcher = {
+      bridgeId: 'outlook-main',
+      customLabel: '',
+      managementSource: 'ENVIRONMENT',
+      protocol: 'IMAP',
+      host: 'outlook.office365.com',
+      port: 993,
+      authMethod: 'OAUTH2',
+      oauthProvider: 'MICROSOFT',
+      tls: true,
+      folder: 'INBOX',
+      tokenStorageMode: 'DATABASE',
+      oauthConnected: true,
+      totalImportedMessages: 0,
+      lastImportedAt: null,
+      effectivePollEnabled: true,
+      effectivePollInterval: '5m',
+      effectiveFetchWindow: 50,
+      pollingState: null,
+      lastEvent: null,
+      canEdit: false,
+      canDelete: false,
+      canConnectOAuth: true
+    }
+
+    render(
+      <FetcherListItem
+        fetcher={fetcher}
+        locale="en"
+        onConfigurePolling={vi.fn()}
+        onConnectOAuth={vi.fn()}
+        onDelete={vi.fn()}
+        onEdit={vi.fn()}
+        onRunPoll={onRunPoll}
+        t={t}
+      />
+    )
+
+    fireEvent.click(screen.getByRole('button', { name: 'Source email account actions' }))
+    fireEvent.click(screen.getAllByRole('button', { name: 'Run Poll Now' })[1])
+
+    expect(onRunPoll).toHaveBeenCalledWith(fetcher)
+  })
+
+  it('shows a quick-run icon button in the fetcher row', () => {
+    const onRunPoll = vi.fn()
+    const fetcher = {
+      bridgeId: 'quick-run-source',
+      customLabel: '',
+      managementSource: 'DATABASE',
+      protocol: 'IMAP',
+      host: 'imap.example.com',
+      port: 993,
+      authMethod: 'PASSWORD',
+      oauthProvider: 'NONE',
+      tls: true,
+      folder: 'INBOX',
+      tokenStorageMode: 'PASSWORD',
+      oauthConnected: false,
+      totalImportedMessages: 0,
+      lastImportedAt: null,
+      effectivePollEnabled: true,
+      effectivePollInterval: '5m',
+      effectiveFetchWindow: 50,
+      pollingState: null,
+      lastEvent: null,
+      canEdit: true,
+      canDelete: true,
+      canConnectOAuth: false
+    }
+
+    render(
+      <FetcherListItem
+        fetcher={fetcher}
+        locale="en"
+        onConfigurePolling={vi.fn()}
+        onConnectOAuth={vi.fn()}
+        onDelete={vi.fn()}
+        onEdit={vi.fn()}
+        onRunPoll={onRunPoll}
+        t={t}
+      />
+    )
+
+    fireEvent.click(screen.getAllByRole('button', { name: 'Run Poll Now' })[0])
+
+    expect(onRunPoll).toHaveBeenCalledWith(fetcher)
   })
 
   it('does not show provider breakdown inside single-account statistics', async () => {
@@ -401,7 +492,7 @@ describe('FetcherListItem', () => {
 
     fireEvent.click(screen.getByRole('button', { name: /fetcher-1/i }))
 
-    expect(screen.getByText('Mail Account Statistics: fetcher-1')).toBeInTheDocument()
+    expect(screen.getByText('Mail Account Statistics: fetcher-1', { exact: false })).toBeInTheDocument()
     expect(screen.queryByText('Import activity over time')).not.toBeInTheDocument()
   })
 })

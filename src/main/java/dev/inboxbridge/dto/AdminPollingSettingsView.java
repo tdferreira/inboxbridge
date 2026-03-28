@@ -13,5 +13,11 @@ public record AdminPollingSettingsView(
         String effectivePollInterval,
         int defaultFetchWindow,
         Integer fetchWindowOverride,
-        int effectiveFetchWindow) {
+        int effectiveFetchWindow,
+        int defaultManualTriggerLimitCount,
+        Integer manualTriggerLimitCountOverride,
+        int effectiveManualTriggerLimitCount,
+        int defaultManualTriggerLimitWindowSeconds,
+        Integer manualTriggerLimitWindowSecondsOverride,
+        int effectiveManualTriggerLimitWindowSeconds) {
 }

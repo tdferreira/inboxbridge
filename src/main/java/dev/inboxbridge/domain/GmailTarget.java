@@ -21,6 +21,7 @@ public record GmailTarget(
                 clientId,
                 clientSecret,
                 refreshToken,
-                redirectUri);
+                redirectUri,
+                GoogleOAuthService.GMAIL_TARGET_SCOPE);
     }
 }

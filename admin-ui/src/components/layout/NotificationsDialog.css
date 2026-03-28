@@ -1,0 +1,22 @@
+.notifications-dialog {
+  display: grid;
+  gap: 1rem;
+}
+
+.notifications-dialog-header {
+  display: flex;
+  align-items: start;
+  justify-content: space-between;
+  gap: 1rem;
+}
+
+.notifications-history-list {
+  display: grid;
+  gap: 0.85rem;
+}
+
+@media (max-width: 640px) {
+  .notifications-dialog-header {
+    flex-direction: column;
+  }
+}

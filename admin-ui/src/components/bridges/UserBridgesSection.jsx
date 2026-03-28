@@ -5,10 +5,6 @@ import LoadingButton from '../common/LoadingButton'
 import PaneToggleButton from '../common/PaneToggleButton'
 import './UserBridgesSection.css'
 
-/**
- * Displays user-managed and env-managed mail fetchers in one operational list
- * while moving create/edit work into a dedicated modal dialog.
- */
 function UserBridgesSection({
   bridgeForm,
   collapsed,
@@ -33,7 +29,7 @@ function UserBridgesSection({
   onClosePollingDialog,
   onCollapseToggle,
   onConfigureFetcherPolling,
-  onConnectMicrosoft,
+  onConnectOAuth,
   onDeleteBridge,
   onEditBridge,
   onFetcherPollingFormChange,
@@ -41,16 +37,22 @@ function UserBridgesSection({
   onResetFetcherPollingSettings,
   onRunFetcherPoll,
   onSaveBridge,
+  onSaveBridgeAndConnectOAuth,
   onSaveFetcherPollingSettings,
   onTestConnection,
   saveLoading,
+  saveAndConnectLoading = false,
   sectionLoading = false,
   t,
   testConnectionLoading = false,
   testResult = null,
   locale,
+  availableOAuthProviders = [],
   microsoftOAuthAvailable = true
 }) {
+  const resolvedOAuthProviders = availableOAuthProviders.length
+    ? availableOAuthProviders
+    : (microsoftOAuthAvailable ? ['MICROSOFT'] : [])
   return (
     <section className="surface-card user-bridges-section section-with-corner-toggle" id="source-bridges-section" tabIndex="-1">
       <div className="panel-header">
@@ -84,7 +86,7 @@ function UserBridgesSection({
                 fetcher={fetcher}
                 locale={locale}
                 onConfigurePolling={onConfigureFetcherPolling}
-                onConnectMicrosoft={onConnectMicrosoft}
+                onConnectOAuth={onConnectOAuth}
                 onDelete={onDeleteBridge}
                 onEdit={onEditBridge}
                 onLoadCustomRange={onLoadFetcherCustomRange}
@@ -107,15 +109,17 @@ function UserBridgesSection({
       ) : null}
       {fetcherDialogOpen ? (
         <FetcherDialog
+          availableOAuthProviders={resolvedOAuthProviders}
           bridgeForm={bridgeForm}
           duplicateIdError={duplicateIdError}
-          microsoftOAuthAvailable={microsoftOAuthAvailable}
           onApplyPreset={onApplyPreset}
           onBridgeFormChange={onBridgeFormChange}
           onClose={onCloseDialog}
           onSave={onSaveBridge}
+          onSaveAndConnectOAuth={onSaveAndConnectOAuth}
           onTestConnection={onTestConnection}
           saveLoading={saveLoading}
+          saveAndConnectLoading={saveAndConnectLoading}
           t={t}
           testConnectionLoading={testConnectionLoading}
           testResult={testResult}

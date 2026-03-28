@@ -114,6 +114,17 @@ class UserConfigResourceTest {
     }
 
     @Test
+    void runUserPollDelegatesToPollingService() {
+        UserConfigResource resource = resource();
+        resource.pollingService = new FakePollingService();
+
+        PollRunResult response = resource.runUserPoll();
+
+        assertEquals(1, response.getFetched());
+        assertEquals(1, response.getImported());
+    }
+
+    @Test
     void testBridgeConnectionDelegatesToUserBridgeService() {
         UserConfigResource resource = resource();
         resource.userBridgeService = new FakeUserBridgeService();
@@ -147,6 +158,7 @@ class UserConfigResourceTest {
         AppUser user = new AppUser();
         user.id = 7L;
         user.username = "alice";
+        user.role = AppUser.Role.USER;
         resource.currentUserContext.setUser(user);
         return resource;
     }
@@ -238,6 +250,26 @@ class UserConfigResourceTest {
         }
     }
 
+    private static final class FakePollingService extends PollingService {
+        @Override
+        public PollRunResult runPollForSource(dev.inboxbridge.domain.RuntimeBridge bridge, String trigger, String actorKey) {
+            PollRunResult result = new PollRunResult();
+            result.incrementFetched();
+            result.incrementImported();
+            result.finish();
+            return result;
+        }
+
+        @Override
+        public PollRunResult runPollForUser(AppUser actor, String trigger) {
+            PollRunResult result = new PollRunResult();
+            result.incrementFetched();
+            result.incrementImported();
+            result.finish();
+            return result;
+        }
+    }
+
     private static final class FakeRuntimeBridgeService extends RuntimeBridgeService {
         @Override
         public Optional<dev.inboxbridge.domain.RuntimeBridge> findAccessibleForUser(AppUser actor, String sourceId) {
@@ -260,17 +292,6 @@ class UserConfigResourceTest {
                     false,
                     Optional.empty(),
                     null));
-        }
-    }
-
-    private static final class FakePollingService extends PollingService {
-        @Override
-        public PollRunResult runPollForSource(dev.inboxbridge.domain.RuntimeBridge bridge, String trigger) {
-            PollRunResult result = new PollRunResult();
-            result.incrementFetched();
-            result.incrementImported();
-            result.finish();
-            return result;
         }
     }
 

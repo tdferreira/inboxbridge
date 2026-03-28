@@ -12,7 +12,9 @@ function UserPollingSettingsSection({
   hasFetchers,
   onCollapseToggle,
   onOpenEditor,
+  onRunPoll,
   pollingSettings,
+  runningPoll = false,
   sectionLoading = false,
   t
 }) {
@@ -22,6 +24,21 @@ function UserPollingSettingsSection({
         <div>
           <div className="section-title">{t('userPolling.title')}</div>
           <p className="section-copy">{t('userPolling.copy')}</p>
+        </div>
+        <div className="panel-header-actions">
+          <LoadingButton
+            className="secondary"
+            disabled={!hasFetchers}
+            isLoading={runningPoll}
+            loadingLabel={t('userPolling.runPollLoading')}
+            onClick={onRunPoll}
+            type="button"
+          >
+            {t('userPolling.runPoll')}
+          </LoadingButton>
+          <LoadingButton className="primary" onClick={onOpenEditor} type="button">
+            {t('userPolling.edit')}
+          </LoadingButton>
         </div>
       </div>
       <PaneToggleButton className="pane-toggle-button-corner" collapseLabel={t('common.collapseSection')} collapsed={collapsed} disabled={collapseLoading} expandLabel={t('common.expandSection')} isLoading={collapseLoading} onClick={onCollapseToggle} />
@@ -41,11 +58,6 @@ function UserPollingSettingsSection({
             {t('userPolling.effectivePolling', { value: pollingSettings.effectivePollEnabled ? t('common.yes') : t('common.no') })}<br />
             {t('userPolling.effectiveInterval', { value: pollingSettings.effectivePollInterval })}<br />
             {t('userPolling.effectiveFetchWindow', { value: pollingSettings.effectiveFetchWindow })}
-          </div>
-          <div className="action-row">
-            <LoadingButton className="primary" onClick={onOpenEditor} type="button">
-              {t('userPolling.edit')}
-            </LoadingButton>
           </div>
         </>
       ) : null}

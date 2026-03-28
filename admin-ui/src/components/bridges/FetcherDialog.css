@@ -2,6 +2,10 @@
   margin-top: 14px;
 }
 
+.fetcher-oauth-setup-box {
+  line-height: 1.5;
+}
+
 .fetcher-test-result {
   display: grid;
   gap: 10px;

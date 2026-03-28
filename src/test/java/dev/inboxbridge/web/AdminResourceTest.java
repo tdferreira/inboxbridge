@@ -15,6 +15,8 @@ import dev.inboxbridge.dto.SourcePollingStatsView;
 import dev.inboxbridge.dto.UpdateAdminPollingSettingsRequest;
 import dev.inboxbridge.dto.UpdateSourcePollingSettingsRequest;
 import dev.inboxbridge.domain.RuntimeBridge;
+import dev.inboxbridge.persistence.AppUser;
+import dev.inboxbridge.security.CurrentUserContext;
 import dev.inboxbridge.service.PollingService;
 import dev.inboxbridge.service.PollingSettingsService;
 import dev.inboxbridge.service.PollingStatsService;
@@ -42,7 +44,7 @@ class AdminResourceTest {
 
         BadRequestException error = assertThrows(
                 BadRequestException.class,
-                () -> resource.updatePollingSettings(new UpdateAdminPollingSettingsRequest(Boolean.TRUE, "1s", Integer.valueOf(10))));
+                () -> resource.updatePollingSettings(new UpdateAdminPollingSettingsRequest(Boolean.TRUE, "1s", Integer.valueOf(10), null, null)));
 
         assertEquals("Poll interval must be at least 5 seconds", error.getMessage());
     }
@@ -61,6 +63,7 @@ class AdminResourceTest {
     @Test
     void runBridgePollDelegatesToPollingService() {
         AdminResource resource = new AdminResource();
+        resource.currentUserContext = currentUserContext();
         resource.runtimeBridgeService = new FakeRuntimeBridgeService();
         resource.pollingService = new FakeRunPollingService();
 
@@ -94,10 +97,20 @@ class AdminResourceTest {
         assertEquals(1, response.importTimelines().get("custom").size());
     }
 
+    private CurrentUserContext currentUserContext() {
+        CurrentUserContext context = new CurrentUserContext();
+        AppUser user = new AppUser();
+        user.id = 1L;
+        user.username = "admin";
+        user.role = AppUser.Role.ADMIN;
+        context.setUser(user);
+        return context;
+    }
+
     private static class FakePollingSettingsService extends PollingSettingsService {
         @Override
         public AdminPollingSettingsView view() {
-            return new AdminPollingSettingsView(true, Boolean.TRUE, true, "5m", "3m", "3m", 50, Integer.valueOf(25), 25);
+            return new AdminPollingSettingsView(true, Boolean.TRUE, true, "5m", "3m", "3m", 50, Integer.valueOf(25), 25, 5, Integer.valueOf(4), 4, 60, Integer.valueOf(90), 90);
         }
     }
 
@@ -140,7 +153,7 @@ class AdminResourceTest {
 
     private static final class FakeRunPollingService extends PollingService {
         @Override
-        public PollRunResult runPollForSource(RuntimeBridge bridge, String trigger) {
+        public PollRunResult runPollForSource(RuntimeBridge bridge, String trigger, String actorKey) {
             PollRunResult result = new PollRunResult();
             result.incrementFetched();
             result.incrementImported();

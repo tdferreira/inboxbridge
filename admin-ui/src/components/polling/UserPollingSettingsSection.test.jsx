@@ -10,6 +10,7 @@ function renderSection(props = {}) {
       hasFetchers
       onCollapseToggle={vi.fn()}
       onOpenEditor={vi.fn()}
+      onRunPoll={vi.fn()}
       pollingSettings={{
         defaultPollEnabled: true,
         pollEnabledOverride: null,
@@ -31,13 +32,16 @@ function renderSection(props = {}) {
 describe('UserPollingSettingsSection', () => {
   it('renders a summary and opens the editor flow', () => {
     const onOpenEditor = vi.fn()
-    renderSection({ onOpenEditor })
+    const onRunPoll = vi.fn()
+    renderSection({ onOpenEditor, onRunPoll })
 
     expect(screen.getByText(/Effective polling:/)).toBeInTheDocument()
     expect(screen.getByText(/Effective interval:/)).toBeInTheDocument()
     expect(screen.getByText(/Effective fetch window:/)).toBeInTheDocument()
 
+    fireEvent.click(screen.getByRole('button', { name: 'Run Poll Now' }))
     fireEvent.click(screen.getByRole('button', { name: 'Edit Polling Settings' }))
+    expect(onRunPoll).toHaveBeenCalled()
     expect(onOpenEditor).toHaveBeenCalled()
   })
 
@@ -49,6 +53,7 @@ describe('UserPollingSettingsSection', () => {
         hasFetchers
         onCollapseToggle={vi.fn()}
         onOpenEditor={vi.fn()}
+        onRunPoll={vi.fn()}
         pollingSettings={{
           defaultPollEnabled: true,
           pollEnabledOverride: null,

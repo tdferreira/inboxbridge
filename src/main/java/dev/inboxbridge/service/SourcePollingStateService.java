@@ -46,11 +46,20 @@ public class SourcePollingStateService {
             PollingSettingsService.EffectivePollingSettings settings,
             Instant now,
             boolean ignoreInterval) {
+        return eligibility(sourceId, settings, now, ignoreInterval, false);
+    }
+
+    public PollEligibility eligibility(
+            String sourceId,
+            PollingSettingsService.EffectivePollingSettings settings,
+            Instant now,
+            boolean ignoreInterval,
+            boolean ignoreCooldown) {
         if (!settings.pollEnabled()) {
             return new PollEligibility(false, "DISABLED", viewForSource(sourceId).orElse(null));
         }
         SourcePollingState state = repository.findBySourceId(sourceId).orElse(null);
-        if (state != null && state.cooldownUntil != null && now.isBefore(state.cooldownUntil)) {
+        if (!ignoreCooldown && state != null && state.cooldownUntil != null && now.isBefore(state.cooldownUntil)) {
             return new PollEligibility(false, "COOLDOWN", toView(state));
         }
         if (!ignoreInterval && state != null && state.nextPollAt != null && now.isBefore(state.nextPollAt)) {

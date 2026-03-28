@@ -70,7 +70,7 @@ describe('FetcherDialog', () => {
     }
   })
 
-  it('hides Microsoft OAuth choices when Microsoft OAuth is not configured', () => {
+  it('hides OAuth2 choices when no source OAuth provider is configured', () => {
     render(
       <FetcherDialog
         bridgeForm={{
@@ -90,6 +90,7 @@ describe('FetcherDialog', () => {
           unreadOnly: false,
           customLabel: ''
         }}
+        availableOAuthProviders={[]}
         microsoftOAuthAvailable={false}
         onApplyPreset={vi.fn()}
         onBridgeFormChange={vi.fn()}
@@ -100,7 +101,6 @@ describe('FetcherDialog', () => {
       />
     )
 
-    expect(screen.queryByRole('option', { name: 'Outlook / Hotmail / Live' })).not.toBeInTheDocument()
     expect(screen.queryByRole('option', { name: 'OAuth2' })).not.toBeInTheDocument()
   })
 
@@ -274,5 +274,43 @@ describe('FetcherDialog', () => {
     expect(screen.getByText('Authenticated')).toBeInTheDocument()
     expect(screen.getByText('Unread filter validated')).toBeInTheDocument()
     expect(screen.getByText('12')).toBeInTheDocument()
+  })
+
+  it('offers a save-and-connect OAuth action when a provider is selected', () => {
+    const onSaveAndConnectOAuth = vi.fn()
+
+    render(
+      <FetcherDialog
+        bridgeForm={{
+          originalBridgeId: '',
+          bridgeId: 'outlook-main',
+          enabled: true,
+          protocol: 'IMAP',
+          host: 'outlook.office365.com',
+          port: 993,
+          tls: true,
+          authMethod: 'OAUTH2',
+          oauthProvider: 'MICROSOFT',
+          username: 'user@example.com',
+          password: '',
+          oauthRefreshToken: '',
+          folder: 'INBOX',
+          unreadOnly: false,
+          customLabel: ''
+        }}
+        onApplyPreset={vi.fn()}
+        onBridgeFormChange={vi.fn()}
+        onClose={vi.fn()}
+        onSave={vi.fn((event) => event.preventDefault())}
+        onSaveAndConnectOAuth={onSaveAndConnectOAuth}
+        onTestConnection={vi.fn()}
+        saveLoading={false}
+        t={(key, params) => translate('en', key, params)}
+      />
+    )
+
+    expect(screen.getByText(/save this mail account and then launch the microsoft consent flow/i)).toBeInTheDocument()
+    fireEvent.click(screen.getByRole('button', { name: 'Save and Connect Microsoft' }))
+    expect(onSaveAndConnectOAuth).toHaveBeenCalledTimes(1)
   })
 })

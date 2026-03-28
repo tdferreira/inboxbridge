@@ -48,8 +48,14 @@ export function formatPollError(message, locale = 'en') {
         return translate(locale, 'common.gmailAccessRevokedError', { bridgeId })
       case 'microsoft_access_revoked':
         return translate(locale, 'common.microsoftAccessRevokedError', { bridgeId })
+      case 'google_source_access_revoked':
+        return translate(locale, 'common.googleSourceAccessRevokedError', { bridgeId })
       case 'poll_busy':
         return translate(locale, 'common.pollBusyError')
+      case 'manual_poll_rate_limited':
+        return translate(locale, 'common.manualPollRateLimitedError', {
+          value: formatDate(message.value, locale)
+        })
       default:
         return formatPollError(message.message, locale)
     }
@@ -105,8 +111,20 @@ export function formatPollError(message, locale = 'en') {
     return translate(locale, 'common.microsoftAccessRevokedError', { bridgeId: microsoftAccessRevokedMatch[1] })
   }
 
+  const googleSourceAccessRevokedMatch = text.match(/^Source (.+?) failed: The linked Google account no longer grants InboxBridge access\..+$/)
+  if (googleSourceAccessRevokedMatch) {
+    return translate(locale, 'common.googleSourceAccessRevokedError', { bridgeId: googleSourceAccessRevokedMatch[1] })
+  }
+
   if (text.startsWith('A poll is already running')) {
     return translate(locale, 'common.pollBusyError')
+  }
+
+  const manualRateLimitMatch = text.match(/^Manual polling is temporarily rate limited until (.+)\.$/)
+  if (manualRateLimitMatch) {
+    return translate(locale, 'common.manualPollRateLimitedError', {
+      value: formatDate(manualRateLimitMatch[1], locale)
+    })
   }
 
   return text
@@ -121,6 +139,7 @@ export function isOauthRevokedError(message) {
   const text = String(message).trim()
   return text.includes('The linked Gmail account no longer grants InboxBridge access.')
     || text.includes('The linked Microsoft account no longer grants InboxBridge access.')
+    || text.includes('The linked Google account no longer grants InboxBridge access.')
 }
 
 export function statusTone(status) {
@@ -180,6 +199,8 @@ export function authMethodLabel(method, locale = 'en') {
 
 export function oauthProviderLabel(provider, locale = 'en') {
   switch (provider) {
+    case 'GOOGLE':
+      return translate(locale, 'oauthProvider.google')
     case 'MICROSOFT':
       return translate(locale, 'oauthProvider.microsoft')
     case 'NONE':

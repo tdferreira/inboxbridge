@@ -236,13 +236,20 @@ public class UserConfigResource {
     }
 
     @POST
+    @Path("/poll/run")
+    public PollRunResult runUserPoll() {
+        return pollingService.runPollForUser(currentUserContext.user(), "user-ui");
+    }
+
+    @POST
     @Path("/bridges/{bridgeId}/poll/run")
     public PollRunResult runBridgePoll(@PathParam("bridgeId") String bridgeId) {
         try {
             return pollingService.runPollForSource(
                     runtimeBridgeService.findAccessibleForUser(currentUserContext.user(), bridgeId)
                             .orElseThrow(() -> new IllegalArgumentException("Unknown mail fetcher id")),
-                    "app-fetcher");
+                    "app-fetcher",
+                    currentUserContext.user().role + ":" + currentUserContext.user().id);
         } catch (IllegalArgumentException e) {
             throw new BadRequestException(e.getMessage(), e);
         }

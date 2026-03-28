@@ -24,7 +24,7 @@ public class UserUiPreferenceService {
 
     static final String DEFAULT_LANGUAGE = "en";
     static final List<String> DEFAULT_USER_SECTION_ORDER = List.of("quickSetup", "gmail", "userPolling", "userStats", "sourceBridges");
-    static final List<String> DEFAULT_ADMIN_SECTION_ORDER = List.of("systemDashboard", "globalStats", "userManagement");
+    static final List<String> DEFAULT_ADMIN_SECTION_ORDER = List.of("adminQuickSetup", "systemDashboard", "oauthApps", "globalStats", "userManagement");
 
     @Inject
     UserUiPreferenceRepository repository;
@@ -35,6 +35,9 @@ public class UserUiPreferenceService {
 
     public UserUiPreferenceView defaultView() {
         return new UserUiPreferenceView(
+                false,
+                false,
+                false,
                 false,
                 false,
                 false,
@@ -61,11 +64,14 @@ public class UserUiPreferenceService {
         preference.layoutEditEnabled = request.layoutEditEnabled() != null && request.layoutEditEnabled();
         preference.quickSetupCollapsed = request.quickSetupCollapsed() != null && request.quickSetupCollapsed();
         preference.quickSetupDismissed = request.quickSetupDismissed() != null && request.quickSetupDismissed();
+        preference.quickSetupPinnedVisible = request.quickSetupPinnedVisible() != null && request.quickSetupPinnedVisible();
         preference.gmailDestinationCollapsed = request.gmailDestinationCollapsed() != null && request.gmailDestinationCollapsed();
         preference.userPollingCollapsed = request.userPollingCollapsed() != null && request.userPollingCollapsed();
         preference.userStatsCollapsed = request.userStatsCollapsed() != null && request.userStatsCollapsed();
         preference.sourceBridgesCollapsed = request.sourceBridgesCollapsed() != null && request.sourceBridgesCollapsed();
+        preference.adminQuickSetupCollapsed = request.adminQuickSetupCollapsed() != null && request.adminQuickSetupCollapsed();
         preference.systemDashboardCollapsed = request.systemDashboardCollapsed() != null && request.systemDashboardCollapsed();
+        preference.oauthAppsCollapsed = request.oauthAppsCollapsed() != null && request.oauthAppsCollapsed();
         preference.globalStatsCollapsed = request.globalStatsCollapsed() != null && request.globalStatsCollapsed();
         preference.userManagementCollapsed = request.userManagementCollapsed() != null && request.userManagementCollapsed();
         preference.userSectionOrder = joinSectionOrder(normalizeSectionOrder(request.userSectionOrder(), DEFAULT_USER_SECTION_ORDER));
@@ -82,11 +88,14 @@ public class UserUiPreferenceService {
                 preference.layoutEditEnabled,
                 preference.quickSetupCollapsed,
                 preference.quickSetupDismissed,
+                preference.quickSetupPinnedVisible,
                 preference.gmailDestinationCollapsed,
                 preference.userPollingCollapsed,
                 preference.userStatsCollapsed,
                 preference.sourceBridgesCollapsed,
+                preference.adminQuickSetupCollapsed,
                 preference.systemDashboardCollapsed,
+                preference.oauthAppsCollapsed,
                 preference.globalStatsCollapsed,
                 preference.userManagementCollapsed,
                 normalizeSectionOrder(splitSectionOrder(preference.userSectionOrder), DEFAULT_USER_SECTION_ORDER),

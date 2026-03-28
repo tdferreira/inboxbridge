@@ -13,7 +13,7 @@ import jakarta.persistence.Table;
  *
  * <p>The environment remains the source of default values. This table only
  * stores admin-selected overrides for the poll enabled flag, scheduler
- * interval, and mailbox fetch window.</p>
+ * interval, mailbox fetch window, and manual trigger rate limiting.</p>
  */
 @Entity
 @Table(name = "system_polling_setting")
@@ -32,6 +32,12 @@ public class SystemPollingSetting extends PanacheEntityBase {
 
     @Column(name = "fetch_window_override")
     public Integer fetchWindowOverride;
+
+    @Column(name = "manual_trigger_limit_count_override")
+    public Integer manualTriggerLimitCountOverride;
+
+    @Column(name = "manual_trigger_limit_window_seconds_override")
+    public Integer manualTriggerLimitWindowSecondsOverride;
 
     @Column(name = "updated_at", nullable = false)
     public Instant updatedAt;

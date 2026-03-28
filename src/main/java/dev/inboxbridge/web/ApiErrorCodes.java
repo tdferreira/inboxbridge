@@ -17,6 +17,7 @@ final class ApiErrorCodes {
         if (message.equals("Register a passkey before removing the password.")) return "account_register_passkey_first";
         if (message.equals("New password confirmation does not match")) return "password_confirmation_mismatch";
         if (message.equals("Username already exists")) return "username_already_exists";
+        if (message.equals("Unknown user id")) return "user_unknown";
         if (message.equals("Mail fetcher ID already exists")) return "mail_fetcher_id_exists";
         if (message.equals("Password is required")) return "password_required";
         if (message.equals("OAuth refresh token is required or connect provider OAuth first")) return "oauth_refresh_token_required";
@@ -61,6 +62,9 @@ final class ApiErrorCodes {
         if (message.equals("Password must contain at least one lowercase letter")) return "password_missing_lowercase";
         if (message.equals("Password must contain at least one number")) return "password_missing_number";
         if (message.equals("Password must contain at least one special character")) return "password_missing_special";
+        if (message.equals("Admins cannot remove their own admin rights.")) return "admin_remove_own_role_forbidden";
+        if (message.equals("Admins cannot delete their own account.")) return "admin_delete_self_forbidden";
+        if (message.equals("At least one approved active admin must remain.")) return "last_active_admin_required";
         if (normalized.contains("authenticate failed")
                 || normalized.contains("authenticationfailed")
                 || normalized.contains("login failed")

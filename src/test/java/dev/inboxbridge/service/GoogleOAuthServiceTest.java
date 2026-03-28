@@ -28,7 +28,8 @@ class GoogleOAuthServiceTest {
                         "client-id",
                         "client-secret",
                         "previous-refresh",
-                        "https://localhost:3000/api/google-oauth/callback"),
+                        "https://localhost:3000/api/google-oauth/callback",
+                        GoogleOAuthService.GMAIL_TARGET_SCOPE),
                 "auth-code");
 
         assertTrue(response.sameLinkedAccount());

@@ -16,7 +16,9 @@ import dev.inboxbridge.service.AppUserService;
 import dev.inboxbridge.service.ApplicationModeService;
 import dev.inboxbridge.service.AuthService;
 import dev.inboxbridge.service.MicrosoftOAuthService;
+import dev.inboxbridge.service.OAuthProviderRegistryService;
 import dev.inboxbridge.service.PasskeyService;
+import dev.inboxbridge.service.SystemOAuthAppSettingsService;
 import jakarta.inject.Inject;
 import jakarta.ws.rs.BadRequestException;
 import jakarta.ws.rs.Consumes;
@@ -55,12 +57,22 @@ public class AuthResource {
     @Inject
     MicrosoftOAuthService microsoftOAuthService;
 
+    @Inject
+    SystemOAuthAppSettingsService systemOAuthAppSettingsService;
+
+    @Inject
+    OAuthProviderRegistryService oAuthProviderRegistryService;
+
     @GET
     @Path("/options")
     public AuthUiOptionsResponse options() {
         return new AuthUiOptionsResponse(
                 applicationModeService.multiUserEnabled(),
-                microsoftOAuthService.clientConfigured());
+                microsoftOAuthService.clientConfigured(),
+                systemOAuthAppSettingsService.googleClientConfigured(),
+                oAuthProviderRegistryService.configuredSourceProviders().stream()
+                        .map(Enum::name)
+                        .toList());
     }
 
     @POST

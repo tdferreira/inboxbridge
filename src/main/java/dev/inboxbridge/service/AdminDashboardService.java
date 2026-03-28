@@ -46,6 +46,9 @@ public class AdminDashboardService {
     @Inject
     PollingStatsService pollingStatsService;
 
+    @Inject
+    SystemOAuthAppSettingsService systemOAuthAppSettingsService;
+
     public AdminDashboardResponse dashboard() {
         PollingSettingsService.EffectivePollingSettings effectivePolling = pollingSettingsService.effectiveSettings();
         Map<String, ImportStats> importStatsBySource = new HashMap<>();
@@ -141,30 +144,24 @@ public class AdminDashboardService {
     }
 
     private boolean gmailClientConfigured() {
-        return !config.gmail().clientId().isBlank()
-                && !"replace-me".equals(config.gmail().clientId())
-                && !config.gmail().clientSecret().isBlank()
-                && !"replace-me".equals(config.gmail().clientSecret());
+        return systemOAuthAppSettingsService.googleClientConfigured();
     }
 
     private String googleTokenStorageMode() {
         if (oAuthCredentialService.secureStorageConfigured() && oAuthCredentialService.findGoogleCredential().isPresent()) {
             return "DATABASE";
         }
-        if (!config.gmail().refreshToken().isBlank() && !"replace-me".equals(config.gmail().refreshToken())) {
+        if (!systemOAuthAppSettingsService.googleRefreshToken().isBlank() && !"replace-me".equals(systemOAuthAppSettingsService.googleRefreshToken())) {
             return "ENVIRONMENT";
         }
         return oAuthCredentialService.secureStorageConfigured() ? "CONFIGURED_BUT_EMPTY" : "NOT_CONFIGURED";
     }
 
-    private String tokenStorageMode(BridgeConfig.Source source, OAuthCredentialService.StoredOAuthCredential microsoftCredential) {
+    private String tokenStorageMode(BridgeConfig.Source source, OAuthCredentialService.StoredOAuthCredential oauthCredential) {
         if (source.authMethod() == BridgeConfig.AuthMethod.PASSWORD) {
             return "PASSWORD";
         }
-        if (source.oauthProvider() != BridgeConfig.OAuthProvider.MICROSOFT) {
-            return "UNKNOWN";
-        }
-        if (microsoftCredential != null) {
+        if (oauthCredential != null) {
             return "DATABASE";
         }
         if (source.oauthRefreshToken().isPresent() && !source.oauthRefreshToken().orElse("").isBlank()) {
@@ -174,10 +171,14 @@ public class AdminDashboardService {
     }
 
     private OAuthCredentialService.StoredOAuthCredential microsoftCredential(BridgeConfig.Source source) {
-        if (source.oauthProvider() != BridgeConfig.OAuthProvider.MICROSOFT || !oAuthCredentialService.secureStorageConfigured()) {
+        if (!oAuthCredentialService.secureStorageConfigured()) {
             return null;
         }
-        return oAuthCredentialService.findMicrosoftCredential(source.id()).orElse(null);
+        return switch (source.oauthProvider()) {
+            case MICROSOFT -> oAuthCredentialService.findMicrosoftCredential(source.id()).orElse(null);
+            case GOOGLE -> oAuthCredentialService.findGoogleCredential("source-google:" + source.id()).orElse(null);
+            default -> null;
+        };
     }
 
     private AdminPollEventSummary sanitizeLastEvent(

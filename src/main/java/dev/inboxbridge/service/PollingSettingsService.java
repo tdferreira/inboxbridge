@@ -21,6 +21,8 @@ import jakarta.transaction.Transactional;
 public class PollingSettingsService {
 
     public static final Duration MIN_POLL_INTERVAL = Duration.ofSeconds(5);
+    public static final int DEFAULT_MANUAL_TRIGGER_LIMIT_COUNT = 5;
+    public static final int DEFAULT_MANUAL_TRIGGER_LIMIT_WINDOW_SECONDS = 60;
 
     @Inject
     BridgeConfig bridgeConfig;
@@ -46,6 +48,20 @@ public class PollingSettingsService {
                 effectiveFetchWindow);
     }
 
+    public ManualPollRateLimit effectiveManualPollRateLimit() {
+        SystemPollingSetting setting = repository.findSingleton().orElse(null);
+        int effectiveCount = setting != null && setting.manualTriggerLimitCountOverride != null
+                ? setting.manualTriggerLimitCountOverride
+                : DEFAULT_MANUAL_TRIGGER_LIMIT_COUNT;
+        int effectiveWindowSeconds = setting != null && setting.manualTriggerLimitWindowSecondsOverride != null
+                ? setting.manualTriggerLimitWindowSecondsOverride
+                : DEFAULT_MANUAL_TRIGGER_LIMIT_WINDOW_SECONDS;
+        return new ManualPollRateLimit(
+                effectiveCount,
+                Duration.ofSeconds(effectiveWindowSeconds),
+                effectiveWindowSeconds);
+    }
+
     public AdminPollingSettingsView view() {
         SystemPollingSetting setting = repository.findSingleton().orElse(null);
         EffectivePollingSettings effective = effectiveSettings();
@@ -58,7 +74,13 @@ public class PollingSettingsService {
                 effective.pollIntervalText(),
                 bridgeConfig.fetchWindow(),
                 setting == null ? null : setting.fetchWindowOverride,
-                effective.fetchWindow());
+                effective.fetchWindow(),
+                DEFAULT_MANUAL_TRIGGER_LIMIT_COUNT,
+                setting == null ? null : setting.manualTriggerLimitCountOverride,
+                effectiveManualPollRateLimit().maxRuns(),
+                DEFAULT_MANUAL_TRIGGER_LIMIT_WINDOW_SECONDS,
+                setting == null ? null : setting.manualTriggerLimitWindowSecondsOverride,
+                effectiveManualPollRateLimit().windowSeconds());
     }
 
     @Transactional
@@ -70,6 +92,9 @@ public class PollingSettingsService {
         setting.pollEnabledOverride = request.pollEnabledOverride();
         setting.pollIntervalOverride = normalizeIntervalOverride(request.pollIntervalOverride());
         setting.fetchWindowOverride = normalizeFetchWindowOverride(request.fetchWindowOverride());
+        setting.manualTriggerLimitCountOverride = normalizeManualTriggerLimitCountOverride(request.manualTriggerLimitCountOverride());
+        setting.manualTriggerLimitWindowSecondsOverride = normalizeManualTriggerLimitWindowSecondsOverride(
+                request.manualTriggerLimitWindowSecondsOverride());
         setting.updatedAt = Instant.now();
         repository.persist(setting);
         return view();
@@ -90,6 +115,26 @@ public class PollingSettingsService {
         }
         if (override < 1 || override > 500) {
             throw new IllegalArgumentException("Fetch window override must be between 1 and 500 messages");
+        }
+        return override;
+    }
+
+    private Integer normalizeManualTriggerLimitCountOverride(Integer override) {
+        if (override == null) {
+            return null;
+        }
+        if (override < 1 || override > 100) {
+            throw new IllegalArgumentException("Manual poll limit must be between 1 and 100 runs");
+        }
+        return override;
+    }
+
+    private Integer normalizeManualTriggerLimitWindowSecondsOverride(Integer override) {
+        if (override == null) {
+            return null;
+        }
+        if (override < 10 || override > 3600) {
+            throw new IllegalArgumentException("Manual poll rate-limit window must be between 10 and 3600 seconds");
         }
         return override;
     }
@@ -139,5 +184,14 @@ public class PollingSettingsService {
             String pollIntervalText,
             Duration pollInterval,
             int fetchWindow) {
+    }
+
+    /**
+     * Effective resolved manual trigger throttling settings.
+     */
+    public record ManualPollRateLimit(
+            int maxRuns,
+            Duration window,
+            int windowSeconds) {
     }
 }

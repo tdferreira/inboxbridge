@@ -1,6 +1,7 @@
 package dev.inboxbridge.web;
 
 import dev.inboxbridge.dto.PollRunResult;
+import dev.inboxbridge.security.CurrentUserContext;
 import dev.inboxbridge.security.RequireAuth;
 import dev.inboxbridge.service.PollingService;
 import jakarta.inject.Inject;
@@ -17,9 +18,12 @@ public class PollingResource {
     @Inject
     PollingService pollingService;
 
+    @Inject
+    CurrentUserContext currentUserContext;
+
     @POST
     @Path("/run")
     public PollRunResult runNow() {
-        return pollingService.runPoll("manual-api");
+        return pollingService.runPollForUser(currentUserContext.user(), "manual-api");
     }
 }

@@ -10,6 +10,8 @@ import org.junit.jupiter.api.Test;
 
 import dev.inboxbridge.dto.AdminResetPasswordRequest;
 import dev.inboxbridge.dto.PollingTimelineBundleView;
+import dev.inboxbridge.dto.SystemOAuthAppSettingsView;
+import dev.inboxbridge.dto.UpdateApplicationModeRequest;
 import dev.inboxbridge.dto.UpdateUserRequest;
 import dev.inboxbridge.dto.UserGmailConfigView;
 import dev.inboxbridge.dto.UserPollingSettingsView;
@@ -24,6 +26,7 @@ import dev.inboxbridge.service.PollingStatsService;
 import dev.inboxbridge.service.UserBridgeService;
 import dev.inboxbridge.service.UserGmailConfigService;
 import dev.inboxbridge.service.UserPollingSettingsService;
+import dev.inboxbridge.service.SystemOAuthAppSettingsService;
 import jakarta.ws.rs.BadRequestException;
 
 class UserManagementResourceTest {
@@ -91,6 +94,30 @@ class UserManagementResourceTest {
         assertEquals(1, response.importTimelines().get("custom").size());
     }
 
+    @Test
+    void updateModeDelegatesToApplicationModeService() {
+        UserManagementResource resource = resource();
+        FakeApplicationModeService applicationModeService = new FakeApplicationModeService(true);
+        resource.applicationModeService = applicationModeService;
+
+        SystemOAuthAppSettingsView response = resource.updateMode(new UpdateApplicationModeRequest(false));
+
+        assertEquals(Boolean.FALSE, applicationModeService.lastRequestedMode);
+        assertEquals(false, response.effectiveMultiUserEnabled());
+    }
+
+    @Test
+    void deleteUserDelegatesToService() {
+        UserManagementResource resource = resource();
+        FakeAppUserService appUserService = new FakeAppUserService(null);
+        resource.appUserService = appUserService;
+
+        java.util.Map<String, Object> payload = resource.deleteUser(7L);
+
+        assertEquals(Boolean.TRUE, payload.get("deleted"));
+        assertEquals(7L, appUserService.deletedUserId);
+    }
+
     private UserManagementResource resource() {
         UserManagementResource resource = new UserManagementResource();
         resource.currentUserContext = new CurrentUserContext();
@@ -106,11 +133,13 @@ class UserManagementResourceTest {
         resource.userPollingSettingsService = new FakeUserPollingSettingsService();
         resource.passkeyService = new FakePasskeyService();
         resource.pollingStatsService = new PollingStatsService();
+        resource.systemOAuthAppSettingsService = new FakeSystemOAuthAppSettingsService();
         return resource;
     }
 
     private static final class FakeAppUserService extends AppUserService {
         private final String updateError;
+        private Long deletedUserId;
 
         private FakeAppUserService(String updateError) {
             this.updateError = updateError;
@@ -157,6 +186,11 @@ class UserManagementResourceTest {
             user.approved = true;
             return Optional.of(user);
         }
+
+        @Override
+        public void deleteUser(AppUser actor, Long userId) {
+            deletedUserId = userId;
+        }
     }
 
     private static final class FakePasskeyService extends PasskeyService {
@@ -173,6 +207,7 @@ class UserManagementResourceTest {
 
     private static final class FakeApplicationModeService extends ApplicationModeService {
         private final boolean enabled;
+        private Boolean lastRequestedMode;
 
         private FakeApplicationModeService(boolean enabled) {
             this.enabled = enabled;
@@ -181,6 +216,29 @@ class UserManagementResourceTest {
         @Override
         public boolean multiUserEnabled() {
             return enabled;
+        }
+
+        @Override
+        public void setMultiUserEnabled(AppUser actor, boolean enabled) {
+            lastRequestedMode = enabled;
+        }
+    }
+
+    private static final class FakeSystemOAuthAppSettingsService extends SystemOAuthAppSettingsService {
+        @Override
+        public SystemOAuthAppSettingsView view() {
+            return new SystemOAuthAppSettingsView(
+                    false,
+                    Boolean.FALSE,
+                    "me",
+                    "https://localhost:3000/api/google-oauth/callback",
+                    "",
+                    false,
+                    false,
+                    "",
+                    "https://localhost:3000/api/microsoft-oauth/callback",
+                    false,
+                    true);
         }
     }
 

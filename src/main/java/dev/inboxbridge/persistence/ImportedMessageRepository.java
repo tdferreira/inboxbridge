@@ -6,6 +6,7 @@ import java.util.Optional;
 
 import io.quarkus.hibernate.orm.panache.PanacheRepository;
 import jakarta.enterprise.context.ApplicationScoped;
+import jakarta.transaction.Transactional;
 
 @ApplicationScoped
 public class ImportedMessageRepository implements PanacheRepository<ImportedMessage> {
@@ -91,5 +92,13 @@ public class ImportedMessageRepository implements PanacheRepository<ImportedMess
                 since)
                 .project(Instant.class)
                 .list();
+    }
+
+    @Transactional
+    public long deleteBySourceAccountIds(List<String> sourceAccountIds) {
+        if (sourceAccountIds == null || sourceAccountIds.isEmpty()) {
+            return 0;
+        }
+        return delete("sourceAccountId in ?1", sourceAccountIds);
     }
 }

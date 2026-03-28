@@ -34,6 +34,9 @@ public class RuntimeBridgeService {
     @Inject
     OAuthCredentialService oAuthCredentialService;
 
+    @Inject
+    SystemOAuthAppSettingsService systemOAuthAppSettingsService;
+
     public Optional<RuntimeBridge> findSystemBridge(String sourceId) {
         return envSourceService.configuredSources().stream()
                 .map(EnvSourceService.IndexedSource::source)
@@ -70,6 +73,17 @@ public class RuntimeBridgeService {
         return bridges;
     }
 
+    public List<RuntimeBridge> listEnabledForUser(AppUser actor) {
+        List<RuntimeBridge> bridges = new ArrayList<>();
+        for (UserBridge bridge : userBridgeService.listEnabledBridges()) {
+            if (!bridge.userId.equals(actor.id)) {
+                continue;
+            }
+            toRuntimeBridge(bridge).ifPresent(bridges::add);
+        }
+        return bridges;
+    }
+
     public boolean gmailAccountLinked(RuntimeBridge bridge) {
         GmailTarget target = bridge.gmailTarget();
         if (target == null) {
@@ -95,11 +109,11 @@ public class RuntimeBridgeService {
                 "gmail-destination",
                 null,
                 "system",
-                config.gmail().destinationUser(),
-                config.gmail().clientId(),
-                config.gmail().clientSecret(),
-                config.gmail().refreshToken(),
-                config.gmail().redirectUri(),
+                systemOAuthAppSettingsService.googleDestinationUser(),
+                systemOAuthAppSettingsService.googleClientId(),
+                systemOAuthAppSettingsService.googleClientSecret(),
+                systemOAuthAppSettingsService.googleRefreshToken(),
+                systemOAuthAppSettingsService.googleRedirectUri(),
                 config.gmail().createMissingLabels(),
                 config.gmail().neverMarkSpam(),
                 config.gmail().processForCalendar());
@@ -130,10 +144,23 @@ public class RuntimeBridgeService {
     private Optional<RuntimeBridge> toRuntimeBridge(UserBridge bridge) {
         Optional<AppUser> owner = appUserRepository.findByIdOptional(bridge.userId);
         Optional<UserGmailConfigService.ResolvedUserGmailConfig> gmailConfig = userGmailConfigService.resolveForUser(bridge.userId);
-        if (owner.isEmpty() || gmailConfig.isEmpty()) {
+        if (owner.isEmpty()) {
             return Optional.empty();
         }
-        UserGmailConfigService.ResolvedUserGmailConfig userTarget = gmailConfig.get();
+        GmailTarget gmailTarget = gmailConfig
+                .map(userTarget -> new GmailTarget(
+                        "user-gmail:" + bridge.userId,
+                        bridge.userId,
+                        owner.get().username,
+                        userTarget.destinationUser(),
+                        userTarget.clientId(),
+                        userTarget.clientSecret(),
+                        userTarget.refreshToken(),
+                        userTarget.redirectUri(),
+                        userTarget.createMissingLabels(),
+                        userTarget.neverMarkSpam(),
+                        userTarget.processForCalendar()))
+                .orElse(null);
         return Optional.of(new RuntimeBridge(
                 bridge.bridgeId,
                 "USER",
@@ -152,17 +179,6 @@ public class RuntimeBridgeService {
                 Optional.ofNullable(bridge.folderName),
                 bridge.unreadOnly,
                 Optional.ofNullable(bridge.customLabel),
-                new GmailTarget(
-                        "user-gmail:" + bridge.userId,
-                        bridge.userId,
-                        owner.get().username,
-                        userTarget.destinationUser(),
-                        userTarget.clientId(),
-                        userTarget.clientSecret(),
-                        userTarget.refreshToken(),
-                        userTarget.redirectUri(),
-                        userTarget.createMissingLabels(),
-                        userTarget.neverMarkSpam(),
-                        userTarget.processForCalendar())));
+                gmailTarget));
     }
 }

@@ -30,6 +30,25 @@
   align-items: center;
 }
 
+.hero-notifications-button {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.6rem;
+}
+
+.hero-notifications-badge {
+  min-width: 1.35rem;
+  height: 1.35rem;
+  padding: 0 0.35rem;
+  border-radius: 999px;
+  background: #a43f2f;
+  color: #fff;
+  font-size: 0.75rem;
+  font-weight: 800;
+  line-height: 1.35rem;
+  text-align: center;
+}
+
 @media (max-width: 760px) {
   .hero-panel {
     flex-direction: column;

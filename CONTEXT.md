@@ -66,7 +66,7 @@ Bootstrap auth behavior:
 
 - default admin user is `admin`
 - default password is `nimda`
-- the deployment can run in multi-user mode or single-user mode through `BRIDGE_MULTI_USER_ENABLED`
+- the deployment can run in multi-user mode or single-user mode through `MULTI_USER_ENABLED`
 - bootstrap admin is forced to change password
 - the login screen no longer exposes live bootstrap-account state to unauthenticated visitors; bootstrap credentials are documented, but runtime bootstrap status is not published through a public endpoint
 - users can register WebAuthn passkeys after signing in
@@ -81,8 +81,10 @@ Bootstrap auth behavior:
 - self-registration now starts from a focused modal workflow on the unauthenticated screen instead of leaving the request form always visible
 - when single-user mode is enabled, self-registration and admin user-management endpoints are disabled and the UI hides those controls entirely
 - single-user mode still keeps the rest of the admin control plane visible for the bootstrap admin, including Gmail setup, mail fetchers, security tools, and poller settings
+- switching to single-user mode from the admin UI now deactivates every account except the acting admin and records which accounts were disabled by that mode change, so re-enabling multi-user mode can reactivate those accounts later
 - admins can approve, suspend, reactivate, promote, or demote users from the admin UI
 - admins can reset another user's password to a temporary value and wipe that user's passkeys
+- admins can now also delete any other user account, but cannot delete themselves from the admin UI
 - the admin password reset workflow now uses a modal dialog instead of an inline form in the user-management panel
 - user creation now uses a dedicated modal dialog instead of an inline form inside the admin section
 - the create-user UI applies duplicate-username checks and the same password-policy checklist used elsewhere in the application
@@ -333,7 +335,10 @@ Current backoff behavior is heuristic but practical:
 - transient network failures trigger a medium cooldown
 - repeated failures increase the cooldown window with exponential growth up to a capped maximum
 
-Manual poll requests bypass the normal interval gate, but they still respect explicit poll-disable settings and active cooldown windows.
+Manual poll requests now split into two behaviors:
+
+- single-source manual runs bypass the normal interval gate and cooldown window for that one selected mail account
+- broader manual runs (`My Polling Settings` for one user, or `Global Polling Settings` for all users) still respect cooldown and next-window checks, and they are protected by an admin-configurable manual rate limit that defaults to 5 runs per 60 seconds per signed-in user
 
 ### 12. Actionable admin-ui notifications
 
@@ -619,6 +624,7 @@ Current live config issue in this workspace:
 - Once all setup steps are complete, the guide can also be hidden entirely; if any step later becomes invalid again, the guide is shown again automatically.
 - The Quick Setup Guide now says `Add at least one email account`, and its provider OAuth step is only rendered when at least one configured source account actually uses OAuth.
 - The Quick Setup Guide now renumbers visible steps dynamically, so conditional steps never leave numbering gaps.
+- The `Administration` workspace now keeps its own admin-specific quick setup guide centered on shared Google OAuth, user creation in multi-user mode, and verifying the first successful import.
 - Language selection, layout persistence, and reset-layout controls now live in a dedicated preferences modal opened from the header instead of an always-visible inline selector.
 - The header `Security` action now opens the password and passkey tools in a dedicated modal with separate tabs, instead of rendering both tools inline in the page.
 - The Google setup help panel is fully localized across the supported admin-ui languages.

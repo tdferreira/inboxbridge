@@ -8,6 +8,7 @@ import java.util.stream.Collectors;
 
 import io.quarkus.hibernate.orm.panache.PanacheRepository;
 import jakarta.enterprise.context.ApplicationScoped;
+import jakarta.transaction.Transactional;
 
 @ApplicationScoped
 public class SourcePollingStateRepository implements PanacheRepository<SourcePollingState> {
@@ -22,5 +23,13 @@ public class SourcePollingStateRepository implements PanacheRepository<SourcePol
         }
         return list("sourceId in ?1", sourceIds).stream()
                 .collect(Collectors.toMap(state -> state.sourceId, Function.identity()));
+    }
+
+    @Transactional
+    public long deleteBySourceIds(List<String> sourceIds) {
+        if (sourceIds == null || sourceIds.isEmpty()) {
+            return 0;
+        }
+        return delete("sourceId in ?1", sourceIds);
     }
 }

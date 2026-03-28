@@ -83,6 +83,7 @@ describe('UserListItem', () => {
         isExpanded
         isLoading={false}
         locale="pt-PT"
+        onDeleteUser={vi.fn()}
         onForcePasswordChange={vi.fn()}
         onOpenResetPasswordDialog={vi.fn()}
         onResetUserPasskeys={vi.fn()}
@@ -114,6 +115,7 @@ describe('UserListItem', () => {
         isExpanded={false}
         isLoading={false}
         locale="pt-PT"
+        onDeleteUser={vi.fn()}
         onForcePasswordChange={vi.fn()}
         onOpenResetPasswordDialog={vi.fn()}
         onResetUserPasskeys={vi.fn()}
@@ -135,6 +137,7 @@ describe('UserListItem', () => {
     expect(menuQueries.getByRole('button', { name: 'Forçar alteração da palavra-passe' })).toBeInTheDocument()
     expect(menuQueries.getByRole('button', { name: 'Repor palavra-passe' })).toBeInTheDocument()
     expect(menuQueries.getByRole('button', { name: 'Repor passkeys' })).toBeInTheDocument()
+    expect(menuQueries.getByRole('button', { name: 'Eliminar utilizador' })).toBeInTheDocument()
   })
 
   it('closes the contextual menu when the trigger scrolls out of view', async () => {
@@ -162,6 +165,7 @@ describe('UserListItem', () => {
         isExpanded={false}
         isLoading={false}
         locale="en"
+        onDeleteUser={vi.fn()}
         onForcePasswordChange={vi.fn()}
         onOpenResetPasswordDialog={vi.fn()}
         onResetUserPasskeys={vi.fn()}
@@ -216,6 +220,7 @@ describe('UserListItem', () => {
         isExpanded
         isLoading={false}
         locale="en"
+        onDeleteUser={vi.fn()}
         onForcePasswordChange={vi.fn()}
         onOpenResetPasswordDialog={vi.fn()}
         onResetUserPasskeys={vi.fn()}

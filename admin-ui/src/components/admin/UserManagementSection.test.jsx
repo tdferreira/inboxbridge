@@ -20,6 +20,7 @@ function renderUi(overrides = {}) {
       onForcePasswordChange={vi.fn()}
       onOpenCreateUserDialog={vi.fn()}
       onOpenResetPasswordDialog={vi.fn()}
+      onDeleteUser={vi.fn()}
       onResetUserPasskeys={vi.fn()}
       onToggleExpandUser={vi.fn()}
       onToggleUserActive={vi.fn()}
@@ -86,12 +87,14 @@ describe('UserManagementSection', () => {
     const onForcePasswordChange = vi.fn()
     const onOpenResetPasswordDialog = vi.fn()
     const onResetUserPasskeys = vi.fn()
+    const onDeleteUser = vi.fn()
 
     renderUi({
       onToggleUserActive,
       onForcePasswordChange,
       onOpenResetPasswordDialog,
-      onResetUserPasskeys
+      onResetUserPasskeys,
+      onDeleteUser
     })
 
     fireEvent.click(screen.getByRole('button', { name: 'User actions' }))
@@ -102,6 +105,7 @@ describe('UserManagementSection', () => {
     expect(menuQueries.queryByRole('button', { name: 'Collapse section' })).not.toBeInTheDocument()
     expect(menuQueries.getByRole('button', { name: 'Make regular user' })).toBeDisabled()
     expect(menuQueries.getByRole('button', { name: 'Reset passkeys' })).toBeDisabled()
+    expect(menuQueries.getByRole('button', { name: 'Delete user' })).toBeDisabled()
 
     fireEvent.click(menuQueries.getByRole('button', { name: 'Suspend user' }))
     fireEvent.click(screen.getByRole('button', { name: 'User actions' }))
@@ -115,6 +119,7 @@ describe('UserManagementSection', () => {
     expect(onForcePasswordChange).toHaveBeenCalledWith(expect.objectContaining({ username: 'admin' }))
     expect(onOpenResetPasswordDialog).toHaveBeenCalledWith(expect.objectContaining({ username: 'admin' }))
     expect(onResetUserPasskeys).not.toHaveBeenCalled()
+    expect(onDeleteUser).not.toHaveBeenCalled()
   })
 
   it('opens the user contextual menu when the actions button is clicked', () => {
@@ -142,5 +147,23 @@ describe('UserManagementSection', () => {
     renderUi({ sectionLoading: true })
 
     expect(screen.getAllByText('Refreshing section…').length).toBeGreaterThan(0)
+  })
+
+  it('sorts users by username before rendering the list', () => {
+    renderUi({
+      expandedUserId: null,
+      users: [
+        { id: 2, username: 'zoe', role: 'USER', approved: true, active: true, bridgeCount: 0 },
+        { id: 1, username: 'alice', role: 'ADMIN', approved: true, active: true, bridgeCount: 0 },
+        { id: 3, username: 'John2', role: 'USER', approved: true, active: true, bridgeCount: 0 },
+        { id: 4, username: 'john10', role: 'USER', approved: true, active: true, bridgeCount: 0 }
+      ]
+    })
+
+    const usernames = ['alice', 'John2', 'john10', 'zoe']
+      .map((username) => screen.getByText(username))
+      .map((element) => element.closest('.user-list-entry')?.querySelector('strong')?.textContent)
+
+    expect(usernames).toEqual(['alice', 'John2', 'john10', 'zoe'])
   })
 })

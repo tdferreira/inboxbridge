@@ -37,6 +37,7 @@ function FetcherListItem({
   fetcher,
   locale,
   onConfigurePolling,
+  onConnectOAuth,
   onConnectMicrosoft,
   onDelete,
   onEdit,
@@ -58,6 +59,8 @@ function FetcherListItem({
   const menuButtonRef = useRef(null)
   const isEnvManaged = fetcher.managementSource === 'ENVIRONMENT'
   const oauthConnected = fetcher.authMethod === 'OAUTH2' && fetcher.oauthConnected === true
+  const canConnectOAuth = fetcher.canConnectOAuth ?? fetcher.canConnectMicrosoft ?? false
+  const handleConnectOAuth = onConnectOAuth || ((bridgeId) => onConnectMicrosoft?.(bridgeId))
   const statsAvailable = hasMeaningfulStats(stats)
   const [statsCollapsed, setStatsCollapsed] = useState(!statsAvailable)
 
@@ -165,19 +168,48 @@ function FetcherListItem({
           )}
         </button>
         <div ref={menuContainerRef} className="fetcher-list-item-menu">
-          <button aria-label={t('bridges.actions')} className="secondary fetcher-menu-button" onClick={() => setMenuOpen((current) => !current)} ref={menuButtonRef} title={t('bridges.actions')} type="button">
-            <span aria-hidden="true" className="menu-icon-hamburger">
-              <span />
-              <span />
-              <span />
-            </span>
-          </button>
+          <div className="fetcher-list-item-actions">
+            <button
+              aria-label={t('bridge.runPollNow')}
+              className="icon-button fetcher-run-button"
+              disabled={pollLoading}
+              onClick={() => onRunPoll(fetcher)}
+              title={t('bridge.runPollNow')}
+              type="button"
+            >
+              {pollLoading ? (
+                <span aria-hidden="true" className="section-refresh-spinner" />
+              ) : (
+                <svg aria-hidden="true" className="fetcher-run-icon" viewBox="0 0 16 16">
+                  <path d="M4 3.5a.75.75 0 0 1 1.16-.63l7 4.5a.75.75 0 0 1 0 1.26l-7 4.5A.75.75 0 0 1 4 12.5z" fill="currentColor" />
+                </svg>
+              )}
+            </button>
+            <button aria-label={t('bridges.actions')} className="icon-button fetcher-menu-button" onClick={() => setMenuOpen((current) => !current)} ref={menuButtonRef} title={t('bridges.actions')} type="button">
+              <span aria-hidden="true" className="menu-icon-hamburger">
+                <span />
+                <span />
+                <span />
+              </span>
+            </button>
+          </div>
           {menuOpen ? (
             <div className="fetcher-menu" data-placement={menuPlacement} ref={menuPanelRef} style={menuStyle}>
-              <button className="secondary" disabled={pollLoading} onClick={() => { onRunPoll(fetcher.bridgeId); setMenuOpen(false) }} type="button">{t('bridge.runPollNow')}</button>
+              <button className="secondary" disabled={pollLoading} onClick={() => { onRunPoll(fetcher); setMenuOpen(false) }} type="button">{t('bridge.runPollNow')}</button>
               <button className="secondary" onClick={() => { onConfigurePolling(fetcher); setMenuOpen(false) }} type="button">{t('bridge.pollerSettings')}</button>
               {fetcher.canEdit ? <button className="secondary" onClick={() => { onEdit(fetcher); setMenuOpen(false) }} type="button">{t('bridge.edit')}</button> : null}
-              {fetcher.canConnectMicrosoft ? <button className="secondary" disabled={connectLoading} onClick={() => { onConnectMicrosoft(fetcher.bridgeId); setMenuOpen(false) }} type="button">{oauthConnected ? t('bridge.reconnectMicrosoft') : t('bridge.connectMicrosoft')}</button> : null}
+              {canConnectOAuth ? (
+                <button
+                  className="secondary"
+                  disabled={connectLoading}
+                  onClick={() => { handleConnectOAuth(fetcher.bridgeId, fetcher.oauthProvider); setMenuOpen(false) }}
+                  type="button"
+                >
+                  {oauthConnected
+                    ? t(fetcher.oauthProvider === 'GOOGLE' ? 'bridge.reconnectGoogle' : 'bridge.reconnectMicrosoft')
+                    : t(fetcher.oauthProvider === 'GOOGLE' ? 'bridge.connectGoogle' : 'bridge.connectMicrosoft')}
+                </button>
+              ) : null}
               {fetcher.canDelete ? <button className="danger" disabled={deleteLoading} onClick={() => { onDelete(fetcher.bridgeId); setMenuOpen(false) }} type="button">{t('bridge.delete')}</button> : null}
             </div>
           ) : null}

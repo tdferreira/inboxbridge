@@ -54,17 +54,24 @@
   position: relative;
 }
 
-.fetcher-menu-button {
-  width: 2.75rem;
-  min-width: 2.75rem;
-  height: 2.75rem;
-  min-height: 2.75rem;
-  padding: 0;
+.fetcher-list-item-actions {
   display: inline-flex;
-  align-items: center;
-  justify-content: center;
+  align-items: start;
+  gap: 8px;
+}
+
+.fetcher-menu-button {
   align-self: start;
   line-height: 1;
+}
+
+.fetcher-run-button {
+  align-self: start;
+}
+
+.fetcher-run-icon {
+  width: 0.95rem;
+  height: 0.95rem;
 }
 
 .fetcher-menu {

@@ -19,6 +19,7 @@ function LabeledField({ children, helpText, label }) {
 }
 
 function FetcherDialog({
+  availableOAuthProviders = [],
   bridgeForm,
   duplicateIdError = '',
   microsoftOAuthAvailable = true,
@@ -26,20 +27,28 @@ function FetcherDialog({
   onBridgeFormChange,
   onClose,
   onSave,
+  onSaveAndConnectOAuth,
   onTestConnection,
   saveLoading,
+  saveAndConnectLoading = false,
   t,
   testConnectionLoading = false,
   testResult = null
 }) {
+  const resolvedOAuthProviders = availableOAuthProviders.length
+    ? availableOAuthProviders
+    : (microsoftOAuthAvailable ? ['MICROSOFT'] : [])
   const [selectedPreset, setSelectedPreset] = useState('custom')
   const availablePresets = useMemo(
-    () => EMAIL_PROVIDER_PRESETS.filter((option) => microsoftOAuthAvailable || option.id !== 'outlook'),
-    [microsoftOAuthAvailable]
+    () => EMAIL_PROVIDER_PRESETS,
+    []
   )
   const effectivePresetId = availablePresets.some((option) => option.id === selectedPreset) ? selectedPreset : 'custom'
   const preset = useMemo(() => findEmailProviderPreset(effectivePresetId), [effectivePresetId])
   const usingPassword = bridgeForm.authMethod === 'PASSWORD'
+  const canUseOAuth = resolvedOAuthProviders.length > 0
+  const canLaunchProviderOAuth = !usingPassword && bridgeForm.oauthProvider !== 'NONE' && resolvedOAuthProviders.includes(bridgeForm.oauthProvider)
+  const providerLabel = bridgeForm.oauthProvider === 'GOOGLE' ? t('oauthProvider.google') : t('oauthProvider.microsoft')
   const dialogTitle = bridgeForm.bridgeId ? t('bridges.editDialogTitle', { bridgeId: bridgeForm.bridgeId }) : t('bridges.addDialogTitle')
   const initialSnapshotRef = useRef(JSON.stringify(bridgeForm))
   const isDirty = initialSnapshotRef.current !== JSON.stringify(bridgeForm)
@@ -89,7 +98,7 @@ function FetcherDialog({
         <LabeledField helpText={t('bridges.authMethodHelp')} label={t('bridges.authMethod')}>
           <select value={bridgeForm.authMethod} onChange={(event) => onBridgeFormChange((current) => ({ ...current, authMethod: event.target.value }))}>
             <option value="PASSWORD">{t('authMethod.password')}</option>
-            {(microsoftOAuthAvailable || bridgeForm.authMethod === 'OAUTH2') ? (
+            {(canUseOAuth || bridgeForm.authMethod === 'OAUTH2') ? (
               <option value="OAUTH2">{t('authMethod.oauth2')}</option>
             ) : null}
           </select>
@@ -97,7 +106,8 @@ function FetcherDialog({
         {!usingPassword ? (
           <LabeledField helpText={t('bridges.oauthProviderHelp')} label={t('bridges.oauthProvider')}>
             <select value={bridgeForm.oauthProvider} onChange={(event) => onBridgeFormChange((current) => ({ ...current, oauthProvider: event.target.value }))}>
-              <option value="MICROSOFT">{t('oauthProvider.microsoft')}</option>
+              {resolvedOAuthProviders.includes('GOOGLE') || bridgeForm.oauthProvider === 'GOOGLE' ? <option value="GOOGLE">{t('oauthProvider.google')}</option> : null}
+              {resolvedOAuthProviders.includes('MICROSOFT') || bridgeForm.oauthProvider === 'MICROSOFT' ? <option value="MICROSOFT">{t('oauthProvider.microsoft')}</option> : null}
             </select>
           </LabeledField>
         ) : null}
@@ -125,6 +135,12 @@ function FetcherDialog({
             placeholder={t('bridges.optionalManualToken')}
             showLabel={t('common.showField', { label: t('bridges.oauthRefreshToken') })}
           />
+        ) : null}
+        {canLaunchProviderOAuth ? (
+          <div className="muted-box full fetcher-oauth-setup-box">
+            <strong>{t('bridges.oauthSetupTitle')}</strong><br />
+            {t('bridges.oauthSetupBody', { provider: providerLabel })}
+          </div>
         ) : null}
         <LabeledField helpText={t('bridges.folderHelp')} label={t('bridges.folder')}>
           <input value={bridgeForm.folder} onChange={(event) => onBridgeFormChange((current) => ({ ...current, folder: event.target.value }))} />
@@ -157,6 +173,17 @@ function FetcherDialog({
           <LoadingButton className="secondary" isLoading={testConnectionLoading} loadingLabel={t('bridges.testConnectionLoading')} onClick={onTestConnection} type="button">
             {t('bridges.testConnection')}
           </LoadingButton>
+          {canLaunchProviderOAuth ? (
+            <LoadingButton
+              className="secondary"
+              isLoading={saveAndConnectLoading}
+              loadingLabel={t('bridges.saveAndConnectOAuthLoading', { provider: providerLabel })}
+              onClick={onSaveAndConnectOAuth}
+              type="button"
+            >
+              {t('bridges.saveAndConnectOAuth', { provider: providerLabel })}
+            </LoadingButton>
+          ) : null}
           <LoadingButton className="primary" isLoading={saveLoading} loadingLabel={t('bridges.saveLoading')} type="submit">
             {bridgeForm.bridgeId ? t('bridges.save') : t('bridges.add')}
           </LoadingButton>

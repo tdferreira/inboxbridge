@@ -20,6 +20,7 @@ import java.util.stream.Collectors;
 import com.fasterxml.jackson.databind.ObjectMapper;
 
 import dev.inboxbridge.config.BridgeConfig;
+import dev.inboxbridge.domain.RuntimeBridge;
 import dev.inboxbridge.dto.GoogleTokenExchangeResponse;
 import dev.inboxbridge.dto.GoogleTokenResponse;
 import dev.inboxbridge.persistence.UserGmailConfigRepository;
@@ -32,8 +33,11 @@ public class GoogleOAuthService {
             "The linked Gmail account no longer grants InboxBridge access. The saved Gmail OAuth link was cleared. Reconnect it from My Gmail Account.";
     public static final String SYSTEM_GMAIL_ACCESS_REVOKED_MESSAGE =
             "The configured Gmail account no longer grants InboxBridge access. Reconnect Gmail OAuth or update the configured refresh token.";
+    public static final String SOURCE_GOOGLE_ACCESS_REVOKED_MESSAGE =
+            "The linked Google account no longer grants InboxBridge access. Reconnect it from this mail account.";
 
-    private static final String OAUTH_SCOPE = "https://www.googleapis.com/auth/gmail.insert https://www.googleapis.com/auth/gmail.labels";
+    public static final String GMAIL_TARGET_SCOPE = "https://www.googleapis.com/auth/gmail.insert https://www.googleapis.com/auth/gmail.labels";
+    public static final String GMAIL_SOURCE_SCOPE = "https://mail.google.com/";
     private static final Duration STATE_TTL = Duration.ofMinutes(10);
 
     @Inject
@@ -48,6 +52,9 @@ public class GoogleOAuthService {
     @Inject
     UserGmailConfigRepository userGmailConfigRepository;
 
+    @Inject
+    SystemOAuthAppSettingsService systemOAuthAppSettingsService;
+
     private final HttpClient httpClient = HttpClient.newBuilder()
             .connectTimeout(Duration.ofSeconds(20))
             .build();
@@ -59,14 +66,19 @@ public class GoogleOAuthService {
         return buildAuthorizationUrl(systemProfile());
     }
 
+    public boolean clientConfigured() {
+        return systemOAuthAppSettingsService.googleClientConfigured();
+    }
+
     public GoogleOAuthProfile systemProfileForCallbacks() {
         return systemProfile();
     }
 
     public String buildAuthorizationUrl(GoogleOAuthProfile profile) {
+        requireConfiguredClient(profile);
         String redirectUri = urlEncode(profile.redirectUri());
         String clientId = urlEncode(profile.clientId());
-        String scope = urlEncode(OAUTH_SCOPE);
+        String scope = urlEncode(profile.scope());
         return "https://accounts.google.com/o/oauth2/v2/auth"
                 + "?response_type=code"
                 + "&access_type=offline"
@@ -101,6 +113,7 @@ public class GoogleOAuthService {
     }
 
     public GoogleTokenExchangeResponse exchangeAuthorizationCode(GoogleOAuthProfile profile, String code) {
+        requireConfiguredClient(profile);
         String body = formBody(Map.of(
                 "code", code,
                 "client_id", profile.clientId(),
@@ -109,7 +122,7 @@ public class GoogleOAuthService {
                 "grant_type", "authorization_code"));
         GoogleTokenResponse token = executeTokenRequest(profile, body, false);
         requireRefreshToken(token.refreshToken(), "Google");
-        validateGrantedScopes(token.scope());
+        validateGrantedScopes(token.scope(), profile.scope(), "Google", retryHintFor(profile));
         return storeExchangeResult(profile, token);
     }
 
@@ -117,7 +130,16 @@ public class GoogleOAuthService {
         return getAccessToken(systemProfile());
     }
 
+    public String getAccessToken(BridgeConfig.Source source) {
+        return getAccessToken(sourceProfile(source));
+    }
+
+    public String getAccessToken(RuntimeBridge bridge) {
+        return getAccessToken(sourceProfile(bridge));
+    }
+
     public String getAccessToken(GoogleOAuthProfile profile) {
+        requireConfiguredClient(profile);
         CachedToken current = cachedTokens.get(profile.subjectKey());
         if (current != null && Instant.now().isBefore(current.expiresAt.minusSeconds(30))) {
             return current.accessToken;
@@ -150,6 +172,24 @@ public class GoogleOAuthService {
 
     public void clearCachedToken(String subjectKey) {
         cachedTokens.remove(subjectKey);
+    }
+
+    public GoogleOAuthProfile sourceProfile(String sourceId, String refreshToken, String redirectUri) {
+        return new GoogleOAuthProfile(
+                "source-google:" + sourceId,
+                systemOAuthAppSettingsService.googleClientId(),
+                systemOAuthAppSettingsService.googleClientSecret(),
+                refreshToken == null ? "" : refreshToken,
+                redirectUri == null || redirectUri.isBlank() ? systemOAuthAppSettingsService.googleRedirectUri() : redirectUri,
+                GMAIL_SOURCE_SCOPE);
+    }
+
+    public GoogleOAuthProfile sourceProfile(BridgeConfig.Source source) {
+        return sourceProfile(source.id(), source.oauthRefreshToken().orElse(""), systemOAuthAppSettingsService.googleRedirectUri());
+    }
+
+    public GoogleOAuthProfile sourceProfile(RuntimeBridge bridge) {
+        return sourceProfile(bridge.id(), bridge.oauthRefreshToken(), systemOAuthAppSettingsService.googleRedirectUri());
     }
 
     public boolean revokeToken(String token) {
@@ -299,10 +339,6 @@ public class GoogleOAuthService {
         }
     }
 
-    void validateGrantedScopes(String grantedScopes) {
-        validateGrantedScopes(grantedScopes, OAUTH_SCOPE, "Google", "Retry the Google OAuth flow and grant every requested Gmail permission.");
-    }
-
     static void validateGrantedScopes(String grantedScopes, String requiredScopes, String provider, String retryHint) {
         Set<String> granted = tokenizeScopes(grantedScopes);
         Set<String> required = tokenizeScopes(requiredScopes);
@@ -380,7 +416,13 @@ public class GoogleOAuthService {
     }
 
     private String revokedAccessMessage(GoogleOAuthProfile profile) {
-        return parseUserId(profile.subjectKey()) != null ? GMAIL_ACCESS_REVOKED_MESSAGE : SYSTEM_GMAIL_ACCESS_REVOKED_MESSAGE;
+        if (parseUserId(profile.subjectKey()) != null) {
+            return GMAIL_ACCESS_REVOKED_MESSAGE;
+        }
+        if (isSourceSubject(profile.subjectKey())) {
+            return SOURCE_GOOGLE_ACCESS_REVOKED_MESSAGE;
+        }
+        return SYSTEM_GMAIL_ACCESS_REVOKED_MESSAGE;
     }
 
     private Long parseUserId(String subjectKey) {
@@ -391,6 +433,25 @@ public class GoogleOAuthService {
             return Long.parseLong(subjectKey.substring("user-gmail:".length()));
         } catch (NumberFormatException ignored) {
             return null;
+        }
+    }
+
+    private boolean isSourceSubject(String subjectKey) {
+        return subjectKey != null && subjectKey.startsWith("source-google:");
+    }
+
+    private String retryHintFor(GoogleOAuthProfile profile) {
+        return isSourceSubject(profile.subjectKey())
+                ? "Retry the Google OAuth flow and approve InboxBridge to access this Gmail mailbox."
+                : "Retry the Google OAuth flow and grant every requested Gmail permission.";
+    }
+
+    private void requireConfiguredClient(GoogleOAuthProfile profile) {
+        if (profile.clientId() == null || profile.clientId().isBlank() || "replace-me".equals(profile.clientId().trim())) {
+            throw new IllegalStateException("Google OAuth client id is not configured");
+        }
+        if (profile.clientSecret() == null || profile.clientSecret().isBlank() || "replace-me".equals(profile.clientSecret().trim())) {
+            throw new IllegalStateException("Google OAuth client secret is not configured");
         }
     }
 
@@ -413,16 +474,18 @@ public class GoogleOAuthService {
             String clientId,
             String clientSecret,
             String refreshToken,
-            String redirectUri) {
+            String redirectUri,
+            String scope) {
     }
 
     private GoogleOAuthProfile systemProfile() {
         return new GoogleOAuthProfile(
                 "gmail-destination",
-                config.gmail().clientId(),
-                config.gmail().clientSecret(),
-                config.gmail().refreshToken(),
-                config.gmail().redirectUri());
+                systemOAuthAppSettingsService.googleClientId(),
+                systemOAuthAppSettingsService.googleClientSecret(),
+                systemOAuthAppSettingsService.googleRefreshToken(),
+                systemOAuthAppSettingsService.googleRedirectUri(),
+                GMAIL_TARGET_SCOPE);
     }
 
     public CallbackValidation validateCallback(String state) {

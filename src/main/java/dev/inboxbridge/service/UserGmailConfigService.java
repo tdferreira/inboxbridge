@@ -24,6 +24,9 @@ public class UserGmailConfigService {
     SecretEncryptionService secretEncryptionService;
 
     @Inject
+    SystemOAuthAppSettingsService systemOAuthAppSettingsService;
+
+    @Inject
     BridgeConfig bridgeConfig;
 
     @Inject
@@ -183,7 +186,8 @@ public class UserGmailConfigService {
                             config.clientId(),
                             config.clientSecret(),
                             config.refreshToken(),
-                            nonBlankOrDefault(config.redirectUri(), defaultRedirectUri())));
+                            nonBlankOrDefault(config.redirectUri(), defaultRedirectUri()),
+                            GoogleOAuthService.GMAIL_TARGET_SCOPE));
             if (userManaged.isPresent()) {
                 return userManaged;
             }
@@ -199,14 +203,15 @@ public class UserGmailConfigService {
 
         return Optional.of(new GoogleOAuthService.GoogleOAuthProfile(
                 "user-gmail:" + userId,
-                bridgeConfig.gmail().clientId(),
-                bridgeConfig.gmail().clientSecret(),
+                systemOAuthAppSettingsService.googleClientId(),
+                systemOAuthAppSettingsService.googleClientSecret(),
                 "",
-                redirectUri));
+                redirectUri,
+                GoogleOAuthService.GMAIL_TARGET_SCOPE));
     }
 
     public boolean sharedGoogleClientConfigured() {
-        return isConfiguredValue(bridgeConfig.gmail().clientId()) && isConfiguredValue(bridgeConfig.gmail().clientSecret());
+        return systemOAuthAppSettingsService.googleClientConfigured();
     }
 
     public String defaultRedirectUri() {
@@ -225,7 +230,7 @@ public class UserGmailConfigService {
         if (!stored.isBlank()) {
             return stored;
         }
-        return sharedGoogleClientConfigured() ? bridgeConfig.gmail().clientId() : "";
+        return sharedGoogleClientConfigured() ? systemOAuthAppSettingsService.googleClientId() : "";
     }
 
     private String effectiveClientSecret(Long userId, UserGmailConfig config) {
@@ -233,7 +238,7 @@ public class UserGmailConfigService {
         if (!stored.isBlank()) {
             return stored;
         }
-        return sharedGoogleClientConfigured() ? bridgeConfig.gmail().clientSecret() : "";
+        return sharedGoogleClientConfigured() ? systemOAuthAppSettingsService.googleClientSecret() : "";
     }
 
     private String effectiveRefreshToken(Long userId, UserGmailConfig config) {

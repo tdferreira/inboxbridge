@@ -7,10 +7,12 @@ function HeroPanel({
   language,
   loadingData,
   onExitLayoutEditing,
+  onOpenNotifications,
   onOpenPreferences,
   onOpenSecurityDialog,
   onRefresh,
   onSignOut,
+  notificationCount = 0,
   refreshLoading,
   session,
   signOutLoading,
@@ -32,6 +34,10 @@ function HeroPanel({
             {t('hero.exitLayoutEditing')}
           </button>
         ) : null}
+        <button className="secondary hero-notifications-button" onClick={onOpenNotifications} title={t('hero.notificationsHint')} type="button">
+          <span>{t('hero.notifications')}</span>
+          {notificationCount ? <span className="hero-notifications-badge">{notificationCount}</span> : null}
+        </button>
         <button className="secondary" onClick={onOpenPreferences} title={t('hero.preferencesHint')} type="button">
           {t('hero.preferences')}
         </button>

@@ -63,4 +63,29 @@ describe('HeroPanel', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Exit Layout Editing' }))
     expect(onExitLayoutEditing).toHaveBeenCalledTimes(1)
   })
+
+  it('shows the notifications button and badge count', () => {
+    const onOpenNotifications = vi.fn()
+
+    render(
+      <HeroPanel
+        language="en"
+        loadingData={false}
+        notificationCount={3}
+        onOpenNotifications={onOpenNotifications}
+        onOpenPreferences={vi.fn()}
+        onOpenSecurityDialog={vi.fn()}
+        onRefresh={vi.fn()}
+        onSignOut={vi.fn()}
+        refreshLoading={false}
+        session={{ username: 'admin', role: 'ADMIN' }}
+        signOutLoading={false}
+        t={(key, params) => translate('en', key, params)}
+      />
+    )
+
+    fireEvent.click(screen.getByRole('button', { name: 'Notifications 3' }))
+    expect(onOpenNotifications).toHaveBeenCalledTimes(1)
+    expect(screen.getByText('3')).toBeInTheDocument()
+  })
 })

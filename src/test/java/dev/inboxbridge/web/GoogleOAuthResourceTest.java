@@ -93,7 +93,8 @@ class GoogleOAuthResourceTest {
                     "client-id",
                     "client-secret",
                     "refresh-token",
-                    "https://localhost:3000/api/google-oauth/callback");
+                    "https://localhost:3000/api/google-oauth/callback",
+                    GoogleOAuthService.GMAIL_TARGET_SCOPE);
         }
 
         @Override

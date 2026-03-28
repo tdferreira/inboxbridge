@@ -1,25 +1,9 @@
 .copy-button {
-  color: var(--ink);
-  background: rgba(255, 255, 255, 0.88);
-  border: 1px solid var(--line);
-  padding: 0;
-  width: 2.25rem;
-  height: 2.25rem;
-  min-width: 2.25rem;
-  min-height: 2.25rem;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
 }
 
 .copy-button-icon {
   width: 1rem;
   height: 1rem;
-}
-
-.copy-button:hover,
-.copy-button:focus-visible {
-  background: rgba(255, 255, 255, 0.98);
 }
 
 .copy-button:active {

@@ -49,6 +49,9 @@ public class MailSourceClient {
     @Inject
     MicrosoftOAuthService microsoftOAuthService;
 
+    @Inject
+    GoogleOAuthService googleOAuthService;
+
     public List<FetchedMessage> fetch(BridgeConfig.Source source) {
         return fetch(source, pollingSettingsService.effectiveSettings().fetchWindow());
     }
@@ -96,8 +99,8 @@ public class MailSourceClient {
         properties.put("mail.imaps.timeout", "20000");
         properties.put("mail.imap.connectiontimeout", "20000");
         properties.put("mail.imaps.connectiontimeout", "20000");
-        if (usesMicrosoftOAuth(bridge)) {
-            configureImapMicrosoftOAuth(properties);
+        if (usesOAuth(bridge)) {
+            configureImapOAuth(properties);
         } else {
             requireSupportedAuth(bridge);
         }
@@ -155,8 +158,8 @@ public class MailSourceClient {
         properties.put("mail.imaps.timeout", "20000");
         properties.put("mail.imap.connectiontimeout", "20000");
         properties.put("mail.imaps.connectiontimeout", "20000");
-        if (usesMicrosoftOAuth(bridge)) {
-            configureImapMicrosoftOAuth(properties);
+        if (usesOAuth(bridge)) {
+            configureImapOAuth(properties);
         } else {
             requireSupportedAuth(bridge);
         }
@@ -192,8 +195,8 @@ public class MailSourceClient {
         properties.put("mail.imaps.timeout", "20000");
         properties.put("mail.imap.connectiontimeout", "20000");
         properties.put("mail.imaps.connectiontimeout", "20000");
-        if (usesMicrosoftOAuth(source)) {
-            configureImapMicrosoftOAuth(properties);
+        if (usesOAuth(source)) {
+            configureImapOAuth(properties);
         } else {
             requireSupportedAuth(source);
         }
@@ -230,8 +233,8 @@ public class MailSourceClient {
         properties.put("mail.imaps.timeout", "20000");
         properties.put("mail.imap.connectiontimeout", "20000");
         properties.put("mail.imaps.connectiontimeout", "20000");
-        if (usesMicrosoftOAuth(bridge)) {
-            configureImapMicrosoftOAuth(properties);
+        if (usesOAuth(bridge)) {
+            configureImapOAuth(properties);
         } else {
             requireSupportedAuth(bridge);
         }
@@ -268,8 +271,8 @@ public class MailSourceClient {
         properties.put("mail.pop3.connectiontimeout", "20000");
         properties.put("mail.pop3s.timeout", "20000");
         properties.put("mail.pop3s.connectiontimeout", "20000");
-        if (usesMicrosoftOAuth(source)) {
-            configurePop3MicrosoftOAuth(properties);
+        if (usesOAuth(source)) {
+            configurePop3OAuth(properties);
         } else {
             requireSupportedAuth(source);
         }
@@ -303,8 +306,8 @@ public class MailSourceClient {
         properties.put("mail.pop3.connectiontimeout", "20000");
         properties.put("mail.pop3s.timeout", "20000");
         properties.put("mail.pop3s.connectiontimeout", "20000");
-        if (usesMicrosoftOAuth(bridge)) {
-            configurePop3MicrosoftOAuth(properties);
+        if (usesOAuth(bridge)) {
+            configurePop3OAuth(properties);
         } else {
             requireSupportedAuth(bridge);
         }
@@ -338,8 +341,8 @@ public class MailSourceClient {
         properties.put("mail.pop3.connectiontimeout", "20000");
         properties.put("mail.pop3s.timeout", "20000");
         properties.put("mail.pop3s.connectiontimeout", "20000");
-        if (usesMicrosoftOAuth(bridge)) {
-            configurePop3MicrosoftOAuth(properties);
+        if (usesOAuth(bridge)) {
+            configurePop3OAuth(properties);
         } else {
             requireSupportedAuth(bridge);
         }
@@ -681,6 +684,16 @@ public class MailSourceClient {
                     () -> microsoftOAuthService.getAccessToken(source));
             return;
         }
+        if (usesGoogleOAuth(source)) {
+            connectStoreWithGoogleOAuthRetry(
+                    store,
+                    source.id(),
+                    source.host(),
+                    source.port(),
+                    source.username(),
+                    () -> googleOAuthService.getAccessToken(source));
+            return;
+        }
         store.connect(source.host(), source.port(), source.username(), source.password());
     }
 
@@ -693,6 +706,16 @@ public class MailSourceClient {
                     bridge.port(),
                     bridge.username(),
                     () -> microsoftOAuthService.getAccessToken(bridge));
+            return;
+        }
+        if (usesGoogleOAuth(bridge)) {
+            connectStoreWithGoogleOAuthRetry(
+                    store,
+                    bridge.id(),
+                    bridge.host(),
+                    bridge.port(),
+                    bridge.username(),
+                    () -> googleOAuthService.getAccessToken(bridge));
             return;
         }
         store.connect(bridge.host(), bridge.port(), bridge.username(), bridge.password());
@@ -724,24 +747,42 @@ public class MailSourceClient {
                 && source.oauthProvider() == BridgeConfig.OAuthProvider.MICROSOFT;
     }
 
+    private boolean usesGoogleOAuth(BridgeConfig.Source source) {
+        return source.authMethod() == BridgeConfig.AuthMethod.OAUTH2
+                && source.oauthProvider() == BridgeConfig.OAuthProvider.GOOGLE;
+    }
+
+    private boolean usesOAuth(BridgeConfig.Source source) {
+        return usesMicrosoftOAuth(source) || usesGoogleOAuth(source);
+    }
+
     private boolean usesMicrosoftOAuth(RuntimeBridge bridge) {
         return bridge.authMethod() == BridgeConfig.AuthMethod.OAUTH2
                 && bridge.oauthProvider() == BridgeConfig.OAuthProvider.MICROSOFT;
     }
 
+    private boolean usesGoogleOAuth(RuntimeBridge bridge) {
+        return bridge.authMethod() == BridgeConfig.AuthMethod.OAUTH2
+                && bridge.oauthProvider() == BridgeConfig.OAuthProvider.GOOGLE;
+    }
+
+    private boolean usesOAuth(RuntimeBridge bridge) {
+        return usesMicrosoftOAuth(bridge) || usesGoogleOAuth(bridge);
+    }
+
     private void requireSupportedAuth(BridgeConfig.Source source) {
         if (source.authMethod() == BridgeConfig.AuthMethod.OAUTH2) {
-            throw new IllegalStateException("OAuth2 is only implemented for Microsoft sources at the moment");
+            throw new IllegalStateException("OAuth2 is only implemented for configured Google or Microsoft source providers at the moment");
         }
     }
 
     private void requireSupportedAuth(RuntimeBridge bridge) {
         if (bridge.authMethod() == BridgeConfig.AuthMethod.OAUTH2) {
-            throw new IllegalStateException("OAuth2 is only implemented for Microsoft sources at the moment");
+            throw new IllegalStateException("OAuth2 is only implemented for configured Google or Microsoft source providers at the moment");
         }
     }
 
-    private void configureImapMicrosoftOAuth(Properties properties) {
+    private void configureImapOAuth(Properties properties) {
         properties.put("mail.imap.auth.mechanisms", "XOAUTH2");
         properties.put("mail.imaps.auth.mechanisms", "XOAUTH2");
         properties.put("mail.imap.auth.login.disable", "true");
@@ -752,7 +793,7 @@ public class MailSourceClient {
         properties.put("mail.imaps.auth.xoauth2.disable", "false");
     }
 
-    private void configurePop3MicrosoftOAuth(Properties properties) {
+    private void configurePop3OAuth(Properties properties) {
         properties.put("mail.pop3.auth.mechanisms", "XOAUTH2");
         properties.put("mail.pop3s.auth.mechanisms", "XOAUTH2");
         properties.put("mail.pop3.auth.login.disable", "true");
@@ -763,6 +804,27 @@ public class MailSourceClient {
         properties.put("mail.pop3s.auth.xoauth2.disable", "false");
         properties.put("mail.pop3.auth.xoauth2.two.line.authentication.format", "true");
         properties.put("mail.pop3s.auth.xoauth2.two.line.authentication.format", "true");
+    }
+
+    private void connectStoreWithGoogleOAuthRetry(
+            Store store,
+            String sourceId,
+            String host,
+            int port,
+            String username,
+            TokenSupplier tokenSupplier) throws MessagingException {
+        try {
+            store.connect(host, port, username, tokenSupplier.get());
+        } catch (MessagingException firstFailure) {
+            if (!isRetryableMicrosoftOAuthFailure(firstFailure)) {
+                throw firstFailure;
+            }
+            LOG.warnf(firstFailure,
+                    "Google session for %s was rejected; invalidating the cached token and retrying once",
+                    sourceId);
+            googleOAuthService.clearCachedToken("source-google:" + sourceId);
+            store.connect(host, port, username, tokenSupplier.get());
+        }
     }
 
     private Folder locateSpamOrJunkFolder(Store store) throws MessagingException {

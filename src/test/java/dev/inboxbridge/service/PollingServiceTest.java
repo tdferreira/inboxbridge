@@ -41,6 +41,7 @@ class PollingServiceTest {
         service.userPollingSettingsService = new FakeUserPollingSettingsService(false, Duration.ofMinutes(2), "2m", 33);
         service.sourcePollingSettingsService = new FakeSourcePollingSettingsService();
         service.sourcePollingStateService = sourcePollingStateService;
+        service.manualPollRateLimitService = new ManualPollRateLimitService();
 
         PollRunResult result = service.runPoll("manual-api");
 
@@ -63,11 +64,38 @@ class PollingServiceTest {
         service.userPollingSettingsService = new FakeUserPollingSettingsService(true, Duration.ofMinutes(5), "5m", 10);
         service.sourcePollingSettingsService = new FakeSourcePollingSettingsService();
         service.sourcePollingStateService = new CooldownSourcePollingStateService();
+        service.manualPollRateLimitService = new ManualPollRateLimitService();
 
         PollRunResult result = service.runPoll("admin-ui");
 
         assertEquals(1, result.getErrors().size());
         assertTrue(result.getErrors().getFirst().contains("cooling down"));
+    }
+
+    @Test
+    void runPollForSourceBypassesCooldownWhenExplicitlyTriggered() {
+        PollingService service = new PollingService();
+        RecordingMailSourceClient mailSourceClient = new RecordingMailSourceClient();
+        RecordingSourcePollingStateService sourcePollingStateService = new RecordingSourcePollingStateService();
+        sourcePollingStateService.cooldownUntil = Instant.now().plus(Duration.ofMinutes(20));
+        service.mailSourceClient = mailSourceClient;
+        service.importDeduplicationService = new ImportDeduplicationService();
+        service.gmailImportService = new GmailImportService();
+        service.gmailLabelService = new FakeGmailLabelService();
+        service.sourcePollEventService = new NoopSourcePollEventService();
+        RuntimeBridge bridge = systemBridge("outlook-main");
+        service.runtimeBridgeService = new FakeRuntimeBridgeService(List.of(bridge));
+        service.pollingSettingsService = new FakePollingSettingsService(true, Duration.ofMinutes(5), "5m", 10);
+        service.userPollingSettingsService = new FakeUserPollingSettingsService(true, Duration.ofMinutes(5), "5m", 10);
+        service.sourcePollingSettingsService = new FakeSourcePollingSettingsService();
+        service.sourcePollingStateService = sourcePollingStateService;
+        service.manualPollRateLimitService = new ManualPollRateLimitService();
+
+        PollRunResult result = service.runPollForSource(bridge, "manual-source");
+
+        assertEquals(0, result.getErrors().size());
+        assertEquals(10, mailSourceClient.lastFetchWindow);
+        assertEquals("outlook-main", sourcePollingStateService.lastRecordedSuccessSourceId);
     }
 
     @Test
@@ -83,6 +111,7 @@ class PollingServiceTest {
         service.userPollingSettingsService = new FakeUserPollingSettingsService(false, Duration.ofMinutes(2), "2m", 33);
         service.sourcePollingSettingsService = new FakeSourcePollingSettingsService();
         service.sourcePollingStateService = new RecordingFailureSourcePollingStateService();
+        service.manualPollRateLimitService = new ManualPollRateLimitService();
 
         PollRunResult result = service.runPoll("manual-api");
 
@@ -108,11 +137,69 @@ class PollingServiceTest {
         service.userPollingSettingsService = new FakeUserPollingSettingsService(false, Duration.ofMinutes(2), "2m", 33);
         service.sourcePollingSettingsService = new FakeSourcePollingSettingsService();
         service.sourcePollingStateService = new RecordingFailureSourcePollingStateService();
+        service.manualPollRateLimitService = new ManualPollRateLimitService();
 
         PollRunResult result = service.runPoll("manual-api");
 
         assertEquals(1, result.getErrorDetails().size());
         assertEquals("microsoft_access_revoked", result.getErrorDetails().getFirst().code());
+    }
+
+    @Test
+    void runPollForUserRespectsCooldownForBroadManualRuns() {
+        PollingService service = new PollingService();
+        service.mailSourceClient = new RecordingMailSourceClient();
+        service.importDeduplicationService = new ImportDeduplicationService();
+        service.gmailImportService = new GmailImportService();
+        service.gmailLabelService = new FakeGmailLabelService();
+        service.sourcePollEventService = new NoopSourcePollEventService();
+        service.runtimeBridgeService = new FakeRuntimeBridgeService(List.of(userBridge(7L)));
+        service.pollingSettingsService = new FakePollingSettingsService(true, Duration.ofMinutes(5), "5m", 10);
+        service.userPollingSettingsService = new FakeUserPollingSettingsService(true, Duration.ofMinutes(5), "5m", 10);
+        service.sourcePollingSettingsService = new FakeSourcePollingSettingsService();
+        service.sourcePollingStateService = new CooldownSourcePollingStateService();
+        service.manualPollRateLimitService = new ManualPollRateLimitService();
+
+        dev.inboxbridge.persistence.AppUser actor = new dev.inboxbridge.persistence.AppUser();
+        actor.id = 7L;
+        actor.role = dev.inboxbridge.persistence.AppUser.Role.USER;
+
+        PollRunResult result = service.runPollForUser(actor, "user-ui");
+
+        assertEquals(1, result.getErrorDetails().size());
+        assertEquals("source_cooling_down", result.getErrorDetails().getFirst().code());
+    }
+
+    @Test
+    void runPollForUserRateLimitsRepeatedManualRuns() {
+        PollingService service = new PollingService();
+        service.mailSourceClient = new RecordingMailSourceClient();
+        service.importDeduplicationService = new ImportDeduplicationService();
+        service.gmailImportService = new GmailImportService();
+        service.gmailLabelService = new FakeGmailLabelService();
+        service.sourcePollEventService = new NoopSourcePollEventService();
+        service.runtimeBridgeService = new FakeRuntimeBridgeService(List.of(userBridge(7L)));
+        service.pollingSettingsService = new FakePollingSettingsService(true, Duration.ofMinutes(5), "5m", 10) {
+            @Override
+            public ManualPollRateLimit effectiveManualPollRateLimit() {
+                return new ManualPollRateLimit(1, Duration.ofMinutes(1), 60);
+            }
+        };
+        service.userPollingSettingsService = new FakeUserPollingSettingsService(true, Duration.ofMinutes(5), "5m", 10);
+        service.sourcePollingSettingsService = new FakeSourcePollingSettingsService();
+        service.sourcePollingStateService = new RecordingSourcePollingStateService();
+        service.manualPollRateLimitService = new ManualPollRateLimitService();
+
+        dev.inboxbridge.persistence.AppUser actor = new dev.inboxbridge.persistence.AppUser();
+        actor.id = 7L;
+        actor.role = dev.inboxbridge.persistence.AppUser.Role.USER;
+
+        PollRunResult first = service.runPollForUser(actor, "user-ui");
+        PollRunResult second = service.runPollForUser(actor, "user-ui");
+
+        assertEquals(0, first.getErrors().size());
+        assertEquals(1, second.getErrorDetails().size());
+        assertEquals("manual_poll_rate_limited", second.getErrorDetails().getFirst().code());
     }
 
     @Test
@@ -230,7 +317,7 @@ class PollingServiceTest {
         }
     }
 
-    private static final class FakePollingSettingsService extends PollingSettingsService {
+    private static class FakePollingSettingsService extends PollingSettingsService {
         private final EffectivePollingSettings settings;
 
         private FakePollingSettingsService(boolean enabled, Duration interval, String text, int fetchWindow) {
@@ -258,9 +345,33 @@ class PollingServiceTest {
 
     private static final class RecordingSourcePollingStateService extends SourcePollingStateService {
         private String lastRecordedSuccessSourceId;
+        private Instant cooldownUntil;
 
         @Override
         public PollEligibility eligibility(String sourceId, PollingSettingsService.EffectivePollingSettings settings, Instant now, boolean ignoreInterval) {
+            if (cooldownUntil != null && now.isBefore(cooldownUntil)) {
+                return new PollEligibility(false, "COOLDOWN", new dev.inboxbridge.dto.SourcePollingStateView(
+                        null,
+                        cooldownUntil,
+                        1,
+                        "auth failure",
+                        now,
+                        null));
+            }
+            return new PollEligibility(true, "READY", null);
+        }
+
+        @Override
+        public PollEligibility eligibility(String sourceId, PollingSettingsService.EffectivePollingSettings settings, Instant now, boolean ignoreInterval, boolean ignoreCooldown) {
+            if (!ignoreCooldown && cooldownUntil != null && now.isBefore(cooldownUntil)) {
+                return new PollEligibility(false, "COOLDOWN", new dev.inboxbridge.dto.SourcePollingStateView(
+                        null,
+                        cooldownUntil,
+                        1,
+                        "auth failure",
+                        now,
+                        null));
+            }
             return new PollEligibility(true, "READY", null);
         }
 
@@ -309,6 +420,13 @@ class PollingServiceTest {
         @Override
         public List<RuntimeBridge> listEnabledForPolling() {
             return bridges;
+        }
+
+        @Override
+        public List<RuntimeBridge> listEnabledForUser(dev.inboxbridge.persistence.AppUser actor) {
+            return bridges.stream()
+                    .filter(bridge -> actor != null && actor.id != null && actor.id.equals(bridge.ownerUserId()))
+                    .toList();
         }
 
         @Override

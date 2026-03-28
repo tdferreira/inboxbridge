@@ -7,6 +7,8 @@ import dev.inboxbridge.dto.AdminUserConfigurationResponse;
 import dev.inboxbridge.dto.AdminResetPasswordRequest;
 import dev.inboxbridge.dto.CreateUserRequest;
 import dev.inboxbridge.dto.PollingTimelineBundleView;
+import dev.inboxbridge.dto.SystemOAuthAppSettingsView;
+import dev.inboxbridge.dto.UpdateApplicationModeRequest;
 import dev.inboxbridge.dto.UpdateUserRequest;
 import dev.inboxbridge.dto.UserSummaryResponse;
 import dev.inboxbridge.security.CurrentUserContext;
@@ -18,6 +20,7 @@ import dev.inboxbridge.service.PollingStatsService;
 import dev.inboxbridge.service.UserBridgeService;
 import dev.inboxbridge.service.UserGmailConfigService;
 import dev.inboxbridge.service.UserPollingSettingsService;
+import dev.inboxbridge.service.SystemOAuthAppSettingsService;
 import jakarta.inject.Inject;
 import jakarta.ws.rs.BadRequestException;
 import jakarta.ws.rs.Consumes;
@@ -65,6 +68,9 @@ public class UserManagementResource {
     @Inject
     PasskeyService passkeyService;
 
+    @Inject
+    SystemOAuthAppSettingsService systemOAuthAppSettingsService;
+
     @GET
     public List<UserSummaryResponse> listUsers() {
         try {
@@ -81,6 +87,18 @@ public class UserManagementResource {
         try {
             applicationModeService.requireMultiUserMode();
             return appUserService.toSummary(appUserService.createUser(request));
+        } catch (IllegalArgumentException e) {
+            throw new BadRequestException(e.getMessage(), e);
+        }
+    }
+
+    @PUT
+    @Path("/mode")
+    @Consumes(MediaType.APPLICATION_JSON)
+    public SystemOAuthAppSettingsView updateMode(UpdateApplicationModeRequest request) {
+        try {
+            applicationModeService.setMultiUserEnabled(currentUserContext.user(), request.multiUserEnabled());
+            return systemOAuthAppSettingsService.view();
         } catch (IllegalArgumentException e) {
             throw new BadRequestException(e.getMessage(), e);
         }
@@ -105,6 +123,18 @@ public class UserManagementResource {
         try {
             applicationModeService.requireMultiUserMode();
             return appUserService.toSummary(appUserService.adminResetPassword(currentUserContext.user(), userId, request));
+        } catch (IllegalArgumentException e) {
+            throw new BadRequestException(e.getMessage(), e);
+        }
+    }
+
+    @DELETE
+    @Path("/{userId}")
+    public java.util.Map<String, Object> deleteUser(@PathParam("userId") Long userId) {
+        try {
+            applicationModeService.requireMultiUserMode();
+            appUserService.deleteUser(currentUserContext.user(), userId);
+            return java.util.Map.of("deleted", Boolean.TRUE);
         } catch (IllegalArgumentException e) {
             throw new BadRequestException(e.getMessage(), e);
         }

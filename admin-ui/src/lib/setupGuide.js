@@ -2,11 +2,53 @@ function renumberStepTitle(title, index) {
   return String(title).replace(/^\d+\.\s*/, `${index}. `)
 }
 
-export function buildSetupGuideState({ gmailMeta, myBridges = [], session, systemDashboard, t }) {
+export function buildSetupGuideState({ workspace = 'user', gmailMeta, myBridges = [], session, systemDashboard, systemOAuthSettings, users = [], t }) {
   if (!session) {
     return {
       steps: [],
       allStepsComplete: false
+    }
+  }
+
+  if (workspace === 'admin') {
+    const visibleSystemBridges = session.username === 'admin'
+      ? (systemDashboard?.bridges || [])
+      : []
+    const importsReady = (systemDashboard?.overall?.totalImportedMessages || 0) > 0
+      && visibleSystemBridges.every((bridge) => bridge.lastEvent?.status !== 'ERROR' && !bridge.lastEvent?.error)
+    const importsErrored = visibleSystemBridges.some((bridge) => bridge.lastEvent?.status === 'ERROR' || bridge.lastEvent?.error)
+    const googleSharedReady = Boolean(systemOAuthSettings?.googleClientId && systemOAuthSettings?.googleClientSecretConfigured && systemOAuthSettings?.googleRefreshTokenConfigured)
+    const multiUserEnabled = systemOAuthSettings?.effectiveMultiUserEnabled !== false
+    const hasAdditionalUser = users.some((user) => user.id !== session.id)
+    const steps = [
+      {
+        title: t('setup.adminStep1Title'),
+        description: googleSharedReady ? t('setup.adminStep1Ready') : t('setup.adminStep1Pending'),
+        targetId: 'oauth-apps-section',
+        sectionKey: 'oauthAppsCollapsed',
+        status: googleSharedReady ? 'complete' : 'pending'
+      }
+    ]
+    if (multiUserEnabled) {
+      steps.push({
+        title: t('setup.adminStep2Title'),
+        description: hasAdditionalUser ? t('setup.adminStep2Ready') : t('setup.adminStep2Pending'),
+        targetId: 'user-management-section',
+        sectionKey: 'userManagementCollapsed',
+        status: hasAdditionalUser ? 'complete' : 'pending'
+      })
+    }
+    steps.push({
+      title: t('setup.adminStep3Title'),
+      description: importsErrored ? t('setup.adminStep3Error') : importsReady ? t('setup.adminStep3Ready') : t('setup.adminStep3Pending'),
+      targetId: 'system-dashboard-section',
+      sectionKey: 'systemDashboardCollapsed',
+      status: importsErrored ? 'error' : importsReady ? 'complete' : 'pending'
+    })
+
+    return {
+      steps: steps.map((step, index) => ({ ...step, title: renumberStepTitle(step.title, index + 1) })),
+      allStepsComplete: steps.every((step) => step.status === 'complete')
     }
   }
 

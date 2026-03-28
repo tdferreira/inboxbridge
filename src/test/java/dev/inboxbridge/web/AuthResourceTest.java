@@ -17,7 +17,9 @@ import dev.inboxbridge.service.AppUserService;
 import dev.inboxbridge.service.ApplicationModeService;
 import dev.inboxbridge.service.AuthService;
 import dev.inboxbridge.service.MicrosoftOAuthService;
+import dev.inboxbridge.service.OAuthProviderRegistryService;
 import dev.inboxbridge.service.PasskeyService;
+import dev.inboxbridge.service.SystemOAuthAppSettingsService;
 import jakarta.ws.rs.BadRequestException;
 import jakarta.ws.rs.core.NewCookie;
 import jakarta.ws.rs.core.Response;
@@ -60,11 +62,14 @@ class AuthResourceTest {
         AuthResource resource = new AuthResource();
         resource.applicationModeService = new FakeApplicationModeService(false);
         resource.microsoftOAuthService = new FakeMicrosoftOAuthService(false);
+        resource.systemOAuthAppSettingsService = new FakeSystemOAuthAppSettingsService(false);
+        resource.oAuthProviderRegistryService = new FakeOAuthProviderRegistryService();
 
         var response = resource.options();
 
         assertEquals(false, response.multiUserEnabled());
         assertEquals(false, response.microsoftOAuthAvailable());
+        assertEquals(false, response.googleOAuthAvailable());
     }
 
     @Test
@@ -117,6 +122,26 @@ class AuthResourceTest {
         @Override
         public AuthenticatedSession loginWithPasskey(AppUser user) {
             return new AuthenticatedSession(user, "session-1");
+        }
+    }
+
+    private static final class FakeSystemOAuthAppSettingsService extends SystemOAuthAppSettingsService {
+        private final boolean googleConfigured;
+
+        private FakeSystemOAuthAppSettingsService(boolean googleConfigured) {
+            this.googleConfigured = googleConfigured;
+        }
+
+        @Override
+        public boolean googleClientConfigured() {
+            return googleConfigured;
+        }
+    }
+
+    private static final class FakeOAuthProviderRegistryService extends OAuthProviderRegistryService {
+        @Override
+        public java.util.List<dev.inboxbridge.config.BridgeConfig.OAuthProvider> configuredSourceProviders() {
+            return java.util.List.of();
         }
     }
 

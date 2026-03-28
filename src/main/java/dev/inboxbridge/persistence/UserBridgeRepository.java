@@ -5,6 +5,7 @@ import java.util.Optional;
 
 import io.quarkus.hibernate.orm.panache.PanacheRepository;
 import jakarta.enterprise.context.ApplicationScoped;
+import jakarta.transaction.Transactional;
 
 @ApplicationScoped
 public class UserBridgeRepository implements PanacheRepository<UserBridge> {
@@ -15,5 +16,10 @@ public class UserBridgeRepository implements PanacheRepository<UserBridge> {
 
     public Optional<UserBridge> findByBridgeId(String bridgeId) {
         return find("bridgeId", bridgeId).firstResultOptional();
+    }
+
+    @Transactional
+    public long deleteByUserId(Long userId) {
+        return delete("userId", userId);
     }
 }

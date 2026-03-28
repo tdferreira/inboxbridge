@@ -8,5 +8,7 @@ package dev.inboxbridge.dto;
 public record UpdateAdminPollingSettingsRequest(
         Boolean pollEnabledOverride,
         String pollIntervalOverride,
-        Integer fetchWindowOverride) {
+        Integer fetchWindowOverride,
+        Integer manualTriggerLimitCountOverride,
+        Integer manualTriggerLimitWindowSecondsOverride) {
 }

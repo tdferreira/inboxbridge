@@ -165,6 +165,7 @@ The `Quick Setup Guide` cards in the admin UI are clickable and jump to the sect
 - the main page sections in each workspace can now be rearranged and that custom order can be remembered per account
 - expanding any major section now refreshes its data immediately and shows a loading indicator while the refresh runs
 - the step numbering is assigned dynamically, so conditional steps never leave numbering gaps
+- the `Administration` workspace now uses its own admin-focused quick setup guide instead of repeating the user-area checklist
 
 ## Admin UI login
 
@@ -212,8 +213,10 @@ Current features:
 - self-registration opens through a dedicated unauthenticated modal flow instead of occupying the main login screen full time
 - admin-managed user creation
 - single-user deployments can disable all self-registration and user-management surfaces with `MULTI_USER_ENABLED=false`
+- switching to single-user mode from the admin UI now deactivates every account except the acting admin, and switching back to multi-user mode reactivates the accounts that were disabled by that mode switch
 - multiple admin users, with admin rights managed from the UI
 - admins can reset another user’s password to a temporary value and wipe that user’s passkeys
+- admins can now also deactivate or permanently delete any other user account from the UI
 - admin password reset now opens a dedicated dialog instead of an always-visible inline form
 - the admin reset-password dialog shows the temporary-password rules inline so the operator can see when the new password satisfies the policy before submitting
 - admin actions that can suspend a user, force a password change, wipe passkeys, or remove stored mail-fetcher data now require an explicit confirmation modal before execution
@@ -259,7 +262,9 @@ Current features:
 - admin-managed runtime overrides for polling enablement, poll interval, and fetch window while still showing the `.env` defaults
 - an admin-only `Global Poller Settings` section for deployment-wide polling controls, with a separate `Global Statistics` section for the all-users analytics
 - the admin-facing `Global Poller Settings` area now shows effective settings in-page and opens a dedicated modal dialog for editing the deployment-wide overrides
+- the admin-facing `Global Poller Settings` area now also exposes the manual-run rate limit, asks for confirmation before triggering an all-users run, and keeps those broad manual runs subject to cooldown/next-window safety checks so providers are not hammered
 - a dedicated `My Poller Settings` section so each user can override polling enablement, interval, and fetch window for their own UI-managed fetchers, with a separate `My Statistics` section that only shows analytics for the current account
+- the user-facing `My Poller Settings` area now also includes `Run Poll Now` for that signed-in user’s own mail accounts, while single-account `Run Poll Now` remains the explicit force-run path when the user wants to bypass cooldown/backoff for one source
 - the user-facing `My Poller Settings` area now shows the effective settings as a compact summary and opens a dedicated modal dialog for editing overrides
 - mail-account statistics now use source-specific cards instead of deployment-wide account-health counters, and include error-poll totals plus manual-vs-scheduled poll activity for that one account
 - the polling charts also support a `Custom` date-time range modal, with a required `from` value and an optional `to` value that defaults to the current time

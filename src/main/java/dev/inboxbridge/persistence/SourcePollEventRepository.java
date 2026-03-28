@@ -6,6 +6,7 @@ import java.util.Optional;
 
 import io.quarkus.hibernate.orm.panache.PanacheRepository;
 import jakarta.enterprise.context.ApplicationScoped;
+import jakarta.transaction.Transactional;
 
 @ApplicationScoped
 public class SourcePollEventRepository implements PanacheRepository<SourcePollEvent> {
@@ -35,5 +36,13 @@ public class SourcePollEventRepository implements PanacheRepository<SourcePollEv
         }
         return find("sourceId in ?1 and finishedAt >= ?2 order by finishedAt", sourceIds, since)
                 .list();
+    }
+
+    @Transactional
+    public long deleteBySourceIds(List<String> sourceIds) {
+        if (sourceIds == null || sourceIds.isEmpty()) {
+            return 0;
+        }
+        return delete("sourceId in ?1", sourceIds);
     }
 }

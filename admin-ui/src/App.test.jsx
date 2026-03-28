@@ -624,7 +624,7 @@ describe('App', () => {
       expect(container.querySelector('.fetcher-menu-button')).not.toBeNull()
     })
     fireEvent.click(container.querySelector('.fetcher-menu-button'))
-    fireEvent.click(screen.getByRole('button', { name: /Run Poll Now|Executar polling agora/ }))
+    fireEvent.click(screen.getAllByRole('button', { name: /Run Poll Now|Executar polling agora/ })[1])
 
     const errorMatcher = /Unable to run mail account polling \(502 Bad Gateway\)|Não foi possível executar a verificação da conta de email \(502 Bad Gateway\)/
     await waitFor(() => {
@@ -728,7 +728,7 @@ describe('App', () => {
       expect(container.querySelector('.fetcher-menu-button')).not.toBeNull()
     })
     fireEvent.click(container.querySelector('.fetcher-menu-button'))
-    fireEvent.click(screen.getByRole('button', { name: /executar polling agora/i }))
+    fireEvent.click(screen.getAllByRole('button', { name: /executar polling agora/i })[1])
 
     await waitFor(() => {
       expect(screen.getByText('Não foi possível executar a verificação da conta de email (502 Bad Gateway)')).toBeInTheDocument()

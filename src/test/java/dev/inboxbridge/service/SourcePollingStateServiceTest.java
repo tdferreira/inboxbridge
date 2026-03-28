@@ -75,6 +75,22 @@ class SourcePollingStateServiceTest {
         assertNotNull(eligibility.state());
     }
 
+    @Test
+    void cooldownCanBeIgnoredForExplicitManualSourceRuns() {
+        SourcePollingStateService service = service();
+        service.recordFailure("fetcher-1", Instant.parse("2026-03-26T12:00:00Z"), "invalid_grant");
+
+        SourcePollingStateService.PollEligibility eligibility = service.eligibility(
+                "fetcher-1",
+                settings(true, "5m", 25),
+                Instant.parse("2026-03-26T12:10:00Z"),
+                true,
+                true);
+
+        assertTrue(eligibility.shouldPoll());
+        assertEquals("READY", eligibility.reason());
+    }
+
     private SourcePollingStateService service() {
         SourcePollingStateService service = new SourcePollingStateService();
         service.repository = new InMemorySourcePollingStateRepository();

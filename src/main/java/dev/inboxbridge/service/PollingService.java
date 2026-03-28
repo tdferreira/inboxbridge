@@ -13,6 +13,7 @@ import dev.inboxbridge.domain.RuntimeBridge;
 import dev.inboxbridge.dto.GmailImportResponse;
 import dev.inboxbridge.dto.PollRunError;
 import dev.inboxbridge.dto.PollRunResult;
+import dev.inboxbridge.persistence.AppUser;
 import io.quarkus.scheduler.Scheduled;
 import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.inject.Inject;
@@ -26,6 +27,8 @@ public class PollingService {
             "The Gmail account is not linked for this destination. Connect it from My Gmail Account before polling this source.";
     private static final String MICROSOFT_ACCESS_REVOKED_MESSAGE =
             "The linked Microsoft account no longer grants InboxBridge access. Reconnect it from this mail account.";
+    private static final String GOOGLE_SOURCE_ACCESS_REVOKED_MESSAGE =
+            "The linked Google account no longer grants InboxBridge access. Reconnect it from this mail account.";
 
     private static final Logger LOG = Logger.getLogger(PollingService.class);
 
@@ -59,6 +62,9 @@ public class PollingService {
     @Inject
     SourcePollingStateService sourcePollingStateService;
 
+    @Inject
+    ManualPollRateLimitService manualPollRateLimitService;
+
     private final AtomicBoolean running = new AtomicBoolean(false);
     private final AtomicReference<ActivePoll> activePoll = new AtomicReference<>();
 
@@ -68,30 +74,87 @@ public class PollingService {
     }
 
     public PollRunResult runPoll(String trigger) {
+        return runPollInternal(trigger, runtimeBridgeService.listEnabledForPolling(), null, false, false, false, null);
+    }
+
+    public PollRunResult runPollForAllUsers(AppUser actor, String trigger) {
+        return runPollInternal(
+                trigger,
+                runtimeBridgeService.listEnabledForPolling(),
+                actorRateLimitKey(actor),
+                false,
+                false,
+                false,
+                null);
+    }
+
+    public PollRunResult runPollForUser(AppUser actor, String trigger) {
+        return runPollInternal(
+                trigger,
+                runtimeBridgeService.listEnabledForUser(actor),
+                actorRateLimitKey(actor),
+                false,
+                false,
+                false,
+                null);
+    }
+
+    public PollRunResult runPollForSource(RuntimeBridge bridge, String trigger) {
+        return runPollForSource(bridge, trigger, null);
+    }
+
+    public PollRunResult runPollForSource(RuntimeBridge bridge, String trigger, String actorKey) {
+        return runPollInternal(trigger, List.of(bridge), actorKey, true, true, true, bridge.id());
+    }
+
+    private PollRunResult runPollInternal(
+            String trigger,
+            List<RuntimeBridge> bridges,
+            String manualActorKey,
+            boolean ignoreInterval,
+            boolean ignoreCooldown,
+            boolean singleSource,
+            String singleSourceId) {
         if (!running.compareAndSet(false, true)) {
             PollRunResult busy = new PollRunResult();
-            busy.addError(new PollRunError("poll_busy", null, currentBusyMessage(), null));
+            busy.addError(new PollRunError("poll_busy", singleSourceId, currentBusyMessage(), null));
             busy.finish();
             return busy;
         }
 
         PollRunResult result = new PollRunResult();
         try {
-            activePoll.set(new ActivePoll(trigger, null, result.getStartedAt()));
+            if (manualActorKey != null) {
+                ManualPollRateLimitService.Decision decision = manualPollRateLimitService.tryAcquire(
+                        manualActorKey,
+                        pollingSettingsService.effectiveManualPollRateLimit().maxRuns(),
+                        pollingSettingsService.effectiveManualPollRateLimit().window(),
+                        Instant.now());
+                if (!decision.allowed()) {
+                    result.addError(new PollRunError(
+                            "manual_poll_rate_limited",
+                            singleSourceId,
+                            "Manual polling is temporarily rate limited until "
+                                    + Optional.ofNullable(decision.retryAt()).map(String::valueOf).orElse("a later retry time") + ".",
+                            Optional.ofNullable(decision.retryAt()).map(String::valueOf).orElse(null)));
+                    return result;
+                }
+            }
+            activePoll.set(new ActivePoll(trigger, singleSourceId, result.getStartedAt()));
             if (!"scheduler".equals(trigger)) {
-                LOG.infof("Starting poll triggered by %s", trigger);
+                LOG.infof("Starting %s poll triggered by %s", singleSource ? "single-source" : "multi-source", trigger);
             }
             Instant now = Instant.now();
-            boolean ignoreInterval = !"scheduler".equals(trigger);
-            for (RuntimeBridge bridge : runtimeBridgeService.listEnabledForPolling()) {
+            for (RuntimeBridge bridge : bridges) {
                 PollingSettingsService.EffectivePollingSettings settings = effectiveSettingsFor(bridge);
                 SourcePollingStateService.PollEligibility eligibility = sourcePollingStateService.eligibility(
                         bridge.id(),
                         settings,
                         now,
-                        ignoreInterval);
+                        ignoreInterval,
+                        ignoreCooldown);
                 if (!eligibility.shouldPoll()) {
-                    if (ignoreInterval) {
+                    if (!"scheduler".equals(trigger)) {
                         result.addError(skipError(bridge, eligibility));
                     }
                     continue;
@@ -115,51 +178,6 @@ public class PollingService {
                 LOG.infof("Poll finished: fetched=%d imported=%d duplicates=%d errors=%d",
                         result.getFetched(), result.getImported(), result.getDuplicates(), result.getErrors().size());
             }
-        }
-    }
-
-    public PollRunResult runPollForSource(RuntimeBridge bridge, String trigger) {
-        if (!running.compareAndSet(false, true)) {
-            PollRunResult busy = new PollRunResult();
-            busy.addError(new PollRunError("poll_busy", bridge.id(), currentBusyMessage(), null));
-            busy.finish();
-            return busy;
-        }
-
-        PollRunResult result = new PollRunResult();
-        try {
-            activePoll.set(new ActivePoll(trigger, bridge.id(), result.getStartedAt()));
-            LOG.infof("Starting single-source poll for %s triggered by %s", bridge.id(), trigger);
-            PollingSettingsService.EffectivePollingSettings settings = effectiveSettingsFor(bridge);
-            SourcePollingStateService.PollEligibility eligibility = sourcePollingStateService.eligibility(
-                    bridge.id(),
-                    settings,
-                    Instant.now(),
-                    true);
-            if (!bridge.enabled()) {
-                result.addError(new PollRunError(
-                        "source_disabled",
-                        bridge.id(),
-                        "Source " + bridge.id() + " is disabled.",
-                        null));
-                return result;
-            }
-            if (!eligibility.shouldPoll()) {
-                result.addError(skipError(bridge, eligibility));
-                return result;
-            }
-            pollSource(bridge, trigger, settings, result);
-            return result;
-        } catch (RuntimeException e) {
-            LOG.error("Unexpected single-source polling failure", e);
-            result.addError(Optional.ofNullable(e.getMessage()).orElse(e.getClass().getSimpleName()));
-            return result;
-        } finally {
-            result.finish();
-            activePoll.set(null);
-            running.set(false);
-            LOG.infof("Single-source poll finished for %s: fetched=%d imported=%d duplicates=%d errors=%d",
-                    bridge.id(), result.getFetched(), result.getImported(), result.getDuplicates(), result.getErrors().size());
         }
     }
 
@@ -226,6 +244,10 @@ public class PollingService {
         return sourcePollingSettingsService.effectiveSettingsFor(bridge);
     }
 
+    private String actorRateLimitKey(AppUser actor) {
+        return actor == null || actor.id == null ? null : actor.role + ":" + actor.id;
+    }
+
     private PollRunError skipError(RuntimeBridge bridge, SourcePollingStateService.PollEligibility eligibility) {
         return switch (eligibility.reason()) {
             case "DISABLED" -> new PollRunError(
@@ -271,6 +293,9 @@ public class PollingService {
         }
         if (MICROSOFT_ACCESS_REVOKED_MESSAGE.equals(rawMessage)) {
             return new PollRunError("microsoft_access_revoked", bridge.id(), formattedMessage, null);
+        }
+        if (GOOGLE_SOURCE_ACCESS_REVOKED_MESSAGE.equals(rawMessage)) {
+            return new PollRunError("google_source_access_revoked", bridge.id(), formattedMessage, null);
         }
         return new PollRunError("generic", bridge.id(), formattedMessage, null);
     }

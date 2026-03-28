@@ -179,7 +179,13 @@ class AdminDashboardServiceTest {
                     "3m",
                     50,
                     Integer.valueOf(25),
-                    25);
+                    25,
+                    5,
+                    null,
+                    5,
+                    60,
+                    null,
+                    60);
         }
     }
 

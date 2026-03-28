@@ -21,7 +21,7 @@ export const EMAIL_PROVIDER_PRESETS = [
   {
     id: 'gmail',
     label: 'Gmail',
-    description: 'Prefills Gmail IMAP settings. InboxBridge source-side Gmail OAuth is not available yet, so this preset keeps password auth.',
+    description: 'Prefills Gmail IMAP settings. When the shared Google OAuth app is configured, you can use OAuth2 for this source account.',
     values: {
       protocol: 'IMAP',
       host: 'imap.gmail.com',

@@ -737,6 +737,9 @@ public class PollingStatsService {
 
     private String providerLabel(ConfiguredSourceSnapshot source) {
         if (source.authMethod() == BridgeConfig.AuthMethod.OAUTH2) {
+            if (source.oauthProvider() == BridgeConfig.OAuthProvider.GOOGLE) {
+                return "Google";
+            }
             if (source.oauthProvider() == BridgeConfig.OAuthProvider.MICROSOFT) {
                 return "Microsoft";
             }

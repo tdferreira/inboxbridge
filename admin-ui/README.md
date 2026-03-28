@@ -108,6 +108,9 @@ Key design choices:
 - connected Gmail accounts can now also be unlinked from the admin UI, which clears InboxBridge's stored Gmail OAuth tokens and attempts a Google-side token revocation when possible
 - in the normal operating model, that shared Google OAuth client comes from one deployment-wide Google Cloud project reused across many users
 - the polling area is now framed as `Poller Settings` and focuses on runtime scheduler controls plus polling-health metrics
+- `My Polling Settings` now also includes a `Run Poll Now` action for the signed-in user’s own mail accounts
+- `Global Polling Settings` now asks for confirmation before starting an all-users manual run, and the dialog also exposes the manual-run rate limit configuration used to prevent repeated hammering
+- broad manual polling runs still respect per-source cooldown and next-window checks, while the single mail-account `Run Poll Now` action remains the explicit force-run path
 - the user poller settings card now uses the same padded section shell as the main dashboard cards, so the form content stays fully inside the card boundaries
 - the hero/header now includes a `Preferences` button that opens a modal for language selection, the persisted `Remember layout on this account` toggle, the `Show Quick Setup Guide` toggle, layout-edit controls, and a reset-layout action
 - the hero/header `Security` button now opens the password and passkey tools in a dedicated modal dialog, with separate tabs so the modal stays less crowded
@@ -196,3 +199,5 @@ The password-visibility eye toggle now keeps a stable position on hover/focus in
 The fetcher add/edit dialog now compares the current form against its initial snapshot, so closing it without making any edits no longer triggers the unsaved-changes confirmation.
 The Quick Setup Guide now says `Add at least one email account`, links to the source-email-account section, and only shows the provider OAuth step when at least one configured source account actually uses OAuth.
 The Quick Setup Guide step numbering is now assigned dynamically so hidden conditional steps cannot leave gaps such as `1, 2, 3, 5`.
+The `Administration` workspace now keeps its own admin-specific quick setup guide focused on shared Google OAuth, creating an additional user in multi-user mode, and confirming the first successful import.
+User management now also supports switching between single-user and multi-user mode with confirmation, preserving disabled accounts for later reactivation, and deleting any other user account from the admin UI.

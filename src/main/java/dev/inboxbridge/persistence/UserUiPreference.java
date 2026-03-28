@@ -46,6 +46,9 @@ public class UserUiPreference extends PanacheEntityBase {
     @Column(name = "quick_setup_dismissed", nullable = false)
     public boolean quickSetupDismissed;
 
+    @Column(name = "quick_setup_pinned_visible", nullable = false)
+    public boolean quickSetupPinnedVisible;
+
     @Column(name = "gmail_destination_collapsed", nullable = false)
     public boolean gmailDestinationCollapsed;
 
@@ -58,8 +61,14 @@ public class UserUiPreference extends PanacheEntityBase {
     @Column(name = "source_bridges_collapsed", nullable = false)
     public boolean sourceBridgesCollapsed;
 
+    @Column(name = "admin_quick_setup_collapsed", nullable = false)
+    public boolean adminQuickSetupCollapsed;
+
     @Column(name = "system_dashboard_collapsed", nullable = false)
     public boolean systemDashboardCollapsed;
+
+    @Column(name = "oauth_apps_collapsed", nullable = false)
+    public boolean oauthAppsCollapsed;
 
     @Column(name = "global_stats_collapsed", nullable = false)
     public boolean globalStatsCollapsed;

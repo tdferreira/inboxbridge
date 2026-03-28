@@ -1,6 +1,7 @@
 package dev.inboxbridge.service;
 
 import java.time.Instant;
+import java.util.List;
 import java.util.Optional;
 
 import dev.inboxbridge.persistence.OAuthCredential;
@@ -79,8 +80,18 @@ public class OAuthCredentialService {
     }
 
     @Transactional
+    public long deleteGoogleCredentials(List<String> subjectKeys) {
+        return repository.deleteByProviderAndSubjects(GOOGLE_PROVIDER, subjectKeys);
+    }
+
+    @Transactional
     public boolean deleteMicrosoftCredential(String sourceId) {
         return deleteCredential(MICROSOFT_PROVIDER, sourceId);
+    }
+
+    @Transactional
+    public long deleteMicrosoftCredentials(List<String> sourceIds) {
+        return repository.deleteByProviderAndSubjects(MICROSOFT_PROVIDER, sourceIds);
     }
 
     @Transactional

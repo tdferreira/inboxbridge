@@ -13,6 +13,7 @@ function Banner({
   focusLabel = 'Focus the related section',
   onDismiss,
   onFocus,
+  title,
   tone = 'success'
 }) {
   const toneClass = tone === 'error'
@@ -22,7 +23,7 @@ function Banner({
       : 'banner-success'
 
   return (
-    <section className={`app-banner ${toneClass}`}>
+    <section className={`app-banner ${toneClass}`} title={title}>
       <div className="app-banner-content">
         {onFocus ? (
           <button aria-label={focusLabel} className="banner-focus-button" onClick={onFocus} title={focusLabel} type="button">

@@ -12,9 +12,15 @@ import dev.inboxbridge.dto.UpdateUserRequest;
 import dev.inboxbridge.dto.UserSummaryResponse;
 import dev.inboxbridge.persistence.AppUser;
 import dev.inboxbridge.persistence.AppUserRepository;
+import dev.inboxbridge.persistence.ImportedMessageRepository;
+import dev.inboxbridge.persistence.SourcePollEventRepository;
+import dev.inboxbridge.persistence.SourcePollingSettingRepository;
+import dev.inboxbridge.persistence.SourcePollingStateRepository;
 import dev.inboxbridge.persistence.UserBridgeRepository;
 import dev.inboxbridge.persistence.UserGmailConfigRepository;
 import dev.inboxbridge.persistence.UserPasskeyRepository;
+import dev.inboxbridge.persistence.UserPollingSettingRepository;
+import dev.inboxbridge.persistence.UserUiPreferenceRepository;
 import io.quarkus.runtime.StartupEvent;
 import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.enterprise.event.Observes;
@@ -43,6 +49,30 @@ public class AppUserService {
 
     @Inject
     UserPasskeyRepository userPasskeyRepository;
+
+    @Inject
+    UserPollingSettingRepository userPollingSettingRepository;
+
+    @Inject
+    UserUiPreferenceRepository userUiPreferenceRepository;
+
+    @Inject
+    OAuthCredentialService oAuthCredentialService;
+
+    @Inject
+    UserSessionService userSessionService;
+
+    @Inject
+    SourcePollingSettingRepository sourcePollingSettingRepository;
+
+    @Inject
+    SourcePollingStateRepository sourcePollingStateRepository;
+
+    @Inject
+    SourcePollEventRepository sourcePollEventRepository;
+
+    @Inject
+    ImportedMessageRepository importedMessageRepository;
 
     void onStartup(@Observes StartupEvent event) {
         ensureBootstrapAdmin();
@@ -74,6 +104,7 @@ public class AppUserService {
         user.mustChangePassword = true;
         user.active = true;
         user.approved = true;
+        user.disabledBySingleUserMode = false;
         user.createdAt = Instant.now();
         user.updatedAt = user.createdAt;
         repository.persist(user);
@@ -92,6 +123,7 @@ public class AppUserService {
         user.mustChangePassword = false;
         user.active = false;
         user.approved = false;
+        user.disabledBySingleUserMode = false;
         user.createdAt = Instant.now();
         user.updatedAt = user.createdAt;
         repository.persist(user);
@@ -159,6 +191,7 @@ public class AppUserService {
         admin.mustChangePassword = true;
         admin.active = true;
         admin.approved = true;
+        admin.disabledBySingleUserMode = false;
         admin.createdAt = Instant.now();
         admin.updatedAt = admin.createdAt;
         repository.persist(admin);
@@ -194,6 +227,55 @@ public class AppUserService {
         }
         user.updatedAt = Instant.now();
         return user;
+    }
+
+    @Transactional
+    public void switchToSingleUserMode(AppUser actor) {
+        AppUser actingAdmin = repository.findByIdOptional(actor.id)
+                .orElseThrow(() -> new IllegalArgumentException("Unknown user id"));
+        if (actingAdmin.role != AppUser.Role.ADMIN) {
+            throw new IllegalArgumentException("Admin access is required");
+        }
+
+        for (AppUser user : repository.listAll()) {
+            if (user.id.equals(actingAdmin.id)) {
+                user.active = true;
+                user.approved = true;
+                user.disabledBySingleUserMode = false;
+                user.updatedAt = Instant.now();
+                continue;
+            }
+            boolean wasActive = user.active;
+            user.active = false;
+            user.disabledBySingleUserMode = wasActive;
+            user.updatedAt = Instant.now();
+            userSessionService.invalidateUserSessions(user.id);
+        }
+    }
+
+    @Transactional
+    public void switchToMultiUserMode() {
+        for (AppUser user : repository.listDisabledBySingleUserMode()) {
+            user.active = true;
+            user.disabledBySingleUserMode = false;
+            user.updatedAt = Instant.now();
+        }
+    }
+
+    @Transactional
+    public void deleteUser(AppUser actor, Long userId) {
+        if (actor != null && actor.id != null && actor.id.equals(userId)) {
+            throw new IllegalArgumentException("Admins cannot delete their own account.");
+        }
+        AppUser user = repository.findByIdOptional(userId)
+                .orElseThrow(() -> new IllegalArgumentException("Unknown user id"));
+
+        if (user.role == AppUser.Role.ADMIN && user.active && user.approved && repository.countApprovedAdmins() == 1) {
+            throw new IllegalArgumentException("At least one approved active admin must remain.");
+        }
+
+        deleteOwnedData(user);
+        repository.delete(user);
     }
 
     @Transactional
@@ -250,6 +332,29 @@ public class AppUserService {
                 userGmailConfigRepository.findByUserId(user.id).isPresent(),
                 userBridgeRepository.listByUserId(user.id).size(),
                 (int) passkeyCount(user.id));
+    }
+
+    private void deleteOwnedData(AppUser user) {
+        List<String> bridgeIds = userBridgeRepository.listByUserId(user.id).stream()
+                .map(bridge -> bridge.bridgeId)
+                .toList();
+
+        if (!bridgeIds.isEmpty()) {
+            sourcePollingSettingRepository.deleteBySourceIds(bridgeIds);
+            sourcePollingStateRepository.deleteBySourceIds(bridgeIds);
+            sourcePollEventRepository.deleteBySourceIds(bridgeIds);
+            importedMessageRepository.deleteBySourceAccountIds(bridgeIds);
+            oAuthCredentialService.deleteMicrosoftCredentials(bridgeIds);
+            oAuthCredentialService.deleteGoogleCredentials(bridgeIds.stream().map(bridgeId -> "source-google:" + bridgeId).toList());
+        }
+
+        oAuthCredentialService.deleteGoogleCredential("user-gmail:" + user.id);
+        userBridgeRepository.deleteByUserId(user.id);
+        userGmailConfigRepository.deleteByUserId(user.id);
+        userPollingSettingRepository.deleteByUserId(user.id);
+        userUiPreferenceRepository.deleteByUserId(user.id);
+        userPasskeyRepository.deleteByUserId(user.id);
+        userSessionService.invalidateUserSessions(user.id);
     }
 
     private void requirePasswordConfirmation(String password, String confirmPassword) {

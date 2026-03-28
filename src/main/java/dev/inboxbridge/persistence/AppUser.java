@@ -55,6 +55,9 @@ public class AppUser extends PanacheEntityBase {
     @Column(name = "approved", nullable = false)
     public boolean approved;
 
+    @Column(name = "disabled_by_single_user_mode", nullable = false)
+    public boolean disabledBySingleUserMode;
+
     @Column(name = "created_at", nullable = false)
     public Instant createdAt;
 

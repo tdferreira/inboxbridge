@@ -20,6 +20,7 @@ function UserListItem({
   isExpanded,
   isLoading,
   locale,
+  onDeleteUser,
   onForcePasswordChange,
   onLoadCustomRange,
   onOpenResetPasswordDialog,
@@ -131,7 +132,7 @@ function UserListItem({
           </div>
         </button>
         <div ref={menuContainerRef} className="user-list-entry-menu">
-          <button aria-label={t('users.actions')} className="secondary fetcher-menu-button" onClick={() => setMenuOpen((current) => !current)} ref={menuButtonRef} title={t('users.actions')} type="button">
+          <button aria-label={t('users.actions')} className="icon-button fetcher-menu-button" onClick={() => setMenuOpen((current) => !current)} ref={menuButtonRef} title={t('users.actions')} type="button">
             <span aria-hidden="true" className="menu-icon-hamburger">
               <span />
               <span />
@@ -162,6 +163,9 @@ function UserListItem({
               <button className="danger" disabled={!userHasPasskeys} onClick={() => { onResetUserPasskeys(user); setMenuOpen(false) }} type="button">
                 {t('users.resetPasskeys')}
               </button>
+              <button className="danger" disabled={viewingSelfAdmin} onClick={() => { onDeleteUser(user); setMenuOpen(false) }} type="button">
+                {t('users.delete')}
+              </button>
             </div>
           ) : null}
         </div>
@@ -187,6 +191,9 @@ function UserListItem({
             </LoadingButton>
             <LoadingButton className="secondary" hint={user.active ? t('users.suspendHint') : t('users.reactivateHint')} isLoading={updatingUser} loadingLabel={t('users.saving')} type="button" onClick={() => onToggleUserActive(user)}>
               {user.active ? t('users.suspend') : t('users.reactivate')}
+            </LoadingButton>
+            <LoadingButton className="danger" disabled={viewingSelfAdmin} hint={viewingSelfAdmin ? t('users.deleteSelfHint') : t('users.deleteHint')} isLoading={updatingUser} loadingLabel={t('users.confirmLoading')} type="button" onClick={() => onDeleteUser(user)}>
+              {t('users.delete')}
             </LoadingButton>
             </div>
             {viewingSelfAdmin ? <div className="muted-box">{t('users.selfAdminWarning')}</div> : null}
