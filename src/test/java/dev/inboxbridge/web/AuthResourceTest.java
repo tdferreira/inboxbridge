@@ -16,6 +16,7 @@ import dev.inboxbridge.security.CurrentUserContext;
 import dev.inboxbridge.service.AppUserService;
 import dev.inboxbridge.service.ApplicationModeService;
 import dev.inboxbridge.service.AuthService;
+import dev.inboxbridge.service.MicrosoftOAuthService;
 import dev.inboxbridge.service.PasskeyService;
 import jakarta.ws.rs.BadRequestException;
 import jakarta.ws.rs.core.NewCookie;
@@ -58,10 +59,12 @@ class AuthResourceTest {
     void optionsReturnsSingleUserSetting() {
         AuthResource resource = new AuthResource();
         resource.applicationModeService = new FakeApplicationModeService(false);
+        resource.microsoftOAuthService = new FakeMicrosoftOAuthService(false);
 
         var response = resource.options();
 
         assertEquals(false, response.multiUserEnabled());
+        assertEquals(false, response.microsoftOAuthAvailable());
     }
 
     @Test
@@ -127,6 +130,19 @@ class AuthResourceTest {
         @Override
         public boolean multiUserEnabled() {
             return enabled;
+        }
+    }
+
+    private static final class FakeMicrosoftOAuthService extends MicrosoftOAuthService {
+        private final boolean configured;
+
+        private FakeMicrosoftOAuthService(boolean configured) {
+            this.configured = configured;
+        }
+
+        @Override
+        public boolean clientConfigured() {
+            return configured;
         }
     }
 }

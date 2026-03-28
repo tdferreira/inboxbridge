@@ -70,7 +70,7 @@ describe('SystemDashboardSection', () => {
     expect(screen.getByText(/Effective interval:/)).toBeInTheDocument()
     expect(screen.getByText(/Effective fetch window:/)).toBeInTheDocument()
 
-    fireEvent.click(screen.getByRole('button', { name: 'Edit Poller Settings' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Edit Polling Settings' }))
     fireEvent.click(screen.getByRole('button', { name: 'Run Poll Now' }))
 
     expect(onOpenEditor).toHaveBeenCalled()
@@ -132,8 +132,8 @@ describe('SystemDashboardSection', () => {
       />
     )
 
-    expect(screen.getByText('Definições globais do poller')).toBeInTheDocument()
+    expect(screen.getByText('Definições globais de verificação')).toBeInTheDocument()
     expect(screen.getByText(/Polling efetivo:/)).toBeInTheDocument()
-    expect(screen.getByRole('button', { name: 'Editar definições do poller' })).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Editar definições de verificação' })).toBeInTheDocument()
   })
 })

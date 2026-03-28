@@ -1,8 +1,126 @@
 import { translate } from './i18n'
 
+function normalizeDateValue(value) {
+  if (!value) return value
+  if (value instanceof Date) return value
+  const text = String(value)
+  const exactDate = new Date(text)
+  if (!Number.isNaN(exactDate.getTime())) {
+    return exactDate
+  }
+  const normalizedText = text.replace(/\.(\d{3})\d+(Z|[+-]\d{2}:\d{2})$/, '.$1$2')
+  const normalizedDate = new Date(normalizedText)
+  if (!Number.isNaN(normalizedDate.getTime())) {
+    return normalizedDate
+  }
+  return null
+}
+
 export function formatDate(value, locale = 'en') {
   if (!value) return translate(locale, 'common.never')
-  return new Date(value).toLocaleString(locale)
+  const date = normalizeDateValue(value)
+  if (!date) return translate(locale, 'common.unavailable')
+  return date.toLocaleString(locale)
+}
+
+export function formatPollError(message, locale = 'en') {
+  if (message && typeof message === 'object') {
+    const code = String(message.code || '').trim()
+    const bridgeId = message.sourceId || ''
+    switch (code) {
+      case 'source_cooling_down':
+        return translate(locale, 'common.cooldownError', {
+          bridgeId,
+          value: formatDate(message.value, locale)
+        })
+      case 'source_waiting_next_window':
+        return translate(locale, 'common.nextPollWindowError', {
+          bridgeId,
+          value: formatDate(message.value, locale)
+        })
+      case 'source_disabled':
+        return translate(locale, 'common.sourceDisabledError', { bridgeId })
+      case 'source_polling_disabled':
+        return translate(locale, 'common.sourcePollingDisabledError', { bridgeId })
+      case 'gmail_account_not_linked':
+        return translate(locale, 'common.gmailAccountNotLinkedError', { bridgeId })
+      case 'gmail_access_revoked':
+        return translate(locale, 'common.gmailAccessRevokedError', { bridgeId })
+      case 'microsoft_access_revoked':
+        return translate(locale, 'common.microsoftAccessRevokedError', { bridgeId })
+      case 'poll_busy':
+        return translate(locale, 'common.pollBusyError')
+      default:
+        return formatPollError(message.message, locale)
+    }
+  }
+
+  const text = String(message || '').trim()
+  if (!text) return text
+  const cooldownMatch = text.match(/^Source (.+?) is cooling down until (.+)\.$/)
+  if (cooldownMatch) {
+    const [, bridgeId, until] = cooldownMatch
+    return translate(locale, 'common.cooldownError', {
+      bridgeId,
+      value: formatDate(until, locale)
+    })
+  }
+
+  const nextWindowMatch = text.match(/^Source (.+?) is waiting for its next poll window at (.+)\.$/)
+  if (nextWindowMatch) {
+    const [, bridgeId, at] = nextWindowMatch
+    return translate(locale, 'common.nextPollWindowError', {
+      bridgeId,
+      value: formatDate(at, locale)
+    })
+  }
+
+  const sourceDisabledMatch = text.match(/^Source (.+?) is disabled\.$/)
+  if (sourceDisabledMatch) {
+    return translate(locale, 'common.sourceDisabledError', { bridgeId: sourceDisabledMatch[1] })
+  }
+
+  const sourcePollingDisabledMatch = text.match(/^Source (.+?) is skipped because polling is disabled for this fetcher\.$/)
+  if (sourcePollingDisabledMatch) {
+    return translate(locale, 'common.sourcePollingDisabledError', { bridgeId: sourcePollingDisabledMatch[1] })
+  }
+
+  const gmailAccountNotLinkedMatch = text.match(/^Source (.+?) failed: The Gmail account is not linked for this destination\..+$/)
+  if (gmailAccountNotLinkedMatch) {
+    return translate(locale, 'common.gmailAccountNotLinkedError', { bridgeId: gmailAccountNotLinkedMatch[1] })
+  }
+
+  const gmailAccessRevokedMatch = text.match(/^Source (.+?) failed: The linked Gmail account no longer grants InboxBridge access\..+$/)
+  if (gmailAccessRevokedMatch) {
+    return translate(locale, 'common.gmailAccessRevokedError', { bridgeId: gmailAccessRevokedMatch[1] })
+  }
+
+  const gmailRefreshRevokedMatch = text.match(/^Source (.+?) failed: Google token request failed with status 400:[\s\S]*invalid_grant[\s\S]*expired or revoked[\s\S]*$/i)
+  if (gmailRefreshRevokedMatch) {
+    return translate(locale, 'common.gmailAccessRevokedError', { bridgeId: gmailRefreshRevokedMatch[1] })
+  }
+
+  const microsoftAccessRevokedMatch = text.match(/^Source (.+?) failed: The linked Microsoft account no longer grants InboxBridge access\..+$/)
+  if (microsoftAccessRevokedMatch) {
+    return translate(locale, 'common.microsoftAccessRevokedError', { bridgeId: microsoftAccessRevokedMatch[1] })
+  }
+
+  if (text.startsWith('A poll is already running')) {
+    return translate(locale, 'common.pollBusyError')
+  }
+
+  return text
+}
+
+export function isOauthRevokedError(message) {
+  if (!message) return false
+  if (typeof message === 'object') {
+    const code = String(message.code || '').trim()
+    return code === 'gmail_access_revoked' || code === 'microsoft_access_revoked'
+  }
+  const text = String(message).trim()
+  return text.includes('The linked Gmail account no longer grants InboxBridge access.')
+    || text.includes('The linked Microsoft account no longer grants InboxBridge access.')
 }
 
 export function statusTone(status) {

@@ -9,6 +9,7 @@ import dev.inboxbridge.dto.MicrosoftOAuthCodeRequest;
 import dev.inboxbridge.dto.MicrosoftOAuthSourceOption;
 import dev.inboxbridge.dto.MicrosoftTokenExchangeResponse;
 import dev.inboxbridge.dto.OAuthUrlResponse;
+import dev.inboxbridge.dto.ApiError;
 import dev.inboxbridge.persistence.AppUser;
 import dev.inboxbridge.persistence.UserBridge;
 import dev.inboxbridge.security.CurrentUserContext;
@@ -59,10 +60,10 @@ public class MicrosoftOAuthResource {
     @GET
     @Path("/start")
     @RequireAuth
-    public Response start(@QueryParam("sourceId") String sourceId) {
+    public Response start(@QueryParam("sourceId") String sourceId, @QueryParam("lang") String language) {
         try {
             authorizeSource(sourceId);
-            return Response.seeOther(URI.create(microsoftOAuthService.buildAuthorizationUrl(sourceId))).build();
+            return Response.seeOther(URI.create(microsoftOAuthService.buildAuthorizationUrl(sourceId, language))).build();
         } catch (IllegalArgumentException | IllegalStateException e) {
             throw new BadRequestException(e.getMessage(), e);
         }
@@ -95,7 +96,10 @@ public class MicrosoftOAuthResource {
             return Response.ok(microsoftOAuthService.exchangeAuthorizationCode(request.sourceId(), request.code())).build();
         } catch (IllegalArgumentException | IllegalStateException e) {
             return Response.status(Response.Status.BAD_REQUEST)
-                    .entity(Map.of("error", e.getMessage()))
+                    .entity(new ApiError(
+                            ApiErrorCodes.resolve(ApiErrorDetails.deepestMessage(e).isBlank() ? e.getMessage() : ApiErrorDetails.deepestMessage(e), 400),
+                            e.getMessage(),
+                            ApiErrorDetails.deepestMessage(e)))
                     .build();
         }
     }
@@ -108,13 +112,15 @@ public class MicrosoftOAuthResource {
             @QueryParam("state") String state,
             @QueryParam("error") String error,
             @QueryParam("error_description") String errorDescription) {
+        String language = callbackLanguage(state);
         if (error != null && !error.isBlank()) {
             return htmlCallbackPage(
-                    microsoftErrorTitle(error),
-                    microsoftErrorMessage(error, errorDescription),
+                    language,
+                    localized(language, microsoftErrorTitle(error), "access_denied".equalsIgnoreCase(error) ? "Permissao necessaria no Microsoft OAuth" : "Erro de Microsoft OAuth"),
+                    localized(language, microsoftErrorMessage(error, errorDescription), localizeMicrosoftErrorMessage(error, errorDescription)),
                     Map.of(
-                            "Error", error,
-                            "Description", errorDescription == null ? "" : errorDescription),
+                            localized(language, "Error", "Erro"), error,
+                            localized(language, "Description", "Descricao"), errorDescription == null ? "" : errorDescription),
                     false,
                     null,
                     null,
@@ -127,11 +133,14 @@ public class MicrosoftOAuthResource {
             callbackValidation = microsoftOAuthService.validateCallback(state);
         } catch (IllegalArgumentException e) {
             return htmlCallbackPage(
-                    "Invalid OAuth State",
-                    "The callback state was missing or expired. Start the Microsoft OAuth flow again from the admin UI.",
+                    language,
+                    localized(language, "Invalid OAuth State", "Estado OAuth invalido"),
+                    localized(language,
+                            "The callback state was missing or expired. Start the Microsoft OAuth flow again from the admin UI.",
+                            "O estado do retorno estava em falta ou expirou. Inicie novamente o fluxo Microsoft OAuth a partir da interface de administracao."),
                     Map.of(
-                            "Code", code == null ? "" : code,
-                            "Error", e.getMessage()),
+                            localized(language, "Code", "Codigo"), code == null ? "" : code,
+                            localized(language, "Error", "Erro"), e.getMessage()),
                     false,
                     null,
                     null,
@@ -139,14 +148,21 @@ public class MicrosoftOAuthResource {
                     null);
         }
 
+        Map<String, String> fields = orderedFields(
+                localized(callbackValidation.language(), "Source ID", "ID da conta"), callbackValidation.sourceId(),
+                localized(callbackValidation.language(), "Authorization Code", "Codigo de autorizacao"), code == null ? "" : code,
+                localized(callbackValidation.language(), "Exchange Endpoint", "Endpoint de troca"), "POST /api/microsoft-oauth/exchange");
+        if (callbackValidation.configKey() != null && !callbackValidation.configKey().isBlank()) {
+            fields.put(localized(callbackValidation.language(), "Env Refresh Token Key", "Chave de refresh token do ambiente"), callbackValidation.configKey());
+        }
+
         return htmlCallbackPage(
-                "Microsoft OAuth Code Received",
-                "You can exchange this authorization code directly in the browser. If secure token storage is configured, InboxBridge will save it encrypted in PostgreSQL and renew access tokens automatically.",
-                orderedFields(
-                        "Source ID", callbackValidation.sourceId(),
-                        "Config Key", callbackValidation.configKey(),
-                        "Authorization Code", code == null ? "" : code,
-                        "Exchange Endpoint", "POST /api/microsoft-oauth/exchange"),
+                callbackValidation.language(),
+                localized(callbackValidation.language(), "Microsoft OAuth Code Received", "Codigo do Microsoft OAuth recebido"),
+                localized(callbackValidation.language(),
+                        "You can exchange this authorization code directly in the browser. If secure token storage is configured, InboxBridge will save it encrypted in PostgreSQL and renew access tokens automatically.",
+                        "Pode trocar este codigo de autorizacao diretamente no browser. Se o armazenamento seguro de tokens estiver configurado, o InboxBridge vai guarda-lo de forma encriptada em PostgreSQL e renovar automaticamente os tokens de acesso."),
+                fields,
                 true,
                 callbackValidation.sourceId(),
                 callbackValidation.configKey(),
@@ -155,6 +171,7 @@ public class MicrosoftOAuthResource {
     }
 
     private Response htmlCallbackPage(
+            String language,
             String title,
             String message,
             Map<String, String> fields,
@@ -187,21 +204,21 @@ public class MicrosoftOAuthResource {
             browserExchangeHtml = """
                     <div class="exchange-card">
                       <div class="actions">
-                        <button class="primary" id="exchangeButton" type="button">Exchange Code In Browser</button>
-                        <button class="secondary" id="copyCodeButton" type="button">Copy Authorization Code</button>
-                        <a class="button-link" id="returnLink" href="/">Return To Admin UI</a>
+                        <button class="primary" id="exchangeButton" type="button">%s</button>
+                        <button class="secondary" id="copyCodeButton" type="button">%s</button>
+                        <a class="button-link" id="returnLink" href="/">%s</a>
                       </div>
                       <div class="status" id="exchangeStatus"></div>
                       <div class="status" id="redirectStatus"></div>
                       <div class="field hidden" id="resultField">
-                        <div class="label">Exchange Result</div>
+                        <div class="label">%s</div>
                         <pre id="resultValue"></pre>
                       </div>
                       <div class="field hidden" id="envField">
-                        <div class="label">Env Assignment</div>
+                        <div class="label">%s</div>
                         <pre id="envAssignmentValue"></pre>
                         <div class="actions compact">
-                          <button class="secondary" id="copyEnvAssignmentButton" type="button">Copy Env Assignment</button>
+                          <button class="secondary" id="copyEnvAssignmentButton" type="button">%s</button>
                         </div>
                       </div>
                     </div>
@@ -240,9 +257,9 @@ public class MicrosoftOAuthResource {
                         if (countdownIntervalId) {
                           window.clearInterval(countdownIntervalId);
                         }
-                        let secondsRemaining = 10;
+                        let secondsRemaining = 5;
                         const updateCountdown = () => {
-                          redirectStatus.textContent = "Returning to the admin UI in " + secondsRemaining + " seconds.";
+                          redirectStatus.textContent = %s + secondsRemaining + %s;
                         };
                         updateCountdown();
                         countdownIntervalId = window.setInterval(() => {
@@ -250,14 +267,14 @@ public class MicrosoftOAuthResource {
                           if (secondsRemaining <= 0) {
                             window.clearInterval(countdownIntervalId);
                             countdownIntervalId = null;
-                            redirectStatus.textContent = "Returning to the admin UI now...";
+                            redirectStatus.textContent = %s;
                             return;
                           }
                           updateCountdown();
                         }, 1000);
                         redirectTimerId = window.setTimeout(() => {
                           window.location.assign("/");
-                        }, 10000);
+                        }, 5000);
                       }
 
                       async function copyText(text, label) {
@@ -274,22 +291,22 @@ public class MicrosoftOAuthResource {
                           document.execCommand("copy");
                           document.body.removeChild(input);
                         }
-                        exchangeStatus.textContent = label + " copied to clipboard.";
+                        exchangeStatus.textContent = label + %s;
                       }
 
                       copyCodeButton?.addEventListener("click", async () => {
                         try {
-                          await copyText(oauthCode, "Authorization code");
+                          await copyText(oauthCode, %s);
                         } catch (error) {
-                          exchangeStatus.textContent = "Unable to copy the authorization code automatically.";
+                          exchangeStatus.textContent = %s;
                         }
                       });
 
                       copyEnvAssignmentButton?.addEventListener("click", async () => {
                         try {
-                          await copyText(envAssignmentValue.textContent, "Env assignment");
+                          await copyText(envAssignmentValue.textContent, %s);
                         } catch (error) {
-                          exchangeStatus.textContent = "Unable to copy the env assignment automatically.";
+                          exchangeStatus.textContent = %s;
                         }
                       });
 
@@ -311,23 +328,23 @@ public class MicrosoftOAuthResource {
                           normalized.includes("offline_access") ||
                           normalized.includes("missing scopes")
                         ) {
-                          return "Microsoft OAuth is still missing one or more required permissions. Retry the flow and approve every requested mailbox permission, then try again. Details: " + parsedMessage;
+                          return %s + parsedMessage;
                         }
                         if (!parsedMessage) {
-                          return "Exchange failed with status " + statusCode + ". Check the server logs and Microsoft app settings.";
+                          return %s + statusCode + %s;
                         }
-                        return "Exchange failed: " + parsedMessage;
+                        return %s + parsedMessage;
                       }
 
                       async function exchangeCode() {
                         if (!oauthCode) {
                           exchangeStatus.textContent = oauthError
-                            ? "Microsoft OAuth returned " + oauthError + (oauthErrorDescription ? ": " + oauthErrorDescription : ".")
-                            : "No authorization code was present in the callback URL.";
+                            ? %s + oauthError + (oauthErrorDescription ? ": " + oauthErrorDescription : ".")
+                            : %s;
                           return;
                         }
                         if (!oauthState) {
-                          exchangeStatus.textContent = "The callback state is missing or expired. Start the Microsoft OAuth flow again from the admin UI.";
+                          exchangeStatus.textContent = %s;
                           return;
                         }
                         if (exchangeAttempted) {
@@ -335,7 +352,7 @@ public class MicrosoftOAuthResource {
                         }
                         exchangeAttempted = true;
                         exchangeButton.disabled = true;
-                        exchangeStatus.textContent = "Exchanging authorization code...";
+                        exchangeStatus.textContent = %s;
                         try {
                           const response = await fetch("/api/microsoft-oauth/exchange", {
                             method: "POST",
@@ -351,13 +368,13 @@ public class MicrosoftOAuthResource {
 
                           const payload = JSON.parse(payloadText);
                           const details = [
-                            "Source ID: " + (payload.sourceId || oauthSourceId),
-                            "Credential Key: " + (payload.credentialKey || ""),
-                            "Storage: " + (payload.storedInDatabase ? "Encrypted database" : "Environment fallback"),
-                            "Scope: " + (payload.scope || ""),
-                            "Token Type: " + (payload.tokenType || ""),
-                            "Access Token Expires At: " + (payload.accessTokenExpiresAt || ""),
-                            "Next Step: " + (payload.nextStep || "")
+                            %s + (payload.sourceId || oauthSourceId),
+                            %s + (payload.credentialKey || ""),
+                            %s + (payload.storedInDatabase ? %s : %s),
+                            %s + (payload.scope || ""),
+                            %s + (payload.tokenType || ""),
+                            %s + (payload.accessTokenExpiresAt || ""),
+                            %s + (payload.nextStep || "")
                           ].join("\\n");
                           exchanged = true;
                           startAutoReturn();
@@ -367,15 +384,15 @@ public class MicrosoftOAuthResource {
                           if (payload.usingEnvironmentFallback && payload.refreshToken) {
                             envAssignmentValue.textContent = oauthConfigKey + "=" + payload.refreshToken;
                             envField.classList.remove("hidden");
-                            exchangeStatus.textContent = "Exchange completed, but this env-managed source cannot poll yet. Copy the env assignment into your local .env, restart InboxBridge, and then polling will be able to use the new refresh token.";
+                            exchangeStatus.textContent = %s;
                           } else {
                             envField.classList.add("hidden");
                             envAssignmentValue.textContent = "";
-                            exchangeStatus.textContent = "Exchange completed. The refresh token was stored encrypted in PostgreSQL and future renewals will be automatic.";
+                            exchangeStatus.textContent = %s;
                           }
                         } catch (error) {
                           exchangeAttempted = false;
-                          exchangeStatus.textContent = "Exchange failed. Check the server logs and Microsoft app settings.";
+                          exchangeStatus.textContent = %s;
                         } finally {
                           exchangeButton.disabled = false;
                         }
@@ -383,14 +400,14 @@ public class MicrosoftOAuthResource {
 
                       exchangeButton?.addEventListener("click", exchangeCode);
                       if (oauthError) {
-                        exchangeStatus.textContent = "Microsoft OAuth returned " + oauthError + (oauthErrorDescription ? ": " + oauthErrorDescription : ".");
+                        exchangeStatus.textContent = %s + oauthError + (oauthErrorDescription ? ": " + oauthErrorDescription : ".");
                       } else if (oauthCode && oauthState) {
-                        exchangeStatus.textContent = "Authorization code received. Attempting automatic exchange...";
+                        exchangeStatus.textContent = %s;
                         window.setTimeout(() => {
                           exchangeCode();
                         }, 0);
                       } else if (oauthCode) {
-                        exchangeStatus.textContent = "Authorization code received, but callback state is missing. Start the Microsoft OAuth flow again if automatic exchange does not work.";
+                        exchangeStatus.textContent = %s;
                       }
 
                       window.addEventListener("beforeunload", (event) => {
@@ -405,30 +422,70 @@ public class MicrosoftOAuthResource {
                         if (exchanged) {
                           return;
                         }
-                        const leave = window.confirm("Leave this page without exchanging the code? If you continue, you must copy the code and handle the token exchange manually later.");
+                        const leave = window.confirm(%s);
                         if (leave) {
                           allowLeave = true;
                         }
                         if (!leave) {
                           event.preventDefault();
-                          exchangeStatus.textContent = "Exchange the code in the browser before leaving, or copy it now and complete the token exchange manually later.";
+                          exchangeStatus.textContent = %s;
                         }
                       });
                     </script>
-                    """.formatted(jsString(sourceId), jsString(state), jsString(configKey), jsString(code));
+                    """.formatted(
+                            escapeHtml(localized(language, "Exchange Code In Browser", "Trocar codigo no browser")),
+                            escapeHtml(localized(language, "Copy Authorization Code", "Copiar codigo de autorizacao")),
+                            escapeHtml(localized(language, "Return To Admin UI", "Voltar a interface de administracao")),
+                            escapeHtml(localized(language, "Exchange Result", "Resultado da troca")),
+                            escapeHtml(localized(language, "Env Assignment", "Atribuicao de ambiente")),
+                            escapeHtml(localized(language, "Copy Env Assignment", "Copiar atribuicao de ambiente")),
+                            jsString(localized(language, "Returning to the admin UI in ", "A voltar para a interface de administracao em ")),
+                            jsString(localized(language, " seconds.", " segundos.")),
+                            jsString(localized(language, "Returning to the admin UI now...", "A voltar para a interface de administracao agora...")),
+                            jsString(localized(language, " copied to clipboard.", " copiado para a area de transferencia.")),
+                            jsString(localized(language, "Authorization code", "Codigo de autorizacao")),
+                            jsString(localized(language, "Unable to copy the authorization code automatically.", "Nao foi possivel copiar automaticamente o codigo de autorizacao.")),
+                            jsString(localized(language, "Env assignment", "Atribuicao de ambiente")),
+                            jsString(localized(language, "Unable to copy the env assignment automatically.", "Nao foi possivel copiar automaticamente a atribuicao de ambiente.")),
+                            jsString(localized(language, "Microsoft OAuth is still missing one or more required permissions. Retry the flow and approve every requested mailbox permission, then try again. Details: ", "Ainda falta uma ou mais permissoes obrigatorias no Microsoft OAuth. Repita o processo e aceite todas as permissoes pedidas da caixa de correio. Detalhes: ")),
+                            jsString(localized(language, "Exchange failed with status ", "A troca do codigo falhou com o estado ")),
+                            jsString(localized(language, ". Check the server logs and Microsoft app settings.", ". Verifique os logs do servidor e as definicoes da aplicacao Microsoft.")),
+                            jsString(localized(language, "Exchange failed: ", "A troca do codigo falhou: ")),
+                            jsString(localized(language, "Microsoft OAuth returned ", "O Microsoft OAuth devolveu ")),
+                            jsString(localized(language, "No authorization code was present in the callback URL.", "Nao foi encontrado qualquer codigo de autorizacao no URL de retorno.")),
+                            jsString(localized(language, "The callback state is missing or expired. Start the Microsoft OAuth flow again from the admin UI.", "O estado do retorno esta em falta ou expirou. Inicie novamente o fluxo Microsoft OAuth a partir da interface de administracao.")),
+                            jsString(localized(language, "Exchanging authorization code...", "A trocar o codigo de autorizacao...")),
+                            jsString(localized(language, "Source ID: ", "ID da conta: ")),
+                            jsString(localized(language, "Credential Key: ", "Chave da credencial: ")),
+                            jsString(localized(language, "Storage: ", "Armazenamento: ")),
+                            jsString(localized(language, "Encrypted database", "Base de dados encriptada")),
+                            jsString(localized(language, "Environment fallback", "Fallback por ambiente")),
+                            jsString(localized(language, "Scope: ", "Escopo: ")),
+                            jsString(localized(language, "Token Type: ", "Tipo de token: ")),
+                            jsString(localized(language, "Access Token Expires At: ", "Token de acesso expira em: ")),
+                            jsString(localized(language, "Next Step: ", "Proximo passo: ")),
+                            jsString(localized(language, "Exchange completed, but this env-managed source cannot poll yet. Copy the env assignment into your local .env, restart InboxBridge, and then polling will be able to use the new refresh token.", "Troca concluida, mas esta conta gerida por ambiente ainda nao pode ser verificada. Copie a atribuicao para o seu .env local, reinicie o InboxBridge e a verificacao podera usar o novo refresh token.")),
+                            jsString(localized(language, "Exchange completed. The refresh token was stored encrypted in PostgreSQL and future renewals will be automatic.", "Troca concluida. O refresh token foi guardado de forma encriptada em PostgreSQL e as futuras renovacoes serao automaticas.")),
+                            jsString(localized(language, "Exchange failed. Check the server logs and Microsoft app settings.", "A troca do codigo falhou. Verifique os logs do servidor e as definicoes da aplicacao Microsoft.")),
+                            jsString(localized(language, "Microsoft OAuth returned ", "O Microsoft OAuth devolveu ")),
+                            jsString(localized(language, "Authorization code received. Attempting automatic exchange...", "Codigo de autorizacao recebido. A tentar a troca automatica...")),
+                            jsString(localized(language, "Authorization code received, but callback state is missing. Start the Microsoft OAuth flow again if automatic exchange does not work.", "Codigo de autorizacao recebido, mas o estado do retorno esta em falta. Inicie novamente o fluxo Microsoft OAuth se a troca automatica nao funcionar.")),
+                            jsString(localized(language, "Leave this page without exchanging the code? If you continue, you must copy the code and handle the token exchange manually later.", "Sair desta pagina sem trocar o codigo? Se continuar, tera de copiar o codigo e tratar manualmente da troca do token mais tarde.")),
+                            jsString(localized(language, "Exchange the code in the browser before leaving, or copy it now and complete the token exchange manually later.", "Troque o codigo no browser antes de sair, ou copie-o agora e conclua manualmente a troca do token mais tarde.")),
+                            jsString(sourceId), jsString(state), jsString(configKey), jsString(code));
         }
         String auxiliaryActionsHtml = "";
         if (browserExchangeHtml.isBlank()) {
             auxiliaryActionsHtml = """
                     <div class="actions">
-                      <a class="button-link" href="/">Return To Admin UI</a>
+                      <a class="button-link" href="/">%s</a>
                     </div>
-                    """;
+                    """.formatted(escapeHtml(localized(language, "Return To Admin UI", "Voltar a interface de administracao")));
         }
 
         String html = """
                 <!doctype html>
-                <html lang="en">
+                <html lang="%s">
                 <head>
                   <meta charset="utf-8">
                   <meta name="viewport" content="width=device-width, initial-scale=1">
@@ -578,21 +635,23 @@ public class MicrosoftOAuthResource {
                       %s
                       %s
                       %s
-                      <div class="hint">You can close this tab after the exchange succeeds and any remaining setup is complete.</div>
+                      <div class="hint">%s</div>
                     </section>
                   </main>
                 </body>
                 </html>
                 """
                 .formatted(
+                        escapeHtml(language),
                         escapeHtml(title),
                         accentColor,
-                        escapeHtml(statusTone),
+                        escapeHtml(localized(language, statusTone, "Success".equals(statusTone) ? "Sucesso" : "Atencao")),
                         escapeHtml(title),
                         escapeHtml(message.strip()),
                         fieldsHtml,
                         browserExchangeHtml,
-                        auxiliaryActionsHtml);
+                        auxiliaryActionsHtml,
+                        escapeHtml(localized(language, "You can close this tab after the exchange succeeds and any remaining setup is complete.", "Pode fechar este separador depois de a troca ser concluida com sucesso e de qualquer configuracao restante ficar concluida.")));
 
         return Response.ok(html, MediaType.TEXT_HTML).build();
     }
@@ -612,6 +671,16 @@ public class MicrosoftOAuthResource {
             return "The Microsoft authorization step failed. Retry the flow after correcting the Microsoft consent or app configuration.";
         }
         return "The Microsoft authorization step failed. Retry the flow and approve every requested permission.";
+    }
+
+    private String localizeMicrosoftErrorMessage(String error, String errorDescription) {
+        if ("access_denied".equalsIgnoreCase(error)) {
+            return "O Microsoft OAuth nao recebeu o consentimento necessario. Repita o processo e aceite todas as permissoes pedidas para a caixa de correio, para que o InboxBridge possa renovar tokens e ler a conta de origem.";
+        }
+        if (errorDescription != null && !errorDescription.isBlank()) {
+            return "O passo de autorizacao da Microsoft falhou. Repita o processo depois de corrigir o consentimento Microsoft ou a configuracao da aplicacao.";
+        }
+        return "O passo de autorizacao da Microsoft falhou. Repita o processo e aceite todas as permissoes pedidas.";
     }
 
     private String escapeHtml(String value) {
@@ -660,5 +729,17 @@ public class MicrosoftOAuthResource {
         if (!bridge.userId.equals(user.id)) {
             throw new ForbiddenException("You do not have access to that bridge");
         }
+    }
+
+    private String callbackLanguage(String state) {
+        try {
+            return microsoftOAuthService.validateCallback(state).language();
+        } catch (Exception ignored) {
+            return "en";
+        }
+    }
+
+    private String localized(String language, String english, String portuguese) {
+        return OAuthPageI18n.text(language, english);
     }
 }

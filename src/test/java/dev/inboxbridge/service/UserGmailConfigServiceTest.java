@@ -187,6 +187,52 @@ class UserGmailConfigServiceTest {
         assertEquals("user-gmail:15", credentialService.deletedSubjectKey);
     }
 
+    @Test
+    void markGoogleAccessRevokedClearsStoredRefreshTokensWithoutProviderRevocation() {
+        InMemoryUserGmailConfigRepository repository = repositoryWithNoRow();
+        UserGmailConfig stored = new UserGmailConfig();
+        stored.userId = 21L;
+        stored.destinationUser = "me";
+        stored.redirectUri = "https://mail.example.test/api/google-oauth/callback";
+        stored.refreshTokenCiphertext = "stored-cipher";
+        stored.refreshTokenNonce = "stored-nonce";
+        repository.persist(stored);
+
+        OAuthCredentialService.StoredOAuthCredential credential = new OAuthCredentialService.StoredOAuthCredential(
+                OAuthCredentialService.GOOGLE_PROVIDER,
+                "user-gmail:21",
+                "refresh-token-xyz",
+                "access-token-xyz",
+                java.time.Instant.parse("2026-03-27T09:00:00Z"),
+                "scope",
+                "Bearer",
+                java.time.Instant.parse("2026-03-27T09:00:00Z"));
+
+        FakeOAuthCredentialService credentialService = new FakeOAuthCredentialService(Optional.of(credential));
+        FakeGoogleOAuthService googleOAuthService = new FakeGoogleOAuthService(true);
+        UserGmailConfigService service = service(true, repository, Optional.of(credential));
+        service.oAuthCredentialService = credentialService;
+        service.googleOAuthService = googleOAuthService;
+
+        boolean changed = service.markGoogleAccessRevoked(new dev.inboxbridge.domain.GmailTarget(
+                "user-gmail:21",
+                21L,
+                "john-doe",
+                "me",
+                "client",
+                "secret",
+                "",
+                "https://mail.example.test/api/google-oauth/callback",
+                true,
+                false,
+                false));
+
+        assertTrue(changed);
+        assertEquals("user-gmail:21", credentialService.deletedSubjectKey);
+        assertEquals("user-gmail:21", googleOAuthService.clearedSubjectKey);
+        assertFalse(service.viewForUser(21L).orElseThrow().refreshTokenConfigured());
+    }
+
     private UserGmailConfigService service(
             boolean encryptionConfigured,
             InMemoryUserGmailConfigRepository repository,

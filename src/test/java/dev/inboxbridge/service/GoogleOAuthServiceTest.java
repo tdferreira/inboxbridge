@@ -41,7 +41,7 @@ class GoogleOAuthServiceTest {
         private boolean revokeCalled;
 
         @Override
-        protected GoogleTokenResponse executeTokenRequest(String body) {
+        protected GoogleTokenResponse executeTokenRequest(GoogleOAuthProfile profile, String body, boolean refreshFlow) {
             return new GoogleTokenResponse(
                     "new-access-token",
                     "new-refresh-token",

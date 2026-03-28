@@ -22,11 +22,16 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import dev.inboxbridge.config.BridgeConfig;
 import dev.inboxbridge.dto.GoogleTokenExchangeResponse;
 import dev.inboxbridge.dto.GoogleTokenResponse;
+import dev.inboxbridge.persistence.UserGmailConfigRepository;
 import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.inject.Inject;
 
 @ApplicationScoped
 public class GoogleOAuthService {
+    public static final String GMAIL_ACCESS_REVOKED_MESSAGE =
+            "The linked Gmail account no longer grants InboxBridge access. The saved Gmail OAuth link was cleared. Reconnect it from My Gmail Account.";
+    public static final String SYSTEM_GMAIL_ACCESS_REVOKED_MESSAGE =
+            "The configured Gmail account no longer grants InboxBridge access. Reconnect Gmail OAuth or update the configured refresh token.";
 
     private static final String OAUTH_SCOPE = "https://www.googleapis.com/auth/gmail.insert https://www.googleapis.com/auth/gmail.labels";
     private static final Duration STATE_TTL = Duration.ofMinutes(10);
@@ -39,6 +44,9 @@ public class GoogleOAuthService {
 
     @Inject
     OAuthCredentialService oAuthCredentialService;
+
+    @Inject
+    UserGmailConfigRepository userGmailConfigRepository;
 
     private final HttpClient httpClient = HttpClient.newBuilder()
             .connectTimeout(Duration.ofSeconds(20))
@@ -68,11 +76,15 @@ public class GoogleOAuthService {
                 + "&scope=" + scope;
     }
 
-    public String buildAuthorizationUrlWithState(GoogleOAuthProfile profile, String targetLabel) {
+    public String buildAuthorizationUrlWithState(GoogleOAuthProfile profile, String targetLabel, String language) {
         purgeExpiredStates();
         String state = UUID.randomUUID().toString();
-        pendingStates.put(state, new PendingState(profile, targetLabel, Instant.now().plus(STATE_TTL)));
+        pendingStates.put(state, new PendingState(profile, targetLabel, normalizeLanguage(language), Instant.now().plus(STATE_TTL)));
         return buildAuthorizationUrl(profile) + "&state=" + urlEncode(state);
+    }
+
+    public String buildAuthorizationUrlWithState(GoogleOAuthProfile profile, String targetLabel) {
+        return buildAuthorizationUrlWithState(profile, targetLabel, null);
     }
 
     public GoogleTokenExchangeResponse exchangeAuthorizationCode(String code) {
@@ -95,7 +107,7 @@ public class GoogleOAuthService {
                 "client_secret", profile.clientSecret(),
                 "redirect_uri", profile.redirectUri(),
                 "grant_type", "authorization_code"));
-        GoogleTokenResponse token = executeTokenRequest(body);
+        GoogleTokenResponse token = executeTokenRequest(profile, body, false);
         requireRefreshToken(token.refreshToken(), "Google");
         validateGrantedScopes(token.scope());
         return storeExchangeResult(profile, token);
@@ -166,7 +178,7 @@ public class GoogleOAuthService {
                 "client_secret", profile.clientSecret(),
                 "refresh_token", resolveRefreshToken(profile),
                 "grant_type", "refresh_token"));
-        return executeTokenRequest(body);
+        return executeTokenRequest(profile, body, true);
     }
 
     private String resolveRefreshToken(GoogleOAuthProfile profile) {
@@ -208,7 +220,7 @@ public class GoogleOAuthService {
                     token.scope(),
                     token.tokenType(),
                     expiresAt,
-                    "Set bridge.security.token-encryption-key to enable automatic encrypted token storage. Until then, keep using the refresh token in your environment or user settings.");
+                    "Set SECURITY_TOKEN_ENCRYPTION_KEY to enable automatic encrypted token storage. Until then, keep using the refresh token in your environment or user settings.");
         }
 
         oAuthCredentialService.storeGoogleCredential(
@@ -313,7 +325,7 @@ public class GoogleOAuthService {
                 .collect(Collectors.toCollection(java.util.LinkedHashSet::new));
     }
 
-    protected GoogleTokenResponse executeTokenRequest(String body) {
+    protected GoogleTokenResponse executeTokenRequest(GoogleOAuthProfile profile, String body, boolean refreshFlow) {
         HttpRequest request = HttpRequest.newBuilder(URI.create("https://oauth2.googleapis.com/token"))
                 .timeout(Duration.ofSeconds(20))
                 .header("Content-Type", "application/x-www-form-urlencoded")
@@ -322,6 +334,10 @@ public class GoogleOAuthService {
         try {
             HttpResponse<String> response = httpClient.send(request, HttpResponse.BodyHandlers.ofString(StandardCharsets.UTF_8));
             if (response.statusCode() / 100 != 2) {
+                if (refreshFlow && indicatesRevokedGoogleConsent(response.body())) {
+                    handleRevokedGoogleConsent(profile);
+                    throw new IllegalStateException(revokedAccessMessage(profile));
+                }
                 throw new IllegalStateException("Google token request failed with status " + response.statusCode() + ": " + response.body());
             }
             return objectMapper.readValue(response.body(), GoogleTokenResponse.class);
@@ -330,6 +346,51 @@ public class GoogleOAuthService {
             throw new IllegalStateException("Google token request failed", e);
         } catch (IOException e) {
             throw new IllegalStateException("Google token request failed", e);
+        }
+    }
+
+    private boolean indicatesRevokedGoogleConsent(String body) {
+        if (body == null || body.isBlank()) {
+            return false;
+        }
+        String normalized = body.toLowerCase();
+        return normalized.contains("\"invalid_grant\"")
+                || normalized.contains("token has been expired or revoked")
+                || normalized.contains("token has been revoked")
+                || normalized.contains("invalid refresh token")
+                || normalized.contains("malformed auth code")
+                || normalized.contains("bad request");
+    }
+
+    private void handleRevokedGoogleConsent(GoogleOAuthProfile profile) {
+        if (profile == null || profile.subjectKey() == null || profile.subjectKey().isBlank()) {
+            return;
+        }
+        clearCachedToken(profile.subjectKey());
+        oAuthCredentialService.deleteGoogleCredential(profile.subjectKey());
+        Long userId = parseUserId(profile.subjectKey());
+        if (userId != null) {
+            userGmailConfigRepository.findByUserId(userId).ifPresent(config -> {
+                config.refreshTokenCiphertext = null;
+                config.refreshTokenNonce = null;
+                config.updatedAt = Instant.now();
+                userGmailConfigRepository.persist(config);
+            });
+        }
+    }
+
+    private String revokedAccessMessage(GoogleOAuthProfile profile) {
+        return parseUserId(profile.subjectKey()) != null ? GMAIL_ACCESS_REVOKED_MESSAGE : SYSTEM_GMAIL_ACCESS_REVOKED_MESSAGE;
+    }
+
+    private Long parseUserId(String subjectKey) {
+        if (subjectKey == null || !subjectKey.startsWith("user-gmail:")) {
+            return null;
+        }
+        try {
+            return Long.parseLong(subjectKey.substring("user-gmail:".length()));
+        } catch (NumberFormatException ignored) {
+            return null;
         }
     }
 
@@ -369,7 +430,34 @@ public class GoogleOAuthService {
         return new CallbackValidation(
                 pendingState.profile().subjectKey(),
                 pendingState.targetLabel(),
-                pendingState.profile().redirectUri());
+                pendingState.profile().redirectUri(),
+                pendingState.language());
+    }
+
+    private String normalizeLanguage(String language) {
+        if (language == null || language.isBlank()) {
+            return "en";
+        }
+        String normalized = language.trim().toLowerCase();
+        if ("fr".equals(normalized) || normalized.startsWith("fr-")) {
+            return "fr";
+        }
+        if ("de".equals(normalized) || normalized.startsWith("de-")) {
+            return "de";
+        }
+        if ("es".equals(normalized) || normalized.startsWith("es-")) {
+            return "es";
+        }
+        if ("pt-pt".equals(normalized)) {
+            return "pt-PT";
+        }
+        if ("pt-br".equals(normalized)) {
+            return "pt-BR";
+        }
+        if ("pt".equals(normalized) || normalized.startsWith("pt-")) {
+            return "pt-PT";
+        }
+        return "en";
     }
 
     private PendingState requirePendingState(String state, boolean keep) {
@@ -389,9 +477,9 @@ public class GoogleOAuthService {
         pendingStates.entrySet().removeIf(entry -> now.isAfter(entry.getValue().expiresAt()));
     }
 
-    public record CallbackValidation(String subjectKey, String targetLabel, String redirectUri) {
+    public record CallbackValidation(String subjectKey, String targetLabel, String redirectUri, String language) {
     }
 
-    private record PendingState(GoogleOAuthProfile profile, String targetLabel, Instant expiresAt) {
+    private record PendingState(GoogleOAuthProfile profile, String targetLabel, String language, Instant expiresAt) {
     }
 }

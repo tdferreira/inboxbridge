@@ -1,6 +1,7 @@
 package dev.inboxbridge.service;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
@@ -21,6 +22,8 @@ import dev.inboxbridge.persistence.AppUser;
 import dev.inboxbridge.persistence.ImportedMessageRepository;
 import dev.inboxbridge.persistence.UserBridge;
 import dev.inboxbridge.persistence.UserBridgeRepository;
+import dev.inboxbridge.persistence.UserGmailConfig;
+import dev.inboxbridge.persistence.UserGmailConfigRepository;
 
 class UserBridgeServiceTest {
 
@@ -111,6 +114,45 @@ class UserBridgeServiceTest {
     }
 
     @Test
+    void listReplacesStaleGmail401ErrorAfterLinkedAccountWasCleared() {
+        UserBridgeService service = service();
+        AppUser owner = user(1L);
+        service.upsert(owner, request(null, "sprc-john"));
+        service.userGmailConfigRepository = new FakeUserGmailConfigRepository(
+                gmailConfig(owner.id, Instant.parse("2026-03-28T08:00:00Z"), false));
+        service.sourcePollEventService = new StaticSourcePollEventService(
+                new AdminPollEventSummary(
+                        "sprc-john",
+                        "scheduler",
+                        "ERROR",
+                        Instant.parse("2026-03-28T07:00:00Z"),
+                        Instant.parse("2026-03-28T07:00:05Z"),
+                        0,
+                        0,
+                        0,
+                        "Source sprc-john failed: Failed to list Gmail labels: 401 - {\"error\":{\"message\":\"Invalid authentication credentials\"}}"));
+        service.sourcePollingStateService = new StaticSourcePollingStateService(
+                new dev.inboxbridge.dto.SourcePollingStateView(
+                        Instant.parse("2026-03-28T08:30:00Z"),
+                        Instant.parse("2026-03-28T08:30:00Z"),
+                        1,
+                        "Source sprc-john failed: Failed to list Gmail labels: 401 - {\"error\":{\"message\":\"Invalid authentication credentials\"}}",
+                        Instant.parse("2026-03-28T07:00:05Z"),
+                        null));
+
+        UserBridgeView view = service.listForUser(owner.id).getFirst();
+
+        assertNotNull(view.lastEvent());
+        assertEquals(
+                "Source sprc-john failed: The linked Gmail account no longer grants InboxBridge access. The saved Gmail OAuth link was cleared. Reconnect it from My Gmail Account.",
+                view.lastEvent().error());
+        assertNotNull(view.pollingState());
+        assertEquals(
+                "Source sprc-john failed: The linked Gmail account no longer grants InboxBridge access. The saved Gmail OAuth link was cleared. Reconnect it from My Gmail Account.",
+                view.pollingState().lastFailureReason());
+    }
+
+    @Test
     void testConnectionUsesStoredPasswordWhenEditingWithoutReenteringIt() {
         UserBridgeService service = service();
         AppUser owner = user(1L);
@@ -129,6 +171,7 @@ class UserBridgeServiceTest {
     private UserBridgeService service() {
         UserBridgeService service = new UserBridgeService();
         service.repository = new InMemoryUserBridgeRepository();
+        service.userGmailConfigRepository = new FakeUserGmailConfigRepository(null);
         service.secretEncryptionService = new FakeSecretEncryptionService();
         service.sourcePollEventService = new NoopSourcePollEventService();
         service.importedMessageRepository = new EmptyImportedMessageRepository();
@@ -298,6 +341,27 @@ class UserBridgeServiceTest {
         }
     }
 
+    private static final class StaticSourcePollingStateService extends SourcePollingStateService {
+        private final dev.inboxbridge.dto.SourcePollingStateView state;
+
+        private StaticSourcePollingStateService(dev.inboxbridge.dto.SourcePollingStateView state) {
+            this.state = state;
+        }
+
+        @Override
+        public Optional<dev.inboxbridge.dto.SourcePollingStateView> viewForSource(String sourceId) {
+            return Optional.ofNullable(state);
+        }
+
+        @Override
+        public java.util.Map<String, dev.inboxbridge.dto.SourcePollingStateView> viewBySourceIds(List<String> sourceIds) {
+            if (state == null || sourceIds.isEmpty()) {
+                return java.util.Map.of();
+            }
+            return java.util.Map.of(sourceIds.getFirst(), state);
+        }
+    }
+
     private static final class FakeOAuthCredentialService extends OAuthCredentialService {
         private final StoredOAuthCredential credential;
 
@@ -324,6 +388,38 @@ class UserBridgeServiceTest {
         public List<IndexedSource> configuredSources() {
             return List.of();
         }
+    }
+
+    private static final class FakeUserGmailConfigRepository extends UserGmailConfigRepository {
+        private final UserGmailConfig config;
+
+        private FakeUserGmailConfigRepository(UserGmailConfig config) {
+            this.config = config;
+        }
+
+        @Override
+        public Optional<UserGmailConfig> findByUserId(Long userId) {
+            if (config == null || !config.userId.equals(userId)) {
+                return Optional.empty();
+            }
+            return Optional.of(config);
+        }
+    }
+
+    private UserGmailConfig gmailConfig(Long userId, Instant updatedAt, boolean hasRefreshToken) {
+        UserGmailConfig config = new UserGmailConfig();
+        config.userId = userId;
+        config.destinationUser = "me";
+        config.redirectUri = "https://localhost:3000/api/google-oauth/callback";
+        config.createMissingLabels = true;
+        config.neverMarkSpam = false;
+        config.processForCalendar = false;
+        config.updatedAt = updatedAt;
+        if (hasRefreshToken) {
+            config.refreshTokenCiphertext = "cipher:refresh";
+            config.refreshTokenNonce = "nonce";
+        }
+        return config;
     }
 
     private static final class FakeMailSourceClient extends MailSourceClient {

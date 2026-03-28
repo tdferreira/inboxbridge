@@ -21,6 +21,7 @@ function LabeledField({ children, helpText, label }) {
 function FetcherDialog({
   bridgeForm,
   duplicateIdError = '',
+  microsoftOAuthAvailable = true,
   onApplyPreset,
   onBridgeFormChange,
   onClose,
@@ -32,7 +33,12 @@ function FetcherDialog({
   testResult = null
 }) {
   const [selectedPreset, setSelectedPreset] = useState('custom')
-  const preset = useMemo(() => findEmailProviderPreset(selectedPreset), [selectedPreset])
+  const availablePresets = useMemo(
+    () => EMAIL_PROVIDER_PRESETS.filter((option) => microsoftOAuthAvailable || option.id !== 'outlook'),
+    [microsoftOAuthAvailable]
+  )
+  const effectivePresetId = availablePresets.some((option) => option.id === selectedPreset) ? selectedPreset : 'custom'
+  const preset = useMemo(() => findEmailProviderPreset(effectivePresetId), [effectivePresetId])
   const usingPassword = bridgeForm.authMethod === 'PASSWORD'
   const dialogTitle = bridgeForm.bridgeId ? t('bridges.editDialogTitle', { bridgeId: bridgeForm.bridgeId }) : t('bridges.addDialogTitle')
   const initialSnapshotRef = useRef(JSON.stringify(bridgeForm))
@@ -57,7 +63,7 @@ function FetcherDialog({
       <form className="settings-grid fetcher-dialog-form" onSubmit={onSave}>
         <LabeledField helpText={t('bridges.providerPresetHelp')} label={t('bridges.providerPreset')}>
           <select value={selectedPreset} onChange={(event) => applyPreset(event.target.value)}>
-            {EMAIL_PROVIDER_PRESETS.map((option) => (
+            {availablePresets.map((option) => (
               <option key={option.id} value={option.id}>{t(`preset.${option.id}.label`)}</option>
             ))}
           </select>
@@ -83,7 +89,9 @@ function FetcherDialog({
         <LabeledField helpText={t('bridges.authMethodHelp')} label={t('bridges.authMethod')}>
           <select value={bridgeForm.authMethod} onChange={(event) => onBridgeFormChange((current) => ({ ...current, authMethod: event.target.value }))}>
             <option value="PASSWORD">{t('authMethod.password')}</option>
-            <option value="OAUTH2">{t('authMethod.oauth2')}</option>
+            {(microsoftOAuthAvailable || bridgeForm.authMethod === 'OAUTH2') ? (
+              <option value="OAUTH2">{t('authMethod.oauth2')}</option>
+            ) : null}
           </select>
         </LabeledField>
         {!usingPassword ? (

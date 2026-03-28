@@ -98,7 +98,7 @@ describe('UserListItem', () => {
 
     expect(screen.getByText('Configuração do utilizador')).toBeInTheDocument()
     expect(screen.getByText('Destino Gmail')).toBeInTheDocument()
-    expect(screen.getByText('Definições do poller')).toBeInTheDocument()
+    expect(screen.getByText('Definições de verificação')).toBeInTheDocument()
     expect(screen.getByText('Passkeys')).toBeInTheDocument()
     const mailFetchersSectionTitle = screen.getByText('Contas de email de origem')
     expect(await screen.findByText('Estatísticas do utilizador: admin')).toBeInTheDocument()

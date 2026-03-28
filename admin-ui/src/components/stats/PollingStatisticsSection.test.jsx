@@ -1,4 +1,4 @@
-import { render, screen } from '@testing-library/react'
+import { fireEvent, render, screen } from '@testing-library/react'
 import { vi } from 'vitest'
 import PollingStatisticsSection from './PollingStatisticsSection'
 import { translate } from '../../lib/i18n'
@@ -120,5 +120,32 @@ describe('PollingStatisticsSection', () => {
     expect(screen.getAllByText('Error polls').length).toBeGreaterThan(0)
     expect(screen.queryByText('Healthy accounts')).not.toBeInTheDocument()
     expect(screen.queryByText('Configured email accounts')).not.toBeInTheDocument()
+  })
+
+  it('opens the custom range dialog with empty fields and closes without discard confirmation when untouched', () => {
+    const confirmSpy = vi.spyOn(window, 'confirm').mockReturnValue(true)
+
+    renderSection({
+      customRangeLoader: vi.fn(async () => ({
+        imports: [],
+        duplicates: [],
+        errors: [],
+        manualRuns: [],
+        scheduledRuns: []
+      }))
+    })
+
+    fireEvent.change(screen.getAllByRole('combobox')[0], { target: { value: 'custom' } })
+
+    expect(screen.getByRole('dialog', { name: 'Custom date-time range' })).toBeInTheDocument()
+    expect(screen.getByLabelText('Date-time from')).toHaveValue('')
+    expect(screen.getByLabelText('Date-time to')).toHaveValue('')
+
+    fireEvent.click(screen.getByRole('button', { name: 'Cancel' }))
+
+    expect(confirmSpy).not.toHaveBeenCalled()
+    expect(screen.queryByRole('dialog', { name: 'Custom date-time range' })).not.toBeInTheDocument()
+
+    confirmSpy.mockRestore()
   })
 })

@@ -16,6 +16,7 @@ import dev.inboxbridge.persistence.AppUser;
 import dev.inboxbridge.persistence.ImportedMessageRepository;
 import dev.inboxbridge.persistence.UserBridge;
 import dev.inboxbridge.persistence.UserBridgeRepository;
+import dev.inboxbridge.persistence.UserGmailConfigRepository;
 import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.inject.Inject;
 import jakarta.transaction.Transactional;
@@ -23,8 +24,14 @@ import jakarta.transaction.Transactional;
 @ApplicationScoped
 public class UserBridgeService {
 
+    private static final String REVOKED_GMAIL_ACCESS_MESSAGE =
+            "The linked Gmail account no longer grants InboxBridge access. The saved Gmail OAuth link was cleared. Reconnect it from My Gmail Account.";
+
     @Inject
     UserBridgeRepository repository;
+
+    @Inject
+    UserGmailConfigRepository userGmailConfigRepository;
 
     @Inject
     SecretEncryptionService secretEncryptionService;
@@ -227,6 +234,7 @@ public class UserBridgeService {
                         Optional.ofNullable(bridge.customLabel),
                         null));
         AdminPollEventSummary lastEvent = sourcePollEventService.latestForSource(bridge.bridgeId).orElse(null);
+        dev.inboxbridge.dto.SourcePollingStateView sanitizedPollingState = sanitizePollingState(bridge, pollingState);
         return new UserBridgeView(
                 bridge.bridgeId,
                 bridge.enabled,
@@ -249,7 +257,7 @@ public class UserBridgeService {
                 importStats.totalImported(),
                 importStats.lastImportedAt(),
                 sanitizeLastEvent(bridge, lastEvent),
-                pollingState);
+                sanitizedPollingState);
     }
 
     private dev.inboxbridge.dto.SourcePollingStateView sourcePollEventState(String bridgeId) {
@@ -294,17 +302,82 @@ public class UserBridgeService {
         if (lastEvent == null || !"ERROR".equals(lastEvent.status()) || lastEvent.error() == null) {
             return lastEvent;
         }
-        if (!lastEvent.error().contains("configured for OAuth2 but has no refresh token")) {
-            return lastEvent;
+        if (lastEvent.error().contains("configured for OAuth2 but has no refresh token")) {
+            OAuthCredentialService.StoredOAuthCredential credential = oAuthCredentialService.findMicrosoftCredential(bridge.bridgeId).orElse(null);
+            if (credential != null && credential.updatedAt() != null && lastEvent.finishedAt() != null
+                    && credential.updatedAt().isAfter(lastEvent.finishedAt())) {
+                return null;
+            }
         }
-        OAuthCredentialService.StoredOAuthCredential credential = oAuthCredentialService.findMicrosoftCredential(bridge.bridgeId).orElse(null);
-        if (credential == null || credential.updatedAt() == null || lastEvent.finishedAt() == null) {
-            return lastEvent;
-        }
-        if (credential.updatedAt().isAfter(lastEvent.finishedAt())) {
-            return null;
+        if (shouldReplaceWithRevokedGmailMessage(bridge.userId, lastEvent.error(), lastEvent.finishedAt())) {
+            return new AdminPollEventSummary(
+                    lastEvent.sourceId(),
+                    lastEvent.trigger(),
+                    lastEvent.status(),
+                    lastEvent.startedAt(),
+                    lastEvent.finishedAt(),
+                    lastEvent.fetched(),
+                    lastEvent.imported(),
+                    lastEvent.duplicates(),
+                    sourcePrefixedRevokedGmailAccessMessage(bridge.bridgeId));
         }
         return lastEvent;
+    }
+
+    private dev.inboxbridge.dto.SourcePollingStateView sanitizePollingState(
+            UserBridge bridge,
+            dev.inboxbridge.dto.SourcePollingStateView pollingState) {
+        if (pollingState == null) {
+            return null;
+        }
+        if (!shouldReplaceWithRevokedGmailMessage(bridge.userId, pollingState.lastFailureReason(), pollingState.lastFailureAt())) {
+            return pollingState;
+        }
+        return new dev.inboxbridge.dto.SourcePollingStateView(
+                pollingState.nextPollAt(),
+                pollingState.cooldownUntil(),
+                pollingState.consecutiveFailures(),
+                sourcePrefixedRevokedGmailAccessMessage(bridge.bridgeId),
+                pollingState.lastFailureAt(),
+                pollingState.lastSuccessAt());
+    }
+
+    private boolean shouldReplaceWithRevokedGmailMessage(Long userId, String errorMessage, Instant referenceTime) {
+        if (userId == null || errorMessage == null || !looksLikeRevokedOrStaleGmailAccessError(errorMessage)) {
+            return false;
+        }
+        if (gmailAccountCurrentlyLinked(userId)) {
+            return false;
+        }
+        Instant gmailConfigUpdatedAt = userGmailConfigRepository.findByUserId(userId)
+                .map(config -> config.updatedAt)
+                .orElse(null);
+        return referenceTime == null
+                || gmailConfigUpdatedAt == null
+                || !gmailConfigUpdatedAt.isBefore(referenceTime);
+    }
+
+    private boolean gmailAccountCurrentlyLinked(Long userId) {
+        boolean storedRefreshToken = userGmailConfigRepository.findByUserId(userId)
+                .map(config -> config.refreshTokenCiphertext != null && config.refreshTokenNonce != null)
+                .orElse(false);
+        if (storedRefreshToken) {
+            return true;
+        }
+        return oAuthCredentialService.findGoogleCredential("user-gmail:" + userId)
+                .map(credential -> credential.refreshToken() != null && !credential.refreshToken().isBlank())
+                .orElse(false);
+    }
+
+    private boolean looksLikeRevokedOrStaleGmailAccessError(String errorMessage) {
+        return errorMessage.contains("Failed to list Gmail labels: 401")
+                || errorMessage.contains("Failed to import Gmail message: 401")
+                || errorMessage.contains("Invalid authentication credentials")
+                || errorMessage.contains("no longer grants InboxBridge access");
+    }
+
+    private String sourcePrefixedRevokedGmailAccessMessage(String bridgeId) {
+        return "Source " + bridgeId + " failed: " + REVOKED_GMAIL_ACCESS_MESSAGE;
     }
 
     private BridgeConfig.Protocol parseProtocol(String value) {

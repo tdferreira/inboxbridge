@@ -1,4 +1,4 @@
-import { authMethodLabel, formatDate, oauthProviderLabel, protocolLabel, statusLabel, statusTone, tokenStorageLabel, triggerLabel } from '../../lib/formatters'
+import { authMethodLabel, formatDate, formatPollError, oauthProviderLabel, protocolLabel, statusLabel, statusTone, tokenStorageLabel, triggerLabel } from '../../lib/formatters'
 import CopyButton from '../common/CopyButton'
 import LoadingButton from '../common/LoadingButton'
 import './BridgeCard.css'
@@ -52,8 +52,8 @@ function BridgeCard({
           <div className="section-copy">{t('bridge.results', { fetched: bridge.lastEvent.fetched, imported: bridge.lastEvent.imported, duplicates: bridge.lastEvent.duplicates, spamJunkSuffix: '' })}</div>
           {bridge.lastEvent.error ? (
             <div className="bridge-card-error-block">
-              <div className="bridge-card-error">{bridge.lastEvent.error}</div>
-              <CopyButton copiedLabel={t('common.copied')} label={t('common.copyError')} text={bridge.lastEvent.error} />
+              <div className="bridge-card-error">{formatPollError(bridge.lastEvent.error, locale)}</div>
+              <CopyButton copiedLabel={t('common.copied')} label={t('common.copyError')} text={formatPollError(bridge.lastEvent.error, locale)} />
             </div>
           ) : null}
         </div>

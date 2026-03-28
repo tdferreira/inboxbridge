@@ -153,7 +153,7 @@ describe('FetcherListItem', () => {
 
     fireEvent.click(screen.getByRole('button', { name: 'Ações da conta de email de origem' }))
     expect(screen.getByRole('button', { name: 'Executar polling agora' })).toBeInTheDocument()
-    expect(screen.getByRole('button', { name: 'Definições do poller' })).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Definições de verificação' })).toBeInTheDocument()
     expect(screen.getByRole('button', { name: 'Editar' })).toBeInTheDocument()
     expect(screen.getByRole('button', { name: 'Apagar' })).toBeInTheDocument()
 

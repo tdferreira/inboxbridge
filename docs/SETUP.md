@@ -33,10 +33,10 @@ JDBC_URL=jdbc:postgresql://postgres:5432/inboxbridge
 JDBC_USERNAME=inboxbridge
 JDBC_PASSWORD=inboxbridge
 PUBLIC_BASE_URL=https://localhost:3000
-BRIDGE_SECURITY_TOKEN_ENCRYPTION_KEY=<base64-32-byte-key>
-BRIDGE_SECURITY_TOKEN_ENCRYPTION_KEY_ID=v1
-BRIDGE_SECURITY_PASSKEY_RP_ID=localhost
-BRIDGE_SECURITY_PASSKEY_ORIGINS=https://localhost:3000
+SECURITY_TOKEN_ENCRYPTION_KEY=<base64-32-byte-key>
+SECURITY_TOKEN_ENCRYPTION_KEY_ID=v1
+SECURITY_PASSKEY_RP_ID=localhost
+SECURITY_PASSKEY_ORIGINS=https://localhost:3000
 ```
 
 After startup:
@@ -51,6 +51,8 @@ Bootstrap admin credentials:
 - password: `nimda`
 
 ## Google Cloud Setup For Gmail API
+
+If you want InboxBridge to use the Gmail API, you must first register this application in Google Cloud.
 
 InboxBridge normally uses one shared Google Cloud OAuth client for the whole deployment.
 
@@ -90,9 +92,11 @@ Notes:
 
 - `GOOGLE_REFRESH_TOKEN` is optional in multi-user mode.
 - Most users should connect their Gmail account from the admin UI instead of placing a Gmail refresh token in `.env`.
-- `BRIDGE_GMAIL_DESTINATION_USER` should usually stay `me`.
+- `GMAIL_DESTINATION_USER` should usually stay `me`.
 
 ## Microsoft Setup For Outlook / Hotmail / Live Source Accounts
+
+If you want InboxBridge to fetch Outlook / Hotmail / Live accounts with OAuth2, you must first register this application in Microsoft Entra.
 
 If you want Microsoft OAuth for source accounts, you need a Microsoft Entra app registration.
 
@@ -130,7 +134,7 @@ Notes:
 Use:
 
 ```dotenv
-BRIDGE_MULTI_USER_ENABLED=true
+MULTI_USER_ENABLED=true
 ```
 
 for the normal multi-user mode.
@@ -138,7 +142,7 @@ for the normal multi-user mode.
 Use:
 
 ```dotenv
-BRIDGE_MULTI_USER_ENABLED=false
+MULTI_USER_ENABLED=false
 ```
 
 if you want only the bootstrap admin and do not need user registration or user management.
@@ -147,26 +151,26 @@ if you want only the bootstrap admin and do not need user registration or user m
 
 You can define source email accounts in two ways:
 
-- in `.env` using `BRIDGE_SOURCES_<n>__...`
+- in `.env` using `MAIL_ACCOUNT_<n>__...`
 - in the admin UI
 
 Example env-managed source:
 
 ```dotenv
-BRIDGE_SOURCES_0__ID=outlook-main
-BRIDGE_SOURCES_0__ENABLED=true
-BRIDGE_SOURCES_0__PROTOCOL=IMAP
-BRIDGE_SOURCES_0__HOST=outlook.office365.com
-BRIDGE_SOURCES_0__PORT=993
-BRIDGE_SOURCES_0__TLS=true
-BRIDGE_SOURCES_0__AUTH_METHOD=OAUTH2
-BRIDGE_SOURCES_0__OAUTH_PROVIDER=MICROSOFT
-BRIDGE_SOURCES_0__USERNAME=replace-me@example.com
-BRIDGE_SOURCES_0__FOLDER=INBOX
-BRIDGE_SOURCES_0__CUSTOM_LABEL=Imported/Outlook
+MAIL_ACCOUNT_0__ID=outlook-main
+MAIL_ACCOUNT_0__ENABLED=true
+MAIL_ACCOUNT_0__PROTOCOL=IMAP
+MAIL_ACCOUNT_0__HOST=outlook.office365.com
+MAIL_ACCOUNT_0__PORT=993
+MAIL_ACCOUNT_0__TLS=true
+MAIL_ACCOUNT_0__AUTH_METHOD=OAUTH2
+MAIL_ACCOUNT_0__OAUTH_PROVIDER=MICROSOFT
+MAIL_ACCOUNT_0__USERNAME=replace-me@example.com
+MAIL_ACCOUNT_0__FOLDER=INBOX
+MAIL_ACCOUNT_0__CUSTOM_LABEL=Imported/Outlook
 ```
 
-If no `BRIDGE_SOURCES_*` values are configured, InboxBridge loads no env-managed source accounts.
+If no `MAIL_ACCOUNT_*` values are configured, InboxBridge loads no env-managed source accounts.
 
 ## Recommended First Run
 
@@ -180,5 +184,5 @@ If no `BRIDGE_SOURCES_*` values are configured, InboxBridge loads no env-managed
 
 ## Related Docs
 
-- [README.md](/Users/tdferreira/Developer/inboxbridge/README.md)
-- [docs/OAUTH_SETUP.md](/Users/tdferreira/Developer/inboxbridge/docs/OAUTH_SETUP.md)
+- [`README.md`](../README.md)
+- [`OAUTH_SETUP.md`](OAUTH_SETUP.md)

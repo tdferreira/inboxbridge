@@ -1,5 +1,5 @@
 import { Suspense, lazy, useEffect, useLayoutEffect, useRef, useState } from 'react'
-import { authMethodLabel, formatDate, oauthProviderLabel, protocolLabel, roleLabel, tokenStorageLabel } from '../../lib/formatters'
+import { authMethodLabel, formatDate, formatPollError, oauthProviderLabel, protocolLabel, roleLabel, tokenStorageLabel } from '../../lib/formatters'
 import { resolveFloatingMenuPosition } from '../../lib/floatingMenu'
 import LoadingButton from '../common/LoadingButton'
 
@@ -243,7 +243,7 @@ function UserListItem({
                 {bridge.host}:{bridge.port} · {t('users.tokenStorageLabel')} {tokenStorageLabel(bridge.tokenStorageMode, locale)}<br />
                 {t('users.pollIntervalValue', { value: bridge.effectivePollInterval })} · {t('users.fetchWindowValue', { value: bridge.effectiveFetchWindow })}<br />
                 {bridge.pollingState?.cooldownUntil ? `${t('users.cooldownUntil', { value: formatDate(bridge.pollingState.cooldownUntil, locale) })} · ` : ''}{t('users.lastUsed', { value: formatDate(bridge.lastEvent?.finishedAt, locale) })}
-                {bridge.pollingState?.lastFailureReason ? <><br />{t('users.lastFailure', { value: bridge.pollingState.lastFailureReason })}</> : null}
+                {bridge.pollingState?.lastFailureReason ? <><br />{t('users.lastFailure', { value: formatPollError(bridge.pollingState.lastFailureReason, locale) })}</> : null}
               </div>
             )) : <div className="muted-box">{t('users.noMailFetchers')}</div>}
             </div>

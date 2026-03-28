@@ -3,7 +3,7 @@ import FetcherPollingDialog from './FetcherPollingDialog'
 import { translate } from '../../lib/i18n'
 
 describe('FetcherPollingDialog', () => {
-  it('renders translated poller settings labels in portuguese', () => {
+  it('renders translated polling settings labels in portuguese', () => {
     render(
       <FetcherPollingDialog
         fetcher={{ bridgeId: 'outlook-main', customLabel: '' }}
@@ -30,7 +30,7 @@ describe('FetcherPollingDialog', () => {
 
     expect(screen.getByText('outlook-main')).toBeInTheDocument()
     expect(screen.getByText('Modo de polling')).toBeInTheDocument()
-    expect(screen.getByRole('button', { name: 'Guardar definições do poller' })).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Guardar definições de verificação' })).toBeInTheDocument()
     expect(screen.getByRole('button', { name: 'Usar predefinições herdadas' })).toBeInTheDocument()
   })
 

@@ -1,16 +1,17 @@
 package dev.inboxbridge.web;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.net.URI;
 import java.util.List;
 import java.util.Optional;
-import java.util.Map;
 
 import org.junit.jupiter.api.Test;
 
 import dev.inboxbridge.config.BridgeConfig;
+import dev.inboxbridge.dto.ApiError;
 import dev.inboxbridge.dto.MicrosoftOAuthSourceOption;
 import dev.inboxbridge.persistence.AppUser;
 import dev.inboxbridge.persistence.UserBridge;
@@ -31,7 +32,7 @@ class MicrosoftOAuthResourceTest {
         resource.envSourceService = envSourceService();
         resource.userBridgeService = new FakeUserBridgeService();
 
-        Response response = resource.start("outlook-main-imap");
+        Response response = resource.start("outlook-main-imap", null);
 
         assertEquals(303, response.getStatus());
         assertEquals(
@@ -50,7 +51,8 @@ class MicrosoftOAuthResourceTest {
         assertEquals(200, response.getStatus());
         assertTrue(html.contains("Microsoft OAuth Code Received"));
         assertTrue(html.contains("outlook-main-imap"));
-        assertTrue(html.contains("BRIDGE_SOURCES_0__OAUTH_REFRESH_TOKEN"));
+        assertTrue(html.contains("MAIL_ACCOUNT_0__OAUTH_REFRESH_TOKEN"));
+        assertTrue(html.contains("Env Refresh Token Key"));
         assertTrue(html.contains("abc123"));
         assertTrue(html.contains("Exchange Code In Browser"));
         assertTrue(html.contains("Return To Admin UI"));
@@ -101,11 +103,49 @@ class MicrosoftOAuthResourceTest {
     }
 
     @Test
+    void callbackRendersPortugueseWhenStateLanguageIsPortuguese() {
+        MicrosoftOAuthResource resource = new MicrosoftOAuthResource();
+        resource.microsoftOAuthService = new FakeMicrosoftOAuthService() {
+            @Override
+            public CallbackValidation validateCallback(String state) {
+                return new CallbackValidation("outlook-main-imap", "MAIL_ACCOUNT_0__OAUTH_REFRESH_TOKEN", "pt");
+            }
+        };
+
+        Response response = resource.callback("abc123", "state-1", null, null);
+        String html = (String) response.getEntity();
+
+        assertTrue(html.contains("Codigo do Microsoft OAuth recebido"));
+        assertTrue(html.contains("Trocar codigo no browser"));
+        assertTrue(html.contains("Voltar a interface de administracao"));
+    }
+
+    @Test
+    void callbackHidesEnvRefreshTokenKeyForUserManagedSources() {
+        MicrosoftOAuthResource resource = new MicrosoftOAuthResource();
+        resource.microsoftOAuthService = new FakeMicrosoftOAuthService() {
+            @Override
+            public CallbackValidation validateCallback(String state) {
+                return new CallbackValidation("outlook-user", "", "en");
+            }
+        };
+
+        Response response = resource.callback("abc123", "state-1", null, null);
+        String html = (String) response.getEntity();
+
+        assertTrue(html.contains("outlook-user"));
+        assertTrue(html.contains("Authorization Code"));
+        assertTrue(html.contains("Exchange Endpoint"));
+        assertFalse(html.contains("Config Key"));
+        assertFalse(html.contains("Env Refresh Token Key"));
+    }
+
+    @Test
     void startMapsConfigurationErrorsToBadRequest() {
         MicrosoftOAuthResource resource = new MicrosoftOAuthResource();
         resource.microsoftOAuthService = new FakeMicrosoftOAuthService() {
             @Override
-            public String buildAuthorizationUrl(String sourceId) {
+            public String buildAuthorizationUrl(String sourceId, String language) {
                 throw new IllegalStateException("Microsoft OAuth client id is not configured");
             }
         };
@@ -115,7 +155,7 @@ class MicrosoftOAuthResourceTest {
 
         BadRequestException error = org.junit.jupiter.api.Assertions.assertThrows(
                 BadRequestException.class,
-                () -> resource.start("outlook-main-imap"));
+                () -> resource.start("outlook-main-imap", null));
 
         assertEquals("Microsoft OAuth client id is not configured", error.getMessage());
     }
@@ -148,9 +188,9 @@ class MicrosoftOAuthResourceTest {
         Response response = resource.exchange(new dev.inboxbridge.dto.MicrosoftOAuthCodeRequest(null, "code-1", "state-1"));
 
         assertEquals(400, response.getStatus());
-        @SuppressWarnings("unchecked")
-        Map<String, String> payload = (Map<String, String>) response.getEntity();
-        assertEquals("Invalid or expired OAuth state", payload.get("error"));
+        ApiError payload = (ApiError) response.getEntity();
+        assertEquals("oauth_state_invalid_or_expired", payload.code());
+        assertEquals("Invalid or expired OAuth state", payload.message());
     }
 
     private CurrentUserContext adminContext() {
@@ -321,7 +361,7 @@ class MicrosoftOAuthResourceTest {
 
         @Override
         public CallbackValidation validateCallback(String state) {
-            return new CallbackValidation("outlook-main-imap", "BRIDGE_SOURCES_0__OAUTH_REFRESH_TOKEN");
+            return new CallbackValidation("outlook-main-imap", "MAIL_ACCOUNT_0__OAUTH_REFRESH_TOKEN", "en");
         }
 
         @Override

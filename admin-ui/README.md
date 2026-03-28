@@ -41,7 +41,7 @@ Key design choices:
 - the login screen supports passkey sign-in for users who have already enrolled one
 - the login screen intentionally avoids exposing live bootstrap-account state to unauthenticated visitors; bootstrap credentials are documented in the operator docs instead
 - self-registration is launched from a dedicated `Register for access` button and uses a modal dialog instead of always rendering the full form
-- when the deployment sets `BRIDGE_MULTI_USER_ENABLED=false`, the login screen hides self-registration and the post-login UI hides user-management features entirely
+- when the deployment sets `MULTI_USER_ENABLED=false`, the login screen hides self-registration and the post-login UI hides user-management features entirely
 - accounts with both a password and a passkey now use password + passkey login, not passkey-only login
 - accounts with only a passkey ignore any typed password and fall through into the passkey prompt instead of stopping on an error
 - users can remove their password and run the account in passkey-only mode
@@ -99,6 +99,8 @@ Key design choices:
 - reconnecting Gmail now uses a friendlier `Reconnect Gmail Account` action, warns before replacing the currently linked Gmail account, and the Google callback page reports when the previous linked account was automatically replaced and its old grant revoked
 - reconnecting Gmail to the same already-linked account keeps the existing Google grant instead of revoking it; revocation only happens when the newly linked Gmail account is actually different
 - the admin UI layout now has an explicit mobile pass, so header controls, section cards, user/mail-account rows, and modal dialogs stack and resize more safely on phones and narrow tablets
+- if Gmail returns a confirmed repeated `401` for a user-linked Gmail account, InboxBridge now clears that saved Gmail OAuth link and the UI will show the account as unlinked until the user reconnects it
+- the mail-account OAuth provider help text now points users to `docs/SETUP.md`, `docs/OAUTH_SETUP.md`, and Microsoft’s official app-registration guide when Microsoft OAuth2 is selected
 - when a source depends on Gmail import but the current account has unlinked Gmail, polling now reports that the Gmail account is not linked instead of surfacing a less clear downstream API failure
 - if Gmail unlink cannot revoke the Google-side grant automatically, the UI now tells the user how to remove InboxBridge manually from `myaccount.google.com -> Security -> Manage third-party access -> InboxBridge -> Delete All Connections`
 - when that admin-only setup sidebar is absent, the Gmail account panel now expands to the full available width instead of keeping an empty second column
@@ -162,7 +164,7 @@ They also include:
 - Microsoft mailbox OAuth validation now treats the mailbox protocol scope plus the refresh token as the real success signal, rather than requiring `offline_access` to appear in the echoed scope string
 - if a Microsoft source previously failed with `has no refresh token`, that stale error is now hidden automatically once a newer encrypted refresh token has been stored for the same source
 - UI-managed Microsoft mail fetchers now also read the encrypted refresh token stored for their `bridgeId`, so a successful browser OAuth exchange is enough for the fetcher runtime even when the `user_bridge` row does not contain a duplicated token copy
-- when secure token storage is not configured, a successful Microsoft exchange for an env-managed source still requires copying the returned `BRIDGE_SOURCES_<n>__OAUTH_REFRESH_TOKEN` value into `.env` and restarting before polling can use it
+- when secure token storage is not configured, a successful Microsoft exchange for an env-managed source still requires copying the returned `MAIL_ACCOUNT_<n>__OAUTH_REFRESH_TOKEN` value into `.env` and restarting before polling can use it
 - a confirmation dialog if the user tries to leave before exchanging the code
 - once the user confirms that leave action, the page suppresses the browser's second generic unsaved-changes prompt
 - a 10-second auto-return countdown after a successful in-browser exchange

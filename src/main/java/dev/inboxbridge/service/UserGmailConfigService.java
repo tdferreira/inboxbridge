@@ -6,6 +6,7 @@ import java.util.Optional;
 import dev.inboxbridge.config.BridgeConfig;
 import dev.inboxbridge.dto.UpdateUserGmailConfigRequest;
 import dev.inboxbridge.dto.UserGmailConfigView;
+import dev.inboxbridge.domain.GmailTarget;
 import dev.inboxbridge.persistence.AppUser;
 import dev.inboxbridge.persistence.UserGmailConfig;
 import dev.inboxbridge.persistence.UserGmailConfigRepository;
@@ -71,6 +72,29 @@ public class UserGmailConfigService {
         googleOAuthService.clearCachedToken(subjectKey);
 
         return new GmailUnlinkResult(providerRevocationAttempted, providerRevoked);
+    }
+
+    @Transactional
+    public boolean markGoogleAccessRevoked(GmailTarget target) {
+        if (target == null || target.userId() == null) {
+            return false;
+        }
+
+        Optional<UserGmailConfig> storedConfig = repository.findByUserId(target.userId());
+        boolean hadStoredRefreshToken = storedConfig.map(config ->
+                config.refreshTokenCiphertext != null || config.refreshTokenNonce != null)
+                .orElse(false);
+        boolean hadOAuthCredential = oAuthCredentialService.deleteGoogleCredential(target.subjectKey());
+
+        storedConfig.ifPresent(config -> {
+            config.refreshTokenCiphertext = null;
+            config.refreshTokenNonce = null;
+            config.updatedAt = Instant.now();
+            repository.persist(config);
+        });
+
+        googleOAuthService.clearCachedToken(target.subjectKey());
+        return hadStoredRefreshToken || hadOAuthCredential;
     }
 
     public Optional<ResolvedUserGmailConfig> resolveForUser(Long userId) {

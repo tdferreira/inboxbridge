@@ -118,6 +118,7 @@ System polling behavior:
 - the movable workspace sections can now also be rearranged by drag-and-drop when the user enables layout editing from `Preferences`, and a dotted placeholder shows the drop position
 - reconnecting Gmail to the same already-linked account should not revoke that account's Google grant; replacement and revocation only happen when the user actually links a different Gmail account
 - the frontend layout now includes explicit responsive behavior for small screens, especially for hero actions, section headers, mail-account and user list rows, modal dialogs, and metric/stat cards
+- when Gmail API access is manually revoked outside InboxBridge, a confirmed repeated Gmail `401` now clears the saved Gmail OAuth link for that user and should cause the UI to show the Gmail account as no longer linked
 - the preferences model now also stores dismissible quick-setup state, a persisted layout-edit toggle, and separate user/admin workspace section order
 - statistics rendering now uses `Recharts 3.x`, giving the polling dashboards shared hover tooltips and more maintainable chart behavior than the previous custom SVG chart
 - the frontend package set is intentionally kept on current stable major versions, including React 19, Vite 7, Vitest 3, and Recharts 3.x

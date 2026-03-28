@@ -48,7 +48,8 @@ function UserBridgesSection({
   t,
   testConnectionLoading = false,
   testResult = null,
-  locale
+  locale,
+  microsoftOAuthAvailable = true
 }) {
   return (
     <section className="surface-card user-bridges-section section-with-corner-toggle" id="source-bridges-section" tabIndex="-1">
@@ -108,6 +109,7 @@ function UserBridgesSection({
         <FetcherDialog
           bridgeForm={bridgeForm}
           duplicateIdError={duplicateIdError}
+          microsoftOAuthAvailable={microsoftOAuthAvailable}
           onApplyPreset={onApplyPreset}
           onBridgeFormChange={onBridgeFormChange}
           onClose={onCloseDialog}

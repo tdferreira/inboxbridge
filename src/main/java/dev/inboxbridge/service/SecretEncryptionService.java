@@ -27,10 +27,10 @@ public class SecretEncryptionService {
     private static final int GCM_TAG_BITS = 128;
     private static final int NONCE_BYTES = 12;
 
-    @ConfigProperty(name = "bridge.security.token-encryption-key", defaultValue = "replace-me")
+    @ConfigProperty(name = "security.token-encryption-key", defaultValue = "replace-me")
     String tokenEncryptionKey;
 
-    @ConfigProperty(name = "bridge.security.token-encryption-key-id", defaultValue = "v1")
+    @ConfigProperty(name = "security.token-encryption-key-id", defaultValue = "v1")
     String tokenEncryptionKeyId;
 
     private final SecureRandom secureRandom = new SecureRandom();
@@ -85,7 +85,7 @@ public class SecretEncryptionService {
     private SecretKeySpec secretKey() {
         byte[] keyBytes = Base64.getDecoder().decode(tokenEncryptionKey);
         if (keyBytes.length != 32) {
-            throw new IllegalStateException("bridge.security.token-encryption-key must be a base64-encoded 32-byte key");
+            throw new IllegalStateException("SECURITY_TOKEN_ENCRYPTION_KEY must be a base64-encoded 32-byte key");
         }
         return new SecretKeySpec(keyBytes, "AES");
     }
@@ -100,7 +100,7 @@ public class SecretEncryptionService {
 
     private void requireConfigured() {
         if (!isConfigured()) {
-            throw new IllegalStateException("Secure token storage is not configured. Set bridge.security.token-encryption-key.");
+            throw new IllegalStateException("Secure token storage is not configured. Set SECURITY_TOKEN_ENCRYPTION_KEY.");
         }
     }
 

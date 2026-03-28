@@ -9,7 +9,7 @@ import jakarta.inject.Inject;
 /**
  * Normalizes environment-managed source configuration so placeholder fallback
  * values from application.yaml do not appear as real fetchers when the
- * deployment has not configured any BRIDGE_SOURCES_* variables.
+ * deployment has not configured any MAIL_ACCOUNT_* variables.
  */
 @ApplicationScoped
 public class EnvSourceService {

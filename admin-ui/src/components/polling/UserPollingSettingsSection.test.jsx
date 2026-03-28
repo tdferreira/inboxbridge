@@ -37,7 +37,7 @@ describe('UserPollingSettingsSection', () => {
     expect(screen.getByText(/Effective interval:/)).toBeInTheDocument()
     expect(screen.getByText(/Effective fetch window:/)).toBeInTheDocument()
 
-    fireEvent.click(screen.getByRole('button', { name: 'Edit Poller Settings' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Edit Polling Settings' }))
     expect(onOpenEditor).toHaveBeenCalled()
   })
 
@@ -65,9 +65,9 @@ describe('UserPollingSettingsSection', () => {
       />
     )
 
-    expect(screen.getByText('As minhas definições do poller')).toBeInTheDocument()
+    expect(screen.getByText('As minhas definições de verificação')).toBeInTheDocument()
     expect(screen.getByText(/Polling efetivo:/)).toBeInTheDocument()
-    expect(screen.getByRole('button', { name: 'Editar definições do poller' })).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Editar definições de verificação' })).toBeInTheDocument()
   })
 
   it('shows a refresh indicator while loading the latest polling values', () => {

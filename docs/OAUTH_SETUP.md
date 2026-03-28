@@ -14,6 +14,8 @@ If your deployment runs on another host, set `PUBLIC_BASE_URL` and InboxBridge w
 
 ## Gmail OAuth
 
+InboxBridge can only use Gmail OAuth after this application has been registered in Google Cloud and issued OAuth client credentials.
+
 ### Goal
 
 Create OAuth credentials that let InboxBridge import mail into Gmail and manage labels for that destination mailbox.
@@ -116,6 +118,8 @@ InboxBridge already includes those.
 
 ## Microsoft OAuth for Outlook.com
 
+InboxBridge can only use Microsoft OAuth for Outlook / Hotmail / Live source accounts after this application has been registered in Microsoft Entra and issued app credentials.
+
 Password-based IMAP / POP login is often blocked by Microsoft even when an app password exists. InboxBridge therefore supports OAuth2 + XOAUTH2 for Microsoft sources.
 
 ### Microsoft account and app registration
@@ -192,25 +196,25 @@ MICROSOFT_TENANT=consumers
 MICROSOFT_CLIENT_ID=your-microsoft-app-client-id
 MICROSOFT_CLIENT_SECRET=your-microsoft-app-client-secret
 MICROSOFT_REDIRECT_URI=https://localhost:3000/api/microsoft-oauth/callback
-BRIDGE_SECURITY_TOKEN_ENCRYPTION_KEY=base64-encoded-32-byte-key
-BRIDGE_SECURITY_TOKEN_ENCRYPTION_KEY_ID=v1
+SECURITY_TOKEN_ENCRYPTION_KEY=base64-encoded-32-byte-key
+SECURITY_TOKEN_ENCRYPTION_KEY_ID=v1
 ```
 
 ### Example Outlook source
 
 ```dotenv
-BRIDGE_SOURCES_0__ID=outlook-main
-BRIDGE_SOURCES_0__ENABLED=true
-BRIDGE_SOURCES_0__PROTOCOL=IMAP
-BRIDGE_SOURCES_0__HOST=outlook.office365.com
-BRIDGE_SOURCES_0__PORT=993
-BRIDGE_SOURCES_0__TLS=true
-BRIDGE_SOURCES_0__AUTH_METHOD=OAUTH2
-BRIDGE_SOURCES_0__OAUTH_PROVIDER=MICROSOFT
-BRIDGE_SOURCES_0__USERNAME=you@outlook.com
-BRIDGE_SOURCES_0__OAUTH_REFRESH_TOKEN=
-BRIDGE_SOURCES_0__FOLDER=INBOX
-BRIDGE_SOURCES_0__CUSTOM_LABEL=Imported/Outlook
+MAIL_ACCOUNT_0__ID=outlook-main
+MAIL_ACCOUNT_0__ENABLED=true
+MAIL_ACCOUNT_0__PROTOCOL=IMAP
+MAIL_ACCOUNT_0__HOST=outlook.office365.com
+MAIL_ACCOUNT_0__PORT=993
+MAIL_ACCOUNT_0__TLS=true
+MAIL_ACCOUNT_0__AUTH_METHOD=OAUTH2
+MAIL_ACCOUNT_0__OAUTH_PROVIDER=MICROSOFT
+MAIL_ACCOUNT_0__USERNAME=you@outlook.com
+MAIL_ACCOUNT_0__OAUTH_REFRESH_TOKEN=
+MAIL_ACCOUNT_0__FOLDER=INBOX
+MAIL_ACCOUNT_0__CUSTOM_LABEL=Imported/Outlook
 ```
 
 ### Browser flow
@@ -237,8 +241,8 @@ curl -k -X POST https://localhost:3000/api/microsoft-oauth/exchange \
 
 Enable secure storage by setting:
 
-- `BRIDGE_SECURITY_TOKEN_ENCRYPTION_KEY`
-- optionally `BRIDGE_SECURITY_TOKEN_ENCRYPTION_KEY_ID`
+- `SECURITY_TOKEN_ENCRYPTION_KEY`
+- optionally `SECURITY_TOKEN_ENCRYPTION_KEY_ID`
 
 Generate a key with:
 

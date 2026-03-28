@@ -26,26 +26,26 @@ quarkus:
         level: INFO
 
 bridge:
-  poll-enabled: ${BRIDGE_POLL_ENABLED:true}
-  poll-interval: ${BRIDGE_POLL_INTERVAL:5m}
-  fetch-window: ${BRIDGE_FETCH_WINDOW:50}
-  multi-user-enabled: ${BRIDGE_MULTI_USER_ENABLED:true}
+  poll-enabled: ${POLL_ENABLED:true}
+  poll-interval: ${POLL_INTERVAL:5m}
+  fetch-window: ${FETCH_WINDOW:50}
+  multi-user-enabled: ${MULTI_USER_ENABLED:true}
   security:
     passkeys:
-      enabled: ${BRIDGE_SECURITY_PASSKEYS_ENABLED:true}
-      rp-id: ${BRIDGE_SECURITY_PASSKEY_RP_ID:localhost}
-      rp-name: ${BRIDGE_SECURITY_PASSKEY_RP_NAME:InboxBridge}
-      origins: ${BRIDGE_SECURITY_PASSKEY_ORIGINS:${PUBLIC_BASE_URL:https://localhost:3000}}
-      challenge-ttl: ${BRIDGE_SECURITY_PASSKEY_CHALLENGE_TTL:PT5M}
+      enabled: ${SECURITY_PASSKEYS_ENABLED:true}
+      rp-id: ${SECURITY_PASSKEY_RP_ID:localhost}
+      rp-name: ${SECURITY_PASSKEY_RP_NAME:InboxBridge}
+      origins: ${SECURITY_PASSKEY_ORIGINS:${PUBLIC_BASE_URL:https://localhost:3000}}
+      challenge-ttl: ${SECURITY_PASSKEY_CHALLENGE_TTL:PT5M}
   gmail:
-    destination-user: ${BRIDGE_GMAIL_DESTINATION_USER:me}
+    destination-user: ${GMAIL_DESTINATION_USER:me}
     client-id: ${GOOGLE_CLIENT_ID:replace-me}
     client-secret: ${GOOGLE_CLIENT_SECRET:replace-me}
     refresh-token: ${GOOGLE_REFRESH_TOKEN:replace-me}
     redirect-uri: ${GOOGLE_REDIRECT_URI:${PUBLIC_BASE_URL:https://localhost:3000}/api/google-oauth/callback}
-    create-missing-labels: ${BRIDGE_GMAIL_CREATE_MISSING_LABELS:true}
-    never-mark-spam: ${BRIDGE_GMAIL_NEVER_MARK_SPAM:false}
-    process-for-calendar: ${BRIDGE_GMAIL_PROCESS_FOR_CALENDAR:false}
+    create-missing-labels: ${GMAIL_CREATE_MISSING_LABELS:true}
+    never-mark-spam: ${GMAIL_NEVER_MARK_SPAM:false}
+    process-for-calendar: ${GMAIL_PROCESS_FOR_CALENDAR:false}
   microsoft:
     tenant: ${MICROSOFT_TENANT:consumers}
     client-id: ${MICROSOFT_CLIENT_ID:replace-me}
@@ -53,18 +53,18 @@ bridge:
     redirect-uri: ${MICROSOFT_REDIRECT_URI:${PUBLIC_BASE_URL:https://localhost:3000}/api/microsoft-oauth/callback}
   sources:
     # Keep real source credentials out of this file. Configure them in .env
-    # with indexed variables like BRIDGE_SOURCES_0__* and BRIDGE_SOURCES_1__*.
-    - id: ${BRIDGE_SOURCES_0__ID:source-0}
-      enabled: ${BRIDGE_SOURCES_0__ENABLED:false}
-      protocol: ${BRIDGE_SOURCES_0__PROTOCOL:IMAP}
-      host: ${BRIDGE_SOURCES_0__HOST:imap.example.com}
-      port: ${BRIDGE_SOURCES_0__PORT:993}
-      tls: ${BRIDGE_SOURCES_0__TLS:true}
-      auth-method: ${BRIDGE_SOURCES_0__AUTH_METHOD:PASSWORD}
-      oauth-provider: ${BRIDGE_SOURCES_0__OAUTH_PROVIDER:NONE}
-      username: ${BRIDGE_SOURCES_0__USERNAME:replace-me@example.com}
-      password: ${BRIDGE_SOURCES_0__PASSWORD:replace-me}
-      oauth-refresh-token: ${BRIDGE_SOURCES_0__OAUTH_REFRESH_TOKEN:}
-      folder: ${BRIDGE_SOURCES_0__FOLDER:INBOX}
-      unread-only: ${BRIDGE_SOURCES_0__UNREAD_ONLY:false}
-      custom-label: ${BRIDGE_SOURCES_0__CUSTOM_LABEL:Imported/Source0}
+    # with indexed variables like MAIL_ACCOUNT_0__* and MAIL_ACCOUNT_1__*.
+    - id: ${MAIL_ACCOUNT_0__ID:source-0}
+      enabled: ${MAIL_ACCOUNT_0__ENABLED:false}
+      protocol: ${MAIL_ACCOUNT_0__PROTOCOL:IMAP}
+      host: ${MAIL_ACCOUNT_0__HOST:imap.example.com}
+      port: ${MAIL_ACCOUNT_0__PORT:993}
+      tls: ${MAIL_ACCOUNT_0__TLS:true}
+      auth-method: ${MAIL_ACCOUNT_0__AUTH_METHOD:PASSWORD}
+      oauth-provider: ${MAIL_ACCOUNT_0__OAUTH_PROVIDER:NONE}
+      username: ${MAIL_ACCOUNT_0__USERNAME:replace-me@example.com}
+      password: ${MAIL_ACCOUNT_0__PASSWORD:replace-me}
+      oauth-refresh-token: ${MAIL_ACCOUNT_0__OAUTH_REFRESH_TOKEN:}
+      folder: ${MAIL_ACCOUNT_0__FOLDER:INBOX}
+      unread-only: ${MAIL_ACCOUNT_0__UNREAD_ONLY:false}
+      custom-label: ${MAIL_ACCOUNT_0__CUSTOM_LABEL:Imported/Source0}

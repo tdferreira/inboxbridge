@@ -40,6 +40,9 @@ public class GmailLabelService {
     @Inject
     BridgeConfig config;
 
+    @Inject
+    UserGmailConfigService userGmailConfigService;
+
     HttpClient httpClient = HttpClient.newBuilder()
             .connectTimeout(Duration.ofSeconds(20))
             .build();
@@ -129,8 +132,19 @@ public class GmailLabelService {
         if (response.statusCode() == 401) {
             googleOAuthService.clearCachedToken(target.oauthProfile().subjectKey());
             response = sendAuthorizedRequest(requestFactory, googleOAuthService.getAccessToken(target.oauthProfile()));
+            if (response.statusCode() == 401) {
+                userGmailConfigService.markGoogleAccessRevoked(target);
+                throw new IllegalStateException(revokedAccessMessage(target));
+            }
         }
         return response;
+    }
+
+    private String revokedAccessMessage(GmailTarget target) {
+        if (target.userId() != null) {
+            return "The linked Gmail account no longer grants InboxBridge access. The saved Gmail OAuth link was cleared. Reconnect it from My Gmail Account.";
+        }
+        return "The configured Gmail account no longer grants InboxBridge access. Reconnect Gmail OAuth or update the configured refresh token.";
     }
 
     private HttpResponse<String> sendAuthorizedRequest(

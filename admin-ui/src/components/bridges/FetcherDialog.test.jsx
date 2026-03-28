@@ -70,6 +70,40 @@ describe('FetcherDialog', () => {
     }
   })
 
+  it('hides Microsoft OAuth choices when Microsoft OAuth is not configured', () => {
+    render(
+      <FetcherDialog
+        bridgeForm={{
+          originalBridgeId: '',
+          bridgeId: '',
+          enabled: true,
+          protocol: 'IMAP',
+          host: '',
+          port: 993,
+          tls: true,
+          authMethod: 'PASSWORD',
+          oauthProvider: 'NONE',
+          username: '',
+          password: '',
+          oauthRefreshToken: '',
+          folder: 'INBOX',
+          unreadOnly: false,
+          customLabel: ''
+        }}
+        microsoftOAuthAvailable={false}
+        onApplyPreset={vi.fn()}
+        onBridgeFormChange={vi.fn()}
+        onClose={vi.fn()}
+        onSave={vi.fn((event) => event.preventDefault())}
+        saveLoading={false}
+        t={(key, params) => translate('en', key, params)}
+      />
+    )
+
+    expect(screen.queryByRole('option', { name: 'Outlook / Hotmail / Live' })).not.toBeInTheDocument()
+    expect(screen.queryByRole('option', { name: 'OAuth2' })).not.toBeInTheDocument()
+  })
+
   it('shows duplicate id validation inline', () => {
     render(
       <FetcherDialog

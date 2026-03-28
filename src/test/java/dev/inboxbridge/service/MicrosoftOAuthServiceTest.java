@@ -46,7 +46,7 @@ class MicrosoftOAuthServiceTest {
 
         MicrosoftOAuthService.CallbackValidation callbackValidation = service.validateCallback(params.get("state"));
         assertEquals("outlook-main-imap", callbackValidation.sourceId());
-        assertEquals("BRIDGE_SOURCES_0__OAUTH_REFRESH_TOKEN", callbackValidation.configKey());
+        assertEquals("MAIL_ACCOUNT_0__OAUTH_REFRESH_TOKEN", callbackValidation.configKey());
     }
 
     @Test

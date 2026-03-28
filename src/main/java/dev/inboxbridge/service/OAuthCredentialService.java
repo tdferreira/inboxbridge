@@ -83,6 +83,11 @@ public class OAuthCredentialService {
         return deleteCredential(MICROSOFT_PROVIDER, sourceId);
     }
 
+    @Transactional
+    public void clearMicrosoftAccessToken(String sourceId) {
+        clearAccessToken(MICROSOFT_PROVIDER, sourceId);
+    }
+
     private Optional<StoredOAuthCredential> findCredential(String provider, String subjectKey) {
         if (!secretEncryptionService.isConfigured()) {
             return Optional.empty();
@@ -109,7 +114,7 @@ public class OAuthCredentialService {
             String scope,
             String tokenType) {
         if (!secretEncryptionService.isConfigured()) {
-            throw new IllegalStateException("Secure token storage is not configured. Set bridge.security.token-encryption-key.");
+            throw new IllegalStateException("Secure token storage is not configured. Set SECURITY_TOKEN_ENCRYPTION_KEY.");
         }
 
         OAuthCredential credential = repository.findByProviderAndSubject(provider, subjectKey)
@@ -188,6 +193,19 @@ public class OAuthCredentialService {
         Optional<OAuthCredential> credential = repository.findByProviderAndSubject(provider, subjectKey);
         credential.ifPresent(repository::delete);
         return credential.isPresent();
+    }
+
+    private void clearAccessToken(String provider, String subjectKey) {
+        Optional<OAuthCredential> credential = repository.findByProviderAndSubject(provider, subjectKey);
+        if (credential.isEmpty()) {
+            return;
+        }
+        OAuthCredential existing = credential.get();
+        existing.accessTokenCiphertext = null;
+        existing.accessTokenNonce = null;
+        existing.accessExpiresAt = null;
+        existing.updatedAt = Instant.now();
+        repository.persist(existing);
     }
 
     private String credentialContext(String provider, String subjectKey, String tokenKind) {

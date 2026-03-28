@@ -37,6 +37,8 @@ import jakarta.inject.Inject;
  */
 @ApplicationScoped
 public class MicrosoftOAuthService {
+    public static final String MICROSOFT_ACCESS_REVOKED_MESSAGE =
+            "The linked Microsoft account no longer grants InboxBridge access. Reconnect it from this mail account.";
 
     private static final Duration HTTP_TIMEOUT = Duration.ofSeconds(20);
     private static final Duration STATE_TTL = Duration.ofMinutes(10);
@@ -64,6 +66,10 @@ public class MicrosoftOAuthService {
     private final ConcurrentMap<String, CachedToken> cachedTokens = new ConcurrentHashMap<>();
     private final ConcurrentMap<String, PendingState> pendingStates = new ConcurrentHashMap<>();
 
+    public boolean clientConfigured() {
+        return isConfiguredValue(config.microsoft().clientId()) && isConfiguredValue(config.microsoft().clientSecret());
+    }
+
     public List<MicrosoftOAuthSourceOption> listMicrosoftOAuthSources() {
         List<MicrosoftOAuthSourceOption> envSources = envSourceService.configuredSources().stream()
                 .map(EnvSourceService.IndexedSource::source)
@@ -77,13 +83,13 @@ public class MicrosoftOAuthService {
         return java.util.stream.Stream.concat(envSources.stream(), userSources.stream()).toList();
     }
 
-    public String buildAuthorizationUrl(String sourceId) {
+    public String buildAuthorizationUrl(String sourceId, String language) {
         requireConfiguredClient();
         SourceRef sourceRef = resolveSourceRef(sourceId);
         purgeExpiredStates();
 
         String state = UUID.randomUUID().toString();
-        pendingStates.put(state, new PendingState(sourceRef, Instant.now().plus(STATE_TTL)));
+        pendingStates.put(state, new PendingState(sourceRef, normalizeLanguage(language), Instant.now().plus(STATE_TTL)));
 
         return authorizationEndpoint()
                 + "?response_type=code"
@@ -95,13 +101,44 @@ public class MicrosoftOAuthService {
                 + "&state=" + urlEncode(state);
     }
 
+    public String buildAuthorizationUrl(String sourceId) {
+        return buildAuthorizationUrl(sourceId, null);
+    }
+
     public CallbackValidation validateCallback(String state) {
         PendingState pendingState = requirePendingState(state, true);
         return new CallbackValidation(
                 pendingState.sourceRef().sourceId(),
                 pendingState.sourceRef().environmentIndex() == null
                         ? ""
-                        : "BRIDGE_SOURCES_" + pendingState.sourceRef().environmentIndex() + "__OAUTH_REFRESH_TOKEN");
+                        : "MAIL_ACCOUNT_" + pendingState.sourceRef().environmentIndex() + "__OAUTH_REFRESH_TOKEN",
+                pendingState.language());
+    }
+
+    private String normalizeLanguage(String language) {
+        if (language == null || language.isBlank()) {
+            return "en";
+        }
+        String normalized = language.trim().toLowerCase();
+        if ("fr".equals(normalized) || normalized.startsWith("fr-")) {
+            return "fr";
+        }
+        if ("de".equals(normalized) || normalized.startsWith("de-")) {
+            return "de";
+        }
+        if ("es".equals(normalized) || normalized.startsWith("es-")) {
+            return "es";
+        }
+        if ("pt-pt".equals(normalized)) {
+            return "pt-PT";
+        }
+        if ("pt-br".equals(normalized)) {
+            return "pt-BR";
+        }
+        if ("pt".equals(normalized) || normalized.startsWith("pt-")) {
+            return "pt-PT";
+        }
+        return "en";
     }
 
     public MicrosoftTokenExchangeResponse exchangeAuthorizationCodeByState(String state, String code) {
@@ -169,6 +206,9 @@ public class MicrosoftOAuthService {
 
     public void invalidateCachedToken(String sourceId) {
         cachedTokens.remove(sourceId);
+        if (oAuthCredentialService.secureStorageConfigured()) {
+            oAuthCredentialService.clearMicrosoftAccessToken(sourceId);
+        }
     }
 
     private MicrosoftTokenExchangeResponse exchangeAuthorizationCode(SourceRef sourceRef, String code) {
@@ -180,7 +220,7 @@ public class MicrosoftOAuthService {
                 "grant_type", "authorization_code",
                 "redirect_uri", config.microsoft().redirectUri(),
                 "scope", authorizationScopes(sourceRef)));
-        MicrosoftTokenResponse token = executeTokenRequest(body);
+        MicrosoftTokenResponse token = executeTokenRequest(sourceRef, body, false);
         requireRefreshToken(token.refreshToken(), "Microsoft");
         validateGrantedScopes(token.scope(), sourceRef.protocol());
         Instant expiresAt = Instant.now().plusSeconds(token.expiresIn() == null ? 300 : token.expiresIn());
@@ -195,11 +235,11 @@ public class MicrosoftOAuthService {
                     false,
                     true,
                     token.refreshToken(),
-                    "env:BRIDGE_SOURCES_" + sourceRef.environmentIndex() + "__OAUTH_REFRESH_TOKEN",
+                    "env:MAIL_ACCOUNT_" + sourceRef.environmentIndex() + "__OAUTH_REFRESH_TOKEN",
                     token.scope(),
                     token.tokenType(),
                     expiresAt,
-                    "Set bridge.security.token-encryption-key to enable automatic encrypted token storage. Until then, keep using BRIDGE_SOURCES_" + sourceRef.environmentIndex() + "__OAUTH_REFRESH_TOKEN in .env.");
+                    "Set SECURITY_TOKEN_ENCRYPTION_KEY to enable automatic encrypted token storage. Until then, keep using MAIL_ACCOUNT_" + sourceRef.environmentIndex() + "__OAUTH_REFRESH_TOKEN in .env.");
         }
 
         oAuthCredentialService.storeMicrosoftCredential(
@@ -234,7 +274,7 @@ public class MicrosoftOAuthService {
                 "grant_type", "refresh_token",
                 "refresh_token", refreshToken,
                 "scope", protocolScope(sourceRef.protocol())));
-        return executeTokenRequest(body);
+        return executeTokenRequest(sourceRef, body, true);
     }
 
     private String resolveRefreshToken(SourceRef sourceRef, String configuredRefreshToken) {
@@ -277,7 +317,7 @@ public class MicrosoftOAuthService {
                 "Retry the Microsoft OAuth flow and approve every requested mailbox permission.");
     }
 
-    private MicrosoftTokenResponse executeTokenRequest(String body) {
+    private MicrosoftTokenResponse executeTokenRequest(SourceRef sourceRef, String body, boolean refreshFlow) {
         HttpRequest request = HttpRequest.newBuilder(URI.create(tokenEndpoint()))
                 .timeout(HTTP_TIMEOUT)
                 .header("Content-Type", "application/x-www-form-urlencoded")
@@ -286,6 +326,10 @@ public class MicrosoftOAuthService {
         try {
             HttpResponse<String> response = httpClient.send(request, HttpResponse.BodyHandlers.ofString(StandardCharsets.UTF_8));
             if (response.statusCode() / 100 != 2) {
+                if (refreshFlow && indicatesRevokedMicrosoftConsent(response.body())) {
+                    handleRevokedMicrosoftConsent(sourceRef);
+                    throw new IllegalStateException(MICROSOFT_ACCESS_REVOKED_MESSAGE);
+                }
                 throw new IllegalStateException("Microsoft token request failed with status " + response.statusCode() + ": " + response.body());
             }
             return objectMapper.readValue(response.body(), MicrosoftTokenResponse.class);
@@ -297,13 +341,40 @@ public class MicrosoftOAuthService {
         }
     }
 
+    private boolean indicatesRevokedMicrosoftConsent(String body) {
+        if (body == null || body.isBlank()) {
+            return false;
+        }
+        String normalized = body.toLowerCase();
+        return normalized.contains("\"invalid_grant\"")
+                || normalized.contains("\"consent_required\"")
+                || normalized.contains("\"interaction_required\"")
+                || normalized.contains("grant has expired")
+                || normalized.contains("user or administrator has not consented")
+                || normalized.contains("refresh token has expired")
+                || normalized.contains("refresh token is invalid")
+                || normalized.contains("token has been revoked")
+                || normalized.contains("no longer valid");
+    }
+
+    private void handleRevokedMicrosoftConsent(SourceRef sourceRef) {
+        cachedTokens.remove(sourceRef.sourceId());
+        if (oAuthCredentialService.secureStorageConfigured()) {
+            oAuthCredentialService.deleteMicrosoftCredential(sourceRef.sourceId());
+        }
+    }
+
     private void requireConfiguredClient() {
-        if (config.microsoft().clientId().isBlank() || "replace-me".equals(config.microsoft().clientId())) {
+        if (!isConfiguredValue(config.microsoft().clientId())) {
             throw new IllegalStateException("Microsoft OAuth client id is not configured");
         }
-        if (config.microsoft().clientSecret().isBlank() || "replace-me".equals(config.microsoft().clientSecret())) {
+        if (!isConfiguredValue(config.microsoft().clientSecret())) {
             throw new IllegalStateException("Microsoft OAuth client secret is not configured");
         }
+    }
+
+    private boolean isConfiguredValue(String value) {
+        return value != null && !value.isBlank() && !"replace-me".equals(value.trim());
     }
 
     private SourceRef resolveSourceRef(String sourceId) {
@@ -395,7 +466,7 @@ public class MicrosoftOAuthService {
     private record CachedToken(String accessToken, Instant expiresAt) {
     }
 
-    private record PendingState(SourceRef sourceRef, Instant expiresAt) {
+    private record PendingState(SourceRef sourceRef, String language, Instant expiresAt) {
     }
 
     private record SourceRef(
@@ -406,6 +477,6 @@ public class MicrosoftOAuthService {
             boolean userManaged) {
     }
 
-    public record CallbackValidation(String sourceId, String configKey) {
+    public record CallbackValidation(String sourceId, String configKey, String language) {
     }
 }

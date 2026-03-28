@@ -11,6 +11,7 @@ import org.jboss.logging.Logger;
 import dev.inboxbridge.domain.FetchedMessage;
 import dev.inboxbridge.domain.RuntimeBridge;
 import dev.inboxbridge.dto.GmailImportResponse;
+import dev.inboxbridge.dto.PollRunError;
 import dev.inboxbridge.dto.PollRunResult;
 import io.quarkus.scheduler.Scheduled;
 import jakarta.enterprise.context.ApplicationScoped;
@@ -18,6 +19,13 @@ import jakarta.inject.Inject;
 
 @ApplicationScoped
 public class PollingService {
+
+    private static final String GMAIL_ACCESS_REVOKED_MESSAGE =
+            "The linked Gmail account no longer grants InboxBridge access. The saved Gmail OAuth link was cleared. Reconnect it from My Gmail Account.";
+    private static final String GMAIL_ACCOUNT_NOT_LINKED_MESSAGE =
+            "The Gmail account is not linked for this destination. Connect it from My Gmail Account before polling this source.";
+    private static final String MICROSOFT_ACCESS_REVOKED_MESSAGE =
+            "The linked Microsoft account no longer grants InboxBridge access. Reconnect it from this mail account.";
 
     private static final Logger LOG = Logger.getLogger(PollingService.class);
 
@@ -62,7 +70,7 @@ public class PollingService {
     public PollRunResult runPoll(String trigger) {
         if (!running.compareAndSet(false, true)) {
             PollRunResult busy = new PollRunResult();
-            busy.addError(currentBusyMessage());
+            busy.addError(new PollRunError("poll_busy", null, currentBusyMessage(), null));
             busy.finish();
             return busy;
         }
@@ -84,7 +92,7 @@ public class PollingService {
                         ignoreInterval);
                 if (!eligibility.shouldPoll()) {
                     if (ignoreInterval) {
-                        result.addError(skipMessage(bridge, eligibility));
+                        result.addError(skipError(bridge, eligibility));
                     }
                     continue;
                 }
@@ -113,7 +121,7 @@ public class PollingService {
     public PollRunResult runPollForSource(RuntimeBridge bridge, String trigger) {
         if (!running.compareAndSet(false, true)) {
             PollRunResult busy = new PollRunResult();
-            busy.addError(currentBusyMessage());
+            busy.addError(new PollRunError("poll_busy", bridge.id(), currentBusyMessage(), null));
             busy.finish();
             return busy;
         }
@@ -129,11 +137,15 @@ public class PollingService {
                     Instant.now(),
                     true);
             if (!bridge.enabled()) {
-                result.addError("Source " + bridge.id() + " is disabled.");
+                result.addError(new PollRunError(
+                        "source_disabled",
+                        bridge.id(),
+                        "Source " + bridge.id() + " is disabled.",
+                        null));
                 return result;
             }
             if (!eligibility.shouldPoll()) {
-                result.addError(skipMessage(bridge, eligibility));
+                result.addError(skipError(bridge, eligibility));
                 return result;
             }
             pollSource(bridge, trigger, settings, result);
@@ -163,8 +175,7 @@ public class PollingService {
         String error = null;
         try {
             if (!runtimeBridgeService.gmailAccountLinked(bridge)) {
-                throw new IllegalStateException(
-                        "The Gmail account is not linked for this destination. Connect it from My Gmail Account before polling this source.");
+                throw new IllegalStateException(GMAIL_ACCOUNT_NOT_LINKED_MESSAGE);
             }
             try {
                 mailSourceClient.probeSpamOrJunkFolder(bridge)
@@ -191,7 +202,7 @@ public class PollingService {
         } catch (RuntimeException e) {
             error = "Source " + bridge.id() + " failed: " + Optional.ofNullable(e.getMessage()).orElse(e.getClass().getSimpleName());
             LOG.error(error, e);
-            result.addError(error);
+            result.addError(mapRuntimeError(bridge, error, e));
         } finally {
             Instant finishedAt = Instant.now();
             if (error == null) {
@@ -215,19 +226,53 @@ public class PollingService {
         return sourcePollingSettingsService.effectiveSettingsFor(bridge);
     }
 
-    private String skipMessage(RuntimeBridge bridge, SourcePollingStateService.PollEligibility eligibility) {
+    private PollRunError skipError(RuntimeBridge bridge, SourcePollingStateService.PollEligibility eligibility) {
         return switch (eligibility.reason()) {
-            case "DISABLED" -> "Source " + bridge.id() + " is skipped because polling is disabled for this fetcher.";
-            case "COOLDOWN" -> "Source " + bridge.id() + " is cooling down until "
-                    + Optional.ofNullable(eligibility.state())
+            case "DISABLED" -> new PollRunError(
+                    "source_polling_disabled",
+                    bridge.id(),
+                    "Source " + bridge.id() + " is skipped because polling is disabled for this fetcher.",
+                    null);
+            case "COOLDOWN" -> new PollRunError(
+                    "source_cooling_down",
+                    bridge.id(),
+                    "Source " + bridge.id() + " is cooling down until "
+                            + Optional.ofNullable(eligibility.state())
+                                    .map(state -> String.valueOf(state.cooldownUntil()))
+                                    .orElse("a later retry time") + ".",
+                    Optional.ofNullable(eligibility.state())
                             .map(state -> String.valueOf(state.cooldownUntil()))
-                            .orElse("a later retry time") + ".";
-            case "INTERVAL" -> "Source " + bridge.id() + " is waiting for its next poll window at "
-                    + Optional.ofNullable(eligibility.state())
+                            .orElse(null));
+            case "INTERVAL" -> new PollRunError(
+                    "source_waiting_next_window",
+                    bridge.id(),
+                    "Source " + bridge.id() + " is waiting for its next poll window at "
+                            + Optional.ofNullable(eligibility.state())
+                                    .map(state -> String.valueOf(state.nextPollAt()))
+                                    .orElse("a later retry time") + ".",
+                    Optional.ofNullable(eligibility.state())
                             .map(state -> String.valueOf(state.nextPollAt()))
-                            .orElse("a later retry time") + ".";
-            default -> "Source " + bridge.id() + " is not ready to poll yet.";
+                            .orElse(null));
+            default -> new PollRunError(
+                    "source_not_ready",
+                    bridge.id(),
+                    "Source " + bridge.id() + " is not ready to poll yet.",
+                    null);
         };
+    }
+
+    private PollRunError mapRuntimeError(RuntimeBridge bridge, String formattedMessage, RuntimeException error) {
+        String rawMessage = Optional.ofNullable(error.getMessage()).orElse("");
+        if (GMAIL_ACCESS_REVOKED_MESSAGE.equals(rawMessage)) {
+            return new PollRunError("gmail_access_revoked", bridge.id(), formattedMessage, null);
+        }
+        if (GMAIL_ACCOUNT_NOT_LINKED_MESSAGE.equals(rawMessage)) {
+            return new PollRunError("gmail_account_not_linked", bridge.id(), formattedMessage, null);
+        }
+        if (MICROSOFT_ACCESS_REVOKED_MESSAGE.equals(rawMessage)) {
+            return new PollRunError("microsoft_access_revoked", bridge.id(), formattedMessage, null);
+        }
+        return new PollRunError("generic", bridge.id(), formattedMessage, null);
     }
 
     private String currentBusyMessage() {

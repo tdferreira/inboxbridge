@@ -15,6 +15,7 @@ import dev.inboxbridge.security.RequireAuth;
 import dev.inboxbridge.service.AppUserService;
 import dev.inboxbridge.service.ApplicationModeService;
 import dev.inboxbridge.service.AuthService;
+import dev.inboxbridge.service.MicrosoftOAuthService;
 import dev.inboxbridge.service.PasskeyService;
 import jakarta.inject.Inject;
 import jakarta.ws.rs.BadRequestException;
@@ -51,10 +52,15 @@ public class AuthResource {
     @Inject
     ApplicationModeService applicationModeService;
 
+    @Inject
+    MicrosoftOAuthService microsoftOAuthService;
+
     @GET
     @Path("/options")
     public AuthUiOptionsResponse options() {
-        return new AuthUiOptionsResponse(applicationModeService.multiUserEnabled());
+        return new AuthUiOptionsResponse(
+                applicationModeService.multiUserEnabled(),
+                microsoftOAuthService.clientConfigured());
     }
 
     @POST

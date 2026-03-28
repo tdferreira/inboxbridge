@@ -1,5 +1,5 @@
 import { Suspense, lazy, useEffect, useLayoutEffect, useRef, useState } from 'react'
-import { authMethodLabel, formatDate, oauthProviderLabel, protocolLabel, statusLabel, statusTone, tokenStorageLabel, triggerLabel } from '../../lib/formatters'
+import { authMethodLabel, formatDate, formatPollError, oauthProviderLabel, protocolLabel, statusLabel, statusTone, tokenStorageLabel, triggerLabel } from '../../lib/formatters'
 import { resolveFloatingMenuPosition } from '../../lib/floatingMenu'
 import CopyButton from '../common/CopyButton'
 import './BridgeCard.css'
@@ -215,7 +215,7 @@ function FetcherListItem({
           {fetcher.pollingState?.lastFailureReason ? (
             <div className="muted-box">
               <strong>{t('bridge.lastFailureReason')}</strong><br />
-              {fetcher.pollingState.lastFailureReason}
+              {formatPollError(fetcher.pollingState.lastFailureReason, locale)}
             </div>
           ) : null}
           {fetcher.lastEvent ? (
@@ -224,8 +224,8 @@ function FetcherListItem({
               <div className="section-copy">{t('bridge.results', { fetched: fetcher.lastEvent.fetched, imported: fetcher.lastEvent.imported, duplicates: fetcher.lastEvent.duplicates, spamJunkSuffix: '' })}</div>
               {fetcher.lastEvent.error ? (
                 <div className="bridge-card-error-block">
-                  <div className="bridge-card-error">{fetcher.lastEvent.error}</div>
-                  <CopyButton copiedLabel={t('common.copied')} label={t('common.copyError')} text={fetcher.lastEvent.error} />
+                  <div className="bridge-card-error">{formatPollError(fetcher.lastEvent.error, locale)}</div>
+                  <CopyButton copiedLabel={t('common.copied')} label={t('common.copyError')} text={formatPollError(fetcher.lastEvent.error, locale)} />
                 </div>
               ) : null}
             </div>

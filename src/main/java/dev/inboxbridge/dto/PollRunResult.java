@@ -13,6 +13,7 @@ public class PollRunResult {
     private int duplicates;
     private int spamJunkMessageCount;
     private final List<String> errors = new ArrayList<>();
+    private final List<PollRunError> errorDetails = new ArrayList<>();
     private final List<String> spamJunkFolderSummaries = new ArrayList<>();
 
     public void incrementFetched() {
@@ -29,6 +30,16 @@ public class PollRunResult {
 
     public void addError(String error) {
         errors.add(error);
+    }
+
+    public void addError(PollRunError error) {
+        if (error == null) {
+            return;
+        }
+        errorDetails.add(error);
+        if (error.message() != null && !error.message().isBlank()) {
+            errors.add(error.message());
+        }
     }
 
     public void addSpamJunkFolderSummary(String sourceId, String folderName, int messageCount) {
@@ -62,6 +73,10 @@ public class PollRunResult {
 
     public List<String> getErrors() {
         return errors;
+    }
+
+    public List<PollRunError> getErrorDetails() {
+        return errorDetails;
     }
 
     public int getSpamJunkMessageCount() {

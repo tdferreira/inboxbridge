@@ -19,7 +19,7 @@ class GoogleOAuthResourceTest {
         GoogleOAuthResource resource = new GoogleOAuthResource();
         resource.googleOAuthService = new FakeGoogleOAuthService();
 
-        Response response = resource.startSystem();
+        Response response = resource.startSystem(null);
 
         assertEquals(303, response.getStatus());
         assertEquals(URI.create("https://accounts.google.com/o/oauth2/v2/auth?client_id=demo"), response.getLocation());
@@ -58,7 +58,29 @@ class GoogleOAuthResourceTest {
         assertTrue(html.contains("Return To Admin UI"));
     }
 
-    private static final class FakeGoogleOAuthService extends GoogleOAuthService {
+    @Test
+    void callbackRendersPortugueseWhenStateLanguageIsPortuguese() {
+        GoogleOAuthResource resource = new GoogleOAuthResource();
+        resource.googleOAuthService = new FakeGoogleOAuthService() {
+            @Override
+            public CallbackValidation validateCallback(String state) {
+                return new CallbackValidation(
+                        "gmail-destination",
+                        "Conta Gmail",
+                        "https://localhost:3000/api/google-oauth/callback",
+                        "pt");
+            }
+        };
+
+        String html = resource.callback("code-123", "state-1", null, null);
+
+        assertTrue(html.contains("Codigo do Google OAuth recebido"));
+        assertTrue(html.contains("Copiar codigo"));
+        assertTrue(html.contains("Trocar codigo no browser"));
+        assertTrue(html.contains("Voltar a interface de administracao"));
+    }
+
+    private static class FakeGoogleOAuthService extends GoogleOAuthService {
         @Override
         public String buildAuthorizationUrl() {
             return "https://accounts.google.com/o/oauth2/v2/auth?client_id=demo";
@@ -75,8 +97,17 @@ class GoogleOAuthResourceTest {
         }
 
         @Override
-        public String buildAuthorizationUrlWithState(GoogleOAuthProfile profile, String targetLabel) {
+        public String buildAuthorizationUrlWithState(GoogleOAuthProfile profile, String targetLabel, String language) {
             return "https://accounts.google.com/o/oauth2/v2/auth?client_id=demo";
+        }
+
+        @Override
+        public CallbackValidation validateCallback(String state) {
+            return new CallbackValidation(
+                    "gmail-destination",
+                    "Shared Gmail account",
+                    "https://localhost:3000/api/google-oauth/callback",
+                    "en");
         }
 
         @Override

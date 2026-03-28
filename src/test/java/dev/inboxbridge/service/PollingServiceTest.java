@@ -91,6 +91,31 @@ class PollingServiceTest {
     }
 
     @Test
+    void runPollMapsMicrosoftOauthRevocationToStructuredError() {
+        PollingService service = new PollingService();
+        service.mailSourceClient = new RecordingMailSourceClient() {
+            @Override
+            public List<dev.inboxbridge.domain.FetchedMessage> fetch(RuntimeBridge bridge, int fetchWindow) {
+                throw new IllegalStateException(MicrosoftOAuthService.MICROSOFT_ACCESS_REVOKED_MESSAGE);
+            }
+        };
+        service.importDeduplicationService = new ImportDeduplicationService();
+        service.gmailImportService = new GmailImportService();
+        service.gmailLabelService = new FakeGmailLabelService();
+        service.sourcePollEventService = new NoopSourcePollEventService();
+        service.runtimeBridgeService = new FakeRuntimeBridgeService(List.of(microsoftUserBridge(7L)));
+        service.pollingSettingsService = new FakePollingSettingsService(true, Duration.ofMinutes(5), "5m", 10);
+        service.userPollingSettingsService = new FakeUserPollingSettingsService(false, Duration.ofMinutes(2), "2m", 33);
+        service.sourcePollingSettingsService = new FakeSourcePollingSettingsService();
+        service.sourcePollingStateService = new RecordingFailureSourcePollingStateService();
+
+        PollRunResult result = service.runPoll("manual-api");
+
+        assertEquals(1, result.getErrorDetails().size());
+        assertEquals("microsoft_access_revoked", result.getErrorDetails().getFirst().code());
+    }
+
+    @Test
     void busyPollMessageIncludesCurrentSourceWhenSingleSourcePollIsActive() throws Exception {
         PollingService service = new PollingService();
         java.lang.reflect.Field activePollField = PollingService.class.getDeclaredField("activePoll");
@@ -156,6 +181,28 @@ class PollingServiceTest {
                 new GmailTarget("target", null, "system", "me", "client", "secret", "refresh", "https://localhost", true, false, false));
     }
 
+    private static RuntimeBridge microsoftUserBridge(Long userId) {
+        return new RuntimeBridge(
+                "outlook-main",
+                "USER",
+                userId,
+                "alice",
+                true,
+                dev.inboxbridge.config.BridgeConfig.Protocol.IMAP,
+                "outlook.office365.com",
+                993,
+                true,
+                dev.inboxbridge.config.BridgeConfig.AuthMethod.OAUTH2,
+                dev.inboxbridge.config.BridgeConfig.OAuthProvider.MICROSOFT,
+                "user@example.com",
+                "",
+                "refresh-token",
+                java.util.Optional.of("INBOX"),
+                false,
+                java.util.Optional.empty(),
+                new GmailTarget("target", userId, "alice", "me", "client", "secret", "refresh", "https://localhost", true, false, false));
+    }
+
     private static final class RecordingPollingService extends PollingService {
         private String lastTrigger;
         private int invocations;
@@ -168,7 +215,7 @@ class PollingServiceTest {
         }
     }
 
-    private static final class RecordingMailSourceClient extends MailSourceClient {
+    private static class RecordingMailSourceClient extends MailSourceClient {
         private int lastFetchWindow;
 
         @Override

@@ -105,10 +105,7 @@ function ImportTimelineChart({ customRangeLoader = null, points = [], timelines 
   const [customRangeLoading, setCustomRangeLoading] = useState(false)
   const [customRangeError, setCustomRangeError] = useState('')
   const [customRangeData, setCustomRangeData] = useState(null)
-  const [customRangeForm, setCustomRangeForm] = useState(() => ({
-    from: toDateTimeLocalValue(new Date(Date.now() - (7 * 24 * 60 * 60 * 1000))),
-    to: ''
-  }))
+  const [customRangeForm, setCustomRangeForm] = useState({ from: '', to: '' })
 
   useEffect(() => {
     if (!selectableRanges.includes(selectedRange)) {
@@ -166,6 +163,8 @@ function ImportTimelineChart({ customRangeLoader = null, points = [], timelines 
               onChange={(event) => {
                 const nextValue = event.target.value
                 if (nextValue === 'custom') {
+                  setCustomRangeError('')
+                  setCustomRangeForm({ from: '', to: '' })
                   setCustomRangeDialogOpen(true)
                   return
                 }
@@ -230,10 +229,11 @@ function ImportTimelineChart({ customRangeLoader = null, points = [], timelines 
       )}
       {customRangeDialogOpen ? (
         <ModalDialog
+          closeLabel={t('common.closeDialog')}
           isDirty={Boolean(customRangeForm.from || customRangeForm.to)}
           onClose={() => setCustomRangeDialogOpen(false)}
           title={t('pollingStats.customRangeTitle')}
-          unsavedChangesMessage={t('common.discardDialogChanges')}
+          unsavedChangesMessage={t('common.unsavedChangesConfirm')}
         >
           <div className="form-grid">
             <label>

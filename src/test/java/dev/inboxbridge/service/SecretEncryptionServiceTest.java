@@ -51,7 +51,7 @@ class SecretEncryptionServiceTest {
 
         assertFalse(service.isConfigured());
         IllegalStateException error = assertThrows(IllegalStateException.class, () -> service.keyVersion());
-        assertEquals("Secure token storage is not configured. Set bridge.security.token-encryption-key.", error.getMessage());
+        assertEquals("Secure token storage is not configured. Set SECURITY_TOKEN_ENCRYPTION_KEY.", error.getMessage());
     }
 
     private SecretEncryptionService configuredService() {

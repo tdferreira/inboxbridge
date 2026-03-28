@@ -21,6 +21,7 @@ import UserManagementSection from './components/admin/UserManagementSection'
 import UserBridgesSection from './components/bridges/UserBridgesSection'
 import { apiErrorText } from './lib/api'
 import { findEmailProviderPreset } from './lib/emailProviderPresets'
+import { formatPollError, isOauthRevokedError } from './lib/formatters'
 import { normalizePasskeyError, parseCreateOptions, parseGetOptions, passkeysSupported, serializeCredential } from './lib/passkeys'
 import { buildSetupGuideState } from './lib/setupGuide'
 import { languageOptions, normalizeLocale, translate } from './lib/i18n'
@@ -121,7 +122,8 @@ const DEFAULT_SOURCE_POLLING_FORM = {
   isDirty: false
 }
 const DEFAULT_AUTH_OPTIONS = {
-  multiUserEnabled: true
+  multiUserEnabled: true,
+  microsoftOAuthAvailable: true
 }
 const DEFAULT_ADMIN_WORKSPACE = 'user'
 const PollingStatisticsSection = lazy(() => import('./components/stats/PollingStatisticsSection'))
@@ -195,6 +197,7 @@ function App() {
   const [dragState, setDragState] = useState(null)
   const notificationTimersRef = useRef(new Map())
   const t = useMemo(() => (key, params) => translate(language, key, params), [language])
+  const errorText = (key) => t(`errors.${key}`)
   const selectableLanguages = useMemo(() => languageOptions.map((value) => ({
     value,
     label: translate(language, `language.${value}`)
@@ -276,6 +279,11 @@ function App() {
         next.oauthProvider = 'MICROSOFT'
       }
     }
+    if (next.authMethod === 'OAUTH2' && !authOptions.microsoftOAuthAvailable) {
+      next.authMethod = 'PASSWORD'
+      next.oauthProvider = 'NONE'
+      next.oauthRefreshToken = ''
+    }
     return next
   }
 
@@ -326,13 +334,13 @@ function App() {
         return
       }
       if (!response.ok) {
-        throw new Error(`Unable to load session (${response.status})`)
+        throw new Error(`${errorText('loadSession')} (${response.status})`)
       }
       const payload = await response.json()
       setSession(payload)
       setAuthError('')
     } catch (err) {
-      setAuthError(err.message || 'Unable to load session')
+      setAuthError(err.message || errorText('loadSession'))
     } finally {
       setAuthLoading(false)
     }
@@ -342,7 +350,7 @@ function App() {
     try {
       const response = await fetch('/api/auth/options')
       if (!response.ok) {
-        throw new Error('Unable to load auth options')
+        throw new Error(errorText('loadAuthOptions'))
       }
       const payload = await response.json()
       setAuthOptions({
@@ -360,11 +368,11 @@ function App() {
     try {
       const response = await fetch(`/api/admin/users/${userId}/configuration`)
       if (!response.ok) {
-        throw new Error(await apiErrorText(response, 'Unable to load user configuration'))
+        throw new Error(await apiErrorText(response, errorText('loadUserConfiguration')))
       }
       setSelectedUserConfig(await response.json())
     } catch (err) {
-      pushNotification({ autoCloseMs: null, copyText: err.message || 'Unable to load user configuration', message: err.message || 'Unable to load user configuration', targetId: 'user-management-section', tone: 'error' })
+      pushNotification({ autoCloseMs: null, copyText: err.message || errorText('loadUserConfiguration'), message: err.message || errorText('loadUserConfiguration'), targetId: 'user-management-section', tone: 'error' })
     } finally {
       setSelectedUserLoading(false)
     }
@@ -378,7 +386,7 @@ function App() {
       const endpointPrefix = fetcher.managementSource === 'ENVIRONMENT' ? '/api/admin/bridges' : '/api/app/bridges'
       const response = await fetch(`${endpointPrefix}/${encodeURIComponent(fetcher.bridgeId)}/polling-stats`)
       if (!response.ok) {
-        throw new Error(await apiErrorText(response, 'Unable to load mail account statistics'))
+        throw new Error(await apiErrorText(response, errorText('loadMailAccountStatistics')))
       }
       const payload = await response.json()
       setFetcherStatsById((current) => ({ ...current, [fetcher.bridgeId]: payload }))
@@ -386,8 +394,8 @@ function App() {
       if (!suppressErrors) {
         pushNotification({
           autoCloseMs: null,
-          copyText: err.message || 'Unable to load mail account statistics',
-          message: err.message || 'Unable to load mail account statistics',
+          copyText: err.message || errorText('loadMailAccountStatistics'),
+          message: err.message || errorText('loadMailAccountStatistics'),
           targetId: 'source-bridges-section',
           tone: 'error'
         })
@@ -415,13 +423,13 @@ function App() {
   async function loadUserCustomRange(range) {
     const search = new URLSearchParams({ from: range.from })
     if (range.to) search.set('to', range.to)
-    return loadScopedTimelineBundle(`/api/app/polling-stats/range?${search.toString()}`, 'Unable to load custom polling range')
+    return loadScopedTimelineBundle(`/api/app/polling-stats/range?${search.toString()}`, t('pollingStats.customRangeLoadError'))
   }
 
   async function loadGlobalCustomRange(range) {
     const search = new URLSearchParams({ from: range.from })
     if (range.to) search.set('to', range.to)
-    return loadScopedTimelineBundle(`/api/admin/polling-stats/range?${search.toString()}`, 'Unable to load custom polling range')
+    return loadScopedTimelineBundle(`/api/admin/polling-stats/range?${search.toString()}`, t('pollingStats.customRangeLoadError'))
   }
 
   async function loadFetcherCustomRange(fetcher, range) {
@@ -430,14 +438,14 @@ function App() {
     const endpointPrefix = fetcher.managementSource === 'ENVIRONMENT' ? '/api/admin/bridges' : '/api/app/bridges'
     return loadScopedTimelineBundle(
       `${endpointPrefix}/${encodeURIComponent(fetcher.bridgeId)}/polling-stats/range?${search.toString()}`,
-      'Unable to load custom mail account range'
+      t('pollingStats.customRangeLoadError')
     )
   }
 
   async function loadAdminUserCustomRange(userId, range) {
     const search = new URLSearchParams({ from: range.from })
     if (range.to) search.set('to', range.to)
-    return loadScopedTimelineBundle(`/api/admin/users/${userId}/polling-stats/range?${search.toString()}`, 'Unable to load custom user range')
+    return loadScopedTimelineBundle(`/api/admin/users/${userId}/polling-stats/range?${search.toString()}`, t('pollingStats.customRangeLoadError'))
   }
 
   async function loadAppData(options = {}) {
@@ -464,7 +472,7 @@ function App() {
       const responses = await Promise.all(requests)
       if (responses.some((response) => !response.ok)) {
         const firstFailed = responses.find((response) => !response.ok)
-        throw new Error(await apiErrorText(firstFailed, 'Unable to load admin data'))
+        throw new Error(await apiErrorText(firstFailed, errorText('loadAdminData')))
       }
 
       const payloads = await Promise.all(responses.map((response) => response.json()))
@@ -539,7 +547,7 @@ function App() {
       }
     } catch (err) {
       if (!suppressErrors) {
-        pushNotification({ autoCloseMs: null, copyText: err.message || 'Unable to load application data', message: err.message || 'Unable to load application data', tone: 'error' })
+        pushNotification({ autoCloseMs: null, copyText: err.message || errorText('loadApplicationData'), message: err.message || errorText('loadApplicationData'), tone: 'error' })
       }
     } finally {
       setLoadingData(false)
@@ -622,7 +630,7 @@ function App() {
           body: JSON.stringify(loginForm)
         })
         if (!response.ok) {
-          throw new Error(await apiErrorText(response, 'Login failed'))
+          throw new Error(await apiErrorText(response, errorText('loginFailed')))
         }
         const payload = await response.json()
         if (payload.status === 'PASSKEY_REQUIRED' && payload.passkeyChallenge) {
@@ -639,7 +647,7 @@ function App() {
           })
         }
       } catch (err) {
-        setAuthError(err.message || 'Login failed')
+        setAuthError(err.message || errorText('loginFailed'))
       }
     })
   }
@@ -655,14 +663,14 @@ function App() {
           body: JSON.stringify(registerForm)
         })
         if (!response.ok) {
-          throw new Error(await apiErrorText(response, 'Registration failed'))
+          throw new Error(await apiErrorText(response, errorText('registrationFailed')))
         }
         const payload = await response.json()
         setRegisterForm(DEFAULT_REGISTER_FORM)
         setRegisterOpen(false)
         pushNotification({ message: payload.message || t('notifications.registrationSubmitted'), tone: 'success' })
       } catch (err) {
-        setAuthError(err.message || 'Registration failed')
+        setAuthError(err.message || errorText('registrationFailed'))
       }
     })
   }
@@ -701,13 +709,13 @@ function App() {
           body: JSON.stringify(passwordForm)
         })
         if (!response.ok) {
-          throw new Error(await apiErrorText(response, 'Unable to change password'))
+          throw new Error(await apiErrorText(response, errorText('changePassword')))
         }
         setPasswordForm(DEFAULT_PASSWORD_FORM)
         pushNotification({ message: t('notifications.passwordUpdated'), targetId: 'password-panel-section', tone: 'success' })
         await loadSession()
       } catch (err) {
-        pushNotification({ autoCloseMs: null, copyText: err.message || 'Unable to change password', message: err.message || 'Unable to change password', targetId: 'password-panel-section', tone: 'error' })
+        pushNotification({ autoCloseMs: null, copyText: err.message || errorText('changePassword'), message: err.message || errorText('changePassword'), targetId: 'password-panel-section', tone: 'error' })
       }
     })
   }
@@ -728,7 +736,7 @@ function App() {
               body: JSON.stringify({ currentPassword: passwordForm.currentPassword })
             })
             if (!response.ok) {
-              throw new Error(await apiErrorText(response, 'Unable to remove password'))
+              throw new Error(await apiErrorText(response, errorText('removePassword')))
             }
             setConfirmationDialog(null)
             setPasswordForm(DEFAULT_PASSWORD_FORM)
@@ -736,7 +744,7 @@ function App() {
             await loadAppData()
             await loadSession()
           } catch (err) {
-            pushNotification({ autoCloseMs: null, copyText: err.message || 'Unable to remove password', message: err.message || 'Unable to remove password', targetId: 'password-panel-section', tone: 'error' })
+            pushNotification({ autoCloseMs: null, copyText: err.message || errorText('removePassword'), message: err.message || errorText('removePassword'), targetId: 'password-panel-section', tone: 'error' })
           }
         })
       },
@@ -758,7 +766,7 @@ function App() {
       })
     })
     if (!finishResponse.ok) {
-      throw new Error(await apiErrorText(finishResponse, 'Passkey sign-in failed'))
+      throw new Error(await apiErrorText(finishResponse, errorText('passkeySignInFailed')))
     }
     const payload = await finishResponse.json()
     setSession(payload.user)
@@ -778,7 +786,7 @@ function App() {
           body: JSON.stringify({ username: loginForm.username.trim() || null })
         })
         if (!startResponse.ok) {
-          throw new Error(await apiErrorText(startResponse, 'Unable to start passkey sign-in'))
+          throw new Error(await apiErrorText(startResponse, errorText('startPasskeySignIn')))
         }
         const startPayload = await startResponse.json()
         await completePasskeyLogin(startPayload)
@@ -801,7 +809,7 @@ function App() {
           body: JSON.stringify({ label: passkeyLabel })
         })
         if (!startResponse.ok) {
-          throw new Error(await apiErrorText(startResponse, 'Unable to start passkey registration'))
+          throw new Error(await apiErrorText(startResponse, errorText('startPasskeyRegistration')))
         }
         const startPayload = await startResponse.json()
         const credential = await navigator.credentials.create({ publicKey: parseCreateOptions(startPayload.publicKeyJson) })
@@ -817,7 +825,7 @@ function App() {
           })
         })
         if (!finishResponse.ok) {
-          throw new Error(await apiErrorText(finishResponse, 'Unable to register passkey'))
+          throw new Error(await apiErrorText(finishResponse, errorText('registerPasskey')))
         }
         setPasskeyLabel('')
         setShowPasskeyRegistrationDialog(false)
@@ -853,14 +861,14 @@ function App() {
           try {
             const response = await fetch(`/api/account/passkeys/${passkeyId}`, { method: 'DELETE' })
             if (!response.ok) {
-              throw new Error(await apiErrorText(response, 'Unable to remove passkey'))
+              throw new Error(await apiErrorText(response, errorText('removePasskey')))
             }
             setConfirmationDialog(null)
             pushNotification({ message: t('notifications.passkeyRemoved'), targetId: 'passkey-panel-section', tone: 'success' })
             await loadAppData()
             await loadSession()
           } catch (err) {
-            pushNotification({ autoCloseMs: null, copyText: err.message || 'Unable to remove passkey', message: err.message || 'Unable to remove passkey', targetId: 'passkey-panel-section', tone: 'error' })
+            pushNotification({ autoCloseMs: null, copyText: err.message || errorText('removePasskey'), message: err.message || errorText('removePasskey'), targetId: 'passkey-panel-section', tone: 'error' })
           }
         })
       },
@@ -878,12 +886,12 @@ function App() {
           body: JSON.stringify(gmailConfig)
         })
         if (!response.ok) {
-          throw new Error(await apiErrorText(response, 'Unable to save Gmail configuration'))
+          throw new Error(await apiErrorText(response, errorText('saveGmailConfiguration')))
         }
         pushNotification({ message: t('notifications.gmailSaved'), targetId: 'gmail-destination-section', tone: 'success' })
         await loadAppData()
       } catch (err) {
-        pushNotification({ autoCloseMs: null, copyText: err.message || 'Unable to save Gmail configuration', message: err.message || 'Unable to save Gmail configuration', targetId: 'gmail-destination-section', tone: 'error' })
+        pushNotification({ autoCloseMs: null, copyText: err.message || errorText('saveGmailConfiguration'), message: err.message || errorText('saveGmailConfiguration'), targetId: 'gmail-destination-section', tone: 'error' })
       }
     })
   }
@@ -900,7 +908,7 @@ function App() {
           try {
             const response = await fetch('/api/account/gmail-link', { method: 'DELETE' })
             if (!response.ok) {
-              throw new Error(await apiErrorText(response, 'Unable to unlink Gmail account'))
+              throw new Error(await apiErrorText(response, errorText('unlinkGmailAccount')))
             }
             const payload = await response.json()
             setConfirmationDialog(null)
@@ -917,7 +925,7 @@ function App() {
             }
             await loadAppData()
           } catch (err) {
-            pushNotification({ autoCloseMs: null, copyText: err.message || 'Unable to unlink Gmail account', message: err.message || 'Unable to unlink Gmail account', targetId: 'gmail-destination-section', tone: 'error' })
+            pushNotification({ autoCloseMs: null, copyText: err.message || errorText('unlinkGmailAccount'), message: err.message || errorText('unlinkGmailAccount'), targetId: 'gmail-destination-section', tone: 'error' })
           }
         })
       },
@@ -946,7 +954,7 @@ function App() {
           body: JSON.stringify(bridgeForm)
         })
         if (!response.ok) {
-          throw new Error(await apiErrorText(response, 'Unable to save mail fetcher'))
+          throw new Error(await apiErrorText(response, errorText('saveMailFetcher')))
         }
         setBridgeDuplicateError('')
         setBridgeTestResult(null)
@@ -955,7 +963,7 @@ function App() {
         setShowFetcherDialog(false)
         await loadAppData()
       } catch (err) {
-        pushNotification({ autoCloseMs: null, copyText: err.message || 'Unable to save mail fetcher', message: err.message || 'Unable to save mail fetcher', targetId: 'source-bridges-section', tone: 'error' })
+        pushNotification({ autoCloseMs: null, copyText: err.message || errorText('saveMailFetcher'), message: err.message || errorText('saveMailFetcher'), targetId: 'source-bridges-section', tone: 'error' })
       }
     })
   }
@@ -969,14 +977,14 @@ function App() {
           body: JSON.stringify(bridgeForm)
         })
         if (!response.ok) {
-          throw new Error(await apiErrorText(response, 'Unable to test mail fetcher connection'))
+          throw new Error(await apiErrorText(response, errorText('testMailFetcherConnection')))
         }
         const payload = await response.json()
         const message = payload.message || t('bridges.testSuccess')
         setBridgeTestResult({ ...payload, message, tone: 'success' })
         pushNotification({ message, targetId: 'source-bridges-section', tone: 'success' })
       } catch (err) {
-        const message = err.message || 'Unable to test mail fetcher connection'
+        const message = err.message || errorText('testMailFetcherConnection')
         setBridgeTestResult({ message, tone: 'error' })
         pushNotification({ autoCloseMs: null, copyText: message, message, targetId: 'source-bridges-section', tone: 'error' })
       }
@@ -995,13 +1003,13 @@ function App() {
           try {
             const response = await fetch(`/api/app/bridges/${encodeURIComponent(bridgeId)}`, { method: 'DELETE' })
             if (!response.ok) {
-              throw new Error(await apiErrorText(response, 'Unable to delete mail fetcher'))
+              throw new Error(await apiErrorText(response, errorText('deleteMailFetcher')))
             }
             setConfirmationDialog(null)
             pushNotification({ message: t('notifications.bridgeDeleted', { bridgeId }), targetId: 'source-bridges-section', tone: 'success' })
             await loadAppData()
           } catch (err) {
-            pushNotification({ autoCloseMs: null, copyText: err.message || 'Unable to delete mail fetcher', message: err.message || 'Unable to delete mail fetcher', targetId: 'source-bridges-section', tone: 'error' })
+            pushNotification({ autoCloseMs: null, copyText: err.message || errorText('deleteMailFetcher'), message: err.message || errorText('deleteMailFetcher'), targetId: 'source-bridges-section', tone: 'error' })
           }
         })
       },
@@ -1033,14 +1041,14 @@ function App() {
         const endpointPrefix = fetcher.managementSource === 'ENVIRONMENT' ? '/api/admin/bridges' : '/api/app/bridges'
         const response = await fetch(`${endpointPrefix}/${encodeURIComponent(fetcher.bridgeId)}/polling-settings`)
         if (!response.ok) {
-          throw new Error(await apiErrorText(response, 'Unable to load fetcher polling settings'))
+          throw new Error(await apiErrorText(response, errorText('loadFetcherPollingSettings')))
         }
         const payload = await response.json()
         setFetcherPollingForm(normalizeSourcePollingForm(payload))
         setShowFetcherPollingDialog(true)
       } catch (err) {
         setFetcherPollingTarget(null)
-        pushNotification({ autoCloseMs: null, copyText: err.message || 'Unable to load fetcher polling settings', message: err.message || 'Unable to load fetcher polling settings', targetId: 'source-bridges-section', tone: 'error' })
+        pushNotification({ autoCloseMs: null, copyText: err.message || errorText('loadFetcherPollingSettings'), message: err.message || errorText('loadFetcherPollingSettings'), targetId: 'source-bridges-section', tone: 'error' })
       }
     })
   }
@@ -1069,7 +1077,7 @@ function App() {
           })
         })
         if (!response.ok) {
-          throw new Error(await apiErrorText(response, 'Unable to save fetcher polling settings'))
+          throw new Error(await apiErrorText(response, errorText('saveFetcherPollingSettings')))
         }
         const payload = await response.json()
         setFetcherPollingForm(normalizeSourcePollingForm(payload))
@@ -1077,7 +1085,7 @@ function App() {
         await loadAppData()
         closeFetcherPollingDialog()
       } catch (err) {
-        pushNotification({ autoCloseMs: null, copyText: err.message || 'Unable to save fetcher polling settings', message: err.message || 'Unable to save fetcher polling settings', targetId: 'source-bridges-section', tone: 'error' })
+        pushNotification({ autoCloseMs: null, copyText: err.message || errorText('saveFetcherPollingSettings'), message: err.message || errorText('saveFetcherPollingSettings'), targetId: 'source-bridges-section', tone: 'error' })
       }
     })
   }
@@ -1097,14 +1105,14 @@ function App() {
           })
         })
         if (!response.ok) {
-          throw new Error(await apiErrorText(response, 'Unable to reset fetcher polling settings'))
+          throw new Error(await apiErrorText(response, errorText('resetFetcherPollingSettings')))
         }
         const payload = await response.json()
         setFetcherPollingForm(normalizeSourcePollingForm(payload))
         pushNotification({ message: t('notifications.fetcherPollingReset', { bridgeId: fetcherPollingTarget.bridgeId }), targetId: 'source-bridges-section', tone: 'success' })
         await loadAppData()
       } catch (err) {
-        pushNotification({ autoCloseMs: null, copyText: err.message || 'Unable to reset fetcher polling settings', message: err.message || 'Unable to reset fetcher polling settings', targetId: 'source-bridges-section', tone: 'error' })
+        pushNotification({ autoCloseMs: null, copyText: err.message || errorText('resetFetcherPollingSettings'), message: err.message || errorText('resetFetcherPollingSettings'), targetId: 'source-bridges-section', tone: 'error' })
       }
     })
   }
@@ -1122,11 +1130,14 @@ function App() {
         const endpointPrefix = fetcher?.managementSource === 'ENVIRONMENT' ? '/api/admin/bridges' : '/api/app/bridges'
         const response = await fetch(`${endpointPrefix}/${encodeURIComponent(bridgeId)}/poll/run`, { method: 'POST' })
         if (!response.ok) {
-          throw new Error(await apiErrorText(response, 'Unable to run mail fetcher poll'))
+          throw new Error(await apiErrorText(response, errorText('runMailFetcherPoll')))
         }
         const payload = await response.json()
-        if (payload.errors?.length) {
-          throw new Error(payload.errors.join('\n'))
+        if (payload.errorDetails?.length || payload.errors?.length) {
+          const formattedErrors = payload.errorDetails?.length
+            ? payload.errorDetails.map((detail) => formatPollError(detail, language))
+            : payload.errors.map((message) => formatPollError(message, language))
+          throw new Error(formattedErrors.join('\n'))
         }
         const completedMessageKey = payload.spamJunkMessageCount > 0
           ? 'notifications.fetcherPollCompletedWithSpam'
@@ -1143,7 +1154,8 @@ function App() {
           tone: 'success'
         })
       } catch (err) {
-        pushNotification({ autoCloseMs: null, copyText: err.message || 'Unable to run mail fetcher poll', message: err.message || 'Unable to run mail fetcher poll', targetId: 'source-bridges-section', tone: 'error' })
+        const message = formatPollError(err.message || errorText('runMailFetcherPoll'), language)
+        pushNotification({ autoCloseMs: null, copyText: message, message, targetId: 'source-bridges-section', tone: 'error' })
       } finally {
         await loadAppData({ suppressErrors: true })
         if (fetcher) {
@@ -1187,7 +1199,7 @@ function App() {
           })
         })
         if (!response.ok) {
-          throw new Error(await apiErrorText(response, 'Unable to create user'))
+          throw new Error(await apiErrorText(response, errorText('createUser')))
         }
         const payload = await response.json()
         setCreateUserForm(DEFAULT_CREATE_USER_FORM)
@@ -1197,7 +1209,7 @@ function App() {
         setSelectedUserId(payload.id)
         return true
       } catch (err) {
-        pushNotification({ autoCloseMs: null, copyText: err.message || 'Unable to create user', message: err.message || 'Unable to create user', targetId: 'user-management-section', tone: 'error' })
+        pushNotification({ autoCloseMs: null, copyText: err.message || errorText('createUser'), message: err.message || errorText('createUser'), targetId: 'user-management-section', tone: 'error' })
         return false
       }
     })
@@ -1217,16 +1229,16 @@ function App() {
           body: JSON.stringify(patch)
         })
         if (!response.ok) {
-          throw new Error(await apiErrorText(response, 'Unable to update user'))
+          throw new Error(await apiErrorText(response, errorText('updateUser')))
         }
         const payload = await response.json()
-        pushNotification({ message: successMessage || `Updated ${payload.username}.`, targetId: 'user-management-section', tone: 'success' })
+        pushNotification({ message: successMessage || t('notifications.userUpdated', { username: payload.username }), targetId: 'user-management-section', tone: 'success' })
         await loadAppData()
         setSelectedUserId(payload.id)
         await loadSelectedUserConfiguration(payload.id)
         return true
       } catch (err) {
-        pushNotification({ autoCloseMs: null, copyText: err.message || 'Unable to update user', message: err.message || 'Unable to update user', targetId: 'user-management-section', tone: 'error' })
+        pushNotification({ autoCloseMs: null, copyText: err.message || errorText('updateUser'), message: err.message || errorText('updateUser'), targetId: 'user-management-section', tone: 'error' })
         return false
       }
     })
@@ -1293,7 +1305,7 @@ function App() {
           body: JSON.stringify(adminResetPasswordForm)
         })
         if (!response.ok) {
-          throw new Error(await apiErrorText(response, 'Unable to reset password'))
+          throw new Error(await apiErrorText(response, errorText('resetPassword')))
         }
         const payload = await response.json()
         setAdminResetPasswordForm(DEFAULT_ADMIN_RESET_PASSWORD_FORM)
@@ -1304,7 +1316,7 @@ function App() {
         setSelectedUserId(payload.id)
         await loadSelectedUserConfiguration(payload.id)
       } catch (err) {
-        pushNotification({ autoCloseMs: null, copyText: err.message || 'Unable to reset password', message: err.message || 'Unable to reset password', targetId: 'user-management-section', tone: 'error' })
+        pushNotification({ autoCloseMs: null, copyText: err.message || errorText('resetPassword'), message: err.message || errorText('resetPassword'), targetId: 'user-management-section', tone: 'error' })
       }
     })
   }
@@ -1322,7 +1334,7 @@ function App() {
           try {
             const response = await fetch(`/api/admin/users/${user.id}/passkeys`, { method: 'DELETE' })
             if (!response.ok) {
-              throw new Error(await apiErrorText(response, 'Unable to reset passkeys'))
+              throw new Error(await apiErrorText(response, errorText('resetPasskeys')))
             }
             const payload = await response.json()
             setConfirmationDialog(null)
@@ -1330,7 +1342,7 @@ function App() {
             await loadAppData()
             await loadSelectedUserConfiguration(user.id)
           } catch (err) {
-            pushNotification({ autoCloseMs: null, copyText: err.message || 'Unable to reset passkeys', message: err.message || 'Unable to reset passkeys', targetId: 'user-management-section', tone: 'error' })
+            pushNotification({ autoCloseMs: null, copyText: err.message || errorText('resetPasskeys'), message: err.message || errorText('resetPasskeys'), targetId: 'user-management-section', tone: 'error' })
           }
         })
       },
@@ -1344,16 +1356,23 @@ function App() {
       try {
         const response = await fetch('/api/admin/poll/run', { method: 'POST' })
         if (!response.ok) {
-          throw new Error(await apiErrorText(response, 'Unable to run poll'))
+          throw new Error(await apiErrorText(response, errorText('runPoll')))
         }
         const payload = await response.json()
+        if (payload.errorDetails?.length || payload.errors?.length) {
+          const formattedErrors = payload.errorDetails?.length
+            ? payload.errorDetails.map((detail) => formatPollError(detail, language))
+            : payload.errors.map((message) => formatPollError(message, language))
+          throw new Error(formattedErrors.join('\n'))
+        }
         const completedMessageKey = payload.spamJunkMessageCount > 0
           ? 'notifications.pollFinishedWithSpam'
           : 'notifications.pollFinished'
         pushNotification({ message: t(completedMessageKey, { fetched: payload.fetched, imported: payload.imported, duplicates: payload.duplicates, errors: payload.errors.length, spamJunkCount: payload.spamJunkMessageCount }), targetId: 'system-dashboard-section', tone: 'success' })
         await loadAppData()
       } catch (err) {
-        pushNotification({ autoCloseMs: null, copyText: err.message || 'Unable to run poll', message: err.message || 'Unable to run poll', targetId: 'system-dashboard-section', tone: 'error' })
+        const message = formatPollError(err.message || errorText('runPoll'), language)
+        pushNotification({ autoCloseMs: null, copyText: message, message, targetId: 'system-dashboard-section', tone: 'error' })
       } finally {
         setRunningPoll(false)
       }
@@ -1378,14 +1397,14 @@ function App() {
           })
         })
         if (!response.ok) {
-          throw new Error(await apiErrorText(response, 'Unable to save polling settings'))
+          throw new Error(await apiErrorText(response, errorText('savePollingSettings')))
         }
         setSystemPollingFormDirty(false)
         setShowSystemPollingDialog(false)
         pushNotification({ message: t('notifications.pollingUpdated'), targetId: 'system-dashboard-section', tone: 'success' })
         await loadAppData()
       } catch (err) {
-        pushNotification({ autoCloseMs: null, copyText: err.message || 'Unable to save polling settings', message: err.message || 'Unable to save polling settings', targetId: 'system-dashboard-section', tone: 'error' })
+        pushNotification({ autoCloseMs: null, copyText: err.message || errorText('savePollingSettings'), message: err.message || errorText('savePollingSettings'), targetId: 'system-dashboard-section', tone: 'error' })
       }
     })
   }
@@ -1403,7 +1422,7 @@ function App() {
           })
         })
         if (!response.ok) {
-          throw new Error(await apiErrorText(response, 'Unable to reset polling settings'))
+          throw new Error(await apiErrorText(response, errorText('resetPollingSettings')))
         }
         setSystemPollingForm(DEFAULT_SYSTEM_POLLING_FORM)
         setSystemPollingFormDirty(false)
@@ -1411,7 +1430,7 @@ function App() {
         pushNotification({ message: t('notifications.pollingReset'), targetId: 'system-dashboard-section', tone: 'success' })
         await loadAppData()
       } catch (err) {
-        pushNotification({ autoCloseMs: null, copyText: err.message || 'Unable to reset polling settings', message: err.message || 'Unable to reset polling settings', targetId: 'system-dashboard-section', tone: 'error' })
+        pushNotification({ autoCloseMs: null, copyText: err.message || errorText('resetPollingSettings'), message: err.message || errorText('resetPollingSettings'), targetId: 'system-dashboard-section', tone: 'error' })
       }
     })
   }
@@ -1434,14 +1453,14 @@ function App() {
           })
         })
         if (!response.ok) {
-          throw new Error(await apiErrorText(response, 'Unable to save your polling settings'))
+          throw new Error(await apiErrorText(response, errorText('saveUserPollingSettings')))
         }
         setUserPollingFormDirty(false)
         setShowUserPollingDialog(false)
         pushNotification({ message: t('notifications.userPollingUpdated'), targetId: 'user-polling-section', tone: 'success' })
         await loadAppData()
       } catch (err) {
-        pushNotification({ autoCloseMs: null, copyText: err.message || 'Unable to save your polling settings', message: err.message || 'Unable to save your polling settings', targetId: 'user-polling-section', tone: 'error' })
+        pushNotification({ autoCloseMs: null, copyText: err.message || errorText('saveUserPollingSettings'), message: err.message || errorText('saveUserPollingSettings'), targetId: 'user-polling-section', tone: 'error' })
       }
     })
   }
@@ -1459,7 +1478,7 @@ function App() {
           })
         })
         if (!response.ok) {
-          throw new Error(await apiErrorText(response, 'Unable to reset your polling settings'))
+          throw new Error(await apiErrorText(response, errorText('resetUserPollingSettings')))
         }
         setUserPollingForm(DEFAULT_USER_POLLING_FORM)
         setUserPollingFormDirty(false)
@@ -1467,7 +1486,7 @@ function App() {
         pushNotification({ message: t('notifications.userPollingReset'), targetId: 'user-polling-section', tone: 'success' })
         await loadAppData()
       } catch (err) {
-        pushNotification({ autoCloseMs: null, copyText: err.message || 'Unable to reset your polling settings', message: err.message || 'Unable to reset your polling settings', targetId: 'user-polling-section', tone: 'error' })
+        pushNotification({ autoCloseMs: null, copyText: err.message || errorText('resetUserPollingSettings'), message: err.message || errorText('resetUserPollingSettings'), targetId: 'user-polling-section', tone: 'error' })
       }
     })
   }
@@ -1476,7 +1495,7 @@ function App() {
     withPending('googleOAuthSelf', async () => {
       await new Promise((resolve) => {
         window.setTimeout(() => {
-          window.location.assign('/api/google-oauth/start/self')
+          window.location.assign(`/api/google-oauth/start/self?lang=${encodeURIComponent(language)}`)
           resolve()
         }, 75)
       })
@@ -1506,7 +1525,7 @@ function App() {
     withPending('googleOAuthSystem', async () => {
       await new Promise((resolve) => {
         window.setTimeout(() => {
-          window.location.assign('/api/google-oauth/start/system')
+          window.location.assign(`/api/google-oauth/start/system?lang=${encodeURIComponent(language)}`)
           resolve()
         }, 75)
       })
@@ -1517,7 +1536,7 @@ function App() {
     withPending(`microsoftOAuth:${sourceId}`, async () => {
       await new Promise((resolve) => {
         window.setTimeout(() => {
-          window.location.assign(`/api/microsoft-oauth/start?sourceId=${encodeURIComponent(sourceId)}`)
+          window.location.assign(`/api/microsoft-oauth/start?sourceId=${encodeURIComponent(sourceId)}&lang=${encodeURIComponent(language)}`)
           resolve()
         }, 75)
       })
@@ -1539,14 +1558,14 @@ function App() {
           body: JSON.stringify(nextPreferences)
         })
         if (!response.ok) {
-          throw new Error(await apiErrorText(response, 'Unable to save layout preference'))
+          throw new Error(await apiErrorText(response, errorText('saveLayoutPreference')))
         }
         const payload = await response.json()
         const normalized = normalizeUiPreferences(payload)
         setUiPreferences(normalized)
         setLanguage(normalized.language)
       } catch (err) {
-        pushNotification({ autoCloseMs: null, copyText: err.message || t('notifications.layoutSaveFailed'), message: err.message || t('notifications.layoutSaveFailed'), tone: 'error' })
+        pushNotification({ autoCloseMs: null, copyText: err.message || errorText('saveLayoutPreference'), message: err.message || errorText('saveLayoutPreference'), tone: 'error' })
       }
     })
   }
@@ -1762,13 +1781,16 @@ function App() {
   }
 
   const visibleFetchers = useMemo(() => {
-      const deriveOauthConnected = (bridge) => bridge.authMethod === 'OAUTH2'
-        && (
-          bridge.oauthConnected === true
+      const deriveOauthConnected = (bridge) => {
+        if (bridge.authMethod !== 'OAUTH2') return false
+        if (isOauthRevokedError(bridge.lastEvent?.error) || isOauthRevokedError(bridge.pollingState?.lastFailureReason)) {
+          return false
+        }
+        return bridge.oauthConnected === true
           || bridge.oauthRefreshTokenConfigured === true
           || bridge.tokenStorageMode === 'DATABASE'
           || bridge.tokenStorageMode === 'ENVIRONMENT'
-        )
+      }
       const databaseFetchers = myBridges.map((bridge) => ({
         ...bridge,
         bridgeId: bridge.bridgeId,
@@ -1776,7 +1798,7 @@ function App() {
         oauthConnected: deriveOauthConnected(bridge),
         canDelete: true,
         canEdit: true,
-        canConnectMicrosoft: bridge.authMethod === 'OAUTH2' && bridge.oauthProvider === 'MICROSOFT',
+        canConnectMicrosoft: authOptions.microsoftOAuthAvailable && bridge.authMethod === 'OAUTH2' && bridge.oauthProvider === 'MICROSOFT',
         canConfigurePolling: true,
         canRunPoll: true
       }))
@@ -1805,7 +1827,7 @@ function App() {
         managementSource: 'ENVIRONMENT',
         canDelete: false,
         canEdit: false,
-        canConnectMicrosoft: bridge.authMethod === 'OAUTH2' && bridge.oauthProvider === 'MICROSOFT',
+        canConnectMicrosoft: authOptions.microsoftOAuthAvailable && bridge.authMethod === 'OAUTH2' && bridge.oauthProvider === 'MICROSOFT',
         canConfigurePolling: true,
         canRunPoll: true
       }))
@@ -1813,7 +1835,7 @@ function App() {
 
     return [...databaseFetchers, ...envFetchers]
       .sort((left, right) => left.bridgeId.localeCompare(right.bridgeId))
-  }, [myBridges, session?.username, systemDashboard?.bridges])
+  }, [authOptions.microsoftOAuthAvailable, myBridges, session?.username, systemDashboard?.bridges])
 
   const setupGuideState = buildSetupGuideState({
     gmailMeta,
@@ -2038,6 +2060,7 @@ function App() {
           sectionLoading={isSectionRefreshing('sourceBridgesCollapsed')}
           t={t}
           locale={language}
+          microsoftOAuthAvailable={authOptions.microsoftOAuthAvailable}
         />
       )
     }
