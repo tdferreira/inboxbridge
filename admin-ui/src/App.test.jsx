@@ -470,6 +470,21 @@ describe('App', () => {
       if (url === '/api/app/bridges') return jsonResponse([])
       if (url === '/api/app/ui-preferences') return jsonResponse({})
       if (url === '/api/account/passkeys') return jsonResponse([])
+      if (url === '/api/admin/oauth-app-settings') {
+        return jsonResponse({
+          effectiveMultiUserEnabled: true,
+          multiUserEnabledOverride: null,
+          googleDestinationUser: 'me',
+          googleRedirectUri: 'https://localhost:3000/api/google-oauth/callback',
+          googleClientId: '',
+          googleClientSecretConfigured: false,
+          googleRefreshTokenConfigured: false,
+          microsoftClientId: '',
+          microsoftRedirectUri: 'https://localhost:3000/api/microsoft-oauth/callback',
+          microsoftClientSecretConfigured: false,
+          secureStorageConfigured: true
+        })
+      }
       if (url === '/api/admin/dashboard') {
         return jsonResponse({
           overall: {
@@ -520,14 +535,342 @@ describe('App', () => {
 
     await screen.findByText(/signed in as/i)
     expect(screen.getByRole('tab', { name: /User|Utilizador/, selected: true })).toBeInTheDocument()
-    expect(screen.getByText(/My Gmail Account|A minha conta Gmail/)).toBeInTheDocument()
+    expect(screen.getByText(/My Gmail Account|A minha conta Gmail/, { selector: '.section-title' })).toBeInTheDocument()
     expect(screen.queryByText(/Global Polling Settings|Definições globais de verificação/)).not.toBeInTheDocument()
 
     fireEvent.click(screen.getByRole('tab', { name: /Administration|Administração/ }))
 
     expect(screen.getByRole('tab', { name: /Administration|Administração/, selected: true })).toBeInTheDocument()
     expect(await screen.findByText(/Global Polling Settings|Definições globais de verificação/)).toBeInTheDocument()
-    expect(screen.queryByText(/My Gmail Account|A minha conta Gmail/)).not.toBeInTheDocument()
+    expect(screen.queryByText(/My Gmail Account|A minha conta Gmail/, { selector: '.section-title' })).not.toBeInTheDocument()
+  })
+
+  it('keeps admin user rows collapsed until one is explicitly opened', async () => {
+    const fetchMock = vi.fn(async (input) => {
+      const url = String(input)
+      if (url === '/api/auth/options') {
+        return jsonResponse({
+          multiUserEnabled: true,
+          microsoftOAuthAvailable: true,
+          googleOAuthAvailable: true,
+          sourceOAuthProviders: ['MICROSOFT', 'GOOGLE']
+        })
+      }
+      if (url === '/api/auth/me') {
+        return jsonResponse({
+          id: 1,
+          username: 'admin',
+          role: 'ADMIN',
+          approved: true,
+          mustChangePassword: false,
+          passkeyCount: 0,
+          passwordConfigured: true
+        })
+      }
+      if (url === '/api/app/gmail-config') {
+        return jsonResponse({
+          destinationUser: 'me',
+          redirectUri: 'https://localhost:3000/api/google-oauth/callback',
+          createMissingLabels: true,
+          neverMarkSpam: false,
+          processForCalendar: false
+        })
+      }
+      if (url === '/api/app/polling-settings') {
+        return jsonResponse({
+          defaultPollEnabled: true,
+          pollEnabledOverride: null,
+          effectivePollEnabled: true,
+          defaultPollInterval: '5m',
+          pollIntervalOverride: null,
+          effectivePollInterval: '5m',
+          defaultFetchWindow: 50,
+          fetchWindowOverride: null,
+          effectiveFetchWindow: 50
+        })
+      }
+      if (url === '/api/app/polling-stats') {
+        return jsonResponse({
+          totalImportedMessages: 0,
+          configuredMailFetchers: 0,
+          enabledMailFetchers: 0,
+          sourcesWithErrors: 0,
+          importsByDay: []
+        })
+      }
+      if (url === '/api/app/bridges') return jsonResponse([])
+      if (url === '/api/app/ui-preferences') return jsonResponse({})
+      if (url === '/api/account/passkeys') return jsonResponse([])
+      if (url === '/api/admin/dashboard') {
+        return jsonResponse({
+          overall: {
+            configuredSources: 0,
+            enabledSources: 0,
+            totalImportedMessages: 0,
+            sourcesWithErrors: 0,
+            pollInterval: '5m',
+            fetchWindow: 50
+          },
+          stats: {
+            totalImportedMessages: 0,
+            configuredMailFetchers: 0,
+            enabledMailFetchers: 0,
+            sourcesWithErrors: 0,
+            importsByDay: []
+          },
+          polling: {
+            defaultPollEnabled: true,
+            pollEnabledOverride: null,
+            effectivePollEnabled: true,
+            defaultPollInterval: '5m',
+            pollIntervalOverride: null,
+            effectivePollInterval: '5m',
+            defaultFetchWindow: 50,
+            fetchWindowOverride: null,
+            effectiveFetchWindow: 50,
+            defaultManualTriggerLimitCount: 5,
+            manualTriggerLimitCountOverride: null,
+            effectiveManualTriggerLimitCount: 5,
+            defaultManualTriggerLimitWindowSeconds: 60,
+            manualTriggerLimitWindowSecondsOverride: null,
+            effectiveManualTriggerLimitWindowSeconds: 60
+          },
+          bridges: [],
+          recentEvents: []
+        })
+      }
+      if (url === '/api/admin/oauth-app-settings') {
+        return jsonResponse({
+          effectiveMultiUserEnabled: true,
+          multiUserEnabledOverride: null,
+          googleDestinationUser: 'me',
+          googleRedirectUri: 'https://localhost:3000/api/google-oauth/callback',
+          googleClientId: '',
+          googleClientSecretConfigured: false,
+          googleRefreshTokenConfigured: false,
+          microsoftClientId: '',
+          microsoftRedirectUri: 'https://localhost:3000/api/microsoft-oauth/callback',
+          microsoftClientSecretConfigured: false,
+          secureStorageConfigured: true
+        })
+      }
+      if (url === '/api/admin/users') {
+        return jsonResponse([
+          {
+            id: 1,
+            username: 'admin',
+            role: 'ADMIN',
+            approved: true,
+            active: true,
+            bridgeCount: 0,
+            gmailConfigured: true,
+            passwordConfigured: true,
+            mustChangePassword: false,
+            passkeyCount: 0
+          },
+          {
+            id: 2,
+            username: 'alice',
+            role: 'USER',
+            approved: true,
+            active: true,
+            bridgeCount: 0,
+            gmailConfigured: false,
+            passwordConfigured: true,
+            mustChangePassword: false,
+            passkeyCount: 0
+          }
+        ])
+      }
+      if (url.includes('/api/admin/users/') && url.endsWith('/configuration')) {
+        throw new Error(`Unexpected user configuration preload: ${url}`)
+      }
+      throw new Error(`Unexpected request: ${url}`)
+    })
+
+    vi.stubGlobal('fetch', fetchMock)
+
+    render(<App />)
+
+    await screen.findByText(/signed in as/i)
+    fireEvent.click(screen.getByRole('tab', { name: /Administration|Administração/ }))
+
+    await screen.findByText('admin')
+    await screen.findByText('alice')
+    expect(screen.queryByText(/Gmail Destination|Destino Gmail/)).not.toBeInTheDocument()
+    expect(fetchMock).not.toHaveBeenCalledWith('/api/admin/users/1/configuration')
+    expect(fetchMock).not.toHaveBeenCalledWith('/api/admin/users/2/configuration')
+  })
+
+  it('uses single-user confirmation copy for the admin run-poll action', async () => {
+    const fetchMock = vi.fn(async (input) => {
+      const url = String(input)
+      if (url === '/api/auth/options') {
+        return jsonResponse({
+          multiUserEnabled: false,
+          microsoftOAuthAvailable: true,
+          googleOAuthAvailable: true,
+          sourceOAuthProviders: ['MICROSOFT', 'GOOGLE']
+        })
+      }
+      if (url === '/api/auth/me') {
+        return jsonResponse({
+          id: 1,
+          username: 'admin',
+          role: 'ADMIN',
+          approved: true,
+          mustChangePassword: false,
+          passkeyCount: 0,
+          passwordConfigured: true
+        })
+      }
+      if (url === '/api/app/gmail-config') return jsonResponse({ destinationUser: 'me', redirectUri: 'https://localhost:3000/api/google-oauth/callback', createMissingLabels: true, neverMarkSpam: false, processForCalendar: false })
+      if (url === '/api/app/polling-settings') return jsonResponse({ defaultPollEnabled: true, pollEnabledOverride: null, effectivePollEnabled: true, defaultPollInterval: '5m', pollIntervalOverride: null, effectivePollInterval: '5m', defaultFetchWindow: 50, fetchWindowOverride: null, effectiveFetchWindow: 50 })
+      if (url === '/api/app/polling-stats') return jsonResponse({ totalImportedMessages: 0, configuredMailFetchers: 0, enabledMailFetchers: 0, sourcesWithErrors: 0, importsByDay: [] })
+      if (url === '/api/app/bridges') return jsonResponse([])
+      if (url === '/api/app/ui-preferences') return jsonResponse({})
+      if (url === '/api/account/passkeys') return jsonResponse([])
+      if (url === '/api/admin/dashboard') {
+        return jsonResponse({
+          overall: { configuredSources: 0, enabledSources: 0, totalImportedMessages: 0, sourcesWithErrors: 0, pollInterval: '5m', fetchWindow: 50 },
+          stats: { totalImportedMessages: 0, configuredMailFetchers: 0, enabledMailFetchers: 0, sourcesWithErrors: 0, importsByDay: [] },
+          polling: {
+            defaultPollEnabled: true,
+            pollEnabledOverride: null,
+            effectivePollEnabled: true,
+            defaultPollInterval: '5m',
+            pollIntervalOverride: null,
+            effectivePollInterval: '5m',
+            defaultFetchWindow: 50,
+            fetchWindowOverride: null,
+            effectiveFetchWindow: 50,
+            defaultManualTriggerLimitCount: 5,
+            manualTriggerLimitCountOverride: null,
+            effectiveManualTriggerLimitCount: 5,
+            defaultManualTriggerLimitWindowSeconds: 60,
+            manualTriggerLimitWindowSecondsOverride: null,
+            effectiveManualTriggerLimitWindowSeconds: 60
+          },
+          bridges: [],
+          recentEvents: []
+        })
+      }
+      if (url === '/api/admin/oauth-app-settings') {
+        return jsonResponse({
+          effectiveMultiUserEnabled: false,
+          multiUserEnabledOverride: false,
+          googleDestinationUser: 'me',
+          googleRedirectUri: 'https://localhost:3000/api/google-oauth/callback',
+          googleClientId: '',
+          googleClientSecretConfigured: false,
+          googleRefreshTokenConfigured: false,
+          microsoftClientId: '',
+          microsoftRedirectUri: 'https://localhost:3000/api/microsoft-oauth/callback',
+          microsoftClientSecretConfigured: false,
+          secureStorageConfigured: true
+        })
+      }
+      throw new Error(`Unexpected request: ${url}`)
+    })
+
+    vi.stubGlobal('fetch', fetchMock)
+
+    render(<App />)
+
+    await screen.findByText(/signed in as/i)
+    fireEvent.click(screen.getByRole('tab', { name: /Administration|Administração/ }))
+    fireEvent.click(await screen.findByRole('button', { name: /Run Poll Now|Executar polling agora/ }))
+
+    expect(await screen.findByText(/Run polling for the current account now\?|Executar agora a verificação para a conta atual\?/)).toBeInTheDocument()
+    expect(screen.getByText(/single-user deployment|modo de utilizador único|modo de usuário único/i)).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: /Run For Current Account|Executar para a conta atual/ })).toBeInTheDocument()
+    expect(screen.queryByText(/Run polling for every user now\?|Executar agora a verificação para todos os utilizadores\?|Executar agora a verificação para todos os usuários\?/)).not.toBeInTheDocument()
+  })
+
+  it('shows the admin Google OAuth dialog as shared client configuration only', async () => {
+    const fetchMock = vi.fn(async (input) => {
+      const url = String(input)
+      if (url === '/api/auth/options') {
+        return jsonResponse({
+          multiUserEnabled: true,
+          microsoftOAuthAvailable: true,
+          googleOAuthAvailable: true,
+          sourceOAuthProviders: ['MICROSOFT', 'GOOGLE']
+        })
+      }
+      if (url === '/api/auth/me') {
+        return jsonResponse({
+          id: 1,
+          username: 'admin',
+          role: 'ADMIN',
+          approved: true,
+          mustChangePassword: false,
+          passkeyCount: 0,
+          passwordConfigured: true
+        })
+      }
+      if (url === '/api/app/gmail-config') return jsonResponse({ destinationUser: 'me', redirectUri: 'https://localhost:3000/api/google-oauth/callback', createMissingLabels: true, neverMarkSpam: false, processForCalendar: false })
+      if (url === '/api/app/polling-settings') return jsonResponse({ defaultPollEnabled: true, pollEnabledOverride: null, effectivePollEnabled: true, defaultPollInterval: '5m', pollIntervalOverride: null, effectivePollInterval: '5m', defaultFetchWindow: 50, fetchWindowOverride: null, effectiveFetchWindow: 50 })
+      if (url === '/api/app/polling-stats') return jsonResponse({ totalImportedMessages: 0, configuredMailFetchers: 0, enabledMailFetchers: 0, sourcesWithErrors: 0, importsByDay: [] })
+      if (url === '/api/app/bridges') return jsonResponse([])
+      if (url === '/api/app/ui-preferences') return jsonResponse({})
+      if (url === '/api/account/passkeys') return jsonResponse([])
+      if (url === '/api/admin/dashboard') {
+        return jsonResponse({
+          overall: { configuredSources: 0, enabledSources: 0, totalImportedMessages: 0, sourcesWithErrors: 0, pollInterval: '5m', fetchWindow: 50 },
+          stats: { totalImportedMessages: 0, configuredMailFetchers: 0, enabledMailFetchers: 0, sourcesWithErrors: 0, importsByDay: [] },
+          polling: {
+            defaultPollEnabled: true,
+            pollEnabledOverride: null,
+            effectivePollEnabled: true,
+            defaultPollInterval: '5m',
+            pollIntervalOverride: null,
+            effectivePollInterval: '5m',
+            defaultFetchWindow: 50,
+            fetchWindowOverride: null,
+            effectiveFetchWindow: 50,
+            defaultManualTriggerLimitCount: 5,
+            manualTriggerLimitCountOverride: null,
+            effectiveManualTriggerLimitCount: 5,
+            defaultManualTriggerLimitWindowSeconds: 60,
+            manualTriggerLimitWindowSecondsOverride: null,
+            effectiveManualTriggerLimitWindowSeconds: 60
+          },
+          bridges: [],
+          recentEvents: []
+        })
+      }
+      if (url === '/api/admin/oauth-app-settings') {
+        return jsonResponse({
+          effectiveMultiUserEnabled: true,
+          multiUserEnabledOverride: null,
+          googleDestinationUser: 'me',
+          googleRedirectUri: 'https://localhost:3000/api/google-oauth/callback',
+          googleClientId: 'google-client-id',
+          googleClientSecretConfigured: true,
+          googleRefreshTokenConfigured: false,
+          microsoftClientId: '',
+          microsoftRedirectUri: 'https://localhost:3000/api/microsoft-oauth/callback',
+          microsoftClientSecretConfigured: false,
+          secureStorageConfigured: true
+        })
+      }
+      if (url === '/api/admin/users') return jsonResponse([])
+      throw new Error(`Unexpected request: ${url}`)
+    })
+
+    vi.stubGlobal('fetch', fetchMock)
+
+    render(<App />)
+
+    await screen.findByText(/signed in as/i)
+    fireEvent.click(screen.getByRole('tab', { name: /Administration|Administração/ }))
+    fireEvent.click(await screen.findByRole('button', { name: /Edit Google App|Editar aplicação Google|Editar aplicativo Google/ }))
+
+    expect((await screen.findAllByText(/Administration only stores the shared Google OAuth client registration|A administração guarda apenas o registo do cliente OAuth Google partilhado|A administração armazena apenas o cadastro compartilhado do cliente OAuth Google/)).length).toBeGreaterThan(0)
+    expect(screen.queryByRole('button', { name: /Connect Shared Gmail OAuth|Ligar OAuth Gmail partilhado|Conectar OAuth Gmail compartilhado/ })).not.toBeInTheDocument()
+    expect(screen.queryByLabelText(/Google Refresh Token/)).not.toBeInTheDocument()
+    expect(screen.queryByLabelText(/Gmail API User|Utilizador da API Gmail|Usuário da API Gmail/)).not.toBeInTheDocument()
   })
 
   it('shows one sanitized error notification when a fetcher poll hits a proxy error', async () => {

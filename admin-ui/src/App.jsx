@@ -641,9 +641,9 @@ function App() {
       }
       if (usersPayload) {
         setUsers(usersPayload)
-        if (!selectedUserId && usersPayload.length > 0) {
-          setSelectedUserId(usersPayload[0].id)
-        }
+        const availableUserIds = new Set(usersPayload.map((user) => user.id))
+        setSelectedUserId((current) => (current && availableUserIds.has(current) ? current : null))
+        setSelectedUserConfig((current) => (current && availableUserIds.has(current.user.id) ? current : null))
       } else {
         setUsers([])
         setSelectedUserId(null)
@@ -1583,10 +1583,11 @@ function App() {
   }
 
   async function runPoll() {
+    const singleUserMode = authOptions.multiUserEnabled === false
     openConfirmation({
       actionKey: 'runPoll',
-      body: t('system.runPollConfirmBody'),
-      confirmLabel: t('system.runPollConfirmAction'),
+      body: t(singleUserMode ? 'system.runPollConfirmBodySingleUser' : 'system.runPollConfirmBody'),
+      confirmLabel: t(singleUserMode ? 'system.runPollConfirmActionSingleUser' : 'system.runPollConfirmAction'),
       confirmLoadingLabel: t('system.runPollLoading'),
       confirmTone: 'primary',
       onConfirm: async () => {
@@ -1620,7 +1621,7 @@ function App() {
           }
         })
       },
-      title: t('system.runPollConfirmTitle')
+      title: t(singleUserMode ? 'system.runPollConfirmTitleSingleUser' : 'system.runPollConfirmTitle')
     })
   }
 
@@ -1844,18 +1845,6 @@ function App() {
         navigateToGoogleOAuthSelf()
       },
       title: t('gmail.reconnectConfirmTitle')
-    })
-  }
-
-  function startGoogleOAuthSystem() {
-    withPending('googleOAuthSystem', async () => {
-      await new Promise((resolve) => {
-        window.setTimeout(() => {
-          setShowSystemOAuthAppsDialog(false)
-          window.location.assign(`/api/google-oauth/start/system?lang=${encodeURIComponent(language)}`)
-          resolve()
-        }, 75)
-      })
     })
   }
 
@@ -2778,7 +2767,6 @@ function App() {
               setSystemOAuthSettings((current) => typeof updater === 'function' ? updater(current) : updater)
             }}
             onSave={saveSystemOAuthSettings}
-            onStartGoogleOAuth={startGoogleOAuthSystem}
             provider={systemOAuthEditorProvider}
             t={t}
           />

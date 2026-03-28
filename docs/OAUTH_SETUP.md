@@ -70,8 +70,8 @@ ${PUBLIC_BASE_URL}/api/google-oauth/callback
 ### Browser flow
 
 1. Sign in to `https://localhost:3000`
-2. Use `Connect My Gmail OAuth` for a user-managed Gmail destination
-3. Or use `Connect System Gmail OAuth` for the env-managed system destination
+2. If you are an admin, first configure the shared Google `Client ID` / `Client Secret` in `Administration -> OAuth Apps` using the values from the Google Cloud project
+3. Then use `Connect My Gmail OAuth` from `My Gmail Account` for the mailbox that should receive imported mail
 4. Complete Google consent
 5. The callback page automatically tries to exchange the code in the browser as soon as it loads
 6. After exchange succeeds, the callback page starts a 10-second countdown and returns to the admin UI automatically

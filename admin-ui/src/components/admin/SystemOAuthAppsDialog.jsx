@@ -9,7 +9,6 @@ function SystemOAuthAppsDialog({
   onClose,
   onOauthSettingsChange,
   onSave,
-  onStartGoogleOAuth,
   provider,
   t
 }) {
@@ -26,17 +25,6 @@ function SystemOAuthAppsDialog({
       <form className="settings-grid system-polling-grid" onSubmit={onSave}>
         {isGoogle ? (
           <>
-            <label>
-              <span className="field-label-row">
-                <span>{t('system.googleDestinationUser')}</span>
-                <InfoHint text={t('system.googleDestinationUserHelp')} />
-              </span>
-              <input
-                aria-label={t('system.googleDestinationUser')}
-                value={oauthSettings.googleDestinationUser}
-                onChange={(event) => onOauthSettingsChange((current) => ({ ...current, googleDestinationUser: event.target.value }))}
-              />
-            </label>
             <label>
               <span className="field-label-row">
                 <span>{t('system.googleRedirectUri')}</span>
@@ -72,26 +60,8 @@ function SystemOAuthAppsDialog({
                 onChange={(event) => onOauthSettingsChange((current) => ({ ...current, googleClientSecret: event.target.value }))}
               />
             </label>
-            <label className="full">
-              <span className="field-label-row">
-                <span>{t('system.googleRefreshToken')}</span>
-                <InfoHint text={t('system.googleRefreshTokenHelp')} />
-              </span>
-              <input
-                aria-label={t('system.googleRefreshToken')}
-                placeholder={oauthSettings.googleRefreshTokenConfigured ? t('gmail.storedSecurely') : ''}
-                type="password"
-                value={oauthSettings.googleRefreshToken}
-                onChange={(event) => onOauthSettingsChange((current) => ({ ...current, googleRefreshToken: event.target.value }))}
-              />
-            </label>
             <div className="muted-box full">
-              {t('system.googleRefreshTokenPreferred')}
-            </div>
-            <div className="action-row full">
-              <LoadingButton className="secondary" isLoading={oauthSettingsLoading} loadingLabel={t('gmail.connectLoading')} onClick={onStartGoogleOAuth} type="button">
-                {t('system.googleConnect')}
-              </LoadingButton>
+              {t('system.googleClientUsageHelp')}
             </div>
           </>
         ) : (

@@ -33,9 +33,10 @@ function OAuthAppsSection({
             <div className="polling-statistics-card-title">{t('system.oauthGoogleTitle')}</div>
             <div className="polling-statistics-breakdown">
               <div><span>{t('system.googleClientId')}</span><strong>{t(oauthSettings?.googleClientId ? 'common.yes' : 'common.no')}</strong></div>
-              <div><span>{t('system.googleRefreshToken')}</span><strong>{t(oauthSettings?.googleRefreshTokenConfigured ? 'common.yes' : 'common.no')}</strong></div>
-              <div><span>{t('system.googleDestinationUser')}</span><strong>{oauthSettings?.googleDestinationUser || t('common.unavailable')}</strong></div>
+              <div><span>{t('system.googleClientSecret')}</span><strong>{t(oauthSettings?.googleClientSecretConfigured ? 'common.yes' : 'common.no')}</strong></div>
+              <div><span>{t('system.googleRedirectUri')}</span><strong>{oauthSettings?.googleRedirectUri || t('common.unavailable')}</strong></div>
             </div>
+            <p className="section-copy">{t('system.googleClientUsageHelp')}</p>
             <div className="action-row">
               <LoadingButton className="secondary" onClick={onEditGoogle} type="button">
                 {t('system.oauthGoogleEdit')}

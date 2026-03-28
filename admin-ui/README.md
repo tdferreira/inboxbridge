@@ -106,7 +106,7 @@ Key design choices:
 - when that admin-only setup sidebar is absent, the Gmail account panel now expands to the full available width instead of keeping an empty second column
 - the admin Gmail account form now shows inline help hints for each configurable field
 - connected Gmail accounts can now also be unlinked from the admin UI, which clears InboxBridge's stored Gmail OAuth tokens and attempts a Google-side token revocation when possible
-- in the normal operating model, that shared Google OAuth client comes from one deployment-wide Google Cloud project reused across many users
+- in the normal operating model, that shared Google OAuth client comes from one deployment-wide Google Cloud project reused across many users, and the `Administration -> OAuth Apps` area only stores that client registration while each user still connects their own Gmail mailbox from `My Gmail Account`
 - the polling area is now framed as `Poller Settings` and focuses on runtime scheduler controls plus polling-health metrics
 - `My Polling Settings` now also includes a `Run Poll Now` action for the signed-in user’s own mail accounts
 - `Global Polling Settings` now asks for confirmation before starting an all-users manual run, and the dialog also exposes the manual-run rate limit configuration used to prevent repeated hammering

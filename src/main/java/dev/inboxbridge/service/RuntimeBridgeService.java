@@ -144,23 +144,22 @@ public class RuntimeBridgeService {
     private Optional<RuntimeBridge> toRuntimeBridge(UserBridge bridge) {
         Optional<AppUser> owner = appUserRepository.findByIdOptional(bridge.userId);
         Optional<UserGmailConfigService.ResolvedUserGmailConfig> gmailConfig = userGmailConfigService.resolveForUser(bridge.userId);
-        if (owner.isEmpty()) {
+        if (owner.isEmpty() || !owner.get().active || !owner.get().approved || gmailConfig.isEmpty()) {
             return Optional.empty();
         }
-        GmailTarget gmailTarget = gmailConfig
-                .map(userTarget -> new GmailTarget(
-                        "user-gmail:" + bridge.userId,
-                        bridge.userId,
-                        owner.get().username,
-                        userTarget.destinationUser(),
-                        userTarget.clientId(),
-                        userTarget.clientSecret(),
-                        userTarget.refreshToken(),
-                        userTarget.redirectUri(),
-                        userTarget.createMissingLabels(),
-                        userTarget.neverMarkSpam(),
-                        userTarget.processForCalendar()))
-                .orElse(null);
+        UserGmailConfigService.ResolvedUserGmailConfig userTarget = gmailConfig.get();
+        GmailTarget gmailTarget = new GmailTarget(
+            "user-gmail:" + bridge.userId,
+            bridge.userId,
+            owner.get().username,
+            userTarget.destinationUser(),
+            userTarget.clientId(),
+            userTarget.clientSecret(),
+            userTarget.refreshToken(),
+            userTarget.redirectUri(),
+            userTarget.createMissingLabels(),
+            userTarget.neverMarkSpam(),
+            userTarget.processForCalendar());
         return Optional.of(new RuntimeBridge(
                 bridge.bridgeId,
                 "USER",

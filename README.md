@@ -222,7 +222,7 @@ Current features:
 - admin actions that can suspend a user, force a password change, wipe passkeys, or remove stored mail-fetcher data now require an explicit confirmation modal before execution
 - admins cannot remove their own admin rights
 - admin-managed per-user Gmail account overrides when advanced customization is really needed
-- non-admin users get a simplified Gmail account status panel with connect/reconnect OAuth, while shared Google OAuth client reuse still lets each user grant consent for their own Gmail mailbox refresh token
+- non-admin users get a simplified Gmail account status panel with connect/reconnect OAuth, while the `Administration -> OAuth Apps` area is limited to configuring the shared Google Cloud OAuth client registration reused by those user mailbox consent flows
 - when the Gmail account area has no admin-only setup sidebar to show, it now expands to the full available width instead of reserving an empty right column
 - the admin Gmail account form now shows inline `(i)` help hints for every configurable field so operators can understand what each setting does without leaving the page
 - connected Gmail accounts can also be unlinked from the admin UI, which clears InboxBridge's stored Gmail OAuth tokens and attempts to revoke the Google grant automatically when possible
@@ -498,6 +498,7 @@ Google OAuth client IDs and client secrets belong to a Google Cloud project, not
 In practice, each deployment must choose one of these patterns:
 
 1. reuse one shared Google OAuth client for many users
+2. let each user connect their own Gmail mailbox from `My Gmail Account` using that shared client
 2. let each user create a Google Cloud OAuth client and paste the values into the UI
 
 Pattern `1` is the intended default for most InboxBridge deployments.
@@ -529,7 +530,7 @@ For the user Gmail screen specifically:
 - `Gmail API User` should usually stay `me`
 - `Redirect URI` now defaults to the deployment callback URL and is prefilled in the UI
 - the actual Gmail mailbox used for imports is the Google account that completed OAuth consent; `Gmail API User=me` just tells the Gmail API to use that authenticated mailbox
-- per-user `Client ID` / `Client Secret` are optional admin-only overrides when the deployment already has a shared Google OAuth client configured; most deployments should not need these overrides
+- admins should configure the shared Google `Client ID` / `Client Secret` in `Administration -> OAuth Apps` using the values from the Google Cloud project; per-user `Client ID` / `Client Secret` remain optional advanced overrides and most deployments should not need them
 - the Gmail account panel now shows deployment-shared Google client availability separately from user-specific client overrides and refresh-token storage, but non-admin users only see the simplified connection status they actually need
 
 When disabled:
