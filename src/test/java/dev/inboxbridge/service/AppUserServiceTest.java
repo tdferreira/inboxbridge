@@ -22,7 +22,7 @@ import dev.inboxbridge.persistence.OAuthCredentialRepository;
 import dev.inboxbridge.persistence.SourcePollEventRepository;
 import dev.inboxbridge.persistence.SourcePollingSettingRepository;
 import dev.inboxbridge.persistence.SourcePollingStateRepository;
-import dev.inboxbridge.persistence.UserBridgeRepository;
+import dev.inboxbridge.persistence.UserEmailAccountRepository;
 import dev.inboxbridge.persistence.UserGmailConfigRepository;
 import dev.inboxbridge.persistence.UserPasskeyRepository;
 import dev.inboxbridge.persistence.UserPollingSettingRepository;
@@ -236,7 +236,7 @@ class AppUserServiceTest {
         AppUserService service = new AppUserService();
         service.repository = new InMemoryAppUserRepository();
         service.passwordHashService = new PasswordHashService();
-        service.userBridgeRepository = new EmptyUserBridgeRepository();
+        service.userEmailAccountRepository = new EmptyUserEmailAccountRepository();
         service.userGmailConfigRepository = new EmptyUserGmailConfigRepository();
         service.userPasskeyRepository = new FixedPasskeyRepository(passkeyCount);
         service.userPollingSettingRepository = new EmptyUserPollingSettingRepository();
@@ -302,9 +302,9 @@ class AppUserServiceTest {
         }
     }
 
-    private static class EmptyUserBridgeRepository extends UserBridgeRepository {
+    private static class EmptyUserEmailAccountRepository extends UserEmailAccountRepository {
         @Override
-        public List<dev.inboxbridge.persistence.UserBridge> listByUserId(Long userId) {
+        public List<dev.inboxbridge.persistence.UserEmailAccount> listByUserId(Long userId) {
             return List.of();
         }
     }

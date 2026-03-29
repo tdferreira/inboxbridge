@@ -9,7 +9,7 @@ import java.util.Optional;
 
 import org.junit.jupiter.api.Test;
 
-import dev.inboxbridge.config.BridgeConfig;
+import dev.inboxbridge.config.InboxBridgeConfig;
 
 class EnvSourceServiceTest {
 
@@ -19,12 +19,12 @@ class EnvSourceServiceTest {
         service.setConfigForTest(new TestConfig(List.of(new TestSource(
                 "source-0",
                 false,
-                BridgeConfig.Protocol.IMAP,
+                InboxBridgeConfig.Protocol.IMAP,
                 "imap.example.com",
                 993,
                 true,
-                BridgeConfig.AuthMethod.PASSWORD,
-                BridgeConfig.OAuthProvider.NONE,
+                InboxBridgeConfig.AuthMethod.PASSWORD,
+                InboxBridgeConfig.OAuthProvider.NONE,
                 "replace-me@example.com",
                 "replace-me",
                 Optional.empty(),
@@ -42,12 +42,12 @@ class EnvSourceServiceTest {
         service.setConfigForTest(new TestConfig(List.of(new TestSource(
                 "outlook-main-imap",
                 false,
-                BridgeConfig.Protocol.IMAP,
+                InboxBridgeConfig.Protocol.IMAP,
                 "outlook.office365.com",
                 993,
                 true,
-                BridgeConfig.AuthMethod.OAUTH2,
-                BridgeConfig.OAuthProvider.MICROSOFT,
+                InboxBridgeConfig.AuthMethod.OAUTH2,
+                InboxBridgeConfig.OAuthProvider.MICROSOFT,
                 "person@example.com",
                 "replace-me",
                 Optional.of("refresh-token"),
@@ -62,7 +62,7 @@ class EnvSourceServiceTest {
         assertTrue(service.isConfigured(configured.getFirst().source()));
     }
 
-    private static final class TestConfig implements BridgeConfig {
+    private static final class TestConfig implements InboxBridgeConfig {
         private final List<Source> sources;
 
         private TestConfig(List<Source> sources) {
@@ -143,17 +143,17 @@ class EnvSourceServiceTest {
     private record TestSource(
             String id,
             boolean enabled,
-            BridgeConfig.Protocol protocol,
+            InboxBridgeConfig.Protocol protocol,
             String host,
             int port,
             boolean tls,
-            BridgeConfig.AuthMethod authMethod,
-            BridgeConfig.OAuthProvider oauthProvider,
+            InboxBridgeConfig.AuthMethod authMethod,
+            InboxBridgeConfig.OAuthProvider oauthProvider,
             String username,
             String password,
             Optional<String> oauthRefreshToken,
             Optional<String> folder,
             boolean unreadOnly,
-            Optional<String> customLabel) implements BridgeConfig.Source {
+            Optional<String> customLabel) implements InboxBridgeConfig.Source {
     }
 }

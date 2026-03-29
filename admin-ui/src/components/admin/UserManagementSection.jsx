@@ -100,12 +100,15 @@ function UserManagementSection({
                 ? selectedUserConfig
                 : {
                     user,
-                    gmailConfig: {
-                      redirectUri: '',
-                      sharedClientConfigured: false,
-                      clientIdConfigured: false,
-                      clientSecretConfigured: false,
-                      refreshTokenConfigured: false
+                    destinationConfig: {
+                      provider: '',
+                      deliveryMode: '',
+                      linked: false,
+                      host: '',
+                      port: null,
+                      authMethod: '',
+                      username: '',
+                      folder: ''
                     },
                     pollingSettings: {
                       effectivePollEnabled: false,

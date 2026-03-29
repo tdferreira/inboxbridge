@@ -4,7 +4,7 @@ import java.time.Duration;
 import java.time.Instant;
 import java.util.Locale;
 
-import dev.inboxbridge.config.BridgeConfig;
+import dev.inboxbridge.config.InboxBridgeConfig;
 import dev.inboxbridge.dto.AdminPollingSettingsView;
 import dev.inboxbridge.dto.UpdateAdminPollingSettingsRequest;
 import dev.inboxbridge.persistence.SystemPollingSetting;
@@ -25,7 +25,7 @@ public class PollingSettingsService {
     public static final int DEFAULT_MANUAL_TRIGGER_LIMIT_WINDOW_SECONDS = 60;
 
     @Inject
-    BridgeConfig bridgeConfig;
+    InboxBridgeConfig inboxBridgeConfig;
 
     @Inject
     SystemPollingSettingRepository repository;
@@ -34,13 +34,13 @@ public class PollingSettingsService {
         SystemPollingSetting setting = repository.findSingleton().orElse(null);
         boolean effectivePollEnabled = setting != null && setting.pollEnabledOverride != null
                 ? setting.pollEnabledOverride
-                : bridgeConfig.pollEnabled();
+                : inboxBridgeConfig.pollEnabled();
         String effectivePollInterval = setting != null && setting.pollIntervalOverride != null && !setting.pollIntervalOverride.isBlank()
                 ? setting.pollIntervalOverride
-                : bridgeConfig.pollInterval();
+                : inboxBridgeConfig.pollInterval();
         int effectiveFetchWindow = setting != null && setting.fetchWindowOverride != null
                 ? setting.fetchWindowOverride
-                : bridgeConfig.fetchWindow();
+                : inboxBridgeConfig.fetchWindow();
         return new EffectivePollingSettings(
                 effectivePollEnabled,
                 effectivePollInterval,
@@ -66,13 +66,13 @@ public class PollingSettingsService {
         SystemPollingSetting setting = repository.findSingleton().orElse(null);
         EffectivePollingSettings effective = effectiveSettings();
         return new AdminPollingSettingsView(
-                bridgeConfig.pollEnabled(),
+                inboxBridgeConfig.pollEnabled(),
                 setting == null ? null : setting.pollEnabledOverride,
                 effective.pollEnabled(),
-                bridgeConfig.pollInterval(),
+                inboxBridgeConfig.pollInterval(),
                 setting == null ? null : setting.pollIntervalOverride,
                 effective.pollIntervalText(),
-                bridgeConfig.fetchWindow(),
+                inboxBridgeConfig.fetchWindow(),
                 setting == null ? null : setting.fetchWindowOverride,
                 effective.fetchWindow(),
                 DEFAULT_MANUAL_TRIGGER_LIMIT_COUNT,

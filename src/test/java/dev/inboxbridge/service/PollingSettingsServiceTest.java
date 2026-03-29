@@ -9,7 +9,7 @@ import java.util.Optional;
 
 import org.junit.jupiter.api.Test;
 
-import dev.inboxbridge.config.BridgeConfig;
+import dev.inboxbridge.config.InboxBridgeConfig;
 import dev.inboxbridge.dto.AdminPollingSettingsView;
 import dev.inboxbridge.dto.UpdateAdminPollingSettingsRequest;
 import dev.inboxbridge.persistence.SystemPollingSetting;
@@ -72,9 +72,9 @@ class PollingSettingsServiceTest {
         assertEquals("Manual poll rate-limit window must be between 10 and 3600 seconds", error.getMessage());
     }
 
-    private PollingSettingsService service(BridgeConfig config, SystemPollingSettingRepository repository) {
+    private PollingSettingsService service(InboxBridgeConfig config, SystemPollingSettingRepository repository) {
         PollingSettingsService service = new PollingSettingsService();
-        service.bridgeConfig = config;
+        service.inboxBridgeConfig = config;
         service.repository = repository;
         return service;
     }
@@ -109,7 +109,7 @@ class PollingSettingsServiceTest {
         }
     }
 
-    private static final class TestConfig implements BridgeConfig {
+    private static final class TestConfig implements InboxBridgeConfig {
         @Override
         public boolean pollEnabled() {
             return true;

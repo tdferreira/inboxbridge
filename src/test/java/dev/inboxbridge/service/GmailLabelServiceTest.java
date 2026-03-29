@@ -12,10 +12,7 @@ import java.net.http.HttpClient;
 import java.net.http.HttpHeaders;
 import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
-import java.nio.charset.StandardCharsets;
-import java.security.cert.Certificate;
 import java.time.Duration;
-import java.time.Instant;
 import java.util.List;
 import java.util.Optional;
 import java.util.Queue;
@@ -31,6 +28,7 @@ import org.junit.jupiter.api.Test;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 
+import dev.inboxbridge.domain.GmailApiDestinationTarget;
 import dev.inboxbridge.domain.GmailTarget;
 
 class GmailLabelServiceTest {
@@ -90,7 +88,7 @@ class GmailLabelServiceTest {
                         false),
                 Optional.of("Imported/IMAP")));
 
-        assertEquals("The linked Gmail account no longer grants InboxBridge access. The saved Gmail OAuth link was cleared. Reconnect it from My Gmail Account.", error.getMessage());
+        assertEquals("The linked Gmail account no longer grants InboxBridge access. The saved Gmail OAuth link was cleared. Reconnect it from My Destination Mailbox.", error.getMessage());
         assertEquals("user-gmail:9", userGmailConfigService.lastRevokedSubjectKey);
     }
 
@@ -118,7 +116,7 @@ class GmailLabelServiceTest {
         private String lastRevokedSubjectKey;
 
         @Override
-        public boolean markGoogleAccessRevoked(GmailTarget target) {
+        public boolean markGoogleAccessRevoked(GmailApiDestinationTarget target) {
             this.lastRevokedSubjectKey = target.subjectKey();
             return true;
         }

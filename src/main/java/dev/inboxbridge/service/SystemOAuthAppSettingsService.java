@@ -2,7 +2,7 @@ package dev.inboxbridge.service;
 
 import java.time.Instant;
 
-import dev.inboxbridge.config.BridgeConfig;
+import dev.inboxbridge.config.InboxBridgeConfig;
 import dev.inboxbridge.dto.SystemOAuthAppSettingsView;
 import dev.inboxbridge.dto.UpdateSystemOAuthAppSettingsRequest;
 import dev.inboxbridge.persistence.SystemOAuthAppSettings;
@@ -15,7 +15,7 @@ import jakarta.transaction.Transactional;
 public class SystemOAuthAppSettingsService {
 
     @Inject
-    BridgeConfig config;
+    InboxBridgeConfig config;
 
     @Inject
     SecretEncryptionService secretEncryptionService;

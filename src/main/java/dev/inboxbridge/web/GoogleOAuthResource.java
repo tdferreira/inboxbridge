@@ -9,7 +9,7 @@ import dev.inboxbridge.security.RequireAdmin;
 import dev.inboxbridge.security.RequireAuth;
 import dev.inboxbridge.service.EnvSourceService;
 import dev.inboxbridge.service.GoogleOAuthService;
-import dev.inboxbridge.service.UserBridgeService;
+import dev.inboxbridge.service.UserEmailAccountService;
 import dev.inboxbridge.service.UserGmailConfigService;
 import jakarta.inject.Inject;
 import jakarta.ws.rs.Consumes;
@@ -38,7 +38,7 @@ public class GoogleOAuthResource {
     EnvSourceService envSourceService;
 
     @Inject
-    UserBridgeService userBridgeService;
+    UserEmailAccountService userEmailAccountService;
 
     @GET
     @Path("/url")
@@ -434,22 +434,22 @@ public class GoogleOAuthResource {
                     if (actor.role != AppUser.Role.ADMIN) {
                         throw new jakarta.ws.rs.ForbiddenException("Only admins can connect environment-managed Google source OAuth.");
                     }
-                    if (source.authMethod() != dev.inboxbridge.config.BridgeConfig.AuthMethod.OAUTH2
-                            || source.oauthProvider() != dev.inboxbridge.config.BridgeConfig.OAuthProvider.GOOGLE) {
+                    if (source.authMethod() != dev.inboxbridge.config.InboxBridgeConfig.AuthMethod.OAUTH2
+                            || source.oauthProvider() != dev.inboxbridge.config.InboxBridgeConfig.OAuthProvider.GOOGLE) {
                         throw new jakarta.ws.rs.BadRequestException("This mail account is not configured for Google OAuth.");
                     }
                     return googleOAuthService.sourceProfile(source);
                 })
-                .orElseGet(() -> userBridgeService.findByBridgeId(sourceId)
+                .orElseGet(() -> userEmailAccountService.findByBridgeId(sourceId)
                         .filter(bridge -> bridge.userId.equals(actor.id))
                         .map(bridge -> {
-                            if (bridge.authMethod != dev.inboxbridge.config.BridgeConfig.AuthMethod.OAUTH2
-                                    || bridge.oauthProvider != dev.inboxbridge.config.BridgeConfig.OAuthProvider.GOOGLE) {
+                            if (bridge.authMethod != dev.inboxbridge.config.InboxBridgeConfig.AuthMethod.OAUTH2
+                                    || bridge.oauthProvider != dev.inboxbridge.config.InboxBridgeConfig.OAuthProvider.GOOGLE) {
                                 throw new jakarta.ws.rs.BadRequestException("This mail account is not configured for Google OAuth.");
                             }
                             return googleOAuthService.sourceProfile(
                                     bridge.bridgeId,
-                                    userBridgeService.decryptRefreshToken(bridge),
+                                    userEmailAccountService.decryptRefreshToken(bridge),
                                     null);
                         })
                         .orElseThrow(() -> new jakarta.ws.rs.BadRequestException("Unknown mail account id")));

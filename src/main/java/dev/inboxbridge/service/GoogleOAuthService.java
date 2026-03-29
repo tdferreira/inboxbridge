@@ -19,8 +19,8 @@ import java.util.stream.Collectors;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 
-import dev.inboxbridge.config.BridgeConfig;
-import dev.inboxbridge.domain.RuntimeBridge;
+import dev.inboxbridge.config.InboxBridgeConfig;
+import dev.inboxbridge.domain.RuntimeEmailAccount;
 import dev.inboxbridge.dto.GoogleTokenExchangeResponse;
 import dev.inboxbridge.dto.GoogleTokenResponse;
 import dev.inboxbridge.persistence.UserGmailConfigRepository;
@@ -29,8 +29,8 @@ import jakarta.inject.Inject;
 
 @ApplicationScoped
 public class GoogleOAuthService {
-    public static final String GMAIL_ACCESS_REVOKED_MESSAGE =
-            "The linked Gmail account no longer grants InboxBridge access. The saved Gmail OAuth link was cleared. Reconnect it from My Gmail Account.";
+        public static final String GMAIL_ACCESS_REVOKED_MESSAGE =
+            "The linked Gmail account no longer grants InboxBridge access. The saved Gmail OAuth link was cleared. Reconnect it from My Destination Mailbox.";
     public static final String SYSTEM_GMAIL_ACCESS_REVOKED_MESSAGE =
             "The configured Gmail account no longer grants InboxBridge access. Reconnect Gmail OAuth or update the configured refresh token.";
     public static final String SOURCE_GOOGLE_ACCESS_REVOKED_MESSAGE =
@@ -41,7 +41,7 @@ public class GoogleOAuthService {
     private static final Duration STATE_TTL = Duration.ofMinutes(10);
 
     @Inject
-    BridgeConfig config;
+    InboxBridgeConfig config;
 
     @Inject
     ObjectMapper objectMapper;
@@ -130,11 +130,11 @@ public class GoogleOAuthService {
         return getAccessToken(systemProfile());
     }
 
-    public String getAccessToken(BridgeConfig.Source source) {
+    public String getAccessToken(InboxBridgeConfig.Source source) {
         return getAccessToken(sourceProfile(source));
     }
 
-    public String getAccessToken(RuntimeBridge bridge) {
+    public String getAccessToken(RuntimeEmailAccount bridge) {
         return getAccessToken(sourceProfile(bridge));
     }
 
@@ -184,11 +184,11 @@ public class GoogleOAuthService {
                 GMAIL_SOURCE_SCOPE);
     }
 
-    public GoogleOAuthProfile sourceProfile(BridgeConfig.Source source) {
+    public GoogleOAuthProfile sourceProfile(InboxBridgeConfig.Source source) {
         return sourceProfile(source.id(), source.oauthRefreshToken().orElse(""), systemOAuthAppSettingsService.googleRedirectUri());
     }
 
-    public GoogleOAuthProfile sourceProfile(RuntimeBridge bridge) {
+    public GoogleOAuthProfile sourceProfile(RuntimeEmailAccount bridge) {
         return sourceProfile(bridge.id(), bridge.oauthRefreshToken(), systemOAuthAppSettingsService.googleRedirectUri());
     }
 

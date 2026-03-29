@@ -27,6 +27,7 @@ import org.junit.jupiter.api.Test;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 
+import dev.inboxbridge.domain.GmailApiDestinationTarget;
 import dev.inboxbridge.domain.GmailTarget;
 import dev.inboxbridge.dto.GmailImportResponse;
 
@@ -89,7 +90,7 @@ class GmailImportServiceTest {
                 "hello".getBytes(),
                 List.of("INBOX")));
 
-        assertEquals("The linked Gmail account no longer grants InboxBridge access. The saved Gmail OAuth link was cleared. Reconnect it from My Gmail Account.", error.getMessage());
+        assertEquals("The linked Gmail account no longer grants InboxBridge access. The saved Gmail OAuth link was cleared. Reconnect it from My Destination Mailbox.", error.getMessage());
         assertEquals("user-gmail:10", userGmailConfigService.lastRevokedSubjectKey);
     }
 
@@ -117,7 +118,7 @@ class GmailImportServiceTest {
         private String lastRevokedSubjectKey;
 
         @Override
-        public boolean markGoogleAccessRevoked(GmailTarget target) {
+        public boolean markGoogleAccessRevoked(GmailApiDestinationTarget target) {
             this.lastRevokedSubjectKey = target.subjectKey();
             return true;
         }

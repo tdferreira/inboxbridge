@@ -42,11 +42,14 @@ describe('HeroPanel', () => {
 
   it('shows an exit action while layout editing is enabled', () => {
     const onExitLayoutEditing = vi.fn()
+    const onDiscardLayoutChanges = vi.fn()
 
     render(
       <HeroPanel
+        hasUnsavedLayoutChanges
         language="en"
         layoutEditing
+        onDiscardLayoutChanges={onDiscardLayoutChanges}
         loadingData={false}
         onExitLayoutEditing={onExitLayoutEditing}
         onOpenPreferences={vi.fn()}
@@ -60,7 +63,9 @@ describe('HeroPanel', () => {
       />
     )
 
-    fireEvent.click(screen.getByRole('button', { name: 'Exit Layout Editing' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Discard Layout Changes' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Save Layout' }))
+    expect(onDiscardLayoutChanges).toHaveBeenCalledTimes(1)
     expect(onExitLayoutEditing).toHaveBeenCalledTimes(1)
   })
 

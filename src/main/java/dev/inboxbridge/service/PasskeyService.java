@@ -70,19 +70,19 @@ public class PasskeyService {
     @Inject
     PasskeyCeremonyRepository passkeyCeremonyRepository;
 
-    @ConfigProperty(name = "bridge.security.passkeys.enabled", defaultValue = "true")
+    @ConfigProperty(name = "inboxbridge.security.passkeys.enabled", defaultValue = "true")
     boolean enabled;
 
-    @ConfigProperty(name = "bridge.security.passkeys.rp-id", defaultValue = "localhost")
+    @ConfigProperty(name = "inboxbridge.security.passkeys.rp-id", defaultValue = "localhost")
     String relyingPartyId;
 
-    @ConfigProperty(name = "bridge.security.passkeys.rp-name", defaultValue = "InboxBridge")
+    @ConfigProperty(name = "inboxbridge.security.passkeys.rp-name", defaultValue = "InboxBridge")
     String relyingPartyName;
 
-    @ConfigProperty(name = "bridge.security.passkeys.origins", defaultValue = "https://localhost:3000")
+    @ConfigProperty(name = "inboxbridge.security.passkeys.origins", defaultValue = "https://localhost:3000")
     String relyingPartyOrigins;
 
-    @ConfigProperty(name = "bridge.security.passkeys.challenge-ttl", defaultValue = "PT5M")
+    @ConfigProperty(name = "inboxbridge.security.passkeys.challenge-ttl", defaultValue = "PT5M")
     Duration challengeTtl;
 
     public boolean isEnabled() {

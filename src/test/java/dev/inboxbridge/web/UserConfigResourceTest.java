@@ -9,8 +9,8 @@ import org.junit.jupiter.api.Test;
 
 import dev.inboxbridge.dto.UpdateUserPollingSettingsRequest;
 import dev.inboxbridge.dto.UpdateSourcePollingSettingsRequest;
-import dev.inboxbridge.dto.UpdateUserBridgeRequest;
-import dev.inboxbridge.dto.BridgeConnectionTestResult;
+import dev.inboxbridge.dto.UpdateUserEmailAccountRequest;
+import dev.inboxbridge.dto.EmailAccountConnectionTestResult;
 import dev.inboxbridge.dto.PollingTimelineBundleView;
 import dev.inboxbridge.dto.PollingBreakdownItemView;
 import dev.inboxbridge.dto.PollingHealthSummaryView;
@@ -22,11 +22,11 @@ import dev.inboxbridge.dto.PollRunResult;
 import dev.inboxbridge.persistence.AppUser;
 import dev.inboxbridge.security.CurrentUserContext;
 import dev.inboxbridge.service.PollingService;
-import dev.inboxbridge.service.RuntimeBridgeService;
+import dev.inboxbridge.service.RuntimeEmailAccountService;
 import dev.inboxbridge.service.SourcePollingSettingsService;
 import dev.inboxbridge.service.PollingStatsService;
 import dev.inboxbridge.service.UserPollingSettingsService;
-import dev.inboxbridge.service.UserBridgeService;
+import dev.inboxbridge.service.UserEmailAccountService;
 import jakarta.ws.rs.BadRequestException;
 
 class UserConfigResourceTest {
@@ -55,11 +55,11 @@ class UserConfigResourceTest {
     }
 
     @Test
-    void bridgePollingSettingsReturnsSourceView() {
+    void emailAccountPollingSettingsReturnsSourceView() {
         UserConfigResource resource = resource();
         resource.sourcePollingSettingsService = new FakeSourcePollingSettingsService();
 
-        SourcePollingSettingsView response = resource.bridgePollingSettings("fetcher-1");
+        SourcePollingSettingsView response = resource.emailAccountPollingSettings("fetcher-1");
 
         assertEquals("fetcher-1", response.sourceId());
         assertEquals("2m", response.effectivePollInterval());
@@ -79,12 +79,12 @@ class UserConfigResourceTest {
     }
 
     @Test
-    void bridgePollingStatsReturnsSourceScopedView() {
+    void emailAccountPollingStatsReturnsSourceScopedView() {
         UserConfigResource resource = resource();
-        resource.runtimeBridgeService = new FakeRuntimeBridgeService();
+        resource.runtimeEmailAccountService = new FakeRuntimeEmailAccountService();
         resource.pollingStatsService = new FakePollingStatsService();
 
-        SourcePollingStatsView response = resource.bridgePollingStats("fetcher-1");
+        SourcePollingStatsView response = resource.emailAccountPollingStats("fetcher-1");
 
         assertEquals(5L, response.totalImportedMessages());
         assertEquals(1, response.configuredMailFetchers());
@@ -102,12 +102,12 @@ class UserConfigResourceTest {
     }
 
     @Test
-    void runBridgePollDelegatesToPollingService() {
+    void runEmailAccountPollDelegatesToPollingService() {
         UserConfigResource resource = resource();
-        resource.runtimeBridgeService = new FakeRuntimeBridgeService();
+        resource.runtimeEmailAccountService = new FakeRuntimeEmailAccountService();
         resource.pollingService = new FakePollingService();
 
-        PollRunResult response = resource.runBridgePoll("fetcher-1");
+        PollRunResult response = resource.runEmailAccountPoll("fetcher-1");
 
         assertEquals(1, response.getFetched());
         assertEquals(1, response.getImported());
@@ -125,11 +125,11 @@ class UserConfigResourceTest {
     }
 
     @Test
-    void testBridgeConnectionDelegatesToUserBridgeService() {
+    void testEmailAccountConnectionDelegatesToUserEmailAccountService() {
         UserConfigResource resource = resource();
-        resource.userBridgeService = new FakeUserBridgeService();
+        resource.userEmailAccountService = new FakeUserEmailAccountService();
 
-        BridgeConnectionTestResult response = resource.testBridgeConnection(new UpdateUserBridgeRequest(
+        EmailAccountConnectionTestResult response = resource.testEmailAccountConnection(new UpdateUserEmailAccountRequest(
                 null,
                 "fetcher-1",
                 true,
@@ -219,7 +219,7 @@ class UserConfigResourceTest {
         }
 
         @Override
-        public SourcePollingStatsView sourceStats(dev.inboxbridge.domain.RuntimeBridge bridge) {
+        public SourcePollingStatsView sourceStats(dev.inboxbridge.domain.RuntimeEmailAccount bridge) {
             return new SourcePollingStatsView(
                     5L,
                     1,
@@ -252,7 +252,7 @@ class UserConfigResourceTest {
 
     private static final class FakePollingService extends PollingService {
         @Override
-        public PollRunResult runPollForSource(dev.inboxbridge.domain.RuntimeBridge bridge, String trigger, String actorKey) {
+        public PollRunResult runPollForSource(dev.inboxbridge.domain.RuntimeEmailAccount bridge, String trigger, String actorKey) {
             PollRunResult result = new PollRunResult();
             result.incrementFetched();
             result.incrementImported();
@@ -270,21 +270,21 @@ class UserConfigResourceTest {
         }
     }
 
-    private static final class FakeRuntimeBridgeService extends RuntimeBridgeService {
+    private static final class FakeRuntimeEmailAccountService extends RuntimeEmailAccountService {
         @Override
-        public Optional<dev.inboxbridge.domain.RuntimeBridge> findAccessibleForUser(AppUser actor, String sourceId) {
-            return Optional.of(new dev.inboxbridge.domain.RuntimeBridge(
+        public Optional<dev.inboxbridge.domain.RuntimeEmailAccount> findAccessibleForUser(AppUser actor, String sourceId) {
+            return Optional.of(new dev.inboxbridge.domain.RuntimeEmailAccount(
                     sourceId,
                     "USER",
                     actor.id,
                     actor.username,
                     true,
-                    dev.inboxbridge.config.BridgeConfig.Protocol.IMAP,
+                    dev.inboxbridge.config.InboxBridgeConfig.Protocol.IMAP,
                     "imap.example.com",
                     993,
                     true,
-                    dev.inboxbridge.config.BridgeConfig.AuthMethod.PASSWORD,
-                    dev.inboxbridge.config.BridgeConfig.OAuthProvider.NONE,
+                    dev.inboxbridge.config.InboxBridgeConfig.AuthMethod.PASSWORD,
+                    dev.inboxbridge.config.InboxBridgeConfig.OAuthProvider.NONE,
                     "alice@example.com",
                     "secret",
                     "",
@@ -295,10 +295,10 @@ class UserConfigResourceTest {
         }
     }
 
-    private static final class FakeUserBridgeService extends UserBridgeService {
+    private static final class FakeUserEmailAccountService extends UserEmailAccountService {
         @Override
-        public BridgeConnectionTestResult testConnection(AppUser user, UpdateUserBridgeRequest request) {
-            return new BridgeConnectionTestResult(true, "Connection test succeeded.", "IMAP", "imap.example.com", 993, true, "PASSWORD", "NONE", true, "INBOX", true, false, Boolean.TRUE, null, 0, 0, Boolean.FALSE, null);
+        public EmailAccountConnectionTestResult testConnection(AppUser user, UpdateUserEmailAccountRequest request) {
+            return new EmailAccountConnectionTestResult(true, "Connection test succeeded.", "IMAP", "imap.example.com", 993, true, "PASSWORD", "NONE", true, "INBOX", true, false, Boolean.TRUE, null, 0, 0, Boolean.FALSE, null);
         }
     }
 }

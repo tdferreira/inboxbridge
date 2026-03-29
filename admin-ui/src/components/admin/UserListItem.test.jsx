@@ -16,13 +16,15 @@ function buildConfig() {
       passkeyCount: 1,
       bridgeCount: 1
     },
-    gmailConfig: {
-      destinationUser: 'me',
-      redirectUri: 'https://localhost:3000/api/google-oauth/callback',
-      sharedClientConfigured: true,
-      clientIdConfigured: false,
-      clientSecretConfigured: false,
-      refreshTokenConfigured: true
+    destinationConfig: {
+      provider: 'OUTLOOK_IMAP',
+      deliveryMode: 'IMAP_APPEND',
+      linked: true,
+      host: 'outlook.office365.com',
+      port: 993,
+      authMethod: 'OAUTH2',
+      username: 'admin@example.com',
+      folder: 'INBOX'
     },
     pollingSettings: {
       effectivePollEnabled: true,
@@ -98,12 +100,11 @@ describe('UserListItem', () => {
     )
 
     expect(screen.getByText('Configuração do utilizador')).toBeInTheDocument()
-    expect(screen.getByText('Destino Gmail')).toBeInTheDocument()
+    expect(screen.getByText('Destination Mailbox')).toBeInTheDocument()
     expect(screen.getByText('Definições de verificação')).toBeInTheDocument()
     expect(screen.getByText('Passkeys')).toBeInTheDocument()
     const mailFetchersSectionTitle = screen.getByText('Contas de email de origem')
-    expect(await screen.findByText('Estatísticas do utilizador: admin')).toBeInTheDocument()
-    expect(screen.getByText(/Utilizador da API Gmail: me/)).toBeInTheDocument()
+    expect(screen.getByText(/Provider: OUTLOOK_IMAP/i)).toBeInTheDocument()
     expect(screen.getByText(/armazenamento do token:/i)).toBeInTheDocument()
     expect(mailFetchersSectionTitle.closest('section')).toHaveTextContent('BD encriptada')
   })
@@ -234,7 +235,6 @@ describe('UserListItem', () => {
       />
     )
 
-    expect(screen.getByText('User Statistics: admin')).toBeInTheDocument()
     expect(screen.queryByText('Import activity over time')).not.toBeInTheDocument()
   })
 })

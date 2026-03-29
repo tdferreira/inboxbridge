@@ -10,15 +10,15 @@ import java.util.Optional;
 
 import org.junit.jupiter.api.Test;
 
-import dev.inboxbridge.config.BridgeConfig;
+import dev.inboxbridge.config.InboxBridgeConfig;
 import dev.inboxbridge.dto.ApiError;
 import dev.inboxbridge.dto.MicrosoftOAuthSourceOption;
 import dev.inboxbridge.persistence.AppUser;
-import dev.inboxbridge.persistence.UserBridge;
+import dev.inboxbridge.persistence.UserEmailAccount;
 import dev.inboxbridge.security.CurrentUserContext;
 import dev.inboxbridge.service.EnvSourceService;
 import dev.inboxbridge.service.MicrosoftOAuthService;
-import dev.inboxbridge.service.UserBridgeService;
+import dev.inboxbridge.service.UserEmailAccountService;
 import jakarta.ws.rs.BadRequestException;
 import jakarta.ws.rs.core.Response;
 
@@ -30,7 +30,7 @@ class MicrosoftOAuthResourceTest {
         resource.microsoftOAuthService = new FakeMicrosoftOAuthService();
         resource.currentUserContext = adminContext();
         resource.envSourceService = envSourceService();
-        resource.userBridgeService = new FakeUserBridgeService();
+        resource.userEmailAccountService = new FakeUserEmailAccountService();
 
         Response response = resource.start("outlook-main-imap", null);
 
@@ -75,7 +75,7 @@ class MicrosoftOAuthResourceTest {
         MicrosoftOAuthResource resource = new MicrosoftOAuthResource();
         resource.microsoftOAuthService = new FakeMicrosoftOAuthService() {
             @Override
-            public CallbackValidation validateCallback(String state) {
+            public BrowserCallbackValidation validateBrowserCallback(String state) {
                 throw new IllegalArgumentException("Invalid or expired OAuth state");
             }
         };
@@ -107,8 +107,8 @@ class MicrosoftOAuthResourceTest {
         MicrosoftOAuthResource resource = new MicrosoftOAuthResource();
         resource.microsoftOAuthService = new FakeMicrosoftOAuthService() {
             @Override
-            public CallbackValidation validateCallback(String state) {
-                return new CallbackValidation("outlook-main-imap", "MAIL_ACCOUNT_0__OAUTH_REFRESH_TOKEN", "pt");
+            public BrowserCallbackValidation validateBrowserCallback(String state) {
+                return new BrowserCallbackValidation("outlook-main-imap", "MAIL_ACCOUNT_0__OAUTH_REFRESH_TOKEN", "pt", "Mail account outlook-main-imap");
             }
         };
 
@@ -125,8 +125,8 @@ class MicrosoftOAuthResourceTest {
         MicrosoftOAuthResource resource = new MicrosoftOAuthResource();
         resource.microsoftOAuthService = new FakeMicrosoftOAuthService() {
             @Override
-            public CallbackValidation validateCallback(String state) {
-                return new CallbackValidation("outlook-user", "", "en");
+            public BrowserCallbackValidation validateBrowserCallback(String state) {
+                return new BrowserCallbackValidation("outlook-user", "", "en", "Mail account outlook-user");
             }
         };
 
@@ -151,7 +151,7 @@ class MicrosoftOAuthResourceTest {
         };
         resource.currentUserContext = adminContext();
         resource.envSourceService = envSourceService();
-        resource.userBridgeService = new FakeUserBridgeService();
+        resource.userEmailAccountService = new FakeUserEmailAccountService();
 
         BadRequestException error = org.junit.jupiter.api.Assertions.assertThrows(
                 BadRequestException.class,
@@ -166,7 +166,7 @@ class MicrosoftOAuthResourceTest {
         resource.microsoftOAuthService = new FakeMicrosoftOAuthService();
         resource.currentUserContext = adminContext();
         resource.envSourceService = envSourceService();
-        resource.userBridgeService = new FakeUserBridgeService();
+        resource.userEmailAccountService = new FakeUserEmailAccountService();
 
         List<MicrosoftOAuthSourceOption> sources = resource.sources();
 
@@ -203,8 +203,8 @@ class MicrosoftOAuthResourceTest {
         return context;
     }
 
-    private BridgeConfig testConfig() {
-        return new BridgeConfig() {
+    private InboxBridgeConfig testConfig() {
+        return new InboxBridgeConfig() {
             @Override
             public boolean pollEnabled() {
                 return true;
@@ -355,13 +355,13 @@ class MicrosoftOAuthResourceTest {
 
     private static class FakeMicrosoftOAuthService extends MicrosoftOAuthService {
         @Override
-        public String buildAuthorizationUrl(String sourceId) {
+        public String buildAuthorizationUrl(String sourceId, String language) {
             return "https://login.microsoftonline.com/consumers/oauth2/v2.0/authorize?client_id=demo";
         }
 
         @Override
-        public CallbackValidation validateCallback(String state) {
-            return new CallbackValidation("outlook-main-imap", "MAIL_ACCOUNT_0__OAUTH_REFRESH_TOKEN", "en");
+        public BrowserCallbackValidation validateBrowserCallback(String state) {
+            return new BrowserCallbackValidation("outlook-main-imap", "MAIL_ACCOUNT_0__OAUTH_REFRESH_TOKEN", "en", "Mail account outlook-main-imap");
         }
 
         @Override
@@ -370,9 +370,9 @@ class MicrosoftOAuthResourceTest {
         }
     }
 
-    private static class FakeUserBridgeService extends UserBridgeService {
+    private static class FakeUserEmailAccountService extends UserEmailAccountService {
         @Override
-        public Optional<UserBridge> findByBridgeId(String bridgeId) {
+        public Optional<UserEmailAccount> findByBridgeId(String bridgeId) {
             return Optional.empty();
         }
     }

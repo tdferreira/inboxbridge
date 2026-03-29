@@ -52,7 +52,7 @@ describe('NotificationsDialog', () => {
     render(
       <NotificationsDialog
         notifications={[
-          { id: 'n1', message: 'My Gmail Account needs attention.', tone: 'error', targetId: 'gmail-destination-section' }
+          { id: 'n1', message: 'My destination mailbox needs attention.', tone: 'error', targetId: 'destination-mailbox-section' }
         ]}
         onClearAll={vi.fn()}
         onClose={vi.fn()}
@@ -64,6 +64,6 @@ describe('NotificationsDialog', () => {
 
     fireEvent.click(screen.getByRole('button', { name: 'Focus the related section' }))
 
-    expect(onFocusNotification).toHaveBeenCalledWith('gmail-destination-section')
+    expect(onFocusNotification).toHaveBeenCalledWith('destination-mailbox-section')
   })
 })

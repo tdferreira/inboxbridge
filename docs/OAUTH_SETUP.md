@@ -2,8 +2,9 @@
 
 This document covers both:
 
-- Gmail OAuth for destination accounts
+- Gmail OAuth for Gmail destination accounts
 - Microsoft OAuth for Outlook / Hotmail / Live source accounts
+- Microsoft OAuth for Outlook / Hotmail / Live destination accounts that use IMAP APPEND
 
 The preferred local callback origin is the HTTPS admin UI:
 
@@ -71,7 +72,7 @@ ${PUBLIC_BASE_URL}/api/google-oauth/callback
 
 1. Sign in to `https://localhost:3000`
 2. If you are an admin, first configure the shared Google `Client ID` / `Client Secret` in `Administration -> OAuth Apps` using the values from the Google Cloud project
-3. Then use `Connect My Gmail OAuth` from `My Gmail Account` for the mailbox that should receive imported mail
+3. Then use the destination-mailbox connect action from `My Destination Mailbox` for the mailbox that should receive imported mail
 4. Complete Google consent
 5. The callback page automatically tries to exchange the code in the browser as soon as it loads
 6. After exchange succeeds, the callback page starts a 10-second countdown and returns to the admin UI automatically
@@ -118,9 +119,9 @@ InboxBridge already includes those.
 
 ## Microsoft OAuth for Outlook.com
 
-InboxBridge can only use Microsoft OAuth for Outlook / Hotmail / Live source accounts after this application has been registered in Microsoft Entra and issued app credentials.
+InboxBridge can only use Microsoft OAuth for Outlook / Hotmail / Live source or destination accounts after this application has been registered in Microsoft Entra and issued app credentials.
 
-Password-based IMAP / POP login is often blocked by Microsoft even when an app password exists. InboxBridge therefore supports OAuth2 + XOAUTH2 for Microsoft sources.
+Password-based IMAP / POP login is often blocked by Microsoft even when an app password exists. InboxBridge therefore requires OAuth2 + XOAUTH2 for Outlook / Hotmail / Live source email accounts and Outlook destination mailboxes.
 
 ### Microsoft account and app registration
 
@@ -219,8 +220,10 @@ MAIL_ACCOUNT_0__CUSTOM_LABEL=Imported/Outlook
 
 ### Browser flow
 
+For Outlook destination mailboxes configured from `My Destination Mailbox` in the admin UI, the same Microsoft app registration is reused. The user chooses `Outlook / Hotmail / Live` as the destination provider, optionally changes the destination folder, and starts `Connect Microsoft Account` from that destination panel. The Outlook host, port, auth method, and OAuth provider are fixed automatically by the preset, so the UI no longer asks the user to edit those values.
+
 1. Sign in to `https://localhost:3000`
-2. Use the Microsoft OAuth button on the relevant bridge
+2. Use the Microsoft OAuth button on the relevant source email account or destination mailbox
 3. Complete Microsoft consent
 4. The callback page automatically tries to exchange the code in the browser as soon as it loads
 5. After exchange succeeds, the callback page starts a 10-second countdown and returns to the admin UI automatically
@@ -255,7 +258,7 @@ With secure storage enabled:
 - Google OAuth tokens are stored encrypted
 - Microsoft OAuth tokens are stored encrypted
 - user-managed Gmail client credentials are stored encrypted
-- user-managed bridge passwords and refresh tokens are stored encrypted
+- user-managed source-email-account passwords and refresh tokens are stored encrypted
 
 Important nuance:
 

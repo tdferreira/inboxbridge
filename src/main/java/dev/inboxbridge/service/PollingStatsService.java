@@ -15,7 +15,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 
-import dev.inboxbridge.config.BridgeConfig;
+import dev.inboxbridge.config.InboxBridgeConfig;
 import dev.inboxbridge.dto.AdminPollEventSummary;
 import dev.inboxbridge.dto.GlobalPollingStatsView;
 import dev.inboxbridge.dto.ImportTimelinePointView;
@@ -25,11 +25,12 @@ import dev.inboxbridge.dto.PollingHealthSummaryView;
 import dev.inboxbridge.dto.SourcePollingStatsView;
 import dev.inboxbridge.dto.SourcePollingStateView;
 import dev.inboxbridge.dto.UserPollingStatsView;
-import dev.inboxbridge.domain.RuntimeBridge;
+import dev.inboxbridge.domain.RuntimeEmailAccount;
 import dev.inboxbridge.persistence.SourcePollEvent;
 import dev.inboxbridge.persistence.ImportedMessageRepository;
-import dev.inboxbridge.persistence.UserBridge;
-import dev.inboxbridge.persistence.UserBridgeRepository;
+import dev.inboxbridge.persistence.UserEmailAccount;
+import dev.inboxbridge.persistence.UserEmailAccountRepository;
+import dev.inboxbridge.persistence.UserMailDestinationConfigRepository;
 import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.inject.Inject;
 
@@ -52,7 +53,10 @@ public class PollingStatsService {
     ImportedMessageRepository importedMessageRepository;
 
     @Inject
-    UserBridgeRepository userBridgeRepository;
+    UserEmailAccountRepository userEmailAccountRepository;
+
+    @Inject
+    UserMailDestinationConfigRepository userMailDestinationConfigRepository;
 
     @Inject
     SourcePollEventService sourcePollEventService;
@@ -66,7 +70,7 @@ public class PollingStatsService {
     public GlobalPollingStatsView globalStats(int sourcesWithErrors) {
         List<ConfiguredSourceSnapshot> sources = new ArrayList<>();
         for (EnvSourceService.IndexedSource indexedSource : envSourceService.configuredSources()) {
-            dev.inboxbridge.config.BridgeConfig.Source source = indexedSource.source();
+            dev.inboxbridge.config.InboxBridgeConfig.Source source = indexedSource.source();
             sources.add(new ConfiguredSourceSnapshot(
                     source.id(),
                     source.enabled(),
@@ -75,14 +79,14 @@ public class PollingStatsService {
                     source.oauthProvider(),
                     source.host()));
         }
-        for (UserBridge bridge : userBridgeRepository.listAll()) {
+        for (UserEmailAccount emailAccount : userEmailAccountRepository.listAll()) {
             sources.add(new ConfiguredSourceSnapshot(
-                    bridge.bridgeId,
-                    bridge.enabled,
-                    bridge.protocol,
-                    bridge.authMethod,
-                    bridge.oauthProvider,
-                    bridge.host));
+                emailAccount.bridgeId,
+                emailAccount.enabled,
+                emailAccount.protocol,
+                emailAccount.authMethod,
+                emailAccount.oauthProvider,
+                emailAccount.host));
         }
         Instant earliest = earliestTimelineInstant();
         Map<String, List<ImportTimelinePointView>> timelines = buildTimelinesFromInstants(
@@ -109,15 +113,15 @@ public class PollingStatsService {
     }
 
     public UserPollingStatsView userStats(Long userId) {
-        List<UserBridge> bridges = userBridgeRepository.listByUserId(userId);
-        List<ConfiguredSourceSnapshot> sources = bridges.stream()
-                .map(bridge -> new ConfiguredSourceSnapshot(
-                        bridge.bridgeId,
-                        bridge.enabled,
-                        bridge.protocol,
-                        bridge.authMethod,
-                        bridge.oauthProvider,
-                        bridge.host))
+        List<UserEmailAccount> emailAccounts = userEmailAccountRepository.listByUserId(userId);
+        List<ConfiguredSourceSnapshot> sources = emailAccounts.stream()
+            .map(emailAccount -> new ConfiguredSourceSnapshot(
+                emailAccount.bridgeId,
+                emailAccount.enabled,
+                emailAccount.protocol,
+                emailAccount.authMethod,
+                emailAccount.oauthProvider,
+                emailAccount.host))
                 .toList();
         String destinationKey = "user-gmail:" + userId;
         Instant earliest = earliestTimelineInstant();
@@ -152,29 +156,29 @@ public class PollingStatsService {
                 scopedStats.averagePollDurationMillis());
     }
 
-    public SourcePollingStatsView sourceStats(RuntimeBridge bridge) {
+        public SourcePollingStatsView sourceStats(RuntimeEmailAccount emailAccount) {
         Instant earliest = earliestTimelineInstant();
         ConfiguredSourceSnapshot source = new ConfiguredSourceSnapshot(
-                bridge.id(),
-                bridge.enabled(),
-                bridge.protocol(),
-                bridge.authMethod(),
-                bridge.oauthProvider(),
-                bridge.host());
-        String destinationKey = bridge.gmailTarget() != null ? bridge.gmailTarget().subjectKey() : null;
+            emailAccount.id(),
+            emailAccount.enabled(),
+            emailAccount.protocol(),
+            emailAccount.authMethod(),
+            emailAccount.oauthProvider(),
+            emailAccount.host());
+        String destinationKey = emailAccount.destination() != null ? emailAccount.destination().subjectKey() : null;
         long totalImportedMessages = destinationKey == null
                 ? 0L
-                : importedMessageRepository.countByDestinationKeyAndSourceAccountId(destinationKey, bridge.id());
+            : importedMessageRepository.countByDestinationKeyAndSourceAccountId(destinationKey, emailAccount.id());
         List<ImportTimelinePointView> importsByDay = destinationKey == null
                 ? buildTimeline(List.of(), DEFAULT_TIMELINE_DAYS)
                 : buildTimeline(
-                        importedMessageRepository.summarizeByImportedDayForDestinationKeyAndSourceAccountId(destinationKey, bridge.id()),
+                importedMessageRepository.summarizeByImportedDayForDestinationKeyAndSourceAccountId(destinationKey, emailAccount.id()),
                         DEFAULT_TIMELINE_DAYS);
         Map<String, List<ImportTimelinePointView>> timelines = destinationKey == null
                 ? buildTimelinesFromInstants(List.of())
                 : buildTimelinesFromInstants(
-                        importedMessageRepository.listImportedAtSinceForDestinationKeyAndSourceAccountId(destinationKey, bridge.id(), earliest));
-        List<SourcePollEvent> events = sourcePollEventService.listBySourceIdsSince(List.of(bridge.id()), earliest);
+                importedMessageRepository.listImportedAtSinceForDestinationKeyAndSourceAccountId(destinationKey, emailAccount.id(), earliest));
+        List<SourcePollEvent> events = sourcePollEventService.listBySourceIdsSince(List.of(emailAccount.id()), earliest);
         ScopedStatsData scopedStats = buildScopedStats(
                 List.of(source),
                 totalImportedMessages,
@@ -214,12 +218,14 @@ public class PollingStatsService {
 
     public PollingTimelineBundleView userTimelineBundle(Long userId, Instant fromInclusive, Instant toExclusive) {
         Instant normalizedTo = normalizeUpperBound(toExclusive);
-        String destinationKey = "user-gmail:" + userId;
+        String destinationKey = userMailDestinationConfigRepository.findByUserId(userId)
+            .map(config -> UserMailDestinationConfigService.PROVIDER_GMAIL.equals(config.provider) ? "user-gmail:" + userId : "user-destination:" + userId)
+            .orElse("user-gmail:" + userId);
         List<Instant> imports = importedMessageRepository.listImportedAtSinceForDestinationKey(destinationKey, fromInclusive).stream()
                 .filter(value -> value.isBefore(normalizedTo))
                 .toList();
-        List<String> sourceIds = userBridgeRepository.listByUserId(userId).stream()
-                .map(bridge -> bridge.bridgeId)
+        List<String> sourceIds = userEmailAccountRepository.listByUserId(userId).stream()
+            .map(emailAccount -> emailAccount.bridgeId)
                 .toList();
         List<SourcePollEvent> events = sourcePollEventService.listBySourceIdsSince(sourceIds, fromInclusive).stream()
                 .filter(event -> event.finishedAt.isBefore(normalizedTo))
@@ -227,15 +233,15 @@ public class PollingStatsService {
         return buildTimelineBundle(imports, events, fromInclusive, normalizedTo);
     }
 
-    public PollingTimelineBundleView sourceTimelineBundle(RuntimeBridge bridge, Instant fromInclusive, Instant toExclusive) {
+        public PollingTimelineBundleView sourceTimelineBundle(RuntimeEmailAccount emailAccount, Instant fromInclusive, Instant toExclusive) {
         Instant normalizedTo = normalizeUpperBound(toExclusive);
-        String destinationKey = bridge.gmailTarget() != null ? bridge.gmailTarget().subjectKey() : null;
+        String destinationKey = emailAccount.destination() != null ? emailAccount.destination().subjectKey() : null;
         List<Instant> imports = destinationKey == null
                 ? List.of()
-                : importedMessageRepository.listImportedAtSinceForDestinationKeyAndSourceAccountId(destinationKey, bridge.id(), fromInclusive).stream()
+            : importedMessageRepository.listImportedAtSinceForDestinationKeyAndSourceAccountId(destinationKey, emailAccount.id(), fromInclusive).stream()
                         .filter(value -> value.isBefore(normalizedTo))
                         .toList();
-        List<SourcePollEvent> events = sourcePollEventService.listBySourceIdsSince(List.of(bridge.id()), fromInclusive).stream()
+        List<SourcePollEvent> events = sourcePollEventService.listBySourceIdsSince(List.of(emailAccount.id()), fromInclusive).stream()
                 .filter(event -> event.finishedAt.isBefore(normalizedTo))
                 .toList();
         return buildTimelineBundle(imports, events, fromInclusive, normalizedTo);
@@ -736,11 +742,11 @@ public class PollingStatsService {
     }
 
     private String providerLabel(ConfiguredSourceSnapshot source) {
-        if (source.authMethod() == BridgeConfig.AuthMethod.OAUTH2) {
-            if (source.oauthProvider() == BridgeConfig.OAuthProvider.GOOGLE) {
+        if (source.authMethod() == InboxBridgeConfig.AuthMethod.OAUTH2) {
+            if (source.oauthProvider() == InboxBridgeConfig.OAuthProvider.GOOGLE) {
                 return "Google";
             }
-            if (source.oauthProvider() == BridgeConfig.OAuthProvider.MICROSOFT) {
+            if (source.oauthProvider() == InboxBridgeConfig.OAuthProvider.MICROSOFT) {
                 return "Microsoft";
             }
         }
@@ -757,7 +763,7 @@ public class PollingStatsService {
         if (host.contains("proton")) {
             return "Proton Mail";
         }
-        if (source.protocol() == BridgeConfig.Protocol.POP3) {
+        if (source.protocol() == InboxBridgeConfig.Protocol.POP3) {
             return "Generic POP3";
         }
         return "Generic IMAP";
@@ -766,9 +772,9 @@ public class PollingStatsService {
     private record ConfiguredSourceSnapshot(
             String sourceId,
             boolean enabled,
-            BridgeConfig.Protocol protocol,
-            BridgeConfig.AuthMethod authMethod,
-            BridgeConfig.OAuthProvider oauthProvider,
+            InboxBridgeConfig.Protocol protocol,
+            InboxBridgeConfig.AuthMethod authMethod,
+            InboxBridgeConfig.OAuthProvider oauthProvider,
             String host) {
     }
 

@@ -3,9 +3,10 @@ package dev.inboxbridge.service;
 import java.time.Instant;
 import java.util.Optional;
 
-import dev.inboxbridge.config.BridgeConfig;
+import dev.inboxbridge.config.InboxBridgeConfig;
 import dev.inboxbridge.dto.UpdateUserGmailConfigRequest;
 import dev.inboxbridge.dto.UserGmailConfigView;
+import dev.inboxbridge.domain.GmailApiDestinationTarget;
 import dev.inboxbridge.domain.GmailTarget;
 import dev.inboxbridge.persistence.AppUser;
 import dev.inboxbridge.persistence.UserGmailConfig;
@@ -27,7 +28,7 @@ public class UserGmailConfigService {
     SystemOAuthAppSettingsService systemOAuthAppSettingsService;
 
     @Inject
-    BridgeConfig bridgeConfig;
+    InboxBridgeConfig inboxBridgeConfig;
 
     @Inject
     OAuthCredentialService oAuthCredentialService;
@@ -43,16 +44,16 @@ public class UserGmailConfigService {
         boolean sharedClientConfigured = sharedGoogleClientConfigured();
         boolean tokenStored = googleOAuthStored(userId);
         return new UserGmailConfigView(
-                bridgeConfig.gmail().destinationUser(),
+                inboxBridgeConfig.gmail().destinationUser(),
                 false,
                 false,
                 tokenStored,
                 defaultRedirectUri(),
                 defaultRedirectUri(),
                 sharedClientConfigured,
-                bridgeConfig.gmail().createMissingLabels(),
-                bridgeConfig.gmail().neverMarkSpam(),
-                bridgeConfig.gmail().processForCalendar());
+                inboxBridgeConfig.gmail().createMissingLabels(),
+                inboxBridgeConfig.gmail().neverMarkSpam(),
+                inboxBridgeConfig.gmail().processForCalendar());
     }
 
     @Transactional
@@ -100,6 +101,29 @@ public class UserGmailConfigService {
         return hadStoredRefreshToken || hadOAuthCredential;
     }
 
+    @Transactional
+    public boolean markGoogleAccessRevoked(GmailApiDestinationTarget target) {
+        if (target == null || target.userId() == null) {
+            return false;
+        }
+
+        Optional<UserGmailConfig> storedConfig = repository.findByUserId(target.userId());
+        boolean hadStoredRefreshToken = storedConfig.map(config ->
+                config.refreshTokenCiphertext != null || config.refreshTokenNonce != null)
+                .orElse(false);
+        boolean hadOAuthCredential = oAuthCredentialService.deleteGoogleCredential(target.subjectKey());
+
+        storedConfig.ifPresent(config -> {
+            config.refreshTokenCiphertext = null;
+            config.refreshTokenNonce = null;
+            config.updatedAt = Instant.now();
+            repository.persist(config);
+        });
+
+        googleOAuthService.clearCachedToken(target.subjectKey());
+        return hadStoredRefreshToken || hadOAuthCredential;
+    }
+
     public Optional<ResolvedUserGmailConfig> resolveForUser(Long userId) {
         if (!secretEncryptionService.isConfigured()) {
             return Optional.empty();
@@ -115,14 +139,18 @@ public class UserGmailConfigService {
         UserGmailConfig config = storedConfig.orElse(null);
         return Optional.of(new ResolvedUserGmailConfig(
                 userId,
-                config == null ? bridgeConfig.gmail().destinationUser() : config.destinationUser,
+                config == null ? inboxBridgeConfig.gmail().destinationUser() : config.destinationUser,
                 effectiveClientId(userId, config),
                 effectiveClientSecret(userId, config),
                 effectiveRefreshToken(userId, config),
                 config == null ? defaultRedirectUri() : nonBlankOrDefault(config.redirectUri, defaultRedirectUri()),
-                config == null ? bridgeConfig.gmail().createMissingLabels() : config.createMissingLabels,
-                config == null ? bridgeConfig.gmail().neverMarkSpam() : config.neverMarkSpam,
-                config == null ? bridgeConfig.gmail().processForCalendar() : config.processForCalendar));
+                config == null ? inboxBridgeConfig.gmail().createMissingLabels() : config.createMissingLabels,
+                config == null ? inboxBridgeConfig.gmail().neverMarkSpam() : config.neverMarkSpam,
+                config == null ? inboxBridgeConfig.gmail().processForCalendar() : config.processForCalendar));
+    }
+
+    public boolean destinationLinked(Long userId) {
+        return googleOAuthStored(userId);
     }
 
     @Transactional
@@ -139,11 +167,11 @@ public class UserGmailConfigService {
 
         UserGmailConfig config = repository.findByUserId(user.id).orElseGet(UserGmailConfig::new);
         config.userId = user.id;
-        config.destinationUser = nonBlankOrDefault(request.destinationUser(), bridgeConfig.gmail().destinationUser());
-        config.redirectUri = nonBlankOrDefault(request.redirectUri(), bridgeConfig.gmail().redirectUri());
-        config.createMissingLabels = request.createMissingLabels() == null ? bridgeConfig.gmail().createMissingLabels() : request.createMissingLabels();
-        config.neverMarkSpam = request.neverMarkSpam() == null ? bridgeConfig.gmail().neverMarkSpam() : request.neverMarkSpam();
-        config.processForCalendar = request.processForCalendar() == null ? bridgeConfig.gmail().processForCalendar() : request.processForCalendar();
+        config.destinationUser = nonBlankOrDefault(request.destinationUser(), inboxBridgeConfig.gmail().destinationUser());
+        config.redirectUri = nonBlankOrDefault(request.redirectUri(), inboxBridgeConfig.gmail().redirectUri());
+        config.createMissingLabels = request.createMissingLabels() == null ? inboxBridgeConfig.gmail().createMissingLabels() : request.createMissingLabels();
+        config.neverMarkSpam = request.neverMarkSpam() == null ? inboxBridgeConfig.gmail().neverMarkSpam() : request.neverMarkSpam();
+        config.processForCalendar = request.processForCalendar() == null ? inboxBridgeConfig.gmail().processForCalendar() : request.processForCalendar();
         config.keyVersion = secretEncryptionService.isConfigured() ? secretEncryptionService.keyVersion() : null;
         config.updatedAt = Instant.now();
 
@@ -215,7 +243,7 @@ public class UserGmailConfigService {
     }
 
     public String defaultRedirectUri() {
-        return nonBlankOrDefault(bridgeConfig.gmail().redirectUri(), "https://localhost:3000/api/google-oauth/callback");
+        return nonBlankOrDefault(inboxBridgeConfig.gmail().redirectUri(), "https://localhost:3000/api/google-oauth/callback");
     }
 
     private String decrypt(String ciphertext, String nonce, String keyVersion, String context) {

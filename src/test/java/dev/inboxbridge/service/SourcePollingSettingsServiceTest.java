@@ -9,8 +9,8 @@ import java.util.Optional;
 
 import org.junit.jupiter.api.Test;
 
-import dev.inboxbridge.config.BridgeConfig;
-import dev.inboxbridge.domain.RuntimeBridge;
+import dev.inboxbridge.config.InboxBridgeConfig;
+import dev.inboxbridge.domain.RuntimeEmailAccount;
 import dev.inboxbridge.dto.UpdateSourcePollingSettingsRequest;
 import dev.inboxbridge.persistence.AppUser;
 import dev.inboxbridge.persistence.SourcePollingSetting;
@@ -55,9 +55,9 @@ class SourcePollingSettingsServiceTest {
     private SourcePollingSettingsService service() {
         SourcePollingSettingsService service = new SourcePollingSettingsService();
         service.repository = new InMemorySourcePollingSettingRepository();
-        service.runtimeBridgeService = new RuntimeBridgeService() {
+        service.runtimeEmailAccountService = new RuntimeEmailAccountService() {
             @Override
-            public Optional<RuntimeBridge> findAccessibleForUser(AppUser actor, String sourceId) {
+            public Optional<RuntimeEmailAccount> findAccessibleForUser(AppUser actor, String sourceId) {
                 return "fetcher-1".equals(sourceId) ? Optional.of(runtimeBridge()) : Optional.empty();
             }
         };
@@ -83,19 +83,19 @@ class SourcePollingSettingsServiceTest {
         return user;
     }
 
-    private RuntimeBridge runtimeBridge() {
-        return new RuntimeBridge(
+    private RuntimeEmailAccount runtimeBridge() {
+        return new RuntimeEmailAccount(
                 "fetcher-1",
                 "USER",
                 7L,
                 "alice",
                 true,
-                BridgeConfig.Protocol.IMAP,
+                InboxBridgeConfig.Protocol.IMAP,
                 "imap.example.com",
                 993,
                 true,
-                BridgeConfig.AuthMethod.PASSWORD,
-                BridgeConfig.OAuthProvider.NONE,
+                InboxBridgeConfig.AuthMethod.PASSWORD,
+                InboxBridgeConfig.OAuthProvider.NONE,
                 "alice@example.com",
                 "secret",
                 "",

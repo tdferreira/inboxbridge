@@ -11,6 +11,7 @@ import dev.inboxbridge.security.RequireAuth;
 import dev.inboxbridge.service.AppUserService;
 import dev.inboxbridge.service.PasskeyService;
 import dev.inboxbridge.service.UserGmailConfigService;
+import dev.inboxbridge.service.UserMailDestinationConfigService;
 import jakarta.inject.Inject;
 import jakarta.ws.rs.BadRequestException;
 import jakarta.ws.rs.Consumes;
@@ -43,6 +44,9 @@ public class AccountResource {
 
     @Inject
     UserGmailConfigService userGmailConfigService;
+
+    @Inject
+    UserMailDestinationConfigService userMailDestinationConfigService;
 
     @POST
     @Path("/password")
@@ -112,5 +116,11 @@ public class AccountResource {
     @Path("/gmail-link")
     public UserGmailConfigService.GmailUnlinkResult unlinkGmailAccount() {
         return userGmailConfigService.unlinkForUser(currentUserContext.user().id);
+    }
+
+    @DELETE
+    @Path("/destination-link")
+    public UserMailDestinationConfigService.DestinationUnlinkResult unlinkDestinationAccount() {
+        return userMailDestinationConfigService.unlinkForUser(currentUserContext.user().id);
     }
 }

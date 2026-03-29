@@ -40,6 +40,7 @@ function UserListItem({
   const menuPanelRef = useRef(null)
   const menuButtonRef = useRef(null)
   const user = config.user
+  const configuredEmailAccounts = config.emailAccounts || config.bridges || []
   const viewingSelfAdmin = user.id === session.id && user.role === 'ADMIN'
   const userHasPasskeys = (config.passkeys?.length || 0) > 0
   const statsAvailable = hasMeaningfulStats(config.pollingStats)
@@ -200,14 +201,15 @@ function UserListItem({
           </section>
 
           <section className="user-detail-section">
-            <div className="user-detail-section-title">{t('users.gmailSection')}</div>
+            <div className="user-detail-section-title">{t('users.destinationSection')}</div>
             <div className="muted-box">
-            {t('users.gmailDestinationUser', { value: config.gmailConfig.destinationUser || t('users.notSet') })}<br />
-            {t('users.gmailRedirectUri', { value: config.gmailConfig.redirectUri || t('users.notSet') })}<br />
-            {t('users.sharedClientAvailable', { value: t(config.gmailConfig.sharedClientConfigured ? 'common.yes' : 'common.no') })}<br />
-            {t('users.clientIdStored', { value: t(config.gmailConfig.clientIdConfigured ? 'common.yes' : 'common.no') })}<br />
-            {t('users.clientSecretStored', { value: t(config.gmailConfig.clientSecretConfigured ? 'common.yes' : 'common.no') })}<br />
-            {t('users.refreshTokenStored', { value: t(config.gmailConfig.refreshTokenConfigured ? 'common.yes' : 'common.no') })}
+            {t('users.destinationProvider', { value: config.destinationConfig.provider || t('users.notSet') })}<br />
+            {t('users.destinationMode', { value: config.destinationConfig.deliveryMode || t('users.notSet') })}<br />
+            {t('users.destinationLinked', { value: t(config.destinationConfig.linked ? 'common.yes' : 'common.no') })}<br />
+            {config.destinationConfig.host ? <>{t('users.destinationHost', { value: `${config.destinationConfig.host}:${config.destinationConfig.port}` })}<br /></> : null}
+            {config.destinationConfig.username ? <>{t('users.destinationUsername', { value: config.destinationConfig.username })}<br /></> : null}
+            {config.destinationConfig.folder ? <>{t('users.destinationFolder', { value: config.destinationConfig.folder })}<br /></> : null}
+            {t('users.destinationAuth', { value: config.destinationConfig.authMethod || t('users.notSet') })}
             </div>
           </section>
 
@@ -243,14 +245,14 @@ function UserListItem({
           <section className="user-detail-section">
             <div className="user-detail-section-title">{t('users.mailFetchersSection')}</div>
             <div className="list-stack">
-            {config.bridges.length > 0 ? config.bridges.map((bridge) => (
-              <div key={bridge.bridgeId} className="muted-box">
-                <strong>{bridge.bridgeId}</strong><br />
-                {protocolLabel(bridge.protocol, locale)} {t('users.via')} {authMethodLabel(bridge.authMethod, locale)}{bridge.oauthProvider !== 'NONE' ? ` / ${oauthProviderLabel(bridge.oauthProvider, locale)}` : ''}<br />
-                {bridge.host}:{bridge.port} · {t('users.tokenStorageLabel')} {tokenStorageLabel(bridge.tokenStorageMode, locale)}<br />
-                {t('users.pollIntervalValue', { value: bridge.effectivePollInterval })} · {t('users.fetchWindowValue', { value: bridge.effectiveFetchWindow })}<br />
-                {bridge.pollingState?.cooldownUntil ? `${t('users.cooldownUntil', { value: formatDate(bridge.pollingState.cooldownUntil, locale) })} · ` : ''}{t('users.lastUsed', { value: formatDate(bridge.lastEvent?.finishedAt, locale) })}
-                {bridge.pollingState?.lastFailureReason ? <><br />{t('users.lastFailure', { value: formatPollError(bridge.pollingState.lastFailureReason, locale) })}</> : null}
+            {configuredEmailAccounts.length > 0 ? configuredEmailAccounts.map((emailAccount) => (
+              <div key={emailAccount.emailAccountId || emailAccount.bridgeId} className="muted-box">
+                <strong>{emailAccount.emailAccountId || emailAccount.bridgeId}</strong><br />
+                {protocolLabel(emailAccount.protocol, locale)} {t('users.via')} {authMethodLabel(emailAccount.authMethod, locale)}{emailAccount.oauthProvider !== 'NONE' ? ` / ${oauthProviderLabel(emailAccount.oauthProvider, locale)}` : ''}<br />
+                {emailAccount.host}:{emailAccount.port} · {t('users.tokenStorageLabel')} {tokenStorageLabel(emailAccount.tokenStorageMode, locale)}<br />
+                {t('users.pollIntervalValue', { value: emailAccount.effectivePollInterval })} · {t('users.fetchWindowValue', { value: emailAccount.effectiveFetchWindow })}<br />
+                {emailAccount.pollingState?.cooldownUntil ? `${t('users.cooldownUntil', { value: formatDate(emailAccount.pollingState.cooldownUntil, locale) })} · ` : ''}{t('users.lastUsed', { value: formatDate(emailAccount.lastEvent?.finishedAt, locale) })}
+                {emailAccount.pollingState?.lastFailureReason ? <><br />{t('users.lastFailure', { value: formatPollError(emailAccount.pollingState.lastFailureReason, locale) })}</> : null}
               </div>
             )) : <div className="muted-box">{t('users.noMailFetchers')}</div>}
             </div>

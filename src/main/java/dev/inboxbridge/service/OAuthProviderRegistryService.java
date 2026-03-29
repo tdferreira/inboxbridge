@@ -3,7 +3,7 @@ package dev.inboxbridge.service;
 import java.util.ArrayList;
 import java.util.List;
 
-import dev.inboxbridge.config.BridgeConfig;
+import dev.inboxbridge.config.InboxBridgeConfig;
 import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.inject.Inject;
 
@@ -13,13 +13,13 @@ public class OAuthProviderRegistryService {
     @Inject
     SystemOAuthAppSettingsService systemOAuthAppSettingsService;
 
-    public List<BridgeConfig.OAuthProvider> configuredSourceProviders() {
-        List<BridgeConfig.OAuthProvider> providers = new ArrayList<>();
+    public List<InboxBridgeConfig.OAuthProvider> configuredSourceProviders() {
+        List<InboxBridgeConfig.OAuthProvider> providers = new ArrayList<>();
         if (systemOAuthAppSettingsService.googleClientConfigured()) {
-            providers.add(BridgeConfig.OAuthProvider.GOOGLE);
+            providers.add(InboxBridgeConfig.OAuthProvider.GOOGLE);
         }
         if (systemOAuthAppSettingsService.microsoftClientConfigured()) {
-            providers.add(BridgeConfig.OAuthProvider.MICROSOFT);
+            providers.add(InboxBridgeConfig.OAuthProvider.MICROSOFT);
         }
         return providers;
     }

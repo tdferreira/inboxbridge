@@ -13,12 +13,12 @@ import org.junit.jupiter.api.Test;
 import dev.inboxbridge.dto.UserPollingStatsView;
 import dev.inboxbridge.dto.SourcePollingStatsView;
 import dev.inboxbridge.dto.SourcePollingStateView;
-import dev.inboxbridge.domain.GmailTarget;
-import dev.inboxbridge.domain.RuntimeBridge;
+import dev.inboxbridge.domain.GmailApiDestinationTarget;
+import dev.inboxbridge.domain.RuntimeEmailAccount;
 import dev.inboxbridge.persistence.SourcePollEvent;
 import dev.inboxbridge.persistence.ImportedMessageRepository;
-import dev.inboxbridge.persistence.UserBridge;
-import dev.inboxbridge.persistence.UserBridgeRepository;
+import dev.inboxbridge.persistence.UserEmailAccount;
+import dev.inboxbridge.persistence.UserEmailAccountRepository;
 
 class PollingStatsServiceTest {
 
@@ -45,10 +45,10 @@ class PollingStatsServiceTest {
                         Instant.parse("2026-03-26T12:15:00Z"));
             }
         };
-        service.userBridgeRepository = new UserBridgeRepository() {
+        service.userEmailAccountRepository = new UserEmailAccountRepository() {
             @Override
-            public List<UserBridge> listByUserId(Long userId) {
-                UserBridge bridge = new UserBridge();
+            public List<UserEmailAccount> listByUserId(Long userId) {
+                UserEmailAccount bridge = new UserEmailAccount();
                 bridge.userId = userId;
                 bridge.bridgeId = "user-fetcher";
                 bridge.enabled = true;
@@ -142,25 +142,25 @@ class PollingStatsServiceTest {
             }
         };
 
-        SourcePollingStatsView stats = service.sourceStats(new RuntimeBridge(
+        SourcePollingStatsView stats = service.sourceStats(new RuntimeEmailAccount(
                 "outlook-main",
                 "USER",
                 7L,
                 "alice",
                 true,
-                dev.inboxbridge.config.BridgeConfig.Protocol.IMAP,
+                dev.inboxbridge.config.InboxBridgeConfig.Protocol.IMAP,
                 "outlook.office365.com",
                 993,
                 true,
-                dev.inboxbridge.config.BridgeConfig.AuthMethod.OAUTH2,
-                dev.inboxbridge.config.BridgeConfig.OAuthProvider.MICROSOFT,
+                dev.inboxbridge.config.InboxBridgeConfig.AuthMethod.OAUTH2,
+                dev.inboxbridge.config.InboxBridgeConfig.OAuthProvider.MICROSOFT,
                 "alice@example.com",
                 "",
                 "",
                 Optional.of("INBOX"),
                 false,
                 Optional.of("Outlook"),
-                new GmailTarget("user-gmail:7", 7L, "alice", "me", "client", "secret", "refresh", "https://localhost", true, false, false)));
+                new GmailApiDestinationTarget("user-gmail:7", 7L, "alice", UserMailDestinationConfigService.PROVIDER_GMAIL, "me", "client", "secret", "refresh", "https://localhost", true, false, false)));
 
         assertEquals(4L, stats.totalImportedMessages());
         assertEquals(1, stats.configuredMailFetchers());

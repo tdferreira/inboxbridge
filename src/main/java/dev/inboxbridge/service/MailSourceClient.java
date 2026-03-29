@@ -15,10 +15,10 @@ import java.util.Set;
 
 import org.jboss.logging.Logger;
 
-import dev.inboxbridge.config.BridgeConfig;
-import dev.inboxbridge.dto.BridgeConnectionTestResult;
+import dev.inboxbridge.config.InboxBridgeConfig;
+import dev.inboxbridge.dto.EmailAccountConnectionTestResult;
 import dev.inboxbridge.domain.FetchedMessage;
-import dev.inboxbridge.domain.RuntimeBridge;
+import dev.inboxbridge.domain.RuntimeEmailAccount;
 import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.inject.Inject;
 import jakarta.mail.Flags;
@@ -38,7 +38,7 @@ public class MailSourceClient {
     private static final Logger LOG = Logger.getLogger(MailSourceClient.class);
 
     @Inject
-    BridgeConfig bridgeConfig;
+    InboxBridgeConfig inboxBridgeConfig;
 
     @Inject
     PollingSettingsService pollingSettingsService;
@@ -52,43 +52,43 @@ public class MailSourceClient {
     @Inject
     GoogleOAuthService googleOAuthService;
 
-    public List<FetchedMessage> fetch(BridgeConfig.Source source) {
+    public List<FetchedMessage> fetch(InboxBridgeConfig.Source source) {
         return fetch(source, pollingSettingsService.effectiveSettings().fetchWindow());
     }
 
-    public List<FetchedMessage> fetch(BridgeConfig.Source source, int fetchWindow) {
+    public List<FetchedMessage> fetch(InboxBridgeConfig.Source source, int fetchWindow) {
         return switch (source.protocol()) {
             case IMAP -> fetchImap(source, fetchWindow);
             case POP3 -> fetchPop3(source, fetchWindow);
         };
     }
 
-    public List<FetchedMessage> fetch(RuntimeBridge bridge) {
+    public List<FetchedMessage> fetch(RuntimeEmailAccount bridge) {
         return fetch(bridge, pollingSettingsService.effectiveSettings().fetchWindow());
     }
 
-    public List<FetchedMessage> fetch(RuntimeBridge bridge, int fetchWindow) {
+    public List<FetchedMessage> fetch(RuntimeEmailAccount bridge, int fetchWindow) {
         return switch (bridge.protocol()) {
             case IMAP -> fetchImap(bridge, fetchWindow);
             case POP3 -> fetchPop3(bridge, fetchWindow);
         };
     }
 
-    public BridgeConnectionTestResult testConnection(RuntimeBridge bridge) {
+    public EmailAccountConnectionTestResult testConnection(RuntimeEmailAccount bridge) {
         return switch (bridge.protocol()) {
             case IMAP -> testImapConnection(bridge);
             case POP3 -> testPop3Connection(bridge);
         };
     }
 
-    public Optional<MailboxCountProbe> probeSpamOrJunkFolder(RuntimeBridge bridge) {
+    public Optional<MailboxCountProbe> probeSpamOrJunkFolder(RuntimeEmailAccount bridge) {
         return switch (bridge.protocol()) {
             case IMAP -> probeImapSpamOrJunkFolder(bridge);
             case POP3 -> Optional.empty();
         };
     }
 
-    private BridgeConnectionTestResult testImapConnection(RuntimeBridge bridge) {
+    private EmailAccountConnectionTestResult testImapConnection(RuntimeEmailAccount bridge) {
         Properties properties = new Properties();
         properties.put("mail.store.protocol", bridge.tls() ? "imaps" : "imap");
         properties.put("mail.imap.ssl.enable", bridge.tls());
@@ -147,7 +147,7 @@ public class MailSourceClient {
         }
     }
 
-    private Optional<MailboxCountProbe> probeImapSpamOrJunkFolder(RuntimeBridge bridge) {
+    private Optional<MailboxCountProbe> probeImapSpamOrJunkFolder(RuntimeEmailAccount bridge) {
         Properties properties = new Properties();
         properties.put("mail.store.protocol", bridge.tls() ? "imaps" : "imap");
         properties.put("mail.imap.ssl.enable", bridge.tls());
@@ -184,7 +184,7 @@ public class MailSourceClient {
         }
     }
 
-    private List<FetchedMessage> fetchImap(BridgeConfig.Source source, int fetchWindow) {
+    private List<FetchedMessage> fetchImap(InboxBridgeConfig.Source source, int fetchWindow) {
         Properties properties = new Properties();
         properties.put("mail.store.protocol", source.tls() ? "imaps" : "imap");
         properties.put("mail.imap.ssl.enable", source.tls());
@@ -222,7 +222,7 @@ public class MailSourceClient {
         }
     }
 
-    private List<FetchedMessage> fetchImap(RuntimeBridge bridge, int fetchWindow) {
+    private List<FetchedMessage> fetchImap(RuntimeEmailAccount bridge, int fetchWindow) {
         Properties properties = new Properties();
         properties.put("mail.store.protocol", bridge.tls() ? "imaps" : "imap");
         properties.put("mail.imap.ssl.enable", bridge.tls());
@@ -260,7 +260,7 @@ public class MailSourceClient {
         }
     }
 
-    private List<FetchedMessage> fetchPop3(BridgeConfig.Source source, int fetchWindow) {
+    private List<FetchedMessage> fetchPop3(InboxBridgeConfig.Source source, int fetchWindow) {
         Properties properties = new Properties();
         properties.put("mail.store.protocol", source.tls() ? "pop3s" : "pop3");
         properties.put("mail.pop3.ssl.enable", source.tls());
@@ -295,7 +295,7 @@ public class MailSourceClient {
         }
     }
 
-    private List<FetchedMessage> fetchPop3(RuntimeBridge bridge, int fetchWindow) {
+    private List<FetchedMessage> fetchPop3(RuntimeEmailAccount bridge, int fetchWindow) {
         Properties properties = new Properties();
         properties.put("mail.store.protocol", bridge.tls() ? "pop3s" : "pop3");
         properties.put("mail.pop3.ssl.enable", bridge.tls());
@@ -330,7 +330,7 @@ public class MailSourceClient {
         }
     }
 
-    private BridgeConnectionTestResult testPop3Connection(RuntimeBridge bridge) {
+    private EmailAccountConnectionTestResult testPop3Connection(RuntimeEmailAccount bridge) {
         Properties properties = new Properties();
         properties.put("mail.store.protocol", bridge.tls() ? "pop3s" : "pop3");
         properties.put("mail.pop3.ssl.enable", bridge.tls());
@@ -380,8 +380,8 @@ public class MailSourceClient {
         }
     }
 
-    private BridgeConnectionTestResult buildProbeResult(
-            RuntimeBridge bridge,
+    private EmailAccountConnectionTestResult buildProbeResult(
+            RuntimeEmailAccount bridge,
             String targetFolder,
             boolean folderAccessible,
             Boolean unreadFilterSupported,
@@ -408,7 +408,7 @@ public class MailSourceClient {
         } else {
             message.append(" No sample message was available to materialize.");
         }
-        return new BridgeConnectionTestResult(
+        return new EmailAccountConnectionTestResult(
                 true,
                 message.toString(),
                 bridge.protocol().name(),
@@ -447,7 +447,7 @@ public class MailSourceClient {
         return Arrays.copyOfRange(messages, messages.length - normalizedFetchWindow, messages.length);
     }
 
-    private List<FetchedMessage> toFetchedMessages(BridgeConfig.Source source, Message[] messages) {
+    private List<FetchedMessage> toFetchedMessages(InboxBridgeConfig.Source source, Message[] messages) {
         return toFetchedMessages(source.id(), messages);
     }
 
@@ -494,7 +494,7 @@ public class MailSourceClient {
         return fetchedMessages;
     }
 
-    private String resolveSourceMessageKey(BridgeConfig.Source source, Message message, String sha) throws MessagingException {
+    private String resolveSourceMessageKey(InboxBridgeConfig.Source source, Message message, String sha) throws MessagingException {
         return resolveSourceMessageKey(source.id(), message, sha);
     }
 
@@ -673,7 +673,7 @@ public class MailSourceClient {
         }
     }
 
-    private void connectStore(Store store, BridgeConfig.Source source) throws MessagingException {
+    private void connectStore(Store store, InboxBridgeConfig.Source source) throws MessagingException {
         if (usesMicrosoftOAuth(source)) {
             connectStoreWithMicrosoftOAuthRetry(
                     store,
@@ -697,7 +697,7 @@ public class MailSourceClient {
         store.connect(source.host(), source.port(), source.username(), source.password());
     }
 
-    private void connectStore(Store store, RuntimeBridge bridge) throws MessagingException {
+    private void connectStore(Store store, RuntimeEmailAccount bridge) throws MessagingException {
         if (usesMicrosoftOAuth(bridge)) {
             connectStoreWithMicrosoftOAuthRetry(
                     store,
@@ -742,42 +742,42 @@ public class MailSourceClient {
         }
     }
 
-    private boolean usesMicrosoftOAuth(BridgeConfig.Source source) {
-        return source.authMethod() == BridgeConfig.AuthMethod.OAUTH2
-                && source.oauthProvider() == BridgeConfig.OAuthProvider.MICROSOFT;
+    private boolean usesMicrosoftOAuth(InboxBridgeConfig.Source source) {
+        return source.authMethod() == InboxBridgeConfig.AuthMethod.OAUTH2
+                && source.oauthProvider() == InboxBridgeConfig.OAuthProvider.MICROSOFT;
     }
 
-    private boolean usesGoogleOAuth(BridgeConfig.Source source) {
-        return source.authMethod() == BridgeConfig.AuthMethod.OAUTH2
-                && source.oauthProvider() == BridgeConfig.OAuthProvider.GOOGLE;
+    private boolean usesGoogleOAuth(InboxBridgeConfig.Source source) {
+        return source.authMethod() == InboxBridgeConfig.AuthMethod.OAUTH2
+                && source.oauthProvider() == InboxBridgeConfig.OAuthProvider.GOOGLE;
     }
 
-    private boolean usesOAuth(BridgeConfig.Source source) {
+    private boolean usesOAuth(InboxBridgeConfig.Source source) {
         return usesMicrosoftOAuth(source) || usesGoogleOAuth(source);
     }
 
-    private boolean usesMicrosoftOAuth(RuntimeBridge bridge) {
-        return bridge.authMethod() == BridgeConfig.AuthMethod.OAUTH2
-                && bridge.oauthProvider() == BridgeConfig.OAuthProvider.MICROSOFT;
+    private boolean usesMicrosoftOAuth(RuntimeEmailAccount bridge) {
+        return bridge.authMethod() == InboxBridgeConfig.AuthMethod.OAUTH2
+                && bridge.oauthProvider() == InboxBridgeConfig.OAuthProvider.MICROSOFT;
     }
 
-    private boolean usesGoogleOAuth(RuntimeBridge bridge) {
-        return bridge.authMethod() == BridgeConfig.AuthMethod.OAUTH2
-                && bridge.oauthProvider() == BridgeConfig.OAuthProvider.GOOGLE;
+    private boolean usesGoogleOAuth(RuntimeEmailAccount bridge) {
+        return bridge.authMethod() == InboxBridgeConfig.AuthMethod.OAUTH2
+                && bridge.oauthProvider() == InboxBridgeConfig.OAuthProvider.GOOGLE;
     }
 
-    private boolean usesOAuth(RuntimeBridge bridge) {
+    private boolean usesOAuth(RuntimeEmailAccount bridge) {
         return usesMicrosoftOAuth(bridge) || usesGoogleOAuth(bridge);
     }
 
-    private void requireSupportedAuth(BridgeConfig.Source source) {
-        if (source.authMethod() == BridgeConfig.AuthMethod.OAUTH2) {
+    private void requireSupportedAuth(InboxBridgeConfig.Source source) {
+        if (source.authMethod() == InboxBridgeConfig.AuthMethod.OAUTH2) {
             throw new IllegalStateException("OAuth2 is only implemented for configured Google or Microsoft source providers at the moment");
         }
     }
 
-    private void requireSupportedAuth(RuntimeBridge bridge) {
-        if (bridge.authMethod() == BridgeConfig.AuthMethod.OAUTH2) {
+    private void requireSupportedAuth(RuntimeEmailAccount bridge) {
+        if (bridge.authMethod() == InboxBridgeConfig.AuthMethod.OAUTH2) {
             throw new IllegalStateException("OAuth2 is only implemented for configured Google or Microsoft source providers at the moment");
         }
     }

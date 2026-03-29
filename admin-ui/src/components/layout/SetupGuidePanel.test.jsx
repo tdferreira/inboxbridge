@@ -22,16 +22,16 @@ describe('SetupGuidePanel', () => {
             targetId: 'password-panel-section'
           },
           {
-            title: '2. Connect your Gmail account',
+            title: '2. Connect your destination mailbox',
             description: 'Ready to continue.',
             status: 'complete',
-            targetId: 'gmail-destination-section'
+            targetId: 'destination-mailbox-section'
           },
           {
             title: '4. Complete provider OAuth',
             description: 'Bridge failed.',
             status: 'error',
-            targetId: 'source-bridges-section'
+            targetId: 'source-email-accounts-section'
           }
         ]}
         t={t}
@@ -40,7 +40,7 @@ describe('SetupGuidePanel', () => {
 
     expect(screen.getByText('Quick Setup Guide')).toBeInTheDocument()
     expect(screen.getByRole('link', { name: /secure your session/i })).toHaveAttribute('href', '#password-panel-section')
-    expect(screen.getByRole('link', { name: /connect your gmail account/i })).toHaveClass('setup-guide-complete')
+    expect(screen.getByRole('link', { name: /connect your destination mailbox/i })).toHaveClass('setup-guide-complete')
     expect(screen.getByRole('link', { name: /complete provider oauth/i })).toHaveClass('setup-guide-error')
     expect(screen.queryByLabelText(/remember layout on this account/i)).not.toBeInTheDocument()
   })

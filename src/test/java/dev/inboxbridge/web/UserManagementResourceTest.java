@@ -14,6 +14,7 @@ import dev.inboxbridge.dto.SystemOAuthAppSettingsView;
 import dev.inboxbridge.dto.UpdateApplicationModeRequest;
 import dev.inboxbridge.dto.UpdateUserRequest;
 import dev.inboxbridge.dto.UserGmailConfigView;
+import dev.inboxbridge.dto.UserMailDestinationView;
 import dev.inboxbridge.dto.UserPollingSettingsView;
 import dev.inboxbridge.dto.UserSummaryResponse;
 import dev.inboxbridge.dto.UserPollingStatsView;
@@ -23,8 +24,9 @@ import dev.inboxbridge.service.AppUserService;
 import dev.inboxbridge.service.ApplicationModeService;
 import dev.inboxbridge.service.PasskeyService;
 import dev.inboxbridge.service.PollingStatsService;
-import dev.inboxbridge.service.UserBridgeService;
+import dev.inboxbridge.service.UserEmailAccountService;
 import dev.inboxbridge.service.UserGmailConfigService;
+import dev.inboxbridge.service.UserMailDestinationConfigService;
 import dev.inboxbridge.service.UserPollingSettingsService;
 import dev.inboxbridge.service.SystemOAuthAppSettingsService;
 import jakarta.ws.rs.BadRequestException;
@@ -129,7 +131,8 @@ class UserManagementResourceTest {
         resource.appUserService = new FakeAppUserService(null);
         resource.applicationModeService = new FakeApplicationModeService(true);
         resource.userGmailConfigService = new FakeUserGmailConfigService();
-        resource.userBridgeService = new FakeUserBridgeService();
+        resource.userMailDestinationConfigService = new FakeUserMailDestinationConfigService();
+        resource.userEmailAccountService = new FakeUserEmailAccountService();
         resource.userPollingSettingsService = new FakeUserPollingSettingsService();
         resource.passkeyService = new FakePasskeyService();
         resource.pollingStatsService = new PollingStatsService();
@@ -266,10 +269,33 @@ class UserManagementResourceTest {
         }
     }
 
-    private static final class FakeUserBridgeService extends UserBridgeService {
+    private static final class FakeUserEmailAccountService extends UserEmailAccountService {
         @Override
-        public List<dev.inboxbridge.dto.UserBridgeView> listForUser(Long userId) {
+        public List<dev.inboxbridge.dto.UserEmailAccountView> listForUser(Long userId) {
             return List.of();
+        }
+    }
+
+    private static final class FakeUserMailDestinationConfigService extends UserMailDestinationConfigService {
+        @Override
+        public UserMailDestinationView viewForUser(Long userId) {
+            return new UserMailDestinationView(
+                    PROVIDER_GMAIL,
+                    "GMAIL_API",
+                    false,
+                    false,
+                    false,
+                    true,
+                    true,
+                    "https://localhost:3000/api/google-oauth/callback",
+                    "https://localhost:3000/api/microsoft-oauth/callback",
+                    null,
+                    null,
+                    true,
+                    "OAUTH2",
+                    "GOOGLE",
+                    null,
+                    null);
         }
     }
 

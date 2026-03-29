@@ -47,21 +47,21 @@ describe('formatters', () => {
       code: 'gmail_access_revoked',
       sourceId: 'outlook-main',
       message: 'Source outlook-main failed: The linked Gmail account no longer grants InboxBridge access.'
-    }, 'pt-PT')).toBe('A fonte outlook-main deixou de ter acesso ao Gmail. Volte a ligá-la em A minha conta Gmail.')
+    }, 'pt-PT')).toBe('A fonte outlook-main deixou de ter acesso ao Gmail. Volte a ligá-la em A minha caixa de destino.')
   })
 
   it('translates known backend gmail access errors from persisted text', () => {
     expect(formatPollError(
       'Source outlook-main failed: The linked Gmail account no longer grants InboxBridge access. The saved Gmail OAuth link was cleared. Reconnect it from My Gmail Account.',
       'pt-PT'
-    )).toBe('A fonte outlook-main deixou de ter acesso ao Gmail. Volte a ligá-la em A minha conta Gmail.')
+    )).toBe('A fonte outlook-main deixou de ter acesso ao Gmail. Volte a ligá-la em A minha caixa de destino.')
   })
 
   it('translates legacy google invalid_grant refresh-token errors from persisted text', () => {
     expect(formatPollError(
       'Source outlook-main failed: Google token request failed with status 400: { "error": "invalid_grant", "error_description": "Token has been expired or revoked." }',
       'pt-PT'
-    )).toBe('A fonte outlook-main deixou de ter acesso ao Gmail. Volte a ligá-la em A minha conta Gmail.')
+    )).toBe('A fonte outlook-main deixou de ter acesso ao Gmail. Volte a ligá-la em A minha caixa de destino.')
   })
 
   it('translates structured microsoft access revoked errors', () => {

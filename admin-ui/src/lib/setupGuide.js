@@ -2,7 +2,7 @@ function renumberStepTitle(title, index) {
   return String(title).replace(/^\d+\.\s*/, `${index}. `)
 }
 
-export function buildSetupGuideState({ workspace = 'user', gmailMeta, myBridges = [], session, systemDashboard, systemOAuthSettings, users = [], t }) {
+export function buildSetupGuideState({ workspace = 'user', destinationMeta, myEmailAccounts = [], session, systemDashboard, systemOAuthSettings, users = [], t }) {
   if (!session) {
     return {
       steps: [],
@@ -11,22 +11,26 @@ export function buildSetupGuideState({ workspace = 'user', gmailMeta, myBridges 
   }
 
   if (workspace === 'admin') {
-    const visibleSystemBridges = session.username === 'admin'
-      ? (systemDashboard?.bridges || [])
+    const systemDashboardEmailAccounts = systemDashboard?.emailAccounts || systemDashboard?.bridges || []
+    const visibleSystemEmailAccounts = session.username === 'admin'
+      ? systemDashboardEmailAccounts
       : []
-    const importsReady = (systemDashboard?.overall?.totalImportedMessages || 0) > 0
-      && visibleSystemBridges.every((bridge) => bridge.lastEvent?.status !== 'ERROR' && !bridge.lastEvent?.error)
-    const importsErrored = visibleSystemBridges.some((bridge) => bridge.lastEvent?.status === 'ERROR' || bridge.lastEvent?.error)
-    const googleSharedReady = Boolean(systemOAuthSettings?.googleClientId && systemOAuthSettings?.googleClientSecretConfigured && systemOAuthSettings?.googleRefreshTokenConfigured)
+    const sharedGoogleReady = Boolean(systemOAuthSettings?.googleClientId && systemOAuthSettings?.googleClientSecretConfigured && systemOAuthSettings?.googleRefreshTokenConfigured)
+    const sharedMicrosoftReady = Boolean(systemOAuthSettings?.microsoftClientId && systemOAuthSettings?.microsoftClientSecretConfigured)
+    const sharedOAuthReady = sharedGoogleReady || sharedMicrosoftReady
+    const importsReady = sharedOAuthReady
+      && (systemDashboard?.overall?.totalImportedMessages || 0) > 0
+      && visibleSystemEmailAccounts.every((emailAccount) => emailAccount.lastEvent?.status !== 'ERROR' && !emailAccount.lastEvent?.error)
+    const importsErrored = visibleSystemEmailAccounts.some((emailAccount) => emailAccount.lastEvent?.status === 'ERROR' || emailAccount.lastEvent?.error)
     const multiUserEnabled = systemOAuthSettings?.effectiveMultiUserEnabled !== false
     const hasAdditionalUser = users.some((user) => user.id !== session.id)
     const steps = [
       {
         title: t('setup.adminStep1Title'),
-        description: googleSharedReady ? t('setup.adminStep1Ready') : t('setup.adminStep1Pending'),
+        description: sharedOAuthReady ? t('setup.adminStep1Ready') : t('setup.adminStep1Pending'),
         targetId: 'oauth-apps-section',
         sectionKey: 'oauthAppsCollapsed',
-        status: googleSharedReady ? 'complete' : 'pending'
+        status: sharedOAuthReady ? 'complete' : 'pending'
       }
     ]
     if (multiUserEnabled) {
@@ -40,10 +44,12 @@ export function buildSetupGuideState({ workspace = 'user', gmailMeta, myBridges 
     }
     steps.push({
       title: t('setup.adminStep3Title'),
-      description: importsErrored ? t('setup.adminStep3Error') : importsReady ? t('setup.adminStep3Ready') : t('setup.adminStep3Pending'),
+      description: !sharedOAuthReady
+        ? t('setup.adminStep3Blocked')
+        : importsErrored ? t('setup.adminStep3Error') : importsReady ? t('setup.adminStep3Ready') : t('setup.adminStep3Pending'),
       targetId: 'system-dashboard-section',
       sectionKey: 'systemDashboardCollapsed',
-      status: importsErrored ? 'error' : importsReady ? 'complete' : 'pending'
+      status: !sharedOAuthReady ? 'pending' : importsErrored ? 'error' : importsReady ? 'complete' : 'pending'
     })
 
     return {
@@ -52,29 +58,30 @@ export function buildSetupGuideState({ workspace = 'user', gmailMeta, myBridges 
     }
   }
 
-  const visibleSystemBridges = session.username === 'admin'
-    ? (systemDashboard?.bridges || [])
+  const systemDashboardEmailAccounts = systemDashboard?.emailAccounts || systemDashboard?.bridges || []
+  const visibleSystemEmailAccounts = session.username === 'admin'
+    ? systemDashboardEmailAccounts
     : []
-  const allBridges = [
-    ...myBridges,
-    ...visibleSystemBridges
+  const allEmailAccounts = [
+    ...myEmailAccounts,
+    ...visibleSystemEmailAccounts
   ]
-  const oauthBridges = allBridges.filter((bridge) => bridge.authMethod === 'OAUTH2')
-  const bridgeErrors = allBridges.filter((bridge) => bridge.lastEvent?.status === 'ERROR' || bridge.lastEvent?.error)
-  const oauthErrors = oauthBridges.filter((bridge) => bridge.lastEvent?.status === 'ERROR' || bridge.lastEvent?.error)
+  const oauthEmailAccounts = allEmailAccounts.filter((emailAccount) => emailAccount.authMethod === 'OAUTH2')
+  const emailAccountErrors = allEmailAccounts.filter((emailAccount) => emailAccount.lastEvent?.status === 'ERROR' || emailAccount.lastEvent?.error)
+  const oauthErrors = oauthEmailAccounts.filter((emailAccount) => emailAccount.lastEvent?.status === 'ERROR' || emailAccount.lastEvent?.error)
   const importedMessages = systemDashboard?.overall?.totalImportedMessages
-    ?? allBridges.reduce((total, bridge) => total + (bridge.totalImportedMessages || 0), 0)
+    ?? allEmailAccounts.reduce((total, emailAccount) => total + (emailAccount.totalImportedMessages || 0), 0)
   const sessionReady = !session.mustChangePassword
-  const gmailReady = Boolean(gmailMeta?.refreshTokenConfigured)
-  const bridgeReady = allBridges.length > 0
-  const oauthReady = gmailReady && oauthBridges.every((bridge) => {
-    if ('oauthRefreshTokenConfigured' in bridge) {
-      return bridge.oauthRefreshTokenConfigured || bridge.tokenStorageMode === 'DATABASE' || bridge.tokenStorageMode === 'ENV'
+  const destinationReady = Boolean(destinationMeta?.linked ?? destinationMeta?.refreshTokenConfigured)
+  const emailAccountsReady = allEmailAccounts.length > 0
+  const oauthReady = destinationReady && oauthEmailAccounts.every((emailAccount) => {
+    if ('oauthRefreshTokenConfigured' in emailAccount) {
+      return emailAccount.oauthRefreshTokenConfigured || emailAccount.tokenStorageMode === 'DATABASE' || emailAccount.tokenStorageMode === 'ENV'
     }
-    return bridge.tokenStorageMode === 'DATABASE' || bridge.tokenStorageMode === 'ENV'
+    return emailAccount.tokenStorageMode === 'DATABASE' || emailAccount.tokenStorageMode === 'ENV'
   })
-  const importsReady = importedMessages > 0 && bridgeErrors.length === 0
-  const importsErrored = bridgeErrors.length > 0
+  const importsReady = importedMessages > 0 && emailAccountErrors.length === 0
+  const importsErrored = emailAccountErrors.length > 0
 
   const steps = [
     {
@@ -86,25 +93,25 @@ export function buildSetupGuideState({ workspace = 'user', gmailMeta, myBridges 
     },
     {
       title: t('setup.step2Title'),
-      description: gmailReady
+      description: destinationReady
         ? t('setup.step2Ready')
         : t('setup.step2Pending'),
-      targetId: 'gmail-destination-section',
-      sectionKey: 'gmailDestinationCollapsed',
-      status: gmailReady ? 'complete' : 'pending'
+      targetId: 'destination-mailbox-section',
+      sectionKey: 'destinationMailboxCollapsed',
+      status: destinationReady ? 'complete' : 'pending'
     },
     {
       title: t('setup.step3Title'),
-      description: bridgeReady
+      description: emailAccountsReady
         ? t('setup.step3Ready')
         : t('setup.step3Pending'),
-      targetId: 'source-bridges-section',
-      sectionKey: 'sourceBridgesCollapsed',
-      status: bridgeReady ? 'complete' : 'pending'
+      targetId: 'source-email-accounts-section',
+      sectionKey: 'sourceEmailAccountsCollapsed',
+      status: emailAccountsReady ? 'complete' : 'pending'
     }
   ]
 
-  if (oauthBridges.length > 0) {
+  if (oauthEmailAccounts.length > 0) {
     steps.push({
       title: t('setup.step4Title'),
       description: oauthErrors.length > 0
@@ -112,8 +119,8 @@ export function buildSetupGuideState({ workspace = 'user', gmailMeta, myBridges 
         : oauthReady
           ? t('setup.step4Ready')
           : t('setup.step4Pending'),
-      targetId: 'source-bridges-section',
-      sectionKey: 'sourceBridgesCollapsed',
+      targetId: 'source-email-accounts-section',
+      sectionKey: 'sourceEmailAccountsCollapsed',
       status: oauthErrors.length > 0 ? 'error' : oauthReady ? 'complete' : 'pending'
     })
   }
@@ -125,8 +132,8 @@ export function buildSetupGuideState({ workspace = 'user', gmailMeta, myBridges 
         : importsReady
           ? t('setup.step5Ready')
           : t('setup.step5Pending'),
-      targetId: session.role === 'ADMIN' ? 'system-dashboard-section' : 'source-bridges-section',
-      sectionKey: session.role === 'ADMIN' ? 'systemDashboardCollapsed' : 'sourceBridgesCollapsed',
+      targetId: session.role === 'ADMIN' ? 'system-dashboard-section' : 'source-email-accounts-section',
+      sectionKey: session.role === 'ADMIN' ? 'systemDashboardCollapsed' : 'sourceEmailAccountsCollapsed',
       status: importsErrored ? 'error' : importsReady ? 'complete' : 'pending'
     })
 

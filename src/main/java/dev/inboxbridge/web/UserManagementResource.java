@@ -17,8 +17,9 @@ import dev.inboxbridge.service.AppUserService;
 import dev.inboxbridge.service.ApplicationModeService;
 import dev.inboxbridge.service.PasskeyService;
 import dev.inboxbridge.service.PollingStatsService;
-import dev.inboxbridge.service.UserBridgeService;
+import dev.inboxbridge.service.UserEmailAccountService;
 import dev.inboxbridge.service.UserGmailConfigService;
+import dev.inboxbridge.service.UserMailDestinationConfigService;
 import dev.inboxbridge.service.UserPollingSettingsService;
 import dev.inboxbridge.service.SystemOAuthAppSettingsService;
 import jakarta.inject.Inject;
@@ -57,7 +58,10 @@ public class UserManagementResource {
     UserGmailConfigService userGmailConfigService;
 
     @Inject
-    UserBridgeService userBridgeService;
+    UserMailDestinationConfigService userMailDestinationConfigService;
+
+    @Inject
+    UserEmailAccountService userEmailAccountService;
 
     @Inject
     UserPollingSettingsService userPollingSettingsService;
@@ -160,12 +164,11 @@ public class UserManagementResource {
             return appUserService.findById(userId)
                     .map(user -> new AdminUserConfigurationResponse(
                             appUserService.toSummary(user),
-                            userGmailConfigService.viewForUser(user.id)
-                                    .orElse(userGmailConfigService.defaultView(user.id)),
+                            userMailDestinationConfigService.viewForUser(user.id),
                             userPollingSettingsService.viewForUser(user.id)
                                     .orElse(userPollingSettingsService.defaultView(user.id)),
                             pollingStatsService.userStats(user.id),
-                            userBridgeService.listForUser(user.id),
+                            userEmailAccountService.listForUser(user.id),
                             passkeyService.listForUser(user.id)))
                     .orElseThrow(() -> new BadRequestException("Unknown user id"));
         } catch (IllegalArgumentException e) {

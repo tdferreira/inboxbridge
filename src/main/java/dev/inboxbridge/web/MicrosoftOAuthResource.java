@@ -7,15 +7,14 @@ import java.util.Map;
 
 import dev.inboxbridge.dto.MicrosoftOAuthCodeRequest;
 import dev.inboxbridge.dto.MicrosoftOAuthSourceOption;
-import dev.inboxbridge.dto.MicrosoftTokenExchangeResponse;
 import dev.inboxbridge.dto.OAuthUrlResponse;
 import dev.inboxbridge.dto.ApiError;
 import dev.inboxbridge.persistence.AppUser;
-import dev.inboxbridge.persistence.UserBridge;
+import dev.inboxbridge.persistence.UserEmailAccount;
 import dev.inboxbridge.security.CurrentUserContext;
 import dev.inboxbridge.security.RequireAuth;
 import dev.inboxbridge.service.MicrosoftOAuthService;
-import dev.inboxbridge.service.UserBridgeService;
+import dev.inboxbridge.service.UserEmailAccountService;
 import dev.inboxbridge.service.EnvSourceService;
 import jakarta.inject.Inject;
 import jakarta.ws.rs.BadRequestException;
@@ -40,7 +39,7 @@ public class MicrosoftOAuthResource {
     CurrentUserContext currentUserContext;
 
     @Inject
-    UserBridgeService userBridgeService;
+    UserEmailAccountService userEmailAccountService;
 
     @Inject
     EnvSourceService envSourceService;
@@ -70,6 +69,17 @@ public class MicrosoftOAuthResource {
     }
 
     @GET
+    @Path("/start/destination")
+    @RequireAuth
+    public Response startDestination(@QueryParam("lang") String language) {
+      try {
+        return Response.seeOther(URI.create(microsoftOAuthService.buildDestinationAuthorizationUrl(currentUserContext.user().id, language))).build();
+      } catch (IllegalArgumentException | IllegalStateException e) {
+        throw new BadRequestException(e.getMessage(), e);
+      }
+    }
+
+    @GET
     @Path("/sources")
     @RequireAuth
     public List<MicrosoftOAuthSourceOption> sources() {
@@ -79,7 +89,7 @@ public class MicrosoftOAuthResource {
             return visible;
         }
         return visible.stream()
-                .filter(source -> userBridgeService.findByBridgeId(source.id())
+                .filter(source -> userEmailAccountService.findByBridgeId(source.id())
                         .map(bridge -> bridge.userId.equals(user.id))
                         .orElse(false))
                 .toList();
@@ -128,9 +138,9 @@ public class MicrosoftOAuthResource {
                     null);
         }
 
-        MicrosoftOAuthService.CallbackValidation callbackValidation;
+        MicrosoftOAuthService.BrowserCallbackValidation callbackValidation;
         try {
-            callbackValidation = microsoftOAuthService.validateCallback(state);
+          callbackValidation = microsoftOAuthService.validateBrowserCallback(state);
         } catch (IllegalArgumentException e) {
             return htmlCallbackPage(
                     language,
@@ -149,7 +159,7 @@ public class MicrosoftOAuthResource {
         }
 
         Map<String, String> fields = orderedFields(
-                localized(callbackValidation.language(), "Source ID", "ID da conta"), callbackValidation.sourceId(),
+          localized(callbackValidation.language(), "Source ID", "ID da conta"), callbackValidation.subjectId(),
                 localized(callbackValidation.language(), "Authorization Code", "Codigo de autorizacao"), code == null ? "" : code,
                 localized(callbackValidation.language(), "Exchange Endpoint", "Endpoint de troca"), "POST /api/microsoft-oauth/exchange");
         if (callbackValidation.configKey() != null && !callbackValidation.configKey().isBlank()) {
@@ -164,7 +174,7 @@ public class MicrosoftOAuthResource {
                         "Pode trocar este codigo de autorizacao diretamente no browser. Se o armazenamento seguro de tokens estiver configurado, o InboxBridge vai guarda-lo de forma encriptada em PostgreSQL e renovar automaticamente os tokens de acesso."),
                 fields,
                 true,
-                callbackValidation.sourceId(),
+                callbackValidation.subjectId(),
                 callbackValidation.configKey(),
                 state,
                 code == null ? "" : code);
@@ -722,7 +732,7 @@ public class MicrosoftOAuthResource {
             }
             return;
         }
-        UserBridge bridge = userBridgeService.findByBridgeId(sourceId).orElseThrow(() -> new BadRequestException("Unknown source id"));
+        UserEmailAccount bridge = userEmailAccountService.findByBridgeId(sourceId).orElseThrow(() -> new BadRequestException("Unknown source id"));
         if (user.role == AppUser.Role.ADMIN) {
             return;
         }

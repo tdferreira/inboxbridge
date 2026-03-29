@@ -2,7 +2,7 @@
 
 ## Purpose
 
-InboxBridge is a self-hosted bridge that pulls mail from external IMAP / POP3 accounts and imports it into Gmail. It is meant to preserve the “one Gmail inbox, many other accounts” workflow without relying on SMTP forwarding.
+InboxBridge is a self-hosted mail importer that pulls mail from external IMAP / POP3 accounts and imports it into a destination mailbox. It can target Gmail through the Gmail API or IMAP APPEND destinations such as Outlook and other known providers. It is meant to preserve the “one inbox, many other accounts” workflow without relying on SMTP forwarding.
 
 ## Current product shape
 
@@ -13,14 +13,14 @@ InboxBridge now consists of:
 - PostgreSQL for durable state
 - Docker Compose wiring for backend, frontend, database, and local TLS bootstrap
 
-The app supports two bridge sources of truth:
+The app supports two source-email-account sources of truth:
 
-- env-managed system mail fetchers from `.env`
-- user-managed mail fetchers stored in PostgreSQL through the admin UI
+- env-managed system source email accounts from `.env`
+- user-managed source email accounts stored in PostgreSQL through the admin UI
 
-In the current admin UI, both kinds of fetchers are shown together in the `My Email Fetchers` section, but env-managed entries are explicitly marked as read-only `.env` items and are only surfaced to the account named `admin`.
-Fallback placeholder values from `application.yaml` are filtered out before that merge, so if the deployment does not actually define any `BRIDGE_SOURCES_*` values then no env-managed fetcher is surfaced.
-User-scoped fetcher actions now resolve only DB-managed fetchers, while env-managed fetchers are handled exclusively through the admin endpoints. New DB-managed fetchers are also rejected if their ID collides with an env-managed fetcher ID.
+In the current admin UI, both kinds of source email accounts are shown together in the `My Source Email Accounts` section, but env-managed entries are explicitly marked as read-only `.env` items and are only surfaced to the account named `admin`.
+Fallback placeholder values from `application.yaml` are filtered out before that merge, so if the deployment does not actually define any `MAIL_ACCOUNT_*` values then no env-managed source email account is surfaced.
+User-scoped source-email-account actions now resolve only DB-managed accounts, while env-managed accounts are handled exclusively through the admin endpoints. New DB-managed source email accounts are also rejected if their ID collides with an env-managed account ID.
 
 Deployment-wide browser callback defaults can now be anchored on `PUBLIC_BASE_URL`, which feeds the default Google and Microsoft OAuth redirect URIs shown in the UI and docs.
 
@@ -41,6 +41,8 @@ Deployment-wide browser callback defaults can now be anchored on `PUBLIC_BASE_UR
 ### 1. Separate frontend and backend
 
 The React admin UI lives in `admin-ui/` and runs in its own container/server. It communicates with the Quarkus backend through proxied REST endpoints under `/api/...`.
+
+`admin-ui/src/App.jsx` still owns bootstrap data loading and top-level workspace composition, but larger imperative slices are now split into focused controller hooks under `admin-ui/src/lib/`, including auth/security flows, source email accounts, destination mailbox flows, polling flows, and admin user management.
 
 Why:
 
@@ -80,7 +82,7 @@ Bootstrap auth behavior:
 - self-registered users start as `inactive` and `unapproved`
 - self-registration now starts from a focused modal workflow on the unauthenticated screen instead of leaving the request form always visible
 - when single-user mode is enabled, self-registration and admin user-management endpoints are disabled and the UI hides those controls entirely
-- single-user mode still keeps the rest of the admin control plane visible for the bootstrap admin, including Gmail setup, mail fetchers, security tools, and poller settings
+- single-user mode still keeps the rest of the admin control plane visible for the bootstrap admin, including destination mailbox setup, source email accounts, security tools, and poller settings
 - switching to single-user mode from the admin UI now deactivates every account except the acting admin and records which accounts were disabled by that mode change, so re-enabling multi-user mode can reactivate those accounts later
 - admins can approve, suspend, reactivate, promote, or demote users from the admin UI
 - admins can reset another user's password to a temporary value and wipe that user's passkeys
@@ -96,19 +98,19 @@ System polling behavior:
 
 - polling defaults still come from env/config
 - admins can override poll enablement, poll interval, and fetch window from the admin UI
-- each user can also override poll enablement, poll interval, and fetch window for that user's own UI-managed fetchers
-- each individual mail fetcher can now override poll enablement, poll interval, and fetch window on top of those inherited settings
+- each user can also override poll enablement, poll interval, and fetch window for that user's own UI-managed source email accounts
+- each individual source email account can now override poll enablement, poll interval, and fetch window on top of those inherited settings
 - overrides are stored in PostgreSQL and merged at runtime with the env defaults
 - clearing an override returns that field to the env default
 - the scheduler now checks effective runtime settings dynamically instead of relying only on a static Quarkus cron interval
-- env-managed system fetchers use the global effective settings, while DB-managed user fetchers use the owning user's effective settings
+- env-managed system source email accounts use the global effective settings, while DB-managed user source email accounts use the owning user's effective settings
 - source-level overrides take precedence over both per-user and global polling settings
 - the admin UI now splits polling into admin-only `Global Poller Settings` and user-scoped `My Poller Settings`
 - `Global Poller Settings` now focuses on effective deployment-wide polling controls, while a separate `Global Statistics` section shows deployment-wide analytics across all users
 - `Global Poller Settings` now keeps only the effective summary in-page and opens a dedicated modal dialog for editing the deployment-wide overrides
 - `My Poller Settings` now focuses on the current user's effective polling overrides, while a separate `My Statistics` section shows analytics scoped only to that user's own imported mail
 - the user poller section now presents a compact effective-settings summary in-page and opens a dedicated modal dialog when the user wants to edit overrides
-- expanded source-email-account cards now also render analytics scoped only to that single mail fetcher
+- expanded source-email-account cards now also render analytics scoped only to that single source email account
 - expanded admin user cards now also render analytics scoped only to that selected user
 - source-email-account statistics intentionally avoid deployment-wide account counters like `healthy accounts` and instead focus on source-scoped values such as imported totals, error polls, and manual-vs-scheduled poll activity
 - all polling statistics charts now expose a `Custom` date-time range flow that opens a modal dialog, requires a `from` value, and defaults `to` to the current time when it is omitted
@@ -148,7 +150,7 @@ System polling behavior:
 
 ### 3. Hybrid env + DB config model
 
-Env-managed system bridges remain supported from `.env`.
+Env-managed system email accounts remain supported from `.env`.
 
 DB-managed user config now stores:
 
@@ -157,7 +159,7 @@ DB-managed user config now stores:
 - user passkeys
 - passkey ceremonies
 - admin-managed per-user Gmail account overrides
-- per-user bridge definitions
+- per-user email account definitions
 - encrypted OAuth credentials
 - recent source poll events
 - imported-message dedupe state
@@ -166,7 +168,7 @@ DB-managed user config now stores:
 Why:
 
 - keeps ops/bootstrap config simple
-- allows the admin UI to manage user-owned bridges
+- allows the admin UI to manage user-owned email accounts
 - preserves explicit operator control over env-managed values
 - lets user Gmail accounts inherit a shared deployment-level Google OAuth client when that is the intended operating model, while keeping the non-admin UI path as a simple connect/reconnect consent flow
 - users can now also unlink their Gmail account from the admin UI, which removes InboxBridge's stored Gmail OAuth tokens and attempts a Google-side token revocation when the token is available
@@ -187,12 +189,12 @@ Why:
 - avoids sender reputation issues
 - keeps labels and import metadata under app control
 
-### 5. Runtime bridge resolution
+### 5. Runtime email-account resolution
 
-`RuntimeBridgeService` combines:
+`RuntimeEmailAccountService` combines:
 
-- enabled env-defined system bridges
-- enabled DB-defined user bridges with valid Gmail account config
+- enabled env-defined system email accounts
+- enabled DB-defined user email accounts with valid destination mailbox config
 
 Polling runs over that combined runtime set.
 
@@ -214,12 +216,12 @@ Why:
 
 ### 7. Encrypted secret storage
 
-When `BRIDGE_SECURITY_TOKEN_ENCRYPTION_KEY` is configured, InboxBridge encrypts:
+When `SECURITY_TOKEN_ENCRYPTION_KEY` is configured, InboxBridge encrypts:
 
 - Google OAuth tokens
 - Microsoft OAuth tokens
 - user-managed Gmail client IDs, client secrets, and refresh tokens
-- user-managed bridge passwords and refresh tokens
+- user-managed source-email-account passwords and refresh tokens
 
 Implementation:
 
@@ -270,13 +272,13 @@ Default local relying-party configuration:
 
 These can be overridden with:
 
-- `BRIDGE_SECURITY_PASSKEYS_ENABLED`
-- `BRIDGE_SECURITY_PASSKEY_RP_ID`
-- `BRIDGE_SECURITY_PASSKEY_RP_NAME`
-- `BRIDGE_SECURITY_PASSKEY_ORIGINS`
-- `BRIDGE_SECURITY_PASSKEY_CHALLENGE_TTL`
+- `SECURITY_PASSKEYS_ENABLED`
+- `SECURITY_PASSKEY_RP_ID`
+- `SECURITY_PASSKEY_RP_NAME`
+- `SECURITY_PASSKEY_ORIGINS`
+- `SECURITY_PASSKEY_CHALLENGE_TTL`
 
-Those settings are now part of the main `BridgeConfig` mapping under `bridge.security.passkeys`, so Quarkus validates them during startup like the rest of the bridge configuration.
+Those settings are now part of the main `InboxBridgeConfig` mapping under `inboxbridge.security.passkeys`, so Quarkus validates them during startup like the rest of the application configuration.
 
 Only public credential material is stored for passkeys. The private key never leaves the user's authenticator.
 
@@ -370,9 +372,9 @@ Design choices:
 - the backend persists the selected language in `user_ui_preference.language`
 - the browser also mirrors the last selected language in local storage so the login screen can reuse it before session data is loaded
 - visible labels now route through the translation helper instead of mixing translated and raw JSX text
-- expanded user-management entries are grouped into explicit subsections for user configuration, Gmail account, poller settings, passkeys, and mail fetchers
+- expanded user-management entries are grouped into explicit subsections for user configuration, Gmail account, poller settings, passkeys, and source email accounts
 - the most prominent labels inside those subsection bodies now follow the selected language too instead of remaining in English
-- quick-setup guidance, Gmail account controls, poller-setting forms, and mail-fetcher forms/lists now have broader locale coverage so changing language updates section bodies as well as headings
+- quick-setup guidance, Gmail account controls, poller-setting forms, and source-email-account forms/lists now have broader locale coverage so changing language updates section bodies as well as headings
 - translation regression coverage now includes localized rendering tests for the major admin-ui surfaces plus a critical-key catalog test in `admin-ui/src/lib/i18n.test.js`
 - password-policy checklists and normalized passkey failure/cancellation messages are now translated too, instead of depending on raw browser English
 - expandable list rows rely on row click plus hover affordance for expansion, so contextual `...` menus focus only on actions and no longer repeat expand/collapse controls
@@ -414,8 +416,8 @@ Microsoft OAuth is used for Outlook / Hotmail / Live source mailboxes.
 
 Supported now:
 
-- env-managed Microsoft mail fetchers
-- user-managed Microsoft mail fetchers
+- env-managed Microsoft source email accounts
+- user-managed Microsoft source email accounts
 
 One Microsoft Entra app registration can be reused across many Outlook.com personal accounts as long as it supports personal Microsoft accounts. Each mailbox still consents separately and receives its own token set.
 
@@ -452,7 +454,7 @@ Still missing for a higher-assurance v1:
 - runs on the scheduler when enabled
 - can be triggered manually by admins
 - prevents overlapping runs with an `AtomicBoolean`
-- processes bridges sequentially
+- processes email accounts sequentially
 
 ### Source status
 
@@ -470,7 +472,7 @@ The React admin UI shows:
 
 - env-managed fetchers inside the unified email-fetcher list, clearly marked as read-only `.env` items and visible only to the account named `admin`
 - user-managed fetchers
-- per-bridge import totals
+- per-email-account import totals
 - last poll result
 - OAuth launch buttons
 - self-registration on the login screen
@@ -478,14 +480,14 @@ The React admin UI shows:
 - admin approval / suspension / role-management controls
 - a top-level setup guide panel that explains the first-run sequence in the admin UI
 - setup guide entries are clickable links that focus the relevant section where the user must take action
-- setup guide entries now use neutral / green / red visual state based on pending work, successful completion, and recorded bridge/provider errors
+- setup guide entries now use neutral / green / red visual state based on pending work, successful completion, and recorded email-account/provider errors
 - when all tracked setup steps are complete, the guide auto-collapses by default
 - the major admin-ui sections can be collapsed, and users can opt into per-account persisted section state across login sessions
 - pane collapse controls now use compact `+` / `-` icon buttons that match the existing visual language instead of text labels
 - password changes are now accessed from the top hero/header controls, not from within the Gmail account sidebar
 - password changes now enforce confirmation, minimum length, mixed case, number, special character, and “different from current password” validation in both UI and backend
 - self-service password removal and passkey deletion now require confirmation modals before any destructive account-security request is sent
-- an `Add Email Fetcher` / `Edit Email Fetcher` modal instead of an always-visible inline bridge form
+- an `Add Email Fetcher` / `Edit Email Fetcher` modal instead of an always-visible inline email-account form
 - that mail-fetcher modal is intentionally wider now, hides the `.env` badge for UI-managed entries, and rejects duplicate IDs both in the browser and in the backend service
 - provider presets for Outlook / Hotmail / Live, Gmail, Yahoo Mail, and Proton Mail Bridge
 - fetcher forms that hide OAuth-only fields during password auth and hide password fields during OAuth setup
@@ -503,12 +505,12 @@ The React admin UI shows:
 - the Google and Microsoft callback pages now also fall back to parsing `window.location.search` directly for `code` and `state`, which makes the browser flow more resilient when the callback HTML was rendered without those values
 - the Microsoft callback exchange endpoint now returns a structured JSON error body, so the callback page can display the real backend failure reason instead of a blank generic `Exchange failed:` message
 - Microsoft OAuth mailbox-scope validation now treats the protocol mailbox scope plus the returned refresh token as the real success signal, rather than requiring `offline_access` to appear in the echoed scope string
-- when secure token storage is not configured, a successful Microsoft OAuth exchange for an env-managed source still requires copying the returned `BRIDGE_SOURCES_<n>__OAUTH_REFRESH_TOKEN` value into `.env` and restarting before the poller can use it
-- when secure token storage is configured and a newer Microsoft refresh token has been stored successfully, the dashboard suppresses older stale `has no refresh token` source errors for that same fetcher
-- UI-managed Microsoft mail fetchers also reuse the encrypted OAuth credential store by `bridgeId`, so their runtime token lookup no longer depends on a duplicated refresh token copy being present on the `user_bridge` row
+- when secure token storage is not configured, a successful Microsoft OAuth exchange for an env-managed source still requires copying the returned `MAIL_ACCOUNT_<n>__OAUTH_REFRESH_TOKEN` value into `.env` and restarting before the poller can use it
+- when secure token storage is configured and a newer Microsoft refresh token has been stored successfully, the dashboard suppresses older stale `has no refresh token` source errors for that same source email account
+- UI-managed Microsoft source email accounts also reuse the encrypted OAuth credential store by email account ID, so their runtime token lookup no longer depends on a duplicated refresh token copy being present on the `user_email_account` row
 - both provider callback flows now surface consent-denied and missing-scope cases with retry guidance instead of leaving the user with a generic exchange failure
 - once the user confirms a `Return To Admin UI` leave action before exchange, the callback page suppresses the browser's second generic unsaved-changes prompt so the user is not asked twice
-- the old env-bridge dashboard section has been reframed as admin-only `Global Poller Settings`, which now focuses on runtime polling controls plus health metrics instead of listing env-managed fetchers there
+- the old env-managed email-account dashboard section has been reframed as admin-only `Global Poller Settings`, which now focuses on runtime polling controls plus health metrics instead of listing env-managed fetchers there
 
 ## Code structure
 
@@ -536,9 +538,10 @@ Notable backend areas:
 - `service/AuthService.java`
 - `service/AppUserService.java`
 - `service/PasskeyService.java`
+- `service/UserMailDestinationConfigService.java`
 - `service/UserGmailConfigService.java`
-- `service/UserBridgeService.java`
-- `service/RuntimeBridgeService.java`
+- `service/UserEmailAccountService.java`
+- `service/RuntimeEmailAccountService.java`
 - `service/GoogleOAuthService.java`
 - `service/MicrosoftOAuthService.java`
 - `service/PollingService.java`
@@ -566,8 +569,12 @@ admin-ui
     │   ├── auth
     │   ├── bridges
     │   ├── common
+    │   ├── destination
+    │   ├── emailAccounts
     │   ├── gmail
-    │   └── layout
+    │   ├── layout
+    │   ├── polling
+    │   └── stats
     ├── lib
     ├── main.jsx
     ├── styles.css
@@ -589,7 +596,22 @@ src/main/resources/db/migration
 ├── V9__optional_password.sql
 ├── V10__system_polling_setting.sql
 ├── V11__passkey_login_and_language.sql
-└── V12__user_polling_and_source_backoff.sql
+├── V12__user_polling_and_source_backoff.sql
+├── V13__source_polling_setting.sql
+├── V14__user_ui_preference_stats_sections.sql
+├── V15__user_ui_preference_layout_order.sql
+├── V16__user_ui_preference_layout_edit_enabled.sql
+├── V17__system_oauth_app_settings.sql
+├── V18__user_ui_preference_quick_setup_pinned_visible.sql
+├── V19__system_oauth_app_settings_google_fields.sql
+├── V20__user_ui_preference_oauth_apps_collapsed.sql
+├── V21__system_oauth_app_settings_multi_user_override.sql
+├── V22__user_ui_preference_admin_quick_setup_collapsed.sql
+├── V23__system_polling_setting_manual_trigger_rate_limit.sql
+├── V24__app_user_single_user_mode_flag.sql
+├── V25__user_mail_destination_config.sql
+├── V26__rename_user_bridge_to_user_email_account.sql
+└── V27__rename_ui_preference_email_account_columns.sql
 ```
 
 ## Current validation status
@@ -603,11 +625,15 @@ Validated on 2026-03-26:
 - admin UI serves correctly over HTTPS in the container
 - unauthenticated `GET /api/auth/me` returns `401`
 - bootstrap login `admin` / `nimda` succeeds and returns `mustChangePassword=true`
-- Flyway migrations `V1` through `V12` apply successfully
+- Flyway migrations `V1` through `V27` apply successfully
 
 Admin UI frontend structure now follows a controller-and-components split:
 
-- `App.jsx` owns session state, data loading, and submit handlers
+- `App.jsx` owns session state and shared data loading
+- `src/lib/useEmailAccountsController.js` owns source email account orchestration
+- `src/lib/useAuthSecurityController.js` owns session auth, password, and passkey flows
+- `src/lib/useDestinationController.js` owns destination mailbox actions
+- `src/lib/usePollingControllers.js` owns user/global polling dialog and run flows
 - `src/components/...` contains reusable UI sections with independent CSS files
 - `src/lib/...` contains formatting and API helper utilities
 - `admin-ui/README.md` documents the frontend layout and test workflow
@@ -617,7 +643,7 @@ Admin UI frontend structure now follows a controller-and-components split:
 
 Current live config issue in this workspace:
 
-- the configured Outlook bridge still fails token refresh with Microsoft `AADSTS65001 consent_required`
+- the configured Outlook email account still fails token refresh with Microsoft `AADSTS65001 consent_required`
 - that is a provider consent/config issue, not a startup/runtime wiring failure
 - Password removal is a confirmed passkey-only transition: the admin UI requires the current password before enabling removal, and the backend verifies that password again before clearing the stored hash.
 - The Quick Setup Guide now auto-collapses immediately once all tracked setup steps are complete.
@@ -625,7 +651,7 @@ Current live config issue in this workspace:
 - The Quick Setup Guide now says `Add at least one email account`, and its provider OAuth step is only rendered when at least one configured source account actually uses OAuth.
 - The Quick Setup Guide now renumbers visible steps dynamically, so conditional steps never leave numbering gaps.
 - The `Administration` workspace now keeps its own admin-specific quick setup guide centered on shared Google OAuth, user creation in multi-user mode, and verifying the first successful import.
-- In the `Administration` workspace, the Google OAuth app editor is now limited to configuring the shared Google Cloud OAuth client registration; mailbox Gmail OAuth consent still happens per user from `My Gmail Account`.
+- In the `Administration` workspace, the Google OAuth app editor is now limited to configuring the shared Google Cloud OAuth client registration; mailbox Gmail OAuth consent still happens per user from `My Destination Mailbox`.
 - Language selection, layout persistence, and reset-layout controls now live in a dedicated preferences modal opened from the header instead of an always-visible inline selector.
 - The header `Security` action now opens the password and passkey tools in a dedicated modal with separate tabs, instead of rendering both tools inline in the page.
 - The Google setup help panel is fully localized across the supported admin-ui languages.

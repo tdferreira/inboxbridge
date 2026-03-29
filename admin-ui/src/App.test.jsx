@@ -170,7 +170,7 @@ describe('App', () => {
           importsByDay: []
         })
       }
-      if (url === '/api/app/bridges') {
+      if (url === '/api/app/email-accounts') {
         return jsonResponse([])
       }
       if (url === '/api/app/ui-preferences') {
@@ -272,7 +272,7 @@ describe('App', () => {
           importsByDay: []
         })
       }
-      if (url === '/api/app/bridges') {
+      if (url === '/api/app/email-accounts') {
         return jsonResponse([])
       }
       if (url === '/api/app/ui-preferences') {
@@ -372,7 +372,7 @@ describe('App', () => {
           importsByDay: []
         })
       }
-      if (url === '/api/app/bridges') {
+      if (url === '/api/app/email-accounts') {
         return jsonResponse([])
       }
       if (url === '/api/app/ui-preferences') {
@@ -467,7 +467,7 @@ describe('App', () => {
           averagePollDurationMillis: 1200
         })
       }
-      if (url === '/api/app/bridges') return jsonResponse([])
+      if (url === '/api/app/email-accounts') return jsonResponse([])
       if (url === '/api/app/ui-preferences') return jsonResponse({})
       if (url === '/api/account/passkeys') return jsonResponse([])
       if (url === '/api/admin/oauth-app-settings') {
@@ -535,14 +535,14 @@ describe('App', () => {
 
     await screen.findByText(/signed in as/i)
     expect(screen.getByRole('tab', { name: /User|Utilizador/, selected: true })).toBeInTheDocument()
-    expect(screen.getByText(/My Gmail Account|A minha conta Gmail/, { selector: '.section-title' })).toBeInTheDocument()
+    expect(screen.getByText(/My Destination Mailbox/, { selector: '.section-title' })).toBeInTheDocument()
     expect(screen.queryByText(/Global Polling Settings|Definições globais de verificação/)).not.toBeInTheDocument()
 
     fireEvent.click(screen.getByRole('tab', { name: /Administration|Administração/ }))
 
     expect(screen.getByRole('tab', { name: /Administration|Administração/, selected: true })).toBeInTheDocument()
     expect(await screen.findByText(/Global Polling Settings|Definições globais de verificação/)).toBeInTheDocument()
-    expect(screen.queryByText(/My Gmail Account|A minha conta Gmail/, { selector: '.section-title' })).not.toBeInTheDocument()
+    expect(screen.queryByText(/My Destination Mailbox/, { selector: '.section-title' })).not.toBeInTheDocument()
   })
 
   it('keeps admin user rows collapsed until one is explicitly opened', async () => {
@@ -598,7 +598,7 @@ describe('App', () => {
           importsByDay: []
         })
       }
-      if (url === '/api/app/bridges') return jsonResponse([])
+      if (url === '/api/app/email-accounts') return jsonResponse([])
       if (url === '/api/app/ui-preferences') return jsonResponse({})
       if (url === '/api/account/passkeys') return jsonResponse([])
       if (url === '/api/admin/dashboard') {
@@ -727,7 +727,7 @@ describe('App', () => {
       if (url === '/api/app/gmail-config') return jsonResponse({ destinationUser: 'me', redirectUri: 'https://localhost:3000/api/google-oauth/callback', createMissingLabels: true, neverMarkSpam: false, processForCalendar: false })
       if (url === '/api/app/polling-settings') return jsonResponse({ defaultPollEnabled: true, pollEnabledOverride: null, effectivePollEnabled: true, defaultPollInterval: '5m', pollIntervalOverride: null, effectivePollInterval: '5m', defaultFetchWindow: 50, fetchWindowOverride: null, effectiveFetchWindow: 50 })
       if (url === '/api/app/polling-stats') return jsonResponse({ totalImportedMessages: 0, configuredMailFetchers: 0, enabledMailFetchers: 0, sourcesWithErrors: 0, importsByDay: [] })
-      if (url === '/api/app/bridges') return jsonResponse([])
+      if (url === '/api/app/email-accounts') return jsonResponse([])
       if (url === '/api/app/ui-preferences') return jsonResponse({})
       if (url === '/api/account/passkeys') return jsonResponse([])
       if (url === '/api/admin/dashboard') {
@@ -812,7 +812,7 @@ describe('App', () => {
       if (url === '/api/app/gmail-config') return jsonResponse({ destinationUser: 'me', redirectUri: 'https://localhost:3000/api/google-oauth/callback', createMissingLabels: true, neverMarkSpam: false, processForCalendar: false })
       if (url === '/api/app/polling-settings') return jsonResponse({ defaultPollEnabled: true, pollEnabledOverride: null, effectivePollEnabled: true, defaultPollInterval: '5m', pollIntervalOverride: null, effectivePollInterval: '5m', defaultFetchWindow: 50, fetchWindowOverride: null, effectiveFetchWindow: 50 })
       if (url === '/api/app/polling-stats') return jsonResponse({ totalImportedMessages: 0, configuredMailFetchers: 0, enabledMailFetchers: 0, sourcesWithErrors: 0, importsByDay: [] })
-      if (url === '/api/app/bridges') return jsonResponse([])
+      if (url === '/api/app/email-accounts') return jsonResponse([])
       if (url === '/api/app/ui-preferences') return jsonResponse({})
       if (url === '/api/account/passkeys') return jsonResponse([])
       if (url === '/api/admin/dashboard') {
@@ -922,7 +922,7 @@ describe('App', () => {
           importsByDay: []
         })
       }
-      if (url === '/api/app/bridges') {
+      if (url === '/api/app/email-accounts') {
         return jsonResponse([
           {
             bridgeId: 'outlook-main',
@@ -952,7 +952,7 @@ describe('App', () => {
       }
       if (url === '/api/app/ui-preferences') return jsonResponse({ language: 'pt-PT' })
       if (url === '/api/account/passkeys') return jsonResponse([])
-      if (url === '/api/app/bridges/outlook-main/poll/run' && method === 'POST') {
+      if (url === '/api/app/email-accounts/outlook-main/poll/run' && method === 'POST') {
         return htmlError(502, 'Bad Gateway', badGatewayHtml)
       }
       throw new Error(`Unexpected request: ${method} ${url}`)
@@ -964,10 +964,9 @@ describe('App', () => {
 
     await screen.findByText(/signed in as/i)
     await waitFor(() => {
-      expect(container.querySelector('.fetcher-menu-button')).not.toBeNull()
+      expect(container.querySelector('.fetcher-run-button')).not.toBeNull()
     })
-    fireEvent.click(container.querySelector('.fetcher-menu-button'))
-    fireEvent.click(screen.getAllByRole('button', { name: /Run Poll Now|Executar polling agora/ })[1])
+    fireEvent.click(container.querySelector('.fetcher-run-button'))
 
     const errorMatcher = /Unable to run mail account polling \(502 Bad Gateway\)|Não foi possível executar a verificação da conta de email \(502 Bad Gateway\)/
     await waitFor(() => {
@@ -1026,7 +1025,7 @@ describe('App', () => {
           importsByDay: []
         })
       }
-      if (url === '/api/app/bridges') {
+      if (url === '/api/app/email-accounts') {
         return jsonResponse([
           {
             bridgeId: 'outlook-main',
@@ -1056,7 +1055,7 @@ describe('App', () => {
       }
       if (url === '/api/app/ui-preferences') return jsonResponse({ language: 'pt-PT' })
       if (url === '/api/account/passkeys') return jsonResponse([])
-      if (url === '/api/app/bridges/outlook-main/poll/run' && method === 'POST') {
+      if (url === '/api/app/email-accounts/outlook-main/poll/run' && method === 'POST') {
         return htmlError(502, 'Bad Gateway', badGatewayHtml)
       }
       throw new Error(`Unexpected request: ${method} ${url}`)
@@ -1068,10 +1067,9 @@ describe('App', () => {
 
     await screen.findByText(/signed in as|sessão iniciada como/i)
     await waitFor(() => {
-      expect(container.querySelector('.fetcher-menu-button')).not.toBeNull()
+      expect(container.querySelector('.fetcher-run-button')).not.toBeNull()
     })
-    fireEvent.click(container.querySelector('.fetcher-menu-button'))
-    fireEvent.click(screen.getAllByRole('button', { name: /executar polling agora/i })[1])
+    fireEvent.click(container.querySelector('.fetcher-run-button'))
 
     await waitFor(() => {
       expect(screen.getByText('Não foi possível executar a verificação da conta de email (502 Bad Gateway)')).toBeInTheDocument()

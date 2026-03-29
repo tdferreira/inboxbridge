@@ -29,10 +29,10 @@ class UserUiPreferenceServiceTest {
         assertFalse(view.quickSetupCollapsed());
         assertFalse(view.quickSetupDismissed());
         assertFalse(view.quickSetupPinnedVisible());
-        assertFalse(view.gmailDestinationCollapsed());
+        assertFalse(view.destinationMailboxCollapsed());
         assertFalse(view.userPollingCollapsed());
         assertFalse(view.userStatsCollapsed());
-        assertFalse(view.sourceBridgesCollapsed());
+        assertFalse(view.sourceEmailAccountsCollapsed());
         assertFalse(view.adminQuickSetupCollapsed());
         assertFalse(view.systemDashboardCollapsed());
         assertFalse(view.oauthAppsCollapsed());
@@ -57,16 +57,16 @@ class UserUiPreferenceServiceTest {
                 true,
                 false,
                 false,
+                true,
+                true,
+                true,
+            true,
+                false,
+                false,
                 false,
                 true,
                 true,
-                true,
-                false,
-                false,
-                false,
-                true,
-                true,
-                java.util.List.of("sourceBridges", "gmail"),
+                java.util.List.of("sourceEmailAccounts", "destination"),
                 java.util.List.of("userManagement"),
                 "pt-PT"));
 
@@ -74,17 +74,17 @@ class UserUiPreferenceServiceTest {
         assertTrue(updated.layoutEditEnabled());
         assertTrue(updated.quickSetupCollapsed());
         assertFalse(updated.quickSetupDismissed());
-        assertTrue(updated.quickSetupPinnedVisible());
-        assertFalse(updated.userPollingCollapsed());
+        assertFalse(updated.quickSetupPinnedVisible());
+        assertTrue(updated.destinationMailboxCollapsed());
+        assertTrue(updated.userPollingCollapsed());
         assertTrue(updated.userStatsCollapsed());
-        assertTrue(updated.sourceBridgesCollapsed());
+        assertTrue(updated.sourceEmailAccountsCollapsed());
         assertFalse(updated.adminQuickSetupCollapsed());
         assertFalse(updated.systemDashboardCollapsed());
         assertFalse(updated.oauthAppsCollapsed());
         assertTrue(updated.globalStatsCollapsed());
         assertTrue(updated.userManagementCollapsed());
-        assertFalse(updated.gmailDestinationCollapsed());
-        assertEquals(java.util.List.of("sourceBridges", "gmail", "quickSetup", "userPolling", "userStats"), updated.userSectionOrder());
+        assertEquals(java.util.List.of("sourceEmailAccounts", "destination", "quickSetup", "userPolling", "userStats"), updated.userSectionOrder());
         assertEquals(java.util.List.of("userManagement", "adminQuickSetup", "systemDashboard", "oauthApps", "globalStats"), updated.adminSectionOrder());
         assertEquals("pt-PT", updated.language());
         assertEquals(Optional.of(updated), service.viewForUser(user.id));

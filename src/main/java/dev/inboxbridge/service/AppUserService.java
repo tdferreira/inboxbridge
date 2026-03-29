@@ -16,8 +16,9 @@ import dev.inboxbridge.persistence.ImportedMessageRepository;
 import dev.inboxbridge.persistence.SourcePollEventRepository;
 import dev.inboxbridge.persistence.SourcePollingSettingRepository;
 import dev.inboxbridge.persistence.SourcePollingStateRepository;
-import dev.inboxbridge.persistence.UserBridgeRepository;
+import dev.inboxbridge.persistence.UserEmailAccountRepository;
 import dev.inboxbridge.persistence.UserGmailConfigRepository;
+import dev.inboxbridge.persistence.UserMailDestinationConfigRepository;
 import dev.inboxbridge.persistence.UserPasskeyRepository;
 import dev.inboxbridge.persistence.UserPollingSettingRepository;
 import dev.inboxbridge.persistence.UserUiPreferenceRepository;
@@ -45,7 +46,10 @@ public class AppUserService {
     UserGmailConfigRepository userGmailConfigRepository;
 
     @Inject
-    UserBridgeRepository userBridgeRepository;
+    UserMailDestinationConfigRepository userMailDestinationConfigRepository;
+
+    @Inject
+    UserEmailAccountRepository userEmailAccountRepository;
 
     @Inject
     UserPasskeyRepository userPasskeyRepository;
@@ -73,6 +77,9 @@ public class AppUserService {
 
     @Inject
     ImportedMessageRepository importedMessageRepository;
+
+    @Inject
+    UserMailDestinationConfigService userMailDestinationConfigService;
 
     void onStartup(@Observes StartupEvent event) {
         ensureBootstrapAdmin();
@@ -329,13 +336,13 @@ public class AppUserService {
                 user.approved,
                 user.mustChangePassword,
                 hasPassword(user),
-                userGmailConfigRepository.findByUserId(user.id).isPresent(),
-                userBridgeRepository.listByUserId(user.id).size(),
+                userMailDestinationConfigService.isAnyDestinationConfigured(user.id),
+                userEmailAccountRepository.listByUserId(user.id).size(),
                 (int) passkeyCount(user.id));
     }
 
     private void deleteOwnedData(AppUser user) {
-        List<String> bridgeIds = userBridgeRepository.listByUserId(user.id).stream()
+        List<String> bridgeIds = userEmailAccountRepository.listByUserId(user.id).stream()
                 .map(bridge -> bridge.bridgeId)
                 .toList();
 
@@ -349,8 +356,10 @@ public class AppUserService {
         }
 
         oAuthCredentialService.deleteGoogleCredential("user-gmail:" + user.id);
-        userBridgeRepository.deleteByUserId(user.id);
+        oAuthCredentialService.deleteMicrosoftCredential("destination-microsoft:" + user.id);
+        userEmailAccountRepository.deleteByUserId(user.id);
         userGmailConfigRepository.deleteByUserId(user.id);
+        userMailDestinationConfigRepository.deleteByUserId(user.id);
         userPollingSettingRepository.deleteByUserId(user.id);
         userUiPreferenceRepository.deleteByUserId(user.id);
         userPasskeyRepository.deleteByUserId(user.id);

@@ -30,6 +30,39 @@
   align-items: center;
 }
 
+.hero-layout-editing-dock {
+  position: fixed;
+  top: 16px;
+  right: 16px;
+  z-index: 40;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 12px 14px;
+  border: 1px solid rgba(180, 58, 40, 0.22);
+  border-radius: 18px;
+  background: rgba(255, 247, 241, 0.96);
+  box-shadow: 0 18px 44px rgba(36, 26, 20, 0.2);
+  backdrop-filter: blur(12px);
+}
+
+.hero-layout-editing-dock-copy {
+  font-size: 0.8rem;
+  font-weight: 800;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: #8f311f;
+}
+
+.hero-layout-editing-dock-actions {
+  display: flex;
+  gap: 10px;
+}
+
+.hero-layout-editing-exit-button {
+  box-shadow: 0 14px 28px rgba(180, 58, 40, 0.22);
+}
+
 .hero-notifications-button {
   display: inline-flex;
   align-items: center;
@@ -57,6 +90,23 @@
 
   .hero-panel .action-row {
     width: 100%;
+  }
+
+  .hero-layout-editing-dock {
+    top: auto;
+    right: 12px;
+    bottom: 12px;
+    left: 12px;
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .hero-layout-editing-dock-actions {
+    width: 100%;
+  }
+
+  .hero-layout-editing-dock-actions > * {
+    flex: 1 1 0;
   }
 }
 

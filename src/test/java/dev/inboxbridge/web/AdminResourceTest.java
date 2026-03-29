@@ -14,13 +14,13 @@ import dev.inboxbridge.dto.SourcePollingSettingsView;
 import dev.inboxbridge.dto.SourcePollingStatsView;
 import dev.inboxbridge.dto.UpdateAdminPollingSettingsRequest;
 import dev.inboxbridge.dto.UpdateSourcePollingSettingsRequest;
-import dev.inboxbridge.domain.RuntimeBridge;
+import dev.inboxbridge.domain.RuntimeEmailAccount;
 import dev.inboxbridge.persistence.AppUser;
 import dev.inboxbridge.security.CurrentUserContext;
 import dev.inboxbridge.service.PollingService;
 import dev.inboxbridge.service.PollingSettingsService;
 import dev.inboxbridge.service.PollingStatsService;
-import dev.inboxbridge.service.RuntimeBridgeService;
+import dev.inboxbridge.service.RuntimeEmailAccountService;
 import dev.inboxbridge.service.SourcePollingSettingsService;
 import jakarta.ws.rs.BadRequestException;
 
@@ -50,36 +50,36 @@ class AdminResourceTest {
     }
 
     @Test
-    void bridgePollingSettingsReturnsSourceView() {
+    void emailAccountPollingSettingsReturnsSourceView() {
         AdminResource resource = new AdminResource();
         resource.sourcePollingSettingsService = new FakeSourcePollingSettingsService();
 
-        SourcePollingSettingsView response = resource.bridgePollingSettings("system-fetcher");
+        SourcePollingSettingsView response = resource.emailAccountPollingSettings("system-fetcher");
 
         assertEquals("system-fetcher", response.sourceId());
         assertEquals("2m", response.effectivePollInterval());
     }
 
     @Test
-    void runBridgePollDelegatesToPollingService() {
+    void runEmailAccountPollDelegatesToPollingService() {
         AdminResource resource = new AdminResource();
         resource.currentUserContext = currentUserContext();
-        resource.runtimeBridgeService = new FakeRuntimeBridgeService();
+        resource.runtimeEmailAccountService = new FakeRuntimeEmailAccountService();
         resource.pollingService = new FakeRunPollingService();
 
-        PollRunResult response = resource.runBridgePoll("system-fetcher");
+        PollRunResult response = resource.runEmailAccountPoll("system-fetcher");
 
         assertEquals(1, response.getFetched());
         assertEquals(1, response.getImported());
     }
 
     @Test
-    void bridgePollingStatsReturnsSourceScopedView() {
+    void emailAccountPollingStatsReturnsSourceScopedView() {
         AdminResource resource = new AdminResource();
-        resource.runtimeBridgeService = new FakeRuntimeBridgeService();
+        resource.runtimeEmailAccountService = new FakeRuntimeEmailAccountService();
         resource.pollingStatsService = new FakePollingStatsService();
 
-        SourcePollingStatsView response = resource.bridgePollingStats("system-fetcher");
+        SourcePollingStatsView response = resource.emailAccountPollingStats("system-fetcher");
 
         assertEquals(4L, response.totalImportedMessages());
         assertEquals(1, response.configuredMailFetchers());
@@ -87,12 +87,12 @@ class AdminResourceTest {
     }
 
     @Test
-    void bridgePollingStatsRangeReturnsCustomTimelineBundle() {
+    void emailAccountPollingStatsRangeReturnsCustomTimelineBundle() {
         AdminResource resource = new AdminResource();
-        resource.runtimeBridgeService = new FakeRuntimeBridgeService();
+        resource.runtimeEmailAccountService = new FakeRuntimeEmailAccountService();
         resource.pollingStatsService = new FakePollingStatsService();
 
-        PollingTimelineBundleView response = resource.bridgePollingStatsRange("system-fetcher", "2026-03-26T00:00:00Z", "2026-03-27T00:00:00Z");
+        PollingTimelineBundleView response = resource.emailAccountPollingStatsRange("system-fetcher", "2026-03-26T00:00:00Z", "2026-03-27T00:00:00Z");
 
         assertEquals(1, response.importTimelines().get("custom").size());
     }
@@ -126,21 +126,21 @@ class AdminResourceTest {
         }
     }
 
-    private static final class FakeRuntimeBridgeService extends RuntimeBridgeService {
+    private static final class FakeRuntimeEmailAccountService extends RuntimeEmailAccountService {
         @Override
-        public Optional<RuntimeBridge> findSystemBridge(String sourceId) {
-            return Optional.of(new RuntimeBridge(
+        public Optional<RuntimeEmailAccount> findSystemBridge(String sourceId) {
+            return Optional.of(new RuntimeEmailAccount(
                     sourceId,
                     "SYSTEM",
                     null,
                     "system",
                     true,
-                    dev.inboxbridge.config.BridgeConfig.Protocol.IMAP,
+                    dev.inboxbridge.config.InboxBridgeConfig.Protocol.IMAP,
                     "imap.example.com",
                     993,
                     true,
-                    dev.inboxbridge.config.BridgeConfig.AuthMethod.PASSWORD,
-                    dev.inboxbridge.config.BridgeConfig.OAuthProvider.NONE,
+                    dev.inboxbridge.config.InboxBridgeConfig.AuthMethod.PASSWORD,
+                    dev.inboxbridge.config.InboxBridgeConfig.OAuthProvider.NONE,
                     "admin@example.com",
                     "secret",
                     "",
@@ -153,7 +153,7 @@ class AdminResourceTest {
 
     private static final class FakeRunPollingService extends PollingService {
         @Override
-        public PollRunResult runPollForSource(RuntimeBridge bridge, String trigger, String actorKey) {
+        public PollRunResult runPollForSource(RuntimeEmailAccount bridge, String trigger, String actorKey) {
             PollRunResult result = new PollRunResult();
             result.incrementFetched();
             result.incrementImported();
@@ -171,7 +171,7 @@ class AdminResourceTest {
 
     private static final class FakePollingStatsService extends PollingStatsService {
         @Override
-        public SourcePollingStatsView sourceStats(RuntimeBridge bridge) {
+        public SourcePollingStatsView sourceStats(RuntimeEmailAccount bridge) {
             return new SourcePollingStatsView(
                     4L,
                     1,
@@ -192,7 +192,7 @@ class AdminResourceTest {
         }
 
         @Override
-        public PollingTimelineBundleView sourceTimelineBundle(RuntimeBridge bridge, java.time.Instant fromInclusive, java.time.Instant toExclusive) {
+        public PollingTimelineBundleView sourceTimelineBundle(RuntimeEmailAccount bridge, java.time.Instant fromInclusive, java.time.Instant toExclusive) {
             return new PollingTimelineBundleView(
                     java.util.Map.of("custom", java.util.List.of(new dev.inboxbridge.dto.ImportTimelinePointView("2026-03-26", 4L))),
                     java.util.Map.of("custom", java.util.List.of()),

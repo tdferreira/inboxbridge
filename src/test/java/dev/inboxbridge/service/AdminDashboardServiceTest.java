@@ -8,12 +8,11 @@ import static org.junit.jupiter.api.Assertions.assertNull;
 import java.time.Instant;
 import java.util.Collections;
 import java.util.List;
-import java.util.Map;
 import java.util.Optional;
 
 import org.junit.jupiter.api.Test;
 
-import dev.inboxbridge.config.BridgeConfig;
+import dev.inboxbridge.config.InboxBridgeConfig;
 import dev.inboxbridge.dto.AdminDashboardResponse;
 import dev.inboxbridge.dto.AdminPollEventSummary;
 import dev.inboxbridge.dto.SourcePollingStateView;
@@ -34,6 +33,7 @@ class AdminDashboardServiceTest {
         service.envSourceService = envSourceService(service.config);
         service.sourcePollingStateService = new FakeSourcePollingStateService();
         service.pollingStatsService = pollingStatsService(service.importedMessageRepository, service.sourcePollEventService, service.envSourceService);
+        service.systemOAuthAppSettingsService = systemOAuthAppSettingsService(service.config);
 
         AdminDashboardResponse response = service.dashboard();
 
@@ -139,6 +139,7 @@ class AdminDashboardServiceTest {
         service.envSourceService = envSourceService(service.config);
         service.sourcePollingStateService = new FakeSourcePollingStateService();
         service.pollingStatsService = pollingStatsService(service.importedMessageRepository, service.sourcePollEventService, service.envSourceService);
+        service.systemOAuthAppSettingsService = systemOAuthAppSettingsService(service.config);
 
         AdminDashboardResponse response = service.dashboard();
 
@@ -191,12 +192,12 @@ class AdminDashboardServiceTest {
 
     private static final class FakeSourcePollingSettingsService extends SourcePollingSettingsService {
         @Override
-        public PollingSettingsService.EffectivePollingSettings effectiveSettingsFor(dev.inboxbridge.domain.RuntimeBridge bridge) {
+        public PollingSettingsService.EffectivePollingSettings effectiveSettingsFor(dev.inboxbridge.domain.RuntimeEmailAccount bridge) {
             return new PollingSettingsService.EffectivePollingSettings(true, "3m", java.time.Duration.ofMinutes(3), 25);
         }
     }
 
-    private EnvSourceService envSourceService(BridgeConfig config) {
+    private EnvSourceService envSourceService(InboxBridgeConfig config) {
         EnvSourceService service = new EnvSourceService();
         service.setConfigForTest(config);
         return service;
@@ -210,7 +211,7 @@ class AdminDashboardServiceTest {
         service.importedMessageRepository = importedMessageRepository;
         service.sourcePollEventService = sourcePollEventService;
         service.envSourceService = envSourceService;
-        service.userBridgeRepository = new dev.inboxbridge.persistence.UserBridgeRepository() {
+        service.userEmailAccountRepository = new dev.inboxbridge.persistence.UserEmailAccountRepository() {
             @Override
             public long count() {
                 return 0L;
@@ -222,11 +223,32 @@ class AdminDashboardServiceTest {
             }
 
             @Override
-            public List<dev.inboxbridge.persistence.UserBridge> listAll() {
+            public List<dev.inboxbridge.persistence.UserEmailAccount> listAll() {
                 return List.of();
             }
         };
         service.sourcePollingStateService = new FakeSourcePollingStateService();
+        return service;
+    }
+
+    private SystemOAuthAppSettingsService systemOAuthAppSettingsService(InboxBridgeConfig config) {
+        SecretEncryptionService secretEncryptionService = new SecretEncryptionService();
+        secretEncryptionService.tokenEncryptionKey = "replace-me";
+        secretEncryptionService.tokenEncryptionKeyId = "v1";
+
+        SystemOAuthAppSettingsService service = new SystemOAuthAppSettingsService();
+        service.config = config;
+        service.secretEncryptionService = secretEncryptionService;
+        service.repository = new dev.inboxbridge.persistence.SystemOAuthAppSettingsRepository() {
+            @Override
+            public Optional<dev.inboxbridge.persistence.SystemOAuthAppSettings> findSingleton() {
+                return Optional.empty();
+            }
+
+            @Override
+            public void persist(dev.inboxbridge.persistence.SystemOAuthAppSettings entity) {
+            }
+        };
         return service;
     }
 
@@ -331,7 +353,7 @@ class AdminDashboardServiceTest {
         }
     }
 
-    private static final class TestConfig implements BridgeConfig {
+    private static final class TestConfig implements InboxBridgeConfig {
         @Override
         public boolean pollEnabled() {
             return false;
@@ -468,18 +490,18 @@ class AdminDashboardServiceTest {
     private record TestSource(
             String id,
             boolean enabled,
-            BridgeConfig.Protocol protocol,
-            BridgeConfig.AuthMethod authMethod,
-            BridgeConfig.OAuthProvider oauthProvider) implements BridgeConfig.Source {
+            InboxBridgeConfig.Protocol protocol,
+            InboxBridgeConfig.AuthMethod authMethod,
+            InboxBridgeConfig.OAuthProvider oauthProvider) implements InboxBridgeConfig.Source {
 
         @Override
         public String host() {
-            return protocol == BridgeConfig.Protocol.IMAP ? "outlook.office365.com" : "pop.example.com";
+            return protocol == InboxBridgeConfig.Protocol.IMAP ? "outlook.office365.com" : "pop.example.com";
         }
 
         @Override
         public int port() {
-            return protocol == BridgeConfig.Protocol.IMAP ? 993 : 995;
+            return protocol == InboxBridgeConfig.Protocol.IMAP ? 993 : 995;
         }
 
         @Override
@@ -494,12 +516,12 @@ class AdminDashboardServiceTest {
 
         @Override
         public String password() {
-            return authMethod == BridgeConfig.AuthMethod.PASSWORD ? "password" : "replace-me";
+            return authMethod == InboxBridgeConfig.AuthMethod.PASSWORD ? "password" : "replace-me";
         }
 
         @Override
         public Optional<String> oauthRefreshToken() {
-            return authMethod == BridgeConfig.AuthMethod.OAUTH2 ? Optional.of("refresh") : Optional.empty();
+            return authMethod == InboxBridgeConfig.AuthMethod.OAUTH2 ? Optional.of("refresh") : Optional.empty();
         }
 
         @Override

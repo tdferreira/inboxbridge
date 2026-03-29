@@ -5,8 +5,8 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
-import dev.inboxbridge.config.BridgeConfig;
-import dev.inboxbridge.dto.AdminBridgeSummary;
+import dev.inboxbridge.config.InboxBridgeConfig;
+import dev.inboxbridge.dto.AdminEmailAccountSummary;
 import dev.inboxbridge.dto.AdminDashboardResponse;
 import dev.inboxbridge.dto.AdminDestinationSummary;
 import dev.inboxbridge.dto.AdminOverallSummary;
@@ -20,7 +20,7 @@ import jakarta.inject.Inject;
 public class AdminDashboardService {
 
     @Inject
-    BridgeConfig config;
+    InboxBridgeConfig config;
 
     @Inject
     ImportedMessageRepository importedMessageRepository;
@@ -64,16 +64,16 @@ public class AdminDashboardService {
                         .map(indexedSource -> indexedSource.source().id())
                         .toList());
 
-        List<AdminBridgeSummary> bridges = configuredSources.stream()
+        List<AdminEmailAccountSummary> bridges = configuredSources.stream()
                 .map(indexedSource -> {
-                    BridgeConfig.Source source = indexedSource.source();
+                    InboxBridgeConfig.Source source = indexedSource.source();
                     ImportStats importStats = importStatsBySource.getOrDefault(source.id(), ImportStats.EMPTY);
                     OAuthCredentialService.StoredOAuthCredential microsoftCredential = microsoftCredential(source);
                     AdminPollEventSummary lastEvent = sanitizeLastEvent(
                             sourcePollEventService.latestForSource(source.id()).orElse(null),
                             microsoftCredential);
                     PollingSettingsService.EffectivePollingSettings effectiveSourcePolling = sourcePollingSettingsService.effectiveSettingsFor(
-                            new dev.inboxbridge.domain.RuntimeBridge(
+                            new dev.inboxbridge.domain.RuntimeEmailAccount(
                                     source.id(),
                                     "SYSTEM",
                                     null,
@@ -92,7 +92,7 @@ public class AdminDashboardService {
                                     source.unreadOnly(),
                                     source.customLabel(),
                                     null));
-                    return new AdminBridgeSummary(
+                    return new AdminEmailAccountSummary(
                             source.id(),
                             source.enabled(),
                             effectiveSourcePolling.pollEnabled(),
@@ -157,8 +157,8 @@ public class AdminDashboardService {
         return oAuthCredentialService.secureStorageConfigured() ? "CONFIGURED_BUT_EMPTY" : "NOT_CONFIGURED";
     }
 
-    private String tokenStorageMode(BridgeConfig.Source source, OAuthCredentialService.StoredOAuthCredential oauthCredential) {
-        if (source.authMethod() == BridgeConfig.AuthMethod.PASSWORD) {
+    private String tokenStorageMode(InboxBridgeConfig.Source source, OAuthCredentialService.StoredOAuthCredential oauthCredential) {
+        if (source.authMethod() == InboxBridgeConfig.AuthMethod.PASSWORD) {
             return "PASSWORD";
         }
         if (oauthCredential != null) {
@@ -170,7 +170,7 @@ public class AdminDashboardService {
         return oAuthCredentialService.secureStorageConfigured() ? "CONFIGURED_BUT_EMPTY" : "NOT_CONFIGURED";
     }
 
-    private OAuthCredentialService.StoredOAuthCredential microsoftCredential(BridgeConfig.Source source) {
+    private OAuthCredentialService.StoredOAuthCredential microsoftCredential(InboxBridgeConfig.Source source) {
         if (!oAuthCredentialService.secureStorageConfigured()) {
             return null;
         }

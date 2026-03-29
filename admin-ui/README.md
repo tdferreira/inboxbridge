@@ -13,18 +13,21 @@ admin-ui/src
 │   ├── account
 │   ├── admin
 │   ├── auth
-│   ├── bridges
 │   ├── common
+│   ├── destination
+│   ├── emailAccounts
 │   ├── gmail
 │   ├── layout
-│   └── polling
+│   ├── polling
+│   └── stats
 ├── lib
 └── test
 ```
 
 Key design choices:
 
-- `App.jsx` owns data fetching, session orchestration, and submit handlers.
+- `App.jsx` owns shared data loading and top-level workspace composition.
+- Imperative UI slices are being moved into controller hooks under `src/lib/...`, including auth and security flows, source email account orchestration, destination mailbox actions, polling flows, and admin user-management actions.
 - Reusable presentational components live under `src/components/...`.
 - `src/components/layout/SetupGuidePanel.jsx` gives users a first-run checklist inside the app itself.
 - the setup guide entries are clickable links that focus the corresponding working section
@@ -54,14 +57,14 @@ Key design choices:
 - admins cannot demote themselves out of the admin role from the UI
 - user creation now starts from a dedicated modal dialog instead of an always-visible inline form
 - that create-user dialog blocks duplicate usernames up front and shows the same password policy checklist used elsewhere in the app
-- the user list now follows the same expandable-entry pattern as mail fetchers, with a `...` contextual menu for suspend, role, password, and passkey actions
-- expanded user entries are now split into clear detail subsections such as `User Configuration`, `Gmail Destination`, `Poller Settings`, `Passkeys`, and `Mail Fetchers`
+- the user list now follows the same expandable-entry pattern as source email accounts, with a `...` contextual menu for suspend, role, password, and passkey actions
+- expanded user entries are now split into clear detail subsections such as `User Configuration`, `Gmail Destination`, `Poller Settings`, `Passkeys`, and `Source Email Accounts`
 - contextual `...` menus no longer duplicate expand/collapse actions; expansion is handled directly by clicking the row itself
 - admins can override scheduled polling enablement, poll interval, and fetch window without changing `.env`
 - admins now see an admin-only `Global Poller Settings` section for deployment-wide polling controls, while the actual global override form lives in a focused modal dialog opened from `Edit Poller Settings`
 - each user now gets a dedicated `My Poller Settings` section whose main page stays focused on effective values while the actual override form lives in a focused modal dialog opened from `Edit Poller Settings`
 - polling analytics now live in separate `Global Statistics` and `My Statistics` sections instead of being mixed into the settings editors
-- those statistics views now show line-chart trends for imports, duplicates, and errors, along with provider breakdowns, fetcher-health buckets, manual-vs-scheduled run counts, and average poll duration
+- those statistics views now show line-chart trends for imports, duplicates, and errors, along with provider breakdowns, source-account health buckets, manual-vs-scheduled run counts, and average poll duration
 - expanded source-email-account rows now also show the same statistics model scoped to that single account, and expanded admin user rows now show the same statistics model scoped to that selected user
 - source-email-account statistics now suppress deployment-wide account-health counters and instead show source-relevant values such as imported-message totals, error-poll counts, provider breakdown, and manual-vs-scheduled poll activity
 - the nested statistics cards inside each expanded source-email-account row and each expanded admin user row can now be collapsed independently, and they default to collapsed when there is not yet any meaningful data to render
@@ -71,30 +74,31 @@ Key design choices:
 - the statistics charts now use `Recharts 3.x`, which adds shared hover tooltips and cleaner multi-series trend rendering without migrating the whole UI to Material UI
 - contextual `actions` buttons now render as compact hamburger menu icons while keeping the same translated accessibility labels and tooltips
 - that hamburger icon styling now comes from the shared global stylesheet so the user list and source-email-account list render the same menu trigger
-- each mail fetcher now also has its own poller-settings dialog and `Run Poll Now` action in the contextual `...` menu
-- while a single mail fetcher poll is running, that fetcher’s status pill switches to a spinner-backed running state instead of still showing the previous success/error label
+- each source email account now also has its own poller-settings dialog and `Run Poll Now` action in the contextual `...` menu
+- while a single source email account poll is running, that account’s status pill switches to a spinner-backed running state instead of still showing the previous success/error label
 - the running status pill now keeps its spinner visibly aligned next to the label instead of shrinking inside the badge
-- the per-fetcher poller dialog title now uses the mail fetcher ID directly so it is always clear which fetcher is being configured
-- env-managed mail fetchers load those per-fetcher poller actions through admin-only endpoints, while UI-managed fetchers use user-scoped endpoints
-- user-scoped fetcher actions no longer fall back to env-managed sources with the same ID, so the `...` menu always addresses the DB-managed fetcher entry that was clicked
-- the fetcher detail view now surfaces poll cooldown/backoff state, next scheduled poll time, and the last recorded provider failure
-- OAuth2 mail fetchers now also show whether the provider connection is already established, and the Microsoft action switches between connect/reconnect based on that state
-- the mail-fetcher area is now presented as `My Email Fetchers`, with add/edit happening in a wider modal dialog instead of an always-visible form
-- the fetcher dialog includes provider presets, auth-aware field visibility, inline help tooltips, and duplicate-ID validation before save
-- the fetcher dialog now also includes a `Test Connection` action that verifies the entered IMAP/POP3 settings against the source server before the fetcher is saved and reports protocol, endpoint, TLS, authentication, and mailbox reachability details
-- those fetcher test results are rendered below the dialog action buttons, and the modal itself now scrolls safely inside the viewport so long diagnostics never push the buttons off-screen
-- fetcher contextual menus auto-close on outside click or `Escape`, and now anchor to the `...` button with viewport-aware placement so they flip above when there is no room below
+- the per-account poller dialog title now uses the source email account ID directly so it is always clear which account is being configured
+- env-managed source email accounts load those per-account poller actions through admin-only endpoints, while UI-managed source email accounts use user-scoped endpoints
+- user-scoped source-email-account actions no longer fall back to env-managed sources with the same ID, so the `...` menu always addresses the DB-managed account entry that was clicked
+- the source-email-account detail view now surfaces poll cooldown/backoff state, next scheduled poll time, and the last recorded provider failure
+- OAuth2 source email accounts now also show whether the provider connection is already established, and the Microsoft action switches between connect/reconnect based on that state
+- the source-email-account area is now presented as `My Source Email Accounts`, with add/edit happening in a wider modal dialog instead of an always-visible form
+- the source-email-account dialog includes provider presets, auth-aware field visibility, inline help tooltips, and duplicate-ID validation before save
+- the source-email-account dialog now also includes a `Test Connection` action that verifies the entered IMAP/POP3 settings against the source server before the account is saved and reports protocol, endpoint, TLS, authentication, and mailbox reachability details
+- those source-email-account test results are rendered below the dialog action buttons, and the modal itself now scrolls safely inside the viewport so long diagnostics never push the buttons off-screen
+- source-email-account contextual menus auto-close on outside click or `Escape`, and now anchor to the `...` button with viewport-aware placement so they flip above when there is no room below
 - compact `...` action buttons now keep a fixed square size, and shared button styling keeps labels on a single line instead of wrapping
-- env-managed fetchers appear in the same list with a read-only `.env` badge only for the account named `admin`; other users never see those env-backed entries
-- placeholder fallback values do not count as env-managed fetchers, so an empty `.env` source configuration produces no `.env` fetcher entry in the UI
-- DB-managed mail fetchers cannot reuse an ID that is already occupied by an env-managed `.env` fetcher
+- env-managed source email accounts appear in the same list with a read-only `.env` badge only for the account named `admin`; other users never see those env-backed entries
+- placeholder fallback values do not count as env-managed source email accounts, so an empty `.env` source configuration produces no `.env` account entry in the UI
+- DB-managed source email accounts cannot reuse an ID that is already occupied by an env-managed `.env` account
 - Outlook / Microsoft source connects now retry once with a freshly refreshed access token if the provider rejects the cached token as invalid before its recorded expiry time
 - busy poll responses now include the active trigger/source details so the UI can show why a click could not start a new run yet
 - notification copy actions now use compact icon-only buttons with tooltip text, and floating notifications become less transparent on hover so long error text is easier to read
 - the floating notification stack also keeps a stronger default opacity and a subtle blur backdrop so messages remain readable over dense UI sections
 - floating notifications now wrap long text inside the card instead of overflowing past the viewport edges
-- the mail-fetcher list now reloads after manual poll attempts and whenever a fetcher row is expanded so the details panel reflects the latest polling state and last-event status
-- expanding an individual mail fetcher or user entry now also triggers a fresh data load for that item, with visible loading feedback while the refresh is in progress
+- the source-email-account list now reloads after manual poll attempts and whenever an account row is expanded so the details panel reflects the latest polling state and last-event status
+- expanding an individual source email account or user entry now also triggers a fresh data load for that item, with visible loading feedback while the refresh is in progress
+- the Outlook destination panel now keeps the saved linked provider/status separate from any unsaved provider selection in the form, and for Outlook it only exposes the destination folder because the host, port, auth method, and OAuth provider are fixed by the Microsoft preset
 - the Gmail account panel distinguishes deployment-shared Google OAuth client credentials from user-specific overrides, but regular users now only see Gmail connection status plus connect/reconnect OAuth while admins keep the advanced override form
 - reconnecting Gmail now uses a friendlier `Reconnect Gmail Account` action, warns before replacing the currently linked Gmail account, and the Google callback page reports when the previous linked account was automatically replaced and its old grant revoked
 - reconnecting Gmail to the same already-linked account keeps the existing Google grant instead of revoking it; revocation only happens when the newly linked Gmail account is actually different
@@ -106,7 +110,7 @@ Key design choices:
 - when that admin-only setup sidebar is absent, the Gmail account panel now expands to the full available width instead of keeping an empty second column
 - the admin Gmail account form now shows inline help hints for each configurable field
 - connected Gmail accounts can now also be unlinked from the admin UI, which clears InboxBridge's stored Gmail OAuth tokens and attempts a Google-side token revocation when possible
-- in the normal operating model, that shared Google OAuth client comes from one deployment-wide Google Cloud project reused across many users, and the `Administration -> OAuth Apps` area only stores that client registration while each user still connects their own Gmail mailbox from `My Gmail Account`
+- in the normal operating model, that shared Google OAuth client comes from one deployment-wide Google Cloud project reused across many users, and the `Administration -> OAuth Apps` area only stores that client registration while each user still connects their own Gmail mailbox from `My Destination Mailbox`
 - the polling area is now framed as `Poller Settings` and focuses on runtime scheduler controls plus polling-health metrics
 - `My Polling Settings` now also includes a `Run Poll Now` action for the signed-in user’s own mail accounts
 - `Global Polling Settings` now asks for confirmation before starting an all-users manual run, and the dialog also exposes the manual-run rate limit configuration used to prevent repeated hammering
@@ -117,7 +121,7 @@ Key design choices:
 - the Security dialog now confirms before closing when the password form has in-progress input
 - visible labels route through the in-repo translation dictionary instead of mixing translated and raw JSX text
 - translated subsection headings and the most prominent detail labels inside the user-management panes now follow the selected language too instead of staying stuck in English
-- quick-setup steps, Gmail account fields, poller-setting forms, and mail-fetcher dialogs now route their visible labels and help text through the same translation dictionary too
+- quick-setup steps, Gmail account fields, poller-setting forms, and source-email-account dialogs now route their visible labels and help text through the same translation dictionary too
 - translation regression coverage now includes component-level localized rendering tests for the major UI surfaces plus a catalog test that verifies critical keys exist for every supported locale
 - password-policy checklists and passkey cancellation/failure messages now also come from the locale dictionary instead of leaking raw English browser copy into translated sessions
 - collapsible panes use compact `+` / `-` window-style controls instead of text-heavy expand/collapse buttons
@@ -151,9 +155,9 @@ Current unit coverage focuses on:
 - first-run setup guide rendering
 - admin security-management controls
 - per-user poller settings controls
-- per-fetcher poller settings controls and contextual poll-now actions
-- email fetcher dialog presets and auth-aware field visibility
-- reusable bridge card actions
+- per-account poller settings controls and contextual poll-now actions
+- source email account dialog presets and auth-aware field visibility
+- reusable email-account card actions
 - language-aware setup guide generation and formatting helpers
 
 The Google and Microsoft OAuth callback pages include a direct return path back to the admin UI after in-browser token exchange.
@@ -166,7 +170,7 @@ They also include:
 - the Microsoft callback exchange now also returns structured JSON errors, so the callback page can show the actual backend failure reason
 - Microsoft mailbox OAuth validation now treats the mailbox protocol scope plus the refresh token as the real success signal, rather than requiring `offline_access` to appear in the echoed scope string
 - if a Microsoft source previously failed with `has no refresh token`, that stale error is now hidden automatically once a newer encrypted refresh token has been stored for the same source
-- UI-managed Microsoft mail fetchers now also read the encrypted refresh token stored for their `bridgeId`, so a successful browser OAuth exchange is enough for the fetcher runtime even when the `user_bridge` row does not contain a duplicated token copy
+- UI-managed Microsoft source email accounts now also read the encrypted refresh token stored for their email account ID, so a successful browser OAuth exchange is enough for the runtime even when the `user_email_account` row does not contain a duplicated token copy
 - when secure token storage is not configured, a successful Microsoft exchange for an env-managed source still requires copying the returned `MAIL_ACCOUNT_<n>__OAUTH_REFRESH_TOKEN` value into `.env` and restarting before polling can use it
 - a confirmation dialog if the user tries to leave before exchanging the code
 - once the user confirms that leave action, the page suppresses the browser's second generic unsaved-changes prompt
@@ -175,12 +179,12 @@ They also include:
 
 API-facing error surfaces in the admin UI now include one-click clipboard actions so users can copy diagnostic payloads without manually selecting text.
 
-Buttons that trigger backend calls now show inline loading spinners so the user can see when authentication, saves, bridge actions, polling, refresh, or OAuth start requests are in progress.
+Buttons that trigger backend calls now show inline loading spinners so the user can see when authentication, saves, source email account actions, polling, refresh, or OAuth start requests are in progress.
 
 Authenticated notifications beneath the setup guide are now dismissable, can focus the related section when action is needed, and automatically close after 10 seconds when they are low-priority success messages.
 Those notifications now render in a floating top-right stack so they remain visible even when the related section is outside the current viewport.
 
-The `...` menus in both the mail-fetcher list and the user-management list now measure the real floating panel, stay attached to the trigger button while scrolling, flip above it when there is not enough room below, and close automatically when the trigger scrolls out of view.
+The `...` menus in both the source-email-account list and the user-management list now measure the real floating panel, stay attached to the trigger button while scrolling, flip above it when there is not enough room below, and close automatically when the trigger scrolls out of view.
 
 The Gmail account area now has two modes:
 
@@ -196,7 +200,7 @@ The admin UI translations are implemented as a lightweight in-repo dictionary un
 The security panel now requires the current password before `Remove Password` becomes available, and the Quick Setup Guide auto-collapses once all tracked setup steps are complete.
 All modal dialogs now support `Escape` to close; form dialogs confirm before closing if the user has already typed changes. The admin user detail view now shows the configured Gmail API user value, which is usually `me` for Gmail API based accounts rather than the literal mailbox address.
 The password-visibility eye toggle now keeps a stable position on hover/focus instead of jumping vertically with the shared button hover animation.
-The fetcher add/edit dialog now compares the current form against its initial snapshot, so closing it without making any edits no longer triggers the unsaved-changes confirmation.
+The source-email-account add/edit dialog now compares the current form against its initial snapshot, so closing it without making any edits no longer triggers the unsaved-changes confirmation.
 The Quick Setup Guide now says `Add at least one email account`, links to the source-email-account section, and only shows the provider OAuth step when at least one configured source account actually uses OAuth.
 The Quick Setup Guide step numbering is now assigned dynamically so hidden conditional steps cannot leave gaps such as `1, 2, 3, 5`.
 The `Administration` workspace now keeps its own admin-specific quick setup guide focused on shared Google OAuth, creating an additional user in multi-user mode, and confirming the first successful import.

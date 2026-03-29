@@ -1,6 +1,6 @@
 package dev.inboxbridge.service;
 
-import dev.inboxbridge.config.BridgeConfig;
+import dev.inboxbridge.config.InboxBridgeConfig;
 import dev.inboxbridge.persistence.AppUser;
 import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.inject.Inject;
@@ -14,7 +14,7 @@ import jakarta.transaction.Transactional;
 public class ApplicationModeService {
 
     @Inject
-    BridgeConfig bridgeConfig;
+    InboxBridgeConfig inboxBridgeConfig;
 
     @Inject
     SystemOAuthAppSettingsService systemOAuthAppSettingsService;
@@ -24,7 +24,7 @@ public class ApplicationModeService {
 
     public boolean multiUserEnabled() {
         Boolean override = systemOAuthAppSettingsService.multiUserEnabledOverride();
-        return override != null ? override : bridgeConfig.multiUserEnabled();
+        return override != null ? override : inboxBridgeConfig.multiUserEnabled();
     }
 
     public void requireMultiUserMode() {

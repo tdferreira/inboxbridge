@@ -16,7 +16,7 @@ import dev.inboxbridge.service.AdminDashboardService;
 import dev.inboxbridge.service.PollingSettingsService;
 import dev.inboxbridge.service.PollingStatsService;
 import dev.inboxbridge.service.PollingService;
-import dev.inboxbridge.service.RuntimeBridgeService;
+import dev.inboxbridge.service.RuntimeEmailAccountService;
 import dev.inboxbridge.service.SourcePollingSettingsService;
 import dev.inboxbridge.service.SystemOAuthAppSettingsService;
 import jakarta.inject.Inject;
@@ -55,7 +55,7 @@ public class AdminResource {
     SourcePollingSettingsService sourcePollingSettingsService;
 
     @Inject
-    RuntimeBridgeService runtimeBridgeService;
+    RuntimeEmailAccountService runtimeEmailAccountService;
 
     @Inject
     SystemOAuthAppSettingsService systemOAuthAppSettingsService;
@@ -121,10 +121,10 @@ public class AdminResource {
     }
 
     @GET
-    @Path("/bridges/{bridgeId}/polling-settings")
-    public SourcePollingSettingsView bridgePollingSettings(@jakarta.ws.rs.PathParam("bridgeId") String bridgeId) {
+    @Path("/email-accounts/{emailAccountId}/polling-settings")
+    public SourcePollingSettingsView emailAccountPollingSettings(@jakarta.ws.rs.PathParam("emailAccountId") String emailAccountId) {
         try {
-            return sourcePollingSettingsService.viewForSystemSource(bridgeId)
+            return sourcePollingSettingsService.viewForSystemSource(emailAccountId)
                     .orElseThrow(() -> new IllegalArgumentException("Unknown mail fetcher id"));
         } catch (IllegalArgumentException e) {
             throw new BadRequestException(e.getMessage(), e);
@@ -132,11 +132,11 @@ public class AdminResource {
     }
 
     @GET
-    @Path("/bridges/{bridgeId}/polling-stats")
-    public SourcePollingStatsView bridgePollingStats(@jakarta.ws.rs.PathParam("bridgeId") String bridgeId) {
+    @Path("/email-accounts/{emailAccountId}/polling-stats")
+    public SourcePollingStatsView emailAccountPollingStats(@jakarta.ws.rs.PathParam("emailAccountId") String emailAccountId) {
         try {
             return pollingStatsService.sourceStats(
-                    runtimeBridgeService.findSystemBridge(bridgeId)
+                    runtimeEmailAccountService.findSystemBridge(emailAccountId)
                             .orElseThrow(() -> new IllegalArgumentException("Unknown mail fetcher id")));
         } catch (IllegalArgumentException e) {
             throw new BadRequestException(e.getMessage(), e);
@@ -144,14 +144,14 @@ public class AdminResource {
     }
 
     @GET
-    @Path("/bridges/{bridgeId}/polling-stats/range")
-    public PollingTimelineBundleView bridgePollingStatsRange(
-            @jakarta.ws.rs.PathParam("bridgeId") String bridgeId,
+        @Path("/email-accounts/{emailAccountId}/polling-stats/range")
+        public PollingTimelineBundleView emailAccountPollingStatsRange(
+            @jakarta.ws.rs.PathParam("emailAccountId") String emailAccountId,
             @QueryParam("from") String from,
             @QueryParam("to") String to) {
         try {
             return pollingStatsService.sourceTimelineBundle(
-                    runtimeBridgeService.findSystemBridge(bridgeId)
+                runtimeEmailAccountService.findSystemBridge(emailAccountId)
                             .orElseThrow(() -> new IllegalArgumentException("Unknown mail fetcher id")),
                     parseInstant(from, true),
                     parseInstant(to, false));
@@ -161,24 +161,24 @@ public class AdminResource {
     }
 
     @PUT
-    @Path("/bridges/{bridgeId}/polling-settings")
+    @Path("/email-accounts/{emailAccountId}/polling-settings")
     @Consumes(MediaType.APPLICATION_JSON)
-    public SourcePollingSettingsView updateBridgePollingSettings(
-            @jakarta.ws.rs.PathParam("bridgeId") String bridgeId,
+    public SourcePollingSettingsView updateEmailAccountPollingSettings(
+            @jakarta.ws.rs.PathParam("emailAccountId") String emailAccountId,
             UpdateSourcePollingSettingsRequest request) {
         try {
-            return sourcePollingSettingsService.updateForSystemSource(bridgeId, request);
+            return sourcePollingSettingsService.updateForSystemSource(emailAccountId, request);
         } catch (IllegalArgumentException e) {
             throw new BadRequestException(e.getMessage(), e);
         }
     }
 
     @POST
-    @Path("/bridges/{bridgeId}/poll/run")
-    public PollRunResult runBridgePoll(@jakarta.ws.rs.PathParam("bridgeId") String bridgeId) {
+    @Path("/email-accounts/{emailAccountId}/poll/run")
+    public PollRunResult runEmailAccountPoll(@jakarta.ws.rs.PathParam("emailAccountId") String emailAccountId) {
         try {
             return pollingService.runPollForSource(
-                    runtimeBridgeService.findSystemBridge(bridgeId)
+                    runtimeEmailAccountService.findSystemBridge(emailAccountId)
                             .orElseThrow(() -> new IllegalArgumentException("Unknown mail fetcher id")),
                     "admin-fetcher",
                     currentUserContext.user().role + ":" + currentUserContext.user().id);

@@ -140,7 +140,7 @@ class AuthResourceTest {
 
     private static final class FakeOAuthProviderRegistryService extends OAuthProviderRegistryService {
         @Override
-        public java.util.List<dev.inboxbridge.config.BridgeConfig.OAuthProvider> configuredSourceProviders() {
+        public java.util.List<dev.inboxbridge.config.InboxBridgeConfig.OAuthProvider> configuredSourceProviders() {
             return java.util.List.of();
         }
     }

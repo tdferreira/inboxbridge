@@ -23,7 +23,7 @@ import jakarta.transaction.Transactional;
 public class UserUiPreferenceService {
 
     static final String DEFAULT_LANGUAGE = "en";
-    static final List<String> DEFAULT_USER_SECTION_ORDER = List.of("quickSetup", "gmail", "userPolling", "userStats", "sourceBridges");
+    static final List<String> DEFAULT_USER_SECTION_ORDER = List.of("quickSetup", "destination", "userPolling", "userStats", "sourceEmailAccounts");
     static final List<String> DEFAULT_ADMIN_SECTION_ORDER = List.of("adminQuickSetup", "systemDashboard", "oauthApps", "globalStats", "userManagement");
 
     @Inject
@@ -65,10 +65,10 @@ public class UserUiPreferenceService {
         preference.quickSetupCollapsed = request.quickSetupCollapsed() != null && request.quickSetupCollapsed();
         preference.quickSetupDismissed = request.quickSetupDismissed() != null && request.quickSetupDismissed();
         preference.quickSetupPinnedVisible = request.quickSetupPinnedVisible() != null && request.quickSetupPinnedVisible();
-        preference.gmailDestinationCollapsed = request.gmailDestinationCollapsed() != null && request.gmailDestinationCollapsed();
+        preference.destinationMailboxCollapsed = request.destinationMailboxCollapsed() != null && request.destinationMailboxCollapsed();
         preference.userPollingCollapsed = request.userPollingCollapsed() != null && request.userPollingCollapsed();
         preference.userStatsCollapsed = request.userStatsCollapsed() != null && request.userStatsCollapsed();
-        preference.sourceBridgesCollapsed = request.sourceBridgesCollapsed() != null && request.sourceBridgesCollapsed();
+        preference.sourceEmailAccountsCollapsed = request.sourceEmailAccountsCollapsed() != null && request.sourceEmailAccountsCollapsed();
         preference.adminQuickSetupCollapsed = request.adminQuickSetupCollapsed() != null && request.adminQuickSetupCollapsed();
         preference.systemDashboardCollapsed = request.systemDashboardCollapsed() != null && request.systemDashboardCollapsed();
         preference.oauthAppsCollapsed = request.oauthAppsCollapsed() != null && request.oauthAppsCollapsed();
@@ -89,10 +89,10 @@ public class UserUiPreferenceService {
                 preference.quickSetupCollapsed,
                 preference.quickSetupDismissed,
                 preference.quickSetupPinnedVisible,
-                preference.gmailDestinationCollapsed,
+                preference.destinationMailboxCollapsed,
                 preference.userPollingCollapsed,
                 preference.userStatsCollapsed,
-                preference.sourceBridgesCollapsed,
+                preference.sourceEmailAccountsCollapsed,
                 preference.adminQuickSetupCollapsed,
                 preference.systemDashboardCollapsed,
                 preference.oauthAppsCollapsed,
@@ -124,11 +124,23 @@ public class UserUiPreferenceService {
         java.util.LinkedHashSet<String> ordered = new java.util.LinkedHashSet<>();
         if (requested != null) {
             requested.stream()
+                    .map(this::normalizeLegacySectionId)
                     .filter(defaults::contains)
                     .forEach(ordered::add);
         }
         defaults.forEach(ordered::add);
         return List.copyOf(ordered);
+    }
+
+    private String normalizeLegacySectionId(String sectionId) {
+        if (sectionId == null || sectionId.isBlank()) {
+            return "";
+        }
+        return switch (sectionId) {
+            case "gmail" -> "destination";
+            case "sourceBridges" -> "sourceEmailAccounts";
+            default -> sectionId;
+        };
     }
 
     private String joinSectionOrder(List<String> values) {

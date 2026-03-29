@@ -39,13 +39,15 @@ function renderUi(overrides = {}) {
           passkeyCount: 0,
           bridgeCount: 0
         },
-        gmailConfig: {
-          destinationUser: 'me',
-          redirectUri: 'https://localhost:3000/api/google-oauth/callback',
-          sharedClientConfigured: true,
-          clientIdConfigured: false,
-          clientSecretConfigured: false,
-          refreshTokenConfigured: true
+        destinationConfig: {
+          provider: 'GMAIL_API',
+          deliveryMode: 'GMAIL_API',
+          linked: true,
+          host: '',
+          port: null,
+          authMethod: 'OAUTH2',
+          username: '',
+          folder: ''
         },
         pollingSettings: {
           defaultPollEnabled: true,
@@ -138,9 +140,9 @@ describe('UserManagementSection', () => {
     renderUi({ locale: 'pt-PT' })
 
     expect(screen.getByText('Configuração do utilizador')).toBeInTheDocument()
-    const gmailSectionTitle = screen.getByText('Destino Gmail')
+    const gmailSectionTitle = screen.getByText('Destination Mailbox')
     expect(screen.getByText('Contas de email de origem')).toBeInTheDocument()
-    expect(gmailSectionTitle.parentElement).toHaveTextContent('Utilizador da API Gmail: me')
+    expect(gmailSectionTitle.parentElement).toHaveTextContent('Provider: GMAIL_API')
   })
 
   it('shows a refresh indicator while the users section reloads', () => {

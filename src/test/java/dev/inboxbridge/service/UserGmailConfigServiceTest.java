@@ -9,7 +9,7 @@ import java.util.Optional;
 
 import org.junit.jupiter.api.Test;
 
-import dev.inboxbridge.config.BridgeConfig;
+import dev.inboxbridge.config.InboxBridgeConfig;
 import dev.inboxbridge.dto.UpdateUserGmailConfigRequest;
 import dev.inboxbridge.dto.UserGmailConfigView;
 import dev.inboxbridge.persistence.AppUser;
@@ -240,8 +240,26 @@ class UserGmailConfigServiceTest {
         UserGmailConfigService service = new UserGmailConfigService();
         service.repository = repository;
         service.secretEncryptionService = encryptionConfigured ? configuredSecrets() : unconfiguredSecrets();
-        service.bridgeConfig = new TestConfig();
+        service.inboxBridgeConfig = new TestConfig();
         service.oAuthCredentialService = new FakeOAuthCredentialService(googleCredential);
+        service.systemOAuthAppSettingsService = systemOAuthAppSettingsService(service.inboxBridgeConfig, service.secretEncryptionService);
+        return service;
+    }
+
+    private SystemOAuthAppSettingsService systemOAuthAppSettingsService(InboxBridgeConfig config, SecretEncryptionService secretEncryptionService) {
+        SystemOAuthAppSettingsService service = new SystemOAuthAppSettingsService();
+        service.config = config;
+        service.secretEncryptionService = secretEncryptionService;
+        service.repository = new dev.inboxbridge.persistence.SystemOAuthAppSettingsRepository() {
+            @Override
+            public Optional<dev.inboxbridge.persistence.SystemOAuthAppSettings> findSingleton() {
+                return Optional.empty();
+            }
+
+            @Override
+            public void persist(dev.inboxbridge.persistence.SystemOAuthAppSettings entity) {
+            }
+        };
         return service;
     }
 
@@ -277,7 +295,7 @@ class UserGmailConfigServiceTest {
         }
     }
 
-    private static final class TestConfig implements BridgeConfig {
+    private static final class TestConfig implements InboxBridgeConfig {
         @Override
         public boolean pollEnabled() {
             return true;
@@ -390,7 +408,7 @@ class UserGmailConfigServiceTest {
     }
 
     private static final class FakeOAuthCredentialService extends OAuthCredentialService {
-        private final Optional<StoredOAuthCredential> googleCredential;
+        private Optional<StoredOAuthCredential> googleCredential;
         private String deletedSubjectKey;
 
         private FakeOAuthCredentialService(Optional<StoredOAuthCredential> googleCredential) {
@@ -405,7 +423,9 @@ class UserGmailConfigServiceTest {
         @Override
         public boolean deleteGoogleCredential(String subjectKey) {
             this.deletedSubjectKey = subjectKey;
-            return googleCredential.isPresent();
+            boolean deleted = googleCredential.isPresent();
+            googleCredential = Optional.empty();
+            return deleted;
         }
     }
 

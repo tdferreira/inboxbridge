@@ -3,7 +3,7 @@ package dev.inboxbridge.service;
 import java.time.Instant;
 import java.util.Optional;
 
-import dev.inboxbridge.domain.RuntimeBridge;
+import dev.inboxbridge.domain.RuntimeEmailAccount;
 import dev.inboxbridge.dto.SourcePollingSettingsView;
 import dev.inboxbridge.dto.UpdateSourcePollingSettingsRequest;
 import dev.inboxbridge.persistence.AppUser;
@@ -24,7 +24,7 @@ public class SourcePollingSettingsService {
     SourcePollingSettingRepository repository;
 
     @Inject
-    RuntimeBridgeService runtimeBridgeService;
+    RuntimeEmailAccountService runtimeEmailAccountService;
 
     @Inject
     PollingSettingsService pollingSettingsService;
@@ -33,20 +33,20 @@ public class SourcePollingSettingsService {
     UserPollingSettingsService userPollingSettingsService;
 
     public Optional<SourcePollingSettingsView> viewForSource(AppUser actor, String sourceId) {
-        RuntimeBridge bridge = runtimeBridgeService.findAccessibleForUser(actor, sourceId)
+        RuntimeEmailAccount emailAccount = runtimeEmailAccountService.findAccessibleForUser(actor, sourceId)
                 .orElseThrow(() -> new IllegalArgumentException("Unknown mail fetcher id"));
-        return Optional.of(toView(bridge, repository.findBySourceId(sourceId).orElse(null)));
+        return Optional.of(toView(emailAccount, repository.findBySourceId(sourceId).orElse(null)));
     }
 
     public Optional<SourcePollingSettingsView> viewForSystemSource(String sourceId) {
-        RuntimeBridge bridge = runtimeBridgeService.findSystemBridge(sourceId)
+        RuntimeEmailAccount emailAccount = runtimeEmailAccountService.findSystemBridge(sourceId)
                 .orElseThrow(() -> new IllegalArgumentException("Unknown mail fetcher id"));
-        return Optional.of(toView(bridge, repository.findBySourceId(sourceId).orElse(null)));
+        return Optional.of(toView(emailAccount, repository.findBySourceId(sourceId).orElse(null)));
     }
 
-    public PollingSettingsService.EffectivePollingSettings effectiveSettingsFor(RuntimeBridge bridge) {
-        PollingSettingsService.EffectivePollingSettings base = baseSettingsFor(bridge);
-        SourcePollingSetting setting = repository.findBySourceId(bridge.id()).orElse(null);
+    public PollingSettingsService.EffectivePollingSettings effectiveSettingsFor(RuntimeEmailAccount emailAccount) {
+        PollingSettingsService.EffectivePollingSettings base = baseSettingsFor(emailAccount);
+        SourcePollingSetting setting = repository.findBySourceId(emailAccount.id()).orElse(null);
         boolean pollEnabled = setting != null && setting.pollEnabledOverride != null
                 ? setting.pollEnabledOverride
                 : base.pollEnabled();
@@ -65,47 +65,47 @@ public class SourcePollingSettingsService {
 
     @Transactional
     public SourcePollingSettingsView updateForSource(AppUser actor, String sourceId, UpdateSourcePollingSettingsRequest request) {
-        RuntimeBridge bridge = runtimeBridgeService.findAccessibleForUser(actor, sourceId)
+        RuntimeEmailAccount emailAccount = runtimeEmailAccountService.findAccessibleForUser(actor, sourceId)
                 .orElseThrow(() -> new IllegalArgumentException("Unknown mail fetcher id"));
-        return updateForResolvedBridge(bridge, sourceId, request);
+        return updateForResolvedEmailAccount(emailAccount, sourceId, request);
     }
 
     @Transactional
     public SourcePollingSettingsView updateForSystemSource(String sourceId, UpdateSourcePollingSettingsRequest request) {
-        RuntimeBridge bridge = runtimeBridgeService.findSystemBridge(sourceId)
+        RuntimeEmailAccount emailAccount = runtimeEmailAccountService.findSystemBridge(sourceId)
                 .orElseThrow(() -> new IllegalArgumentException("Unknown mail fetcher id"));
-        return updateForResolvedBridge(bridge, sourceId, request);
+        return updateForResolvedEmailAccount(emailAccount, sourceId, request);
     }
 
-    private SourcePollingSettingsView updateForResolvedBridge(
-            RuntimeBridge bridge,
+    private SourcePollingSettingsView updateForResolvedEmailAccount(
+            RuntimeEmailAccount emailAccount,
             String sourceId,
             UpdateSourcePollingSettingsRequest request) {
         SourcePollingSetting setting = repository.findBySourceId(sourceId).orElseGet(SourcePollingSetting::new);
         if (setting.id == null) {
             setting.sourceId = sourceId;
-            setting.ownerUserId = bridge.ownerUserId();
+            setting.ownerUserId = emailAccount.ownerUserId();
         }
         setting.pollEnabledOverride = request.pollEnabledOverride();
         setting.pollIntervalOverride = normalizeIntervalOverride(request.pollIntervalOverride());
         setting.fetchWindowOverride = normalizeFetchWindowOverride(request.fetchWindowOverride());
         setting.updatedAt = Instant.now();
         repository.persist(setting);
-        return toView(bridge, setting);
+        return toView(emailAccount, setting);
     }
 
-    private PollingSettingsService.EffectivePollingSettings baseSettingsFor(RuntimeBridge bridge) {
-        if (bridge.ownerUserId() != null) {
-            return userPollingSettingsService.effectiveSettingsForUser(bridge.ownerUserId());
+    private PollingSettingsService.EffectivePollingSettings baseSettingsFor(RuntimeEmailAccount emailAccount) {
+        if (emailAccount.ownerUserId() != null) {
+            return userPollingSettingsService.effectiveSettingsForUser(emailAccount.ownerUserId());
         }
         return pollingSettingsService.effectiveSettings();
     }
 
-    private SourcePollingSettingsView toView(RuntimeBridge bridge, SourcePollingSetting setting) {
-        PollingSettingsService.EffectivePollingSettings base = baseSettingsFor(bridge);
-        PollingSettingsService.EffectivePollingSettings effective = effectiveSettingsFor(bridge);
+    private SourcePollingSettingsView toView(RuntimeEmailAccount emailAccount, SourcePollingSetting setting) {
+        PollingSettingsService.EffectivePollingSettings base = baseSettingsFor(emailAccount);
+        PollingSettingsService.EffectivePollingSettings effective = effectiveSettingsFor(emailAccount);
         return new SourcePollingSettingsView(
-                bridge.id(),
+                emailAccount.id(),
                 base.pollEnabled(),
                 setting == null ? null : setting.pollEnabledOverride,
                 effective.pollEnabled(),

@@ -1,12 +1,14 @@
 package dev.inboxbridge.service;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.net.URI;
 import java.net.URLDecoder;
 import java.nio.charset.StandardCharsets;
+import java.util.Base64;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -16,9 +18,9 @@ import org.junit.jupiter.api.Test;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 
-import dev.inboxbridge.config.BridgeConfig;
-import dev.inboxbridge.persistence.UserBridge;
-import dev.inboxbridge.persistence.UserBridgeRepository;
+import dev.inboxbridge.config.InboxBridgeConfig;
+import dev.inboxbridge.persistence.UserEmailAccount;
+import dev.inboxbridge.persistence.UserEmailAccountRepository;
 
 class MicrosoftOAuthServiceTest {
 
@@ -29,12 +31,14 @@ class MicrosoftOAuthServiceTest {
                 new TestMicrosoft("consumers", "client-id", "client-secret", "http://localhost:8080/api/microsoft-oauth/callback"),
                 List.of(new TestSource(
                         "outlook-main-imap",
-                        BridgeConfig.Protocol.IMAP,
-                        BridgeConfig.AuthMethod.OAUTH2,
-                        BridgeConfig.OAuthProvider.MICROSOFT)));
+                        InboxBridgeConfig.Protocol.IMAP,
+                        InboxBridgeConfig.AuthMethod.OAUTH2,
+                        InboxBridgeConfig.OAuthProvider.MICROSOFT)));
         service.objectMapper = new ObjectMapper();
-        service.userBridgeRepository = new EmptyUserBridgeRepository();
+        service.userEmailAccountRepository = new EmptyUserEmailAccountRepository();
         service.envSourceService = envSourceService(service.config);
+                service.systemOAuthAppSettingsService = systemOAuthAppSettingsService(service.config);
+                service.oAuthCredentialService = oauthCredentialService();
 
         String authorizationUrl = service.buildAuthorizationUrl("outlook-main-imap");
         Map<String, String> params = queryParams(authorizationUrl);
@@ -56,12 +60,14 @@ class MicrosoftOAuthServiceTest {
                 new TestMicrosoft("consumers", "client-id", "client-secret", "http://localhost:8080/api/microsoft-oauth/callback"),
                 List.of(new TestSource(
                         "outlook-main-pop",
-                        BridgeConfig.Protocol.POP3,
-                        BridgeConfig.AuthMethod.OAUTH2,
-                        BridgeConfig.OAuthProvider.MICROSOFT)));
+                        InboxBridgeConfig.Protocol.POP3,
+                        InboxBridgeConfig.AuthMethod.OAUTH2,
+                        InboxBridgeConfig.OAuthProvider.MICROSOFT)));
         service.objectMapper = new ObjectMapper();
-        service.userBridgeRepository = new EmptyUserBridgeRepository();
+        service.userEmailAccountRepository = new EmptyUserEmailAccountRepository();
         service.envSourceService = envSourceService(service.config);
+                service.systemOAuthAppSettingsService = systemOAuthAppSettingsService(service.config);
+                service.oAuthCredentialService = oauthCredentialService();
 
         String authorizationUrl = service.buildAuthorizationUrl("outlook-main-pop");
 
@@ -77,12 +83,14 @@ class MicrosoftOAuthServiceTest {
                 new TestMicrosoft("consumers", "replace-me", "replace-me", "http://localhost:8080/api/microsoft-oauth/callback"),
                 List.of(new TestSource(
                         "outlook-main-imap",
-                        BridgeConfig.Protocol.IMAP,
-                        BridgeConfig.AuthMethod.OAUTH2,
-                        BridgeConfig.OAuthProvider.MICROSOFT)));
+                        InboxBridgeConfig.Protocol.IMAP,
+                        InboxBridgeConfig.AuthMethod.OAUTH2,
+                        InboxBridgeConfig.OAuthProvider.MICROSOFT)));
         service.objectMapper = new ObjectMapper();
-        service.userBridgeRepository = new EmptyUserBridgeRepository();
+        service.userEmailAccountRepository = new EmptyUserEmailAccountRepository();
         service.envSourceService = envSourceService(service.config);
+                service.systemOAuthAppSettingsService = systemOAuthAppSettingsService(service.config);
+                service.oAuthCredentialService = oauthCredentialService();
 
         IllegalStateException error = assertThrows(IllegalStateException.class,
                 () -> service.buildAuthorizationUrl("outlook-main-imap"));
@@ -96,7 +104,7 @@ class MicrosoftOAuthServiceTest {
 
         IllegalStateException error = assertThrows(
                 IllegalStateException.class,
-                () -> service.validateGrantedScopes("offline_access", BridgeConfig.Protocol.IMAP));
+                () -> service.validateGrantedScopes("offline_access", InboxBridgeConfig.Protocol.IMAP));
 
         assertTrue(error.getMessage().contains("did not grant all required permissions"));
         assertTrue(error.getMessage().contains("IMAP.AccessAsUser.All"));
@@ -106,7 +114,7 @@ class MicrosoftOAuthServiceTest {
     void validateGrantedScopesAllowsMicrosoftResponsesThatOmitOfflineAccessFromScopeEcho() {
         MicrosoftOAuthService service = new MicrosoftOAuthService();
 
-        service.validateGrantedScopes("https://outlook.office.com/IMAP.AccessAsUser.All", BridgeConfig.Protocol.IMAP);
+        service.validateGrantedScopes("https://outlook.office.com/IMAP.AccessAsUser.All", InboxBridgeConfig.Protocol.IMAP);
     }
 
     @Test
@@ -116,9 +124,10 @@ class MicrosoftOAuthServiceTest {
                 new TestMicrosoft("consumers", "client-id", "client-secret", "http://localhost:8080/api/microsoft-oauth/callback"),
                 List.of(new TestSource(
                         "outlook-main-imap",
-                        BridgeConfig.Protocol.IMAP,
-                        BridgeConfig.AuthMethod.OAUTH2,
-                        BridgeConfig.OAuthProvider.MICROSOFT)));
+                        InboxBridgeConfig.Protocol.IMAP,
+                        InboxBridgeConfig.AuthMethod.OAUTH2,
+                        InboxBridgeConfig.OAuthProvider.MICROSOFT)));
+        service.oAuthCredentialService = oauthCredentialService();
 
         java.lang.reflect.Field cacheField = MicrosoftOAuthService.class.getDeclaredField("cachedTokens");
         cacheField.setAccessible(true);
@@ -136,6 +145,29 @@ class MicrosoftOAuthServiceTest {
         assertTrue(cache.isEmpty());
     }
 
+    @Test
+    void preferredMailboxUsernameReadsPreferredUsernameClaimFromAccessToken() throws Exception {
+        MicrosoftOAuthService service = new MicrosoftOAuthService();
+        service.objectMapper = new ObjectMapper();
+        String accessToken = jwt(Map.of("preferred_username", "owner@example.com"));
+
+        java.lang.reflect.Method method = MicrosoftOAuthService.class.getDeclaredMethod("preferredMailboxUsername", String.class);
+        method.setAccessible(true);
+
+        assertEquals("owner@example.com", method.invoke(service, accessToken));
+    }
+
+    @Test
+    void preferredMailboxUsernameReturnsNullForOpaqueTokens() throws Exception {
+        MicrosoftOAuthService service = new MicrosoftOAuthService();
+        service.objectMapper = new ObjectMapper();
+
+        java.lang.reflect.Method method = MicrosoftOAuthService.class.getDeclaredMethod("preferredMailboxUsername", String.class);
+        method.setAccessible(true);
+
+        assertNull(method.invoke(service, "opaque-token"));
+    }
+
     private static Map<String, String> queryParams(String url) {
         String query = URI.create(url).getRawQuery();
         Map<String, String> params = new HashMap<>();
@@ -148,13 +180,50 @@ class MicrosoftOAuthServiceTest {
         return params;
     }
 
-    private EnvSourceService envSourceService(BridgeConfig config) {
+    private static String jwt(Map<String, String> claims) throws Exception {
+        String header = Base64.getUrlEncoder().withoutPadding().encodeToString("{\"alg\":\"none\"}".getBytes(StandardCharsets.UTF_8));
+        String payload = new ObjectMapper().writeValueAsString(claims);
+        String encodedPayload = Base64.getUrlEncoder().withoutPadding().encodeToString(payload.getBytes(StandardCharsets.UTF_8));
+        return header + "." + encodedPayload + ".signature";
+    }
+
+    private EnvSourceService envSourceService(InboxBridgeConfig config) {
         EnvSourceService service = new EnvSourceService();
         service.setConfigForTest(config);
         return service;
     }
 
-    private record TestConfig(TestMicrosoft microsoft, List<BridgeConfig.Source> sources) implements BridgeConfig {
+    private SystemOAuthAppSettingsService systemOAuthAppSettingsService(InboxBridgeConfig config) {
+        InboxBridgeConfig bridgeConfig = config;
+        return new SystemOAuthAppSettingsService() {
+            @Override
+            public String microsoftClientId() {
+                return bridgeConfig.microsoft().clientId();
+            }
+
+            @Override
+            public String microsoftClientSecret() {
+                return bridgeConfig.microsoft().clientSecret();
+            }
+
+            @Override
+            public boolean microsoftClientConfigured() {
+                return !"replace-me".equals(bridgeConfig.microsoft().clientId())
+                        && !"replace-me".equals(bridgeConfig.microsoft().clientSecret());
+            }
+        };
+    }
+
+    private OAuthCredentialService oauthCredentialService() {
+        return new OAuthCredentialService() {
+            @Override
+            public boolean secureStorageConfigured() {
+                return false;
+            }
+        };
+    }
+
+    private record TestConfig(TestMicrosoft microsoft, List<InboxBridgeConfig.Source> sources) implements InboxBridgeConfig {
         @Override
         public boolean pollEnabled() {
             return false;
@@ -256,14 +325,14 @@ class MicrosoftOAuthServiceTest {
         }
     }
 
-    private record TestMicrosoft(String tenant, String clientId, String clientSecret, String redirectUri) implements BridgeConfig.Microsoft {
+    private record TestMicrosoft(String tenant, String clientId, String clientSecret, String redirectUri) implements InboxBridgeConfig.Microsoft {
     }
 
     private record TestSource(
             String id,
-            BridgeConfig.Protocol protocol,
-            BridgeConfig.AuthMethod authMethod,
-            BridgeConfig.OAuthProvider oauthProvider) implements BridgeConfig.Source {
+            InboxBridgeConfig.Protocol protocol,
+            InboxBridgeConfig.AuthMethod authMethod,
+            InboxBridgeConfig.OAuthProvider oauthProvider) implements InboxBridgeConfig.Source {
 
         @Override
         public boolean enabled() {
@@ -277,7 +346,7 @@ class MicrosoftOAuthServiceTest {
 
         @Override
         public int port() {
-            return protocol == BridgeConfig.Protocol.IMAP ? 993 : 995;
+            return protocol == InboxBridgeConfig.Protocol.IMAP ? 993 : 995;
         }
 
         @Override
@@ -316,14 +385,14 @@ class MicrosoftOAuthServiceTest {
         }
     }
 
-    private static class EmptyUserBridgeRepository extends UserBridgeRepository {
+    private static class EmptyUserEmailAccountRepository extends UserEmailAccountRepository {
         @Override
-        public List<UserBridge> listAll() {
+        public List<UserEmailAccount> listAll() {
             return List.of();
         }
 
         @Override
-        public Optional<UserBridge> findByBridgeId(String bridgeId) {
+        public Optional<UserEmailAccount> findByBridgeId(String bridgeId) {
             return Optional.empty();
         }
     }

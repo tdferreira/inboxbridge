@@ -18,7 +18,8 @@ import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.node.ObjectNode;
 
-import dev.inboxbridge.config.BridgeConfig;
+import dev.inboxbridge.config.InboxBridgeConfig;
+import dev.inboxbridge.domain.GmailApiDestinationTarget;
 import dev.inboxbridge.domain.GmailTarget;
 import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.inject.Inject;
@@ -41,7 +42,7 @@ public class GmailLabelService {
     ObjectMapper objectMapper;
 
     @Inject
-    BridgeConfig config;
+    InboxBridgeConfig config;
 
     @Inject
     UserGmailConfigService userGmailConfigService;
@@ -54,7 +55,7 @@ public class GmailLabelService {
         return resolveLabelIds(systemTarget(), customLabel);
     }
 
-    public List<String> resolveLabelIds(GmailTarget target, Optional<String> customLabel) {
+    public List<String> resolveLabelIds(GmailApiDestinationTarget target, Optional<String> customLabel) {
         List<String> labelIds = new ArrayList<>();
         labelIds.add("INBOX");
         labelIds.add("UNREAD");
@@ -64,7 +65,11 @@ public class GmailLabelService {
         return labelIds;
     }
 
-    private String resolveCustomLabelId(GmailTarget target, String labelName) {
+    public List<String> resolveLabelIds(GmailTarget target, Optional<String> customLabel) {
+        return resolveLabelIds(asDestinationTarget(target), customLabel);
+    }
+
+    private String resolveCustomLabelId(GmailApiDestinationTarget target, String labelName) {
         Map<String, String> labelsByName = listLabels(target);
         if (labelsByName.containsKey(labelName)) {
             return labelsByName.get(labelName);
@@ -75,7 +80,7 @@ public class GmailLabelService {
         return createLabel(target, labelName);
     }
 
-    private Map<String, String> listLabels(GmailTarget target) {
+    private Map<String, String> listLabels(GmailApiDestinationTarget target) {
         try {
             HttpResponse<String> response = sendAuthorizedRequestWithRetry(
                     target,
@@ -101,7 +106,7 @@ public class GmailLabelService {
         }
     }
 
-    private String createLabel(GmailTarget target, String labelName) {
+    private String createLabel(GmailApiDestinationTarget target, String labelName) {
         ObjectNode payload = objectMapper.createObjectNode();
         payload.put("name", labelName);
         payload.put("labelListVisibility", "labelShow");
@@ -129,7 +134,7 @@ public class GmailLabelService {
     }
 
     private HttpResponse<String> sendAuthorizedRequestWithRetry(
-            GmailTarget target,
+            GmailApiDestinationTarget target,
             AuthorizedRequestFactory requestFactory) throws IOException, InterruptedException {
         HttpResponse<String> response = sendAuthorizedRequest(requestFactory, googleOAuthService.getAccessToken(target.oauthProfile()));
         if (response.statusCode() == 401) {
@@ -143,9 +148,9 @@ public class GmailLabelService {
         return response;
     }
 
-    private String revokedAccessMessage(GmailTarget target) {
+    private String revokedAccessMessage(GmailApiDestinationTarget target) {
         if (target.userId() != null) {
-            return "The linked Gmail account no longer grants InboxBridge access. The saved Gmail OAuth link was cleared. Reconnect it from My Gmail Account.";
+            return "The linked Gmail account no longer grants InboxBridge access. The saved Gmail OAuth link was cleared. Reconnect it from My Destination Mailbox.";
         }
         return "The configured Gmail account no longer grants InboxBridge access. Reconnect Gmail OAuth or update the configured refresh token.";
     }
@@ -162,11 +167,12 @@ public class GmailLabelService {
         return URLEncoder.encode(value, StandardCharsets.UTF_8);
     }
 
-    private GmailTarget systemTarget() {
-        return new GmailTarget(
+    private GmailApiDestinationTarget systemTarget() {
+        return new GmailApiDestinationTarget(
                 "gmail-destination",
                 null,
                 "system",
+                UserMailDestinationConfigService.PROVIDER_GMAIL,
                 systemOAuthAppSettingsService.googleDestinationUser(),
                 systemOAuthAppSettingsService.googleClientId(),
                 systemOAuthAppSettingsService.googleClientSecret(),
@@ -175,5 +181,21 @@ public class GmailLabelService {
                 config.gmail().createMissingLabels(),
                 config.gmail().neverMarkSpam(),
                 config.gmail().processForCalendar());
+    }
+
+    private GmailApiDestinationTarget asDestinationTarget(GmailTarget target) {
+        return new GmailApiDestinationTarget(
+                target.subjectKey(),
+                target.userId(),
+                target.ownerUsername(),
+                UserMailDestinationConfigService.PROVIDER_GMAIL,
+                target.destinationUser(),
+                target.clientId(),
+                target.clientSecret(),
+                target.refreshToken(),
+                target.redirectUri(),
+                target.createMissingLabels(),
+                target.neverMarkSpam(),
+                target.processForCalendar());
     }
 }

@@ -2,7 +2,7 @@ package dev.inboxbridge.service;
 
 import java.util.List;
 
-import dev.inboxbridge.config.BridgeConfig;
+import dev.inboxbridge.config.InboxBridgeConfig;
 import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.inject.Inject;
 
@@ -22,29 +22,29 @@ public class EnvSourceService {
     private static final String DEFAULT_CUSTOM_LABEL = "Imported/Source0";
 
     @Inject
-    BridgeConfig config;
+    InboxBridgeConfig config;
 
-    public void setConfigForTest(BridgeConfig config) {
+    public void setConfigForTest(InboxBridgeConfig config) {
         this.config = config;
     }
 
     public List<IndexedSource> configuredSources() {
-        List<BridgeConfig.Source> sources = config.sources();
+        List<InboxBridgeConfig.Source> sources = config.sources();
         return java.util.stream.IntStream.range(0, sources.size())
                 .mapToObj(index -> new IndexedSource(index, sources.get(index)))
                 .filter(indexed -> isConfigured(indexed.source()))
                 .toList();
     }
 
-    public boolean isConfigured(BridgeConfig.Source source) {
+    public boolean isConfigured(InboxBridgeConfig.Source source) {
         return !DEFAULT_SOURCE_ID.equals(source.id())
                 || source.enabled()
-                || source.protocol() != BridgeConfig.Protocol.IMAP
+                || source.protocol() != InboxBridgeConfig.Protocol.IMAP
                 || !DEFAULT_HOST.equals(source.host())
                 || source.port() != 993
                 || !source.tls()
-                || source.authMethod() != BridgeConfig.AuthMethod.PASSWORD
-                || source.oauthProvider() != BridgeConfig.OAuthProvider.NONE
+                || source.authMethod() != InboxBridgeConfig.AuthMethod.PASSWORD
+                || source.oauthProvider() != InboxBridgeConfig.OAuthProvider.NONE
                 || !DEFAULT_USERNAME.equals(source.username())
                 || !DEFAULT_PASSWORD.equals(source.password())
                 || source.oauthRefreshToken().isPresent() && !source.oauthRefreshToken().orElse("").isBlank()
@@ -53,6 +53,6 @@ public class EnvSourceService {
                 || !DEFAULT_CUSTOM_LABEL.equals(source.customLabel().orElse(DEFAULT_CUSTOM_LABEL));
     }
 
-    public record IndexedSource(int index, BridgeConfig.Source source) {
+    public record IndexedSource(int index, InboxBridgeConfig.Source source) {
     }
 }

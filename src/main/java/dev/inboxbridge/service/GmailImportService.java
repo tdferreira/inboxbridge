@@ -16,7 +16,8 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.node.ArrayNode;
 import com.fasterxml.jackson.databind.node.ObjectNode;
 
-import dev.inboxbridge.config.BridgeConfig;
+import dev.inboxbridge.config.InboxBridgeConfig;
+import dev.inboxbridge.domain.GmailApiDestinationTarget;
 import dev.inboxbridge.domain.GmailTarget;
 import dev.inboxbridge.dto.GmailImportResponse;
 import jakarta.enterprise.context.ApplicationScoped;
@@ -40,7 +41,7 @@ public class GmailImportService {
     ObjectMapper objectMapper;
 
     @Inject
-    BridgeConfig config;
+    InboxBridgeConfig config;
 
     @Inject
     UserGmailConfigService userGmailConfigService;
@@ -53,7 +54,7 @@ public class GmailImportService {
         return importMessage(systemTarget(), rawMessage, labelIds);
     }
 
-    public GmailImportResponse importMessage(GmailTarget target, byte[] rawMessage, List<String> labelIds) {
+    public GmailImportResponse importMessage(GmailApiDestinationTarget target, byte[] rawMessage, List<String> labelIds) {
         String encodedMessage = Base64.getUrlEncoder().withoutPadding().encodeToString(rawMessage);
 
         ObjectNode payload = objectMapper.createObjectNode();
@@ -87,8 +88,12 @@ public class GmailImportService {
         }
     }
 
+    public GmailImportResponse importMessage(GmailTarget target, byte[] rawMessage, List<String> labelIds) {
+        return importMessage(asDestinationTarget(target), rawMessage, labelIds);
+    }
+
     private HttpResponse<String> sendAuthorizedRequestWithRetry(
-            GmailTarget target,
+            GmailApiDestinationTarget target,
             AuthorizedRequestFactory requestFactory) throws IOException, InterruptedException {
         HttpResponse<String> response = sendAuthorizedRequest(requestFactory, googleOAuthService.getAccessToken(target.oauthProfile()));
         if (response.statusCode() == 401) {
@@ -102,9 +107,9 @@ public class GmailImportService {
         return response;
     }
 
-    private String revokedAccessMessage(GmailTarget target) {
+    private String revokedAccessMessage(GmailApiDestinationTarget target) {
         if (target.userId() != null) {
-            return "The linked Gmail account no longer grants InboxBridge access. The saved Gmail OAuth link was cleared. Reconnect it from My Gmail Account.";
+            return "The linked Gmail account no longer grants InboxBridge access. The saved Gmail OAuth link was cleared. Reconnect it from My Destination Mailbox.";
         }
         return "The configured Gmail account no longer grants InboxBridge access. Reconnect Gmail OAuth or update the configured refresh token.";
     }
@@ -121,11 +126,12 @@ public class GmailImportService {
         return URLEncoder.encode(value, StandardCharsets.UTF_8);
     }
 
-    private GmailTarget systemTarget() {
-        return new GmailTarget(
+    private GmailApiDestinationTarget systemTarget() {
+        return new GmailApiDestinationTarget(
                 "gmail-destination",
                 null,
                 "system",
+                UserMailDestinationConfigService.PROVIDER_GMAIL,
                 systemOAuthAppSettingsService.googleDestinationUser(),
                 systemOAuthAppSettingsService.googleClientId(),
                 systemOAuthAppSettingsService.googleClientSecret(),
@@ -134,5 +140,21 @@ public class GmailImportService {
                 config.gmail().createMissingLabels(),
                 config.gmail().neverMarkSpam(),
                 config.gmail().processForCalendar());
+    }
+
+    private GmailApiDestinationTarget asDestinationTarget(GmailTarget target) {
+        return new GmailApiDestinationTarget(
+                target.subjectKey(),
+                target.userId(),
+                target.ownerUsername(),
+                UserMailDestinationConfigService.PROVIDER_GMAIL,
+                target.destinationUser(),
+                target.clientId(),
+                target.clientSecret(),
+                target.refreshToken(),
+                target.redirectUri(),
+                target.createMissingLabels(),
+                target.neverMarkSpam(),
+                target.processForCalendar());
     }
 }

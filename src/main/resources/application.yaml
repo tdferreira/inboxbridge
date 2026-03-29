@@ -25,7 +25,7 @@ quarkus:
       "dev.inboxbridge":
         level: INFO
 
-bridge:
+inboxbridge:
   poll-enabled: ${POLL_ENABLED:true}
   poll-interval: ${POLL_INTERVAL:5m}
   fetch-window: ${FETCH_WINDOW:50}

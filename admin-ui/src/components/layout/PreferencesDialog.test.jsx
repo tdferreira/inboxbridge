@@ -93,7 +93,7 @@ describe('PreferencesDialog', () => {
     expect(onQuickSetupVisibilityChange).not.toHaveBeenCalled()
   })
 
-  it('shows an exit layout editing action when layout editing is active', () => {
+  it('shows a save layout action when layout editing is active', () => {
     const onExitLayoutEditing = vi.fn()
 
     render(
@@ -116,7 +116,7 @@ describe('PreferencesDialog', () => {
       />
     )
 
-    fireEvent.click(screen.getByRole('button', { name: 'Exit Layout Editing' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Save Layout' }))
     expect(onExitLayoutEditing).toHaveBeenCalledTimes(1)
   })
 })

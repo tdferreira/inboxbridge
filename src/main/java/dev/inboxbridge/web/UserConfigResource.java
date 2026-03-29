@@ -3,15 +3,15 @@ package dev.inboxbridge.web;
 import java.time.Instant;
 import java.util.List;
 
-import dev.inboxbridge.dto.UpdateUserBridgeRequest;
-import dev.inboxbridge.dto.UpdateUserGmailConfigRequest;
+import dev.inboxbridge.dto.UpdateUserEmailAccountRequest;
+import dev.inboxbridge.dto.UpdateUserMailDestinationRequest;
 import dev.inboxbridge.dto.UpdateUserPollingSettingsRequest;
 import dev.inboxbridge.dto.UpdateSourcePollingSettingsRequest;
 import dev.inboxbridge.dto.UpdateUserUiPreferenceRequest;
-import dev.inboxbridge.dto.BridgeConnectionTestResult;
+import dev.inboxbridge.dto.EmailAccountConnectionTestResult;
 import dev.inboxbridge.dto.PollingTimelineBundleView;
-import dev.inboxbridge.dto.UserBridgeView;
-import dev.inboxbridge.dto.UserGmailConfigView;
+import dev.inboxbridge.dto.UserEmailAccountView;
+import dev.inboxbridge.dto.UserMailDestinationView;
 import dev.inboxbridge.dto.SourcePollingSettingsView;
 import dev.inboxbridge.dto.SourcePollingStatsView;
 import dev.inboxbridge.dto.UserPollingStatsView;
@@ -21,10 +21,10 @@ import dev.inboxbridge.dto.PollRunResult;
 import dev.inboxbridge.security.CurrentUserContext;
 import dev.inboxbridge.security.RequireAuth;
 import dev.inboxbridge.service.PollingService;
-import dev.inboxbridge.service.RuntimeBridgeService;
+import dev.inboxbridge.service.RuntimeEmailAccountService;
 import dev.inboxbridge.service.SourcePollingSettingsService;
-import dev.inboxbridge.service.UserBridgeService;
-import dev.inboxbridge.service.UserGmailConfigService;
+import dev.inboxbridge.service.UserEmailAccountService;
+import dev.inboxbridge.service.UserMailDestinationConfigService;
 import dev.inboxbridge.service.PollingStatsService;
 import dev.inboxbridge.service.UserPollingSettingsService;
 import dev.inboxbridge.service.UserUiPreferenceService;
@@ -50,10 +50,10 @@ public class UserConfigResource {
     CurrentUserContext currentUserContext;
 
     @Inject
-    UserGmailConfigService userGmailConfigService;
+    UserMailDestinationConfigService userMailDestinationConfigService;
 
     @Inject
-    UserBridgeService userBridgeService;
+    UserEmailAccountService userEmailAccountService;
 
     @Inject
     UserPollingSettingsService userPollingSettingsService;
@@ -65,7 +65,7 @@ public class UserConfigResource {
     SourcePollingSettingsService sourcePollingSettingsService;
 
     @Inject
-    RuntimeBridgeService runtimeBridgeService;
+    RuntimeEmailAccountService runtimeEmailAccountService;
 
     @Inject
     PollingService pollingService;
@@ -74,27 +74,26 @@ public class UserConfigResource {
     UserUiPreferenceService userUiPreferenceService;
 
     @GET
-    @Path("/gmail-config")
-    public UserGmailConfigView gmailConfig() {
-        return userGmailConfigService.viewForUser(currentUserContext.user().id)
-                .orElse(userGmailConfigService.defaultView(currentUserContext.user().id));
+    @Path("/destination-config")
+    public UserMailDestinationView destinationConfig() {
+        return userMailDestinationConfigService.viewForUser(currentUserContext.user().id);
     }
 
     @PUT
-    @Path("/gmail-config")
+    @Path("/destination-config")
     @Consumes(MediaType.APPLICATION_JSON)
-    public UserGmailConfigView updateGmailConfig(UpdateUserGmailConfigRequest request) {
+    public UserMailDestinationView updateDestinationConfig(UpdateUserMailDestinationRequest request) {
         try {
-            return userGmailConfigService.update(currentUserContext.user(), request);
+            return userMailDestinationConfigService.update(currentUserContext.user(), request);
         } catch (IllegalArgumentException | IllegalStateException e) {
             throw new BadRequestException(e.getMessage(), e);
         }
     }
 
     @GET
-    @Path("/bridges")
-    public List<UserBridgeView> bridges() {
-        return userBridgeService.listForUser(currentUserContext.user().id);
+    @Path("/email-accounts")
+    public List<UserEmailAccountView> emailAccounts() {
+        return userEmailAccountService.listForUser(currentUserContext.user().id);
     }
 
     @GET
@@ -126,11 +125,11 @@ public class UserConfigResource {
     }
 
     @GET
-    @Path("/bridges/{bridgeId}/polling-stats")
-    public SourcePollingStatsView bridgePollingStats(@PathParam("bridgeId") String bridgeId) {
+    @Path("/email-accounts/{emailAccountId}/polling-stats")
+    public SourcePollingStatsView emailAccountPollingStats(@PathParam("emailAccountId") String emailAccountId) {
         try {
             return pollingStatsService.sourceStats(
-                    runtimeBridgeService.findAccessibleForUser(currentUserContext.user(), bridgeId)
+                    runtimeEmailAccountService.findAccessibleForUser(currentUserContext.user(), emailAccountId)
                             .orElseThrow(() -> new IllegalArgumentException("Unknown mail fetcher id")));
         } catch (IllegalArgumentException e) {
             throw new BadRequestException(e.getMessage(), e);
@@ -138,14 +137,14 @@ public class UserConfigResource {
     }
 
     @GET
-    @Path("/bridges/{bridgeId}/polling-stats/range")
-    public PollingTimelineBundleView bridgePollingStatsRange(
-            @PathParam("bridgeId") String bridgeId,
+        @Path("/email-accounts/{emailAccountId}/polling-stats/range")
+        public PollingTimelineBundleView emailAccountPollingStatsRange(
+            @PathParam("emailAccountId") String emailAccountId,
             @QueryParam("from") String from,
             @QueryParam("to") String to) {
         try {
             return pollingStatsService.sourceTimelineBundle(
-                    runtimeBridgeService.findAccessibleForUser(currentUserContext.user(), bridgeId)
+                runtimeEmailAccountService.findAccessibleForUser(currentUserContext.user(), emailAccountId)
                             .orElseThrow(() -> new IllegalArgumentException("Unknown mail fetcher id")),
                     parseInstant(from, true),
                     parseInstant(to, false));
@@ -180,42 +179,42 @@ public class UserConfigResource {
     }
 
     @PUT
-    @Path("/bridges")
+    @Path("/email-accounts")
     @Consumes(MediaType.APPLICATION_JSON)
-    public UserBridgeView upsertBridge(UpdateUserBridgeRequest request) {
+    public UserEmailAccountView upsertEmailAccount(UpdateUserEmailAccountRequest request) {
         try {
-            return userBridgeService.upsert(currentUserContext.user(), request);
+            return userEmailAccountService.upsert(currentUserContext.user(), request);
         } catch (IllegalArgumentException | IllegalStateException e) {
             throw new BadRequestException(e.getMessage(), e);
         }
     }
 
     @POST
-    @Path("/bridges/test-connection")
+    @Path("/email-accounts/test-connection")
     @Consumes(MediaType.APPLICATION_JSON)
-    public BridgeConnectionTestResult testBridgeConnection(UpdateUserBridgeRequest request) {
+    public EmailAccountConnectionTestResult testEmailAccountConnection(UpdateUserEmailAccountRequest request) {
         try {
-            return userBridgeService.testConnection(currentUserContext.user(), request);
+            return userEmailAccountService.testConnection(currentUserContext.user(), request);
         } catch (IllegalArgumentException | IllegalStateException e) {
             throw new BadRequestException(e.getMessage(), e);
         }
     }
 
     @DELETE
-    @Path("/bridges/{bridgeId}")
-    public void deleteBridge(@PathParam("bridgeId") String bridgeId) {
+    @Path("/email-accounts/{emailAccountId}")
+    public void deleteEmailAccount(@PathParam("emailAccountId") String emailAccountId) {
         try {
-            userBridgeService.delete(currentUserContext.user(), bridgeId);
+            userEmailAccountService.delete(currentUserContext.user(), emailAccountId);
         } catch (IllegalArgumentException e) {
             throw new BadRequestException(e.getMessage(), e);
         }
     }
 
     @GET
-    @Path("/bridges/{bridgeId}/polling-settings")
-    public SourcePollingSettingsView bridgePollingSettings(@PathParam("bridgeId") String bridgeId) {
+    @Path("/email-accounts/{emailAccountId}/polling-settings")
+    public SourcePollingSettingsView emailAccountPollingSettings(@PathParam("emailAccountId") String emailAccountId) {
         try {
-            return sourcePollingSettingsService.viewForSource(currentUserContext.user(), bridgeId)
+            return sourcePollingSettingsService.viewForSource(currentUserContext.user(), emailAccountId)
                     .orElseThrow(() -> new IllegalArgumentException("Unknown mail fetcher id"));
         } catch (IllegalArgumentException e) {
             throw new BadRequestException(e.getMessage(), e);
@@ -223,13 +222,13 @@ public class UserConfigResource {
     }
 
     @PUT
-    @Path("/bridges/{bridgeId}/polling-settings")
+    @Path("/email-accounts/{emailAccountId}/polling-settings")
     @Consumes(MediaType.APPLICATION_JSON)
-    public SourcePollingSettingsView updateBridgePollingSettings(
-            @PathParam("bridgeId") String bridgeId,
+    public SourcePollingSettingsView updateEmailAccountPollingSettings(
+            @PathParam("emailAccountId") String emailAccountId,
             UpdateSourcePollingSettingsRequest request) {
         try {
-            return sourcePollingSettingsService.updateForSource(currentUserContext.user(), bridgeId, request);
+            return sourcePollingSettingsService.updateForSource(currentUserContext.user(), emailAccountId, request);
         } catch (IllegalArgumentException e) {
             throw new BadRequestException(e.getMessage(), e);
         }
@@ -242,11 +241,11 @@ public class UserConfigResource {
     }
 
     @POST
-    @Path("/bridges/{bridgeId}/poll/run")
-    public PollRunResult runBridgePoll(@PathParam("bridgeId") String bridgeId) {
+    @Path("/email-accounts/{emailAccountId}/poll/run")
+    public PollRunResult runEmailAccountPoll(@PathParam("emailAccountId") String emailAccountId) {
         try {
             return pollingService.runPollForSource(
-                    runtimeBridgeService.findAccessibleForUser(currentUserContext.user(), bridgeId)
+                    runtimeEmailAccountService.findAccessibleForUser(currentUserContext.user(), emailAccountId)
                             .orElseThrow(() -> new IllegalArgumentException("Unknown mail fetcher id")),
                     "app-fetcher",
                     currentUserContext.user().role + ":" + currentUserContext.user().id);

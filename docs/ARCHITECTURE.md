@@ -6,13 +6,13 @@
 2. Each enabled source in config is polled
 3. `MailSourceClient` fetches recent messages over IMAP or POP3
 4. `ImportDeduplicationService` checks whether a message was already imported
-5. `GmailLabelService` resolves the Gmail label IDs
-6. `GmailImportService` calls Gmail `messages.import`
+5. The configured destination implementation prepares the append/import target
+6. `MailDestinationService` dispatches to the active destination provider, such as Gmail API import or IMAP APPEND
 7. Import metadata is stored in PostgreSQL
 
-## Why this starter uses Gmail import
+## Why Gmail import is still one destination mode
 
-`messages.import` is the right API for this use case because it imports a raw MIME message into the mailbox without re-sending it to the world. That preserves the original sender, headers, dates, attachments, and threading signals much better than forwarding.
+When the destination provider is Gmail, `messages.import` is the right API for this use case because it imports a raw MIME message into the mailbox without re-sending it to the world. That preserves the original sender, headers, dates, attachments, and threading signals much better than forwarding.
 
 ## Dedupe strategy
 
@@ -31,7 +31,7 @@ The fetch window and scheduler interval now come from effective runtime polling 
 
 - environment values provide defaults
 - PostgreSQL stores optional admin overrides
-- PostgreSQL also stores optional per-user overrides for DB-managed fetchers
+- PostgreSQL also stores optional per-user overrides for DB-managed source email accounts
 - the running poller merges the correct layer at runtime for each source
 
 Each source now has its own persisted polling state:
@@ -41,7 +41,7 @@ Each source now has its own persisted polling state:
 - consecutive failure count
 - last failure reason and timestamps
 
-The scheduler checks that state on every run so one blocked or throttled mailbox does not stall unrelated fetchers.
+The scheduler checks that state on every run so one blocked or throttled mailbox does not stall unrelated source email accounts.
 
 That is deliberately simple for a first self-hosted version. The next evolution should be:
 
@@ -63,9 +63,10 @@ That is deliberately simple for a first self-hosted version. The next evolution 
 
 The React admin UI now separates:
 
-- `My Poller Settings`: per-user polling overrides for UI-managed fetchers
-- `My Email Fetchers`: a unified operational list of DB-managed and env-managed fetchers, with add/edit work happening in a modal dialog
-- `Poller Settings`: global polling controls, health metrics, and runtime overrides
+- `My Poller Settings`: per-user polling overrides for UI-managed source email accounts
+- `My Source Email Accounts`: a unified operational list of DB-managed and env-managed source email accounts, with add/edit work happening in a modal dialog
+- `My Destination Mailbox`: provider-neutral destination mailbox configuration for Gmail API or IMAP APPEND destinations
+- `Global Poller Settings`: global polling controls, health metrics, and runtime overrides
 
 Deployment mode is also configurable:
 
