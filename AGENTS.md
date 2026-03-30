@@ -5,6 +5,7 @@ Standing instructions for future agents working in this repository.
 ## Workflow rules
 
 - Do not read `.env` unless the user explicitly asks for it.
+- Treat [CONTEXT.md](CONTEXT.md) as the source of truth for cross-chat memory in this repository, and keep it up to date when meaningful behavior, architecture, validation expectations, or runtime constraints change.
 - Update documentation whenever behavior, UI copy, setup flow, or architecture changes.
 - Add or update tests for every behavior change.
 - Always finish with the stack ready for manual testing whenever feasible.

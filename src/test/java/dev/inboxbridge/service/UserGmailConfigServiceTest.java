@@ -319,8 +319,28 @@ class UserGmailConfigServiceTest {
         }
 
         @Override
+        public int sourceHostMaxConcurrency() {
+            return 2;
+        }
+
+        @Override
         public Duration destinationProviderMinSpacing() {
             return Duration.ofMillis(250);
+        }
+
+        @Override
+        public int destinationProviderMaxConcurrency() {
+            return 1;
+        }
+
+        @Override
+        public Duration throttleLeaseTtl() {
+            return Duration.ofMinutes(2);
+        }
+
+        @Override
+        public int adaptiveThrottleMaxMultiplier() {
+            return 6;
         }
 
         @Override

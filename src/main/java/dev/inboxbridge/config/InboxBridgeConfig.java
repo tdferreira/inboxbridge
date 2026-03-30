@@ -22,8 +22,20 @@ public interface InboxBridgeConfig {
     @WithDefault("PT1S")
     Duration sourceHostMinSpacing();
 
+    @WithDefault("2")
+    int sourceHostMaxConcurrency();
+
     @WithDefault("PT0.25S")
     Duration destinationProviderMinSpacing();
+
+    @WithDefault("1")
+    int destinationProviderMaxConcurrency();
+
+    @WithDefault("PT2M")
+    Duration throttleLeaseTtl();
+
+    @WithDefault("6")
+    int adaptiveThrottleMaxMultiplier();
 
     @WithDefault("0.2")
     double successJitterRatio();

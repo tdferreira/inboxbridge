@@ -437,13 +437,31 @@ class PollingServiceTest {
         private final java.util.List<String> destinationProviders = new java.util.ArrayList<>();
 
         @Override
-        public void awaitSourceMailboxTurn(RuntimeEmailAccount emailAccount) {
+        public ThrottleLease acquireSourceMailboxPermit(RuntimeEmailAccount emailAccount) {
             sourceHosts.add(emailAccount.host());
+            return ThrottleLease.noopLease();
         }
 
         @Override
-        public void awaitDestinationDeliveryTurn(MailDestinationTarget target) {
+        public ThrottleLease acquireDestinationDeliveryPermit(MailDestinationTarget target) {
             destinationProviders.add(target.providerId());
+            return ThrottleLease.noopLease();
+        }
+
+        @Override
+        public void recordSourceSuccess(RuntimeEmailAccount emailAccount) {
+        }
+
+        @Override
+        public void recordSourceFailure(RuntimeEmailAccount emailAccount, String errorMessage) {
+        }
+
+        @Override
+        public void recordDestinationSuccess(MailDestinationTarget target) {
+        }
+
+        @Override
+        public void recordDestinationFailure(MailDestinationTarget target, String errorMessage) {
         }
     }
 

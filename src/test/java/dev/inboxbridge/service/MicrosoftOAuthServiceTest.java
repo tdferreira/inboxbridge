@@ -245,8 +245,28 @@ class MicrosoftOAuthServiceTest {
         }
 
         @Override
+        public int sourceHostMaxConcurrency() {
+            return 2;
+        }
+
+        @Override
         public java.time.Duration destinationProviderMinSpacing() {
             return java.time.Duration.ofMillis(250);
+        }
+
+        @Override
+        public int destinationProviderMaxConcurrency() {
+            return 1;
+        }
+
+        @Override
+        public java.time.Duration throttleLeaseTtl() {
+            return java.time.Duration.ofMinutes(2);
+        }
+
+        @Override
+        public int adaptiveThrottleMaxMultiplier() {
+            return 6;
         }
 
         @Override

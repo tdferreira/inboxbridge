@@ -4,6 +4,13 @@
 
 InboxBridge is a self-hosted mail importer that pulls mail from external IMAP / POP3 accounts and imports it into a destination mailbox. It can target Gmail through the Gmail API or IMAP APPEND destinations such as Outlook and other known providers. It is meant to preserve the “one inbox, many other accounts” workflow without relying on SMTP forwarding.
 
+## Context maintenance
+
+`CONTEXT.md` is the source of truth for cross-chat memory in this repository.
+When meaningful behavior, architecture, validation expectations, or known
+runtime constraints change, update this file so future chats can resume from it
+without depending on older ad-hoc handoff notes.
+
 ## Current product shape
 
 InboxBridge now consists of:
@@ -344,13 +351,17 @@ Current backoff behavior is heuristic but practical:
 Manual poll requests now split into two behaviors:
 
 - single-source manual runs bypass the normal interval gate and cooldown window for that one selected mail account
-- broader manual runs (`My Polling Settings` for one user, or `Global Polling Settings` for all users) still respect cooldown and next-window checks, and they are protected by an admin-configurable manual rate limit that defaults to 5 runs per 60 seconds per signed-in user
+- broader manual runs (`My Polling Settings` for one user, or `Global Polling Settings` for all users) also bypass cooldown and next-window checks, but they are still protected by an admin-configurable manual rate limit that defaults to 5 runs per 60 seconds per signed-in user
 
-Per-instance pacing now adds another protection layer:
+Polling-scale hardening now adds a persisted protection layer:
 
 - polls against the same source host are spaced apart by a configurable minimum gap (`SOURCE_HOST_MIN_SPACING`, default `PT1S`)
+- polls against the same source host are also capped by a configurable concurrency limit (`SOURCE_HOST_MAX_CONCURRENCY`, default `2`)
 - destination deliveries for the same provider/mode are also spaced apart by a configurable minimum gap (`DESTINATION_PROVIDER_MIN_SPACING`, default `PT0.25S`)
-- this is still an in-process limiter, so multi-node deployments would need distributed coordination if they want the same guarantees across instances
+- destination deliveries for the same provider/host are also capped by a configurable concurrency limit (`DESTINATION_PROVIDER_MAX_CONCURRENCY`, default `1`)
+- short-lived throttle leases are persisted in PostgreSQL so in-flight work can be bounded even if the app restarts unexpectedly, with a configurable lease TTL (`THROTTLE_LEASE_TTL`, default `PT2M`)
+- persisted adaptive multipliers now widen spacing after host/provider contention and after throttling-style provider failures, up to a configurable ceiling (`ADAPTIVE_THROTTLE_MAX_MULTIPLIER`, default `6`)
+- this is still one shared-database coordination layer, not a full distributed quota system; true cluster-wide provider budgeting and smarter queueing are still future work
 
 ### 12. Actionable admin-ui notifications
 
@@ -621,21 +632,25 @@ src/main/resources/db/migration
 ├── V24__app_user_single_user_mode_flag.sql
 ├── V25__user_mail_destination_config.sql
 ├── V26__rename_user_bridge_to_user_email_account.sql
-└── V27__rename_ui_preference_email_account_columns.sql
+├── V27__rename_ui_preference_email_account_columns.sql
+├── V28__user_gmail_linked_mailbox_address.sql
+└── V29__poll_throttle_state.sql
 ```
 
 ## Current validation status
 
-Validated on 2026-03-26:
+Validated on 2026-03-30:
 
-- `mvn test` passes
-- admin-ui Docker build succeeds, with the Vitest suite intended to run separately unless `RUN_TESTS=true` is passed to the admin UI Docker build
-- Docker Compose build succeeds
+- targeted backend polling tests pass, including `PollingServiceTest`, `SourcePollingStateServiceTest`, and `PollThrottleServiceTest`
+- targeted frontend notification tests pass, including `src/lib/notifications.test.js`
+- admin-ui Docker build succeeds with the Vitest suite enabled in-container
+- `docker compose up --build -d` succeeds
 - backend starts on both HTTP `8080` and HTTPS `8443`
 - admin UI serves correctly over HTTPS in the container
 - unauthenticated `GET /api/auth/me` returns `401`
 - bootstrap login `admin` / `nimda` succeeds and returns `mustChangePassword=true`
-- Flyway migrations `V1` through `V27` apply successfully
+- Flyway migrations `V1` through `V29` apply successfully
+- direct backend startup works with the current polling pacing defaults because `DESTINATION_PROVIDER_MIN_SPACING` now uses the valid ISO-8601 duration `PT0.25S`
 
 Admin UI frontend structure now follows a controller-and-components split:
 
@@ -650,6 +665,13 @@ Admin UI frontend structure now follows a controller-and-components split:
 - the Google and Microsoft OAuth callback pages now support navigating back to InboxBridge after in-browser code exchange
 - the Google and Microsoft OAuth callback pages support copying the raw code, automatically attempt the exchange on load, warn before navigating away without exchange, and auto-redirect to InboxBridge after a 5-second countdown once exchange succeeds unless the user cancels that automatic redirect
 - admin-ui buttons that trigger backend work now show inline loading spinners so the user gets immediate feedback during authentication, saves, polling, refresh, and OAuth start flows
+- source-email-account notifications are now stored as structured descriptors and resolved at render time, so changing the UI language also re-translates existing notifications instead of leaving them in the previous language
+- source-specific notification links can now focus the matching source email account card in the user workspace, including OAuth-related error notifications such as a missing refresh token
+- the add/edit source email account dialog now supports IMAP folder discovery after a successful test connection and while editing an existing IMAP account, mirroring the destination mailbox folder-selection flow
+- the frontend production bundle now uses explicit manual chunking for React/vendor, router, i18n, and chart code, which removed the earlier Vite large-chunk build warning
+- polling now includes a first scaling-hardening layer: deterministic per-source success jitter, per-instance minimum spacing between polls to the same source host, and per-instance minimum spacing between deliveries to the same destination provider/host
+- those scaling-hardening knobs are configured through `SOURCE_HOST_MIN_SPACING`, `DESTINATION_PROVIDER_MIN_SPACING`, `SUCCESS_JITTER_RATIO`, and `MAX_SUCCESS_JITTER`
+- the current throttling/jitter protection is per app instance only; true cluster-wide coordination, global provider quotas, and distributed locking are still future work for multi-node deployments
 
 Current live config issue in this workspace:
 

@@ -440,7 +440,11 @@ Current limits:
 - minimum interval: `5s`
 - fetch window range: `1` to `500`
 - default source-host minimum spacing on one app instance: `PT1S`
+- default source-host max concurrency on one app instance: `2`
 - default destination-provider minimum spacing on one app instance: `PT0.25S`
+- default destination-provider max concurrency on one app instance: `1`
+- default throttle lease TTL for persisted host/provider permits: `PT2M`
+- default adaptive throttle max multiplier: `6x`
 - default successful-poll jitter: `20%` of the effective interval, capped at `PT30S`
 
 ### Fix Google `403: org_internal`

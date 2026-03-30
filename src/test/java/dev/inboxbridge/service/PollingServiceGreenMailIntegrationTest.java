@@ -119,7 +119,52 @@ class PollingServiceGreenMailIntegrationTest {
         assertEquals(List.of("alpha", "beta"), destinationSubjectsAfterSecondRun);
     }
 
+    @Test
+    void runPollUsesConfiguredSourceAndDestinationFoldersInsteadOfInbox() throws Exception {
+        appendMessage(sourceMail, SOURCE_USERNAME, SOURCE_PASSWORD, "INBOX", "inbox-message", "Should stay in the source inbox", "<inbox@example.com>");
+        appendMessage(sourceMail, SOURCE_USERNAME, SOURCE_PASSWORD, "Projects/2026", "project-alpha", "Should be imported from the custom source folder", "<project-alpha@example.com>");
+        appendMessage(sourceMail, SOURCE_USERNAME, SOURCE_PASSWORD, "Projects/2026", "project-beta", "Should also be imported from the custom source folder", "<project-beta@example.com>");
+
+        PollingService service = new PollingService();
+        MailSourceClient mailSourceClient = new MailSourceClient();
+        mailSourceClient.mimeHashService = new MimeHashService();
+        ImapAppendMailDestinationService destinationService = new ImapAppendMailDestinationService();
+        RecordingImportedMessageRepository importedMessageRepository = new RecordingImportedMessageRepository();
+        ImportDeduplicationService deduplicationService = new ImportDeduplicationService();
+        deduplicationService.importedMessageRepository = importedMessageRepository;
+        deduplicationService.mimeHashService = new MimeHashService();
+
+        service.mailSourceClient = mailSourceClient;
+        service.importDeduplicationService = deduplicationService;
+        service.mailDestinationServices = new SingleMailDestinationServices(destinationService);
+        service.sourcePollEventService = new NoopSourcePollEventService();
+        service.runtimeEmailAccountService = new FixedRuntimeEmailAccountService(List.of(runtimeAccount("Projects/2026", "Imported/Projects")));
+        service.pollingSettingsService = new FixedPollingSettingsService();
+        service.userPollingSettingsService = new FixedUserPollingSettingsService();
+        service.sourcePollingSettingsService = new FixedSourcePollingSettingsService();
+        service.sourcePollingStateService = new ReadySourcePollingStateService();
+        service.manualPollRateLimitService = new ManualPollRateLimitService();
+
+        PollRunResult result = service.runPoll("greenmail-integration:custom-folders");
+
+        assertEquals(2, result.getFetched());
+        assertEquals(2, result.getImported());
+        assertEquals(0, result.getDuplicates());
+        assertTrue(result.getErrorDetails().isEmpty());
+
+        assertEquals(
+                List.of("project-alpha", "project-beta"),
+                listSubjects(destinationMail, DESTINATION_USERNAME, DESTINATION_PASSWORD, "Imported/Projects"));
+        assertEquals(
+                List.of(),
+                listSubjects(destinationMail, DESTINATION_USERNAME, DESTINATION_PASSWORD, "INBOX"));
+    }
+
     private RuntimeEmailAccount runtimeAccount() {
+        return runtimeAccount("INBOX", DESTINATION_FOLDER);
+    }
+
+    private RuntimeEmailAccount runtimeAccount(String sourceFolder, String destinationFolder) {
         return new RuntimeEmailAccount(
                 "greenmail-source",
                 "USER",
@@ -135,7 +180,7 @@ class PollingServiceGreenMailIntegrationTest {
                 SOURCE_USERNAME,
                 SOURCE_PASSWORD,
                 "",
-                Optional.of("INBOX"),
+                Optional.of(sourceFolder),
                 false,
                 Optional.of("Imported/Test"),
                 new ImapAppendDestinationTarget(
@@ -150,7 +195,7 @@ class PollingServiceGreenMailIntegrationTest {
                         InboxBridgeConfig.OAuthProvider.NONE,
                         DESTINATION_USERNAME,
                         DESTINATION_PASSWORD,
-                        DESTINATION_FOLDER));
+                        destinationFolder));
     }
 
     private static void appendMessage(

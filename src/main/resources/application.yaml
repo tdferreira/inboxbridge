@@ -30,7 +30,11 @@ inboxbridge:
   poll-interval: ${POLL_INTERVAL:5m}
   fetch-window: ${FETCH_WINDOW:50}
   source-host-min-spacing: ${SOURCE_HOST_MIN_SPACING:PT1S}
+  source-host-max-concurrency: ${SOURCE_HOST_MAX_CONCURRENCY:2}
   destination-provider-min-spacing: ${DESTINATION_PROVIDER_MIN_SPACING:PT0.25S}
+  destination-provider-max-concurrency: ${DESTINATION_PROVIDER_MAX_CONCURRENCY:1}
+  throttle-lease-ttl: ${THROTTLE_LEASE_TTL:PT2M}
+  adaptive-throttle-max-multiplier: ${ADAPTIVE_THROTTLE_MAX_MULTIPLIER:6}
   success-jitter-ratio: ${SUCCESS_JITTER_RATIO:0.2}
   max-success-jitter: ${MAX_SUCCESS_JITTER:PT30S}
   multi-user-enabled: ${MULTI_USER_ENABLED:true}
