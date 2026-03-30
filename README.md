@@ -258,6 +258,7 @@ Current features:
 - the add/edit source email account dialog is wider, rejects duplicate IDs before submit, and only shows the `.env` badge for environment-managed entries
 - each source email account can now override its own polling enabled state, interval, and fetch window on top of the inherited user/global defaults
 - polling now fails early with a clear message when a source depends on a Gmail account that is no longer linked, instead of surfacing a vaguer downstream Gmail API failure
+- successful polls now add deterministic jitter to the next scheduled run, and each app instance spaces out repeated source-host access plus destination-provider deliveries so large fleets are less likely to hammer one IMAP host or the Gmail API in a burst
 - IMAP message reads now retry once after a `FolderClosedException` by reopening the folder and reacquiring the message before the fetch batch is failed
 - Microsoft IMAP/POP connects now invalidate the cached access token and refresh once automatically if Outlook rejects the current token as invalid before the normal expiry time
 - when a manual run collides with an active scheduler/manual run, the busy error now includes the current trigger, source when relevant, and start time
@@ -438,6 +439,9 @@ Current limits:
 
 - minimum interval: `5s`
 - fetch window range: `1` to `500`
+- default source-host minimum spacing on one app instance: `PT1S`
+- default destination-provider minimum spacing on one app instance: `PT0.25S`
+- default successful-poll jitter: `20%` of the effective interval, capped at `PT30S`
 
 ### Fix Google `403: org_internal`
 
@@ -579,6 +583,8 @@ To replace the generated certs with your own:
 - metrics and audit-friendly structured event logs are still limited
 
 ## Tests
+
+The backend test suite now includes a GreenMail-backed mail-flow integration test that verifies InboxBridge can fetch messages from a real IMAP source mailbox, append them into a real IMAP destination mailbox, and suppress duplicate re-imports on the next poll.
 
 Verified on 2026-03-26:
 

@@ -954,6 +954,7 @@ const simpleTranslations = {
     'errors.resetPollingSettings': 'Impossible de réinitialiser les réglages de vérification',
     'errors.saveUserPollingSettings': 'Impossible d’enregistrer vos réglages de vérification',
     'errors.resetUserPollingSettings': 'Impossible de réinitialiser vos réglages de vérification',
+    'errors.saveOAuthApps': 'Impossible d’enregistrer les paramètres des applications OAuth',
     'errors.saveLayoutPreference': 'Impossible d’enregistrer la préférence de disposition',
     'api.bad_request': 'La demande n’a pas pu être traitée.',
     'api.forbidden': 'Vous n’avez pas l’autorisation d’effectuer cette action.',
@@ -1206,6 +1207,7 @@ const simpleTranslations = {
     'errors.resetPollingSettings': 'Abruf-Einstellungen konnten nicht zurückgesetzt werden',
     'errors.saveUserPollingSettings': 'Ihre Abruf-Einstellungen konnten nicht gespeichert werden',
     'errors.resetUserPollingSettings': 'Ihre Abruf-Einstellungen konnten nicht zurückgesetzt werden',
+    'errors.saveOAuthApps': 'Die Einstellungen der OAuth-Apps konnten nicht gespeichert werden',
     'errors.saveLayoutPreference': 'Layout-Einstellung konnte nicht gespeichert werden',
     'api.bad_request': 'Die Anfrage konnte nicht verarbeitet werden.',
     'api.forbidden': 'Sie haben keine Berechtigung für diese Aktion.',
@@ -1792,6 +1794,7 @@ const simpleTranslations = {
     'errors.resetPollingSettings': 'No se pudieron restablecer los ajustes de sondeo',
     'errors.saveUserPollingSettings': 'No se pudieron guardar tus ajustes de sondeo',
     'errors.resetUserPollingSettings': 'No se pudieron restablecer tus ajustes de sondeo',
+    'errors.saveOAuthApps': 'No se pudieron guardar las configuraciones de las aplicaciones OAuth',
     'errors.saveLayoutPreference': 'No se pudo guardar la preferencia de diseño',
     'api.bad_request': 'No se pudo completar la solicitud.',
     'api.forbidden': 'No tienes permiso para realizar esta acción.',
@@ -2350,6 +2353,7 @@ Object.assign(simpleTranslations.fr, {
   'notifications.fetcherPollCompleted': 'Polling terminé pour {emailAccountId} : récupérés {fetched}, importés {imported}, doublons {duplicates}.',
   'notifications.fetcherPollCompletedWithSpam': 'Polling terminé pour {emailAccountId} : récupérés {fetched}, importés {imported}, doublons {duplicates}. Les dossiers spam/indésirables contiennent actuellement {spamJunkCount} messages.',
   'notifications.pollFinishedWithSpam': 'Polling terminé : récupérés {fetched}, importés {imported}, doublons {duplicates}, erreurs {errors}. Les dossiers spam/indésirables contiennent actuellement {spamJunkCount} messages.',
+  'notifications.oauthAppsUpdated': 'Les paramètres des applications OAuth ont été mis à jour.',
   'bridge.oauthConnected': 'OAuth connecté',
   'status.success': 'Succès',
   'status.error': 'Erreur',
@@ -2450,6 +2454,7 @@ Object.assign(simpleTranslations.de, {
   'users.modeTitle': 'Bereitstellungsmodus',
   'users.multiUserEnabledCopy': 'Für diese Bereitstellung sind mehrere Benutzerkonten aktiviert.',
   'users.singleUserEnabledCopy': 'Diese Bereitstellung läuft derzeit im Einzelbenutzermodus.',
+  'notifications.oauthAppsUpdated': 'Die Einstellungen der OAuth-Apps wurden aktualisiert.',
   'users.initialPassword': 'Initiales Passwort',
   'users.role': 'Rolle',
   'users.roleHelp': 'Benutzer kann nur das eigene Zielpostfach, die eigenen Quell-E-Mail-Konten und persönliche Einstellungen verwalten. Admin kann zusätzlich den Administrationsbereich öffnen, Benutzer verwalten, gemeinsame OAuth-Apps konfigurieren und globale Polling-Einstellungen ändern.',
@@ -4003,6 +4008,7 @@ Object.assign(simpleTranslations.es, {
   'users.modeTitle': 'Modo de despliegue',
   'users.multiUserEnabledCopy': 'Hay varias cuentas de usuario habilitadas para este despliegue.',
   'users.singleUserEnabledCopy': 'Este despliegue se está ejecutando actualmente en modo de usuario único.',
+  'notifications.oauthAppsUpdated': 'Se actualizaron las configuraciones de las aplicaciones OAuth.',
   'users.initialPassword': 'Contraseña inicial',
   'users.role': 'Rol',
   'users.roleHelp': 'Usuario solo puede gestionar su propio buzón de destino, sus propias cuentas de correo de origen y sus preferencias personales. Admin también puede acceder al área de Administración, gestionar usuarios, aplicaciones OAuth compartidas y la configuración global de polling.',
@@ -4681,6 +4687,12 @@ function applyEmailAccountAliases(dictionary) {
       if (!(alias in dictionary)) {
         dictionary[alias] = value
       }
+    }
+    if (key === 'notifications.bridgeSaved' && !('notifications.emailAccountSaved' in dictionary)) {
+      dictionary['notifications.emailAccountSaved'] = value
+    }
+    if (key === 'notifications.bridgeDeleted' && !('notifications.emailAccountDeleted' in dictionary)) {
+      dictionary['notifications.emailAccountDeleted'] = value
     }
   }
 }

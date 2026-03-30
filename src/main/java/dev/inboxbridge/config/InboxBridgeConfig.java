@@ -1,5 +1,6 @@
 package dev.inboxbridge.config;
 
+import java.time.Duration;
 import java.util.List;
 import java.util.Optional;
 
@@ -17,6 +18,18 @@ public interface InboxBridgeConfig {
 
     @WithDefault("50")
     int fetchWindow();
+
+    @WithDefault("PT1S")
+    Duration sourceHostMinSpacing();
+
+    @WithDefault("PT0.25S")
+    Duration destinationProviderMinSpacing();
+
+    @WithDefault("0.2")
+    double successJitterRatio();
+
+    @WithDefault("PT30S")
+    Duration maxSuccessJitter();
 
     @WithDefault("true")
     boolean multiUserEnabled();

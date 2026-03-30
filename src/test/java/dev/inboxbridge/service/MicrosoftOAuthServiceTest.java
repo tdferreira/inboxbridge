@@ -240,6 +240,26 @@ class MicrosoftOAuthServiceTest {
         }
 
         @Override
+        public java.time.Duration sourceHostMinSpacing() {
+            return java.time.Duration.ofSeconds(1);
+        }
+
+        @Override
+        public java.time.Duration destinationProviderMinSpacing() {
+            return java.time.Duration.ofMillis(250);
+        }
+
+        @Override
+        public double successJitterRatio() {
+            return 0.2d;
+        }
+
+        @Override
+        public java.time.Duration maxSuccessJitter() {
+            return java.time.Duration.ofSeconds(30);
+        }
+
+        @Override
         public boolean multiUserEnabled() {
             return true;
         }

@@ -62,6 +62,9 @@ public class PollingService {
     @Inject
     ManualPollRateLimitService manualPollRateLimitService;
 
+    @Inject
+    PollThrottleService pollThrottleService;
+
     private final AtomicBoolean running = new AtomicBoolean(false);
     private final AtomicReference<ActivePoll> activePoll = new AtomicReference<>();
 
@@ -203,6 +206,7 @@ public class PollingService {
             } catch (RuntimeException spamProbeError) {
                 LOG.debugf(spamProbeError, "Unable to inspect spam/junk mailbox for source %s", emailAccount.id());
             }
+            awaitSourceThrottle(emailAccount);
             List<FetchedMessage> messages = mailSourceClient.fetch(emailAccount, settings.fetchWindow());
             for (FetchedMessage message : messages) {
                 result.incrementFetched();
@@ -212,6 +216,7 @@ public class PollingService {
                     duplicates++;
                     continue;
                 }
+                awaitDestinationThrottle(emailAccount.destination());
                 MailImportResponse importResponse = destinationService.importMessage(emailAccount.destination(), emailAccount, message);
                 importDeduplicationService.recordImport(message, emailAccount.destination(), importResponse);
                 result.incrementImported();
@@ -256,6 +261,20 @@ public class PollingService {
 
     private String actorRateLimitKey(AppUser actor) {
         return actor == null || actor.id == null ? null : actor.role + ":" + actor.id;
+    }
+
+    private void awaitSourceThrottle(RuntimeEmailAccount emailAccount) {
+        if (pollThrottleService == null) {
+            return;
+        }
+        pollThrottleService.awaitSourceMailboxTurn(emailAccount);
+    }
+
+    private void awaitDestinationThrottle(MailDestinationTarget target) {
+        if (pollThrottleService == null) {
+            return;
+        }
+        pollThrottleService.awaitDestinationDeliveryTurn(target);
     }
 
     private PollRunError skipError(RuntimeEmailAccount bridge, SourcePollingStateService.PollEligibility eligibility) {

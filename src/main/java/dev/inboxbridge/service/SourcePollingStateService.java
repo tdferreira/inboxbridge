@@ -10,6 +10,7 @@ import java.util.function.Function;
 import java.util.stream.Collectors;
 
 import dev.inboxbridge.dto.SourcePollingStateView;
+import dev.inboxbridge.config.InboxBridgeConfig;
 import dev.inboxbridge.persistence.SourcePollingState;
 import dev.inboxbridge.persistence.SourcePollingStateRepository;
 import jakarta.enterprise.context.ApplicationScoped;
@@ -31,6 +32,9 @@ public class SourcePollingStateService {
 
     @Inject
     SourcePollingStateRepository repository;
+
+    @Inject
+    InboxBridgeConfig inboxBridgeConfig;
 
     public Optional<SourcePollingStateView> viewForSource(String sourceId) {
         return repository.findBySourceId(sourceId).map(this::toView);
@@ -74,7 +78,7 @@ public class SourcePollingStateService {
         if (state.id == null) {
             state.sourceId = sourceId;
         }
-        state.nextPollAt = finishedAt.plus(settings.pollInterval());
+        state.nextPollAt = finishedAt.plus(settings.pollInterval()).plus(successJitterFor(sourceId, settings.pollInterval()));
         state.cooldownUntil = null;
         state.consecutiveFailures = 0;
         state.lastFailureReason = null;
@@ -82,6 +86,29 @@ public class SourcePollingStateService {
         state.lastSuccessAt = finishedAt;
         state.updatedAt = finishedAt;
         repository.persist(state);
+    }
+
+    Duration successJitterFor(String sourceId, Duration pollInterval) {
+        if (pollInterval == null || pollInterval.isZero() || pollInterval.isNegative()) {
+            return Duration.ZERO;
+        }
+        double configuredRatio = Math.max(0d, inboxBridgeConfig.successJitterRatio());
+        if (configuredRatio <= 0d) {
+            return Duration.ZERO;
+        }
+        Duration configuredCap = inboxBridgeConfig.maxSuccessJitter();
+        if (configuredCap == null || configuredCap.isNegative()) {
+            configuredCap = Duration.ZERO;
+        }
+        long intervalMillis = pollInterval.toMillis();
+        long ratioMillis = (long) Math.floor(intervalMillis * configuredRatio);
+        long maxJitterMillis = configuredCap.isZero() ? ratioMillis : Math.min(configuredCap.toMillis(), ratioMillis);
+        if (maxJitterMillis <= 0L) {
+            return Duration.ZERO;
+        }
+        int hash = Math.abs((sourceId == null ? "" : sourceId).hashCode());
+        long jitterMillis = hash % (maxJitterMillis + 1L);
+        return Duration.ofMillis(jitterMillis);
     }
 
     @Transactional

@@ -339,11 +339,18 @@ Current backoff behavior is heuristic but practical:
 - auth and consent failures trigger an even longer cooldown so InboxBridge does not repeatedly hammer a blocked account
 - transient network failures trigger a medium cooldown
 - repeated failures increase the cooldown window with exponential growth up to a capped maximum
+- successful polls also add deterministic per-source jitter to the next run so large fleets do not naturally re-align on the same exact boundary again after succeeding
 
 Manual poll requests now split into two behaviors:
 
 - single-source manual runs bypass the normal interval gate and cooldown window for that one selected mail account
 - broader manual runs (`My Polling Settings` for one user, or `Global Polling Settings` for all users) still respect cooldown and next-window checks, and they are protected by an admin-configurable manual rate limit that defaults to 5 runs per 60 seconds per signed-in user
+
+Per-instance pacing now adds another protection layer:
+
+- polls against the same source host are spaced apart by a configurable minimum gap (`SOURCE_HOST_MIN_SPACING`, default `PT1S`)
+- destination deliveries for the same provider/mode are also spaced apart by a configurable minimum gap (`DESTINATION_PROVIDER_MIN_SPACING`, default `PT0.25S`)
+- this is still an in-process limiter, so multi-node deployments would need distributed coordination if they want the same guarantees across instances
 
 ### 12. Actionable admin-ui notifications
 

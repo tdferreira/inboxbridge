@@ -37,13 +37,24 @@ class SourcePollingStateServiceTest {
     void successSchedulesNextPollFromEffectiveInterval() {
         SourcePollingStateService service = service();
         Instant finishedAt = Instant.parse("2026-03-26T12:00:00Z");
+        Duration interval = Duration.ofMinutes(3);
 
         service.recordSuccess("fetcher-1", finishedAt, settings(true, "3m", 25));
 
         var state = service.viewForSource("fetcher-1").orElseThrow();
-        assertEquals(Instant.parse("2026-03-26T12:03:00Z"), state.nextPollAt());
+        assertEquals(finishedAt.plus(interval).plus(service.successJitterFor("fetcher-1", interval)), state.nextPollAt());
         assertEquals(0, state.consecutiveFailures());
         assertEquals(finishedAt, state.lastSuccessAt());
+    }
+
+    @Test
+    void successJitterStaysWithinConfiguredCap() {
+        SourcePollingStateService service = service();
+
+        Duration jitter = service.successJitterFor("fetcher-1", Duration.ofMinutes(10));
+
+        assertTrue(!jitter.isNegative());
+        assertTrue(jitter.compareTo(Duration.ofSeconds(30)) <= 0);
     }
 
     @Test
@@ -94,6 +105,7 @@ class SourcePollingStateServiceTest {
     private SourcePollingStateService service() {
         SourcePollingStateService service = new SourcePollingStateService();
         service.repository = new InMemorySourcePollingStateRepository();
+        service.inboxBridgeConfig = new FakeInboxBridgeConfig();
         return service;
     }
 
@@ -125,5 +137,32 @@ class SourcePollingStateServiceTest {
                 states.add(entity);
             }
         }
+    }
+
+    private static final class FakeInboxBridgeConfig implements dev.inboxbridge.config.InboxBridgeConfig {
+        @Override
+        public boolean pollEnabled() { return true; }
+        @Override
+        public String pollInterval() { return "5m"; }
+        @Override
+        public int fetchWindow() { return 50; }
+        @Override
+        public Duration sourceHostMinSpacing() { return Duration.ofSeconds(1); }
+        @Override
+        public Duration destinationProviderMinSpacing() { return Duration.ofMillis(250); }
+        @Override
+        public double successJitterRatio() { return 0.2d; }
+        @Override
+        public Duration maxSuccessJitter() { return Duration.ofSeconds(30); }
+        @Override
+        public boolean multiUserEnabled() { return true; }
+        @Override
+        public Security security() { throw new UnsupportedOperationException(); }
+        @Override
+        public Gmail gmail() { throw new UnsupportedOperationException(); }
+        @Override
+        public Microsoft microsoft() { throw new UnsupportedOperationException(); }
+        @Override
+        public List<dev.inboxbridge.config.InboxBridgeConfig.Source> sources() { return List.of(); }
     }
 }

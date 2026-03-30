@@ -10,6 +10,7 @@ import java.util.List;
 
 import org.junit.jupiter.api.Test;
 
+import dev.inboxbridge.domain.FetchedMessage;
 import dev.inboxbridge.domain.GmailApiDestinationTarget;
 import dev.inboxbridge.domain.MailDestinationTarget;
 import dev.inboxbridge.domain.RuntimeEmailAccount;
@@ -264,6 +265,52 @@ class PollingServiceTest {
     }
 
     @Test
+    void runPollAppliesSourceHostAndDestinationProviderThrottles() {
+        PollingService service = new PollingService();
+        RecordingMailSourceClient mailSourceClient = new RecordingMailSourceClient() {
+            @Override
+            public List<FetchedMessage> fetch(RuntimeEmailAccount bridge, int fetchWindow) {
+                lastFetchWindow = fetchWindow;
+                return List.of(new FetchedMessage(
+                        bridge.id(),
+                        bridge.id() + ":message-1",
+                        java.util.Optional.of("<message-1@example.com>"),
+                        Instant.parse("2026-03-27T10:00:00Z"),
+                        "raw".getBytes(java.nio.charset.StandardCharsets.UTF_8)));
+            }
+        };
+        RecordingPollThrottleService pollThrottleService = new RecordingPollThrottleService();
+        service.mailSourceClient = mailSourceClient;
+        service.importDeduplicationService = new ImportDeduplicationService() {
+            @Override
+            public boolean alreadyImported(FetchedMessage fetchedMessage, MailDestinationTarget destinationTarget) {
+                return false;
+            }
+
+            @Override
+            public void recordImport(FetchedMessage fetchedMessage, MailDestinationTarget destinationTarget, MailImportResponse response) {
+            }
+        };
+        service.mailDestinationServices = new FakeMailDestinationServices(new FakeMailDestinationService(true));
+        service.sourcePollEventService = new NoopSourcePollEventService();
+        service.runtimeEmailAccountService = new FakeRuntimeEmailAccountService(List.of(userBridge(7L)));
+        service.pollingSettingsService = new FakePollingSettingsService(true, Duration.ofMinutes(5), "5m", 10);
+        service.userPollingSettingsService = new FakeUserPollingSettingsService(false, Duration.ofMinutes(2), "2m", 33);
+        service.sourcePollingSettingsService = new FakeSourcePollingSettingsService();
+        RecordingSourcePollingStateService sourcePollingStateService = new RecordingSourcePollingStateService();
+        service.sourcePollingStateService = sourcePollingStateService;
+        service.manualPollRateLimitService = new ManualPollRateLimitService();
+        service.pollThrottleService = pollThrottleService;
+
+        PollRunResult result = service.runPoll("manual-api");
+
+        assertEquals(0, result.getErrors().size());
+        assertEquals("user-fetcher", sourcePollingStateService.lastRecordedSuccessSourceId);
+        assertEquals(List.of("imap.example.com"), pollThrottleService.sourceHosts);
+        assertEquals(List.of(UserMailDestinationConfigService.PROVIDER_GMAIL), pollThrottleService.destinationProviders);
+    }
+
+    @Test
     void busyPollMessageIncludesCurrentSourceWhenSingleSourcePollIsActive() throws Exception {
         PollingService service = new PollingService();
         java.lang.reflect.Field activePollField = PollingService.class.getDeclaredField("activePoll");
@@ -371,7 +418,7 @@ class PollingServiceTest {
     }
 
     private static class RecordingMailSourceClient extends MailSourceClient {
-        private int lastFetchWindow;
+        protected int lastFetchWindow;
 
         @Override
         public List<dev.inboxbridge.domain.FetchedMessage> fetch(RuntimeEmailAccount bridge, int fetchWindow) {
@@ -382,6 +429,21 @@ class PollingServiceTest {
         @Override
         public java.util.Optional<MailboxCountProbe> probeSpamOrJunkFolder(RuntimeEmailAccount bridge) {
             return java.util.Optional.of(new MailboxCountProbe("Spam", 4));
+        }
+    }
+
+    private static final class RecordingPollThrottleService extends PollThrottleService {
+        private final java.util.List<String> sourceHosts = new java.util.ArrayList<>();
+        private final java.util.List<String> destinationProviders = new java.util.ArrayList<>();
+
+        @Override
+        public void awaitSourceMailboxTurn(RuntimeEmailAccount emailAccount) {
+            sourceHosts.add(emailAccount.host());
+        }
+
+        @Override
+        public void awaitDestinationDeliveryTurn(MailDestinationTarget target) {
+            destinationProviders.add(target.providerId());
         }
     }
 

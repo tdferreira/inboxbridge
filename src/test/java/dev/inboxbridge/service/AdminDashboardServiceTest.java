@@ -5,6 +5,7 @@ import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertNull;
 
+import java.time.Duration;
 import java.time.Instant;
 import java.util.Collections;
 import java.util.List;
@@ -367,6 +368,26 @@ class AdminDashboardServiceTest {
         @Override
         public int fetchWindow() {
             return 50;
+        }
+
+        @Override
+        public Duration sourceHostMinSpacing() {
+            return Duration.ofSeconds(1);
+        }
+
+        @Override
+        public Duration destinationProviderMinSpacing() {
+            return Duration.ofMillis(250);
+        }
+
+        @Override
+        public double successJitterRatio() {
+            return 0.2d;
+        }
+
+        @Override
+        public Duration maxSuccessJitter() {
+            return Duration.ofSeconds(30);
         }
 
         @Override
