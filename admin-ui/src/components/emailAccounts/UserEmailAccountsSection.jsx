@@ -54,7 +54,7 @@ function UserEmailAccountsSection({
     ? availableOAuthProviders
     : (microsoftOAuthAvailable ? ['MICROSOFT'] : [])
   return (
-    <section className="surface-card user-bridges-section section-with-corner-toggle" id="source-email-accounts-section" tabIndex="-1">
+    <section className="surface-card user-email-accounts-section section-with-corner-toggle" id="source-email-accounts-section" tabIndex="-1">
       <div className="panel-header">
         <div>
           <div className="section-title">{t('emailAccounts.title')}</div>
@@ -80,9 +80,9 @@ function UserEmailAccountsSection({
           <div className="fetcher-list">
             {fetchers.map((fetcher) => (
               <EmailAccountListItem
-                key={`${fetcher.managementSource}:${fetcher.bridgeId}`}
-                  connectLoading={connectingEmailAccountId === fetcher.bridgeId}
-                  deleteLoading={deletingEmailAccountId === fetcher.bridgeId}
+                key={`${fetcher.managementSource}:${fetcher.emailAccountId}`}
+                  connectLoading={connectingEmailAccountId === fetcher.emailAccountId}
+                  deleteLoading={deletingEmailAccountId === fetcher.emailAccountId}
                 fetcher={fetcher}
                 locale={locale}
                 onConfigurePolling={onConfigureFetcherPolling}
@@ -92,16 +92,16 @@ function UserEmailAccountsSection({
                 onLoadCustomRange={onLoadFetcherCustomRange}
                 onRunPoll={onRunFetcherPoll}
                 onToggleExpand={onFetcherToggleExpand}
-                pollLoading={fetcherPollLoadingId === fetcher.bridgeId}
-                refreshLoading={fetcherRefreshLoadingId === fetcher.bridgeId}
-                stats={fetcherStatsById?.[fetcher.bridgeId] || null}
-                statsLoading={fetcherStatsLoadingId === fetcher.bridgeId}
+                pollLoading={fetcherPollLoadingId === fetcher.emailAccountId}
+                refreshLoading={fetcherRefreshLoadingId === fetcher.emailAccountId}
+                stats={fetcherStatsById?.[fetcher.emailAccountId] || null}
+                statsLoading={fetcherStatsLoadingId === fetcher.emailAccountId}
                 t={t}
               />
             ))}
           </div>
         ) : (
-          <div className="muted-box user-bridges-empty-state">
+          <div className="muted-box user-email-accounts-empty-state">
             <strong>{t('emailAccounts.emptyTitle')}</strong><br />
             {t('emailAccounts.emptyBody')}
           </div>

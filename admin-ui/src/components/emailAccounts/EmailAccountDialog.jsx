@@ -67,7 +67,7 @@ function EmailAccountDialog({
     && (!usingPassword || emailAccountForm.password?.trim() || editingExistingAccount)
   )
   const providerLabel = effectiveOauthProvider === 'GOOGLE' ? t('oauthProvider.google') : t('oauthProvider.microsoft')
-  const dialogTitle = emailAccountForm.emailAccountId ? t('emailAccounts.editDialogTitle', { bridgeId: emailAccountForm.emailAccountId }) : t('emailAccounts.addDialogTitle')
+  const dialogTitle = emailAccountForm.emailAccountId ? t('emailAccounts.editDialogTitle', { emailAccountId: emailAccountForm.emailAccountId }) : t('emailAccounts.addDialogTitle')
   const initialSnapshotRef = useRef(JSON.stringify(emailAccountForm))
   const isDirty = initialSnapshotRef.current !== JSON.stringify(emailAccountForm)
 
@@ -97,7 +97,7 @@ function EmailAccountDialog({
         </LabeledField>
         <div className="muted-box full">{t(`preset.${preset.id}.description`)}</div>
 
-        <LabeledField helpText={t('emailAccounts.bridgeIdHelp')} label={t('emailAccounts.bridgeId')}>
+        <LabeledField helpText={t('emailAccounts.emailAccountIdHelp')} label={t('emailAccounts.emailAccountId')}>
           <input value={emailAccountForm.emailAccountId} onChange={(event) => onEmailAccountFormChange((current) => ({ ...current, emailAccountId: event.target.value }))} />
         </LabeledField>
         {duplicateIdError ? <div className="banner-error full">{duplicateIdError}</div> : null}

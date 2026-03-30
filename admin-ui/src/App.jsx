@@ -976,7 +976,7 @@ function AppContent() {
           onCollapseToggle={() => toggleWorkspaceSection('sourceEmailAccountsCollapsed')}
           onConfigureFetcherPolling={emailAccounts.openFetcherPollingDialog}
           onConnectOAuth={emailAccounts.startSourceOAuth}
-          onDeleteEmailAccount={(bridgeId) => emailAccounts.deleteEmailAccount(bridgeId, openConfirmation)}
+          onDeleteEmailAccount={(emailAccountId) => emailAccounts.deleteEmailAccount(emailAccountId, openConfirmation)}
           onEditEmailAccount={emailAccounts.editEmailAccount}
           onFetcherPollingFormChange={emailAccounts.handleFetcherPollingFormChange}
           onFetcherToggleExpand={emailAccounts.refreshFetcherState}

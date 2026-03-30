@@ -46,7 +46,7 @@ function renderSection(props = {}) {
           effectiveFetchWindow: 25
         },
         destination: { tokenStorageMode: 'DATABASE' },
-        bridges: [],
+        emailAccounts: [],
         recentEvents: []
       }}
       onCollapseToggle={vi.fn()}
@@ -120,7 +120,7 @@ describe('SystemDashboardSection', () => {
             effectiveFetchWindow: 25
           },
           destination: { tokenStorageMode: 'DATABASE' },
-          bridges: [],
+          emailAccounts: [],
           recentEvents: []
         }}
         onCollapseToggle={vi.fn()}

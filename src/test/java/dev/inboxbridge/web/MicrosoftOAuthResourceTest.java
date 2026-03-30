@@ -404,7 +404,7 @@ class MicrosoftOAuthResourceTest {
 
     private static class FakeUserEmailAccountService extends UserEmailAccountService {
         @Override
-        public Optional<UserEmailAccount> findByBridgeId(String bridgeId) {
+        public Optional<UserEmailAccount> findByEmailAccountId(String emailAccountId) {
             return Optional.empty();
         }
     }

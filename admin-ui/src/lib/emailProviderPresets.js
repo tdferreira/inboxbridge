@@ -65,12 +65,12 @@ export const EMAIL_PROVIDER_PRESETS = [
 export const DESTINATION_PROVIDER_PRESETS = [
   {
     id: 'GMAIL_API',
-    labelKey: 'bridge.providerGmail',
+    labelKey: 'emailAccount.providerGmail',
     descriptionKey: 'destinationPreset.gmail.description'
   },
   {
     id: 'OUTLOOK_IMAP',
-    labelKey: 'bridge.providerOutlook',
+    labelKey: 'emailAccount.providerOutlook',
     descriptionKey: 'destinationPreset.outlook.description',
     values: {
       provider: 'OUTLOOK_IMAP',
@@ -86,7 +86,7 @@ export const DESTINATION_PROVIDER_PRESETS = [
   },
   {
     id: 'YAHOO_IMAP',
-    labelKey: 'bridge.providerYahoo',
+    labelKey: 'emailAccount.providerYahoo',
     descriptionKey: 'destinationPreset.yahoo.description',
     values: {
       provider: 'YAHOO_IMAP',
@@ -102,7 +102,7 @@ export const DESTINATION_PROVIDER_PRESETS = [
   },
   {
     id: 'PROTON_BRIDGE_IMAP',
-    labelKey: 'bridge.providerProton',
+    labelKey: 'emailAccount.providerProton',
     descriptionKey: 'destinationPreset.proton-bridge.description',
     values: {
       provider: 'PROTON_BRIDGE_IMAP',
@@ -118,7 +118,7 @@ export const DESTINATION_PROVIDER_PRESETS = [
   },
   {
     id: 'CUSTOM_IMAP',
-    labelKey: 'bridge.providerGenericImap',
+    labelKey: 'emailAccount.providerGenericImap',
     descriptionKey: 'destinationPreset.custom.description',
     values: {
       provider: 'CUSTOM_IMAP',

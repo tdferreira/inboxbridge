@@ -37,7 +37,7 @@ function renderUi(overrides = {}) {
           passwordConfigured: true,
           mustChangePassword: false,
           passkeyCount: 0,
-          bridgeCount: 0
+          emailAccountCount: 0
         },
         destinationConfig: {
           provider: 'GMAIL_API',
@@ -61,12 +61,12 @@ function renderUi(overrides = {}) {
           effectiveFetchWindow: 50
         },
         passkeys: [],
-        bridges: []
+        emailAccounts: []
       }}
       selectedUserLoading={false}
       updatingPasskeysResetUserId={null}
       updatingUserId={null}
-      users={[{ id: 7, username: 'admin', role: 'ADMIN', approved: true, active: true, bridgeCount: 0 }]}
+      users={[{ id: 7, username: 'admin', role: 'ADMIN', approved: true, active: true, emailAccountCount: 0 }]}
       locale={locale}
       t={(key, params) => translate(locale, key, params)}
       {...overrides}
@@ -166,7 +166,7 @@ describe('UserManagementSection', () => {
           passwordConfigured: true,
           mustChangePassword: false,
           passkeyCount: 0,
-          bridgeCount: 1
+          emailAccountCount: 1
         },
         destinationConfig: null,
         pollingSettings: {
@@ -174,7 +174,7 @@ describe('UserManagementSection', () => {
           effectivePollInterval: '5m',
           effectiveFetchWindow: 25
         },
-        bridges: [{ bridgeId: 'outlook-main', protocol: 'IMAP', authMethod: 'OAUTH2', oauthProvider: 'MICROSOFT', host: 'outlook.office365.com', port: 993, tokenStorageMode: 'DATABASE', effectivePollInterval: '5m', effectiveFetchWindow: 25 }],
+        emailAccounts: [{ emailAccountId: 'outlook-main', protocol: 'IMAP', authMethod: 'OAUTH2', oauthProvider: 'MICROSOFT', host: 'outlook.office365.com', port: 993, tokenStorageMode: 'DATABASE', effectivePollInterval: '5m', effectiveFetchWindow: 25 }],
         passkeys: null
       }
     })
@@ -198,11 +198,11 @@ describe('UserManagementSection', () => {
           passwordConfigured: true,
           mustChangePassword: false,
           passkeyCount: 0,
-          bridgeCount: 2
+          emailAccountCount: 2
         },
         destinationConfig: null,
         pollingSettings: null,
-        bridges: [null, { bridgeId: 'outlook-main' }],
+        emailAccounts: [null, { emailAccountId: 'outlook-main' }],
         passkeys: null
       }
     })
@@ -216,10 +216,10 @@ describe('UserManagementSection', () => {
     renderUi({
       expandedUserId: null,
       users: [
-        { id: 2, username: 'zoe', role: 'USER', approved: true, active: true, bridgeCount: 0 },
-        { id: 1, username: 'alice', role: 'ADMIN', approved: true, active: true, bridgeCount: 0 },
-        { id: 3, username: 'John2', role: 'USER', approved: true, active: true, bridgeCount: 0 },
-        { id: 4, username: 'john10', role: 'USER', approved: true, active: true, bridgeCount: 0 }
+        { id: 2, username: 'zoe', role: 'USER', approved: true, active: true, emailAccountCount: 0 },
+        { id: 1, username: 'alice', role: 'ADMIN', approved: true, active: true, emailAccountCount: 0 },
+        { id: 3, username: 'John2', role: 'USER', approved: true, active: true, emailAccountCount: 0 },
+        { id: 4, username: 'john10', role: 'USER', approved: true, active: true, emailAccountCount: 0 }
       ]
     })
 

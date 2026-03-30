@@ -9,11 +9,11 @@ public record AdminDashboardResponse(
         GlobalPollingStatsView stats,
         AdminPollingSettingsView polling,
         AdminDestinationSummary destination,
-                @JsonProperty("emailAccounts") List<AdminEmailAccountSummary> bridges,
+        @JsonProperty("emailAccounts") List<AdminEmailAccountSummary> emailAccounts,
                 List<AdminPollEventSummary> recentEvents) {
 
         @JsonProperty("bridges")
         public List<AdminEmailAccountSummary> legacyBridges() {
-                return bridges;
+                return emailAccounts;
         }
 }

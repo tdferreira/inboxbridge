@@ -58,7 +58,7 @@ public class MailboxConflictService {
             source.enabled = false;
             source.updatedAt = Instant.now();
             userEmailAccountRepository.persist(source);
-            disabledSourceIds.add(source.bridgeId);
+            disabledSourceIds.add(source.emailAccountId);
         }
         return disabledSourceIds;
     }

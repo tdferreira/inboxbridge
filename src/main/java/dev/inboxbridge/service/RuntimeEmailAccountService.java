@@ -49,15 +49,15 @@ public class RuntimeEmailAccountService {
     public Optional<RuntimeEmailAccount> findAccessibleForUser(AppUser actor, String sourceId) {
         // User-scoped endpoints must only target DB-managed fetchers. Env-managed
         // sources are exposed through the admin endpoints to avoid ID collisions.
-        Optional<UserEmailAccount> bridge = userEmailAccountService.findByBridgeId(sourceId);
-        if (bridge.isEmpty() || !bridge.get().userId.equals(actor.id)) {
+        Optional<UserEmailAccount> emailAccount = userEmailAccountService.findByEmailAccountId(sourceId);
+        if (emailAccount.isEmpty() || !emailAccount.get().userId.equals(actor.id)) {
             return Optional.empty();
         }
-        return toRuntimeEmailAccount(bridge.get());
+        return toRuntimeEmailAccount(emailAccount.get());
     }
 
     public List<RuntimeEmailAccount> listEnabledForPolling() {
-        List<RuntimeEmailAccount> bridges = new ArrayList<>();
+        List<RuntimeEmailAccount> emailAccounts = new ArrayList<>();
         MailDestinationTarget systemTarget = systemDestinationTarget();
 
         for (EnvSourceService.IndexedSource indexedSource : envSourceService.configuredSources()) {
@@ -65,24 +65,24 @@ public class RuntimeEmailAccountService {
             if (!source.enabled()) {
                 continue;
             }
-            bridges.add(toRuntimeEmailAccount(source, systemTarget));
+            emailAccounts.add(toRuntimeEmailAccount(source, systemTarget));
         }
 
-        for (UserEmailAccount bridge : userEmailAccountService.listEnabledBridges()) {
-            toRuntimeEmailAccount(bridge).ifPresent(bridges::add);
+        for (UserEmailAccount emailAccount : userEmailAccountService.listEnabledBridges()) {
+            toRuntimeEmailAccount(emailAccount).ifPresent(emailAccounts::add);
         }
-        return bridges;
+        return emailAccounts;
     }
 
     public List<RuntimeEmailAccount> listEnabledForUser(AppUser actor) {
-        List<RuntimeEmailAccount> bridges = new ArrayList<>();
-        for (UserEmailAccount bridge : userEmailAccountService.listEnabledBridges()) {
-            if (!bridge.userId.equals(actor.id)) {
+        List<RuntimeEmailAccount> emailAccounts = new ArrayList<>();
+        for (UserEmailAccount emailAccount : userEmailAccountService.listEnabledBridges()) {
+            if (!emailAccount.userId.equals(actor.id)) {
                 continue;
             }
-            toRuntimeEmailAccount(bridge).ifPresent(bridges::add);
+            toRuntimeEmailAccount(emailAccount).ifPresent(emailAccounts::add);
         }
-        return bridges;
+        return emailAccounts;
     }
 
     private MailDestinationTarget systemDestinationTarget() {
@@ -123,33 +123,33 @@ public class RuntimeEmailAccountService {
                 destinationTarget);
     }
 
-    private Optional<RuntimeEmailAccount> toRuntimeEmailAccount(UserEmailAccount bridge) {
-        Optional<AppUser> owner = appUserRepository.findByIdOptional(bridge.userId);
+    private Optional<RuntimeEmailAccount> toRuntimeEmailAccount(UserEmailAccount emailAccount) {
+        Optional<AppUser> owner = appUserRepository.findByIdOptional(emailAccount.userId);
         if (owner.isEmpty() || !owner.get().active || !owner.get().approved) {
             return Optional.empty();
         }
-        Optional<MailDestinationTarget> destinationTarget = userMailDestinationConfigService.resolveForUser(bridge.userId, owner.get().username);
+        Optional<MailDestinationTarget> destinationTarget = userMailDestinationConfigService.resolveForUser(emailAccount.userId, owner.get().username);
         if (destinationTarget.isEmpty()) {
             return Optional.empty();
         }
         return Optional.of(new RuntimeEmailAccount(
-                bridge.bridgeId,
+                emailAccount.emailAccountId,
                 "USER",
-                bridge.userId,
+                emailAccount.userId,
                 owner.get().username,
-                bridge.enabled,
-                bridge.protocol,
-                bridge.host,
-                bridge.port,
-                bridge.tls,
-                bridge.authMethod,
-                bridge.oauthProvider,
-                bridge.username,
-                userEmailAccountService.decryptPassword(bridge),
-                userEmailAccountService.decryptRefreshToken(bridge),
-                Optional.ofNullable(bridge.folderName),
-                bridge.unreadOnly,
-                Optional.ofNullable(bridge.customLabel),
+                emailAccount.enabled,
+                emailAccount.protocol,
+                emailAccount.host,
+                emailAccount.port,
+                emailAccount.tls,
+                emailAccount.authMethod,
+                emailAccount.oauthProvider,
+                emailAccount.username,
+                userEmailAccountService.decryptPassword(emailAccount),
+                userEmailAccountService.decryptRefreshToken(emailAccount),
+                Optional.ofNullable(emailAccount.folderName),
+                emailAccount.unreadOnly,
+                Optional.ofNullable(emailAccount.customLabel),
                 destinationTarget.get()));
     }
 }

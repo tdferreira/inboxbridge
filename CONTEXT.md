@@ -570,7 +570,7 @@ admin-ui
     │   ├── account
     │   ├── admin
     │   ├── auth
-    │   ├── bridges
+    │   ├── emailAccounts
     │   ├── common
     │   ├── destination
     │   ├── emailAccounts

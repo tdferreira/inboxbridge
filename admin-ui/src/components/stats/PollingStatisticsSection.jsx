@@ -11,6 +11,22 @@ function formatDuration(milliseconds, t) {
   return `${minutes.toFixed(minutes >= 10 ? 0 : 1)} min`
 }
 
+function translateProviderLabel(entry, t) {
+  const providerKey = String(entry?.key || '').trim().toLowerCase()
+  const providerLabelKeys = {
+    gmail: 'emailAccount.providerGmail',
+    microsoft: 'emailAccount.providerOutlook',
+    outlook: 'emailAccount.providerOutlook',
+    yahoo: 'emailAccount.providerYahoo',
+    'yahoo-mail': 'emailAccount.providerYahoo',
+    proton: 'emailAccount.providerProton',
+    'proton-bridge': 'emailAccount.providerProton',
+    'generic-imap': 'emailAccount.providerGenericImap',
+    'generic-pop3': 'emailAccount.providerGenericPop3'
+  }
+  return providerLabelKeys[providerKey] ? t(providerLabelKeys[providerKey]) : entry?.label
+}
+
 function PollingStatisticsSection({
   collapsed = false,
   collapseLoading = false,
@@ -121,7 +137,7 @@ function PollingStatisticsSection({
                   <div className="polling-statistics-breakdown">
                     {stats.providerBreakdown.map((entry) => (
                       <div key={entry.key}>
-                        <span>{entry.label}</span>
+                        <span>{translateProviderLabel(entry, t)}</span>
                         <strong>{entry.count}</strong>
                       </div>
                     ))}

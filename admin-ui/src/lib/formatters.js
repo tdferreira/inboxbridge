@@ -26,30 +26,30 @@ export function formatDate(value, locale = 'en') {
 export function formatPollError(message, locale = 'en') {
   if (message && typeof message === 'object') {
     const code = String(message.code || '').trim()
-    const bridgeId = message.sourceId || ''
+    const emailAccountId = message.sourceId || ''
     switch (code) {
       case 'source_cooling_down':
         return translate(locale, 'common.cooldownError', {
-          bridgeId,
+          emailAccountId,
           value: formatDate(message.value, locale)
         })
       case 'source_waiting_next_window':
         return translate(locale, 'common.nextPollWindowError', {
-          bridgeId,
+          emailAccountId,
           value: formatDate(message.value, locale)
         })
       case 'source_disabled':
-        return translate(locale, 'common.sourceDisabledError', { bridgeId })
+        return translate(locale, 'common.sourceDisabledError', { emailAccountId })
       case 'source_polling_disabled':
-        return translate(locale, 'common.sourcePollingDisabledError', { bridgeId })
+        return translate(locale, 'common.sourcePollingDisabledError', { emailAccountId })
       case 'gmail_account_not_linked':
-        return translate(locale, 'common.gmailAccountNotLinkedError', { bridgeId })
+        return translate(locale, 'common.gmailAccountNotLinkedError', { emailAccountId })
       case 'gmail_access_revoked':
-        return translate(locale, 'common.gmailAccessRevokedError', { bridgeId })
+        return translate(locale, 'common.gmailAccessRevokedError', { emailAccountId })
       case 'microsoft_access_revoked':
-        return translate(locale, 'common.microsoftAccessRevokedError', { bridgeId })
+        return translate(locale, 'common.microsoftAccessRevokedError', { emailAccountId })
       case 'google_source_access_revoked':
-        return translate(locale, 'common.googleSourceAccessRevokedError', { bridgeId })
+        return translate(locale, 'common.googleSourceAccessRevokedError', { emailAccountId })
       case 'poll_busy':
         return translate(locale, 'common.pollBusyError')
       case 'manual_poll_rate_limited':
@@ -65,61 +65,61 @@ export function formatPollError(message, locale = 'en') {
   if (!text) return text
   const cooldownMatch = text.match(/^Source (.+?) is cooling down until (.+)\.$/)
   if (cooldownMatch) {
-    const [, bridgeId, until] = cooldownMatch
+    const [, emailAccountId, until] = cooldownMatch
     return translate(locale, 'common.cooldownError', {
-      bridgeId,
+      emailAccountId,
       value: formatDate(until, locale)
     })
   }
 
   const nextWindowMatch = text.match(/^Source (.+?) is waiting for its next poll window at (.+)\.$/)
   if (nextWindowMatch) {
-    const [, bridgeId, at] = nextWindowMatch
+    const [, emailAccountId, at] = nextWindowMatch
     return translate(locale, 'common.nextPollWindowError', {
-      bridgeId,
+      emailAccountId,
       value: formatDate(at, locale)
     })
   }
 
   const sourceDisabledMatch = text.match(/^Source (.+?) is disabled\.$/)
   if (sourceDisabledMatch) {
-    return translate(locale, 'common.sourceDisabledError', { bridgeId: sourceDisabledMatch[1] })
+    return translate(locale, 'common.sourceDisabledError', { emailAccountId: sourceDisabledMatch[1] })
   }
 
   const sourcePollingDisabledMatch = text.match(/^Source (.+?) is skipped because polling is disabled for this fetcher\.$/)
   if (sourcePollingDisabledMatch) {
-    return translate(locale, 'common.sourcePollingDisabledError', { bridgeId: sourcePollingDisabledMatch[1] })
+    return translate(locale, 'common.sourcePollingDisabledError', { emailAccountId: sourcePollingDisabledMatch[1] })
   }
 
   const gmailAccountNotLinkedMatch = text.match(/^Source (.+?) failed: The Gmail account is not linked for this destination\..+$/)
   if (gmailAccountNotLinkedMatch) {
-    return translate(locale, 'common.gmailAccountNotLinkedError', { bridgeId: gmailAccountNotLinkedMatch[1] })
+    return translate(locale, 'common.gmailAccountNotLinkedError', { emailAccountId: gmailAccountNotLinkedMatch[1] })
   }
 
   const gmailAccessRevokedMatch = text.match(/^Source (.+?) failed: The linked Gmail account no longer grants InboxBridge access\..+$/)
   if (gmailAccessRevokedMatch) {
-    return translate(locale, 'common.gmailAccessRevokedError', { bridgeId: gmailAccessRevokedMatch[1] })
+    return translate(locale, 'common.gmailAccessRevokedError', { emailAccountId: gmailAccessRevokedMatch[1] })
   }
 
   const gmailRefreshRevokedMatch = text.match(/^Source (.+?) failed: Google token request failed with status 400:[\s\S]*invalid_grant[\s\S]*expired or revoked[\s\S]*$/i)
   if (gmailRefreshRevokedMatch) {
-    return translate(locale, 'common.gmailAccessRevokedError', { bridgeId: gmailRefreshRevokedMatch[1] })
+    return translate(locale, 'common.gmailAccessRevokedError', { emailAccountId: gmailRefreshRevokedMatch[1] })
   }
 
   const microsoftAccessRevokedMatch = text.match(/^Source (.+?) failed: The linked Microsoft account no longer grants InboxBridge access\..+$/)
   if (microsoftAccessRevokedMatch) {
-    return translate(locale, 'common.microsoftAccessRevokedError', { bridgeId: microsoftAccessRevokedMatch[1] })
+    return translate(locale, 'common.microsoftAccessRevokedError', { emailAccountId: microsoftAccessRevokedMatch[1] })
   }
 
   const googleSourceAccessRevokedMatch = text.match(/^Source (.+?) failed: The linked Google account no longer grants InboxBridge access\..+$/)
   if (googleSourceAccessRevokedMatch) {
-    return translate(locale, 'common.googleSourceAccessRevokedError', { bridgeId: googleSourceAccessRevokedMatch[1] })
+    return translate(locale, 'common.googleSourceAccessRevokedError', { emailAccountId: googleSourceAccessRevokedMatch[1] })
   }
 
   const oauthRefreshTokenMissingMatch = text.match(/^(?:Source (.+?) failed:\s*)?Source (.+?) is configured for OAuth2 but has no refresh token\.?$/)
   if (oauthRefreshTokenMissingMatch) {
     return translate(locale, 'common.oauthRefreshTokenMissingError', {
-      bridgeId: oauthRefreshTokenMissingMatch[1] || oauthRefreshTokenMissingMatch[2]
+      emailAccountId: oauthRefreshTokenMissingMatch[1] || oauthRefreshTokenMissingMatch[2]
     })
   }
 

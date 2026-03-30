@@ -171,7 +171,7 @@ function createWorkspaceRouteFetch({ session, uiPreferences = {} }) {
             fetchWindowOverride: null,
             effectiveFetchWindow: 50
           },
-          bridges: [],
+          emailAccounts: [],
           recentEvents: []
         })
       }
@@ -465,7 +465,7 @@ describe('App', () => {
             fetchWindowOverride: null,
             effectiveFetchWindow: 50
           },
-          bridges: []
+          emailAccounts: []
         })
       }
       throw new Error(`Unexpected request: GET ${url}`)
@@ -677,7 +677,7 @@ describe('App', () => {
             fetchWindowOverride: null,
             effectiveFetchWindow: 50
           },
-          bridges: [],
+          emailAccounts: [],
           recentEvents: []
         })
       }
@@ -791,7 +791,7 @@ describe('App', () => {
             manualTriggerLimitWindowSecondsOverride: null,
             effectiveManualTriggerLimitWindowSeconds: 60
           },
-          bridges: [],
+          emailAccounts: [],
           recentEvents: []
         })
       }
@@ -818,7 +818,7 @@ describe('App', () => {
             role: 'ADMIN',
             approved: true,
             active: true,
-            bridgeCount: 0,
+            emailAccountCount: 0,
             gmailConfigured: true,
             passwordConfigured: true,
             mustChangePassword: false,
@@ -830,7 +830,7 @@ describe('App', () => {
             role: 'USER',
             approved: true,
             active: true,
-            bridgeCount: 0,
+            emailAccountCount: 0,
             gmailConfigured: false,
             passwordConfigured: true,
             mustChangePassword: false,
@@ -948,7 +948,7 @@ describe('App', () => {
             manualTriggerLimitWindowSecondsOverride: null,
             effectiveManualTriggerLimitWindowSeconds: 60
           },
-          bridges: [],
+          emailAccounts: [],
           recentEvents: []
         })
       }
@@ -975,7 +975,7 @@ describe('App', () => {
             role: 'ADMIN',
             approved: true,
             active: true,
-            bridgeCount: 0,
+            emailAccountCount: 0,
             gmailConfigured: true,
             passwordConfigured: true,
             mustChangePassword: false,
@@ -987,7 +987,7 @@ describe('App', () => {
             role: 'USER',
             approved: true,
             active: true,
-            bridgeCount: 1,
+            emailAccountCount: 1,
             gmailConfigured: false,
             passwordConfigured: true,
             mustChangePassword: false,
@@ -1003,7 +1003,7 @@ describe('App', () => {
             role: 'USER',
             approved: true,
             active: true,
-            bridgeCount: 1
+            emailAccountCount: 1
           },
           destinationConfig: null,
           pollingSettings: {
@@ -1014,7 +1014,7 @@ describe('App', () => {
           pollingStats: {
             totalImportedMessages: 0
           },
-          bridges: [null, { bridgeId: 'outlook-main' }],
+          emailAccounts: [null, { emailAccountId: 'outlook-main' }],
           passkeys: null
         })
       }
@@ -1085,7 +1085,7 @@ describe('App', () => {
             manualTriggerLimitWindowSecondsOverride: null,
             effectiveManualTriggerLimitWindowSeconds: 60
           },
-          bridges: [],
+          emailAccounts: [],
           recentEvents: []
         })
       }
@@ -1170,7 +1170,7 @@ describe('App', () => {
             manualTriggerLimitWindowSecondsOverride: null,
             effectiveManualTriggerLimitWindowSeconds: 60
           },
-          bridges: [],
+          emailAccounts: [],
           recentEvents: []
         })
       }
@@ -1259,7 +1259,7 @@ describe('App', () => {
       if (url === '/api/app/email-accounts') {
         return jsonResponse([
           {
-            bridgeId: 'outlook-main',
+            emailAccountId: 'outlook-main',
             customLabel: '',
             managementSource: 'DATABASE',
             protocol: 'IMAP',
@@ -1362,7 +1362,7 @@ describe('App', () => {
       if (url === '/api/app/email-accounts') {
         return jsonResponse([
           {
-            bridgeId: 'outlook-main',
+            emailAccountId: 'outlook-main',
             customLabel: '',
             managementSource: 'DATABASE',
             protocol: 'IMAP',

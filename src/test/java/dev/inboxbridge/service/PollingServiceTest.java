@@ -85,15 +85,15 @@ class PollingServiceTest {
         service.importDeduplicationService = new ImportDeduplicationService();
         service.mailDestinationServices = new FakeMailDestinationServices(new FakeMailDestinationService(true));
         service.sourcePollEventService = new NoopSourcePollEventService();
-        RuntimeEmailAccount bridge = systemBridge("outlook-main");
-        service.runtimeEmailAccountService = new FakeRuntimeEmailAccountService(List.of(bridge));
+        RuntimeEmailAccount emailAccount = systemBridge("outlook-main");
+        service.runtimeEmailAccountService = new FakeRuntimeEmailAccountService(List.of(emailAccount));
         service.pollingSettingsService = new FakePollingSettingsService(true, Duration.ofMinutes(5), "5m", 10);
         service.userPollingSettingsService = new FakeUserPollingSettingsService(true, Duration.ofMinutes(5), "5m", 10);
         service.sourcePollingSettingsService = new FakeSourcePollingSettingsService();
         service.sourcePollingStateService = sourcePollingStateService;
         service.manualPollRateLimitService = new ManualPollRateLimitService();
 
-        PollRunResult result = service.runPollForSource(bridge, "manual-source");
+        PollRunResult result = service.runPollForSource(emailAccount, "manual-source");
 
         assertEquals(0, result.getErrors().size());
         assertEquals(10, mailSourceClient.lastFetchWindow);
@@ -446,21 +446,21 @@ class PollingServiceTest {
     }
 
     private static final class FakeRuntimeEmailAccountService extends RuntimeEmailAccountService {
-        private final List<RuntimeEmailAccount> bridges;
+        private final List<RuntimeEmailAccount> emailAccounts;
 
-        private FakeRuntimeEmailAccountService(List<RuntimeEmailAccount> bridges) {
-            this.bridges = bridges;
+        private FakeRuntimeEmailAccountService(List<RuntimeEmailAccount> emailAccounts) {
+            this.emailAccounts = emailAccounts;
         }
 
         @Override
         public List<RuntimeEmailAccount> listEnabledForPolling() {
-            return bridges;
+            return emailAccounts;
         }
 
         @Override
         public List<RuntimeEmailAccount> listEnabledForUser(dev.inboxbridge.persistence.AppUser actor) {
-            return bridges.stream()
-                    .filter(bridge -> actor != null && actor.id != null && actor.id.equals(bridge.ownerUserId()))
+            return emailAccounts.stream()
+                    .filter(emailAccount -> actor != null && actor.id != null && actor.id.equals(emailAccount.ownerUserId()))
                     .toList();
         }
     }

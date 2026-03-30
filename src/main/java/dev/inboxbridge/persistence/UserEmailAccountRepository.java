@@ -11,11 +11,11 @@ import jakarta.transaction.Transactional;
 public class UserEmailAccountRepository implements PanacheRepository<UserEmailAccount> {
 
     public List<UserEmailAccount> listByUserId(Long userId) {
-        return find("userId = ?1 order by bridgeId", userId).list();
+        return find("userId = ?1 order by emailAccountId", userId).list();
     }
 
-    public Optional<UserEmailAccount> findByBridgeId(String bridgeId) {
-        return find("bridgeId", bridgeId).firstResultOptional();
+    public Optional<UserEmailAccount> findByEmailAccountId(String emailAccountId) {
+        return find("emailAccountId", emailAccountId).firstResultOptional();
     }
 
     @Transactional

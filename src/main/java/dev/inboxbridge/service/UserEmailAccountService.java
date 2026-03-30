@@ -66,16 +66,16 @@ public class UserEmailAccountService {
 
     public List<UserEmailAccountView> listForUser(Long userId) {
         Map<String, ImportStats> importStatsBySource = importStatsBySource();
-        List<UserEmailAccount> bridges = repository.listByUserId(userId);
+        List<UserEmailAccount> emailAccounts = repository.listByUserId(userId);
         Map<String, dev.inboxbridge.dto.SourcePollingStateView> pollingStateBySource = sourcePollingStateService.viewBySourceIds(
-                bridges.stream()
-                        .map(bridge -> bridge.bridgeId)
+                emailAccounts.stream()
+                        .map(emailAccount -> emailAccount.emailAccountId)
                         .toList());
-        return bridges.stream()
-                .map(bridge -> toView(
-                        bridge,
-                        importStatsBySource.getOrDefault(bridge.bridgeId, ImportStats.EMPTY),
-                        pollingStateBySource.get(bridge.bridgeId)))
+        return emailAccounts.stream()
+                .map(emailAccount -> toView(
+                        emailAccount,
+                        importStatsBySource.getOrDefault(emailAccount.emailAccountId, ImportStats.EMPTY),
+                        pollingStateBySource.get(emailAccount.emailAccountId)))
                 .toList();
     }
 
@@ -83,8 +83,8 @@ public class UserEmailAccountService {
         return repository.list("enabled", true);
     }
 
-    public Optional<UserEmailAccount> findByBridgeId(String bridgeId) {
-        return repository.findByBridgeId(bridgeId);
+    public Optional<UserEmailAccount> findByEmailAccountId(String emailAccountId) {
+        return repository.findByEmailAccountId(emailAccountId);
     }
 
     public EmailAccountConnectionTestResult testConnection(AppUser user, UpdateUserEmailAccountRequest request) {
@@ -93,7 +93,7 @@ public class UserEmailAccountService {
     }
 
     public RuntimeEmailAccount preview(AppUser user, UpdateUserEmailAccountRequest request) {
-        String bridgeId = requireNonBlank(request.bridgeId(), "Mail fetcher ID");
+        String emailAccountId = requireNonBlank(request.emailAccountId(), "Mail fetcher ID");
         UserEmailAccount existing = resolveExistingBridge(user, request);
         InboxBridgeConfig.Protocol protocol = parseProtocol(request.protocol());
         String host = requireNonBlank(request.host(), "Host");
@@ -104,7 +104,7 @@ public class UserEmailAccountService {
             oauthProvider = InboxBridgeConfig.OAuthProvider.MICROSOFT;
         }
         RuntimeEmailAccount candidate = new RuntimeEmailAccount(
-                bridgeId,
+                emailAccountId,
                 "USER",
                 user.id,
                 user.username,
@@ -131,25 +131,25 @@ public class UserEmailAccountService {
     @Transactional
     public UserEmailAccountView upsert(AppUser user, UpdateUserEmailAccountRequest request) {
         if (!secretEncryptionService.isConfigured()) {
-            throw new IllegalStateException("Secure secret storage must be configured before storing user bridge secrets in the database.");
+            throw new IllegalStateException("Secure secret storage must be configured before storing user email account secrets in the database.");
         }
-        String bridgeId = requireNonBlank(request.bridgeId(), "Mail fetcher ID");
+        String emailAccountId = requireNonBlank(request.emailAccountId(), "Mail fetcher ID");
         UserEmailAccount existing = resolveExistingBridge(user, request);
-        UserEmailAccount bridge = existing == null ? new UserEmailAccount() : existing;
+        UserEmailAccount emailAccount = existing == null ? new UserEmailAccount() : existing;
         // Fetcher IDs are global across env-backed runtime config, OAuth state,
         // logs, and imported-message attribution, so renames must stay unique.
-        repository.findByBridgeId(bridgeId)
-                .filter(candidate -> bridge.id == null || !candidate.id.equals(bridge.id))
+        repository.findByEmailAccountId(emailAccountId)
+                .filter(candidate -> emailAccount.id == null || !candidate.id.equals(emailAccount.id))
                 .ifPresent(candidate -> {
                     throw new IllegalArgumentException("Mail fetcher ID already exists");
                 });
         boolean collidesWithSystemSource = envSourceService.configuredSources().stream()
                 .map(EnvSourceService.IndexedSource::source)
-                .anyMatch(source -> source.id().equals(bridgeId));
+                .anyMatch(source -> source.id().equals(emailAccountId));
         if (collidesWithSystemSource) {
             throw new IllegalArgumentException("Mail fetcher ID already exists");
         }
-        boolean isNew = bridge.id == null;
+        boolean isNew = emailAccount.id == null;
         String host = requireNonBlank(request.host(), "Host");
         InboxBridgeConfig.AuthMethod authMethod = parseAuthMethod(request.authMethod());
         InboxBridgeConfig.OAuthProvider oauthProvider = parseOAuthProvider(request.oauthProvider());
@@ -157,42 +157,42 @@ public class UserEmailAccountService {
             authMethod = InboxBridgeConfig.AuthMethod.OAUTH2;
             oauthProvider = InboxBridgeConfig.OAuthProvider.MICROSOFT;
         }
-        bridge.userId = user.id;
-        bridge.bridgeId = bridgeId;
-        bridge.enabled = request.enabled() == null || request.enabled();
-        bridge.protocol = parseProtocol(request.protocol());
-        bridge.host = host;
-        bridge.port = request.port() == null ? defaultPort(bridge.protocol) : request.port();
-        bridge.tls = request.tls() == null || request.tls();
-        bridge.authMethod = authMethod;
-        bridge.oauthProvider = oauthProvider;
-        bridge.username = requireNonBlank(request.username(), "Username");
-        bridge.folderName = blankToNull(request.folder());
-        bridge.unreadOnly = request.unreadOnly() != null && request.unreadOnly();
-        bridge.customLabel = blankToNull(request.customLabel());
-        bridge.updatedAt = Instant.now();
+        emailAccount.userId = user.id;
+        emailAccount.emailAccountId = emailAccountId;
+        emailAccount.enabled = request.enabled() == null || request.enabled();
+        emailAccount.protocol = parseProtocol(request.protocol());
+        emailAccount.host = host;
+        emailAccount.port = request.port() == null ? defaultPort(emailAccount.protocol) : request.port();
+        emailAccount.tls = request.tls() == null || request.tls();
+        emailAccount.authMethod = authMethod;
+        emailAccount.oauthProvider = oauthProvider;
+        emailAccount.username = requireNonBlank(request.username(), "Username");
+        emailAccount.folderName = blankToNull(request.folder());
+        emailAccount.unreadOnly = request.unreadOnly() != null && request.unreadOnly();
+        emailAccount.customLabel = blankToNull(request.customLabel());
+        emailAccount.updatedAt = Instant.now();
         if (isNew) {
-            bridge.createdAt = bridge.updatedAt;
+            emailAccount.createdAt = emailAccount.updatedAt;
         }
 
         RuntimeEmailAccount candidate = new RuntimeEmailAccount(
-                bridge.bridgeId,
+                emailAccount.emailAccountId,
                 "USER",
                 user.id,
                 user.username,
-                bridge.enabled,
-                bridge.protocol,
-                bridge.host,
-                bridge.port,
-                bridge.tls,
-                bridge.authMethod,
-                bridge.oauthProvider,
-                bridge.username,
-                bridge.authMethod == InboxBridgeConfig.AuthMethod.PASSWORD ? resolvePassword(existing, bridge.authMethod, request.password()) : "",
-                bridge.authMethod == InboxBridgeConfig.AuthMethod.OAUTH2 ? resolveRefreshToken(existing, bridge.authMethod, bridge.oauthProvider, request.oauthRefreshToken()) : "",
+                emailAccount.enabled,
+                emailAccount.protocol,
+                emailAccount.host,
+                emailAccount.port,
+                emailAccount.tls,
+                emailAccount.authMethod,
+                emailAccount.oauthProvider,
+                emailAccount.username,
+                emailAccount.authMethod == InboxBridgeConfig.AuthMethod.PASSWORD ? resolvePassword(existing, emailAccount.authMethod, request.password()) : "",
+                emailAccount.authMethod == InboxBridgeConfig.AuthMethod.OAUTH2 ? resolveRefreshToken(existing, emailAccount.authMethod, emailAccount.oauthProvider, request.oauthRefreshToken()) : "",
                 Optional.ofNullable(blankToNull(request.folder())),
-                bridge.unreadOnly,
-                Optional.ofNullable(bridge.customLabel),
+                emailAccount.unreadOnly,
+                Optional.ofNullable(emailAccount.customLabel),
                 null);
         if (candidate.enabled() && mailboxConflictService.conflictsWithCurrentDestination(user.id, candidate)) {
             throw new IllegalArgumentException(MailboxConflictService.SOURCE_DESTINATION_CONFLICT_MESSAGE);
@@ -201,110 +201,110 @@ public class UserEmailAccountService {
         if (request.password() != null && !request.password().isBlank()) {
             SecretEncryptionService.EncryptedValue encrypted = secretEncryptionService.encrypt(
                     request.password(),
-                    "user-bridge:" + user.id + ":" + bridge.bridgeId + ":password");
-            bridge.passwordCiphertext = encrypted.ciphertextBase64();
-            bridge.passwordNonce = encrypted.nonceBase64();
-            bridge.keyVersion = secretEncryptionService.keyVersion();
+                    "user-bridge:" + user.id + ":" + emailAccount.emailAccountId + ":password");
+            emailAccount.passwordCiphertext = encrypted.ciphertextBase64();
+            emailAccount.passwordNonce = encrypted.nonceBase64();
+            emailAccount.keyVersion = secretEncryptionService.keyVersion();
         }
         if (request.oauthRefreshToken() != null && !request.oauthRefreshToken().isBlank()) {
             SecretEncryptionService.EncryptedValue encrypted = secretEncryptionService.encrypt(
                     request.oauthRefreshToken(),
-                    "user-bridge:" + user.id + ":" + bridge.bridgeId + ":oauth-refresh-token");
-            bridge.oauthRefreshTokenCiphertext = encrypted.ciphertextBase64();
-            bridge.oauthRefreshTokenNonce = encrypted.nonceBase64();
-            bridge.keyVersion = secretEncryptionService.keyVersion();
+                    "user-bridge:" + user.id + ":" + emailAccount.emailAccountId + ":oauth-refresh-token");
+            emailAccount.oauthRefreshTokenCiphertext = encrypted.ciphertextBase64();
+            emailAccount.oauthRefreshTokenNonce = encrypted.nonceBase64();
+            emailAccount.keyVersion = secretEncryptionService.keyVersion();
         }
 
-        repository.persist(bridge);
+        repository.persist(emailAccount);
         return toView(
-                bridge,
+                emailAccount,
                 ImportStats.EMPTY,
-                sourcePollEventState(bridge.bridgeId));
+                sourcePollEventState(emailAccount.emailAccountId));
     }
 
     @Transactional
-    public void delete(AppUser user, String bridgeId) {
-        UserEmailAccount bridge = repository.findByBridgeId(bridgeId)
+    public void delete(AppUser user, String emailAccountId) {
+        UserEmailAccount bridge = repository.findByEmailAccountId(emailAccountId)
                 .filter(existing -> existing.userId.equals(user.id))
                 .orElseThrow(() -> new IllegalArgumentException("Unknown mail fetcher id"));
         repository.delete(bridge);
     }
 
-    public String decryptPassword(UserEmailAccount bridge) {
-        if (bridge.passwordCiphertext == null || bridge.passwordNonce == null) {
+    public String decryptPassword(UserEmailAccount emailAccount) {
+        if (emailAccount.passwordCiphertext == null || emailAccount.passwordNonce == null) {
             return "";
         }
         return secretEncryptionService.decrypt(
-                bridge.passwordCiphertext,
-                bridge.passwordNonce,
-                bridge.keyVersion,
-                "user-bridge:" + bridge.userId + ":" + bridge.bridgeId + ":password");
+                emailAccount.passwordCiphertext,
+                emailAccount.passwordNonce,
+                emailAccount.keyVersion,
+                "user-bridge:" + emailAccount.userId + ":" + emailAccount.emailAccountId + ":password");
     }
 
-    public String decryptRefreshToken(UserEmailAccount bridge) {
-        if (bridge.oauthRefreshTokenCiphertext == null || bridge.oauthRefreshTokenNonce == null) {
-            return fallbackStoredRefreshToken(bridge).orElse("");
+    public String decryptRefreshToken(UserEmailAccount emailAccount) {
+        if (emailAccount.oauthRefreshTokenCiphertext == null || emailAccount.oauthRefreshTokenNonce == null) {
+            return fallbackStoredRefreshToken(emailAccount).orElse("");
         }
         return secretEncryptionService.decrypt(
-                bridge.oauthRefreshTokenCiphertext,
-                bridge.oauthRefreshTokenNonce,
-                bridge.keyVersion,
-                "user-bridge:" + bridge.userId + ":" + bridge.bridgeId + ":oauth-refresh-token");
+                emailAccount.oauthRefreshTokenCiphertext,
+                emailAccount.oauthRefreshTokenNonce,
+                emailAccount.keyVersion,
+                "user-bridge:" + emailAccount.userId + ":" + emailAccount.emailAccountId + ":oauth-refresh-token");
     }
 
     private UserEmailAccountView toView(
-            UserEmailAccount bridge,
+            UserEmailAccount emailAccount,
             ImportStats importStats,
             dev.inboxbridge.dto.SourcePollingStateView pollingState) {
         PollingSettingsService.EffectivePollingSettings effectiveSettings = sourcePollingSettingsService.effectiveSettingsFor(
                 new dev.inboxbridge.domain.RuntimeEmailAccount(
-                        bridge.bridgeId,
+                        emailAccount.emailAccountId,
                         "USER",
-                        bridge.userId,
+                        emailAccount.userId,
                         null,
-                        bridge.enabled,
-                        bridge.protocol,
-                        bridge.host,
-                        bridge.port,
-                        bridge.tls,
-                        bridge.authMethod,
-                        bridge.oauthProvider,
-                        bridge.username,
-                        decryptPassword(bridge),
-                        decryptRefreshToken(bridge),
-                        Optional.ofNullable(bridge.folderName),
-                        bridge.unreadOnly,
-                        Optional.ofNullable(bridge.customLabel),
+                        emailAccount.enabled,
+                        emailAccount.protocol,
+                        emailAccount.host,
+                        emailAccount.port,
+                        emailAccount.tls,
+                        emailAccount.authMethod,
+                        emailAccount.oauthProvider,
+                        emailAccount.username,
+                        decryptPassword(emailAccount),
+                        decryptRefreshToken(emailAccount),
+                        Optional.ofNullable(emailAccount.folderName),
+                        emailAccount.unreadOnly,
+                        Optional.ofNullable(emailAccount.customLabel),
                         null));
-        AdminPollEventSummary lastEvent = sourcePollEventService.latestForSource(bridge.bridgeId).orElse(null);
-        dev.inboxbridge.dto.SourcePollingStateView sanitizedPollingState = sanitizePollingState(bridge, pollingState);
+        AdminPollEventSummary lastEvent = sourcePollEventService.latestForSource(emailAccount.emailAccountId).orElse(null);
+        dev.inboxbridge.dto.SourcePollingStateView sanitizedPollingState = sanitizePollingState(emailAccount, pollingState);
         return new UserEmailAccountView(
-                bridge.bridgeId,
-                bridge.enabled,
+                emailAccount.emailAccountId,
+                emailAccount.enabled,
                 effectiveSettings.pollEnabled(),
                 effectiveSettings.pollIntervalText(),
                 effectiveSettings.fetchWindow(),
-                bridge.protocol.name(),
-                bridge.host,
-                bridge.port,
-                bridge.tls,
-                bridge.authMethod.name(),
-                bridge.oauthProvider.name(),
-                bridge.username,
-                bridge.passwordCiphertext != null,
-                hasEffectiveOAuthRefreshToken(bridge),
-                bridge.folderName == null ? "INBOX" : bridge.folderName,
-                bridge.unreadOnly,
-                bridge.customLabel == null ? "" : bridge.customLabel,
-                tokenStorageMode(bridge),
+                emailAccount.protocol.name(),
+                emailAccount.host,
+                emailAccount.port,
+                emailAccount.tls,
+                emailAccount.authMethod.name(),
+                emailAccount.oauthProvider.name(),
+                emailAccount.username,
+                emailAccount.passwordCiphertext != null,
+                hasEffectiveOAuthRefreshToken(emailAccount),
+                emailAccount.folderName == null ? "INBOX" : emailAccount.folderName,
+                emailAccount.unreadOnly,
+                emailAccount.customLabel == null ? "" : emailAccount.customLabel,
+                tokenStorageMode(emailAccount),
                 importStats.totalImported(),
                 importStats.lastImportedAt(),
-                sanitizeLastEvent(bridge, lastEvent),
+                sanitizeLastEvent(emailAccount, lastEvent),
                 sanitizedPollingState);
     }
 
-    private dev.inboxbridge.dto.SourcePollingStateView sourcePollEventState(String bridgeId) {
-        return sourcePollingStateService.viewForSource(bridgeId).orElse(null);
+    private dev.inboxbridge.dto.SourcePollingStateView sourcePollEventState(String emailAccountId) {
+        return sourcePollingStateService.viewForSource(emailAccountId).orElse(null);
     }
 
     private Map<String, ImportStats> importStatsBySource() {
@@ -317,59 +317,59 @@ public class UserEmailAccountService {
         return importStatsBySource;
     }
 
-    private String tokenStorageMode(UserEmailAccount bridge) {
-        if (bridge.authMethod == InboxBridgeConfig.AuthMethod.PASSWORD) {
+    private String tokenStorageMode(UserEmailAccount emailAccount) {
+        if (emailAccount.authMethod == InboxBridgeConfig.AuthMethod.PASSWORD) {
             return "PASSWORD";
         }
-        if (bridge.oauthProvider == InboxBridgeConfig.OAuthProvider.NONE) {
+        if (emailAccount.oauthProvider == InboxBridgeConfig.OAuthProvider.NONE) {
             return "NOT_CONFIGURED";
         }
-        return hasEffectiveOAuthRefreshToken(bridge) ? "DATABASE" : "NOT_CONFIGURED";
+        return hasEffectiveOAuthRefreshToken(emailAccount) ? "DATABASE" : "NOT_CONFIGURED";
     }
 
-    private boolean hasEffectiveOAuthRefreshToken(UserEmailAccount bridge) {
-        return bridge.oauthRefreshTokenCiphertext != null
-                || fallbackStoredRefreshToken(bridge).filter(token -> !token.isBlank()).isPresent();
+    private boolean hasEffectiveOAuthRefreshToken(UserEmailAccount emailAccount) {
+        return emailAccount.oauthRefreshTokenCiphertext != null
+                || fallbackStoredRefreshToken(emailAccount).filter(token -> !token.isBlank()).isPresent();
     }
 
-    private Optional<String> fallbackStoredRefreshToken(UserEmailAccount bridge) {
-        return switch (bridge.oauthProvider) {
-            case MICROSOFT -> fallbackMicrosoftRefreshToken(bridge);
-            case GOOGLE -> fallbackGoogleRefreshToken(bridge);
+    private Optional<String> fallbackStoredRefreshToken(UserEmailAccount emailAccount) {
+        return switch (emailAccount.oauthProvider) {
+            case MICROSOFT -> fallbackMicrosoftRefreshToken(emailAccount);
+            case GOOGLE -> fallbackGoogleRefreshToken(emailAccount);
             default -> Optional.empty();
         };
     }
 
-    private Optional<String> fallbackMicrosoftRefreshToken(UserEmailAccount bridge) {
-        if (bridge.oauthProvider != InboxBridgeConfig.OAuthProvider.MICROSOFT || !oAuthCredentialService.secureStorageConfigured()) {
+    private Optional<String> fallbackMicrosoftRefreshToken(UserEmailAccount emailAccount) {
+        if (emailAccount.oauthProvider != InboxBridgeConfig.OAuthProvider.MICROSOFT || !oAuthCredentialService.secureStorageConfigured()) {
             return Optional.empty();
         }
-        return oAuthCredentialService.findMicrosoftCredential(bridge.bridgeId)
+        return oAuthCredentialService.findMicrosoftCredential(emailAccount.emailAccountId)
                 .map(OAuthCredentialService.StoredOAuthCredential::refreshToken)
                 .filter(token -> token != null && !token.isBlank());
     }
 
-    private Optional<String> fallbackGoogleRefreshToken(UserEmailAccount bridge) {
-        if (bridge.oauthProvider != InboxBridgeConfig.OAuthProvider.GOOGLE || !oAuthCredentialService.secureStorageConfigured()) {
+    private Optional<String> fallbackGoogleRefreshToken(UserEmailAccount emailAccount) {
+        if (emailAccount.oauthProvider != InboxBridgeConfig.OAuthProvider.GOOGLE || !oAuthCredentialService.secureStorageConfigured()) {
             return Optional.empty();
         }
-        return oAuthCredentialService.findGoogleCredential("source-google:" + bridge.bridgeId)
+        return oAuthCredentialService.findGoogleCredential("source-google:" + emailAccount.emailAccountId)
                 .map(OAuthCredentialService.StoredOAuthCredential::refreshToken)
                 .filter(token -> token != null && !token.isBlank());
     }
 
-    private AdminPollEventSummary sanitizeLastEvent(UserEmailAccount bridge, AdminPollEventSummary lastEvent) {
+    private AdminPollEventSummary sanitizeLastEvent(UserEmailAccount emailAccount, AdminPollEventSummary lastEvent) {
         if (lastEvent == null || !"ERROR".equals(lastEvent.status()) || lastEvent.error() == null) {
             return lastEvent;
         }
         if (lastEvent.error().contains("configured for OAuth2 but has no refresh token")) {
-            OAuthCredentialService.StoredOAuthCredential credential = oAuthCredentialService.findMicrosoftCredential(bridge.bridgeId).orElse(null);
+            OAuthCredentialService.StoredOAuthCredential credential = oAuthCredentialService.findMicrosoftCredential(emailAccount.emailAccountId).orElse(null);
             if (credential != null && credential.updatedAt() != null && lastEvent.finishedAt() != null
                     && credential.updatedAt().isAfter(lastEvent.finishedAt())) {
                 return null;
             }
         }
-        if (shouldReplaceWithRevokedGmailMessage(bridge.userId, lastEvent.error(), lastEvent.finishedAt())) {
+        if (shouldReplaceWithRevokedGmailMessage(emailAccount.userId, lastEvent.error(), lastEvent.finishedAt())) {
             return new AdminPollEventSummary(
                     lastEvent.sourceId(),
                     lastEvent.trigger(),
@@ -379,25 +379,25 @@ public class UserEmailAccountService {
                     lastEvent.fetched(),
                     lastEvent.imported(),
                     lastEvent.duplicates(),
-                    sourcePrefixedRevokedGmailAccessMessage(bridge.bridgeId));
+                    sourcePrefixedRevokedGmailAccessMessage(emailAccount.emailAccountId));
         }
         return lastEvent;
     }
 
     private dev.inboxbridge.dto.SourcePollingStateView sanitizePollingState(
-            UserEmailAccount bridge,
+            UserEmailAccount emailAccount,
             dev.inboxbridge.dto.SourcePollingStateView pollingState) {
         if (pollingState == null) {
             return null;
         }
-        if (!shouldReplaceWithRevokedGmailMessage(bridge.userId, pollingState.lastFailureReason(), pollingState.lastFailureAt())) {
+        if (!shouldReplaceWithRevokedGmailMessage(emailAccount.userId, pollingState.lastFailureReason(), pollingState.lastFailureAt())) {
             return pollingState;
         }
         return new dev.inboxbridge.dto.SourcePollingStateView(
                 pollingState.nextPollAt(),
                 pollingState.cooldownUntil(),
                 pollingState.consecutiveFailures(),
-                sourcePrefixedRevokedGmailAccessMessage(bridge.bridgeId),
+                sourcePrefixedRevokedGmailAccessMessage(emailAccount.emailAccountId),
                 pollingState.lastFailureAt(),
                 pollingState.lastSuccessAt());
     }
@@ -436,8 +436,8 @@ public class UserEmailAccountService {
                 || errorMessage.contains("no longer grants InboxBridge access");
     }
 
-    private String sourcePrefixedRevokedGmailAccessMessage(String bridgeId) {
-        return "Source " + bridgeId + " failed: " + REVOKED_GMAIL_ACCESS_MESSAGE;
+    private String sourcePrefixedRevokedGmailAccessMessage(String emailAccountId) {
+        return "Source " + emailAccountId + " failed: " + REVOKED_GMAIL_ACCESS_MESSAGE;
     }
 
     private InboxBridgeConfig.Protocol parseProtocol(String value) {
@@ -464,11 +464,11 @@ public class UserEmailAccountService {
     }
 
     private UserEmailAccount resolveExistingBridge(AppUser user, UpdateUserEmailAccountRequest request) {
-        String originalBridgeId = blankToNull(request.originalBridgeId());
-        if (originalBridgeId == null) {
+        String originalEmailAccountId = blankToNull(request.originalEmailAccountId());
+        if (originalEmailAccountId == null) {
             return null;
         }
-        return repository.findByBridgeId(originalBridgeId)
+        return repository.findByEmailAccountId(originalEmailAccountId)
                 .filter(existing -> existing.userId.equals(user.id))
                 .orElseThrow(() -> new IllegalArgumentException("Unknown mail fetcher id"));
     }

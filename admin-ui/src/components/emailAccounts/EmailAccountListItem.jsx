@@ -60,13 +60,13 @@ function EmailAccountListItem({
   const isEnvManaged = fetcher.managementSource === 'ENVIRONMENT'
   const oauthConnected = fetcher.authMethod === 'OAUTH2' && fetcher.oauthConnected === true
   const canConnectOAuth = fetcher.canConnectOAuth ?? fetcher.canConnectMicrosoft ?? false
-  const handleConnectOAuth = onConnectOAuth || ((bridgeId) => onConnectMicrosoft?.(bridgeId))
+  const handleConnectOAuth = onConnectOAuth || ((emailAccountId) => onConnectMicrosoft?.(emailAccountId))
   const statsAvailable = hasMeaningfulStats(stats)
   const [statsCollapsed, setStatsCollapsed] = useState(!statsAvailable)
 
   useEffect(() => {
     setStatsCollapsed(!statsAvailable)
-  }, [fetcher.bridgeId, statsAvailable])
+  }, [fetcher.emailAccountId, statsAvailable])
 
   function toggleExpanded() {
     setExpanded((current) => {
@@ -145,11 +145,11 @@ function EmailAccountListItem({
         <button className="fetcher-list-item-main" onClick={toggleExpanded} type="button">
           <div>
             <div className="fetcher-list-item-title-row">
-              <strong>{fetcher.customLabel || fetcher.bridgeId}</strong>
+              <strong>{fetcher.customLabel || fetcher.emailAccountId}</strong>
               {isEnvManaged ? <span className="status-pill tone-neutral">{t('emailAccounts.envManagedBadge')}</span> : null}
             </div>
             <div className="section-copy">
-              {fetcher.bridgeId} · {protocolLabel(fetcher.protocol, locale)} · {fetcher.host}:{fetcher.port} · {authMethodLabel(fetcher.authMethod, locale)}{fetcher.oauthProvider !== 'NONE' ? ` / ${oauthProviderLabel(fetcher.oauthProvider, locale)}` : ''}
+              {fetcher.emailAccountId} · {protocolLabel(fetcher.protocol, locale)} · {fetcher.host}:{fetcher.port} · {authMethodLabel(fetcher.authMethod, locale)}{fetcher.oauthProvider !== 'NONE' ? ` / ${oauthProviderLabel(fetcher.oauthProvider, locale)}` : ''}
               {refreshLoading ? (
                 <span className="user-list-inline-loading">
                   <span aria-hidden="true" className="user-list-inline-spinner" />
@@ -202,7 +202,7 @@ function EmailAccountListItem({
                 <button
                   className="secondary"
                   disabled={connectLoading}
-                  onClick={() => { handleConnectOAuth(fetcher.bridgeId, fetcher.oauthProvider); setMenuOpen(false) }}
+                  onClick={() => { handleConnectOAuth(fetcher.emailAccountId, fetcher.oauthProvider); setMenuOpen(false) }}
                   type="button"
                 >
                   {oauthConnected
@@ -210,7 +210,7 @@ function EmailAccountListItem({
                     : t(fetcher.oauthProvider === 'GOOGLE' ? 'emailAccount.connectGoogle' : 'emailAccount.connectMicrosoft')}
                 </button>
               ) : null}
-              {fetcher.canDelete ? <button className="danger" disabled={deleteLoading} onClick={() => { onDelete(fetcher.bridgeId); setMenuOpen(false) }} type="button">{t('emailAccount.delete')}</button> : null}
+              {fetcher.canDelete ? <button className="danger" disabled={deleteLoading} onClick={() => { onDelete(fetcher.emailAccountId); setMenuOpen(false) }} type="button">{t('emailAccount.delete')}</button> : null}
             </div>
           ) : null}
         </div>
@@ -225,7 +225,7 @@ function EmailAccountListItem({
             </div>
           ) : null}
           {isEnvManaged ? <div className="muted-box">{t('emailAccounts.envManagedNote')}</div> : null}
-          <dl className="bridge-card-config">
+          <dl className="email-account-card-config">
             <div><dt>{t('emailAccount.provider')}</dt><dd>{inferProviderLabel(fetcher, locale, t)}</dd></div>
             <div><dt>{t('emailAccount.host')}</dt><dd>{fetcher.host}:{fetcher.port}</dd></div>
             <div><dt>{t('emailAccount.tls')}</dt><dd>{fetcher.tls ? t('emailAccount.tlsRequired') : t('emailAccount.tlsOff')}</dd></div>
@@ -255,8 +255,8 @@ function EmailAccountListItem({
               <div className="section-copy">{t('emailAccount.viaTrigger', { time: formatDate(fetcher.lastEvent.finishedAt, locale), trigger: triggerLabel(fetcher.lastEvent.trigger, locale) })}</div>
               <div className="section-copy">{t('emailAccount.results', { fetched: fetcher.lastEvent.fetched, imported: fetcher.lastEvent.imported, duplicates: fetcher.lastEvent.duplicates, spamJunkSuffix: '' })}</div>
               {fetcher.lastEvent.error ? (
-                <div className="bridge-card-error-block">
-                  <div className="bridge-card-error">{formatPollError(fetcher.lastEvent.error, locale)}</div>
+                <div className="email-account-card-error-block">
+                  <div className="email-account-card-error">{formatPollError(fetcher.lastEvent.error, locale)}</div>
                   <CopyButton copiedLabel={t('common.copied')} label={t('common.copyError')} text={formatPollError(fetcher.lastEvent.error, locale)} />
                 </div>
               ) : null}
@@ -275,7 +275,7 @@ function EmailAccountListItem({
               showCollapseToggle={true}
               stats={stats}
               t={t}
-              title={t('pollingStats.sourceTitle', { bridgeId: fetcher.bridgeId })}
+              title={t('pollingStats.sourceTitle', { emailAccountId: fetcher.emailAccountId })}
               variant="source"
             />
           </Suspense>

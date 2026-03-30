@@ -23,7 +23,7 @@ function EmailAccountPollingDialog({
       isDirty={form.isDirty}
       onClose={onClose}
       size="wide"
-      title={t('sourcePolling.title', { bridgeId: fetcher.bridgeId })}
+      title={t('sourcePolling.title', { emailAccountId: fetcher.emailAccountId })}
       unsavedChangesMessage={t('sourcePolling.unsavedChanges')}
     >
       <form className="fetcher-polling-dialog-form" onSubmit={onSave}>

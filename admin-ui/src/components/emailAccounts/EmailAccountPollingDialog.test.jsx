@@ -6,7 +6,7 @@ describe('EmailAccountPollingDialog', () => {
   it('renders translated polling settings labels in portuguese', () => {
     render(
       <EmailAccountPollingDialog
-        fetcher={{ bridgeId: 'outlook-main', customLabel: '' }}
+        fetcher={{ emailAccountId: 'outlook-main', customLabel: '' }}
         form={{
           pollEnabledMode: 'DEFAULT',
           pollIntervalOverride: '',
@@ -39,7 +39,7 @@ describe('EmailAccountPollingDialog', () => {
 
     render(
       <EmailAccountPollingDialog
-        fetcher={{ bridgeId: 'fetcher-1', customLabel: '' }}
+        fetcher={{ emailAccountId: 'fetcher-1', customLabel: '' }}
         form={{
           pollEnabledMode: 'DEFAULT',
           pollIntervalOverride: '',

@@ -191,10 +191,10 @@ class RuntimeEmailAccountServiceTest {
         return user;
     }
 
-    private static UserEmailAccount userBridge(Long userId, String bridgeId) {
+    private static UserEmailAccount userBridge(Long userId, String emailAccountId) {
         UserEmailAccount bridge = new UserEmailAccount();
         bridge.userId = userId;
-        bridge.bridgeId = bridgeId;
+        bridge.emailAccountId = emailAccountId;
         bridge.enabled = true;
         bridge.protocol = InboxBridgeConfig.Protocol.IMAP;
         bridge.host = "imap.example.com";
@@ -202,7 +202,7 @@ class RuntimeEmailAccountServiceTest {
         bridge.tls = true;
         bridge.authMethod = InboxBridgeConfig.AuthMethod.PASSWORD;
         bridge.oauthProvider = InboxBridgeConfig.OAuthProvider.NONE;
-        bridge.username = bridgeId + "@example.com";
+        bridge.username = emailAccountId + "@example.com";
         bridge.folderName = "INBOX";
         bridge.unreadOnly = false;
         bridge.customLabel = null;

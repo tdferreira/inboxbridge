@@ -1,4 +1,4 @@
-.user-bridges-section {
+.user-email-accounts-section {
   padding: 24px;
   display: grid;
   gap: 18px;
@@ -9,12 +9,12 @@
   gap: 16px;
 }
 
-.user-bridges-empty-state {
+.user-email-accounts-empty-state {
   line-height: 1.6;
 }
 
 @media (max-width: 760px) {
-  .user-bridges-section {
+  .user-email-accounts-section {
     padding: 16px;
   }
 }

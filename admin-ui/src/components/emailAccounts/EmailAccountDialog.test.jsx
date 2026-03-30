@@ -5,7 +5,7 @@ import { translate } from '../../lib/i18n'
 describe('EmailAccountDialog', () => {
   it('supports provider presets and hides irrelevant auth fields', () => {
     let emailAccountForm = {
-      bridgeId: '',
+      emailAccountId: '',
       enabled: true,
       protocol: 'IMAP',
       host: '',
@@ -75,8 +75,8 @@ describe('EmailAccountDialog', () => {
     render(
       <EmailAccountDialog
         emailAccountForm={{
-          originalBridgeId: '',
-          bridgeId: '',
+          originalEmailAccountId: '',
+          emailAccountId: '',
           enabled: true,
           protocol: 'IMAP',
           host: '',
@@ -109,8 +109,8 @@ describe('EmailAccountDialog', () => {
     render(
       <EmailAccountDialog
         emailAccountForm={{
-          originalBridgeId: 'outlook-main',
-          bridgeId: 'outlook-main',
+          originalEmailAccountId: 'outlook-main',
+          emailAccountId: 'outlook-main',
           enabled: true,
           protocol: 'IMAP',
           host: 'outlook.office365.com',
@@ -141,8 +141,8 @@ describe('EmailAccountDialog', () => {
     render(
       <EmailAccountDialog
         emailAccountForm={{
-          originalBridgeId: '',
-          bridgeId: 'duplicate-id',
+          originalEmailAccountId: '',
+          emailAccountId: 'duplicate-id',
           enabled: true,
           protocol: 'IMAP',
           host: 'imap.example.com',
@@ -174,8 +174,8 @@ describe('EmailAccountDialog', () => {
     render(
       <EmailAccountDialog
         emailAccountForm={{
-          originalBridgeId: '',
-          bridgeId: '',
+          originalEmailAccountId: '',
+          emailAccountId: '',
           enabled: true,
           protocol: 'IMAP',
           host: '',
@@ -213,8 +213,8 @@ describe('EmailAccountDialog', () => {
     render(
       <EmailAccountDialog
         emailAccountForm={{
-          originalBridgeId: '',
-          bridgeId: '',
+          originalEmailAccountId: '',
+          emailAccountId: '',
           enabled: true,
           protocol: 'IMAP',
           host: '',

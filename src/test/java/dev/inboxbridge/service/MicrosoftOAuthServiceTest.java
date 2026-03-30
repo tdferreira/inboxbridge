@@ -392,7 +392,7 @@ class MicrosoftOAuthServiceTest {
         }
 
         @Override
-        public Optional<UserEmailAccount> findByBridgeId(String bridgeId) {
+        public Optional<UserEmailAccount> findByEmailAccountId(String emailAccountId) {
             return Optional.empty();
         }
     }

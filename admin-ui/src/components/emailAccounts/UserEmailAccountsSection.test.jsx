@@ -9,7 +9,7 @@ describe('UserEmailAccountsSection', () => {
     render(
       <UserEmailAccountsSection
         emailAccountForm={{
-          bridgeId: '',
+          emailAccountId: '',
           enabled: true,
           protocol: 'IMAP',
           host: '',
@@ -70,7 +70,7 @@ describe('UserEmailAccountsSection', () => {
     render(
       <UserEmailAccountsSection
         emailAccountForm={{
-          bridgeId: '',
+          emailAccountId: '',
           enabled: true,
           protocol: 'IMAP',
           host: '',

@@ -10,7 +10,7 @@ describe('EmailAccountListItem', () => {
       <div>
         <EmailAccountListItem
           fetcher={{
-            bridgeId: 'fetcher-1',
+            emailAccountId: 'fetcher-1',
             customLabel: '',
             managementSource: 'DATABASE',
             protocol: 'IMAP',
@@ -61,7 +61,7 @@ describe('EmailAccountListItem', () => {
     render(
       <EmailAccountListItem
         fetcher={{
-          bridgeId: 'fetcher-1',
+          emailAccountId: 'fetcher-1',
           customLabel: '',
           managementSource: 'DATABASE',
           protocol: 'IMAP',
@@ -97,14 +97,14 @@ describe('EmailAccountListItem', () => {
 
     fireEvent.click(screen.getByRole('button', { name: /fetcher-1/i }))
 
-    expect(onToggleExpand).toHaveBeenCalledWith(expect.objectContaining({ bridgeId: 'fetcher-1' }), true)
+    expect(onToggleExpand).toHaveBeenCalledWith(expect.objectContaining({ emailAccountId: 'fetcher-1' }), true)
   })
 
   it('renders translated fetcher labels in portuguese', async () => {
     render(
       <EmailAccountListItem
         fetcher={{
-          bridgeId: 'fetcher-1',
+          emailAccountId: 'fetcher-1',
           customLabel: '',
           managementSource: 'ENVIRONMENT',
           protocol: 'IMAP',
@@ -169,7 +169,7 @@ describe('EmailAccountListItem', () => {
     render(
       <EmailAccountListItem
         fetcher={{
-          bridgeId: 'outlook-main',
+          emailAccountId: 'outlook-main',
           customLabel: '',
           managementSource: 'DATABASE',
           protocol: 'IMAP',
@@ -219,7 +219,7 @@ describe('EmailAccountListItem', () => {
   it('passes the clicked fetcher object when running a manual poll', () => {
     const onRunPoll = vi.fn()
     const fetcher = {
-      bridgeId: 'outlook-main',
+      emailAccountId: 'outlook-main',
       customLabel: '',
       managementSource: 'ENVIRONMENT',
       protocol: 'IMAP',
@@ -265,7 +265,7 @@ describe('EmailAccountListItem', () => {
   it('shows a quick-run icon button in the fetcher row', () => {
     const onRunPoll = vi.fn()
     const fetcher = {
-      bridgeId: 'quick-run-source',
+      emailAccountId: 'quick-run-source',
       customLabel: '',
       managementSource: 'DATABASE',
       protocol: 'IMAP',
@@ -311,7 +311,7 @@ describe('EmailAccountListItem', () => {
     render(
       <EmailAccountListItem
         fetcher={{
-          bridgeId: 'gmail-source',
+          emailAccountId: 'gmail-source',
           customLabel: '',
           managementSource: 'DATABASE',
           protocol: 'IMAP',
@@ -388,7 +388,7 @@ describe('EmailAccountListItem', () => {
     render(
       <EmailAccountListItem
         fetcher={{
-          bridgeId: 'fetcher-1',
+          emailAccountId: 'fetcher-1',
           customLabel: '',
           managementSource: 'DATABASE',
           protocol: 'IMAP',
@@ -439,7 +439,7 @@ describe('EmailAccountListItem', () => {
     render(
       <EmailAccountListItem
         fetcher={{
-          bridgeId: 'fetcher-1',
+          emailAccountId: 'fetcher-1',
           customLabel: '',
           managementSource: 'DATABASE',
           protocol: 'IMAP',

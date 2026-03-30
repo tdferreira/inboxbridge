@@ -52,15 +52,15 @@ class AdminDashboardServiceTest {
         assertEquals(1L, response.stats().scheduledRuns());
 
         assertEquals("DATABASE", response.destination().tokenStorageMode());
-        assertEquals(2, response.bridges().size());
-        assertEquals("outlook-main-imap", response.bridges().getFirst().id());
-        assertEquals(4L, response.bridges().getFirst().totalImportedMessages());
-        assertEquals("DATABASE", response.bridges().getFirst().tokenStorageMode());
-        assertNotNull(response.bridges().getFirst().lastEvent());
-        assertEquals("ERROR", response.bridges().getFirst().lastEvent().status());
-        assertEquals("3m", response.bridges().getFirst().effectivePollInterval());
-        assertEquals(25, response.bridges().getFirst().effectiveFetchWindow());
-        assertNotNull(response.bridges().getFirst().pollingState());
+        assertEquals(2, response.emailAccounts().size());
+        assertEquals("outlook-main-imap", response.emailAccounts().getFirst().id());
+        assertEquals(4L, response.emailAccounts().getFirst().totalImportedMessages());
+        assertEquals("DATABASE", response.emailAccounts().getFirst().tokenStorageMode());
+        assertNotNull(response.emailAccounts().getFirst().lastEvent());
+        assertEquals("ERROR", response.emailAccounts().getFirst().lastEvent().status());
+        assertEquals("3m", response.emailAccounts().getFirst().effectivePollInterval());
+        assertEquals(25, response.emailAccounts().getFirst().effectiveFetchWindow());
+        assertNotNull(response.emailAccounts().getFirst().pollingState());
 
         assertEquals(1, response.recentEvents().size());
         assertEquals("outlook-main-imap", response.recentEvents().getFirst().sourceId());
@@ -143,8 +143,8 @@ class AdminDashboardServiceTest {
 
         AdminDashboardResponse response = service.dashboard();
 
-        assertEquals("DATABASE", response.bridges().getFirst().tokenStorageMode());
-        assertNull(response.bridges().getFirst().lastEvent());
+        assertEquals("DATABASE", response.emailAccounts().getFirst().tokenStorageMode());
+        assertNull(response.emailAccounts().getFirst().lastEvent());
         assertEquals(0, response.overall().sourcesWithErrors());
     }
 

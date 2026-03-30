@@ -71,15 +71,15 @@ class UserEmailAccountServiceTest {
                         "Bearer",
                         Instant.parse("2026-03-27T09:28:30Z")));
 
-        UserEmailAccount bridge = service.repository.findByBridgeId("outlook-main").orElseThrow();
-        bridge.oauthRefreshTokenCiphertext = null;
-        bridge.oauthRefreshTokenNonce = null;
+        UserEmailAccount emailAccount = service.repository.findByEmailAccountId("outlook-main").orElseThrow();
+        emailAccount.oauthRefreshTokenCiphertext = null;
+        emailAccount.oauthRefreshTokenNonce = null;
 
         UserEmailAccountView view = service.listForUser(owner.id).getFirst();
 
         assertTrue(view.oauthRefreshTokenConfigured());
         assertEquals("DATABASE", view.tokenStorageMode());
-        assertEquals("refresh-token", service.decryptRefreshToken(bridge));
+        assertEquals("refresh-token", service.decryptRefreshToken(emailAccount));
     }
 
     @Test
@@ -191,7 +191,7 @@ class UserEmailAccountServiceTest {
                 false,
                 "Imported/Test"));
 
-        UserEmailAccount stored = service.repository.findByBridgeId("outlook-main").orElseThrow();
+        UserEmailAccount stored = service.repository.findByEmailAccountId("outlook-main").orElseThrow();
         assertEquals(InboxBridgeConfig.AuthMethod.OAUTH2, stored.authMethod);
         assertEquals(InboxBridgeConfig.OAuthProvider.MICROSOFT, stored.oauthProvider);
     }
@@ -268,10 +268,10 @@ class UserEmailAccountServiceTest {
         return user;
     }
 
-    private UpdateUserEmailAccountRequest request(String originalBridgeId, String bridgeId) {
+    private UpdateUserEmailAccountRequest request(String originalEmailAccountId, String emailAccountId) {
         return new UpdateUserEmailAccountRequest(
-                originalBridgeId,
-                bridgeId,
+                originalEmailAccountId,
+                emailAccountId,
                 true,
                 "IMAP",
                 "imap.example.com",
@@ -287,10 +287,10 @@ class UserEmailAccountServiceTest {
                 "Imported/Test");
     }
 
-    private UpdateUserEmailAccountRequest oauthRequest(String bridgeId) {
+    private UpdateUserEmailAccountRequest oauthRequest(String emailAccountId) {
         return new UpdateUserEmailAccountRequest(
                 null,
-                bridgeId,
+                emailAccountId,
                 true,
                 "IMAP",
                 "outlook.office365.com",
@@ -334,33 +334,33 @@ class UserEmailAccountServiceTest {
     }
 
     private static final class InMemoryUserEmailAccountRepository extends UserEmailAccountRepository {
-        private final List<UserEmailAccount> bridges = new ArrayList<>();
+        private final List<UserEmailAccount> emailAccounts = new ArrayList<>();
         private long sequence = 1L;
 
         @Override
-        public Optional<UserEmailAccount> findByBridgeId(String bridgeId) {
-            return bridges.stream().filter(bridge -> bridge.bridgeId.equals(bridgeId)).findFirst();
+        public Optional<UserEmailAccount> findByEmailAccountId(String emailAccountId) {
+            return emailAccounts.stream().filter(emailAccount -> emailAccount.emailAccountId.equals(emailAccountId)).findFirst();
         }
 
         @Override
         public List<UserEmailAccount> listByUserId(Long userId) {
-            return bridges.stream()
-                    .filter(bridge -> bridge.userId.equals(userId))
-                    .sorted((left, right) -> left.bridgeId.compareTo(right.bridgeId))
+            return emailAccounts.stream()
+                    .filter(emailAccount -> emailAccount.userId.equals(userId))
+                    .sorted((left, right) -> left.emailAccountId.compareTo(right.emailAccountId))
                     .toList();
         }
 
         @Override
-        public void persist(UserEmailAccount bridge) {
-            if (bridge.id == null) {
-                bridge.id = sequence++;
-                if (bridge.createdAt == null) {
-                    bridge.createdAt = Instant.now();
+        public void persist(UserEmailAccount emailAccount) {
+            if (emailAccount.id == null) {
+                emailAccount.id = sequence++;
+                if (emailAccount.createdAt == null) {
+                    emailAccount.createdAt = Instant.now();
                 }
-                bridges.add(bridge);
+                emailAccounts.add(emailAccount);
             }
-            if (bridge.updatedAt == null) {
-                bridge.updatedAt = Instant.now();
+            if (emailAccount.updatedAt == null) {
+                emailAccount.updatedAt = Instant.now();
             }
         }
     }

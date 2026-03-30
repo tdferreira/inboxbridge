@@ -121,13 +121,13 @@ describe('useUserManagementController', () => {
         effectivePollInterval: '5m',
         effectiveFetchWindow: 25
       },
-      bridges: [{ bridgeId: 'outlook-main' }]
+      emailAccounts: [{ emailAccountId: 'outlook-main' }]
     }))
 
     const { result } = renderController()
 
     act(() => {
-      result.current.applyLoadedUsers([{ id: 7, username: 'admin', role: 'ADMIN', approved: true, active: true, bridgeCount: 1 }])
+      result.current.applyLoadedUsers([{ id: 7, username: 'admin', role: 'ADMIN', approved: true, active: true, emailAccountCount: 1 }])
     })
 
     await act(async () => {
@@ -135,11 +135,11 @@ describe('useUserManagementController', () => {
     })
 
     expect(result.current.selectedUserConfig).toEqual(expect.objectContaining({
-      user: expect.objectContaining({ id: 7, username: 'admin', bridgeCount: 1 }),
+      user: expect.objectContaining({ id: 7, username: 'admin', emailAccountCount: 1 }),
       destinationConfig: expect.objectContaining({ provider: '', linked: false }),
       pollingSettings: expect.objectContaining({ effectivePollEnabled: true, effectivePollInterval: '5m', effectiveFetchWindow: 25 }),
-      emailAccounts: [{ bridgeId: 'outlook-main' }],
-      bridges: [{ bridgeId: 'outlook-main' }],
+      emailAccounts: [{ emailAccountId: 'outlook-main' }],
+      emailAccounts: [{ emailAccountId: 'outlook-main' }],
       passkeys: []
     }))
   })
@@ -155,7 +155,7 @@ describe('useUserManagementController', () => {
     expect(result.current.loadSelectedUserConfiguration).toBe(initialLoader)
 
     act(() => {
-      result.current.applyLoadedUsers([{ id: 7, username: 'admin', role: 'ADMIN', approved: true, active: true, bridgeCount: 1 }])
+      result.current.applyLoadedUsers([{ id: 7, username: 'admin', role: 'ADMIN', approved: true, active: true, emailAccountCount: 1 }])
     })
 
     expect(result.current.loadSelectedUserConfiguration).toBe(initialLoader)

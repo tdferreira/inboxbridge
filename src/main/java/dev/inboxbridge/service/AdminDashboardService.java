@@ -64,7 +64,7 @@ public class AdminDashboardService {
                         .map(indexedSource -> indexedSource.source().id())
                         .toList());
 
-        List<AdminEmailAccountSummary> bridges = configuredSources.stream()
+        List<AdminEmailAccountSummary> emailAccounts = configuredSources.stream()
                 .map(indexedSource -> {
                     InboxBridgeConfig.Source source = indexedSource.source();
                     ImportStats importStats = importStatsBySource.getOrDefault(source.id(), ImportStats.EMPTY);
@@ -116,8 +116,8 @@ public class AdminDashboardService {
                 })
                 .toList();
 
-        int sourcesWithErrors = (int) bridges.stream()
-                .filter(bridge -> bridge.lastEvent() != null && "ERROR".equals(bridge.lastEvent().status()))
+        int sourcesWithErrors = (int) emailAccounts.stream()
+                .filter(emailAccount -> emailAccount.lastEvent() != null && "ERROR".equals(emailAccount.lastEvent().status()))
                 .count();
 
         GlobalPollingStatsView stats = pollingStatsService.globalStats(sourcesWithErrors);
@@ -139,7 +139,7 @@ public class AdminDashboardService {
                         config.gmail().createMissingLabels(),
                         config.gmail().neverMarkSpam(),
                         config.gmail().processForCalendar()),
-                bridges,
+                emailAccounts,
                 sourcePollEventService.recentEvents(20));
     }
 

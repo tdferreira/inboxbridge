@@ -9,11 +9,11 @@ public record AdminUserConfigurationResponse(
         UserMailDestinationView destinationConfig,
         UserPollingSettingsView pollingSettings,
         UserPollingStatsView pollingStats,
-                @JsonProperty("emailAccounts") List<UserEmailAccountView> bridges,
+        @JsonProperty("emailAccounts") List<UserEmailAccountView> emailAccounts,
                 List<PasskeyView> passkeys) {
 
         @JsonProperty("bridges")
         public List<UserEmailAccountView> legacyBridges() {
-                return bridges;
+                return emailAccounts;
         }
 }

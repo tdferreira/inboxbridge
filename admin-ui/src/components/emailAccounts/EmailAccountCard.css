@@ -1,53 +1,53 @@
-.bridge-card {
+.email-account-card {
   padding: 20px;
   display: grid;
   gap: 14px;
 }
 
-.bridge-card-topline {
+.email-account-card-topline {
   display: flex;
   justify-content: space-between;
   gap: 12px;
   align-items: start;
 }
 
-.bridge-card-config {
+.email-account-card-config {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 10px 14px;
   margin: 0;
 }
 
-.bridge-card-config div {
+.email-account-card-config div {
   display: grid;
   gap: 4px;
 }
 
-.bridge-card-config dt {
+.email-account-card-config dt {
   text-transform: uppercase;
   letter-spacing: 0.12em;
   font-size: 0.72rem;
   color: var(--muted);
 }
 
-.bridge-card-config dd {
+.email-account-card-config dd {
   margin: 0;
   font-weight: 600;
 }
 
-.bridge-card-error {
+.email-account-card-error {
   color: var(--danger);
   margin-top: 8px;
 }
 
-.bridge-card-error-block {
+.email-account-card-error-block {
   display: grid;
   gap: 10px;
   margin-top: 8px;
 }
 
 @media (max-width: 760px) {
-  .bridge-card-config {
+  .email-account-card-config {
     grid-template-columns: 1fr;
   }
 }

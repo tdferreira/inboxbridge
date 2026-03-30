@@ -13,7 +13,7 @@ const DEFAULT_SELECTED_USER = {
   passwordConfigured: false,
   mustChangePassword: false,
   passkeyCount: 0,
-  bridgeCount: 0
+  emailAccountCount: 0
 }
 const DEFAULT_SELECTED_DESTINATION_CONFIG = {
   provider: '',
@@ -61,8 +61,7 @@ function normalizeSelectedUserConfiguration(payload, fallbackUser) {
     },
     pollingStats: payload?.pollingStats || null,
     passkeys: Array.isArray(payload?.passkeys) ? payload.passkeys.filter(Boolean) : [],
-    emailAccounts,
-    bridges: emailAccounts
+    emailAccounts
   }
 }
 

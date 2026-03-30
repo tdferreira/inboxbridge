@@ -31,8 +31,8 @@ final class ApiErrorCodes {
         if (message.startsWith("Invalid ISO-8601 date-time:")) return "date_range_invalid";
         if (message.equals("Multi-user mode is disabled for this deployment.")) return "multi_user_disabled";
         if (message.equals("Admin access required") || message.equals("Admin access is required")) return "admin_access_required";
-        if (message.equals("Admin access is required for environment-managed bridges")) return "admin_access_required";
-        if (message.equals("You do not have access to that bridge")) return "bridge_access_denied";
+        if (message.equals("Admin access is required for environment-managed email accounts")) return "admin_access_required";
+        if (message.equals("You do not have access to that email account")) return "bridge_access_denied";
         if (message.equals("Unknown source id") || message.startsWith("Unknown source id:")) return "source_unknown";
         if (message.equals("Missing OAuth state")) return "oauth_state_missing";
         if (message.equals("Invalid or expired OAuth state")) return "oauth_state_invalid_or_expired";

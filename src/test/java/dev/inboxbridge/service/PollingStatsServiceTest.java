@@ -50,7 +50,7 @@ class PollingStatsServiceTest {
             public List<UserEmailAccount> listByUserId(Long userId) {
                 UserEmailAccount bridge = new UserEmailAccount();
                 bridge.userId = userId;
-                bridge.bridgeId = "user-fetcher";
+                bridge.emailAccountId = "user-fetcher";
                 bridge.enabled = true;
                 return List.of(bridge);
             }

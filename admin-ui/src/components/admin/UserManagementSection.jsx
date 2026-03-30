@@ -35,8 +35,7 @@ function createFallbackUserConfig(user, t) {
     },
     pollingStats: null,
     passkeys: [],
-    emailAccounts: [],
-    bridges: []
+    emailAccounts: []
   }
 }
 
@@ -65,8 +64,7 @@ function normalizeExpandedUserConfig(config, user, t) {
     },
     pollingStats: config?.pollingStats || null,
     passkeys: Array.isArray(config?.passkeys) ? config.passkeys : [],
-    emailAccounts,
-    bridges: emailAccounts
+    emailAccounts
   }
 }
 

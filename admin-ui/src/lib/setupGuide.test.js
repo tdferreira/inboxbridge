@@ -8,7 +8,7 @@ describe('buildSetupGuideState', () => {
     const result = buildSetupGuideState({
       destinationMeta: { linked: true },
       myEmailAccounts: [{
-        bridgeId: 'outlook-main',
+        emailAccountId: 'outlook-main',
         authMethod: 'OAUTH2',
         oauthRefreshTokenConfigured: true,
         tokenStorageMode: 'DATABASE',
@@ -34,7 +34,7 @@ describe('buildSetupGuideState', () => {
       myEmailAccounts: [],
       session: { username: 'alice', role: 'ADMIN', mustChangePassword: false },
       systemDashboard: {
-        bridges: [{
+        emailAccounts: [{
           id: 'env-outlook',
           authMethod: 'PASSWORD',
           tokenStorageMode: 'PASSWORD',
@@ -55,7 +55,7 @@ describe('buildSetupGuideState', () => {
     const result = buildSetupGuideState({
       destinationMeta: { linked: true },
       myEmailAccounts: [{
-        bridgeId: 'source-main',
+        emailAccountId: 'source-main',
         authMethod: 'PASSWORD',
         tokenStorageMode: 'PASSWORD',
         totalImportedMessages: 2,
@@ -77,7 +77,7 @@ describe('buildSetupGuideState', () => {
     const result = buildSetupGuideState({
       destinationMeta: { linked: true },
       myEmailAccounts: [{
-        bridgeId: 'source-main',
+        emailAccountId: 'source-main',
         authMethod: 'PASSWORD',
         tokenStorageMode: 'PASSWORD',
         totalImportedMessages: 2,

@@ -6,7 +6,7 @@ import com.fasterxml.jackson.annotation.JsonAlias;
 import com.fasterxml.jackson.annotation.JsonProperty;
 
 public record UserEmailAccountView(
-        @JsonProperty("emailAccountId") @JsonAlias("bridgeId") String bridgeId,
+        @JsonProperty("emailAccountId") @JsonAlias("bridgeId") String emailAccountId,
         boolean enabled,
         boolean effectivePollEnabled,
         String effectivePollInterval,
@@ -31,6 +31,6 @@ public record UserEmailAccountView(
 
         @JsonProperty("bridgeId")
         public String legacyBridgeId() {
-                return bridgeId;
+                return emailAccountId;
         }
 }

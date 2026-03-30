@@ -474,7 +474,7 @@ public class GoogleOAuthResource {
                     }
                     return googleOAuthService.sourceProfile(source);
                 })
-                .orElseGet(() -> userEmailAccountService.findByBridgeId(sourceId)
+                .orElseGet(() -> userEmailAccountService.findByEmailAccountId(sourceId)
                         .filter(bridge -> bridge.userId.equals(actor.id))
                         .map(bridge -> {
                             if (bridge.authMethod != dev.inboxbridge.config.InboxBridgeConfig.AuthMethod.OAUTH2
@@ -482,7 +482,7 @@ public class GoogleOAuthResource {
                                 throw new jakarta.ws.rs.BadRequestException("This mail account is not configured for Google OAuth.");
                             }
                             return googleOAuthService.sourceProfile(
-                                    bridge.bridgeId,
+                                    bridge.emailAccountId,
                                     userEmailAccountService.decryptRefreshToken(bridge),
                                     null);
                         })

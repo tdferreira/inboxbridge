@@ -342,17 +342,17 @@ public class AppUserService {
     }
 
     private void deleteOwnedData(AppUser user) {
-        List<String> bridgeIds = userEmailAccountRepository.listByUserId(user.id).stream()
-                .map(bridge -> bridge.bridgeId)
+        List<String> emailAccountIds = userEmailAccountRepository.listByUserId(user.id).stream()
+                .map(bridge -> bridge.emailAccountId)
                 .toList();
 
-        if (!bridgeIds.isEmpty()) {
-            sourcePollingSettingRepository.deleteBySourceIds(bridgeIds);
-            sourcePollingStateRepository.deleteBySourceIds(bridgeIds);
-            sourcePollEventRepository.deleteBySourceIds(bridgeIds);
-            importedMessageRepository.deleteBySourceAccountIds(bridgeIds);
-            oAuthCredentialService.deleteMicrosoftCredentials(bridgeIds);
-            oAuthCredentialService.deleteGoogleCredentials(bridgeIds.stream().map(bridgeId -> "source-google:" + bridgeId).toList());
+        if (!emailAccountIds.isEmpty()) {
+            sourcePollingSettingRepository.deleteBySourceIds(emailAccountIds);
+            sourcePollingStateRepository.deleteBySourceIds(emailAccountIds);
+            sourcePollEventRepository.deleteBySourceIds(emailAccountIds);
+            importedMessageRepository.deleteBySourceAccountIds(emailAccountIds);
+            oAuthCredentialService.deleteMicrosoftCredentials(emailAccountIds);
+            oAuthCredentialService.deleteGoogleCredentials(emailAccountIds.stream().map(emailAccountId -> "source-google:" + emailAccountId).toList());
         }
 
         oAuthCredentialService.deleteGoogleCredential("user-gmail:" + user.id);

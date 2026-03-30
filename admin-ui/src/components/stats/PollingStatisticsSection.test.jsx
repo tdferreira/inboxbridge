@@ -97,7 +97,8 @@ describe('PollingStatisticsSection', () => {
     expect(screen.getByText('Import activity over time')).toBeInTheDocument()
     expect(screen.getByText('Healthy accounts')).toBeInTheDocument()
     expect(screen.getByText('Provider breakdown')).toBeInTheDocument()
-    expect(screen.getByText('Microsoft')).toBeInTheDocument()
+    expect(screen.getByText('Outlook')).toBeInTheDocument()
+    expect(screen.getByText('Generic IMAP')).toBeInTheDocument()
     expect(screen.getByText('Scheduled runs')).toBeInTheDocument()
     expect(screen.getByText('Poll activity over time')).toBeInTheDocument()
   })
@@ -112,6 +113,8 @@ describe('PollingStatisticsSection', () => {
     expect(screen.getByText('Atividade de importação ao longo do tempo')).toBeInTheDocument()
     expect(screen.getByText('Distribuição por fornecedor')).toBeInTheDocument()
     expect(screen.getByText('Contas saudáveis')).toBeInTheDocument()
+    expect(screen.getByText('Outlook')).toBeInTheDocument()
+    expect(screen.getByText('IMAP genérico')).toBeInTheDocument()
   })
 
   it('uses source-specific metrics for mail account statistics', () => {

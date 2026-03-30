@@ -81,7 +81,7 @@ public class PollingStatsService {
         }
         for (UserEmailAccount emailAccount : userEmailAccountRepository.listAll()) {
             sources.add(new ConfiguredSourceSnapshot(
-                emailAccount.bridgeId,
+                emailAccount.emailAccountId,
                 emailAccount.enabled,
                 emailAccount.protocol,
                 emailAccount.authMethod,
@@ -116,7 +116,7 @@ public class PollingStatsService {
         List<UserEmailAccount> emailAccounts = userEmailAccountRepository.listByUserId(userId);
         List<ConfiguredSourceSnapshot> sources = emailAccounts.stream()
             .map(emailAccount -> new ConfiguredSourceSnapshot(
-                emailAccount.bridgeId,
+                emailAccount.emailAccountId,
                 emailAccount.enabled,
                 emailAccount.protocol,
                 emailAccount.authMethod,
@@ -225,7 +225,7 @@ public class PollingStatsService {
                 .filter(value -> value.isBefore(normalizedTo))
                 .toList();
         List<String> sourceIds = userEmailAccountRepository.listByUserId(userId).stream()
-            .map(emailAccount -> emailAccount.bridgeId)
+            .map(emailAccount -> emailAccount.emailAccountId)
                 .toList();
         List<SourcePollEvent> events = sourcePollEventService.listBySourceIdsSince(sourceIds, fromInclusive).stream()
                 .filter(event -> event.finishedAt.isBefore(normalizedTo))

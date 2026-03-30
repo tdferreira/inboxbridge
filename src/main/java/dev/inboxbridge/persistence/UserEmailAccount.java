@@ -35,7 +35,7 @@ public class UserEmailAccount extends PanacheEntityBase {
     public Long userId;
 
         @Column(name = "email_account_id", nullable = false, length = 120)
-    public String bridgeId;
+    public String emailAccountId;
 
     @Column(name = "enabled", nullable = false)
     public boolean enabled;

@@ -89,7 +89,7 @@ public class MicrosoftOAuthResource {
             return visible;
         }
         return visible.stream()
-                .filter(source -> userEmailAccountService.findByBridgeId(source.id())
+                .filter(source -> userEmailAccountService.findByEmailAccountId(source.id())
                         .map(bridge -> bridge.userId.equals(user.id))
                         .orElse(false))
                 .toList();
@@ -781,16 +781,16 @@ public class MicrosoftOAuthResource {
                 .anyMatch(source -> source.id().equals(sourceId));
         if (envSource) {
             if (user.role != AppUser.Role.ADMIN) {
-                throw new ForbiddenException("Admin access is required for environment-managed bridges");
+                throw new ForbiddenException("Admin access is required for environment-managed email accounts");
             }
             return;
         }
-        UserEmailAccount bridge = userEmailAccountService.findByBridgeId(sourceId).orElseThrow(() -> new BadRequestException("Unknown source id"));
+        UserEmailAccount bridge = userEmailAccountService.findByEmailAccountId(sourceId).orElseThrow(() -> new BadRequestException("Unknown source id"));
         if (user.role == AppUser.Role.ADMIN) {
             return;
         }
         if (!bridge.userId.equals(user.id)) {
-            throw new ForbiddenException("You do not have access to that bridge");
+            throw new ForbiddenException("You do not have access to that email account");
         }
     }
 

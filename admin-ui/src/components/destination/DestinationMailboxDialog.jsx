@@ -189,16 +189,16 @@ function DestinationMailboxDialog({
             <LabeledField helpText={t('destination.portHelp')} label={t('destination.port')}>
               <input aria-label={t('destination.port')} type="number" value={resolvedDestinationConfig.port} onChange={(event) => setDestinationConfig((current) => ({ ...current, port: Number(event.target.value) || '' }))} />
             </LabeledField>
-            <LabeledField helpText={t('bridges.usernameHelp')} label={t('bridges.username')}>
-              <input aria-label={t('bridges.username')} value={resolvedDestinationConfig.username} onChange={(event) => setDestinationConfig((current) => ({ ...current, username: event.target.value }))} />
+            <LabeledField helpText={t('emailAccounts.usernameHelp')} label={t('emailAccounts.username')}>
+              <input aria-label={t('emailAccounts.username')} value={resolvedDestinationConfig.username} onChange={(event) => setDestinationConfig((current) => ({ ...current, username: event.target.value }))} />
             </LabeledField>
             {usesPassword ? (
               <PasswordField
-                helpText={t('bridges.passwordHelp')}
-                hideLabel={t('common.hideField', { label: t('bridges.password') })}
-                label={t('bridges.password')}
-                placeholder={configured && savedProvider === provider && destinationMeta?.passwordConfigured ? t('bridges.keepExisting') : ''}
-                showLabel={t('common.showField', { label: t('bridges.password') })}
+                helpText={t('emailAccounts.passwordHelp')}
+                hideLabel={t('common.hideField', { label: t('emailAccounts.password') })}
+                label={t('emailAccounts.password')}
+                placeholder={configured && savedProvider === provider && destinationMeta?.passwordConfigured ? t('emailAccounts.keepExisting') : ''}
+                showLabel={t('common.showField', { label: t('emailAccounts.password') })}
                 value={resolvedDestinationConfig.password}
                 onChange={(event) => setDestinationConfig((current) => ({ ...current, password: event.target.value }))}
               />
@@ -208,17 +208,17 @@ function DestinationMailboxDialog({
             <div className="destination-folder-control full">
               <label>
                 <span className="field-label-row">
-                  <span>{t('bridges.folder')}</span>
-                  <InfoHint text={t('bridges.folderHelp')} />
+                  <span>{t('emailAccounts.folder')}</span>
+                  <InfoHint text={t('emailAccounts.folderHelp')} />
                 </span>
                 {detectedFolders.length > 0 && !manualFolderEntry ? (
-                  <select aria-label={t('bridges.folder')} value={currentFolderDetected ? currentFolder : defaultDetectedFolder} onChange={(event) => setDestinationConfig((current) => ({ ...current, folder: event.target.value }))}>
+                  <select aria-label={t('emailAccounts.folder')} value={currentFolderDetected ? currentFolder : defaultDetectedFolder} onChange={(event) => setDestinationConfig((current) => ({ ...current, folder: event.target.value }))}>
                     {detectedFolders.map((folder) => (
                       <option key={folder} value={folder}>{folder}</option>
                     ))}
                   </select>
                 ) : (
-                  <input aria-label={t('bridges.folder')} value={resolvedDestinationConfig.folder} onChange={(event) => setDestinationConfig((current) => ({ ...current, folder: event.target.value }))} />
+                  <input aria-label={t('emailAccounts.folder')} value={resolvedDestinationConfig.folder} onChange={(event) => setDestinationConfig((current) => ({ ...current, folder: event.target.value }))} />
                 )}
               </label>
               <div className="destination-folder-actions">
@@ -235,8 +235,8 @@ function DestinationMailboxDialog({
             <label className="checkbox-row full destination-dialog-checkbox">
               <input checked={resolvedDestinationConfig.tls} onChange={(event) => setDestinationConfig((current) => ({ ...current, tls: event.target.checked }))} type="checkbox" />
               <span className="field-label-row">
-                <span>{t('bridges.tlsOnly')}</span>
-                <InfoHint text={t('bridges.tlsOnlyHelp')} />
+                <span>{t('emailAccounts.tlsOnly')}</span>
+                <InfoHint text={t('emailAccounts.tlsOnlyHelp')} />
               </span>
             </label>
           </>
@@ -244,8 +244,8 @@ function DestinationMailboxDialog({
 
         <div className="full action-row">
           {!isGmailProvider ? (
-            <LoadingButton className="secondary" disabled={!canTestConnection} isLoading={testConnectionLoading} loadingLabel={t('bridges.testConnectionLoading')} onClick={handleTestConnection} type="button">
-              {t('bridges.testConnection')}
+            <LoadingButton className="secondary" disabled={!canTestConnection} isLoading={testConnectionLoading} loadingLabel={t('emailAccounts.testConnectionLoading')} onClick={handleTestConnection} type="button">
+              {t('emailAccounts.testConnection')}
             </LoadingButton>
           ) : null}
           {canLaunchOAuth ? (
@@ -273,14 +273,14 @@ function DestinationMailboxDialog({
             <strong>{testResult.message}</strong>
             {testResult.tone !== 'error' && testResult.protocol ? (
               <dl className="fetcher-test-result-grid">
-                <div><dt>{t('bridges.testProtocol')}</dt><dd>{testResult.protocol}</dd></div>
-                <div><dt>{t('bridges.testEndpoint')}</dt><dd>{testResult.host}:{testResult.port}</dd></div>
-                <div><dt>{t('bridges.testTls')}</dt><dd>{testResult.tls ? t('common.yes') : t('common.no')}</dd></div>
-                <div><dt>{t('bridges.testAuth')}</dt><dd>{t(`authMethod.${String(testResult.authMethod || '').toLowerCase()}`)}{testResult.oauthProvider && testResult.oauthProvider !== 'NONE' ? ` / ${t(`oauthProvider.${String(testResult.oauthProvider).toLowerCase()}`)}` : ''}</dd></div>
-                <div><dt>{t('bridges.testAuthenticated')}</dt><dd>{testResult.authenticated ? t('common.yes') : t('common.no')}</dd></div>
-                <div><dt>{t('bridges.testFolder')}</dt><dd>{testResult.folder || 'INBOX'}</dd></div>
-                <div><dt>{t('bridges.testFolderAccessible')}</dt><dd>{testResult.folderAccessible ? t('common.yes') : t('common.no')}</dd></div>
-                <div><dt>{t('bridges.testVisibleMessages')}</dt><dd>{testResult.visibleMessageCount ?? t('common.unavailable')}</dd></div>
+                <div><dt>{t('emailAccounts.testProtocol')}</dt><dd>{testResult.protocol}</dd></div>
+                <div><dt>{t('emailAccounts.testEndpoint')}</dt><dd>{testResult.host}:{testResult.port}</dd></div>
+                <div><dt>{t('emailAccounts.testTls')}</dt><dd>{testResult.tls ? t('common.yes') : t('common.no')}</dd></div>
+                <div><dt>{t('emailAccounts.testAuth')}</dt><dd>{t(`authMethod.${String(testResult.authMethod || '').toLowerCase()}`)}{testResult.oauthProvider && testResult.oauthProvider !== 'NONE' ? ` / ${t(`oauthProvider.${String(testResult.oauthProvider).toLowerCase()}`)}` : ''}</dd></div>
+                <div><dt>{t('emailAccounts.testAuthenticated')}</dt><dd>{testResult.authenticated ? t('common.yes') : t('common.no')}</dd></div>
+                <div><dt>{t('emailAccounts.testFolder')}</dt><dd>{testResult.folder || 'INBOX'}</dd></div>
+                <div><dt>{t('emailAccounts.testFolderAccessible')}</dt><dd>{testResult.folderAccessible ? t('common.yes') : t('common.no')}</dd></div>
+                <div><dt>{t('emailAccounts.testVisibleMessages')}</dt><dd>{testResult.visibleMessageCount ?? t('common.unavailable')}</dd></div>
               </dl>
             ) : null}
           </div>

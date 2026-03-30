@@ -49,7 +49,7 @@ function UserListItem({
     passwordConfigured: false,
     mustChangePassword: false,
     passkeyCount: 0,
-    bridgeCount: 0,
+    emailAccountCount: 0,
     ...(config?.user || {})
   }
   const destinationConfig = {
@@ -161,7 +161,7 @@ function UserListItem({
               <strong>{user.username}</strong>
             </div>
             <div className="section-copy">
-              {roleLabel(user.role, locale)} · {user.approved ? t('users.approved') : t('users.pending')} · {user.active ? t('users.active') : t('users.inactive')} · {t('users.mailFetchers', { count: user.bridgeCount })}
+              {roleLabel(user.role, locale)} · {user.approved ? t('users.approved') : t('users.pending')} · {user.active ? t('users.active') : t('users.inactive')} · {t('users.mailFetchers', { count: user.emailAccountCount })}
               {isLoading ? (
                 <span className="user-list-inline-loading">
                   <span aria-hidden="true" className="user-list-inline-spinner" />
@@ -288,11 +288,11 @@ function UserListItem({
             <div className="user-detail-section-title">{t('users.mailFetchersSection')}</div>
             <div className="list-stack">
             {configuredEmailAccounts.length > 0 ? configuredEmailAccounts.map((emailAccount, index) => {
-              const emailAccountId = emailAccount?.emailAccountId || emailAccount?.bridgeId || `${user.id || 'user'}-email-account-${index}`
+              const emailAccountId = emailAccount?.emailAccountId || emailAccount?.emailAccountId || `${user.id || 'user'}-email-account-${index}`
 
               return (
               <div key={emailAccountId} className="muted-box">
-                <strong>{emailAccount?.emailAccountId || emailAccount?.bridgeId || t('users.notSet')}</strong><br />
+                <strong>{emailAccount?.emailAccountId || emailAccount?.emailAccountId || t('users.notSet')}</strong><br />
                 {protocolLabel(emailAccount?.protocol, locale)} {t('users.via')} {authMethodLabel(emailAccount?.authMethod, locale)}{emailAccount?.oauthProvider && emailAccount.oauthProvider !== 'NONE' ? ` / ${oauthProviderLabel(emailAccount.oauthProvider, locale)}` : ''}<br />
                 {emailAccount?.host || t('users.notSet')}:{emailAccount?.port ?? t('users.notSet')} · {t('users.tokenStorageLabel')} {tokenStorageLabel(emailAccount?.tokenStorageMode, locale)}<br />
                 {t('users.pollIntervalValue', { value: emailAccount?.effectivePollInterval || t('users.notSet') })} · {t('users.fetchWindowValue', { value: emailAccount?.effectiveFetchWindow ?? t('users.notSet') })}<br />

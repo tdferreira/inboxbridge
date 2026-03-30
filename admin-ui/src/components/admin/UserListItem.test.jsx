@@ -14,7 +14,7 @@ function buildConfig() {
       passwordConfigured: true,
       mustChangePassword: false,
       passkeyCount: 1,
-      bridgeCount: 1
+      emailAccountCount: 1
     },
     destinationConfig: {
       provider: 'OUTLOOK_IMAP',
@@ -61,8 +61,8 @@ function buildConfig() {
       createdAt: '2026-03-27T09:00:00Z',
       lastUsedAt: '2026-03-27T10:00:00Z'
     }],
-    bridges: [{
-      bridgeId: 'outlook-main',
+    emailAccounts: [{
+      emailAccountId: 'outlook-main',
       protocol: 'IMAP',
       authMethod: 'OAUTH2',
       oauthProvider: 'MICROSOFT',

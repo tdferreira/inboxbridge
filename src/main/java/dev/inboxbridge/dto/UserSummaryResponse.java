@@ -1,5 +1,7 @@
 package dev.inboxbridge.dto;
 
+import com.fasterxml.jackson.annotation.JsonProperty;
+
 public record UserSummaryResponse(
         Long id,
         String username,
@@ -9,6 +11,11 @@ public record UserSummaryResponse(
         boolean mustChangePassword,
         boolean passwordConfigured,
         boolean gmailConfigured,
-        int bridgeCount,
+        @JsonProperty("emailAccountCount") int emailAccountCount,
         int passkeyCount) {
+
+    @JsonProperty("bridgeCount")
+    public int legacyBridgeCount() {
+        return emailAccountCount;
+    }
 }

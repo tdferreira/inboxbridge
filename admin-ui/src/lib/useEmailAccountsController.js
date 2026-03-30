@@ -17,10 +17,10 @@ const DEFAULT_SOURCE_POLLING_FORM = {
 }
 
 function normalizeLoadedEmailAccount(emailAccount) {
-  const emailAccountId = emailAccount?.emailAccountId || emailAccount?.bridgeId || ''
+  const emailAccountId = emailAccount?.emailAccountId || emailAccount?.emailAccountId || ''
   return {
     ...emailAccount,
-    bridgeId: emailAccountId,
+    emailAccountId: emailAccountId,
     emailAccountId
   }
 }
@@ -74,7 +74,7 @@ function deriveOauthConnected(emailAccount) {
 }
 
 function pruneFetcherStats(currentStats, userEmailAccounts, systemEmailAccounts) {
-  const validIds = new Set(userEmailAccounts.map((emailAccount) => emailAccount.bridgeId))
+  const validIds = new Set(userEmailAccounts.map((emailAccount) => emailAccount.emailAccountId))
   for (const emailAccount of systemEmailAccounts) {
     validIds.add(emailAccount.id)
   }
@@ -109,7 +109,7 @@ export function useEmailAccountsController({
   const visibleFetchers = useMemo(() => {
     const databaseFetchers = userEmailAccounts.map((emailAccount) => ({
       ...emailAccount,
-      bridgeId: emailAccount.bridgeId,
+      emailAccountId: emailAccount.emailAccountId,
       managementSource: 'DATABASE',
       oauthConnected: deriveOauthConnected(emailAccount),
       canDelete: true,
@@ -120,7 +120,7 @@ export function useEmailAccountsController({
     }))
     const envFetchers = sessionUsername === 'admin'
       ? (systemDashboardEmailAccounts || []).map((emailAccount) => ({
-        bridgeId: emailAccount.id,
+        emailAccountId: emailAccount.id,
         enabled: emailAccount.enabled,
         effectivePollEnabled: emailAccount.effectivePollEnabled,
         effectivePollInterval: emailAccount.effectivePollInterval,
@@ -150,14 +150,14 @@ export function useEmailAccountsController({
       : []
 
     return [...databaseFetchers, ...envFetchers]
-      .sort((left, right) => left.bridgeId.localeCompare(right.bridgeId))
+      .sort((left, right) => left.emailAccountId.localeCompare(right.emailAccountId))
   }, [authOptions.sourceOAuthProviders, sessionUsername, systemDashboardEmailAccounts, userEmailAccounts])
 
-  const connectingEmailAccountId = visibleFetchers.find((emailAccount) => isPending(`microsoftOAuth:${emailAccount.bridgeId}`) || isPending(`googleSourceOAuth:${emailAccount.bridgeId}`))?.bridgeId || null
-  const deletingEmailAccountId = userEmailAccounts.find((emailAccount) => isPending(`bridgeDelete:${emailAccount.bridgeId}`))?.bridgeId || null
-  const fetcherPollLoadingId = visibleFetchers.find((emailAccount) => isPending(`bridgePoll:${emailAccount.bridgeId}`))?.bridgeId || null
+  const connectingEmailAccountId = visibleFetchers.find((emailAccount) => isPending(`microsoftOAuth:${emailAccount.emailAccountId}`) || isPending(`googleSourceOAuth:${emailAccount.emailAccountId}`))?.emailAccountId || null
+  const deletingEmailAccountId = userEmailAccounts.find((emailAccount) => isPending(`bridgeDelete:${emailAccount.emailAccountId}`))?.emailAccountId || null
+  const fetcherPollLoadingId = visibleFetchers.find((emailAccount) => isPending(`bridgePoll:${emailAccount.emailAccountId}`))?.emailAccountId || null
   const fetcherPollingLoading = fetcherPollingTarget
-    ? isPending(`fetcherPollingSave:${fetcherPollingTarget.bridgeId}`) || isPending(`fetcherPollingLoad:${fetcherPollingTarget.bridgeId}`)
+    ? isPending(`fetcherPollingSave:${fetcherPollingTarget.emailAccountId}`) || isPending(`fetcherPollingLoad:${fetcherPollingTarget.emailAccountId}`)
     : false
 
   function applyLoadedEmailAccounts(emailAccountsPayload, adminEmailAccounts = []) {
@@ -167,7 +167,7 @@ export function useEmailAccountsController({
     const nextSystemEmailAccounts = Array.isArray(adminEmailAccounts)
       ? adminEmailAccounts.map((emailAccount) => ({
         ...emailAccount,
-        id: emailAccount.emailAccountId || emailAccount.id || emailAccount.bridgeId || ''
+        id: emailAccount.emailAccountId || emailAccount.id || emailAccount.emailAccountId || ''
       }))
       : []
     setUserEmailAccounts(nextUserEmailAccounts)
@@ -195,8 +195,8 @@ export function useEmailAccountsController({
   function editEmailAccount(emailAccount) {
     setEmailAccountTestResult(null)
     handleEmailAccountFormChange({
-      originalEmailAccountId: emailAccount.bridgeId,
-      emailAccountId: emailAccount.bridgeId,
+      originalEmailAccountId: emailAccount.emailAccountId,
+      emailAccountId: emailAccount.emailAccountId,
       enabled: emailAccount.enabled,
       protocol: emailAccount.protocol,
       host: emailAccount.host,
@@ -250,17 +250,17 @@ export function useEmailAccountsController({
   }
 
   async function loadFetcherStats(fetcher, options = {}) {
-    if (!fetcher?.bridgeId) return
+    if (!fetcher?.emailAccountId) return
     const { suppressErrors = false } = options
-    setFetcherStatsLoadingId(fetcher.bridgeId)
+    setFetcherStatsLoadingId(fetcher.emailAccountId)
     try {
       const endpointPrefix = fetcher.managementSource === 'ENVIRONMENT' ? '/api/admin/email-accounts' : '/api/app/email-accounts'
-      const response = await fetch(`${endpointPrefix}/${encodeURIComponent(fetcher.bridgeId)}/polling-stats`)
+      const response = await fetch(`${endpointPrefix}/${encodeURIComponent(fetcher.emailAccountId)}/polling-stats`)
       if (!response.ok) {
         throw new Error(await apiErrorText(response, errorText('loadMailAccountStatistics')))
       }
       const payload = await response.json()
-      setFetcherStatsById((current) => ({ ...current, [fetcher.bridgeId]: payload }))
+      setFetcherStatsById((current) => ({ ...current, [fetcher.emailAccountId]: payload }))
     } catch (err) {
       if (!suppressErrors) {
         pushNotification({
@@ -272,7 +272,7 @@ export function useEmailAccountsController({
         })
       }
     } finally {
-      setFetcherStatsLoadingId((current) => current === fetcher.bridgeId ? null : current)
+      setFetcherStatsLoadingId((current) => current === fetcher.emailAccountId ? null : current)
     }
   }
 
@@ -296,7 +296,7 @@ export function useEmailAccountsController({
     if (range.to) search.set('to', range.to)
     const endpointPrefix = fetcher.managementSource === 'ENVIRONMENT' ? '/api/admin/email-accounts' : '/api/app/email-accounts'
     return loadScopedTimelineBundle(
-      `${endpointPrefix}/${encodeURIComponent(fetcher.bridgeId)}/polling-stats/range?${search.toString()}`,
+      `${endpointPrefix}/${encodeURIComponent(fetcher.emailAccountId)}/polling-stats/range?${search.toString()}`,
       t('pollingStats.customRangeLoadError')
     )
   }
@@ -306,10 +306,10 @@ export function useEmailAccountsController({
     const normalizedEmailAccountId = emailAccountForm.emailAccountId.trim()
     const originalEmailAccountId = emailAccountForm.originalEmailAccountId.trim()
     const duplicateFetcher = visibleFetchers.find((fetcher) => (
-      fetcher.bridgeId === normalizedEmailAccountId && fetcher.bridgeId !== originalEmailAccountId
+      fetcher.emailAccountId === normalizedEmailAccountId && fetcher.emailAccountId !== originalEmailAccountId
     ))
     if (duplicateFetcher) {
-      const duplicateMessage = t('emailAccounts.duplicateId', { bridgeId: normalizedEmailAccountId })
+      const duplicateMessage = t('emailAccounts.duplicateId', { emailAccountId: normalizedEmailAccountId })
       setEmailAccountDuplicateError(duplicateMessage)
       pushNotification({ autoCloseMs: null, copyText: duplicateMessage, message: duplicateMessage, targetId: 'source-email-accounts-section', tone: 'error' })
       return null
@@ -329,14 +329,14 @@ export function useEmailAccountsController({
         setEmailAccountDuplicateError('')
         setEmailAccountTestResult(null)
         if (!connectMicrosoftAfterSave) {
-          pushNotification({ message: t('notifications.emailAccountSaved', { bridgeId: emailAccountForm.emailAccountId }), targetId: 'source-email-accounts-section', tone: 'success' })
+          pushNotification({ message: t('notifications.emailAccountSaved', { emailAccountId: emailAccountForm.emailAccountId }), targetId: 'source-email-accounts-section', tone: 'success' })
           setEmailAccountForm(DEFAULT_EMAIL_ACCOUNT_FORM)
           setShowFetcherDialog(false)
           await loadAppData()
         } else {
           pushNotification({
             message: t('notifications.emailAccountSavedStartingProviderOAuth', {
-              bridgeId: payload.emailAccountId || payload.bridgeId || emailAccountForm.emailAccountId,
+              emailAccountId: payload.emailAccountId || payload.emailAccountId || emailAccountForm.emailAccountId,
               provider: emailAccountForm.oauthProvider === 'GOOGLE' ? t('oauthProvider.google') : t('oauthProvider.microsoft')
             }),
             targetId: 'source-email-accounts-section',
@@ -358,7 +358,7 @@ export function useEmailAccountsController({
 
   async function saveEmailAccountAndConnectOAuth() {
     const payload = await upsertEmailAccountForm({ connectMicrosoftAfterSave: true })
-    const savedBridgeId = payload?.emailAccountId || payload?.bridgeId || emailAccountForm.emailAccountId?.trim()
+    const savedBridgeId = payload?.emailAccountId || payload?.emailAccountId || emailAccountForm.emailAccountId?.trim()
     if (savedBridgeId) {
       startSourceOAuth(savedBridgeId, emailAccountForm.oauthProvider)
     }
@@ -387,21 +387,21 @@ export function useEmailAccountsController({
     })
   }
 
-  async function deleteEmailAccount(bridgeId, openConfirmation) {
+  async function deleteEmailAccount(emailAccountId, openConfirmation) {
     openConfirmation({
-      actionKey: `bridgeDelete:${bridgeId}`,
-      body: t('emailAccount.deleteConfirmBody', { bridgeId }),
+      actionKey: `bridgeDelete:${emailAccountId}`,
+      body: t('emailAccount.deleteConfirmBody', { emailAccountId }),
       confirmLabel: t('emailAccount.delete'),
       confirmLoadingLabel: t('emailAccount.deleteLoading'),
       confirmTone: 'danger',
       onConfirm: async () => {
-        await withPending(`bridgeDelete:${bridgeId}`, async () => {
+        await withPending(`bridgeDelete:${emailAccountId}`, async () => {
           try {
-            const response = await fetch(`/api/app/email-accounts/${encodeURIComponent(bridgeId)}`, { method: 'DELETE' })
+            const response = await fetch(`/api/app/email-accounts/${encodeURIComponent(emailAccountId)}`, { method: 'DELETE' })
             if (!response.ok) {
               throw new Error(await apiErrorText(response, errorText('deleteMailFetcher')))
             }
-            pushNotification({ message: t('notifications.emailAccountDeleted', { bridgeId }), targetId: 'source-email-accounts-section', tone: 'success' })
+            pushNotification({ message: t('notifications.emailAccountDeleted', { emailAccountId }), targetId: 'source-email-accounts-section', tone: 'success' })
             await loadAppData()
             openConfirmation(null)
           } catch (err) {
@@ -415,10 +415,10 @@ export function useEmailAccountsController({
 
   async function openFetcherPollingDialog(fetcher) {
     setFetcherPollingTarget(fetcher)
-    await withPending(`fetcherPollingLoad:${fetcher.bridgeId}`, async () => {
+    await withPending(`fetcherPollingLoad:${fetcher.emailAccountId}`, async () => {
       try {
         const endpointPrefix = fetcher.managementSource === 'ENVIRONMENT' ? '/api/admin/email-accounts' : '/api/app/email-accounts'
-        const response = await fetch(`${endpointPrefix}/${encodeURIComponent(fetcher.bridgeId)}/polling-settings`)
+        const response = await fetch(`${endpointPrefix}/${encodeURIComponent(fetcher.emailAccountId)}/polling-settings`)
         if (!response.ok) {
           throw new Error(await apiErrorText(response, errorText('loadFetcherPollingSettings')))
         }
@@ -445,10 +445,10 @@ export function useEmailAccountsController({
   async function saveFetcherPollingSettings(event) {
     event.preventDefault()
     if (!fetcherPollingTarget) return
-    await withPending(`fetcherPollingSave:${fetcherPollingTarget.bridgeId}`, async () => {
+    await withPending(`fetcherPollingSave:${fetcherPollingTarget.emailAccountId}`, async () => {
       try {
         const endpointPrefix = fetcherPollingTarget.managementSource === 'ENVIRONMENT' ? '/api/admin/email-accounts' : '/api/app/email-accounts'
-        const response = await fetch(`${endpointPrefix}/${encodeURIComponent(fetcherPollingTarget.bridgeId)}/polling-settings`, {
+        const response = await fetch(`${endpointPrefix}/${encodeURIComponent(fetcherPollingTarget.emailAccountId)}/polling-settings`, {
           method: 'PUT',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
@@ -464,7 +464,7 @@ export function useEmailAccountsController({
         }
         const payload = await response.json()
         setFetcherPollingForm(normalizeSourcePollingForm(payload))
-        pushNotification({ message: t('notifications.fetcherPollingSaved', { bridgeId: fetcherPollingTarget.bridgeId }), targetId: 'source-email-accounts-section', tone: 'success' })
+        pushNotification({ message: t('notifications.fetcherPollingSaved', { emailAccountId: fetcherPollingTarget.emailAccountId }), targetId: 'source-email-accounts-section', tone: 'success' })
         await loadAppData()
         closeFetcherPollingDialog()
       } catch (err) {
@@ -475,10 +475,10 @@ export function useEmailAccountsController({
 
   async function resetFetcherPollingSettings() {
     if (!fetcherPollingTarget) return
-    await withPending(`fetcherPollingSave:${fetcherPollingTarget.bridgeId}`, async () => {
+    await withPending(`fetcherPollingSave:${fetcherPollingTarget.emailAccountId}`, async () => {
       try {
         const endpointPrefix = fetcherPollingTarget.managementSource === 'ENVIRONMENT' ? '/api/admin/email-accounts' : '/api/app/email-accounts'
-        const response = await fetch(`${endpointPrefix}/${encodeURIComponent(fetcherPollingTarget.bridgeId)}/polling-settings`, {
+        const response = await fetch(`${endpointPrefix}/${encodeURIComponent(fetcherPollingTarget.emailAccountId)}/polling-settings`, {
           method: 'PUT',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
@@ -492,7 +492,7 @@ export function useEmailAccountsController({
         }
         const payload = await response.json()
         setFetcherPollingForm(normalizeSourcePollingForm(payload))
-        pushNotification({ message: t('notifications.fetcherPollingReset', { bridgeId: fetcherPollingTarget.bridgeId }), targetId: 'source-email-accounts-section', tone: 'success' })
+        pushNotification({ message: t('notifications.fetcherPollingReset', { emailAccountId: fetcherPollingTarget.emailAccountId }), targetId: 'source-email-accounts-section', tone: 'success' })
         await loadAppData()
       } catch (err) {
         pushNotification({ autoCloseMs: null, copyText: err.message || errorText('resetFetcherPollingSettings'), message: err.message || errorText('resetFetcherPollingSettings'), targetId: 'source-email-accounts-section', tone: 'error' })
@@ -516,24 +516,24 @@ export function useEmailAccountsController({
 
   async function runFetcherPoll(fetcherOrBridgeId) {
     const fetcher = typeof fetcherOrBridgeId === 'string'
-      ? visibleFetchers.find((entry) => entry.bridgeId === fetcherOrBridgeId)
+      ? visibleFetchers.find((entry) => entry.emailAccountId === fetcherOrBridgeId)
       : fetcherOrBridgeId
-    const bridgeId = typeof fetcherOrBridgeId === 'string' ? fetcherOrBridgeId : fetcherOrBridgeId?.bridgeId
-    if (!bridgeId) {
+    const emailAccountId = typeof fetcherOrBridgeId === 'string' ? fetcherOrBridgeId : fetcherOrBridgeId?.emailAccountId
+    if (!emailAccountId) {
       return
     }
-    await withPending(`bridgePoll:${bridgeId}`, async () => {
+    await withPending(`bridgePoll:${emailAccountId}`, async () => {
       try {
-        const notificationGroup = `fetcher-poll:${bridgeId}`
+        const notificationGroup = `fetcher-poll:${emailAccountId}`
         pushNotification({
           autoCloseMs: 10000,
           groupKey: notificationGroup,
-          message: t('notifications.fetcherPollStarted', { bridgeId }),
+          message: t('notifications.fetcherPollStarted', { emailAccountId }),
           targetId: 'source-email-accounts-section',
           tone: 'warning'
         })
         const endpointPrefix = fetcher?.managementSource === 'ENVIRONMENT' ? '/api/admin/email-accounts' : '/api/app/email-accounts'
-        const response = await fetch(`${endpointPrefix}/${encodeURIComponent(bridgeId)}/poll/run`, { method: 'POST' })
+        const response = await fetch(`${endpointPrefix}/${encodeURIComponent(emailAccountId)}/poll/run`, { method: 'POST' })
         if (!response.ok) {
           throw new Error(await apiErrorText(response, errorText('runMailFetcherPoll')))
         }
@@ -552,7 +552,7 @@ export function useEmailAccountsController({
         pushNotification({
           groupKey: notificationGroup,
           message: t(completedMessageKey, {
-            bridgeId,
+            emailAccountId,
             fetched: payload.fetched,
             imported: payload.imported,
             duplicates: payload.duplicates,
@@ -566,7 +566,7 @@ export function useEmailAccountsController({
         const message = formatPollError(err.message || errorText('runMailFetcherPoll'), language)
         pushNotification({
           copyText: message,
-          groupKey: `fetcher-poll:${bridgeId}`,
+          groupKey: `fetcher-poll:${emailAccountId}`,
           message,
           replaceGroup: true,
           targetId: err.notificationTargetId || notificationTargetForPollErrors([], [err.message || '']),
@@ -585,14 +585,14 @@ export function useEmailAccountsController({
     if (!expanded) {
       return
     }
-    setExpandedFetcherLoadingId(fetcher.bridgeId)
+    setExpandedFetcherLoadingId(fetcher.emailAccountId)
     try {
       await Promise.all([
         refreshSectionData('sourceEmailAccountsCollapsed', () => loadAppData({ suppressErrors: true })),
         loadFetcherStats(fetcher, { suppressErrors: true })
       ])
     } finally {
-      setExpandedFetcherLoadingId((current) => current === fetcher.bridgeId ? null : current)
+      setExpandedFetcherLoadingId((current) => current === fetcher.emailAccountId ? null : current)
     }
   }
 

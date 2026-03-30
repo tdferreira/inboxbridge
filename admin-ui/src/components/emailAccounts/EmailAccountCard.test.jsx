@@ -10,7 +10,7 @@ describe('EmailAccountCard', () => {
     const onDelete = vi.fn()
     const onConnectMicrosoft = vi.fn()
     const emailAccount = {
-      bridgeId: 'outlook-main',
+      emailAccountId: 'outlook-main',
       protocol: 'IMAP',
       authMethod: 'OAUTH2',
       oauthProvider: 'MICROSOFT',
@@ -101,7 +101,7 @@ describe('EmailAccountCard', () => {
     render(
       <EmailAccountCard
         emailAccount={{
-          bridgeId: 'outlook-main',
+          emailAccountId: 'outlook-main',
           protocol: 'IMAP',
           authMethod: 'OAUTH2',
           oauthProvider: 'MICROSOFT',

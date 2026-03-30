@@ -33,8 +33,9 @@ import jakarta.transaction.Transactional;
 /**
  * Implements Microsoft OAuth for Outlook / Hotmail / Live source mailboxes.
  *
- * <p>The service supports both environment-managed bridges and user-managed
- * bridges, uses a browser-friendly auth-code flow with CSRF state tracking,
+ * <p>The service supports both environment-managed email accounts and
+ * user-managed email accounts, uses a browser-friendly auth-code flow with
+ * CSRF state tracking,
  * stores tokens encrypted in PostgreSQL when secure storage is enabled, and
  * refreshes short-lived access tokens for IMAP / POP XOAUTH2 logins.</p>
  */
@@ -95,7 +96,7 @@ public class MicrosoftOAuthService {
                 .toList();
         List<MicrosoftOAuthSourceOption> userSources = userEmailAccountRepository.listAll().stream()
                 .filter(source -> source.oauthProvider == InboxBridgeConfig.OAuthProvider.MICROSOFT)
-                .map(source -> new MicrosoftOAuthSourceOption(source.bridgeId, source.protocol.name(), source.enabled))
+                .map(source -> new MicrosoftOAuthSourceOption(source.emailAccountId, source.protocol.name(), source.enabled))
                 .toList();
         return java.util.stream.Stream.concat(envSources.stream(), userSources.stream()).toList();
     }
@@ -575,7 +576,7 @@ public class MicrosoftOAuthService {
                     false);
         }
 
-        UserEmailAccount bridge = userEmailAccountRepository.findByBridgeId(sourceId).orElse(null);
+        UserEmailAccount bridge = userEmailAccountRepository.findByEmailAccountId(sourceId).orElse(null);
         if (bridge != null) {
             if (bridge.authMethod != InboxBridgeConfig.AuthMethod.OAUTH2) {
                 throw new IllegalArgumentException("Source " + sourceId + " is not configured for OAuth2");
@@ -584,7 +585,7 @@ public class MicrosoftOAuthService {
                 throw new IllegalArgumentException("Source " + sourceId + " is not configured for Microsoft OAuth");
             }
             return new SourceRef(
-                    bridge.bridgeId,
+                    bridge.emailAccountId,
                     bridge.protocol,
                     "",
                     null,
