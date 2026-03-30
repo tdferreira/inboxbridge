@@ -19,6 +19,7 @@ final class ApiErrorCodes {
         if (message.equals("Username already exists")) return "username_already_exists";
         if (message.equals("Unknown user id")) return "user_unknown";
         if (message.equals("Mail fetcher ID already exists")) return "mail_fetcher_id_exists";
+        if (message.equals("A source mailbox cannot be the same as My Destination Mailbox. Choose a different mailbox or keep that source disabled.")) return "source_destination_mailbox_conflict";
         if (message.equals("Password is required")) return "password_required";
         if (message.equals("OAuth refresh token is required or connect provider OAuth first")) return "oauth_refresh_token_required";
         if (message.equals("Fetch window override must be between 1 and 500 messages")) return "fetch_window_invalid";
@@ -37,7 +38,7 @@ final class ApiErrorCodes {
         if (message.equals("Invalid or expired OAuth state")) return "oauth_state_invalid_or_expired";
         if (message.equals("Microsoft OAuth client id is not configured")) return "microsoft_oauth_client_id_missing";
         if (message.equals("Microsoft OAuth client secret is not configured")) return "microsoft_oauth_client_secret_missing";
-        if (message.equals("Secure encrypted storage is required for UI-managed Microsoft OAuth bridges.")) return "microsoft_oauth_secure_storage_required";
+        if (message.startsWith("Secure token storage is required before completing ")) return "secure_token_storage_required";
         if (message.startsWith("Secure token storage is not configured.")) return "secure_token_storage_not_configured";
         if (message.equals("Only admins can override advanced Gmail account settings from the admin UI.")) return "gmail_admin_override_only";
         if (message.equals("This account requires password verification before passkey sign-in.")) return "passkey_password_verification_required";

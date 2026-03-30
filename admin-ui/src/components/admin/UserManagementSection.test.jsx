@@ -139,8 +139,10 @@ describe('UserManagementSection', () => {
   it('renders translated subsection titles inside the expanded user pane', () => {
     renderUi({ locale: 'pt-PT' })
 
+    expect(screen.getByText('Modo de implementação')).toBeInTheDocument()
+    expect(screen.getByText('Estão ativadas várias contas de utilizador para esta implementação.')).toBeInTheDocument()
     expect(screen.getByText('Configuração do utilizador')).toBeInTheDocument()
-    const gmailSectionTitle = screen.getByText('Destination Mailbox')
+    const gmailSectionTitle = screen.getByText('Caixa de destino')
     expect(screen.getByText('Contas de email de origem')).toBeInTheDocument()
     expect(gmailSectionTitle.parentElement).toHaveTextContent('Provider: GMAIL_API')
   })
@@ -149,6 +151,65 @@ describe('UserManagementSection', () => {
     renderUi({ sectionLoading: true })
 
     expect(screen.getAllByText('Refreshing section…').length).toBeGreaterThan(0)
+  })
+
+  it('renders expanded user details even when the selected config payload is partial', () => {
+    renderUi({
+      selectedUserConfig: {
+        user: {
+          id: 7,
+          username: 'admin',
+          role: 'ADMIN',
+          approved: true,
+          active: true,
+          gmailConfigured: true,
+          passwordConfigured: true,
+          mustChangePassword: false,
+          passkeyCount: 0,
+          bridgeCount: 1
+        },
+        destinationConfig: null,
+        pollingSettings: {
+          effectivePollEnabled: true,
+          effectivePollInterval: '5m',
+          effectiveFetchWindow: 25
+        },
+        bridges: [{ bridgeId: 'outlook-main', protocol: 'IMAP', authMethod: 'OAUTH2', oauthProvider: 'MICROSOFT', host: 'outlook.office365.com', port: 993, tokenStorageMode: 'DATABASE', effectivePollInterval: '5m', effectiveFetchWindow: 25 }],
+        passkeys: null
+      }
+    })
+
+    expect(screen.getByText('Destination Mailbox')).toBeInTheDocument()
+    expect(screen.getByText(/Provider: Not set/)).toBeInTheDocument()
+    expect(screen.getByText('outlook-main')).toBeInTheDocument()
+    expect(screen.getByText('No passkeys registered for this user.')).toBeInTheDocument()
+  })
+
+  it('renders partial email-account entries without blanking the expanded user pane', () => {
+    renderUi({
+      selectedUserConfig: {
+        user: {
+          id: 7,
+          username: 'admin',
+          role: 'ADMIN',
+          approved: true,
+          active: true,
+          gmailConfigured: true,
+          passwordConfigured: true,
+          mustChangePassword: false,
+          passkeyCount: 0,
+          bridgeCount: 2
+        },
+        destinationConfig: null,
+        pollingSettings: null,
+        bridges: [null, { bridgeId: 'outlook-main' }],
+        passkeys: null
+      }
+    })
+
+    expect(screen.getByText('Destination Mailbox')).toBeInTheDocument()
+    expect(screen.getByText('outlook-main')).toBeInTheDocument()
+    expect(screen.getByText(/Not set:Not set/)).toBeInTheDocument()
   })
 
   it('sorts users by username before rendering the list', () => {

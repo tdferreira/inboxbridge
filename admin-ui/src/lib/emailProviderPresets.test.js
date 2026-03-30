@@ -27,7 +27,8 @@ describe('emailProviderPresets', () => {
 
     expect(preset).toEqual(expect.objectContaining({
       id: 'GMAIL_API',
-      label: 'Gmail'
+      labelKey: 'bridge.providerGmail',
+      descriptionKey: 'destinationPreset.gmail.description'
     }))
     expect(preset).not.toHaveProperty('values')
   })

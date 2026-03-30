@@ -2,6 +2,10 @@ package dev.inboxbridge.service;
 
 import java.io.ByteArrayInputStream;
 import java.time.Instant;
+import java.util.ArrayList;
+import java.util.Comparator;
+import java.util.LinkedHashSet;
+import java.util.List;
 import java.util.Properties;
 import java.util.UUID;
 
@@ -10,6 +14,7 @@ import dev.inboxbridge.domain.FetchedMessage;
 import dev.inboxbridge.domain.ImapAppendDestinationTarget;
 import dev.inboxbridge.domain.MailDestinationTarget;
 import dev.inboxbridge.domain.RuntimeEmailAccount;
+import dev.inboxbridge.dto.EmailAccountConnectionTestResult;
 import dev.inboxbridge.dto.MailImportResponse;
 import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.inject.Inject;
@@ -61,26 +66,7 @@ public class ImapAppendMailDestinationService implements MailDestinationService 
     @Override
     public MailImportResponse importMessage(MailDestinationTarget target, RuntimeEmailAccount bridge, FetchedMessage message) {
         ImapAppendDestinationTarget imapTarget = (ImapAppendDestinationTarget) target;
-        Properties properties = new Properties();
-        properties.put("mail.store.protocol", imapTarget.tls() ? "imaps" : "imap");
-        properties.put("mail.imap.ssl.enable", imapTarget.tls());
-        properties.put("mail.imaps.ssl.enable", imapTarget.tls());
-        properties.put("mail.imap.ssl.checkserveridentity", "true");
-        properties.put("mail.imaps.ssl.checkserveridentity", "true");
-        properties.put("mail.imap.timeout", "20000");
-        properties.put("mail.imaps.timeout", "20000");
-        properties.put("mail.imap.connectiontimeout", "20000");
-        properties.put("mail.imaps.connectiontimeout", "20000");
-        if (imapTarget.authMethod() == InboxBridgeConfig.AuthMethod.OAUTH2) {
-            properties.put("mail.imap.auth.mechanisms", "XOAUTH2");
-            properties.put("mail.imap.auth.login.disable", "true");
-            properties.put("mail.imap.auth.plain.disable", "true");
-            properties.put("mail.imaps.auth.mechanisms", "XOAUTH2");
-            properties.put("mail.imaps.auth.login.disable", "true");
-            properties.put("mail.imaps.auth.plain.disable", "true");
-        }
-
-        Session session = Session.getInstance(properties);
+        Session session = Session.getInstance(sessionProperties(imapTarget));
         Store store = null;
         Folder folder = null;
         try {
@@ -102,6 +88,126 @@ public class ImapAppendMailDestinationService implements MailDestinationService 
         } finally {
             closeQuietly(folder);
             closeQuietly(store);
+        }
+    }
+
+    public List<String> listFolders(ImapAppendDestinationTarget target) {
+        Session session = Session.getInstance(sessionProperties(target));
+        Store store = null;
+        try {
+            store = session.getStore(target.tls() ? "imaps" : "imap");
+            store.connect(target.host(), target.port(), target.username(), resolveSecret(target));
+
+            LinkedHashSet<String> folderNames = new LinkedHashSet<>();
+            Folder inbox = store.getFolder("INBOX");
+            if (inbox != null && inbox.exists()) {
+                folderNames.add(inbox.getFullName());
+            }
+
+            Folder defaultFolder = store.getDefaultFolder();
+            if (defaultFolder != null) {
+                collectFolderNames(defaultFolder.list("*"), folderNames);
+            }
+
+            List<String> folders = new ArrayList<>(folderNames);
+            folders.sort(Comparator
+                    .comparing((String folderName) -> !"INBOX".equalsIgnoreCase(folderName))
+                    .thenComparing(String.CASE_INSENSITIVE_ORDER));
+            return folders;
+        } catch (MessagingException e) {
+            if (MailSourceClient.isRetryableMicrosoftOAuthFailure(e)) {
+                microsoftOAuthService.invalidateDestinationCachedToken(target.userId());
+                throw new IllegalStateException(MICROSOFT_DESTINATION_ACCESS_REVOKED_MESSAGE, e);
+            }
+            throw new IllegalStateException("Failed to list destination mailbox folders", e);
+        } finally {
+            closeQuietly(store);
+        }
+    }
+
+    public EmailAccountConnectionTestResult testConnection(ImapAppendDestinationTarget target) {
+        Session session = Session.getInstance(sessionProperties(target));
+        Store store = null;
+        Folder folder = null;
+        try {
+            store = session.getStore(target.tls() ? "imaps" : "imap");
+            store.connect(target.host(), target.port(), target.username(), resolveSecret(target));
+            folder = store.getFolder(target.folder());
+            if (!folder.exists()) {
+                throw new IllegalStateException("The mailbox path " + target.folder() + " does not exist on " + target.host() + ".");
+            }
+            folder.open(Folder.READ_ONLY);
+            int visibleMessageCount = folder.getMessageCount();
+            return new EmailAccountConnectionTestResult(
+                    true,
+                    "Connection test succeeded.",
+                    "IMAP",
+                    target.host(),
+                    target.port(),
+                    target.tls(),
+                    target.authMethod().name(),
+                    target.oauthProvider().name(),
+                    true,
+                    target.folder(),
+                    true,
+                    false,
+                    null,
+                    null,
+                    visibleMessageCount,
+                    null,
+                    visibleMessageCount > 0,
+                    null);
+        } catch (MessagingException e) {
+            if (MailSourceClient.isRetryableMicrosoftOAuthFailure(e)) {
+                microsoftOAuthService.invalidateDestinationCachedToken(target.userId());
+                throw new IllegalStateException(MICROSOFT_DESTINATION_ACCESS_REVOKED_MESSAGE, e);
+            }
+            throw new IllegalStateException("Failed to connect to the destination mailbox", e);
+        } finally {
+            closeQuietly(folder);
+            closeQuietly(store);
+        }
+    }
+
+    private Properties sessionProperties(ImapAppendDestinationTarget target) {
+        Properties properties = new Properties();
+        properties.put("mail.store.protocol", target.tls() ? "imaps" : "imap");
+        properties.put("mail.imap.ssl.enable", target.tls());
+        properties.put("mail.imaps.ssl.enable", target.tls());
+        properties.put("mail.imap.ssl.checkserveridentity", "true");
+        properties.put("mail.imaps.ssl.checkserveridentity", "true");
+        properties.put("mail.imap.timeout", "20000");
+        properties.put("mail.imaps.timeout", "20000");
+        properties.put("mail.imap.connectiontimeout", "20000");
+        properties.put("mail.imaps.connectiontimeout", "20000");
+        if (target.authMethod() == InboxBridgeConfig.AuthMethod.OAUTH2) {
+            properties.put("mail.imap.auth.mechanisms", "XOAUTH2");
+            properties.put("mail.imap.auth.login.disable", "true");
+            properties.put("mail.imap.auth.plain.disable", "true");
+            properties.put("mail.imaps.auth.mechanisms", "XOAUTH2");
+            properties.put("mail.imaps.auth.login.disable", "true");
+            properties.put("mail.imaps.auth.plain.disable", "true");
+        }
+        return properties;
+    }
+
+    private void collectFolderNames(Folder[] folders, LinkedHashSet<String> names) throws MessagingException {
+        if (folders == null) {
+            return;
+        }
+        for (Folder folder : folders) {
+            if (folder == null) {
+                continue;
+            }
+            if (folder.exists()) {
+                String fullName = folder.getFullName();
+                if (fullName != null && !fullName.isBlank()) {
+                    names.add(fullName);
+                }
+            }
+            if ((folder.getType() & Folder.HOLDS_FOLDERS) != 0) {
+                collectFolderNames(folder.list("*"), names);
+            }
         }
     }
 

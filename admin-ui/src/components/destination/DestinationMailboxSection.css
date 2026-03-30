@@ -18,6 +18,50 @@
   line-height: 1.6;
 }
 
+.destination-empty-state {
+  line-height: 1.6;
+}
+
+.destination-dialog-form {
+  margin-top: 12px;
+}
+
+.destination-dialog-checkbox {
+  align-items: center;
+}
+
+.destination-folder-control {
+  display: grid;
+  gap: 8px;
+}
+
+.destination-folder-actions {
+  align-items: center;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+}
+
+.destination-folder-status {
+  color: var(--muted-text, #61707d);
+  font-size: 0.92rem;
+}
+
+.destination-folder-toggle {
+  appearance: none;
+  background: transparent;
+  border: 0;
+  color: var(--action-color, #205493);
+  cursor: pointer;
+  font: inherit;
+  padding: 0;
+  text-decoration: underline;
+}
+
+.destination-folder-toggle:hover {
+  text-decoration-thickness: 2px;
+}
+
 .sidebar-stack {
   display: grid;
   gap: 12px;

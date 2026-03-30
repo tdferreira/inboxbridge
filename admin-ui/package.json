@@ -8,11 +8,12 @@
     "build": "vite build",
     "preview": "vite preview --host 0.0.0.0 --port 4173",
     "test": "vitest",
-    "test:run": "vitest run"
+    "test:run": "node --max-old-space-size=4096 ./node_modules/vitest/vitest.mjs run --pool forks --maxWorkers=1"
   },
   "dependencies": {
     "react": "^19.2.0",
     "react-dom": "^19.2.0",
+    "react-router-dom": "^7.13.2",
     "recharts": "^3.8.1"
   },
   "devDependencies": {

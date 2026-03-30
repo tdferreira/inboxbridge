@@ -14,6 +14,25 @@ export function useDestinationController({
 }) {
   const normalizedDestinationConfig = normalizeDestinationProviderConfig(destinationConfig)
 
+  function resolveNormalizedConfig(configOverride) {
+    return normalizeDestinationProviderConfig(configOverride || destinationConfig)
+  }
+
+  function buildDestinationRequestBody(configOverride) {
+    const resolvedConfig = resolveNormalizedConfig(configOverride)
+    return {
+      provider: resolvedConfig.provider,
+      host: resolvedConfig.host,
+      port: resolvedConfig.port === '' ? null : Number(resolvedConfig.port),
+      tls: resolvedConfig.tls,
+      authMethod: resolvedConfig.authMethod,
+      oauthProvider: resolvedConfig.oauthProvider,
+      username: resolvedConfig.username,
+      password: resolvedConfig.password,
+      folder: resolvedConfig.folder
+    }
+  }
+
   function currentLinkedOAuthProvider() {
     if (!destinationMeta?.linked && !destinationMeta?.oauthConnected) {
       return null
@@ -22,11 +41,12 @@ export function useDestinationController({
     return linkedProvider === 'GMAIL_API' ? 'GOOGLE' : 'MICROSOFT'
   }
 
-  function requestedLinkedOAuthProvider() {
-    if (normalizedDestinationConfig.provider === 'GMAIL_API') {
+  function requestedLinkedOAuthProvider(configOverride) {
+    const resolvedConfig = resolveNormalizedConfig(configOverride)
+    if (resolvedConfig.provider === 'GMAIL_API') {
       return 'GOOGLE'
     }
-    if (normalizedDestinationConfig.authMethod === 'OAUTH2' && normalizedDestinationConfig.oauthProvider === 'MICROSOFT') {
+    if (resolvedConfig.authMethod === 'OAUTH2' && resolvedConfig.oauthProvider === 'MICROSOFT') {
       return 'MICROSOFT'
     }
     return null
@@ -49,23 +69,13 @@ export function useDestinationController({
     return true
   }
 
-  async function persistDestinationConfig() {
+  async function persistDestinationConfig(configOverride) {
     await withPending('destinationSave', async () => {
       try {
         const response = await fetch('/api/app/destination-config', {
           method: 'PUT',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            provider: normalizedDestinationConfig.provider,
-            host: normalizedDestinationConfig.host,
-            port: normalizedDestinationConfig.port === '' ? null : Number(normalizedDestinationConfig.port),
-            tls: normalizedDestinationConfig.tls,
-            authMethod: normalizedDestinationConfig.authMethod,
-            oauthProvider: normalizedDestinationConfig.oauthProvider,
-            username: normalizedDestinationConfig.username,
-            password: normalizedDestinationConfig.password,
-            folder: normalizedDestinationConfig.folder
-          })
+          body: JSON.stringify(buildDestinationRequestBody(configOverride))
         })
         if (!response.ok) {
           throw new Error(await errorText('saveDestinationConfiguration', response))
@@ -79,18 +89,36 @@ export function useDestinationController({
     })
   }
 
-  async function saveDestinationConfig(event) {
-    event.preventDefault()
+  async function saveDestinationConfig(configOverride, event) {
+    if (configOverride && typeof configOverride.preventDefault === 'function' && event == null) {
+      event = configOverride
+      configOverride = null
+    }
+    event?.preventDefault?.()
     const currentProvider = currentLinkedOAuthProvider()
-    const requestedProvider = requestedLinkedOAuthProvider()
+    const requestedProvider = requestedLinkedOAuthProvider(configOverride)
     if (currentProvider && currentProvider !== requestedProvider) {
       linkedDestinationReplacementConfirmation('destinationSave', async () => {
         closeConfirmation()
-        await persistDestinationConfig()
+        await persistDestinationConfig(configOverride)
       })
       return
     }
-    await persistDestinationConfig()
+    await persistDestinationConfig(configOverride)
+  }
+
+  async function testDestinationConnection(configOverride) {
+    return withPending('destinationConnectionTest', async () => {
+      const response = await fetch('/api/app/destination-config/test-connection', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(buildDestinationRequestBody(configOverride))
+      })
+      if (!response.ok) {
+        throw new Error(await errorText('testDestinationConnection', response))
+      }
+      return response.json()
+    })
   }
 
   async function performDestinationSave(fetchCall, fallbackKey) {
@@ -102,9 +130,10 @@ export function useDestinationController({
   }
 
   async function unlinkDestinationAccount() {
+    const linkedProvider = destinationMeta?.provider || normalizedDestinationConfig.provider
     openConfirmation({
       actionKey: 'destinationUnlink',
-      body: t(destinationConfig.provider === 'GMAIL_API' ? 'gmail.unlinkConfirmBody' : 'destination.unlinkConfirmBody'),
+      body: t(linkedProvider === 'GMAIL_API' ? 'gmail.unlinkConfirmBody' : 'destination.unlinkConfirmBody'),
       confirmLabel: t('destination.unlink'),
       confirmLoadingLabel: t('destination.unlinkLoading'),
       confirmTone: 'danger',
@@ -116,11 +145,19 @@ export function useDestinationController({
               'unlinkDestinationAccount'
             )
             closeConfirmation()
-            if (destinationConfig.provider === 'GMAIL_API' && payload.providerRevocationAttempted && !payload.providerRevoked) {
+            if (linkedProvider === 'GMAIL_API' && payload.providerRevocationAttempted && !payload.providerRevoked) {
               pushNotification({
                 autoCloseMs: null,
                 copyText: t('notifications.gmailUnlinkedRevokeFailed'),
                 message: t('notifications.gmailUnlinkedRevokeFailed'),
+                targetId: 'destination-mailbox-section',
+                tone: 'warning'
+              })
+            } else if (linkedProvider !== 'GMAIL_API') {
+              pushNotification({
+                autoCloseMs: null,
+                copyText: t('notifications.microsoftDestinationUnlinked'),
+                message: t('notifications.microsoftDestinationUnlinked'),
                 targetId: 'destination-mailbox-section',
                 tone: 'warning'
               })
@@ -133,7 +170,7 @@ export function useDestinationController({
           }
         })
       },
-      title: t(destinationConfig.provider === 'GMAIL_API' ? 'gmail.unlinkConfirmTitle' : 'destination.unlinkConfirmTitle')
+      title: t(linkedProvider === 'GMAIL_API' ? 'gmail.unlinkConfirmTitle' : 'destination.unlinkConfirmTitle')
     })
   }
 
@@ -205,6 +242,52 @@ export function useDestinationController({
     await navigateToMicrosoftDestinationOAuth()
   }
 
+  async function saveDestinationConfigAndAuthenticate(configOverride) {
+    const resolvedConfig = resolveNormalizedConfig(configOverride)
+    if (resolvedConfig.provider === 'GMAIL_API') {
+      const currentProvider = currentLinkedOAuthProvider()
+      if (!currentProvider) {
+        await persistDestinationConfig(configOverride)
+        await navigateToGoogleOAuthSelf()
+        return
+      }
+      if (currentProvider !== 'GOOGLE') {
+        linkedDestinationReplacementConfirmation('googleOAuthSelf', async () => {
+          closeConfirmation()
+          await persistDestinationConfig(configOverride)
+          await navigateToGoogleOAuthSelf()
+        })
+        return
+      }
+      openConfirmation({
+        actionKey: 'googleOAuthSelf',
+        body: t('gmail.reconnectConfirmBody'),
+        confirmLabel: t('gmail.reconnect'),
+        confirmLoadingLabel: t('gmail.reconnectLoading'),
+        confirmTone: 'danger',
+        onConfirm: async () => {
+          closeConfirmation()
+          await persistDestinationConfig(configOverride)
+          await navigateToGoogleOAuthSelf()
+        },
+        title: t('gmail.reconnectConfirmTitle')
+      })
+      return
+    }
+    const currentProvider = currentLinkedOAuthProvider()
+    const requestedProvider = requestedLinkedOAuthProvider(configOverride)
+    if (currentProvider && (currentProvider !== requestedProvider || currentProvider === 'MICROSOFT')) {
+      linkedDestinationReplacementConfirmation('microsoftDestinationOAuth', async () => {
+        closeConfirmation()
+        await persistDestinationConfig(configOverride)
+        await navigateToMicrosoftDestinationOAuth()
+      })
+      return
+    }
+    await persistDestinationConfig(configOverride)
+    await navigateToMicrosoftDestinationOAuth()
+  }
+
   async function startDestinationOAuth() {
     if (normalizedDestinationConfig.provider === 'GMAIL_API') {
       await startGoogleOAuthSelf()
@@ -215,7 +298,9 @@ export function useDestinationController({
 
   return {
     saveDestinationConfig,
+    saveDestinationConfigAndAuthenticate,
     startDestinationOAuth,
+    testDestinationConnection,
     unlinkDestinationAccount
   }
 }

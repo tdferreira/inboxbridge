@@ -1,6 +1,7 @@
 import LoadingButton from '../common/LoadingButton'
 import ModalDialog from '../common/ModalDialog'
 import PasswordField from '../common/PasswordField'
+import InfoHint from '../common/InfoHint'
 import { buildPasswordChecks, canSubmitPasswordChange } from '../../lib/passwordPolicy'
 import './PasswordResetDialog.css'
 
@@ -68,7 +69,10 @@ function CreateUserDialog({
           ))}
         </div>
         <label>
-          <span>{t('users.role')}</span>
+          <span className="field-label-row">
+            <span>{t('users.role')}</span>
+            <InfoHint text={t('users.roleHelp')} />
+          </span>
           <select value={createUserForm.role} onChange={(event) => onFormChange((current) => ({ ...current, role: event.target.value }))}>
             <option value="USER">{roleLabel('USER')}</option>
             <option value="ADMIN">{roleLabel('ADMIN')}</option>

@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import {
   CartesianGrid,
   Legend,
@@ -78,6 +78,7 @@ function fromDateTimeLocalValue(value) {
 }
 
 function ImportTimelineChart({ customRangeLoader = null, points = [], timelines = null, series = null, t, title }) {
+  const chartFrameRef = useRef(null)
   const resolvedSeries = useMemo(() => {
     if (Array.isArray(series) && series.length > 0) {
       return series
@@ -106,6 +107,7 @@ function ImportTimelineChart({ customRangeLoader = null, points = [], timelines 
   const [customRangeError, setCustomRangeError] = useState('')
   const [customRangeData, setCustomRangeData] = useState(null)
   const [customRangeForm, setCustomRangeForm] = useState({ from: '', to: '' })
+  const [chartFrameReady, setChartFrameReady] = useState(false)
 
   useEffect(() => {
     if (!selectableRanges.includes(selectedRange)) {
@@ -152,6 +154,42 @@ function ImportTimelineChart({ customRangeLoader = null, points = [], timelines 
 
   const chartRows = useMemo(() => buildChartRows(visibleSeries, selectedRange), [selectedRange, visibleSeries])
 
+  useLayoutEffect(() => {
+    const frame = chartFrameRef.current
+    if (!frame) {
+      setChartFrameReady(false)
+      return undefined
+    }
+
+    let animationFrame = null
+
+    function updateFrameReadiness() {
+      const nextReady = frame.clientWidth > 0 && frame.clientHeight > 0
+      setChartFrameReady((current) => (current === nextReady ? current : nextReady))
+    }
+
+    updateFrameReadiness()
+
+    const observer = typeof ResizeObserver === 'function'
+      ? new ResizeObserver(() => {
+        updateFrameReadiness()
+      })
+      : null
+
+    if (observer) {
+      observer.observe(frame)
+    } else {
+      animationFrame = window.requestAnimationFrame(updateFrameReadiness)
+    }
+
+    return () => {
+      if (animationFrame !== null) {
+        window.cancelAnimationFrame(animationFrame)
+      }
+      observer?.disconnect()
+    }
+  }, [selectedRange, visibleSeries.length])
+
   return (
     <div className="timeline-chart-card surface-card">
       <div className="timeline-chart-header">
@@ -183,47 +221,49 @@ function ImportTimelineChart({ customRangeLoader = null, points = [], timelines 
         <div className="muted-box">{t('pollingStats.noImportTimeline')}</div>
       ) : (
         <div className="timeline-chart-shell">
-          <div className="timeline-chart-frame">
-            <ResponsiveContainer height="100%" minHeight={240} minWidth={320} width="100%">
-              <LineChart data={chartRows} margin={{ top: 8, right: 16, bottom: 6, left: 0 }}>
-                <CartesianGrid stroke="rgba(15, 23, 42, 0.08)" strokeDasharray="3 4" vertical={false} />
-                <XAxis
-                  axisLine={false}
-                  dataKey="label"
-                  minTickGap={18}
-                  tick={{ fill: 'var(--muted-text)', fontSize: 12 }}
-                  tickLine={false}
-                />
-                <YAxis
-                  allowDecimals={false}
-                  axisLine={false}
-                  tick={{ fill: 'var(--muted-text)', fontSize: 12 }}
-                  tickLine={false}
-                  width={34}
-                />
-                <Tooltip
-                  content={<TimelineTooltip t={t} />}
-                  cursor={{ stroke: 'rgba(37, 99, 235, 0.35)', strokeDasharray: '3 4' }}
-                  labelFormatter={(_, payload) => payload?.[0]?.payload?.bucketLabel || ''}
-                />
-                <Legend
-                  formatter={(value) => <span className="timeline-chart-legend-text">{value}</span>}
-                  wrapperStyle={{ paddingTop: '4px' }}
-                />
-                {visibleSeries.map((entry, index) => (
-                  <Line
-                    activeDot={{ r: 5 }}
-                    dataKey={entry.key}
-                    dot={false}
-                    key={entry.key}
-                    name={entry.label}
-                    stroke={SERIES_COLORS[index % SERIES_COLORS.length]}
-                    strokeWidth={2.5}
-                    type="monotone"
+          <div className="timeline-chart-frame" ref={chartFrameRef}>
+            {chartFrameReady ? (
+              <ResponsiveContainer height="100%" minHeight={240} minWidth={320} width="100%">
+                <LineChart data={chartRows} margin={{ top: 8, right: 16, bottom: 6, left: 0 }}>
+                  <CartesianGrid stroke="rgba(15, 23, 42, 0.08)" strokeDasharray="3 4" vertical={false} />
+                  <XAxis
+                    axisLine={false}
+                    dataKey="label"
+                    minTickGap={18}
+                    tick={{ fill: 'var(--muted-text)', fontSize: 12 }}
+                    tickLine={false}
                   />
-                ))}
-              </LineChart>
-            </ResponsiveContainer>
+                  <YAxis
+                    allowDecimals={false}
+                    axisLine={false}
+                    tick={{ fill: 'var(--muted-text)', fontSize: 12 }}
+                    tickLine={false}
+                    width={34}
+                  />
+                  <Tooltip
+                    content={<TimelineTooltip t={t} />}
+                    cursor={{ stroke: 'rgba(37, 99, 235, 0.35)', strokeDasharray: '3 4' }}
+                    labelFormatter={(_, payload) => payload?.[0]?.payload?.bucketLabel || ''}
+                  />
+                  <Legend
+                    formatter={(value) => <span className="timeline-chart-legend-text">{value}</span>}
+                    wrapperStyle={{ paddingTop: '4px' }}
+                  />
+                  {visibleSeries.map((entry, index) => (
+                    <Line
+                      activeDot={{ r: 5 }}
+                      dataKey={entry.key}
+                      dot={false}
+                      key={entry.key}
+                      name={entry.label}
+                      stroke={SERIES_COLORS[index % SERIES_COLORS.length]}
+                      strokeWidth={2.5}
+                      type="monotone"
+                    />
+                  ))}
+                </LineChart>
+              </ResponsiveContainer>
+            ) : null}
           </div>
         </div>
       )}

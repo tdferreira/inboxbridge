@@ -85,7 +85,7 @@ describe('EmailAccountDialog', () => {
           authMethod: 'PASSWORD',
           oauthProvider: 'NONE',
           username: '',
-          password: '',
+          password: 'secret',
           oauthRefreshToken: '',
           folder: 'INBOX',
           unreadOnly: false,
@@ -199,11 +199,11 @@ describe('EmailAccountDialog', () => {
       />
     )
 
-    expect(screen.getByRole('dialog', { name: 'Adicionar conta de email de origem' })).toBeInTheDocument()
+    expect(screen.getByRole('dialog', { name: 'Adicionar conta de email' })).toBeInTheDocument()
     expect(screen.getByLabelText(/Predefinição do fornecedor/)).toBeInTheDocument()
     expect(screen.getByLabelText(/Método de autenticação/)).toBeInTheDocument()
     expect(screen.getByLabelText(/Etiqueta personalizada/)).toBeInTheDocument()
-    expect(screen.getByRole('button', { name: 'Adicionar conta de email de origem' })).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Adicionar' })).toBeInTheDocument()
   })
 
   it('closes without confirmation when no changes were introduced', () => {
@@ -238,7 +238,7 @@ describe('EmailAccountDialog', () => {
       />
     )
 
-    fireEvent.click(screen.getByRole('button', { name: 'Close Add Source Email Account' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Close Add Email Account' }))
 
     expect(confirmSpy).not.toHaveBeenCalled()
     expect(onClose).toHaveBeenCalledTimes(1)
@@ -252,8 +252,8 @@ describe('EmailAccountDialog', () => {
     render(
       <EmailAccountDialog
         emailAccountForm={{
-          originalBridgeId: '',
-          bridgeId: 'fetcher-a',
+          originalEmailAccountId: '',
+          emailAccountId: 'fetcher-a',
           enabled: true,
           protocol: 'IMAP',
           host: 'imap.example.com',
@@ -298,9 +298,6 @@ describe('EmailAccountDialog', () => {
       />
     )
 
-    fireEvent.click(screen.getByRole('button', { name: 'Test Connection' }))
-
-    expect(onTestConnection).toHaveBeenCalledTimes(1)
     expect(screen.getByText('Connection test succeeded for IMAP on imap.example.com:993 (folder INBOX).')).toBeInTheDocument()
     expect(screen.getByText('Endpoint')).toBeInTheDocument()
     expect(screen.getByText('imap.example.com:993')).toBeInTheDocument()
@@ -309,14 +306,47 @@ describe('EmailAccountDialog', () => {
     expect(screen.getByText('12')).toBeInTheDocument()
   })
 
+  it('disables test connection until the required connection fields are present', () => {
+    render(
+      <EmailAccountDialog
+        emailAccountForm={{
+          originalEmailAccountId: '',
+          emailAccountId: 'fetcher-a',
+          enabled: true,
+          protocol: 'IMAP',
+          host: 'imap.example.com',
+          port: 993,
+          tls: true,
+          authMethod: 'PASSWORD',
+          oauthProvider: 'NONE',
+          username: 'user@example.com',
+          password: '',
+          oauthRefreshToken: '',
+          folder: 'INBOX',
+          unreadOnly: false,
+          customLabel: ''
+        }}
+        onApplyPreset={vi.fn()}
+        onEmailAccountFormChange={vi.fn()}
+        onClose={vi.fn()}
+        onSave={vi.fn((event) => event.preventDefault())}
+        onTestEmailAccountConnection={vi.fn()}
+        saveLoading={false}
+        t={(key, params) => translate('en', key, params)}
+      />
+    )
+
+    expect(screen.getByRole('button', { name: 'Test Connection' })).toBeDisabled()
+  })
+
   it('offers a save-and-connect OAuth action when a provider is selected', () => {
     const onSaveAndConnectOAuth = vi.fn()
 
     render(
       <EmailAccountDialog
         emailAccountForm={{
-          originalBridgeId: '',
-          bridgeId: 'outlook-main',
+          originalEmailAccountId: '',
+          emailAccountId: 'outlook-main',
           enabled: true,
           protocol: 'IMAP',
           host: 'outlook.office365.com',
@@ -345,5 +375,71 @@ describe('EmailAccountDialog', () => {
     expect(screen.getByText(/save this mail account and then launch the microsoft consent flow/i)).toBeInTheDocument()
     fireEvent.click(screen.getByRole('button', { name: 'Save and Connect Microsoft' }))
     expect(onSaveAndConnectOAuth).toHaveBeenCalledTimes(1)
+  })
+
+  it('hides plain add for new Outlook accounts and locks provider changes while editing', () => {
+    const { rerender } = render(
+      <EmailAccountDialog
+        emailAccountForm={{
+          originalEmailAccountId: '',
+          emailAccountId: 'outlook-main',
+          enabled: true,
+          protocol: 'IMAP',
+          host: 'outlook.office365.com',
+          port: 993,
+          tls: true,
+          authMethod: 'OAUTH2',
+          oauthProvider: 'MICROSOFT',
+          username: 'user@example.com',
+          password: '',
+          oauthRefreshToken: '',
+          folder: 'INBOX',
+          unreadOnly: false,
+          customLabel: ''
+        }}
+        onApplyPreset={vi.fn()}
+        onEmailAccountFormChange={vi.fn()}
+        onClose={vi.fn()}
+        onSave={vi.fn((event) => event.preventDefault())}
+        onSaveAndConnectOAuth={vi.fn()}
+        saveLoading={false}
+        t={(key, params) => translate('en', key, params)}
+      />
+    )
+
+    expect(screen.queryByRole('button', { name: 'Add' })).not.toBeInTheDocument()
+    expect(screen.queryByLabelText('Custom Label')).not.toBeInTheDocument()
+
+    rerender(
+      <EmailAccountDialog
+        emailAccountForm={{
+          originalEmailAccountId: 'outlook-main',
+          emailAccountId: 'outlook-main',
+          enabled: true,
+          protocol: 'IMAP',
+          host: 'outlook.office365.com',
+          port: 993,
+          tls: true,
+          authMethod: 'OAUTH2',
+          oauthProvider: 'MICROSOFT',
+          username: 'user@example.com',
+          password: '',
+          oauthRefreshToken: '',
+          folder: 'Archive',
+          unreadOnly: false,
+          customLabel: ''
+        }}
+        onApplyPreset={vi.fn()}
+        onEmailAccountFormChange={vi.fn()}
+        onClose={vi.fn()}
+        onSave={vi.fn((event) => event.preventDefault())}
+        onSaveAndConnectOAuth={vi.fn()}
+        saveLoading={false}
+        t={(key, params) => translate('en', key, params)}
+      />
+    )
+
+    expect(screen.getByLabelText(/Provider preset/)).toBeDisabled()
+    expect(screen.getByRole('button', { name: 'Save' })).toBeInTheDocument()
   })
 })

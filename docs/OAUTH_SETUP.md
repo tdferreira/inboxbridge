@@ -3,8 +3,8 @@
 This document covers both:
 
 - Gmail OAuth for Gmail destination accounts
-- Microsoft OAuth for Outlook / Hotmail / Live source accounts
-- Microsoft OAuth for Outlook / Hotmail / Live destination accounts that use IMAP APPEND
+- Microsoft OAuth for Outlook source accounts
+- Microsoft OAuth for Outlook destination accounts that use IMAP APPEND
 
 The preferred local callback origin is the HTTPS admin UI:
 
@@ -75,11 +75,11 @@ ${PUBLIC_BASE_URL}/api/google-oauth/callback
 3. Then use the destination-mailbox connect action from `My Destination Mailbox` for the mailbox that should receive imported mail
 4. Complete Google consent
 5. The callback page automatically tries to exchange the code in the browser as soon as it loads
-6. After exchange succeeds, the callback page starts a 10-second countdown and returns to the admin UI automatically
+6. After exchange succeeds, the callback page starts a 5-second countdown and redirects to InboxBridge automatically
 7. If the automatic attempt fails, use the callback page button to retry the exchange manually
-8. Use `Return To Admin UI` if you want to go back immediately instead of waiting for the countdown
+8. Use `Return to InboxBridge` if you want to go back immediately instead of waiting for the countdown
 9. If you try to leave before exchanging, the callback page warns that you must handle the code or token manually later
-10. If secure storage is enabled, InboxBridge stores the token encrypted in PostgreSQL
+10. If secure storage is enabled, InboxBridge stores the token securely and renews access automatically
 
 If the deployment already has a shared Google client configured, users can leave the per-user client ID and secret blank and still start the Gmail OAuth flow successfully.
 
@@ -119,9 +119,9 @@ InboxBridge already includes those.
 
 ## Microsoft OAuth for Outlook.com
 
-InboxBridge can only use Microsoft OAuth for Outlook / Hotmail / Live source or destination accounts after this application has been registered in Microsoft Entra and issued app credentials.
+InboxBridge can only use Microsoft OAuth for Outlook source or destination accounts after this application has been registered in Microsoft Entra and issued app credentials.
 
-Password-based IMAP / POP login is often blocked by Microsoft even when an app password exists. InboxBridge therefore requires OAuth2 + XOAUTH2 for Outlook / Hotmail / Live source email accounts and Outlook destination mailboxes.
+Password-based IMAP / POP login is often blocked by Microsoft even when an app password exists. InboxBridge therefore requires OAuth2 + XOAUTH2 for Outlook source email accounts and Outlook destination mailboxes.
 
 ### Microsoft account and app registration
 
@@ -133,7 +133,7 @@ Use Microsoft Entra app registration:
 2. Go to `Entra ID > App registrations > New registration`
 3. Give the app a meaningful name, such as `InboxBridge Outlook OAuth`
 4. Choose supported accounts:
-   - recommended for a personal Outlook / Hotmail / Live setup: `Personal Microsoft accounts only`
+  - recommended for a personal Outlook setup: `Personal Microsoft accounts only`
    - if you want both personal and work/school accounts: `Accounts in any organizational directory and personal Microsoft accounts`
 5. Choose redirect URI platform `Web`
 6. Add:
@@ -176,7 +176,7 @@ From the app registration:
 - `Application (client) ID` -> `MICROSOFT_CLIENT_ID`
 - `Client secret Value` -> `MICROSOFT_CLIENT_SECRET`
 
-For personal Outlook / Hotmail / Live accounts, prefer:
+For personal Outlook accounts, prefer:
 
 - `MICROSOFT_TENANT=consumers`
 
@@ -220,17 +220,18 @@ MAIL_ACCOUNT_0__CUSTOM_LABEL=Imported/Outlook
 
 ### Browser flow
 
-For Outlook destination mailboxes configured from `My Destination Mailbox` in the admin UI, the same Microsoft app registration is reused. The user chooses `Outlook / Hotmail / Live` as the destination provider, optionally changes the destination folder, and starts `Connect Microsoft Account` from that destination panel. The Outlook host, port, auth method, and OAuth provider are fixed automatically by the preset, so the UI no longer asks the user to edit those values.
+For Outlook destination mailboxes configured from `My Destination Mailbox` in the admin UI, the same Microsoft app registration is reused. The user chooses `Outlook` as the destination provider, can save folder-only edits without reconnecting, and uses the Microsoft OAuth action whenever the connected mailbox identity needs to change.
 
 1. Sign in to `https://localhost:3000`
 2. Use the Microsoft OAuth button on the relevant source email account or destination mailbox
 3. Complete Microsoft consent
 4. The callback page automatically tries to exchange the code in the browser as soon as it loads
-5. After exchange succeeds, the callback page starts a 10-second countdown and returns to the admin UI automatically
+5. After exchange succeeds, the callback page starts a 5-second countdown and redirects to InboxBridge automatically
 6. If the automatic attempt fails, use the callback page button to retry the exchange manually
-7. Use `Return To Admin UI` if you want to go back immediately instead of waiting for the countdown
-8. If you try to leave before exchanging, the callback page warns that you must handle the code or token manually later
-8. If secure storage is enabled, InboxBridge stores the token encrypted in PostgreSQL
+7. Use `Return to InboxBridge` if you want to go back immediately instead of waiting for the countdown
+8. If secure storage is missing, the callback page stops the exchange and tells you to configure `SECURITY_TOKEN_ENCRYPTION_KEY`, restart InboxBridge, and retry the OAuth flow
+9. When the exchange succeeds, InboxBridge stores the token securely and renews access automatically
+10. If you later unlink or replace a Microsoft destination connection, InboxBridge removes its stored tokens but you may still need to remove `InboxBridge` manually from your Microsoft account permissions or My Apps page
 
 Example manual exchange:
 

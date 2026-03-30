@@ -62,7 +62,7 @@ describe('UserEmailAccountsSection', () => {
     expect(screen.getByText('Gira as caixas de email das quais o InboxBridge vai buscar mensagens.')).toBeInTheDocument()
     expect(screen.getByText('Ainda não existem contas de email de origem configuradas.')).toBeInTheDocument()
 
-    fireEvent.click(screen.getByRole('button', { name: 'Adicionar conta de email de origem' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Adicionar conta de email' }))
     expect(onAddFetcher).toHaveBeenCalledTimes(1)
   })
 

@@ -3,6 +3,7 @@
   inset: 0;
   background: rgba(36, 26, 20, 0.28);
   backdrop-filter: blur(4px);
+  overscroll-behavior: contain;
   display: flex;
   align-items: center;
   justify-content: center;
@@ -11,16 +12,17 @@
 }
 
 .modal-surface {
-  width: min(560px, 100%);
+  width: min(820px, 100%);
   max-height: calc(100vh - 48px);
   overflow-y: auto;
+  overscroll-behavior: contain;
   padding: 24px;
   display: grid;
   gap: 16px;
 }
 
 .modal-surface-wide {
-  width: min(860px, 100%);
+  width: min(1240px, 100%);
 }
 
 .modal-header {

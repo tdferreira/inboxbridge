@@ -118,6 +118,7 @@ System polling behavior:
 - polling statistics now also expose provider mix, current health buckets, duplicate trends, error trends, manual-vs-scheduled runs, and average poll duration
 - nested statistics sections inside expanded source-email-account cards and expanded admin user cards are independently collapsible, and should default to collapsed when there is no meaningful data to display yet
 - the admin UI now separates admin users into `User` and `Administration` workspaces so personal account setup is distinct from deployment-wide controls
+- those workspaces are now route-backed in the browser, so `/` stays on the user workspace, `/admin` opens the administration workspace directly, and supported locales can expose translated workspace slugs such as `/utilizador` and `/administracao`
 - the movable content sections inside each workspace now support per-account reordering, while the header and workspace switcher stay fixed
 - the movable workspace sections can now also be rearranged by drag-and-drop when the user enables layout editing from `Preferences`, and a dotted placeholder shows the drop position
 - reconnecting Gmail to the same already-linked account should not revoke that account's Google grant; replacement and revocation only happen when the user actually links a different Gmail account
@@ -146,6 +147,8 @@ System polling behavior:
 - mail-fetcher detail data is refreshed automatically after manual poll attempts and when the user expands a fetcher row, so the visible status no longer waits only for the periodic dashboard refresh
 - expanding any major collapsible admin-ui section now triggers a fresh reload for that section and shows an inline loading indicator while the refresh is happening
 - expanding an individual user entry now refreshes the latest user list/configuration data as part of that expansion flow, while the row shows loading feedback
+- destination mailbox preset descriptions, destination test-connection actions, and admin destination-section labels are localized across the supported admin-ui locales instead of falling back to English strings from preset metadata
+- expanded admin user cards also defensively render partial configuration payloads so missing sub-objects do not blank the page while the latest data is loading
 - IMAP fetch materialization now snapshots UID / Message-ID / timestamp metadata before reading the raw MIME payload so an already-invalidated folder does not fail a message after the bytes were successfully read
 
 ### 3. Hybrid env + DB config model
@@ -412,7 +415,7 @@ Important current operator note:
 
 ### Microsoft
 
-Microsoft OAuth is used for Outlook / Hotmail / Live source mailboxes.
+Microsoft OAuth is used for Outlook source mailboxes.
 
 Supported now:
 
@@ -489,7 +492,7 @@ The React admin UI shows:
 - self-service password removal and passkey deletion now require confirmation modals before any destructive account-security request is sent
 - an `Add Email Fetcher` / `Edit Email Fetcher` modal instead of an always-visible inline email-account form
 - that mail-fetcher modal is intentionally wider now, hides the `.env` badge for UI-managed entries, and rejects duplicate IDs both in the browser and in the backend service
-- provider presets for Outlook / Hotmail / Live, Gmail, Yahoo Mail, and Proton Mail Bridge
+- provider presets for Outlook, Gmail, Yahoo Mail, and Proton Mail Bridge
 - fetcher forms that hide OAuth-only fields during password auth and hide password fields during OAuth setup
 - inline help-tooltips on fetcher and poller fields so the purpose of each control is visible in the UI
 - prefilled Gmail redirect URIs and shared-client guidance on the user Gmail settings page
@@ -509,7 +512,7 @@ The React admin UI shows:
 - when secure token storage is configured and a newer Microsoft refresh token has been stored successfully, the dashboard suppresses older stale `has no refresh token` source errors for that same source email account
 - UI-managed Microsoft source email accounts also reuse the encrypted OAuth credential store by email account ID, so their runtime token lookup no longer depends on a duplicated refresh token copy being present on the `user_email_account` row
 - both provider callback flows now surface consent-denied and missing-scope cases with retry guidance instead of leaving the user with a generic exchange failure
-- once the user confirms a `Return To Admin UI` leave action before exchange, the callback page suppresses the browser's second generic unsaved-changes prompt so the user is not asked twice
+- once the user confirms a `Return to InboxBridge` leave action before exchange, the callback page suppresses the browser's second generic unsaved-changes prompt so the user is not asked twice
 - the old env-managed email-account dashboard section has been reframed as admin-only `Global Poller Settings`, which now focuses on runtime polling controls plus health metrics instead of listing env-managed fetchers there
 
 ## Code structure
@@ -619,7 +622,7 @@ src/main/resources/db/migration
 Validated on 2026-03-26:
 
 - `mvn test` passes
-- admin-ui Vitest suite passes during the Docker build
+- admin-ui Docker build succeeds, with the Vitest suite intended to run separately unless `RUN_TESTS=true` is passed to the admin UI Docker build
 - Docker Compose build succeeds
 - backend starts on both HTTP `8080` and HTTPS `8443`
 - admin UI serves correctly over HTTPS in the container
@@ -637,8 +640,8 @@ Admin UI frontend structure now follows a controller-and-components split:
 - `src/components/...` contains reusable UI sections with independent CSS files
 - `src/lib/...` contains formatting and API helper utilities
 - `admin-ui/README.md` documents the frontend layout and test workflow
-- the Google and Microsoft OAuth callback pages now support navigating back to the admin UI after in-browser code exchange
-- the Google and Microsoft OAuth callback pages support copying the raw code, automatically attempt the exchange on load, warn before navigating away without exchange, and auto-return to the admin UI after a 10-second countdown once exchange succeeds
+- the Google and Microsoft OAuth callback pages now support navigating back to InboxBridge after in-browser code exchange
+- the Google and Microsoft OAuth callback pages support copying the raw code, automatically attempt the exchange on load, warn before navigating away without exchange, and auto-redirect to InboxBridge after a 5-second countdown once exchange succeeds unless the user cancels that automatic redirect
 - admin-ui buttons that trigger backend work now show inline loading spinners so the user gets immediate feedback during authentication, saves, polling, refresh, and OAuth start flows
 
 Current live config issue in this workspace:

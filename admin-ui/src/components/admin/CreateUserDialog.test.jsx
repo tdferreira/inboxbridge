@@ -61,5 +61,6 @@ describe('CreateUserDialog', () => {
     expect(screen.getByRole('dialog', { name: 'Criar utilizador' })).toBeInTheDocument()
     expect(screen.getByText('Crie uma conta totalmente aprovada e atribua o papel inicial. A palavra-passe temporária tem de respeitar a mesma política de todas as outras contas.')).toBeInTheDocument()
     expect(screen.getByLabelText('Palavra-passe inicial')).toBeInTheDocument()
+    expect(screen.getByLabelText('Utilizador só pode gerir a própria caixa de destino, as próprias contas de email de origem e as preferências pessoais. Admin também pode aceder à área de Administração, gerir utilizadores, aplicações OAuth partilhadas e definições globais de polling.')).toBeInTheDocument()
   })
 })

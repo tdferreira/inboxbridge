@@ -12,6 +12,64 @@ function sortUsersByUsername(users = []) {
   }))
 }
 
+function createFallbackUserConfig(user, t) {
+  return {
+    user,
+    destinationConfig: {
+      provider: '',
+      deliveryMode: '',
+      linked: false,
+      host: '',
+      port: null,
+      authMethod: '',
+      username: '',
+      folder: ''
+    },
+    pollingSettings: {
+      effectivePollEnabled: false,
+      effectivePollInterval: t('users.notSet'),
+      effectiveFetchWindow: t('users.notSet'),
+      pollEnabledOverride: null,
+      pollIntervalOverride: null,
+      fetchWindowOverride: null
+    },
+    pollingStats: null,
+    passkeys: [],
+    emailAccounts: [],
+    bridges: []
+  }
+}
+
+function normalizeExpandedUserConfig(config, user, t) {
+  const fallback = createFallbackUserConfig(user, t)
+  const emailAccounts = Array.isArray(config?.emailAccounts)
+    ? config.emailAccounts.filter(Boolean)
+    : Array.isArray(config?.bridges)
+      ? config.bridges.filter(Boolean)
+      : []
+
+  return {
+    ...fallback,
+    ...(config || {}),
+    user: {
+      ...user,
+      ...(config?.user || {})
+    },
+    destinationConfig: {
+      ...fallback.destinationConfig,
+      ...(config?.destinationConfig || {})
+    },
+    pollingSettings: {
+      ...fallback.pollingSettings,
+      ...(config?.pollingSettings || {})
+    },
+    pollingStats: config?.pollingStats || null,
+    passkeys: Array.isArray(config?.passkeys) ? config.passkeys : [],
+    emailAccounts,
+    bridges: emailAccounts
+  }
+}
+
 /**
  * Admin workspace for user lifecycle management and non-sensitive cross-user
  * configuration inspection.
@@ -96,32 +154,9 @@ function UserManagementSection({
           <div className="list-stack">
             {sortedUsers.map((user) => {
               const isExpanded = expandedUserId === user.id
-              const config = isExpanded && selectedUserConfig?.user.id === user.id
-                ? selectedUserConfig
-                : {
-                    user,
-                    destinationConfig: {
-                      provider: '',
-                      deliveryMode: '',
-                      linked: false,
-                      host: '',
-                      port: null,
-                      authMethod: '',
-                      username: '',
-                      folder: ''
-                    },
-                    pollingSettings: {
-                      effectivePollEnabled: false,
-                      effectivePollInterval: t('users.notSet'),
-                      effectiveFetchWindow: t('users.notSet'),
-                      pollEnabledOverride: null,
-                      pollIntervalOverride: null,
-                      fetchWindowOverride: null
-                    },
-                    pollingStats: null,
-                    passkeys: [],
-                    bridges: []
-                  }
+              const config = isExpanded && selectedUserConfig?.user?.id === user.id
+                ? normalizeExpandedUserConfig(selectedUserConfig, user, t)
+                : createFallbackUserConfig(user, t)
 
               return (
                 <UserListItem

@@ -3,13 +3,16 @@ package dev.inboxbridge.web;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 
+import java.util.List;
 import java.util.Optional;
 
 import org.junit.jupiter.api.Test;
 
+import dev.inboxbridge.dto.DestinationMailboxFolderOptionsView;
 import dev.inboxbridge.dto.UpdateUserPollingSettingsRequest;
 import dev.inboxbridge.dto.UpdateSourcePollingSettingsRequest;
 import dev.inboxbridge.dto.UpdateUserEmailAccountRequest;
+import dev.inboxbridge.dto.UpdateUserMailDestinationRequest;
 import dev.inboxbridge.dto.EmailAccountConnectionTestResult;
 import dev.inboxbridge.dto.PollingTimelineBundleView;
 import dev.inboxbridge.dto.PollingBreakdownItemView;
@@ -27,6 +30,7 @@ import dev.inboxbridge.service.SourcePollingSettingsService;
 import dev.inboxbridge.service.PollingStatsService;
 import dev.inboxbridge.service.UserPollingSettingsService;
 import dev.inboxbridge.service.UserEmailAccountService;
+import dev.inboxbridge.service.UserMailDestinationConfigService;
 import jakarta.ws.rs.BadRequestException;
 
 class UserConfigResourceTest {
@@ -150,6 +154,72 @@ class UserConfigResourceTest {
         assertEquals("Connection test succeeded.", response.message());
         assertEquals("IMAP", response.protocol());
         assertEquals(Boolean.TRUE, response.folderAccessible());
+    }
+
+    @Test
+    void destinationFoldersReturnsUserScopedFolderOptions() {
+        UserConfigResource resource = resource();
+        resource.userMailDestinationConfigService = new FakeUserMailDestinationConfigService();
+
+        DestinationMailboxFolderOptionsView response = resource.destinationFolders();
+
+        assertEquals(List.of("INBOX", "Archive"), response.folders());
+    }
+
+    @Test
+    void destinationFoldersMapsValidationErrorsToBadRequest() {
+        UserConfigResource resource = resource();
+        resource.userMailDestinationConfigService = new ErrorUserMailDestinationConfigService();
+
+        BadRequestException error = assertThrows(BadRequestException.class, resource::destinationFolders);
+
+        assertEquals("Save and connect the destination mailbox before loading folders.", error.getMessage());
+    }
+
+    @Test
+    void testDestinationConnectionDelegatesToDestinationService() {
+        UserConfigResource resource = resource();
+        resource.userMailDestinationConfigService = new FakeUserMailDestinationConfigService();
+
+        EmailAccountConnectionTestResult response = resource.testDestinationConnection(new UpdateUserMailDestinationRequest(
+                "OUTLOOK_IMAP",
+                "outlook.office365.com",
+                993,
+                true,
+                "OAUTH2",
+                "MICROSOFT",
+                "alice@example.com",
+                "",
+                "INBOX"));
+
+        assertEquals(true, response.success());
+        assertEquals("Connection test succeeded.", response.message());
+    }
+
+    @Test
+    void testDestinationConnectionMapsValidationErrorsToBadRequest() {
+        UserConfigResource resource = resource();
+        resource.userMailDestinationConfigService = new ErrorUserMailDestinationConfigService() {
+            @Override
+            public EmailAccountConnectionTestResult testConnectionForUser(AppUser user, UpdateUserMailDestinationRequest request) {
+                throw new IllegalStateException("Save and connect the destination mailbox before testing it.");
+            }
+        };
+
+        BadRequestException error = assertThrows(
+                BadRequestException.class,
+                () -> resource.testDestinationConnection(new UpdateUserMailDestinationRequest(
+                        "OUTLOOK_IMAP",
+                        "outlook.office365.com",
+                        993,
+                        true,
+                        "OAUTH2",
+                        "MICROSOFT",
+                        "alice@example.com",
+                        "",
+                        "INBOX")));
+
+        assertEquals("Save and connect the destination mailbox before testing it.", error.getMessage());
     }
 
     private UserConfigResource resource() {
@@ -299,6 +369,25 @@ class UserConfigResourceTest {
         @Override
         public EmailAccountConnectionTestResult testConnection(AppUser user, UpdateUserEmailAccountRequest request) {
             return new EmailAccountConnectionTestResult(true, "Connection test succeeded.", "IMAP", "imap.example.com", 993, true, "PASSWORD", "NONE", true, "INBOX", true, false, Boolean.TRUE, null, 0, 0, Boolean.FALSE, null);
+        }
+    }
+
+    private static final class FakeUserMailDestinationConfigService extends UserMailDestinationConfigService {
+        @Override
+        public DestinationMailboxFolderOptionsView listFoldersForUser(Long userId, String ownerUsername) {
+            return new DestinationMailboxFolderOptionsView(List.of("INBOX", "Archive"));
+        }
+
+        @Override
+        public EmailAccountConnectionTestResult testConnectionForUser(AppUser user, UpdateUserMailDestinationRequest request) {
+            return new EmailAccountConnectionTestResult(true, "Connection test succeeded.", "IMAP", request.host(), request.port(), request.tls(), request.authMethod(), request.oauthProvider(), true, request.folder(), true, false, null, null, 0, null, false, null);
+        }
+    }
+
+    private static class ErrorUserMailDestinationConfigService extends UserMailDestinationConfigService {
+        @Override
+        public DestinationMailboxFolderOptionsView listFoldersForUser(Long userId, String ownerUsername) {
+            throw new IllegalStateException("Save and connect the destination mailbox before loading folders.");
         }
     }
 }

@@ -8,6 +8,7 @@ import dev.inboxbridge.dto.UpdateUserMailDestinationRequest;
 import dev.inboxbridge.dto.UpdateUserPollingSettingsRequest;
 import dev.inboxbridge.dto.UpdateSourcePollingSettingsRequest;
 import dev.inboxbridge.dto.UpdateUserUiPreferenceRequest;
+import dev.inboxbridge.dto.DestinationMailboxFolderOptionsView;
 import dev.inboxbridge.dto.EmailAccountConnectionTestResult;
 import dev.inboxbridge.dto.PollingTimelineBundleView;
 import dev.inboxbridge.dto.UserEmailAccountView;
@@ -85,6 +86,27 @@ public class UserConfigResource {
     public UserMailDestinationView updateDestinationConfig(UpdateUserMailDestinationRequest request) {
         try {
             return userMailDestinationConfigService.update(currentUserContext.user(), request);
+        } catch (IllegalArgumentException | IllegalStateException e) {
+            throw new BadRequestException(e.getMessage(), e);
+        }
+    }
+
+    @GET
+    @Path("/destination-config/folders")
+    public DestinationMailboxFolderOptionsView destinationFolders() {
+        try {
+            return userMailDestinationConfigService.listFoldersForUser(currentUserContext.user().id, currentUserContext.user().username);
+        } catch (IllegalArgumentException | IllegalStateException e) {
+            throw new BadRequestException(e.getMessage(), e);
+        }
+    }
+
+    @POST
+    @Path("/destination-config/test-connection")
+    @Consumes(MediaType.APPLICATION_JSON)
+    public EmailAccountConnectionTestResult testDestinationConnection(UpdateUserMailDestinationRequest request) {
+        try {
+            return userMailDestinationConfigService.testConnectionForUser(currentUserContext.user(), request);
         } catch (IllegalArgumentException | IllegalStateException e) {
             throw new BadRequestException(e.getMessage(), e);
         }

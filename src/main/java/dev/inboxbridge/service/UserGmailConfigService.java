@@ -68,6 +68,7 @@ public class UserGmailConfigService {
         storedConfig.ifPresent(config -> {
             config.refreshTokenCiphertext = null;
             config.refreshTokenNonce = null;
+            config.linkedMailboxAddress = null;
             config.updatedAt = Instant.now();
             repository.persist(config);
         });
@@ -93,6 +94,7 @@ public class UserGmailConfigService {
         storedConfig.ifPresent(config -> {
             config.refreshTokenCiphertext = null;
             config.refreshTokenNonce = null;
+            config.linkedMailboxAddress = null;
             config.updatedAt = Instant.now();
             repository.persist(config);
         });
@@ -116,6 +118,7 @@ public class UserGmailConfigService {
         storedConfig.ifPresent(config -> {
             config.refreshTokenCiphertext = null;
             config.refreshTokenNonce = null;
+            config.linkedMailboxAddress = null;
             config.updatedAt = Instant.now();
             repository.persist(config);
         });
@@ -147,10 +150,6 @@ public class UserGmailConfigService {
                 config == null ? inboxBridgeConfig.gmail().createMissingLabels() : config.createMissingLabels,
                 config == null ? inboxBridgeConfig.gmail().neverMarkSpam() : config.neverMarkSpam,
                 config == null ? inboxBridgeConfig.gmail().processForCalendar() : config.processForCalendar));
-    }
-
-    public boolean destinationLinked(Long userId) {
-        return googleOAuthStored(userId);
     }
 
     @Transactional
@@ -206,6 +205,26 @@ public class UserGmailConfigService {
     }
 
     public Optional<GoogleOAuthService.GoogleOAuthProfile> googleProfileForUser(Long userId) {
+        return authorizationProfileForUser(userId);
+    }
+
+    public Optional<GoogleOAuthService.GoogleOAuthProfile> linkedGoogleProfileForUser(Long userId) {
+        return resolveForUser(userId)
+                .filter(config -> !config.clientId().isBlank() && !config.clientSecret().isBlank() && !config.refreshToken().isBlank())
+                .map(config -> new GoogleOAuthService.GoogleOAuthProfile(
+                        "user-gmail:" + userId,
+                        config.clientId(),
+                        config.clientSecret(),
+                        config.refreshToken(),
+                        nonBlankOrDefault(config.redirectUri(), defaultRedirectUri()),
+                        GoogleOAuthService.GMAIL_TARGET_SCOPE));
+    }
+
+    public boolean destinationLinked(Long userId) {
+        return linkedGoogleProfileForUser(userId).isPresent();
+    }
+
+    public Optional<GoogleOAuthService.GoogleOAuthProfile> authorizationProfileForUser(Long userId) {
         if (secretEncryptionService.isConfigured()) {
             Optional<GoogleOAuthService.GoogleOAuthProfile> userManaged = resolveForUser(userId)
                     .filter(config -> !config.clientId().isBlank() && !config.clientSecret().isBlank())
@@ -236,6 +255,13 @@ public class UserGmailConfigService {
                 "",
                 redirectUri,
                 GoogleOAuthService.GMAIL_TARGET_SCOPE));
+    }
+
+    public Optional<String> linkedMailboxAddress(Long userId) {
+        return repository.findByUserId(userId)
+                .map(config -> config.linkedMailboxAddress)
+                .filter(value -> value != null && !value.isBlank())
+                .map(String::trim);
     }
 
     public boolean sharedGoogleClientConfigured() {
@@ -306,10 +332,6 @@ public class UserGmailConfigService {
 
     private String nonBlankOrDefault(String value, String fallback) {
         return value == null || value.isBlank() ? fallback : value.trim();
-    }
-
-    private boolean isConfiguredValue(String value) {
-        return isProvided(value) && !"replace-me".equals(value.trim());
     }
 
     private boolean isProvided(String value) {

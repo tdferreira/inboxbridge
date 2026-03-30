@@ -12,7 +12,7 @@ Optional but useful:
 
 - a modern browser with passkey/WebAuthn support
 - a Google Cloud account if you want Gmail API access
-- a Microsoft Entra / Azure account if you want Microsoft OAuth for Outlook / Hotmail / Live source or destination accounts
+- a Microsoft Entra / Azure account if you want Microsoft OAuth for Outlook source or destination accounts
 
 ## Minimum Local Bootstrap
 
@@ -25,6 +25,8 @@ cp .env.example .env
 openssl rand -base64 32
 docker compose up --build
 ```
+
+The admin UI image now skips the full Vitest suite during `docker compose up --build` so the container can be prepared reliably for manual testing even on tighter Docker memory limits. Run the frontend test suite separately from `admin-ui/` before shipping changes, or build the image with `RUN_TESTS=true` if you specifically want the Docker build to enforce it.
 
 At minimum, set these values in `.env`:
 
@@ -94,9 +96,9 @@ Notes:
 - Most users should connect their Gmail account from the admin UI instead of placing a Gmail refresh token in `.env`.
 - `GMAIL_DESTINATION_USER` should usually stay `me`.
 
-## Microsoft Setup For Outlook / Hotmail / Live Source And Destination Accounts
+## Microsoft Setup For Outlook Source And Destination Accounts
 
-If you want InboxBridge to fetch Outlook / Hotmail / Live accounts with OAuth2, or to append imports into an Outlook destination mailbox with Microsoft OAuth2, you must first register this application in Microsoft Entra.
+If you want InboxBridge to fetch Outlook accounts with OAuth2, or to append imports into an Outlook destination mailbox with Microsoft OAuth2, you must first register this application in Microsoft Entra.
 
 Typical flow:
 
@@ -126,6 +128,7 @@ Notes:
 - `consumers` is usually right for Outlook.com / Hotmail / Live accounts.
 - one Microsoft app can usually be reused across many personal mailboxes and Outlook destination mailboxes
 - each mailbox still grants its own consent
+- `SECURITY_TOKEN_ENCRYPTION_KEY` must already be configured before the browser callback page can exchange Google or Microsoft OAuth authorization codes
 
 ## Destination Mailbox Options
 
@@ -134,10 +137,19 @@ Users now configure the destination mailbox from `My Destination Mailbox` in the
 Available choices:
 
 - `Gmail`: Gmail API import with Google OAuth
-- `Outlook / Hotmail / Live`: IMAP APPEND with Microsoft OAuth2 only; the UI keeps the Outlook IMAP/XOAUTH2 settings fixed and only asks for the destination folder plus the Microsoft account connection
+- `Outlook`: IMAP APPEND with Microsoft OAuth2 only; the UI keeps the Outlook IMAP/XOAUTH2 settings fixed and only asks for the destination folder plus the Microsoft account connection
 - `Yahoo Mail`: IMAP APPEND with password or app password
 - `Proton Mail Bridge`: IMAP APPEND against the local Proton Bridge endpoint
 - `Generic IMAP`: manual IMAP APPEND settings
+
+Rules enforced by the app:
+
+- a source mailbox cannot be the same mailbox as `My Destination Mailbox`
+- if changing the destination would make an existing source point to the same mailbox, InboxBridge disables that source automatically until the conflict is resolved
+- Gmail destinations are only considered ready after `Save and Authenticate` finishes successfully
+- Outlook destinations can save folder-only edits without reconnecting, but changes that affect the connected mailbox identity still require Microsoft OAuth again
+- new Outlook source accounts rely on `Save and Connect Microsoft`; the plain `Add` action is hidden until the account is no longer in the first-link flow
+- editing an existing source account keeps its provider preset fixed and only shows provider-specific fields such as `Folder` or `Custom Label` when that provider supports them
 
 ## Single-User vs Multi-User
 

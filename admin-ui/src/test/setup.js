@@ -1,4 +1,43 @@
 import '@testing-library/jest-dom/vitest'
+import { cleanup } from '@testing-library/react'
+import { afterEach, vi } from 'vitest'
+
+function createStorageMock() {
+  const store = new Map()
+
+  return {
+    clear() {
+      store.clear()
+    },
+    getItem(key) {
+      return store.has(key) ? store.get(key) : null
+    },
+    key(index) {
+      return Array.from(store.keys())[index] ?? null
+    },
+    removeItem(key) {
+      store.delete(key)
+    },
+    setItem(key, value) {
+      store.set(String(key), String(value))
+    },
+    get length() {
+      return store.size
+    }
+  }
+}
+
+if (
+  !window.localStorage
+  || typeof window.localStorage.getItem !== 'function'
+  || typeof window.localStorage.setItem !== 'function'
+  || typeof window.localStorage.clear !== 'function'
+) {
+  Object.defineProperty(window, 'localStorage', {
+    configurable: true,
+    value: createStorageMock()
+  })
+}
 
 if (!navigator.clipboard) {
   Object.assign(navigator, {
@@ -15,3 +54,9 @@ if (!window.ResizeObserver) {
     disconnect() {}
   }
 }
+
+afterEach(() => {
+  cleanup()
+  vi.restoreAllMocks()
+  vi.unstubAllGlobals()
+})

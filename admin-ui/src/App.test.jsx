@@ -30,13 +30,169 @@ function htmlError(status, statusText, html) {
   }
 }
 
+function clearLocalStorage() {
+  if (typeof window.localStorage?.clear === 'function') {
+    window.localStorage.clear()
+    return
+  }
+  Object.keys(window.localStorage || {}).forEach((key) => {
+    delete window.localStorage[key]
+  })
+}
+
+function createWorkspaceRouteFetch({ session, uiPreferences = {} }) {
+  let storedUiPreferences = { ...uiPreferences }
+
+  return vi.fn(async (input, init = {}) => {
+    const url = String(input)
+    const method = init.method || 'GET'
+
+    if (url === '/api/auth/options') {
+      return jsonResponse({
+        multiUserEnabled: true,
+        microsoftOAuthAvailable: true,
+        googleOAuthAvailable: true,
+        sourceOAuthProviders: ['MICROSOFT', 'GOOGLE']
+      })
+    }
+    if (url === '/api/auth/me') {
+      return jsonResponse(session)
+    }
+    if (url === '/api/app/destination-config' || url === '/api/app/gmail-config') {
+      return jsonResponse({
+        provider: 'GMAIL_API',
+        linked: false,
+        oauthConnected: false,
+        destinationUser: 'me',
+        redirectUri: 'https://localhost:3000/api/google-oauth/callback',
+        googleRedirectUri: 'https://localhost:3000/api/google-oauth/callback',
+        createMissingLabels: true,
+        neverMarkSpam: false,
+        processForCalendar: false,
+        sharedGoogleClientConfigured: true,
+        secureStorageConfigured: true
+      })
+    }
+    if (url === '/api/app/polling-settings') {
+      return jsonResponse({
+        defaultPollEnabled: true,
+        pollEnabledOverride: null,
+        effectivePollEnabled: true,
+        defaultPollInterval: '5m',
+        pollIntervalOverride: null,
+        effectivePollInterval: '5m',
+        defaultFetchWindow: 50,
+        fetchWindowOverride: null,
+        effectiveFetchWindow: 50
+      })
+    }
+    if (url === '/api/app/polling-stats') {
+      return jsonResponse({
+        totalImportedMessages: 0,
+        configuredMailFetchers: 0,
+        enabledMailFetchers: 0,
+        sourcesWithErrors: 0,
+        importsByDay: [],
+        importTimelines: {},
+        duplicateTimelines: {},
+        errorTimelines: {},
+        health: { activeMailFetchers: 0, coolingDownMailFetchers: 0, failingMailFetchers: 0, disabledMailFetchers: 0 },
+        providerBreakdown: [],
+        manualRuns: 0,
+        scheduledRuns: 0,
+        averagePollDurationMillis: 0
+      })
+    }
+    if (url === '/api/app/email-accounts') {
+      return jsonResponse([])
+    }
+    if (url === '/api/app/ui-preferences') {
+      if (method === 'PUT') {
+        storedUiPreferences = {
+          ...storedUiPreferences,
+          ...JSON.parse(init.body || '{}')
+        }
+      }
+      return jsonResponse(storedUiPreferences)
+    }
+    if (url === '/api/account/passkeys') {
+      return jsonResponse([])
+    }
+
+    if (session.role === 'ADMIN') {
+      if (url === '/api/admin/oauth-app-settings') {
+        return jsonResponse({
+          effectiveMultiUserEnabled: true,
+          multiUserEnabledOverride: null,
+          googleDestinationUser: 'me',
+          googleRedirectUri: 'https://localhost:3000/api/google-oauth/callback',
+          googleClientId: '',
+          googleClientSecretConfigured: false,
+          googleRefreshTokenConfigured: false,
+          microsoftClientId: '',
+          microsoftRedirectUri: 'https://localhost:3000/api/microsoft-oauth/callback',
+          microsoftClientSecretConfigured: false,
+          secureStorageConfigured: true
+        })
+      }
+      if (url === '/api/admin/dashboard') {
+        return jsonResponse({
+          overall: {
+            configuredSources: 0,
+            enabledSources: 0,
+            totalImportedMessages: 0,
+            sourcesWithErrors: 0,
+            pollInterval: '5m',
+            fetchWindow: 50
+          },
+          stats: {
+            totalImportedMessages: 0,
+            configuredMailFetchers: 0,
+            enabledMailFetchers: 0,
+            sourcesWithErrors: 0,
+            importsByDay: [],
+            importTimelines: {},
+            duplicateTimelines: {},
+            errorTimelines: {},
+            health: { activeMailFetchers: 0, coolingDownMailFetchers: 0, failingMailFetchers: 0, disabledMailFetchers: 0 },
+            providerBreakdown: [],
+            manualRuns: 0,
+            scheduledRuns: 0,
+            averagePollDurationMillis: 0
+          },
+          polling: {
+            defaultPollEnabled: true,
+            pollEnabledOverride: null,
+            effectivePollEnabled: true,
+            defaultPollInterval: '5m',
+            pollIntervalOverride: null,
+            effectivePollInterval: '5m',
+            defaultFetchWindow: 50,
+            fetchWindowOverride: null,
+            effectiveFetchWindow: 50
+          },
+          bridges: [],
+          recentEvents: []
+        })
+      }
+      if (url === '/api/admin/users') {
+        return jsonResponse([])
+      }
+    }
+
+    throw new Error(`Unexpected request: ${method} ${url}`)
+  })
+}
+
 describe('App', () => {
   beforeEach(() => {
-    window.localStorage.clear()
+    clearLocalStorage()
+    window.history.replaceState({}, '', '/')
   })
 
   afterEach(() => {
-    window.localStorage.clear()
+    clearLocalStorage()
+    window.history.replaceState({}, '', '/')
   })
 
   it('falls back to passkey login when password login is blocked by passkey policy', async () => {
@@ -702,6 +858,184 @@ describe('App', () => {
     expect(fetchMock).not.toHaveBeenCalledWith('/api/admin/users/2/configuration')
   })
 
+  it('keeps the administration workspace rendered when an expanded user returns a partial configuration payload', async () => {
+    const fetchMock = vi.fn(async (input) => {
+      const url = String(input)
+      if (url === '/api/auth/options') {
+        return jsonResponse({
+          multiUserEnabled: true,
+          microsoftOAuthAvailable: true,
+          googleOAuthAvailable: true,
+          sourceOAuthProviders: ['MICROSOFT', 'GOOGLE']
+        })
+      }
+      if (url === '/api/auth/me') {
+        return jsonResponse({
+          id: 1,
+          username: 'admin',
+          role: 'ADMIN',
+          approved: true,
+          mustChangePassword: false,
+          passkeyCount: 0,
+          passwordConfigured: true
+        })
+      }
+      if (url === '/api/app/gmail-config') {
+        return jsonResponse({
+          destinationUser: 'me',
+          redirectUri: 'https://localhost:3000/api/google-oauth/callback',
+          createMissingLabels: true,
+          neverMarkSpam: false,
+          processForCalendar: false
+        })
+      }
+      if (url === '/api/app/polling-settings') {
+        return jsonResponse({
+          defaultPollEnabled: true,
+          pollEnabledOverride: null,
+          effectivePollEnabled: true,
+          defaultPollInterval: '5m',
+          pollIntervalOverride: null,
+          effectivePollInterval: '5m',
+          defaultFetchWindow: 50,
+          fetchWindowOverride: null,
+          effectiveFetchWindow: 50
+        })
+      }
+      if (url === '/api/app/polling-stats') {
+        return jsonResponse({
+          totalImportedMessages: 0,
+          configuredMailFetchers: 0,
+          enabledMailFetchers: 0,
+          sourcesWithErrors: 0,
+          importsByDay: []
+        })
+      }
+      if (url === '/api/app/email-accounts') return jsonResponse([])
+      if (url === '/api/app/ui-preferences') return jsonResponse({})
+      if (url === '/api/account/passkeys') return jsonResponse([])
+      if (url === '/api/admin/dashboard') {
+        return jsonResponse({
+          overall: {
+            configuredSources: 0,
+            enabledSources: 0,
+            totalImportedMessages: 0,
+            sourcesWithErrors: 0,
+            pollInterval: '5m',
+            fetchWindow: 50
+          },
+          stats: {
+            totalImportedMessages: 0,
+            configuredMailFetchers: 0,
+            enabledMailFetchers: 0,
+            sourcesWithErrors: 0,
+            importsByDay: []
+          },
+          polling: {
+            defaultPollEnabled: true,
+            pollEnabledOverride: null,
+            effectivePollEnabled: true,
+            defaultPollInterval: '5m',
+            pollIntervalOverride: null,
+            effectivePollInterval: '5m',
+            defaultFetchWindow: 50,
+            fetchWindowOverride: null,
+            effectiveFetchWindow: 50,
+            defaultManualTriggerLimitCount: 5,
+            manualTriggerLimitCountOverride: null,
+            effectiveManualTriggerLimitCount: 5,
+            defaultManualTriggerLimitWindowSeconds: 60,
+            manualTriggerLimitWindowSecondsOverride: null,
+            effectiveManualTriggerLimitWindowSeconds: 60
+          },
+          bridges: [],
+          recentEvents: []
+        })
+      }
+      if (url === '/api/admin/oauth-app-settings') {
+        return jsonResponse({
+          effectiveMultiUserEnabled: true,
+          multiUserEnabledOverride: null,
+          googleDestinationUser: 'me',
+          googleRedirectUri: 'https://localhost:3000/api/google-oauth/callback',
+          googleClientId: '',
+          googleClientSecretConfigured: false,
+          googleRefreshTokenConfigured: false,
+          microsoftClientId: '',
+          microsoftRedirectUri: 'https://localhost:3000/api/microsoft-oauth/callback',
+          microsoftClientSecretConfigured: false,
+          secureStorageConfigured: true
+        })
+      }
+      if (url === '/api/admin/users') {
+        return jsonResponse([
+          {
+            id: 1,
+            username: 'admin',
+            role: 'ADMIN',
+            approved: true,
+            active: true,
+            bridgeCount: 0,
+            gmailConfigured: true,
+            passwordConfigured: true,
+            mustChangePassword: false,
+            passkeyCount: 0
+          },
+          {
+            id: 2,
+            username: 'alice',
+            role: 'USER',
+            approved: true,
+            active: true,
+            bridgeCount: 1,
+            gmailConfigured: false,
+            passwordConfigured: true,
+            mustChangePassword: false,
+            passkeyCount: 0
+          }
+        ])
+      }
+      if (url === '/api/admin/users/2/configuration') {
+        return jsonResponse({
+          user: {
+            id: 2,
+            username: 'alice',
+            role: 'USER',
+            approved: true,
+            active: true,
+            bridgeCount: 1
+          },
+          destinationConfig: null,
+          pollingSettings: {
+            effectivePollEnabled: true,
+            effectivePollInterval: '5m',
+            effectiveFetchWindow: 25
+          },
+          pollingStats: {
+            totalImportedMessages: 0
+          },
+          bridges: [null, { bridgeId: 'outlook-main' }],
+          passkeys: null
+        })
+      }
+      throw new Error(`Unexpected request: ${url}`)
+    })
+
+    vi.stubGlobal('fetch', fetchMock)
+
+    render(<App />)
+
+    await screen.findByText(/signed in as/i)
+    fireEvent.click(screen.getByRole('tab', { name: /Administration|Administração/ }))
+    await screen.findByText('alice')
+
+    fireEvent.click(await screen.findByTitle(/Inspect configuration and security controls for alice|Inspecionar a configuração e os controlos de segurança de alice/))
+
+    expect(await screen.findByText('Destination Mailbox')).toBeInTheDocument()
+    expect(await screen.findByText('outlook-main')).toBeInTheDocument()
+    expect(screen.getByText('Users', { selector: '.section-title' })).toBeInTheDocument()
+  })
+
   it('uses single-user confirmation copy for the admin run-poll action', async () => {
     const fetchMock = vi.fn(async (input) => {
       const url = String(input)
@@ -1074,5 +1408,248 @@ describe('App', () => {
     await waitFor(() => {
       expect(screen.getByText('Não foi possível executar a verificação da conta de email (502 Bad Gateway)')).toBeInTheDocument()
     })
+  })
+
+  it('loads destination folder options for a linked IMAP destination mailbox', async () => {
+    const fetchMock = vi.fn(async (input) => {
+      const url = String(input)
+      if (url === '/api/auth/options') return jsonResponse({ multiUserEnabled: true })
+      if (url === '/api/auth/me') {
+        return jsonResponse({
+          id: 1,
+          username: 'alice',
+          role: 'USER',
+          approved: true,
+          mustChangePassword: false,
+          passkeyCount: 0,
+          passwordConfigured: true
+        })
+      }
+      if (url === '/api/app/destination-config') {
+        return jsonResponse({
+          provider: 'OUTLOOK_IMAP',
+          configured: true,
+          linked: true,
+          passwordConfigured: false,
+          oauthConnected: true,
+          host: 'outlook.office365.com',
+          port: 993,
+          tls: true,
+          authMethod: 'OAUTH2',
+          oauthProvider: 'MICROSOFT',
+          username: 'owner@example.com',
+          folder: 'INBOX'
+        })
+      }
+      if (url === '/api/app/destination-config/folders') {
+        return jsonResponse({ folders: ['INBOX', 'Archive'] })
+      }
+      if (url === '/api/app/polling-settings') {
+        return jsonResponse({
+          defaultPollEnabled: true,
+          pollEnabledOverride: null,
+          effectivePollEnabled: true,
+          defaultPollInterval: '5m',
+          pollIntervalOverride: null,
+          effectivePollInterval: '5m',
+          defaultFetchWindow: 50,
+          fetchWindowOverride: null,
+          effectiveFetchWindow: 50
+        })
+      }
+      if (url === '/api/app/polling-stats') {
+        return jsonResponse({
+          totalImportedMessages: 0,
+          configuredMailFetchers: 0,
+          enabledMailFetchers: 0,
+          sourcesWithErrors: 0,
+          importsByDay: []
+        })
+      }
+      if (url === '/api/app/email-accounts') return jsonResponse([])
+      if (url === '/api/app/ui-preferences') return jsonResponse({})
+      if (url === '/api/account/passkeys') return jsonResponse([])
+      throw new Error(`Unexpected request: GET ${url}`)
+    })
+
+    vi.stubGlobal('fetch', fetchMock)
+
+    render(<App />)
+
+    await screen.findByText(/signed in as/i)
+    fireEvent.click(await screen.findByRole('button', { name: 'Edit Destination Mailbox' }))
+    await waitFor(() => {
+      expect(screen.getByRole('combobox', { name: 'Folder' })).toHaveValue('INBOX')
+    })
+    expect(fetchMock).toHaveBeenCalledWith('/api/app/destination-config/folders')
+    expect(screen.getByRole('option', { name: 'Archive' })).toBeInTheDocument()
+  })
+
+  it('does not request destination folder options for a Gmail destination', async () => {
+    const fetchMock = vi.fn(async (input) => {
+      const url = String(input)
+      if (url === '/api/auth/options') return jsonResponse({ multiUserEnabled: true })
+      if (url === '/api/auth/me') {
+        return jsonResponse({
+          id: 1,
+          username: 'alice',
+          role: 'USER',
+          approved: true,
+          mustChangePassword: false,
+          passkeyCount: 0,
+          passwordConfigured: true
+        })
+      }
+      if (url === '/api/app/destination-config') {
+        return jsonResponse({
+          provider: 'GMAIL_API',
+          linked: true,
+          oauthConnected: true,
+          sharedGoogleClientConfigured: true,
+          googleRedirectUri: 'https://localhost:3000/api/google-oauth/callback'
+        })
+      }
+      if (url === '/api/app/polling-settings') {
+        return jsonResponse({
+          defaultPollEnabled: true,
+          pollEnabledOverride: null,
+          effectivePollEnabled: true,
+          defaultPollInterval: '5m',
+          pollIntervalOverride: null,
+          effectivePollInterval: '5m',
+          defaultFetchWindow: 50,
+          fetchWindowOverride: null,
+          effectiveFetchWindow: 50
+        })
+      }
+      if (url === '/api/app/polling-stats') {
+        return jsonResponse({
+          totalImportedMessages: 0,
+          configuredMailFetchers: 0,
+          enabledMailFetchers: 0,
+          sourcesWithErrors: 0,
+          importsByDay: []
+        })
+      }
+      if (url === '/api/app/email-accounts') return jsonResponse([])
+      if (url === '/api/app/ui-preferences') return jsonResponse({})
+      if (url === '/api/account/passkeys') return jsonResponse([])
+      throw new Error(`Unexpected request: GET ${url}`)
+    })
+
+    vi.stubGlobal('fetch', fetchMock)
+
+    render(<App />)
+
+    await screen.findByText(/signed in as/i)
+    expect(fetchMock).not.toHaveBeenCalledWith('/api/app/destination-config/folders')
+  })
+
+  it('opens the administration workspace directly from /admin for admins', async () => {
+    window.history.replaceState({}, '', '/admin')
+    const fetchMock = createWorkspaceRouteFetch({
+      session: {
+        id: 1,
+        username: 'admin',
+        role: 'ADMIN',
+        approved: true,
+        mustChangePassword: false,
+        passkeyCount: 0,
+        passwordConfigured: true
+      }
+    })
+
+    vi.stubGlobal('fetch', fetchMock)
+
+    render(<App />)
+
+    await screen.findByText(/signed in as/i)
+
+    expect(await screen.findByRole('tab', { name: 'Administration', selected: true })).toBeInTheDocument()
+    expect(screen.getByText('Global Polling Settings', { selector: '.section-title' })).toBeInTheDocument()
+    expect(window.location.pathname).toBe('/admin')
+  })
+
+  it('supports translated workspace URLs for admins', async () => {
+    window.history.replaceState({}, '', '/utilizador')
+    const fetchMock = createWorkspaceRouteFetch({
+      session: {
+        id: 1,
+        username: 'admin',
+        role: 'ADMIN',
+        approved: true,
+        mustChangePassword: false,
+        passkeyCount: 0,
+        passwordConfigured: true
+      },
+      uiPreferences: {
+        language: 'pt-PT'
+      }
+    })
+
+    vi.stubGlobal('fetch', fetchMock)
+
+    render(<App />)
+
+    await screen.findByText(/sess[aã]o iniciada como/i)
+
+    expect(await screen.findByRole('tab', { name: 'Utilizador', selected: true })).toBeInTheDocument()
+    expect(screen.getByRole('tab', { name: 'Administração', selected: false })).toBeInTheDocument()
+    expect(window.location.pathname).toBe('/utilizador')
+  })
+
+  it('normalizes explicit workspace URLs back to / for non-admin sessions', async () => {
+    window.history.replaceState({}, '', '/user')
+    const fetchMock = createWorkspaceRouteFetch({
+      session: {
+        id: 1,
+        username: 'alice',
+        role: 'USER',
+        approved: true,
+        mustChangePassword: false,
+        passkeyCount: 0,
+        passwordConfigured: true
+      }
+    })
+
+    vi.stubGlobal('fetch', fetchMock)
+
+    render(<App />)
+
+    await screen.findByText(/signed in as/i)
+
+    await waitFor(() => {
+      expect(window.location.pathname).toBe('/')
+    })
+    expect(screen.queryByRole('tablist', { name: 'Workspace' })).not.toBeInTheDocument()
+    expect(screen.getByText('My Destination Mailbox', { selector: '.section-title' })).toBeInTheDocument()
+  })
+
+  it('translates explicit workspace URLs when the language changes', async () => {
+    window.history.replaceState({}, '', '/admin')
+    const fetchMock = createWorkspaceRouteFetch({
+      session: {
+        id: 1,
+        username: 'admin',
+        role: 'ADMIN',
+        approved: true,
+        mustChangePassword: false,
+        passkeyCount: 0,
+        passwordConfigured: true
+      }
+    })
+
+    vi.stubGlobal('fetch', fetchMock)
+
+    render(<App />)
+
+    await screen.findByText(/signed in as/i)
+    fireEvent.click(screen.getByRole('button', { name: 'Preferences' }))
+    fireEvent.change(screen.getByLabelText('Language'), { target: { value: 'pt-PT' } })
+
+    await waitFor(() => {
+      expect(window.location.pathname).toBe('/administracao')
+    })
+    expect(await screen.findByRole('tab', { name: 'Administração', selected: true })).toBeInTheDocument()
   })
 })

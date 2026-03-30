@@ -68,6 +68,9 @@ public class MicrosoftOAuthService {
     @Inject
     UserMailDestinationConfigRepository userMailDestinationConfigRepository;
 
+    @Inject
+    MailboxConflictService mailboxConflictService;
+
     private final HttpClient httpClient = HttpClient.newBuilder()
             .connectTimeout(HTTP_TIMEOUT)
             .build();
@@ -78,6 +81,10 @@ public class MicrosoftOAuthService {
 
     public boolean clientConfigured() {
         return systemOAuthAppSettingsService.microsoftClientConfigured();
+    }
+
+    public boolean secureStorageConfigured() {
+        return oAuthCredentialService.secureStorageConfigured();
     }
 
     public List<MicrosoftOAuthSourceOption> listMicrosoftOAuthSources() {
@@ -324,6 +331,7 @@ public class MicrosoftOAuthService {
 
     private MicrosoftTokenExchangeResponse exchangeAuthorizationCode(SourceRef sourceRef, String code) {
         requireConfiguredClient();
+        requireSecureTokenStorage("Microsoft OAuth");
         String body = formBody(Map.of(
                 "client_id", systemOAuthAppSettingsService.microsoftClientId(),
                 "client_secret", systemOAuthAppSettingsService.microsoftClientSecret(),
@@ -336,22 +344,6 @@ public class MicrosoftOAuthService {
         validateGrantedScopes(token.scope(), sourceRef.protocol());
         Instant expiresAt = Instant.now().plusSeconds(token.expiresIn() == null ? 300 : token.expiresIn());
         cachedTokens.put(sourceRef.sourceId(), new CachedToken(token.accessToken(), expiresAt));
-
-        if (!oAuthCredentialService.secureStorageConfigured()) {
-            if (sourceRef.userManaged()) {
-                throw new IllegalStateException("Secure encrypted storage is required for UI-managed Microsoft OAuth bridges.");
-            }
-            return new MicrosoftTokenExchangeResponse(
-                    sourceRef.sourceId(),
-                    false,
-                    true,
-                    token.refreshToken(),
-                    "env:MAIL_ACCOUNT_" + sourceRef.environmentIndex() + "__OAUTH_REFRESH_TOKEN",
-                    token.scope(),
-                    token.tokenType(),
-                    expiresAt,
-                    "Set SECURITY_TOKEN_ENCRYPTION_KEY to enable automatic encrypted token storage. Until then, keep using MAIL_ACCOUNT_" + sourceRef.environmentIndex() + "__OAUTH_REFRESH_TOKEN in .env.");
-        }
 
         oAuthCredentialService.storeMicrosoftCredential(
                 sourceRef.sourceId(),
@@ -435,6 +427,7 @@ public class MicrosoftOAuthService {
     }
 
     private MicrosoftTokenExchangeResponse exchangeDestinationAuthorizationCode(Long userId, String code) {
+        requireSecureTokenStorage("Microsoft destination OAuth");
         String body = formBody(Map.of(
                 "client_id", systemOAuthAppSettingsService.microsoftClientId(),
                 "client_secret", systemOAuthAppSettingsService.microsoftClientSecret(),
@@ -450,6 +443,7 @@ public class MicrosoftOAuthService {
         cachedTokens.put(subjectKey, new CachedToken(token.accessToken(), expiresAt));
         oAuthCredentialService.storeMicrosoftCredential(subjectKey, token.refreshToken(), token.accessToken(), expiresAt, token.scope(), token.tokenType());
         syncDestinationMicrosoftConfig(userId, preferredMailboxUsername(token.accessToken()));
+        mailboxConflictService.disableSourcesMatchingCurrentDestination(userId);
         return new MicrosoftTokenExchangeResponse(
                 subjectKey,
                 true,
@@ -460,6 +454,13 @@ public class MicrosoftOAuthService {
                 token.tokenType(),
                 expiresAt,
                 "Stored securely in the database for the Outlook destination mailbox.");
+    }
+
+    private void requireSecureTokenStorage(String flowLabel) {
+        if (!oAuthCredentialService.secureStorageConfigured()) {
+            throw new IllegalStateException(
+                    "Secure token storage is required before completing " + flowLabel + ". Set SECURITY_TOKEN_ENCRYPTION_KEY to a base64-encoded 32-byte key, restart InboxBridge, and then retry the OAuth flow.");
+        }
     }
 
     void validateGrantedScopes(String grantedScopes, InboxBridgeConfig.Protocol protocol) {

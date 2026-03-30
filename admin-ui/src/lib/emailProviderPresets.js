@@ -6,7 +6,7 @@ export const EMAIL_PROVIDER_PRESETS = [
   },
   {
     id: 'outlook',
-    label: 'Outlook / Hotmail / Live',
+    label: 'Outlook',
     description: 'Prefills the Outlook IMAP server and Microsoft OAuth defaults supported by InboxBridge.',
     values: {
       protocol: 'IMAP',
@@ -65,13 +65,13 @@ export const EMAIL_PROVIDER_PRESETS = [
 export const DESTINATION_PROVIDER_PRESETS = [
   {
     id: 'GMAIL_API',
-    label: 'Gmail',
-    description: 'Imports through the Gmail API into the mailbox that completes Google OAuth.'
+    labelKey: 'bridge.providerGmail',
+    descriptionKey: 'destinationPreset.gmail.description'
   },
   {
     id: 'OUTLOOK_IMAP',
-    label: 'Outlook / Hotmail / Live',
-    description: 'Uses IMAP APPEND against Outlook with Microsoft OAuth2 by default.',
+    labelKey: 'bridge.providerOutlook',
+    descriptionKey: 'destinationPreset.outlook.description',
     values: {
       provider: 'OUTLOOK_IMAP',
       host: 'outlook.office365.com',
@@ -86,8 +86,8 @@ export const DESTINATION_PROVIDER_PRESETS = [
   },
   {
     id: 'YAHOO_IMAP',
-    label: 'Yahoo Mail',
-    description: 'Uses IMAP APPEND with password or app-password authentication.',
+    labelKey: 'bridge.providerYahoo',
+    descriptionKey: 'destinationPreset.yahoo.description',
     values: {
       provider: 'YAHOO_IMAP',
       host: 'imap.mail.yahoo.com',
@@ -102,8 +102,8 @@ export const DESTINATION_PROVIDER_PRESETS = [
   },
   {
     id: 'PROTON_BRIDGE_IMAP',
-    label: 'Proton Mail Bridge',
-    description: 'Uses the local Proton Mail Bridge IMAP endpoint for APPEND delivery.',
+    labelKey: 'bridge.providerProton',
+    descriptionKey: 'destinationPreset.proton-bridge.description',
     values: {
       provider: 'PROTON_BRIDGE_IMAP',
       host: '127.0.0.1',
@@ -118,8 +118,8 @@ export const DESTINATION_PROVIDER_PRESETS = [
   },
   {
     id: 'CUSTOM_IMAP',
-    label: 'Generic IMAP',
-    description: 'Bring your own IMAP APPEND target and fill in the server settings manually.',
+    labelKey: 'bridge.providerGenericImap',
+    descriptionKey: 'destinationPreset.custom.description',
     values: {
       provider: 'CUSTOM_IMAP',
       host: '',

@@ -32,6 +32,9 @@ public class UserGmailConfig extends PanacheEntityBase {
     @Column(name = "destination_user", nullable = false, length = 255)
     public String destinationUser;
 
+        @Column(name = "linked_mailbox_address", length = 255)
+        public String linkedMailboxAddress;
+
     @Column(name = "client_id_ciphertext", length = 4096)
     public String clientIdCiphertext;
 

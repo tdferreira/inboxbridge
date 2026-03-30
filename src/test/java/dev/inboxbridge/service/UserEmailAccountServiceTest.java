@@ -186,7 +186,7 @@ class UserEmailAccountServiceTest {
                 "NONE",
                 "user@example.com",
                 "Secret#123",
-                "",
+                "refresh-token",
                 "INBOX",
                 false,
                 "Imported/Test"));
@@ -222,6 +222,23 @@ class UserEmailAccountServiceTest {
         assertEquals("OAuth refresh token is required or connect provider OAuth first", error.getMessage());
     }
 
+    @Test
+    void upsertRejectsSourceMailboxThatMatchesCurrentDestination() {
+        UserEmailAccountService service = service();
+        service.mailboxConflictService = new MailboxConflictService() {
+            @Override
+            public boolean conflictsWithCurrentDestination(Long userId, RuntimeEmailAccount source) {
+                return true;
+            }
+        };
+
+        IllegalArgumentException error = assertThrows(
+                IllegalArgumentException.class,
+                () -> service.upsert(user(1L), request(null, "fetcher-a")));
+
+        assertEquals(MailboxConflictService.SOURCE_DESTINATION_CONFLICT_MESSAGE, error.getMessage());
+    }
+
     private UserEmailAccountService service() {
         UserEmailAccountService service = new UserEmailAccountService();
         service.repository = new InMemoryUserEmailAccountRepository();
@@ -235,6 +252,12 @@ class UserEmailAccountServiceTest {
         service.oAuthCredentialService = new FakeOAuthCredentialService(null);
         service.envSourceService = new FakeEnvSourceService();
         service.mailSourceClient = new FakeMailSourceClient();
+        service.mailboxConflictService = new MailboxConflictService() {
+            @Override
+            public boolean conflictsWithCurrentDestination(Long userId, RuntimeEmailAccount source) {
+                return false;
+            }
+        };
         return service;
     }
 
@@ -277,7 +300,7 @@ class UserEmailAccountServiceTest {
                 "MICROSOFT",
                 "user@example.com",
                 "",
-                "",
+                "refresh-token",
                 "INBOX",
                 false,
                 "Imported/Test");

@@ -1,6 +1,7 @@
 package dev.inboxbridge.service;
 
 import java.time.Instant;
+import java.util.List;
 import java.util.Objects;
 import java.util.Optional;
 
@@ -8,6 +9,8 @@ import dev.inboxbridge.config.InboxBridgeConfig;
 import dev.inboxbridge.domain.GmailApiDestinationTarget;
 import dev.inboxbridge.domain.ImapAppendDestinationTarget;
 import dev.inboxbridge.domain.MailDestinationTarget;
+import dev.inboxbridge.dto.DestinationMailboxFolderOptionsView;
+import dev.inboxbridge.dto.EmailAccountConnectionTestResult;
 import dev.inboxbridge.dto.UpdateUserMailDestinationRequest;
 import dev.inboxbridge.dto.UserGmailConfigView;
 import dev.inboxbridge.dto.UserMailDestinationView;
@@ -45,17 +48,25 @@ public class UserMailDestinationConfigService {
     @Inject
     MicrosoftOAuthService microsoftOAuthService;
 
+    @Inject
+    ImapAppendMailDestinationService imapAppendMailDestinationService;
+
+    @Inject
+    MailboxConflictService mailboxConflictService;
+
     public UserMailDestinationView viewForUser(Long userId) {
         UserMailDestinationConfig config = repository.findByUserId(userId).orElse(null);
         if (config == null || PROVIDER_GMAIL.equals(config.provider)) {
+            boolean gmailLinked = userGmailConfigService.destinationLinked(userId);
             UserGmailConfigView gmailView = userGmailConfigService.viewForUser(userId)
                     .orElse(userGmailConfigService.defaultView(userId));
             return new UserMailDestinationView(
                     PROVIDER_GMAIL,
                     "GMAIL_API",
-                    gmailView.refreshTokenConfigured(),
+                config != null || gmailLinked,
+                gmailLinked,
                     false,
-                    gmailView.refreshTokenConfigured(),
+                gmailLinked,
                     gmailView.sharedClientConfigured(),
                     systemOAuthAppSettingsService.microsoftClientConfigured(),
                     gmailView.defaultRedirectUri(),
@@ -77,6 +88,7 @@ public class UserMailDestinationConfigService {
         return new UserMailDestinationView(
                 config.provider,
                 "IMAP_APPEND",
+            true,
                 passwordConfigured || oauthConnected,
                 passwordConfigured,
                 oauthConnected,
@@ -98,7 +110,7 @@ public class UserMailDestinationConfigService {
         if (config == null || PROVIDER_GMAIL.equals(config.provider)) {
             UserGmailConfigView gmailView = userGmailConfigService.viewForUser(userId)
                     .orElse(userGmailConfigService.defaultView(userId));
-            Optional<GoogleOAuthService.GoogleOAuthProfile> profile = userGmailConfigService.googleProfileForUser(userId);
+            Optional<GoogleOAuthService.GoogleOAuthProfile> profile = userGmailConfigService.linkedGoogleProfileForUser(userId);
             if (profile.isEmpty()) {
                 return Optional.empty();
             }
@@ -118,9 +130,13 @@ public class UserMailDestinationConfigService {
                     gmailView.processForCalendar()));
         }
 
-        if (!secretEncryptionService.isConfigured()) {
+        InboxBridgeConfig.AuthMethod authMethod = InboxBridgeConfig.AuthMethod.valueOf(config.authMethod);
+        if (authMethod == InboxBridgeConfig.AuthMethod.PASSWORD && !secretEncryptionService.isConfigured()) {
             return Optional.empty();
         }
+        String password = authMethod == InboxBridgeConfig.AuthMethod.PASSWORD
+            ? decryptPassword(config)
+            : null;
         return Optional.of(new ImapAppendDestinationTarget(
                 "user-destination:" + userId,
                 userId,
@@ -129,15 +145,36 @@ public class UserMailDestinationConfigService {
                 requireNonBlank(config.host, "Destination host"),
                 config.port == null ? 993 : config.port,
                 config.tls,
-                InboxBridgeConfig.AuthMethod.valueOf(config.authMethod),
+                authMethod,
                 InboxBridgeConfig.OAuthProvider.valueOf(config.oauthProvider),
                 requireNonBlank(config.username, "Destination username"),
-                decryptPassword(config),
+                password,
                 config.folderName == null || config.folderName.isBlank() ? "INBOX" : config.folderName));
     }
 
     public boolean isAnyDestinationConfigured(Long userId) {
-        return repository.findByUserId(userId).isPresent() || userGmailConfigService.googleProfileForUser(userId).isPresent();
+        return repository.findByUserId(userId).isPresent() || userGmailConfigService.destinationLinked(userId);
+    }
+
+    public DestinationMailboxFolderOptionsView listFoldersForUser(Long userId, String ownerUsername) {
+        Optional<MailDestinationTarget> target = resolveForUser(userId, ownerUsername);
+        if (target.isEmpty() || !(target.get() instanceof ImapAppendDestinationTarget imapTarget)) {
+            throw new IllegalStateException("Save and connect an IMAP destination mailbox before loading folders.");
+        }
+        if (!imapAppendMailDestinationService.isLinked(imapTarget)) {
+            throw new IllegalStateException("Save and connect the destination mailbox before loading folders.");
+        }
+
+        List<String> folders = imapAppendMailDestinationService.listFolders(imapTarget);
+        return new DestinationMailboxFolderOptionsView(folders);
+    }
+
+    public EmailAccountConnectionTestResult testConnectionForUser(AppUser user, UpdateUserMailDestinationRequest request) {
+        ImapAppendDestinationTarget target = previewImapTarget(user, request);
+        if (target.authMethod() == InboxBridgeConfig.AuthMethod.OAUTH2 && !imapAppendMailDestinationService.isLinked(target)) {
+            throw new IllegalStateException("Save and connect the destination mailbox before testing it.");
+        }
+        return imapAppendMailDestinationService.testConnection(target);
     }
 
     @Transactional
@@ -163,6 +200,7 @@ public class UserMailDestinationConfigService {
         if (PROVIDER_GMAIL.equals(provider)) {
             clearImapFields(config);
             repository.persist(config);
+            mailboxConflictService.disableSourcesMatchingCurrentDestination(user.id);
             return viewForUser(user.id);
         }
 
@@ -188,10 +226,11 @@ public class UserMailDestinationConfigService {
             if (!InboxBridgeConfig.OAuthProvider.MICROSOFT.name().equals(config.oauthProvider)) {
                 throw new IllegalArgumentException("Only Microsoft OAuth2 is currently supported for IMAP destination mailboxes.");
             }
-            config.username = blankToNull(request.username());
+            config.username = requireNonBlank(request.username(), "Destination username");
         }
 
         repository.persist(config);
+        mailboxConflictService.disableSourcesMatchingCurrentDestination(user.id);
         return viewForUser(user.id);
     }
 
@@ -323,8 +362,55 @@ public class UserMailDestinationConfigService {
         return value == null || value.isBlank() ? fallback : value.trim();
     }
 
-    private String blankToNull(String value) {
-        return value == null || value.isBlank() ? null : value.trim();
+    private ImapAppendDestinationTarget previewImapTarget(AppUser user, UpdateUserMailDestinationRequest request) {
+        String provider = normalizeProvider(request.provider());
+        if (PROVIDER_GMAIL.equals(provider)) {
+            throw new IllegalArgumentException("Gmail destinations do not use IMAP connection testing.");
+        }
+
+        InboxBridgeConfig.AuthMethod authMethod = PROVIDER_OUTLOOK.equals(provider)
+                ? InboxBridgeConfig.AuthMethod.OAUTH2
+                : parseAuthMethod(request.authMethod());
+        InboxBridgeConfig.OAuthProvider oauthProvider = PROVIDER_OUTLOOK.equals(provider)
+                ? InboxBridgeConfig.OAuthProvider.MICROSOFT
+                : parseOAuthProvider(request.oauthProvider());
+        String password = null;
+        if (authMethod == InboxBridgeConfig.AuthMethod.PASSWORD) {
+            password = previewPassword(user.id, request.password());
+            if (password == null || password.isBlank()) {
+                throw new IllegalArgumentException("Destination mailbox password is required");
+            }
+        } else if (oauthProvider != InboxBridgeConfig.OAuthProvider.MICROSOFT) {
+            throw new IllegalArgumentException("Only Microsoft OAuth2 is currently supported for IMAP destination mailboxes.");
+        }
+
+        return new ImapAppendDestinationTarget(
+                "user-destination-preview:" + user.id,
+                user.id,
+                user.username,
+                provider,
+                requireNonBlank(request.host(), "Destination host"),
+                request.port() == null ? 993 : request.port(),
+                request.tls() == null || request.tls(),
+                authMethod,
+                oauthProvider,
+                requireNonBlank(request.username(), "Destination username"),
+                password,
+                blankToDefault(request.folder(), "INBOX"));
+    }
+
+    private String previewPassword(Long userId, String requestPassword) {
+        if (requestPassword != null && !requestPassword.isBlank()) {
+            return requestPassword;
+        }
+        if (!secretEncryptionService.isConfigured()) {
+            return null;
+        }
+        UserMailDestinationConfig existing = repository.findByUserId(userId).orElse(null);
+        if (existing == null) {
+            return null;
+        }
+        return decryptPassword(existing);
     }
 
     public record DestinationUnlinkResult(

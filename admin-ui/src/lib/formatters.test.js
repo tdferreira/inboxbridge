@@ -72,6 +72,13 @@ describe('formatters', () => {
     }, 'pt-PT')).toBe('A fonte outlook-main deixou de ter acesso ao Microsoft OAuth. Volte a ligá-la nesta conta de email.')
   })
 
+  it('translates missing OAuth refresh-token errors from persisted text', () => {
+    expect(formatPollError(
+      'Source outlook-main failed: Source outlook-main is configured for OAuth2 but has no refresh token',
+      'pt-PT'
+    )).toBe('A fonte outlook-main está configurada para OAuth2 mas não tem refresh token.')
+  })
+
   it('detects revoked oauth errors from strings and structured payloads', () => {
     expect(isOauthRevokedError('Source x failed: The linked Microsoft account no longer grants InboxBridge access.')).toBe(true)
     expect(isOauthRevokedError({ code: 'gmail_access_revoked' })).toBe(true)

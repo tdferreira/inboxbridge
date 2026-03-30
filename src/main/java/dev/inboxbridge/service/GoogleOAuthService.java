@@ -55,6 +55,9 @@ public class GoogleOAuthService {
     @Inject
     SystemOAuthAppSettingsService systemOAuthAppSettingsService;
 
+    @Inject
+    MailboxConflictService mailboxConflictService;
+
     private final HttpClient httpClient = HttpClient.newBuilder()
             .connectTimeout(Duration.ofSeconds(20))
             .build();
@@ -68,6 +71,10 @@ public class GoogleOAuthService {
 
     public boolean clientConfigured() {
         return systemOAuthAppSettingsService.googleClientConfigured();
+    }
+
+    public boolean secureStorageConfigured() {
+        return oAuthCredentialService.secureStorageConfigured();
     }
 
     public GoogleOAuthProfile systemProfileForCallbacks() {
@@ -114,6 +121,7 @@ public class GoogleOAuthService {
 
     public GoogleTokenExchangeResponse exchangeAuthorizationCode(GoogleOAuthProfile profile, String code) {
         requireConfiguredClient(profile);
+        requireSecureTokenStorage();
         String body = formBody(Map.of(
                 "code", code,
                 "client_id", profile.clientId(),
@@ -248,21 +256,6 @@ public class GoogleOAuthService {
         Instant expiresAt = Instant.now().plusSeconds(token.expiresIn() == null ? 300 : token.expiresIn());
         cachedTokens.put(profile.subjectKey(), new CachedToken(token.accessToken(), expiresAt));
 
-        if (!oAuthCredentialService.secureStorageConfigured()) {
-            return new GoogleTokenExchangeResponse(
-                    false,
-                    true,
-                    replacedExistingAccount,
-                    sameLinkedAccount,
-                    previousGrantRevoked,
-                    token.refreshToken(),
-                    "env:" + profile.subjectKey(),
-                    token.scope(),
-                    token.tokenType(),
-                    expiresAt,
-                    "Set SECURITY_TOKEN_ENCRYPTION_KEY to enable automatic encrypted token storage. Until then, keep using the refresh token in your environment or user settings.");
-        }
-
         oAuthCredentialService.storeGoogleCredential(
                 profile.subjectKey(),
                 token.refreshToken(),
@@ -270,6 +263,16 @@ public class GoogleOAuthService {
                 expiresAt,
                 token.scope(),
                 token.tokenType());
+
+        Long userId = parseUserId(profile.subjectKey());
+        if (userId != null) {
+            userGmailConfigRepository.findByUserId(userId).ifPresent(config -> {
+                config.linkedMailboxAddress = newAccountAddress;
+                config.updatedAt = Instant.now();
+                userGmailConfigRepository.persist(config);
+            });
+            mailboxConflictService.disableSourcesMatchingCurrentDestination(userId);
+        }
 
         return new GoogleTokenExchangeResponse(
                 true,
@@ -283,6 +286,13 @@ public class GoogleOAuthService {
                 token.tokenType(),
                 expiresAt,
                 "Stored securely in the database. Future Google access token refreshes will be handled automatically.");
+    }
+
+    private void requireSecureTokenStorage() {
+        if (!oAuthCredentialService.secureStorageConfigured()) {
+            throw new IllegalStateException(
+                    "Secure token storage is required before completing Google OAuth. Set SECURITY_TOKEN_ENCRYPTION_KEY to a base64-encoded 32-byte key, restart InboxBridge, and then retry the OAuth flow.");
+        }
     }
 
     protected String resolveAccountAddress(GoogleOAuthProfile profile) {

@@ -4,7 +4,6 @@ import { languageOptions, normalizeLocale, translate } from './i18n'
 import {
   applyLayoutPreferences,
   captureLayoutPreferences,
-  DEFAULT_ADMIN_WORKSPACE,
   DEFAULT_UI_PREFERENCES,
   hasLayoutPreferenceChanges,
   normalizeUiPreferences
@@ -15,7 +14,6 @@ export function useWorkspacePreferencesController({ language, pushNotification, 
   const [uiPreferencesLoadedForUserId, setUiPreferencesLoadedForUserId] = useState(null)
   const [showPreferencesDialog, setShowPreferencesDialog] = useState(false)
   const [showNotificationsDialog, setShowNotificationsDialog] = useState(false)
-  const [adminWorkspace, setAdminWorkspace] = useState(DEFAULT_ADMIN_WORKSPACE)
   const [dragState, setDragState] = useState(null)
   const [layoutEditSnapshot, setLayoutEditSnapshot] = useState(null)
 
@@ -226,7 +224,6 @@ export function useWorkspacePreferencesController({ language, pushNotification, 
     setUiPreferencesLoadedForUserId(null)
     setShowPreferencesDialog(false)
     setShowNotificationsDialog(false)
-    setAdminWorkspace(DEFAULT_ADMIN_WORKSPACE)
     setDragState(null)
     setLayoutEditSnapshot(null)
   }
@@ -241,14 +238,7 @@ export function useWorkspacePreferencesController({ language, pushNotification, 
     }
   }, [dragState, uiPreferences.layoutEditEnabled])
 
-  useEffect(() => {
-    if (session?.role !== 'ADMIN') {
-      setAdminWorkspace(DEFAULT_ADMIN_WORKSPACE)
-    }
-  }, [session?.role])
-
   return {
-    adminWorkspace,
     applyLoadedUiPreferences,
     closeNotificationsDialog: () => setShowNotificationsDialog(false),
     closePreferencesDialog: () => setShowPreferencesDialog(false),
@@ -269,12 +259,12 @@ export function useWorkspacePreferencesController({ language, pushNotification, 
     resetLayoutPreferences,
     resetLayoutState,
     selectableLanguages,
-    setAdminWorkspace,
     setDragState,
     showNotificationsDialog,
     showPreferencesDialog,
     startLayoutEditingFromPreferences,
     toggleSection,
+    uiPreferencesLoadedForUserId,
     uiPreferences
   }
 }

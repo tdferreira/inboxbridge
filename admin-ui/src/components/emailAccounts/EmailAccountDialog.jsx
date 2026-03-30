@@ -54,6 +54,18 @@ function EmailAccountDialog({
   const canUseOAuth = resolvedOAuthProviders.length > 0
   const effectiveOauthProvider = requiresMicrosoftOAuth ? 'MICROSOFT' : emailAccountForm.oauthProvider
   const canLaunchProviderOAuth = !usingPassword && effectiveOauthProvider !== 'NONE' && resolvedOAuthProviders.includes(effectiveOauthProvider)
+  const editingExistingAccount = Boolean(emailAccountForm.originalEmailAccountId)
+  const supportsFolder = emailAccountForm.protocol === 'IMAP'
+  const supportsCustomLabel = !requiresMicrosoftOAuth
+  const canSaveWithoutOAuth = !requiresMicrosoftOAuth || editingExistingAccount
+  const hasRequiredConnectionFields = Boolean(
+    emailAccountForm.emailAccountId?.trim()
+    && emailAccountForm.host?.trim()
+    && emailAccountForm.username?.trim()
+    && emailAccountForm.port
+    && (!supportsFolder || emailAccountForm.folder?.trim())
+    && (!usingPassword || emailAccountForm.password?.trim() || editingExistingAccount)
+  )
   const providerLabel = effectiveOauthProvider === 'GOOGLE' ? t('oauthProvider.google') : t('oauthProvider.microsoft')
   const dialogTitle = emailAccountForm.emailAccountId ? t('emailAccounts.editDialogTitle', { bridgeId: emailAccountForm.emailAccountId }) : t('emailAccounts.addDialogTitle')
   const initialSnapshotRef = useRef(JSON.stringify(emailAccountForm))
@@ -77,7 +89,7 @@ function EmailAccountDialog({
       <p className="section-copy">{t('emailAccounts.dialogCopy')}</p>
       <form className="settings-grid fetcher-dialog-form" onSubmit={onSave}>
         <LabeledField helpText={t('emailAccounts.providerPresetHelp')} label={t('emailAccounts.providerPreset')}>
-          <select value={selectedPreset} onChange={(event) => applyPreset(event.target.value)}>
+          <select disabled={editingExistingAccount} value={selectedPreset} onChange={(event) => applyPreset(event.target.value)}>
             {availablePresets.map((option) => (
               <option key={option.id} value={option.id}>{t(`preset.${option.id}.label`)}</option>
             ))}
@@ -125,43 +137,48 @@ function EmailAccountDialog({
             )}
           </LabeledField>
         ) : null}
-        <LabeledField helpText={t('emailAccounts.usernameHelp')} label={t('emailAccounts.username')}>
-          <input value={emailAccountForm.username} onChange={(event) => onEmailAccountFormChange((current) => ({ ...current, username: event.target.value }))} />
-        </LabeledField>
-        {usingPassword ? (
-          <PasswordField
-            helpText={t('emailAccounts.passwordHelp')}
-            hideLabel={t('common.hideField', { label: t('emailAccounts.password') })}
-            label={t('emailAccounts.password')}
-            value={emailAccountForm.password}
-            onChange={(event) => onEmailAccountFormChange((current) => ({ ...current, password: event.target.value }))}
-            placeholder={t('emailAccounts.keepExisting')}
-            showLabel={t('common.showField', { label: t('emailAccounts.password') })}
-          />
-        ) : null}
-        {!usingPassword ? (
-          <PasswordField
-            helpText={t('emailAccounts.oauthRefreshTokenHelp')}
-            hideLabel={t('common.hideField', { label: t('emailAccounts.oauthRefreshToken') })}
-            label={t('emailAccounts.oauthRefreshToken')}
-            value={emailAccountForm.oauthRefreshToken}
-            onChange={(event) => onEmailAccountFormChange((current) => ({ ...current, oauthRefreshToken: event.target.value }))}
-            placeholder={t('emailAccounts.optionalManualToken')}
-            showLabel={t('common.showField', { label: t('emailAccounts.oauthRefreshToken') })}
-          />
-        ) : null}
+        <div className="form-field-pair full">
+          <LabeledField helpText={t('emailAccounts.usernameHelp')} label={t('emailAccounts.username')}>
+            <input value={emailAccountForm.username} onChange={(event) => onEmailAccountFormChange((current) => ({ ...current, username: event.target.value }))} />
+          </LabeledField>
+          {usingPassword ? (
+            <PasswordField
+              helpText={t('emailAccounts.passwordHelp')}
+              hideLabel={t('common.hideField', { label: t('emailAccounts.password') })}
+              label={t('emailAccounts.password')}
+              value={emailAccountForm.password}
+              onChange={(event) => onEmailAccountFormChange((current) => ({ ...current, password: event.target.value }))}
+              placeholder={t('emailAccounts.keepExisting')}
+              showLabel={t('common.showField', { label: t('emailAccounts.password') })}
+            />
+          ) : (
+            <PasswordField
+              helpText={t('emailAccounts.oauthRefreshTokenHelp')}
+              hideLabel={t('common.hideField', { label: t('emailAccounts.oauthRefreshToken') })}
+              label={t('emailAccounts.oauthRefreshToken')}
+              value={emailAccountForm.oauthRefreshToken}
+              onChange={(event) => onEmailAccountFormChange((current) => ({ ...current, oauthRefreshToken: event.target.value }))}
+              placeholder={t('emailAccounts.optionalManualToken')}
+              showLabel={t('common.showField', { label: t('emailAccounts.oauthRefreshToken') })}
+            />
+          )}
+        </div>
         {canLaunchProviderOAuth ? (
           <div className="muted-box full fetcher-oauth-setup-box">
             <strong>{t('emailAccounts.oauthSetupTitle')}</strong><br />
             {t('emailAccounts.oauthSetupBody', { provider: providerLabel })}
           </div>
         ) : null}
-        <LabeledField helpText={t('emailAccounts.folderHelp')} label={t('emailAccounts.folder')}>
-          <input value={emailAccountForm.folder} onChange={(event) => onEmailAccountFormChange((current) => ({ ...current, folder: event.target.value }))} />
-        </LabeledField>
-        <LabeledField helpText={t('emailAccounts.customLabelHelp')} label={t('emailAccounts.customLabel')}>
-          <input value={emailAccountForm.customLabel} onChange={(event) => onEmailAccountFormChange((current) => ({ ...current, customLabel: event.target.value }))} />
-        </LabeledField>
+        {supportsFolder ? (
+          <LabeledField helpText={t('emailAccounts.folderHelp')} label={t('emailAccounts.folder')}>
+            <input value={emailAccountForm.folder} onChange={(event) => onEmailAccountFormChange((current) => ({ ...current, folder: event.target.value }))} />
+          </LabeledField>
+        ) : null}
+        {supportsCustomLabel ? (
+          <LabeledField helpText={t('emailAccounts.customLabelHelp')} label={t('emailAccounts.customLabel')}>
+            <input value={emailAccountForm.customLabel} onChange={(event) => onEmailAccountFormChange((current) => ({ ...current, customLabel: event.target.value }))} />
+          </LabeledField>
+        ) : null}
         <label className="checkbox-row">
           <input type="checkbox" checked={emailAccountForm.enabled} onChange={(event) => onEmailAccountFormChange((current) => ({ ...current, enabled: event.target.checked }))} />
           <span className="field-label-row">
@@ -184,12 +201,13 @@ function EmailAccountDialog({
           </span>
         </label>
         <div className="full action-row">
-          <LoadingButton className="secondary" isLoading={testConnectionLoading} loadingLabel={t('emailAccounts.testConnectionLoading')} onClick={onTestEmailAccountConnection} type="button">
+          <LoadingButton className="secondary" disabled={!hasRequiredConnectionFields} isLoading={testConnectionLoading} loadingLabel={t('emailAccounts.testConnectionLoading')} onClick={onTestEmailAccountConnection} type="button">
             {t('emailAccounts.testConnection')}
           </LoadingButton>
           {canLaunchProviderOAuth ? (
             <LoadingButton
-              className="secondary"
+              className={canSaveWithoutOAuth ? 'secondary' : 'primary'}
+              disabled={!hasRequiredConnectionFields}
               isLoading={saveAndConnectLoading}
               loadingLabel={t('emailAccounts.saveAndConnectOAuthLoading', { provider: providerLabel })}
               onClick={onSaveAndConnectOAuth}
@@ -198,9 +216,11 @@ function EmailAccountDialog({
               {t('emailAccounts.saveAndConnectOAuth', { provider: providerLabel })}
             </LoadingButton>
           ) : null}
-          <LoadingButton className="primary" isLoading={saveLoading} loadingLabel={t('emailAccounts.saveLoading')} type="submit">
-            {emailAccountForm.emailAccountId ? t('emailAccounts.save') : t('emailAccounts.add')}
-          </LoadingButton>
+          {canSaveWithoutOAuth ? (
+            <LoadingButton className="primary" disabled={!hasRequiredConnectionFields} isLoading={saveLoading} loadingLabel={t('emailAccounts.saveLoading')} type="submit">
+              {editingExistingAccount ? t('emailAccounts.save') : t('emailAccounts.addAction')}
+            </LoadingButton>
+          ) : null}
           <button className="secondary" onClick={onClose} type="button">
             {t('common.cancel')}
           </button>

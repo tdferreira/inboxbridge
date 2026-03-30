@@ -1,6 +1,7 @@
 package dev.inboxbridge.web;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.net.URI;
@@ -38,11 +39,15 @@ class GoogleOAuthResourceTest {
         assertTrue(html.contains("Return To Admin UI"));
         assertTrue(html.contains("Leave this page without exchanging the code?"));
         assertTrue(html.contains("Attempting automatic exchange"));
+        assertTrue(html.contains("Cancel automatic return"));
         assertTrue(html.contains("window.setTimeout(() => {"));
         assertTrue(html.contains("Returning to the admin UI in"));
         assertTrue(html.contains("new URLSearchParams(window.location.search)"));
         assertTrue(html.contains("callbackParams.get('code')"));
         assertTrue(html.contains("Google OAuth is still missing one or more required permissions"));
+        assertTrue(html.contains("Secure token storage is enabled"));
+        assertTrue(html.contains("id=\"copyStatus\""));
+        assertFalse(html.contains("PostgreSQL"));
         assertTrue(html.contains("code-123"));
     }
 
@@ -125,6 +130,11 @@ class GoogleOAuthResourceTest {
                     "Bearer",
                     Instant.parse("2026-03-26T11:00:00Z"),
                     "Stored securely in the database.");
+        }
+
+        @Override
+        public boolean secureStorageConfigured() {
+            return true;
         }
     }
 }

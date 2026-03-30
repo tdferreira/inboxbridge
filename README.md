@@ -35,7 +35,7 @@ Google help: https://support.google.com/accounts/answer/13533235
 4. Stores OAuth tokens encrypted in PostgreSQL when secure storage is enabled.
 5. Stores user-managed destination-mailbox and source-email-account secrets encrypted in PostgreSQL.
 6. Provides a separate React admin UI with login, self-registration, approval workflow, user management, destination mailbox config, and source email account config.
-7. Supports Google OAuth for Gmail destinations and Microsoft OAuth for Outlook / Hotmail / Live source and destination accounts.
+7. Supports Google OAuth for Gmail destinations and Microsoft OAuth for Outlook source and destination accounts.
 8. Organizes the admin UI into reusable React components with component-scoped styles and frontend unit tests.
 9. Supports WebAuthn passkeys for browser sign-in after a user enrolls one from the security panel.
 10. Supports per-user poller overrides plus automatic per-source cooldown/backoff when providers start rejecting or throttling requests.
@@ -108,6 +108,9 @@ To actually import mail, you need the bootstrap config above plus:
 - a destination mailbox configured either as Gmail through shared `GOOGLE_*` env vars / per-user linking, or as an IMAP APPEND destination in the admin UI
 - provider OAuth app credentials for any OAuth-based source or destination flow
 - at least one source email account, either from `.env` or from the admin UI
+- destination mailbox setup now uses an Add/Edit modal workflow: Gmail must always use `Save and Authenticate`, while Outlook can save folder-only changes without reconnecting and requires Microsoft OAuth again for mailbox-identity changes
+- InboxBridge now blocks any source mailbox that points at the same mailbox as `My Destination Mailbox`; if the destination is changed to match an existing source mailbox, that source is disabled automatically until the conflict is removed
+- browser-based Google and Microsoft OAuth exchange now requires `SECURITY_TOKEN_ENCRYPTION_KEY`; if secure storage is missing, the callback page stops and tells the user to configure the key and retry instead of offering a manual fallback
 
 The fastest operator-managed path is:
 
@@ -205,6 +208,7 @@ The admin UI also supports these languages, with the user preference stored per 
 - Spanish
 
 User preferences now live behind the `Preferences` button in the header, which opens a modal for language selection, the `Remember layout on this account` option, a `Show Quick Setup Guide` toggle, and `layout editing` controls.
+For admin users, the workspace selection is also reflected in the browser URL: `/` stays on the user workspace without rewriting, `/admin` opens the administration workspace directly, and supported locales expose translated workspace slugs such as `/utilizador` and `/administracao`.
 The `Security` tools also open in a dedicated dialog instead of occupying permanent space in the main page layout, with separate tabs for `Password` and `Passkeys`.
 The `Quick Setup Guide` can now be hidden once every step is complete, and it automatically comes back if one of those requirements later becomes invalid again.
 
@@ -242,7 +246,8 @@ Current features:
 - expanded user-management entries are split into clearer subsections for user configuration, Gmail account, poller settings, passkeys, and source email accounts
 - expandable source-email-account and user rows now use the row itself for expand/collapse, while the `...` menu is reserved for actions only
 - the bundled admin-ui locales now cover quick-setup content, Gmail account fields, poller-setting forms, and source-email-account labels more completely instead of leaving those section bodies in English
-- common provider presets for Outlook / Hotmail / Live, Gmail, Yahoo Mail, and Proton Mail Bridge when creating a source email account
+- common provider presets for Outlook, Gmail, Yahoo Mail, and Proton Mail Bridge when creating a source email account
+- the source email account modal now uses `Add Email Account` / `Edit Source Email Account ...` headings, disables `Test Connection` until the required fields are present, hides the plain `Add` action for new Outlook accounts, and locks the provider preset while editing an existing account
 - auth-aware source-email-account forms that hide password-only or OAuth-only fields when they are not relevant
 - inline help tooltips for source-email-account and poller fields so each control explains what it does
 - env-managed source email accounts shown in the same operational list with a read-only `.env` badge, but only for the account named `admin`
@@ -343,7 +348,7 @@ Recommended flow:
 2. Use the relevant OAuth button in the UI
 3. Complete provider consent
 4. The callback page automatically tries to exchange the code in the browser as soon as it loads
-5. The callback page starts a 10-second countdown and returns to the admin UI automatically after a successful in-browser exchange
+5. The callback page starts a 5-second countdown and redirects to InboxBridge automatically after a successful in-browser exchange unless you cancel that automatic redirect
 6. You can still use the callback page exchange button to retry manually if the automatic attempt fails
 7. You can still use the callback page return button to navigate back immediately
 8. If secure storage is enabled, InboxBridge stores the token encrypted in PostgreSQL automatically
@@ -351,18 +356,21 @@ Recommended flow:
 OAuth callback usability notes:
 
 - the callback page includes a `Copy Code` button
+- if the browser blocks clipboard access on the callback page, InboxBridge now opens a manual copy dialog with the code instead of presenting that clipboard failure as the main OAuth result
 - the callback page automatically attempts the code exchange when it loads
+- after a successful in-browser exchange, the callback page shows a cancelable 5-second auto-return countdown so the user can stay on the page and inspect the exchange details if needed
 - the Google and Microsoft callback pages now also re-read the browser query string directly, so they can recover if the reverse proxy or callback rendering path did not populate the code/state into the initial HTML
 - both Google and Microsoft callback pages now detect consent denial and tell the user to retry the OAuth flow while approving every requested permission
 - the Microsoft callback exchange endpoint now returns a structured JSON error body, so the callback page shows the real exchange failure reason instead of an empty generic error
 - Microsoft OAuth validation now treats the mailbox protocol scope plus the returned refresh token as the real success signal, so it does not fail merely because Microsoft omitted `offline_access` from the echoed scope string
 - when a Microsoft OAuth exchange stores a newer encrypted refresh token successfully, the admin dashboard suppresses any older stale `has no refresh token` error for that same source instead of continuing to present it as the current state
 - UI-managed Microsoft source email accounts now also reuse that encrypted credential store by email account ID, so a successful browser OAuth exchange can immediately satisfy the runtime even when the `user_email_account` row itself does not yet hold a duplicated refresh token copy
-- if secure token storage is not configured, an env-managed Microsoft source still needs the returned `MAIL_ACCOUNT_<n>__OAUTH_REFRESH_TOKEN` copied into `.env` and a restart before polling can actually use the token
-- the callback page includes a `Return To Admin UI` button
-- returning to the admin UI before exchange asks for confirmation
+- browser OAuth exchange now fails hard when secure token storage is missing, so `SECURITY_TOKEN_ENCRYPTION_KEY` must be configured before exchanging Google or Microsoft authorization codes from the callback pages
+- when Microsoft destination access is unlinked or replaced, InboxBridge removes its stored tokens but Microsoft may still keep the app consent until the user removes `InboxBridge` manually from their Microsoft account permissions or My Apps page
+- the callback page includes a `Return to InboxBridge` button
+- returning to InboxBridge before exchange asks for confirmation
 - once you confirm that leave action, the page suppresses the browser's second generic `beforeunload` prompt so you are not asked twice
-- after a successful in-browser exchange, the callback page shows a 10-second auto-return countdown
+- after a successful in-browser exchange, the callback page shows a 5-second auto-return countdown that can be canceled from the page itself
 - if you leave without exchanging, you must add the code or resulting token manually later
 
 Admin UI loading feedback notes:
@@ -574,7 +582,7 @@ To replace the generated certs with your own:
 Verified on 2026-03-26:
 
 - `mvn test` passes
-- admin UI Docker build runs the Vitest suite successfully
+- admin UI Docker build succeeds, with frontend Vitest intended to run separately unless `RUN_TESTS=true` is passed to the admin UI Docker build
 - Docker Compose builds successfully
 - the HTTPS admin UI serves correctly in the container
 - unauthenticated `GET /api/auth/me` returns `401` through the HTTPS proxy

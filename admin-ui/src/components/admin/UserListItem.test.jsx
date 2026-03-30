@@ -100,13 +100,45 @@ describe('UserListItem', () => {
     )
 
     expect(screen.getByText('Configuração do utilizador')).toBeInTheDocument()
-    expect(screen.getByText('Destination Mailbox')).toBeInTheDocument()
+    expect(screen.getByText('Caixa de destino')).toBeInTheDocument()
     expect(screen.getByText('Definições de verificação')).toBeInTheDocument()
     expect(screen.getByText('Passkeys')).toBeInTheDocument()
     const mailFetchersSectionTitle = screen.getByText('Contas de email de origem')
     expect(screen.getByText(/Provider: OUTLOOK_IMAP/i)).toBeInTheDocument()
     expect(screen.getByText(/armazenamento do token:/i)).toBeInTheDocument()
     expect(mailFetchersSectionTitle.closest('section')).toHaveTextContent('BD encriptada')
+  })
+
+  it('renders fallback detail values without crashing when the admin payload is partial', () => {
+    render(
+      <UserListItem
+        config={{
+          user: {
+            id: 7,
+            username: 'admin'
+          }
+        }}
+        isExpanded
+        isLoading={false}
+        locale="en"
+        onDeleteUser={vi.fn()}
+        onForcePasswordChange={vi.fn()}
+        onOpenResetPasswordDialog={vi.fn()}
+        onResetUserPasskeys={vi.fn()}
+        onToggleExpand={vi.fn()}
+        onToggleUserActive={vi.fn()}
+        onUpdateUser={vi.fn()}
+        session={{ id: 99, role: 'ADMIN' }}
+        t={(key, params) => translate('en', key, params)}
+        updatingPasskeysReset={false}
+        updatingUser={false}
+      />
+    )
+
+    expect(screen.getByText('Destination Mailbox')).toBeInTheDocument()
+    expect(screen.getByText('No passkeys registered for this user.')).toBeInTheDocument()
+    expect(screen.getByText('No mail fetchers configured for this user.')).toBeInTheDocument()
+    expect(screen.getByText(/Provider:\s*Not set/i)).toBeInTheDocument()
   })
 
   it('renders translated contextual menu actions in portuguese', () => {

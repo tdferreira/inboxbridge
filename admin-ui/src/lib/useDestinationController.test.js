@@ -170,6 +170,99 @@ describe('useDestinationController', () => {
     }))
   })
 
+  it('warns before replacing a linked Gmail destination when saving and authenticating Outlook', async () => {
+    const { result, openConfirmation } = renderController({
+      destinationMeta: { linked: true, oauthConnected: false, provider: 'GMAIL_API' }
+    })
+
+    await act(async () => {
+      await result.current.saveDestinationConfigAndAuthenticate()
+    })
+
+    expect(openConfirmation).toHaveBeenCalledWith(expect.objectContaining({
+      actionKey: 'microsoftDestinationOAuth',
+      title: 'destination.replaceLinkedConfirmTitle',
+      body: 'destination.replaceLinkedGoogleConfirmBody'
+    }))
+  })
+
+  it('tests the destination mailbox connection against the destination test endpoint', async () => {
+    fetch.mockResolvedValue({ ok: true, json: async () => ({ success: true, message: 'Connection test succeeded.' }) })
+    const { result } = renderController()
+
+    await act(async () => {
+      await result.current.testDestinationConnection()
+    })
+
+    expect(fetch).toHaveBeenCalledWith('/api/app/destination-config/test-connection', expect.objectContaining({ method: 'POST' }))
+  })
+
+  it('saves before authenticating a newly added Gmail destination from the modal flow', async () => {
+    fetch.mockResolvedValue({ ok: true, json: async () => ({}) })
+    const assign = vi.fn()
+    const originalLocation = window.location
+    Object.defineProperty(window, 'location', {
+      configurable: true,
+      value: { assign }
+    })
+
+    const { result } = renderController({
+      destinationConfig: { provider: 'GMAIL_API' },
+      destinationMeta: { configured: false, linked: false, oauthConnected: false, provider: 'GMAIL_API' }
+    })
+
+    await act(async () => {
+      await result.current.saveDestinationConfigAndAuthenticate()
+    })
+
+    expect(fetch).toHaveBeenCalledWith('/api/app/destination-config', expect.objectContaining({ method: 'PUT' }))
+    expect(assign).toHaveBeenCalledWith('/api/google-oauth/start/self?lang=en')
+
+    Object.defineProperty(window, 'location', {
+      configurable: true,
+      value: originalLocation
+    })
+  })
+
+  it('uses the saved linked provider for unlink confirmation even when the draft provider changed in the modal', async () => {
+    const { result, openConfirmation } = renderController({
+      destinationConfig: { provider: 'OUTLOOK_IMAP' },
+      destinationMeta: { linked: true, oauthConnected: true, provider: 'GMAIL_API' }
+    })
+
+    await act(async () => {
+      await result.current.unlinkDestinationAccount()
+    })
+
+    expect(openConfirmation).toHaveBeenCalledWith(expect.objectContaining({
+      body: 'gmail.unlinkConfirmBody',
+      title: 'gmail.unlinkConfirmTitle'
+    }))
+  })
+
+  it('shows the Microsoft manual removal notice after unlinking an Outlook destination', async () => {
+    fetch.mockResolvedValue({ ok: true, json: async () => ({ providerRevocationAttempted: false, providerRevoked: false }) })
+    const { result, openConfirmation, pushNotification, loadAppData } = renderController({
+      destinationMeta: { linked: true, oauthConnected: true, provider: 'OUTLOOK_IMAP' }
+    })
+
+    await act(async () => {
+      await result.current.unlinkDestinationAccount()
+    })
+
+    const confirmation = openConfirmation.mock.calls[0][0]
+
+    await act(async () => {
+      await confirmation.onConfirm()
+    })
+
+    expect(pushNotification).toHaveBeenCalledWith(expect.objectContaining({
+      message: 'notifications.microsoftDestinationUnlinked',
+      tone: 'warning'
+    }))
+    expect(loadAppData).toHaveBeenCalled()
+  })
+
   it('saves before starting Gmail destination OAuth when switching away from Outlook', async () => {
     fetch.mockResolvedValue({ ok: true, json: async () => ({}) })
     const assign = vi.fn()

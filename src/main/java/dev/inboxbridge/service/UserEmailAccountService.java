@@ -61,6 +61,9 @@ public class UserEmailAccountService {
     @Inject
     MailSourceClient mailSourceClient;
 
+    @Inject
+    MailboxConflictService mailboxConflictService;
+
     public List<UserEmailAccountView> listForUser(Long userId) {
         Map<String, ImportStats> importStatsBySource = importStatsBySource();
         List<UserEmailAccount> bridges = repository.listByUserId(userId);
@@ -100,7 +103,7 @@ public class UserEmailAccountService {
             authMethod = InboxBridgeConfig.AuthMethod.OAUTH2;
             oauthProvider = InboxBridgeConfig.OAuthProvider.MICROSOFT;
         }
-        return new RuntimeEmailAccount(
+        RuntimeEmailAccount candidate = new RuntimeEmailAccount(
                 bridgeId,
                 "USER",
                 user.id,
@@ -119,6 +122,10 @@ public class UserEmailAccountService {
                 request.unreadOnly() != null && request.unreadOnly(),
                 Optional.ofNullable(blankToNull(request.customLabel())),
                 null);
+        if (candidate.enabled() && mailboxConflictService.conflictsWithCurrentDestination(user.id, candidate)) {
+            throw new IllegalArgumentException(MailboxConflictService.SOURCE_DESTINATION_CONFLICT_MESSAGE);
+        }
+        return candidate;
     }
 
     @Transactional
@@ -166,6 +173,29 @@ public class UserEmailAccountService {
         bridge.updatedAt = Instant.now();
         if (isNew) {
             bridge.createdAt = bridge.updatedAt;
+        }
+
+        RuntimeEmailAccount candidate = new RuntimeEmailAccount(
+                bridge.bridgeId,
+                "USER",
+                user.id,
+                user.username,
+                bridge.enabled,
+                bridge.protocol,
+                bridge.host,
+                bridge.port,
+                bridge.tls,
+                bridge.authMethod,
+                bridge.oauthProvider,
+                bridge.username,
+                bridge.authMethod == InboxBridgeConfig.AuthMethod.PASSWORD ? resolvePassword(existing, bridge.authMethod, request.password()) : "",
+                bridge.authMethod == InboxBridgeConfig.AuthMethod.OAUTH2 ? resolveRefreshToken(existing, bridge.authMethod, bridge.oauthProvider, request.oauthRefreshToken()) : "",
+                Optional.ofNullable(blankToNull(request.folder())),
+                bridge.unreadOnly,
+                Optional.ofNullable(bridge.customLabel),
+                null);
+        if (candidate.enabled() && mailboxConflictService.conflictsWithCurrentDestination(user.id, candidate)) {
+            throw new IllegalArgumentException(MailboxConflictService.SOURCE_DESTINATION_CONFLICT_MESSAGE);
         }
 
         if (request.password() != null && !request.password().isBlank()) {

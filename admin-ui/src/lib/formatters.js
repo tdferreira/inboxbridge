@@ -116,6 +116,13 @@ export function formatPollError(message, locale = 'en') {
     return translate(locale, 'common.googleSourceAccessRevokedError', { bridgeId: googleSourceAccessRevokedMatch[1] })
   }
 
+  const oauthRefreshTokenMissingMatch = text.match(/^(?:Source (.+?) failed:\s*)?Source (.+?) is configured for OAuth2 but has no refresh token\.?$/)
+  if (oauthRefreshTokenMissingMatch) {
+    return translate(locale, 'common.oauthRefreshTokenMissingError', {
+      bridgeId: oauthRefreshTokenMissingMatch[1] || oauthRefreshTokenMissingMatch[2]
+    })
+  }
+
   if (text.startsWith('A poll is already running')) {
     return translate(locale, 'common.pollBusyError')
   }

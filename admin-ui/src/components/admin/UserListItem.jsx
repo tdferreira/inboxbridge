@@ -39,11 +39,50 @@ function UserListItem({
   const menuContainerRef = useRef(null)
   const menuPanelRef = useRef(null)
   const menuButtonRef = useRef(null)
-  const user = config.user
-  const configuredEmailAccounts = config.emailAccounts || config.bridges || []
-  const viewingSelfAdmin = user.id === session.id && user.role === 'ADMIN'
-  const userHasPasskeys = (config.passkeys?.length || 0) > 0
-  const statsAvailable = hasMeaningfulStats(config.pollingStats)
+  const user = {
+    id: null,
+    username: '',
+    role: 'USER',
+    approved: false,
+    active: false,
+    gmailConfigured: false,
+    passwordConfigured: false,
+    mustChangePassword: false,
+    passkeyCount: 0,
+    bridgeCount: 0,
+    ...(config?.user || {})
+  }
+  const destinationConfig = {
+    provider: '',
+    deliveryMode: '',
+    linked: false,
+    host: '',
+    port: null,
+    authMethod: '',
+    username: '',
+    folder: '',
+    ...(config?.destinationConfig || {})
+  }
+  const pollingSettings = {
+    effectivePollEnabled: false,
+    effectivePollInterval: t('users.notSet'),
+    effectiveFetchWindow: t('users.notSet'),
+    pollEnabledOverride: null,
+    pollIntervalOverride: null,
+    fetchWindowOverride: null,
+    ...(config?.pollingSettings || {})
+  }
+  const passkeys = Array.isArray(config?.passkeys)
+    ? config.passkeys.filter(Boolean)
+    : []
+  const configuredEmailAccounts = Array.isArray(config?.emailAccounts)
+    ? config.emailAccounts
+    : Array.isArray(config?.bridges)
+      ? config.bridges
+      : []
+  const viewingSelfAdmin = user.id === session?.id && user.role === 'ADMIN'
+  const userHasPasskeys = passkeys.length > 0
+  const statsAvailable = hasMeaningfulStats(config?.pollingStats)
   const [statsCollapsed, setStatsCollapsed] = useState(!statsAvailable)
 
   useEffect(() => {
@@ -203,26 +242,26 @@ function UserListItem({
           <section className="user-detail-section">
             <div className="user-detail-section-title">{t('users.destinationSection')}</div>
             <div className="muted-box">
-            {t('users.destinationProvider', { value: config.destinationConfig.provider || t('users.notSet') })}<br />
-            {t('users.destinationMode', { value: config.destinationConfig.deliveryMode || t('users.notSet') })}<br />
-            {t('users.destinationLinked', { value: t(config.destinationConfig.linked ? 'common.yes' : 'common.no') })}<br />
-            {config.destinationConfig.host ? <>{t('users.destinationHost', { value: `${config.destinationConfig.host}:${config.destinationConfig.port}` })}<br /></> : null}
-            {config.destinationConfig.username ? <>{t('users.destinationUsername', { value: config.destinationConfig.username })}<br /></> : null}
-            {config.destinationConfig.folder ? <>{t('users.destinationFolder', { value: config.destinationConfig.folder })}<br /></> : null}
-            {t('users.destinationAuth', { value: config.destinationConfig.authMethod || t('users.notSet') })}
+            {t('users.destinationProvider', { value: destinationConfig.provider || t('users.notSet') })}<br />
+            {t('users.destinationMode', { value: destinationConfig.deliveryMode || t('users.notSet') })}<br />
+            {t('users.destinationLinked', { value: t(destinationConfig.linked ? 'common.yes' : 'common.no') })}<br />
+            {destinationConfig.host ? <>{t('users.destinationHost', { value: destinationConfig.port ? `${destinationConfig.host}:${destinationConfig.port}` : destinationConfig.host })}<br /></> : null}
+            {destinationConfig.username ? <>{t('users.destinationUsername', { value: destinationConfig.username })}<br /></> : null}
+            {destinationConfig.folder ? <>{t('users.destinationFolder', { value: destinationConfig.folder })}<br /></> : null}
+            {t('users.destinationAuth', { value: destinationConfig.authMethod || t('users.notSet') })}
             </div>
           </section>
 
           <section className="user-detail-section">
             <div className="user-detail-section-title">{t('users.pollingSection')}</div>
             <div className="muted-box">
-            {t('users.pollingEnabled', { value: t(config.pollingSettings.effectivePollEnabled ? 'common.yes' : 'common.no') })}<br />
-            {t('users.pollIntervalValue', { value: config.pollingSettings.effectivePollInterval })}<br />
-            {t('users.fetchWindowValue', { value: config.pollingSettings.effectiveFetchWindow })}<br />
+            {t('users.pollingEnabled', { value: t(pollingSettings.effectivePollEnabled ? 'common.yes' : 'common.no') })}<br />
+            {t('users.pollIntervalValue', { value: pollingSettings.effectivePollInterval || t('users.notSet') })}<br />
+            {t('users.fetchWindowValue', { value: pollingSettings.effectiveFetchWindow || t('users.notSet') })}<br />
             {t('users.pollingOverrideState', {
-              value: config.pollingSettings.pollEnabledOverride === null
-                && !config.pollingSettings.pollIntervalOverride
-                && config.pollingSettings.fetchWindowOverride === null
+              value: pollingSettings.pollEnabledOverride === null
+                && !pollingSettings.pollIntervalOverride
+                && pollingSettings.fetchWindowOverride === null
                 ? t('users.noneApplied')
                 : t('common.yes')
             })}
@@ -232,9 +271,12 @@ function UserListItem({
           <section className="user-detail-section">
             <div className="user-detail-section-title">{t('users.passkeysSection')}</div>
             <div className="list-stack">
-            {config.passkeys.length > 0 ? config.passkeys.map((passkey) => (
-              <div key={passkey.id} className="muted-box">
-                <strong>{passkey.label}</strong><br />
+            {passkeys.length > 0 ? passkeys.map((passkey, index) => (
+              <div
+                key={passkey.id || `${user.id || 'user'}-passkey-${index}`}
+                className="muted-box"
+              >
+                <strong>{passkey.label || t('users.notSet')}</strong><br />
                 {t('users.discoverable', { value: t(passkey.discoverable ? 'common.yes' : 'common.no').toLowerCase() })} · {t('users.backedUp', { value: t(passkey.backedUp ? 'common.yes' : 'common.no').toLowerCase() })}<br />
                 {t('users.created', { value: formatDate(passkey.createdAt, locale) })} · {t('users.lastUsed', { value: formatDate(passkey.lastUsedAt, locale) })}
               </div>
@@ -245,16 +287,19 @@ function UserListItem({
           <section className="user-detail-section">
             <div className="user-detail-section-title">{t('users.mailFetchersSection')}</div>
             <div className="list-stack">
-            {configuredEmailAccounts.length > 0 ? configuredEmailAccounts.map((emailAccount) => (
-              <div key={emailAccount.emailAccountId || emailAccount.bridgeId} className="muted-box">
-                <strong>{emailAccount.emailAccountId || emailAccount.bridgeId}</strong><br />
-                {protocolLabel(emailAccount.protocol, locale)} {t('users.via')} {authMethodLabel(emailAccount.authMethod, locale)}{emailAccount.oauthProvider !== 'NONE' ? ` / ${oauthProviderLabel(emailAccount.oauthProvider, locale)}` : ''}<br />
-                {emailAccount.host}:{emailAccount.port} · {t('users.tokenStorageLabel')} {tokenStorageLabel(emailAccount.tokenStorageMode, locale)}<br />
-                {t('users.pollIntervalValue', { value: emailAccount.effectivePollInterval })} · {t('users.fetchWindowValue', { value: emailAccount.effectiveFetchWindow })}<br />
-                {emailAccount.pollingState?.cooldownUntil ? `${t('users.cooldownUntil', { value: formatDate(emailAccount.pollingState.cooldownUntil, locale) })} · ` : ''}{t('users.lastUsed', { value: formatDate(emailAccount.lastEvent?.finishedAt, locale) })}
-                {emailAccount.pollingState?.lastFailureReason ? <><br />{t('users.lastFailure', { value: formatPollError(emailAccount.pollingState.lastFailureReason, locale) })}</> : null}
+            {configuredEmailAccounts.length > 0 ? configuredEmailAccounts.map((emailAccount, index) => {
+              const emailAccountId = emailAccount?.emailAccountId || emailAccount?.bridgeId || `${user.id || 'user'}-email-account-${index}`
+
+              return (
+              <div key={emailAccountId} className="muted-box">
+                <strong>{emailAccount?.emailAccountId || emailAccount?.bridgeId || t('users.notSet')}</strong><br />
+                {protocolLabel(emailAccount?.protocol, locale)} {t('users.via')} {authMethodLabel(emailAccount?.authMethod, locale)}{emailAccount?.oauthProvider && emailAccount.oauthProvider !== 'NONE' ? ` / ${oauthProviderLabel(emailAccount.oauthProvider, locale)}` : ''}<br />
+                {emailAccount?.host || t('users.notSet')}:{emailAccount?.port ?? t('users.notSet')} · {t('users.tokenStorageLabel')} {tokenStorageLabel(emailAccount?.tokenStorageMode, locale)}<br />
+                {t('users.pollIntervalValue', { value: emailAccount?.effectivePollInterval || t('users.notSet') })} · {t('users.fetchWindowValue', { value: emailAccount?.effectiveFetchWindow ?? t('users.notSet') })}<br />
+                {emailAccount?.pollingState?.cooldownUntil ? `${t('users.cooldownUntil', { value: formatDate(emailAccount.pollingState.cooldownUntil, locale) })} · ` : ''}{t('users.lastUsed', { value: formatDate(emailAccount?.lastEvent?.finishedAt, locale) })}
+                {emailAccount?.pollingState?.lastFailureReason ? <><br />{t('users.lastFailure', { value: formatPollError(emailAccount.pollingState.lastFailureReason, locale) })}</> : null}
               </div>
-            )) : <div className="muted-box">{t('users.noMailFetchers')}</div>}
+            )}) : <div className="muted-box">{t('users.noMailFetchers')}</div>}
             </div>
           </section>
 
@@ -267,7 +312,7 @@ function UserListItem({
               onCollapseToggle={() => setStatsCollapsed((current) => !current)}
               sectionLoading={isLoading}
               showCollapseToggle={true}
-              stats={config.pollingStats || null}
+              stats={config?.pollingStats || null}
               t={t}
               title={t('pollingStats.userDetailTitle', { username: user.username })}
             />

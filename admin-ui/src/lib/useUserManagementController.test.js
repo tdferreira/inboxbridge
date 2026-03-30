@@ -1,6 +1,13 @@
 import { act, renderHook } from '@testing-library/react'
 import { useUserManagementController } from './useUserManagementController'
 
+function jsonResponse(payload, ok = true) {
+  return {
+    ok,
+    json: async () => payload
+  }
+}
+
 describe('useUserManagementController', () => {
   beforeEach(() => {
     vi.restoreAllMocks()
@@ -105,5 +112,52 @@ describe('useUserManagementController', () => {
       message: 'Duplicate alice',
       tone: 'error'
     }))
+  })
+
+  it('normalizes partial selected-user configuration payloads from the API', async () => {
+    fetch.mockResolvedValueOnce(jsonResponse({
+      pollingSettings: {
+        effectivePollEnabled: true,
+        effectivePollInterval: '5m',
+        effectiveFetchWindow: 25
+      },
+      bridges: [{ bridgeId: 'outlook-main' }]
+    }))
+
+    const { result } = renderController()
+
+    act(() => {
+      result.current.applyLoadedUsers([{ id: 7, username: 'admin', role: 'ADMIN', approved: true, active: true, bridgeCount: 1 }])
+    })
+
+    await act(async () => {
+      await result.current.loadSelectedUserConfiguration(7)
+    })
+
+    expect(result.current.selectedUserConfig).toEqual(expect.objectContaining({
+      user: expect.objectContaining({ id: 7, username: 'admin', bridgeCount: 1 }),
+      destinationConfig: expect.objectContaining({ provider: '', linked: false }),
+      pollingSettings: expect.objectContaining({ effectivePollEnabled: true, effectivePollInterval: '5m', effectiveFetchWindow: 25 }),
+      emailAccounts: [{ bridgeId: 'outlook-main' }],
+      bridges: [{ bridgeId: 'outlook-main' }],
+      passkeys: []
+    }))
+  })
+
+  it('keeps the selected-user loader stable when the users list refreshes', () => {
+    const { result } = renderController()
+    const initialLoader = result.current.loadSelectedUserConfiguration
+
+    act(() => {
+      result.current.applyLoadedUsers([{ id: 7, username: 'admin', role: 'ADMIN', approved: true, active: true }])
+    })
+
+    expect(result.current.loadSelectedUserConfiguration).toBe(initialLoader)
+
+    act(() => {
+      result.current.applyLoadedUsers([{ id: 7, username: 'admin', role: 'ADMIN', approved: true, active: true, bridgeCount: 1 }])
+    })
+
+    expect(result.current.loadSelectedUserConfiguration).toBe(initialLoader)
   })
 })

@@ -70,6 +70,7 @@ Key design choices:
 - the nested statistics cards inside each expanded source-email-account row and each expanded admin user row can now be collapsed independently, and they default to collapsed when there is not yet any meaningful data to render
 - the statistics charts now support a `Custom` range that opens a modal dialog for `date-time from` and optional `date-time to`; the charts then reload scoped timeline data for that selected window
 - admin users now get a workspace switcher that separates their normal user-facing setup flow from the deployment `Administration` controls
+- those admin/user workspaces are now also addressable through URL paths, with `/` remaining the canonical user workspace and explicit workspace slugs translated per UI language where supported, such as `/admin`, `/user`, `/administracao`, and `/utilizador`
 - inside those workspaces, the movable content sections can now be reordered independently while the header and workspace switcher remain fixed in place
 - the statistics charts now use `Recharts 3.x`, which adds shared hover tooltips and cleaner multi-series trend rendering without migrating the whole UI to Material UI
 - contextual `actions` buttons now render as compact hamburger menu icons while keeping the same translated accessibility labels and tooltips
@@ -98,7 +99,12 @@ Key design choices:
 - floating notifications now wrap long text inside the card instead of overflowing past the viewport edges
 - the source-email-account list now reloads after manual poll attempts and whenever an account row is expanded so the details panel reflects the latest polling state and last-event status
 - expanding an individual source email account or user entry now also triggers a fresh data load for that item, with visible loading feedback while the refresh is in progress
-- the Outlook destination panel now keeps the saved linked provider/status separate from any unsaved provider selection in the form, and for Outlook it only exposes the destination folder because the host, port, auth method, and OAuth provider are fixed by the Microsoft preset
+- the `My Destination Mailbox` area now uses an Add/Edit modal workflow instead of keeping the full form inline all the time, and the OAuth connect action only appears once the mailbox has been saved
+- when a destination mailbox dialog is open, background page scrolling is locked so wheel and trackpad scrolling stay inside the modal instead of moving the blurred page behind it
+- reconnect and unlink actions for destination mailbox links now live inside the destination edit dialog and only appear when that saved provider is actually linked
+- the destination mailbox dialog keeps the Outlook IMAP fields visible even for Microsoft OAuth so the user can still confirm or edit host, port, username, TLS, and folder values explicitly, but the save actions now separate plain folder-only saves from `Save and Authenticate` for mailbox-identity changes
+- the destination mailbox dialog can test the target mailbox connection as soon as the current settings are sufficient to authenticate
+- when a saved IMAP destination mailbox is already linked, the destination folder field inside the edit dialog now loads the real remote folder list and renders it as a dropdown by default, while still allowing manual folder entry as a fallback when needed, including Outlook destinations linked through Microsoft OAuth
 - the Gmail account panel distinguishes deployment-shared Google OAuth client credentials from user-specific overrides, but regular users now only see Gmail connection status plus connect/reconnect OAuth while admins keep the advanced override form
 - reconnecting Gmail now uses a friendlier `Reconnect Gmail Account` action, warns before replacing the currently linked Gmail account, and the Google callback page reports when the previous linked account was automatically replaced and its old grant revoked
 - reconnecting Gmail to the same already-linked account keeps the existing Google grant instead of revoking it; revocation only happens when the newly linked Gmail account is actually different
@@ -142,6 +148,12 @@ cd admin-ui
 npm test -- --run
 ```
 
+The Docker image build no longer runs the full Vitest suite by default because the complete jsdom suite can exhaust the Node heap inside constrained Docker builds before `vite build` runs. To keep test execution in the container build, opt in explicitly:
+
+```bash
+docker build -f admin-ui/Dockerfile --build-arg RUN_TESTS=true .
+```
+
 Current unit coverage focuses on:
 
 - formatter utilities
@@ -161,9 +173,12 @@ Current unit coverage focuses on:
 - language-aware setup guide generation and formatting helpers
 
 The Google and Microsoft OAuth callback pages include a direct return path back to the admin UI after in-browser token exchange.
+
+That callback flow now uses `Return to InboxBridge`, shows a red `Cancel automatic redirect` action during the 5-second countdown, and keeps the redirect wording product-neutral instead of tying it to the admin UI label.
 They also include:
 
 - a one-click code copy button
+- if the browser blocks clipboard access, the callback page opens a manual copy dialog so the user can still copy the code or env assignment
 - an automatic in-browser exchange attempt as soon as the callback page loads
 - the Google and Microsoft callback pages also parse the browser query string directly as a fallback, so the page can still recover the OAuth code/state if they were not rendered into the initial HTML
 - both callback pages now show explicit retry guidance when the provider returns `access_denied` or the token exchange reveals missing required scopes
@@ -174,7 +189,8 @@ They also include:
 - when secure token storage is not configured, a successful Microsoft exchange for an env-managed source still requires copying the returned `MAIL_ACCOUNT_<n>__OAUTH_REFRESH_TOKEN` value into `.env` and restarting before polling can use it
 - a confirmation dialog if the user tries to leave before exchanging the code
 - once the user confirms that leave action, the page suppresses the browser's second generic unsaved-changes prompt
-- a 10-second auto-return countdown after a successful in-browser exchange
+- a cancelable 5-second auto-return countdown after a successful in-browser exchange
+- when secure token storage is enabled, the callback pages keep the flow fully in-browser and do not ask the user to copy an env assignment
 - guidance that leaving early means the code or token must be handled manually later
 
 API-facing error surfaces in the admin UI now include one-click clipboard actions so users can copy diagnostic payloads without manually selecting text.

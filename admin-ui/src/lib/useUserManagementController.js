@@ -1,8 +1,70 @@
-import { useCallback, useEffect, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import { apiErrorText } from './api'
 
 const DEFAULT_ADMIN_RESET_PASSWORD_FORM = { newPassword: '', confirmNewPassword: '' }
 const DEFAULT_CREATE_USER_FORM = { username: '', password: '', confirmPassword: '', role: 'USER' }
+const DEFAULT_SELECTED_USER = {
+  id: null,
+  username: '',
+  role: 'USER',
+  approved: false,
+  active: false,
+  gmailConfigured: false,
+  passwordConfigured: false,
+  mustChangePassword: false,
+  passkeyCount: 0,
+  bridgeCount: 0
+}
+const DEFAULT_SELECTED_DESTINATION_CONFIG = {
+  provider: '',
+  deliveryMode: '',
+  linked: false,
+  host: '',
+  port: null,
+  authMethod: '',
+  username: '',
+  folder: ''
+}
+const DEFAULT_SELECTED_POLLING_SETTINGS = {
+  defaultPollEnabled: false,
+  pollEnabledOverride: null,
+  effectivePollEnabled: false,
+  defaultPollInterval: '',
+  pollIntervalOverride: null,
+  effectivePollInterval: '',
+  defaultFetchWindow: null,
+  fetchWindowOverride: null,
+  effectiveFetchWindow: ''
+}
+
+function normalizeSelectedUserConfiguration(payload, fallbackUser) {
+  const emailAccounts = Array.isArray(payload?.emailAccounts)
+    ? payload.emailAccounts
+    : Array.isArray(payload?.bridges)
+      ? payload.bridges
+      : []
+
+  return {
+    ...payload,
+    user: {
+      ...DEFAULT_SELECTED_USER,
+      ...(fallbackUser || {}),
+      ...(payload?.user || {})
+    },
+    destinationConfig: {
+      ...DEFAULT_SELECTED_DESTINATION_CONFIG,
+      ...(payload?.destinationConfig || {})
+    },
+    pollingSettings: {
+      ...DEFAULT_SELECTED_POLLING_SETTINGS,
+      ...(payload?.pollingSettings || {})
+    },
+    pollingStats: payload?.pollingStats || null,
+    passkeys: Array.isArray(payload?.passkeys) ? payload.passkeys.filter(Boolean) : [],
+    emailAccounts,
+    bridges: emailAccounts
+  }
+}
 
 export function useUserManagementController({
   authOptions,
@@ -25,6 +87,7 @@ export function useUserManagementController({
   const [showCreateUserDialog, setShowCreateUserDialog] = useState(false)
   const [showPasswordResetDialog, setShowPasswordResetDialog] = useState(false)
   const [users, setUsers] = useState([])
+  const usersRef = useRef([])
 
   const duplicateCreateUsername = (() => {
     const normalized = createUserForm.username.trim().toLowerCase()
@@ -36,15 +99,17 @@ export function useUserManagementController({
 
   function applyLoadedUsers(usersPayload) {
     if (!Array.isArray(usersPayload)) {
+      usersRef.current = []
       setUsers([])
       setSelectedUserId(null)
       setSelectedUserConfig(null)
       return
     }
+    usersRef.current = usersPayload
     setUsers(usersPayload)
     const availableUserIds = new Set(usersPayload.map((user) => user.id))
     setSelectedUserId((current) => (current && availableUserIds.has(current) ? current : null))
-    setSelectedUserConfig((current) => (current && availableUserIds.has(current.user.id) ? current : null))
+    setSelectedUserConfig((current) => (current?.user?.id && availableUserIds.has(current.user.id) ? current : null))
   }
 
   function resetUserManagementState() {
@@ -70,16 +135,16 @@ export function useUserManagementController({
         throw new Error(await apiErrorText(response, errorText('loadUserConfiguration')))
       }
       const payload = await response.json()
-      setSelectedUserConfig({
-        ...payload,
-        emailAccounts: payload.emailAccounts || payload.bridges || []
-      })
+      setSelectedUserConfig(normalizeSelectedUserConfiguration(
+        payload,
+        usersRef.current.find((user) => user.id === userId)
+      ))
     } catch (err) {
       pushNotification({ autoCloseMs: null, copyText: err.message || errorText('loadUserConfiguration'), message: err.message || errorText('loadUserConfiguration'), targetId: 'user-management-section', tone: 'error' })
     } finally {
       setSelectedUserLoading(false)
     }
-  }, [authOptions.multiUserEnabled, errorText, pushNotification, session, t])
+  }, [authOptions.multiUserEnabled, errorText, pushNotification, session])
 
   async function createUser(event) {
     event.preventDefault()
@@ -117,7 +182,7 @@ export function useUserManagementController({
   }
 
   function toggleExpandedUser(userId) {
-    setSelectedUserConfig((current) => current && current.user.id === userId && selectedUserId === userId ? null : current)
+    setSelectedUserConfig((current) => current && current.user?.id === userId && selectedUserId === userId ? null : current)
     setSelectedUserId((current) => current === userId ? null : userId)
   }
 

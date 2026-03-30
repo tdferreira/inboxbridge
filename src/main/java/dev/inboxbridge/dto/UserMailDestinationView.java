@@ -3,6 +3,7 @@ package dev.inboxbridge.dto;
 public record UserMailDestinationView(
         String provider,
         String deliveryMode,
+        boolean configured,
         boolean linked,
         boolean passwordConfigured,
         boolean oauthConnected,

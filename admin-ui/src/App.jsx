@@ -1,4 +1,5 @@
 import { Suspense, lazy, useEffect, useMemo, useRef, useState } from 'react'
+import { BrowserRouter, useLocation, useNavigate } from 'react-router-dom'
 import AuthScreen from './components/auth/AuthScreen'
 import Banner from './components/common/Banner'
 import ConfirmationDialog from './components/common/ConfirmationDialog'
@@ -33,6 +34,7 @@ import { usePollingControllers } from './lib/usePollingControllers'
 import { useUserManagementController } from './lib/useUserManagementController'
 import { useWorkspacePreferencesController } from './lib/useWorkspacePreferencesController'
 import { applyOrderedSectionIds, DEFAULT_UI_PREFERENCES } from './lib/workspacePreferences'
+import { buildWorkspacePath, canonicalWorkspacePath, resolveWorkspaceRoute } from './lib/workspaceRoutes'
 
 const REFRESH_MS = 30000
 
@@ -112,7 +114,9 @@ const PollingStatisticsSection = lazy(() => import('./components/stats/PollingSt
  * Coordinates admin-ui data fetching and browser interactions while delegating
  * UI structure to smaller reusable components.
  */
-function App() {
+function AppContent() {
+  const location = useLocation()
+  const navigate = useNavigate()
   const [authOptions, setAuthOptions] = useState(DEFAULT_AUTH_OPTIONS)
   const [notifications, setNotifications] = useState([])
   const [loadingData, setLoadingData] = useState(false)
@@ -121,6 +125,8 @@ function App() {
 
   const [destinationConfig, setDestinationConfig] = useState(DEFAULT_DESTINATION_CONFIG)
   const [destinationMeta, setDestinationMeta] = useState(null)
+  const [destinationFolders, setDestinationFolders] = useState([])
+  const [destinationFoldersLoading, setDestinationFoldersLoading] = useState(false)
   const [userPollingStats, setUserPollingStats] = useState(DEFAULT_USER_POLLING_STATS)
 
   const [systemDashboard, setSystemDashboard] = useState(null)
@@ -132,6 +138,7 @@ function App() {
   const [language, setLanguage] = useState(() => normalizeLocale(window.localStorage.getItem('inboxbridge.language') || navigator.language))
   const [showSystemOAuthAppsDialog, setShowSystemOAuthAppsDialog] = useState(false)
   const notificationTimersRef = useRef(new Map())
+  const selectedUserLoaderRef = useRef(null)
   const t = useMemo(() => (key, params) => translate(language, key, params), [language])
   const notificationTimestampFormatter = useMemo(
     () => new Intl.DateTimeFormat(language, { dateStyle: 'medium', timeStyle: 'medium' }),
@@ -157,6 +164,8 @@ function App() {
   })
   const session = auth.session
   const isAdmin = session?.role === 'ADMIN'
+  const workspaceRoute = useMemo(() => resolveWorkspaceRoute(location.pathname), [location.pathname])
+  const adminWorkspace = isAdmin && workspaceRoute.workspace === 'admin' ? 'admin' : 'user'
   const layout = useWorkspacePreferencesController({
     language,
     pushNotification,
@@ -165,7 +174,6 @@ function App() {
     withPending
   })
   const {
-    adminWorkspace,
     applyLoadedUiPreferences,
     closeNotificationsDialog,
     closePreferencesDialog,
@@ -185,14 +193,24 @@ function App() {
     resetLayoutPreferences,
     resetLayoutState,
     selectableLanguages,
-    setAdminWorkspace,
     setDragState,
     showNotificationsDialog,
     showPreferencesDialog,
     startLayoutEditingFromPreferences,
     toggleSection,
+    uiPreferencesLoadedForUserId,
     uiPreferences
   } = layout
+
+  function setAdminWorkspace(nextWorkspace, options = {}) {
+    const explicitUserRoute = nextWorkspace === 'user' && Boolean(options.explicitUserRoute ?? (isAdmin && location.pathname !== '/'))
+    const nextPath = buildWorkspacePath(language, nextWorkspace, { explicitUserRoute })
+    if (location.pathname === nextPath) {
+      return
+    }
+    navigate(nextPath, { replace: Boolean(options.replace) })
+  }
+
   const apiErrorMessage = async (key, response) => apiErrorText(response, errorText(key))
   const emailAccounts = useEmailAccountsController({
     authOptions,
@@ -453,6 +471,7 @@ function App() {
 
       setDestinationMeta({
         ...destinationPayload,
+        configured: destinationPayload.configured ?? false,
         provider: destinationPayload.provider || 'GMAIL_API',
         defaultRedirectUri: destinationPayload.googleRedirectUri || destinationPayload.defaultRedirectUri || `${window.location.origin}/api/google-oauth/callback`,
         linked: destinationPayload.linked ?? destinationPayload.refreshTokenConfigured ?? false,
@@ -542,17 +561,76 @@ function App() {
   }, [authOptions.multiUserEnabled, session])
 
   useEffect(() => {
+    if (!session) {
+      return
+    }
+    if (uiPreferencesLoadedForUserId !== session.id) {
+      return
+    }
+    const nextPath = canonicalWorkspacePath(location.pathname, language, isAdmin)
+    if (nextPath && nextPath !== location.pathname) {
+      navigate(nextPath, { replace: true })
+    }
+  }, [isAdmin, language, location.pathname, navigate, session, uiPreferencesLoadedForUserId])
+
+  useEffect(() => {
+    let cancelled = false
+
+    async function loadDestinationFolders() {
+      if (!session?.id || !destinationMeta?.linked || !destinationMeta?.provider || destinationMeta.provider === 'GMAIL_API') {
+        setDestinationFolders([])
+        setDestinationFoldersLoading(false)
+        return
+      }
+
+      setDestinationFoldersLoading(true)
+      try {
+        const response = await fetch('/api/app/destination-config/folders')
+        if (!response.ok) {
+          if (!cancelled) {
+            setDestinationFolders([])
+          }
+          return
+        }
+        const payload = await response.json()
+        if (!cancelled) {
+          setDestinationFolders(Array.isArray(payload?.folders) ? payload.folders : [])
+        }
+      } catch {
+        if (!cancelled) {
+          setDestinationFolders([])
+        }
+      } finally {
+        if (!cancelled) {
+          setDestinationFoldersLoading(false)
+        }
+      }
+    }
+
+    loadDestinationFolders()
+    return () => {
+      cancelled = true
+    }
+  }, [destinationMeta?.linked, destinationMeta?.provider, session?.id])
+
+  useEffect(() => {
     setDismissedPersistentNotifications({})
   }, [session?.id])
+
+  useEffect(() => {
+    selectedUserLoaderRef.current = userManagement.loadSelectedUserConfiguration
+  }, [userManagement.loadSelectedUserConfiguration])
 
   useEffect(() => {
     if (userManagement.selectedUserId) {
       refreshSectionData('userManagementCollapsed', async () => {
         await loadAppData()
-        await userManagement.loadSelectedUserConfiguration(userManagement.selectedUserId)
+        if (selectedUserLoaderRef.current) {
+          await selectedUserLoaderRef.current(userManagement.selectedUserId)
+        }
       })
     }
-  }, [authOptions.multiUserEnabled, session?.role, userManagement.loadSelectedUserConfiguration, userManagement.selectedUserId])
+  }, [authOptions.multiUserEnabled, session?.role, userManagement.selectedUserId])
 
   useEffect(() => {
     notifications.forEach((notification) => {
@@ -813,6 +891,8 @@ function App() {
           collapsed={uiPreferences.destinationMailboxCollapsed}
           collapseLoading={isPending('uiPreferences') && uiPreferences.persistLayout}
           destinationConfig={destinationConfig}
+          destinationFolders={destinationFolders}
+          destinationFoldersLoading={destinationFoldersLoading}
           destinationMeta={destinationMeta}
           isAdmin={false}
           locale={language}
@@ -821,10 +901,13 @@ function App() {
           onConnectOAuth={destination.startDestinationOAuth}
           onUnlinkOAuth={destination.unlinkDestinationAccount}
           onSave={destination.saveDestinationConfig}
+          onSaveAndAuthenticate={destination.saveDestinationConfigAndAuthenticate}
+          onTestConnection={destination.testDestinationConnection}
           saveLoading={isPending('destinationSave')}
           sectionLoading={isSectionRefreshing('destinationMailboxCollapsed')}
           setDestinationConfig={setDestinationConfig}
           t={t}
+          testConnectionLoading={isPending('destinationConnectionTest')}
           unlinkLoading={isPending('destinationUnlink')}
         />
       )
@@ -1022,8 +1105,8 @@ function App() {
           multiUserEnabled={authOptions.multiUserEnabled}
           modeToggleLoading={isPending('multiUserModeSave')}
           onToggleMultiUserEnabled={userManagement.requestToggleMultiUserMode}
-          updatingPasskeysResetUserId={userManagement.selectedUserConfig && isPending(`resetPasskeys:${userManagement.selectedUserConfig.user.id}`) ? userManagement.selectedUserConfig.user.id : null}
-          updatingUserId={userManagement.selectedUserConfig && (
+          updatingPasskeysResetUserId={userManagement.selectedUserConfig?.user?.id && isPending(`resetPasskeys:${userManagement.selectedUserConfig.user.id}`) ? userManagement.selectedUserConfig.user.id : null}
+          updatingUserId={userManagement.selectedUserConfig?.user?.id && (
             isPending(`updateUser:${userManagement.selectedUserConfig.user.id}`)
             || isPending(`deleteUser:${userManagement.selectedUserConfig.user.id}`)
           ) ? userManagement.selectedUserConfig.user.id : null}
@@ -1406,6 +1489,14 @@ function App() {
         ) : null}
       </main>
     </div>
+  )
+}
+
+function App() {
+  return (
+    <BrowserRouter>
+      <AppContent />
+    </BrowserRouter>
   )
 }
 

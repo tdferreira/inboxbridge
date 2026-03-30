@@ -51,23 +51,50 @@ class MicrosoftOAuthResourceTest {
         assertEquals(200, response.getStatus());
         assertTrue(html.contains("Microsoft OAuth Code Received"));
         assertTrue(html.contains("outlook-main-imap"));
-        assertTrue(html.contains("MAIL_ACCOUNT_0__OAUTH_REFRESH_TOKEN"));
-        assertTrue(html.contains("Env Refresh Token Key"));
         assertTrue(html.contains("abc123"));
         assertTrue(html.contains("Exchange Code In Browser"));
+        assertTrue(html.contains("Cancel automatic return"));
         assertTrue(html.contains("Return To Admin UI"));
         assertTrue(html.contains("Leave this page without exchanging the code?"));
         assertTrue(html.contains("Attempting automatic exchange"));
         assertTrue(html.contains("const callbackParams = new URLSearchParams(window.location.search);"));
         assertTrue(html.contains("const oauthCode = callbackParams.get(\"code\") || serverRenderedCode;"));
         assertTrue(html.contains("const oauthState = callbackParams.get(\"state\") || serverRenderedState;"));
+        assertTrue(html.contains("window.prompt(manualCopyPrompt, text);"));
+        assertTrue(html.contains("Copy the authorization code manually and press Cmd+C, then Enter."));
         assertTrue(html.contains("let allowLeave = false;"));
+        assertTrue(html.contains("function clearAutoReturn()"));
+        assertTrue(html.contains("function cancelAutoReturn()"));
+        assertTrue(html.contains("cancelReturnButton?.addEventListener(\"click\""));
+        assertTrue(html.contains("Automatic return canceled. You can stay on this page and inspect the exchange details."));
         assertTrue(html.contains("if (exchanged || allowLeave) {"));
         assertTrue(html.contains("allowLeave = true;"));
         assertTrue(html.contains("window.setTimeout(() => {"));
         assertTrue(html.contains("Returning to the admin UI in"));
-        assertTrue(html.contains("encrypted in PostgreSQL"));
+        assertTrue(html.contains("Secure token storage is enabled."));
+        assertTrue(html.contains("id=\"copyStatus\""));
+        assertFalse(html.contains("Env Refresh Token Key"));
+        assertFalse(html.contains("MAIL_ACCOUNT_0__OAUTH_REFRESH_TOKEN"));
+        assertFalse(html.contains("PostgreSQL"));
         assertTrue(html.contains("Microsoft OAuth is still missing one or more required permissions"));
+    }
+
+    @Test
+    void callbackShowsEnvRefreshTokenKeyWhenSecureStorageIsDisabled() {
+        MicrosoftOAuthResource resource = new MicrosoftOAuthResource();
+        resource.microsoftOAuthService = new FakeMicrosoftOAuthService() {
+            @Override
+            public boolean secureStorageConfigured() {
+                return false;
+            }
+        };
+
+        Response response = resource.callback("abc123", "state-1", null, null);
+        String html = (String) response.getEntity();
+
+        assertTrue(html.contains("MAIL_ACCOUNT_0__OAUTH_REFRESH_TOKEN"));
+        assertTrue(html.contains("Env Refresh Token Key"));
+        assertTrue(html.contains("Secure token storage is not configured."));
     }
 
     @Test
@@ -367,6 +394,11 @@ class MicrosoftOAuthResourceTest {
         @Override
         public List<MicrosoftOAuthSourceOption> listMicrosoftOAuthSources() {
             return List.of(new MicrosoftOAuthSourceOption("outlook-main-imap", "IMAP", true));
+        }
+
+        @Override
+        public boolean secureStorageConfigured() {
+            return true;
         }
     }
 

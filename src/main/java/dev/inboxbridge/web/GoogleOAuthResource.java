@@ -96,6 +96,7 @@ public class GoogleOAuthResource {
             @QueryParam("error") String error,
             @QueryParam("error_description") String errorDescription) {
         String language = resolveCallbackLanguage(state);
+      boolean secureStorageConfigured = googleOAuthService.secureStorageConfigured();
         if (error != null && !error.isBlank()) {
             return errorPage(
                     language,
@@ -106,19 +107,27 @@ public class GoogleOAuthResource {
         }
         GoogleOAuthService.CallbackValidation callbackValidation = null;
         String statusMessage = localized(language,
-                "Use the button below to exchange the code. If secure token storage is configured, InboxBridge will store the token encrypted in PostgreSQL.",
-                "Use o botao abaixo para trocar o codigo. Se o armazenamento seguro de tokens estiver configurado, o InboxBridge vai guardar o token de forma encriptada em PostgreSQL.");
+          secureStorageConfigured
+            ? "Secure token storage is enabled. Use the button below to exchange the code and InboxBridge will store the token securely and renew access automatically."
+            : "Secure token storage is required before exchanging this authorization code. Set SECURITY_TOKEN_ENCRYPTION_KEY to a base64-encoded 32-byte key, restart InboxBridge, and then retry the OAuth flow.",
+          secureStorageConfigured
+            ? "O armazenamento seguro de tokens esta ativo. Use o botao abaixo para trocar o codigo e o InboxBridge vai guardar o token de forma segura e renovar o acesso automaticamente."
+            : "O armazenamento seguro de tokens e obrigatorio antes de trocar este codigo de autorizacao. Defina SECURITY_TOKEN_ENCRYPTION_KEY com uma chave base64 de 32 bytes, reinicie o InboxBridge e repita o fluxo OAuth.");
         if (state != null && !state.isBlank()) {
             try {
                 callbackValidation = googleOAuthService.validateCallback(state);
                 language = callbackValidation.language();
                 statusMessage = localized(language,
-                        "Use the button below to exchange the code for " + callbackValidation.targetLabel() + ". If secure token storage is configured, InboxBridge will store the token encrypted in PostgreSQL.",
-                        "Use o botao abaixo para trocar o codigo de " + callbackValidation.targetLabel() + ". Se o armazenamento seguro de tokens estiver configurado, o InboxBridge vai guardar o token de forma encriptada em PostgreSQL.");
+            secureStorageConfigured
+              ? "Secure token storage is enabled for " + callbackValidation.targetLabel() + ". Use the button below to exchange the code and InboxBridge will store the token securely and renew access automatically."
+              : "Secure token storage is required before exchanging the authorization code for " + callbackValidation.targetLabel() + ". Set SECURITY_TOKEN_ENCRYPTION_KEY to a base64-encoded 32-byte key, restart InboxBridge, and then retry the OAuth flow.",
+            secureStorageConfigured
+              ? "O armazenamento seguro de tokens esta ativo para " + callbackValidation.targetLabel() + ". Use o botao abaixo para trocar o codigo e o InboxBridge vai guardar o token de forma segura e renovar o acesso automaticamente."
+              : "O armazenamento seguro de tokens e obrigatorio antes de trocar o codigo de autorizacao para " + callbackValidation.targetLabel() + ". Defina SECURITY_TOKEN_ENCRYPTION_KEY com uma chave base64 de 32 bytes, reinicie o InboxBridge e repita o fluxo OAuth.");
             } catch (IllegalArgumentException e) {
                 statusMessage = localized(language,
-                        "The Google OAuth state is missing or expired. Start the flow again from the admin UI.",
-                        "O estado do Google OAuth esta em falta ou expirou. Inicie novamente o fluxo a partir da interface de administracao.");
+                  "The Google OAuth state is missing or expired. Start the flow again from InboxBridge.",
+                  "O estado do Google OAuth esta em falta ou expirou. Inicie novamente o fluxo a partir do InboxBridge.");
             }
         }
         String safeCode = code == null ? "" : code.replace("\\", "\\\\").replace("'", "\\'");
@@ -138,6 +147,7 @@ public class GoogleOAuthResource {
                     .actions { display: flex; flex-wrap: wrap; gap: 12px; }
                     button, a.button-link { border: none; border-radius: 999px; padding: 13px 18px; font: inherit; font-weight: 700; cursor: pointer; text-decoration: none; display: inline-flex; align-items: center; justify-content: center; }
                     button { color: white; background: linear-gradient(135deg, #17654b, #0f4c38); }
+                    button.danger { background: linear-gradient(135deg, #b43a28, #8b2d20); }
                     a.button-link { color: #241a14; background: rgba(255,255,255,0.9); border: 1px solid rgba(36,26,20,0.12); }
                     .status { color: #66584d; min-height: 1.4em; }
                   </style>
@@ -148,10 +158,12 @@ public class GoogleOAuthResource {
                     <p>%s</p>
                     <pre id="codeValue"></pre>
                     <div class="actions">
-                      <button id="copyCodeButton" type="button">%s</button>
                       <button id="exchangeButton" type="button">%s</button>
+                      <button id="copyCodeButton" type="button">%s</button>
+                      <button class="danger" id="cancelReturnButton" type="button" hidden>%s</button>
                       <a class="button-link" id="returnLink" href="/">%s</a>
                     </div>
+                    <div class="status" id="copyStatus"></div>
                     <pre id="resultValue" hidden></pre>
                     <div class="status" id="status"></div>
                     <div class="status" id="redirectStatus"></div>
@@ -165,6 +177,7 @@ public class GoogleOAuthResource {
                       noCodeToCopy: %s,
                       codeCopied: %s,
                       copyFailed: %s,
+                      manualCopyPrompt: %s,
                       permissionMissingPrefix: %s,
                       exchangeFailedPrefix: %s,
                       oauthReturnedPrefix: %s,
@@ -193,6 +206,7 @@ public class GoogleOAuthResource {
                       successStoredEnv: %s,
                       exchangeFailedGeneric: %s,
                       autoAttempting: %s,
+                      autoReturnCanceled: %s,
                       missingState: %s,
                       beforeUnload: %s,
                       leaveConfirm: %s,
@@ -211,17 +225,25 @@ public class GoogleOAuthResource {
                     let redirectTimerId = null;
                     let countdownIntervalId = null;
                     document.getElementById('codeValue').textContent = oauthCode || text.noCodeReceived;
+                    const copyStatus = document.getElementById('copyStatus');
                     const status = document.getElementById('status');
                     const redirectStatus = document.getElementById('redirectStatus');
                     const resultValue = document.getElementById('resultValue');
+                    const cancelReturnButton = document.getElementById('cancelReturnButton');
                     const returnLink = document.getElementById('returnLink');
-                    function startAutoReturn() {
+                    function clearAutoReturn() {
                       if (redirectTimerId) {
                         window.clearTimeout(redirectTimerId);
+                        redirectTimerId = null;
                       }
                       if (countdownIntervalId) {
                         window.clearInterval(countdownIntervalId);
+                        countdownIntervalId = null;
                       }
+                    }
+                    function startAutoReturn() {
+                      clearAutoReturn();
+                      cancelReturnButton.hidden = false;
                       let secondsRemaining = 5;
                       const updateCountdown = () => {
                         redirectStatus.textContent = text.returningPrefix + secondsRemaining + text.returningSuffix;
@@ -238,12 +260,19 @@ public class GoogleOAuthResource {
                         updateCountdown();
                       }, 1000);
                       redirectTimerId = window.setTimeout(() => {
+                        cancelReturnButton.hidden = true;
                         window.location.assign('/');
                       }, 5000);
                     }
+                    function cancelAutoReturn() {
+                      clearAutoReturn();
+                      allowLeave = true;
+                      cancelReturnButton.hidden = true;
+                      redirectStatus.textContent = text.autoReturnCanceled;
+                    }
                     document.getElementById('copyCodeButton').addEventListener('click', async () => {
                       if (!oauthCode) {
-                        status.textContent = text.noCodeToCopy;
+                        copyStatus.textContent = text.noCodeToCopy;
                         return;
                       }
                       try {
@@ -260,11 +289,13 @@ public class GoogleOAuthResource {
                           document.execCommand('copy');
                           document.body.removeChild(textarea);
                         }
-                        status.textContent = text.codeCopied;
+                        copyStatus.textContent = text.codeCopied;
                       } catch (error) {
-                        status.textContent = text.copyFailed;
+                        window.prompt(text.manualCopyPrompt, oauthCode);
+                        copyStatus.textContent = text.copyFailed;
                       }
                     });
+                    cancelReturnButton.addEventListener('click', cancelAutoReturn);
                     function formatExchangeError(payloadText) {
                       const normalized = (payloadText || '').toLowerCase();
                       if (
@@ -378,23 +409,25 @@ public class GoogleOAuthResource {
                 escapeHtml(localized(language, "Google OAuth Callback", "Retorno do Google OAuth")),
                 escapeHtml(localized(language, "Google OAuth Code Received", "Codigo do Google OAuth recebido")),
                 statusMessage.replace("%", "%%"),
-                escapeHtml(localized(language, "Copy Code", "Copiar codigo")),
                 escapeHtml(localized(language, "Exchange Code In Browser", "Trocar codigo no browser")),
-                escapeHtml(localized(language, "Return To Admin UI", "Voltar a interface de administracao")),
+                escapeHtml(localized(language, "Copy Code", "Copiar codigo")),
+                escapeHtml(localized(language, "Cancel automatic redirect", "Cancelar redirecionamento automatico")),
+                escapeHtml(localized(language, "Return to InboxBridge", "Voltar ao InboxBridge")),
                 js(localized(language, "(no authorization code received)", "(nenhum codigo de autorizacao recebido)")),
-                js(localized(language, "Returning to the admin UI in ", "A voltar para a interface de administracao em ")),
+                js(localized(language, "Redirecting to InboxBridge in ", "A redirecionar para o InboxBridge em ")),
                 js(localized(language, " seconds.", " segundos.")),
-                js(localized(language, "Returning to the admin UI now...", "A voltar para a interface de administracao agora...")),
+                js(localized(language, "Redirecting to InboxBridge now...", "A redirecionar para o InboxBridge agora...")),
                 js(localized(language, "No authorization code is available to copy from this callback URL.", "Nao existe nenhum codigo de autorizacao disponivel para copiar deste URL de retorno.")),
                 js(localized(language, "Authorization code copied to clipboard.", "Codigo de autorizacao copiado para a area de transferencia.")),
-                js(localized(language, "Unable to copy automatically. Copy the code manually before leaving this page.", "Nao foi possivel copiar automaticamente. Copie o codigo manualmente antes de sair desta pagina.")),
+                js(localized(language, "Clipboard access was blocked by the browser. A manual copy dialog was opened with the authorization code.", "O acesso a area de transferencia foi bloqueado pelo browser. Foi aberta uma janela para copiar manualmente o codigo de autorizacao.")),
+                js(localized(language, "Copy the authorization code manually and press Cmd+C, then Enter.", "Copie manualmente o codigo de autorizacao e prima Cmd+C, depois Enter.")),
                 js(localized(language, "Google OAuth is still missing one or more required permissions. Retry the flow and approve every requested Gmail permission, then try again. Details: ", "Ainda falta uma ou mais permissoes obrigatorias no Google OAuth. Repita o processo e aceite todas as permissoes pedidas do Gmail. Detalhes: ")),
                 js(localized(language, "Exchange failed: ", "A troca do codigo falhou: ")),
                 js(localized(language, "OAuth returned ", "O OAuth devolveu ")),
                 js(localized(language, "No authorization code was present in the callback URL.", "Nao foi encontrado qualquer codigo de autorizacao no URL de retorno.")),
                 js(localized(language, "Exchanging authorization code...", "A trocar o codigo de autorizacao...")),
                 js(localized(language, "Storage: ", "Armazenamento: ")),
-                js(localized(language, "Encrypted database", "Base de dados encriptada")),
+                js(localized(language, "Encrypted storage", "Armazenamento encriptado")),
                 js(localized(language, "Environment fallback", "Fallback por ambiente")),
                 js(localized(language, "Previous Gmail account replaced: ", "Conta Gmail anterior substituida: ")),
                 js(localized(language, "Same Gmail account reauthorized: ", "Mesma conta Gmail reautorizada: ")),
@@ -408,17 +441,18 @@ public class GoogleOAuthResource {
                 js(localized(language, "Next Step: ", "Proximo passo: ")),
                 js(localized(language, "Refresh Token: ", "Refresh token: ")),
                 js(localized(language, "Exchange completed. The same Gmail account was reauthorized, so the existing Google grant was kept in place.", "Troca concluida. A mesma conta Gmail foi reautorizada, por isso a permissao Google existente foi mantida.")),
-                js(localized(language, "Exchange completed. Token stored encrypted in PostgreSQL. The previously linked Gmail account was automatically unlinked and its Google grant was revoked.", "Troca concluida. O token foi guardado de forma encriptada em PostgreSQL. A conta Gmail anteriormente ligada foi desligada automaticamente e a permissao Google foi revogada.")),
-                js(localized(language, "Exchange completed. Token stored encrypted in PostgreSQL. The previously linked Gmail account was replaced here, but you may still need to remove the old Google grant manually from myaccount.google.com.", "Troca concluida. O token foi guardado de forma encriptada em PostgreSQL. A conta Gmail anteriormente ligada foi substituida aqui, mas pode ainda ser necessario remover manualmente a permissao Google antiga em myaccount.google.com.")),
-                js(localized(language, "Exchange completed. Token stored encrypted in PostgreSQL.", "Troca concluida. O token foi guardado de forma encriptada em PostgreSQL.")),
+                js(localized(language, "Exchange completed. The token was stored securely. The previously linked Gmail account was automatically unlinked and its Google grant was revoked.", "Troca concluida. O token foi guardado de forma segura. A conta Gmail anteriormente ligada foi desligada automaticamente e a permissao Google foi revogada.")),
+                js(localized(language, "Exchange completed. The token was stored securely. The previously linked Gmail account was replaced here, but you may still need to remove the old Google grant manually from myaccount.google.com.", "Troca concluida. O token foi guardado de forma segura. A conta Gmail anteriormente ligada foi substituida aqui, mas pode ainda ser necessario remover manualmente a permissao Google antiga em myaccount.google.com.")),
+                js(localized(language, "Exchange completed. The token was stored securely.", "Troca concluida. O token foi guardado de forma segura.")),
                 js(localized(language, "Exchange completed. The same Gmail account was reauthorized. Copy the refresh token into your local .env if you are using env fallback.", "Troca concluida. A mesma conta Gmail foi reautorizada. Copie o refresh token para o seu .env local se estiver a usar fallback por ambiente.")),
                 js(localized(language, "Exchange completed. The previously linked Gmail account was replaced. Copy the new refresh token into your local .env if you are using env fallback.", "Troca concluida. A conta Gmail anteriormente ligada foi substituida. Copie o novo refresh token para o seu .env local se estiver a usar fallback por ambiente.")),
                 js(localized(language, "Exchange completed. Copy the refresh token into your local .env if you are using env fallback.", "Troca concluida. Copie o refresh token para o seu .env local se estiver a usar fallback por ambiente.")),
                 js(localized(language, "Exchange failed. Check the server logs and OAuth client settings.", "A troca do codigo falhou. Verifique os logs do servidor e as definicoes do cliente OAuth.")),
                 js(localized(language, "Authorization code received. Attempting automatic exchange...", "Codigo de autorizacao recebido. A tentar a troca automatica...")),
+                js(localized(language, "Automatic redirect canceled. You can stay on this page and inspect the exchange details.", "Redirecionamento automatico cancelado. Pode permanecer nesta pagina e verificar os detalhes da troca.")),
                 js(localized(language, "Authorization code received, but callback state is missing. Use the exchange button if you are completing a manual flow.", "Codigo de autorizacao recebido, mas o estado do retorno esta em falta. Use o botao de troca se estiver a completar um processo manual.")),
                 js(localized(language, "Leave this page without exchanging the code? You will need to add it manually later.", "Sair desta pagina sem trocar o codigo? Vai ter de o adicionar manualmente mais tarde.")),
-                js(localized(language, "Leave this page without exchanging the code? If you continue, you will need to add it manually from the admin UI later.", "Sair desta pagina sem trocar o codigo? Se continuar, vai ter de o adicionar manualmente mais tarde a partir da interface de administracao.")),
+                js(localized(language, "Leave this page without exchanging the code? If you continue, you will need to add it manually from InboxBridge later.", "Sair desta pagina sem trocar o codigo? Se continuar, vai ter de o adicionar manualmente mais tarde a partir do InboxBridge.")),
                 js(localized(language, "Exchange the code here, or copy it before leaving so you can add it manually later.", "Troque o codigo aqui, ou copie-o antes de sair para o poder adicionar manualmente mais tarde.")),
                 safeCode,
                 safeState);
@@ -489,7 +523,7 @@ public class GoogleOAuthResource {
                 escapeHtml(error == null ? "" : error),
                 escapeHtml(localized(language, "Description", "Descricao")),
                 escapeHtml(errorDescription == null ? "" : errorDescription),
-                escapeHtml(localized(language, "Return To Admin UI", "Voltar a interface de administracao")));
+                escapeHtml(localized(language, "Return to InboxBridge", "Voltar ao InboxBridge")));
     }
 
     private String googleErrorTitle(String error) {
@@ -531,6 +565,10 @@ public class GoogleOAuthResource {
     }
 
     private String localized(String language, String english, String portuguese) {
+      String normalized = OAuthPageI18n.normalize(language);
+      if ("pt-PT".equals(normalized) || "pt-BR".equals(normalized)) {
+        return portuguese;
+      }
         return OAuthPageI18n.text(language, english);
     }
 

@@ -82,6 +82,7 @@ class UserGmailConfigServiceTest {
         assertEquals("shared-client-secret", profile.clientSecret());
         assertEquals("", profile.refreshToken());
         assertEquals("https://custom.example.test/api/google-oauth/callback", profile.redirectUri());
+        assertFalse(service.destinationLinked(9L));
     }
 
     @Test

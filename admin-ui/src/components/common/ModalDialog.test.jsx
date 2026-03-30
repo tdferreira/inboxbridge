@@ -2,6 +2,22 @@ import { fireEvent, render } from '@testing-library/react'
 import ModalDialog from './ModalDialog'
 
 describe('ModalDialog', () => {
+  it('locks page scrolling while the modal is open and restores it on unmount', () => {
+    const { unmount } = render(
+      <ModalDialog onClose={vi.fn()} title="Example">
+        <div>Body</div>
+      </ModalDialog>
+    )
+
+    expect(document.body.style.overflow).toBe('hidden')
+    expect(document.documentElement.style.overflow).toBe('hidden')
+
+    unmount()
+
+    expect(document.body.style.overflow).toBe('')
+    expect(document.documentElement.style.overflow).toBe('')
+  })
+
   it('closes on Escape when the dialog is not dirty', () => {
     const onClose = vi.fn()
 

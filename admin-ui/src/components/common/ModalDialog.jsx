@@ -51,6 +51,19 @@ function ModalDialog({
     }
   })
 
+  useEffect(() => {
+    const previousBodyOverflow = document.body.style.overflow
+    const previousHtmlOverflow = document.documentElement.style.overflow
+
+    document.body.style.overflow = 'hidden'
+    document.documentElement.style.overflow = 'hidden'
+
+    return () => {
+      document.body.style.overflow = previousBodyOverflow
+      document.documentElement.style.overflow = previousHtmlOverflow
+    }
+  }, [])
+
   return (
     <div className="modal-backdrop" role="presentation">
       <section aria-label={title} aria-modal="true" className={`modal-surface surface-card ${sizeClassName} ${className}`.trim()} ref={dialogRef} role="dialog">

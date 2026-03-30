@@ -63,7 +63,7 @@ function UserEmailAccountsSection({
         {!collapsed ? (
           <div className="panel-header-actions">
             <LoadingButton className="primary" isLoading={false} onClick={onAddFetcher} type="button">
-              {t('emailAccounts.add')}
+              {t('emailAccounts.addSection')}
             </LoadingButton>
           </div>
         ) : null}

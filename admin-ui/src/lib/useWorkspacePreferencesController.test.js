@@ -8,11 +8,21 @@ function createFetchResponse(payload) {
   }
 }
 
+function clearLocalStorage() {
+  if (typeof window.localStorage?.clear === 'function') {
+    window.localStorage.clear()
+    return
+  }
+  Object.keys(window.localStorage || {}).forEach((key) => {
+    delete window.localStorage[key]
+  })
+}
+
 describe('useWorkspacePreferencesController', () => {
   beforeEach(() => {
     vi.restoreAllMocks()
     vi.stubGlobal('fetch', vi.fn())
-    window.localStorage.clear()
+    clearLocalStorage()
   })
 
   afterEach(() => {

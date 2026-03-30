@@ -64,8 +64,8 @@ That is deliberately simple for a first self-hosted version. The next evolution 
 The React admin UI now separates:
 
 - `My Poller Settings`: per-user polling overrides for UI-managed source email accounts
-- `My Source Email Accounts`: a unified operational list of DB-managed and env-managed source email accounts, with add/edit work happening in a modal dialog
-- `My Destination Mailbox`: provider-neutral destination mailbox configuration for Gmail API or IMAP APPEND destinations
+- `My Source Email Accounts`: a unified operational list of DB-managed and env-managed source email accounts, with add/edit work happening in a modal dialog and provider-specific actions gated by the selected provider
+- `My Destination Mailbox`: provider-neutral destination mailbox configuration for Gmail API or IMAP APPEND destinations, with Gmail always using `Save and Authenticate` and Outlook allowing plain saves only for non-identity edits such as folder changes
 - `Global Poller Settings`: global polling controls, health metrics, and runtime overrides
 
 Deployment mode is also configurable:
