@@ -22,6 +22,10 @@ function UserPollingSettingsDialog({
       unsavedChangesMessage={t('dialogs.unsavedChanges')}
     >
       <form className="settings-grid user-polling-grid" onSubmit={onSavePollingSettings}>
+        {(() => {
+          const pollingDisabled = pollingSettingsForm.pollEnabledMode === 'DISABLED'
+          return (
+            <>
         <label>
           <span className="field-label-row">
             <span>{t('userPolling.pollingMode')}</span>
@@ -39,6 +43,7 @@ function UserPollingSettingsDialog({
             <InfoHint text={t('userPolling.pollIntervalHelp')} />
           </span>
           <input
+            disabled={pollingDisabled}
             placeholder={t('userPolling.leaveBlank', { value: pollingSettings.defaultPollInterval })}
             value={pollingSettingsForm.pollIntervalOverride}
             onChange={(event) => onPollingFormChange((current) => ({ ...current, pollIntervalOverride: event.target.value }))}
@@ -71,6 +76,9 @@ function UserPollingSettingsDialog({
             {t('userPolling.useDefaults')}
           </LoadingButton>
         </div>
+            </>
+          )
+        })()}
       </form>
     </ModalDialog>
   )

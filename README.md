@@ -248,6 +248,7 @@ Current features:
 - the bundled admin-ui locales now cover quick-setup content, Gmail account fields, poller-setting forms, and source-email-account labels more completely instead of leaving those section bodies in English
 - common provider presets for Outlook, Gmail, Yahoo Mail, and Proton Mail Bridge when creating a source email account
 - the source email account modal now uses `Add Email Account` / `Edit Source Email Account ...` headings, disables `Test Connection` until the required fields are present, hides the plain `Add` action for new Outlook accounts, and locks the provider preset while editing an existing account
+- after a successful IMAP source connection test, that dialog now also loads the remote folder list so the user can choose a detected mailbox folder or switch back to manual folder entry; editing an existing IMAP source reloads the folder list automatically too
 - auth-aware source-email-account forms that hide password-only or OAuth-only fields when they are not relevant
 - inline help tooltips for source-email-account and poller fields so each control explains what it does
 - env-managed source email accounts shown in the same operational list with a read-only `.env` badge, but only for the account named `admin`

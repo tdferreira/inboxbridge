@@ -377,6 +377,67 @@ describe('EmailAccountDialog', () => {
     expect(onSaveAndConnectOAuth).toHaveBeenCalledTimes(1)
   })
 
+  it('uses detected IMAP folders while still allowing manual entry', () => {
+    let emailAccountForm = {
+      originalEmailAccountId: 'fetcher-a',
+      emailAccountId: 'fetcher-a',
+      enabled: true,
+      protocol: 'IMAP',
+      host: 'imap.example.com',
+      port: 993,
+      tls: true,
+      authMethod: 'PASSWORD',
+      oauthProvider: 'NONE',
+      username: 'user@example.com',
+      password: '',
+      oauthRefreshToken: '',
+      folder: 'INBOX',
+      unreadOnly: false,
+      customLabel: ''
+    }
+
+    const { rerender } = render(
+      <EmailAccountDialog
+        emailAccountFolders={['INBOX', 'Archive']}
+        emailAccountForm={emailAccountForm}
+        onApplyPreset={vi.fn()}
+        onEmailAccountFormChange={(updater) => {
+          emailAccountForm = typeof updater === 'function' ? updater(emailAccountForm) : updater
+          rerenderUi()
+        }}
+        onClose={vi.fn()}
+        onSave={vi.fn((event) => event.preventDefault())}
+        saveLoading={false}
+        t={(key, params) => translate('en', key, params)}
+      />
+    )
+
+    expect(screen.getByRole('combobox', { name: /^Folder\b/i })).toHaveValue('INBOX')
+    fireEvent.click(screen.getByRole('button', { name: 'Enter folder manually' }))
+    fireEvent.change(screen.getByRole('textbox', { name: /^Folder\b/i }), { target: { value: 'Projects' } })
+    expect(screen.getByRole('textbox', { name: /^Folder\b/i })).toHaveValue('Projects')
+    fireEvent.click(screen.getByRole('button', { name: 'Use detected folders' }))
+    expect(screen.getByRole('combobox', { name: /^Folder\b/i })).toHaveValue('INBOX')
+
+    function rerenderUi() {
+      rerender(
+        <EmailAccountDialog
+          emailAccountFolders={['INBOX', 'Archive']}
+          emailAccountForm={emailAccountForm}
+          onApplyPreset={vi.fn()}
+          onEmailAccountFormChange={(updater) => {
+            emailAccountForm = typeof updater === 'function' ? updater(emailAccountForm) : updater
+            rerenderUi()
+          }}
+          onClose={vi.fn()}
+          onSave={vi.fn((event) => event.preventDefault())}
+          saveLoading={false}
+          t={(key, params) => translate('en', key, params)}
+        />
+      )
+    }
+  })
+
   it('hides plain add for new Outlook accounts and locks provider changes while editing', () => {
     const { rerender } = render(
       <EmailAccountDialog

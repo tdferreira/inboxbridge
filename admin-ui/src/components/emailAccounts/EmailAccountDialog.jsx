@@ -21,6 +21,8 @@ function LabeledField({ children, helpText, label }) {
 function EmailAccountDialog({
   availableOAuthProviders = [],
   emailAccountForm,
+  emailAccountFolders = [],
+  emailAccountFoldersLoading = false,
   duplicateIdError = '',
   microsoftOAuthAvailable = true,
   onApplyPreset,
@@ -44,9 +46,6 @@ function EmailAccountDialog({
     () => EMAIL_PROVIDER_PRESETS,
     []
   )
-  useEffect(() => {
-    setSelectedPreset(inferredPresetId)
-  }, [inferredPresetId])
   const effectivePresetId = availablePresets.some((option) => option.id === selectedPreset) ? selectedPreset : 'custom'
   const preset = useMemo(() => findEmailProviderPreset(effectivePresetId), [effectivePresetId])
   const requiresMicrosoftOAuth = effectivePresetId === 'outlook' || isOutlookSourceConfig(emailAccountForm)
@@ -57,6 +56,11 @@ function EmailAccountDialog({
   const editingExistingAccount = Boolean(emailAccountForm.originalEmailAccountId)
   const supportsFolder = emailAccountForm.protocol === 'IMAP'
   const supportsCustomLabel = !requiresMicrosoftOAuth
+  const detectedFolders = supportsFolder ? emailAccountFolders : []
+  const currentFolder = emailAccountForm.folder || ''
+  const currentFolderDetected = detectedFolders.includes(currentFolder)
+  const defaultDetectedFolder = detectedFolders.find((folder) => folder.toUpperCase() === 'INBOX') || detectedFolders[0] || ''
+  const [manualFolderEntry, setManualFolderEntry] = useState(detectedFolders.length === 0)
   const canSaveWithoutOAuth = !requiresMicrosoftOAuth || editingExistingAccount
   const hasRequiredConnectionFields = Boolean(
     emailAccountForm.emailAccountId?.trim()
@@ -71,11 +75,48 @@ function EmailAccountDialog({
   const initialSnapshotRef = useRef(JSON.stringify(emailAccountForm))
   const isDirty = initialSnapshotRef.current !== JSON.stringify(emailAccountForm)
 
+  useEffect(() => {
+    setSelectedPreset(inferredPresetId)
+  }, [inferredPresetId])
+  useEffect(() => {
+    if (!detectedFolders.length) {
+      setManualFolderEntry(true)
+      return
+    }
+    if (currentFolder && !currentFolderDetected) {
+      setManualFolderEntry(true)
+      return
+    }
+    setManualFolderEntry(false)
+  }, [currentFolder, currentFolderDetected, detectedFolders])
+  useEffect(() => {
+    if (!detectedFolders.length || currentFolder || !defaultDetectedFolder) {
+      return
+    }
+    onEmailAccountFormChange((current) => {
+      if ((current.folder || '') === defaultDetectedFolder) {
+        return current
+      }
+      return { ...current, folder: defaultDetectedFolder }
+    })
+  }, [currentFolder, defaultDetectedFolder, detectedFolders, onEmailAccountFormChange])
+
   function applyPreset(presetId) {
     setSelectedPreset(presetId)
     if (presetId !== 'custom') {
       onApplyPreset(presetId)
     }
+  }
+
+  function useDetectedFolderOptions() {
+    if (!defaultDetectedFolder) {
+      return
+    }
+    onEmailAccountFormChange((current) => ({
+      ...current,
+      folder: currentFolderDetected ? current.folder : defaultDetectedFolder
+    }))
+    setManualFolderEntry(false)
   }
 
   return (
@@ -170,9 +211,33 @@ function EmailAccountDialog({
           </div>
         ) : null}
         {supportsFolder ? (
-          <LabeledField helpText={t('emailAccounts.folderHelp')} label={t('emailAccounts.folder')}>
-            <input value={emailAccountForm.folder} onChange={(event) => onEmailAccountFormChange((current) => ({ ...current, folder: event.target.value }))} />
-          </LabeledField>
+          <div className="fetcher-folder-control full">
+            <label>
+              <span className="field-label-row">
+                <span>{t('emailAccounts.folder')}</span>
+                <InfoHint text={t('emailAccounts.folderHelp')} />
+              </span>
+              {detectedFolders.length > 0 && !manualFolderEntry ? (
+                <select value={currentFolderDetected ? currentFolder : defaultDetectedFolder} onChange={(event) => onEmailAccountFormChange((current) => ({ ...current, folder: event.target.value }))}>
+                  {detectedFolders.map((folder) => (
+                    <option key={folder} value={folder}>{folder}</option>
+                  ))}
+                </select>
+              ) : (
+                <input value={emailAccountForm.folder} onChange={(event) => onEmailAccountFormChange((current) => ({ ...current, folder: event.target.value }))} />
+              )}
+            </label>
+            <div className="fetcher-folder-actions">
+              {emailAccountFoldersLoading ? (
+                <span className="fetcher-folder-status">{t('common.refreshingSection')}</span>
+              ) : null}
+              {detectedFolders.length > 0 ? (
+                <button className="fetcher-folder-toggle" onClick={manualFolderEntry ? useDetectedFolderOptions : () => setManualFolderEntry(true)} type="button">
+                  {t(manualFolderEntry ? 'destination.folderUseDetected' : 'destination.folderUseManual')}
+                </button>
+              ) : null}
+            </div>
+          </div>
         ) : null}
         {supportsCustomLabel ? (
           <LabeledField helpText={t('emailAccounts.customLabelHelp')} label={t('emailAccounts.customLabel')}>

@@ -53,4 +53,39 @@ describe('SystemPollingSettingsDialog', () => {
     expect(form.manualTriggerLimitCountOverride).toBe('7')
     expect(form.manualTriggerLimitWindowSecondsOverride).toBe('90')
   })
+
+  it('disables the poll interval override when polling is disabled', () => {
+    render(
+      <SystemPollingSettingsDialog
+        isDirty={false}
+        onClose={vi.fn()}
+        onPollingFormChange={vi.fn()}
+        onResetPollingSettings={vi.fn()}
+        onSavePollingSettings={vi.fn((event) => event.preventDefault())}
+        pollingSettings={{
+          defaultPollEnabled: true,
+          effectivePollEnabled: false,
+          defaultPollInterval: '5m',
+          effectivePollInterval: 'disabled',
+          defaultFetchWindow: 50,
+          effectiveFetchWindow: 25,
+          defaultManualTriggerLimitCount: 5,
+          effectiveManualTriggerLimitCount: 5,
+          defaultManualTriggerLimitWindowSeconds: 60,
+          effectiveManualTriggerLimitWindowSeconds: 60
+        }}
+        pollingSettingsForm={{
+          pollEnabledMode: 'DISABLED',
+          pollIntervalOverride: '',
+          fetchWindowOverride: '',
+          manualTriggerLimitCountOverride: '',
+          manualTriggerLimitWindowSecondsOverride: ''
+        }}
+        pollingSettingsLoading={false}
+        t={(key, params) => translate('en', key, params)}
+      />
+    )
+
+    expect(screen.getByLabelText(/Poll Interval Override/)).toBeDisabled()
+  })
 })

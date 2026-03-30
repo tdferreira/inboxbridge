@@ -169,9 +169,12 @@ class PollingServiceTest {
     }
 
     @Test
-    void runPollForUserRespectsCooldownForBroadManualRuns() {
+    void runPollForUserBypassesCooldownForBroadManualRuns() {
         PollingService service = new PollingService();
-        service.mailSourceClient = new RecordingMailSourceClient();
+        RecordingMailSourceClient mailSourceClient = new RecordingMailSourceClient();
+        RecordingSourcePollingStateService sourcePollingStateService = new RecordingSourcePollingStateService();
+        sourcePollingStateService.cooldownUntil = Instant.now().plus(Duration.ofMinutes(15));
+        service.mailSourceClient = mailSourceClient;
         service.importDeduplicationService = new ImportDeduplicationService();
         service.mailDestinationServices = new FakeMailDestinationServices(new FakeMailDestinationService(true));
         service.sourcePollEventService = new NoopSourcePollEventService();
@@ -179,7 +182,7 @@ class PollingServiceTest {
         service.pollingSettingsService = new FakePollingSettingsService(true, Duration.ofMinutes(5), "5m", 10);
         service.userPollingSettingsService = new FakeUserPollingSettingsService(true, Duration.ofMinutes(5), "5m", 10);
         service.sourcePollingSettingsService = new FakeSourcePollingSettingsService();
-        service.sourcePollingStateService = new CooldownSourcePollingStateService();
+        service.sourcePollingStateService = sourcePollingStateService;
         service.manualPollRateLimitService = new ManualPollRateLimitService();
 
         dev.inboxbridge.persistence.AppUser actor = new dev.inboxbridge.persistence.AppUser();
@@ -188,8 +191,45 @@ class PollingServiceTest {
 
         PollRunResult result = service.runPollForUser(actor, "user-ui");
 
-        assertEquals(1, result.getErrorDetails().size());
-        assertEquals("source_cooling_down", result.getErrorDetails().getFirst().code());
+        assertEquals(0, result.getErrorDetails().size());
+        assertEquals(33, mailSourceClient.lastFetchWindow);
+        assertEquals("user-fetcher", sourcePollingStateService.lastRecordedSuccessSourceId);
+    }
+
+    @Test
+    void runPollForAllUsersBypassesCooldownButStillHonorsManualRateLimits() {
+        PollingService service = new PollingService();
+        RecordingMailSourceClient mailSourceClient = new RecordingMailSourceClient();
+        RecordingSourcePollingStateService sourcePollingStateService = new RecordingSourcePollingStateService();
+        sourcePollingStateService.cooldownUntil = Instant.now().plus(Duration.ofMinutes(15));
+        service.mailSourceClient = mailSourceClient;
+        service.importDeduplicationService = new ImportDeduplicationService();
+        service.mailDestinationServices = new FakeMailDestinationServices(new FakeMailDestinationService(true));
+        service.sourcePollEventService = new NoopSourcePollEventService();
+        service.runtimeEmailAccountService = new FakeRuntimeEmailAccountService(List.of(userBridge(7L)));
+        service.pollingSettingsService = new FakePollingSettingsService(true, Duration.ofMinutes(5), "5m", 10) {
+            @Override
+            public ManualPollRateLimit effectiveManualPollRateLimit() {
+                return new ManualPollRateLimit(1, Duration.ofMinutes(1), 60);
+            }
+        };
+        service.userPollingSettingsService = new FakeUserPollingSettingsService(true, Duration.ofMinutes(5), "5m", 10);
+        service.sourcePollingSettingsService = new FakeSourcePollingSettingsService();
+        service.sourcePollingStateService = sourcePollingStateService;
+        service.manualPollRateLimitService = new ManualPollRateLimitService();
+
+        dev.inboxbridge.persistence.AppUser actor = new dev.inboxbridge.persistence.AppUser();
+        actor.id = 1L;
+        actor.role = dev.inboxbridge.persistence.AppUser.Role.ADMIN;
+
+        PollRunResult first = service.runPollForAllUsers(actor, "admin-ui");
+        PollRunResult second = service.runPollForAllUsers(actor, "admin-ui");
+
+        assertEquals(0, first.getErrorDetails().size());
+        assertEquals(33, mailSourceClient.lastFetchWindow);
+        assertEquals("user-fetcher", sourcePollingStateService.lastRecordedSuccessSourceId);
+        assertEquals(1, second.getErrorDetails().size());
+        assertEquals("manual_poll_rate_limited", second.getErrorDetails().getFirst().code());
     }
 
     @Test

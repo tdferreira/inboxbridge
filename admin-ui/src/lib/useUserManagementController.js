@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { apiErrorText } from './api'
+import { pollErrorNotification, translatedNotification } from './notifications'
 
 const DEFAULT_ADMIN_RESET_PASSWORD_FORM = { newPassword: '', confirmNewPassword: '' }
 const DEFAULT_CREATE_USER_FORM = { username: '', password: '', confirmPassword: '', role: 'USER' }
@@ -139,7 +140,7 @@ export function useUserManagementController({
         usersRef.current.find((user) => user.id === userId)
       ))
     } catch (err) {
-      pushNotification({ autoCloseMs: null, copyText: err.message || errorText('loadUserConfiguration'), message: err.message || errorText('loadUserConfiguration'), targetId: 'user-management-section', tone: 'error' })
+      pushNotification({ autoCloseMs: null, copyText: err.message ? pollErrorNotification(err.message) : translatedNotification('errors.loadUserConfiguration'), message: err.message ? pollErrorNotification(err.message) : translatedNotification('errors.loadUserConfiguration'), targetId: 'user-management-section', tone: 'error' })
     } finally {
       setSelectedUserLoading(false)
     }
@@ -149,7 +150,7 @@ export function useUserManagementController({
     event.preventDefault()
     const normalizedUsername = createUserForm.username.trim()
     if (users.some((user) => user.username.toLowerCase() === normalizedUsername.toLowerCase())) {
-      pushNotification({ autoCloseMs: null, message: t('users.duplicateUsername', { username: normalizedUsername }), targetId: 'user-management-section', tone: 'error' })
+      pushNotification({ autoCloseMs: null, message: translatedNotification('users.duplicateUsername', { username: normalizedUsername }), targetId: 'user-management-section', tone: 'error' })
       return false
     }
     return withPending('createUser', async () => {
@@ -169,12 +170,12 @@ export function useUserManagementController({
         const payload = await response.json()
         setCreateUserForm(DEFAULT_CREATE_USER_FORM)
         setShowCreateUserDialog(false)
-        pushNotification({ message: t('notifications.userCreated', { username: payload.username }), targetId: 'user-management-section', tone: 'success' })
+        pushNotification({ message: translatedNotification('notifications.userCreated', { username: payload.username }), targetId: 'user-management-section', tone: 'success' })
         await loadAppData()
         setSelectedUserId(payload.id)
         return true
       } catch (err) {
-        pushNotification({ autoCloseMs: null, copyText: err.message || errorText('createUser'), message: err.message || errorText('createUser'), targetId: 'user-management-section', tone: 'error' })
+        pushNotification({ autoCloseMs: null, copyText: err.message ? pollErrorNotification(err.message) : translatedNotification('errors.createUser'), message: err.message ? pollErrorNotification(err.message) : translatedNotification('errors.createUser'), targetId: 'user-management-section', tone: 'error' })
         return false
       }
     })
@@ -197,13 +198,13 @@ export function useUserManagementController({
           throw new Error(await apiErrorText(response, errorText('updateUser')))
         }
         const payload = await response.json()
-        pushNotification({ message: successMessage || t('notifications.userUpdated', { username: payload.username }), targetId: 'user-management-section', tone: 'success' })
+        pushNotification({ message: successMessage || translatedNotification('notifications.userUpdated', { username: payload.username }), targetId: 'user-management-section', tone: 'success' })
         await loadAppData()
         setSelectedUserId(payload.id)
         await loadSelectedUserConfiguration(payload.id)
         return true
       } catch (err) {
-        pushNotification({ autoCloseMs: null, copyText: err.message || errorText('updateUser'), message: err.message || errorText('updateUser'), targetId: 'user-management-section', tone: 'error' })
+        pushNotification({ autoCloseMs: null, copyText: err.message ? pollErrorNotification(err.message) : translatedNotification('errors.updateUser'), message: err.message ? pollErrorNotification(err.message) : translatedNotification('errors.updateUser'), targetId: 'user-management-section', tone: 'error' })
         return false
       }
     })
@@ -237,15 +238,15 @@ export function useUserManagementController({
             await loadAuthOptions()
             await loadAppData()
             pushNotification({
-              message: enabled ? t('notifications.multiUserEnabled') : t('notifications.singleUserEnabled'),
+              message: enabled ? translatedNotification('notifications.multiUserEnabled') : translatedNotification('notifications.singleUserEnabled'),
               targetId: 'user-management-section',
               tone: 'success'
             })
           } catch (err) {
             pushNotification({
               autoCloseMs: null,
-              copyText: err.message || errorText('saveMultiUserMode'),
-              message: err.message || errorText('saveMultiUserMode'),
+              copyText: err.message ? pollErrorNotification(err.message) : translatedNotification('errors.saveMultiUserMode'),
+              message: err.message ? pollErrorNotification(err.message) : translatedNotification('errors.saveMultiUserMode'),
               targetId: 'user-management-section',
               tone: 'error'
             })
@@ -275,8 +276,8 @@ export function useUserManagementController({
           user.id,
           { active: !active },
           active
-            ? t('notifications.userSuspended', { username: user.username })
-            : t('notifications.userReactivated', { username: user.username })
+            ? translatedNotification('notifications.userSuspended', { username: user.username })
+            : translatedNotification('notifications.userReactivated', { username: user.username })
         )
         if (success) {
           closeConfirmation()
@@ -300,7 +301,7 @@ export function useUserManagementController({
         const success = await updateUser(
           user.id,
           { mustChangePassword: true },
-          t('notifications.forcedPasswordReset', { username: user.username })
+          translatedNotification('notifications.forcedPasswordReset', { username: user.username })
         )
         if (success) {
           closeConfirmation()
@@ -329,12 +330,12 @@ export function useUserManagementController({
         setAdminResetPasswordForm(DEFAULT_ADMIN_RESET_PASSWORD_FORM)
         setShowPasswordResetDialog(false)
         setPasswordResetTarget(null)
-        pushNotification({ autoCloseMs: null, message: t('notifications.temporaryPasswordSet', { username: payload.username }), targetId: 'user-management-section', tone: 'warning' })
+        pushNotification({ autoCloseMs: null, message: translatedNotification('notifications.temporaryPasswordSet', { username: payload.username }), targetId: 'user-management-section', tone: 'warning' })
         await loadAppData()
         setSelectedUserId(payload.id)
         await loadSelectedUserConfiguration(payload.id)
       } catch (err) {
-        pushNotification({ autoCloseMs: null, copyText: err.message || errorText('resetPassword'), message: err.message || errorText('resetPassword'), targetId: 'user-management-section', tone: 'error' })
+        pushNotification({ autoCloseMs: null, copyText: err.message ? pollErrorNotification(err.message) : translatedNotification('errors.resetPassword'), message: err.message ? pollErrorNotification(err.message) : translatedNotification('errors.resetPassword'), targetId: 'user-management-section', tone: 'error' })
       }
     })
   }
@@ -358,11 +359,11 @@ export function useUserManagementController({
             }
             const payload = await response.json()
             closeConfirmation()
-            pushNotification({ message: t('notifications.passkeysRemoved', { count: payload.deleted, username: user.username }), targetId: 'user-management-section', tone: 'success' })
+            pushNotification({ message: translatedNotification('notifications.passkeysRemoved', { count: payload.deleted, username: user.username }), targetId: 'user-management-section', tone: 'success' })
             await loadAppData()
             await loadSelectedUserConfiguration(user.id)
           } catch (err) {
-            pushNotification({ autoCloseMs: null, copyText: err.message || errorText('resetPasskeys'), message: err.message || errorText('resetPasskeys'), targetId: 'user-management-section', tone: 'error' })
+            pushNotification({ autoCloseMs: null, copyText: err.message ? pollErrorNotification(err.message) : translatedNotification('errors.resetPasskeys'), message: err.message ? pollErrorNotification(err.message) : translatedNotification('errors.resetPasskeys'), targetId: 'user-management-section', tone: 'error' })
           }
         })
       },
@@ -393,9 +394,9 @@ export function useUserManagementController({
               setSelectedUserConfig(null)
             }
             await loadAppData()
-            pushNotification({ message: t('notifications.userDeleted', { username: user.username }), targetId: 'user-management-section', tone: 'success' })
+            pushNotification({ message: translatedNotification('notifications.userDeleted', { username: user.username }), targetId: 'user-management-section', tone: 'success' })
           } catch (err) {
-            pushNotification({ autoCloseMs: null, copyText: err.message || errorText('deleteUser'), message: err.message || errorText('deleteUser'), targetId: 'user-management-section', tone: 'error' })
+            pushNotification({ autoCloseMs: null, copyText: err.message ? pollErrorNotification(err.message) : translatedNotification('errors.deleteUser'), message: err.message ? pollErrorNotification(err.message) : translatedNotification('errors.deleteUser'), targetId: 'user-management-section', tone: 'error' })
           }
         })
       },

@@ -1,4 +1,4 @@
-import { Suspense, lazy, useEffect, useMemo, useRef, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { BrowserRouter, useLocation, useNavigate } from 'react-router-dom'
 import AuthScreen from './components/auth/AuthScreen'
 import Banner from './components/common/Banner'
@@ -9,23 +9,19 @@ import PasswordPanel from './components/account/PasswordPanel'
 import PasskeyPanel from './components/account/PasskeyPanel'
 import PasskeyRegistrationDialog from './components/account/PasskeyRegistrationDialog'
 import PasswordResetDialog from './components/admin/PasswordResetDialog'
-import DestinationMailboxSection from './components/destination/DestinationMailboxSection'
 import HeroPanel from './components/layout/HeroPanel'
 import NotificationsDialog from './components/layout/NotificationsDialog'
 import PreferencesDialog from './components/layout/PreferencesDialog'
-import SetupGuidePanel from './components/layout/SetupGuidePanel'
-import WorkspaceSectionWindow from './components/layout/WorkspaceSectionWindow'
-import OAuthAppsSection from './components/admin/OAuthAppsSection'
-import SystemDashboardSection from './components/admin/SystemDashboardSection'
 import SystemOAuthAppsDialog from './components/admin/SystemOAuthAppsDialog'
 import SystemPollingSettingsDialog from './components/admin/SystemPollingSettingsDialog'
-import UserPollingSettingsSection from './components/polling/UserPollingSettingsSection'
 import UserPollingSettingsDialog from './components/polling/UserPollingSettingsDialog'
-import UserManagementSection from './components/admin/UserManagementSection'
-import UserEmailAccountsSection from './components/emailAccounts/UserEmailAccountsSection'
+import WorkspaceSectionList from './components/layout/WorkspaceSectionList'
+import { buildAdminWorkspaceSections, buildUserWorkspaceSections } from './components/layout/workspaceSectionBuilders'
 import { apiErrorText } from './lib/api'
 import { buildSetupGuideState } from './lib/setupGuide'
 import { normalizeDestinationProviderConfig } from './lib/emailProviderPresets'
+import { pollErrorNotification, resolveNotificationContent, translatedNotification } from './lib/notifications'
+import { isSourceEmailAccountTargetId } from './lib/sectionTargets'
 import { normalizeLocale, translate } from './lib/i18n'
 import { useAuthSecurityController } from './lib/useAuthSecurityController'
 import { useDestinationController } from './lib/useDestinationController'
@@ -33,7 +29,7 @@ import { useEmailAccountsController } from './lib/useEmailAccountsController'
 import { usePollingControllers } from './lib/usePollingControllers'
 import { useUserManagementController } from './lib/useUserManagementController'
 import { useWorkspacePreferencesController } from './lib/useWorkspacePreferencesController'
-import { applyOrderedSectionIds, DEFAULT_UI_PREFERENCES } from './lib/workspacePreferences'
+import { applyOrderedSectionIds } from './lib/workspacePreferences'
 import { buildWorkspacePath, canonicalWorkspacePath, resolveWorkspaceRoute } from './lib/workspaceRoutes'
 
 const REFRESH_MS = 30000
@@ -108,8 +104,6 @@ const NOTIFICATION_AUTO_CLOSE_MS = {
   warning: 12000,
   error: 16000
 }
-const PollingStatisticsSection = lazy(() => import('./components/stats/PollingStatisticsSection'))
-
 /**
  * Coordinates admin-ui data fetching and browser interactions while delegating
  * UI structure to smaller reusable components.
@@ -338,7 +332,7 @@ function AppContent() {
 
   function pushNotification({
     autoCloseMs,
-    copyText = '',
+    copyText,
     groupKey = null,
     message,
     replaceGroup = false,
@@ -360,7 +354,7 @@ function AppContent() {
       return true
     }), {
       autoCloseMs: resolvedAutoCloseMs,
-      copyText,
+      copyText: copyText ?? message,
       createdAt: Date.now(),
       floatingVisible: true,
       groupKey,
@@ -369,6 +363,14 @@ function AppContent() {
       targetId,
       tone
     }])
+  }
+
+  function resolveNotificationText(notification) {
+    return resolveNotificationContent(notification?.message, language)
+  }
+
+  function resolveNotificationCopyText(notification) {
+    return resolveNotificationContent(notification?.copyText, language)
   }
 
   async function loadAuthOptions() {
@@ -528,7 +530,13 @@ function AppContent() {
       }
     } catch (err) {
       if (!suppressErrors) {
-        pushNotification({ autoCloseMs: null, copyText: err.message || errorText('loadApplicationData'), message: err.message || errorText('loadApplicationData'), tone: 'error' })
+        const errorMessage = err.message || errorText('loadApplicationData')
+        pushNotification({
+          autoCloseMs: null,
+          copyText: err.message ? pollErrorNotification(err.message) : translatedNotification('errors.loadApplicationData'),
+          message: err.message ? pollErrorNotification(err.message) : translatedNotification('errors.loadApplicationData'),
+          tone: 'error'
+        })
       }
     } finally {
       setLoadingData(false)
@@ -682,11 +690,16 @@ function AppContent() {
         })
         setSystemOAuthSettingsDirty(false)
         setShowSystemOAuthAppsDialog(false)
-        pushNotification({ message: t('notifications.oauthAppsUpdated'), targetId: 'oauth-apps-section', tone: 'success' })
+        pushNotification({ message: translatedNotification('notifications.oauthAppsUpdated'), targetId: 'oauth-apps-section', tone: 'success' })
         await loadAuthOptions()
         await loadAppData()
       } catch (err) {
-        pushNotification({ copyText: err.message || errorText('saveOAuthApps'), message: err.message || errorText('saveOAuthApps'), targetId: 'oauth-apps-section', tone: 'error' })
+        pushNotification({
+          copyText: err.message ? pollErrorNotification(err.message) : translatedNotification('errors.saveOAuthApps'),
+          message: err.message ? pollErrorNotification(err.message) : translatedNotification('errors.saveOAuthApps'),
+          targetId: 'oauth-apps-section',
+          tone: 'error'
+        })
       }
     })
   }
@@ -716,6 +729,7 @@ function AppContent() {
   }
 
   function focusTarget(targetId, sectionKey = null) {
+    const sourceEmailAccountTarget = isSourceEmailAccountTargetId(targetId)
     const derivedSectionKey = sectionKey || ({
       'destination-mailbox-section': 'destinationMailboxCollapsed',
       'user-polling-section': 'userPollingCollapsed',
@@ -725,7 +739,7 @@ function AppContent() {
       'oauth-apps-section': 'oauthAppsCollapsed',
       'global-polling-stats-section': 'globalStatsCollapsed',
       'user-management-section': 'userManagementCollapsed'
-    }[targetId] || null)
+    }[targetId] || (sourceEmailAccountTarget ? 'sourceEmailAccountsCollapsed' : null))
     if (derivedSectionKey && uiPreferences[derivedSectionKey]) {
       void expandSection(derivedSectionKey)
     }
@@ -738,7 +752,7 @@ function AppContent() {
     if (targetId === 'user-management-section' || targetId === 'system-dashboard-section' || targetId === 'oauth-apps-section' || targetId === 'global-polling-stats-section') {
       setAdminWorkspace('admin')
     }
-    if (targetId === 'destination-mailbox-section' || targetId === 'user-polling-section' || targetId === 'user-polling-stats-section' || targetId === 'source-email-accounts-section') {
+    if (targetId === 'destination-mailbox-section' || targetId === 'user-polling-section' || targetId === 'user-polling-stats-section' || targetId === 'source-email-accounts-section' || sourceEmailAccountTarget) {
       setAdminWorkspace('user')
     }
     window.setTimeout(() => {
@@ -841,7 +855,7 @@ function AppContent() {
     if (session?.mustChangePassword && !dismissedPersistentNotifications.mustChangePassword) {
       items.push({
         id: 'must-change-password',
-        message: t('notifications.mustChangePassword'),
+        message: translatedNotification('notifications.mustChangePassword'),
         targetId: 'password-panel-section',
         tone: 'warning',
         persistentKey: 'mustChangePassword'
@@ -860,6 +874,15 @@ function AppContent() {
     [notifications]
   )
 
+  const resolvedNotificationHistory = useMemo(
+    () => notificationHistory.map((notification) => ({
+      ...notification,
+      copyText: resolveNotificationCopyText(notification),
+      message: resolveNotificationText(notification)
+    })),
+    [language, notificationHistory]
+  )
+
   function notificationTimestamp(notification) {
     if (!notification?.createdAt) {
       return ''
@@ -867,257 +890,51 @@ function AppContent() {
     return t('notifications.createdAt', { value: notificationTimestampFormatter.format(new Date(notification.createdAt)) })
   }
 
-  const userWorkspaceSections = [
-    {
-      id: 'quickSetup',
-      render: () => userSetupGuideState.allStepsComplete && uiPreferences.quickSetupDismissed ? null : (
-        <SetupGuidePanel
-          collapsed={uiPreferences.quickSetupCollapsed}
-          dismissable={userSetupGuideState.allStepsComplete}
-          onDismiss={dismissQuickSetupGuide}
-          onFocusSection={focusSection}
-          sectionLoading={isSectionRefreshing('quickSetupCollapsed')}
-          onToggleCollapse={() => toggleWorkspaceSection('quickSetupCollapsed')}
-          savingLayout={isPending('uiPreferences')}
-          steps={userSetupGuideState.steps}
-          t={t}
-        />
-      )
-    },
-    {
-      id: 'destination',
-      render: () => (
-        <DestinationMailboxSection
-          collapsed={uiPreferences.destinationMailboxCollapsed}
-          collapseLoading={isPending('uiPreferences') && uiPreferences.persistLayout}
-          destinationConfig={destinationConfig}
-          destinationFolders={destinationFolders}
-          destinationFoldersLoading={destinationFoldersLoading}
-          destinationMeta={destinationMeta}
-          isAdmin={false}
-          locale={language}
-          oauthLoading={isPending('googleOAuthSelf') || isPending('microsoftDestinationOAuth')}
-          onCollapseToggle={() => toggleWorkspaceSection('destinationMailboxCollapsed')}
-          onConnectOAuth={destination.startDestinationOAuth}
-          onUnlinkOAuth={destination.unlinkDestinationAccount}
-          onSave={destination.saveDestinationConfig}
-          onSaveAndAuthenticate={destination.saveDestinationConfigAndAuthenticate}
-          onTestConnection={destination.testDestinationConnection}
-          saveLoading={isPending('destinationSave')}
-          sectionLoading={isSectionRefreshing('destinationMailboxCollapsed')}
-          setDestinationConfig={setDestinationConfig}
-          t={t}
-          testConnectionLoading={isPending('destinationConnectionTest')}
-          unlinkLoading={isPending('destinationUnlink')}
-        />
-      )
-    },
-    {
-      id: 'userPolling',
-      render: () => (
-        <UserPollingSettingsSection
-          collapsed={uiPreferences.userPollingCollapsed}
-          collapseLoading={isPending('uiPreferences') && uiPreferences.persistLayout}
-          hasFetchers={emailAccounts.userEmailAccounts.length > 0}
-          onCollapseToggle={() => toggleWorkspaceSection('userPollingCollapsed')}
-          onOpenEditor={polling.openUserPollingDialog}
-          onRunPoll={polling.runUserPoll}
-          pollingSettings={polling.userPollingSettings}
-          runningPoll={polling.runningUserPoll}
-          sectionLoading={isSectionRefreshing('userPollingCollapsed')}
-          t={t}
-        />
-      )
-    },
-    {
-      id: 'userStats',
-      render: () => (
-        <Suspense fallback={<div className="muted-box">{t('common.refreshingSection')}</div>}>
-          <PollingStatisticsSection
-            collapsed={uiPreferences.userStatsCollapsed}
-            collapseLoading={isPending('uiPreferences') && uiPreferences.persistLayout}
-            copy={t('pollingStats.userCopy')}
-            customRangeLoader={loadUserCustomRange}
-            id="user-polling-stats-section"
-            onCollapseToggle={() => toggleWorkspaceSection('userStatsCollapsed')}
-            sectionLoading={isSectionRefreshing('userPollingCollapsed')}
-            stats={userPollingStats}
-            t={t}
-            title={t('pollingStats.userTitle')}
-          />
-        </Suspense>
-      )
-    },
-    {
-      id: 'sourceEmailAccounts',
-      render: () => (
-        <UserEmailAccountsSection
-          emailAccountForm={emailAccounts.emailAccountForm}
-          collapsed={uiPreferences.sourceEmailAccountsCollapsed}
-          collapseLoading={isPending('uiPreferences') && uiPreferences.persistLayout}
-          connectingEmailAccountId={emailAccounts.connectingEmailAccountId}
-          deletingEmailAccountId={emailAccounts.deletingEmailAccountId}
-          duplicateIdError={emailAccounts.emailAccountDuplicateError}
-          fetcherDialogOpen={emailAccounts.showFetcherDialog}
-          fetcherPollLoadingId={emailAccounts.fetcherPollLoadingId}
-          fetcherPollingDialog={emailAccounts.fetcherPollingTarget}
-          fetcherPollingForm={emailAccounts.fetcherPollingForm}
-          fetcherPollingLoading={emailAccounts.fetcherPollingLoading}
-          fetcherRefreshLoadingId={emailAccounts.expandedFetcherLoadingId}
-          fetcherStatsById={emailAccounts.fetcherStatsById}
-          fetcherStatsLoadingId={emailAccounts.fetcherStatsLoadingId}
-          fetchers={emailAccounts.visibleFetchers}
-          onLoadFetcherCustomRange={emailAccounts.loadFetcherCustomRange}
-          onAddFetcher={emailAccounts.openAddFetcherDialog}
-          onApplyPreset={emailAccounts.applyEmailAccountPreset}
-          onEmailAccountFormChange={emailAccounts.handleEmailAccountFormChange}
-          onCloseDialog={emailAccounts.closeFetcherDialog}
-          onClosePollingDialog={emailAccounts.closeFetcherPollingDialog}
-          onCollapseToggle={() => toggleWorkspaceSection('sourceEmailAccountsCollapsed')}
-          onConfigureFetcherPolling={emailAccounts.openFetcherPollingDialog}
-          onConnectOAuth={emailAccounts.startSourceOAuth}
-          onDeleteEmailAccount={(emailAccountId) => emailAccounts.deleteEmailAccount(emailAccountId, openConfirmation)}
-          onEditEmailAccount={emailAccounts.editEmailAccount}
-          onFetcherPollingFormChange={emailAccounts.handleFetcherPollingFormChange}
-          onFetcherToggleExpand={emailAccounts.refreshFetcherState}
-          onResetFetcherPollingSettings={emailAccounts.resetFetcherPollingSettings}
-          onRunFetcherPoll={emailAccounts.runFetcherPoll}
-          onSaveEmailAccount={emailAccounts.saveEmailAccount}
-          onSaveEmailAccountAndConnectOAuth={emailAccounts.saveEmailAccountAndConnectOAuth}
-          onSaveFetcherPollingSettings={emailAccounts.saveFetcherPollingSettings}
-          onTestEmailAccountConnection={emailAccounts.testEmailAccountConnection}
-          saveLoading={isPending('bridgeSave')}
-          saveAndConnectLoading={isPending('bridgeSaveConnect')}
-          testConnectionLoading={isPending('bridgeConnectionTest')}
-          testResult={emailAccounts.emailAccountTestResult}
-          sectionLoading={isSectionRefreshing('sourceEmailAccountsCollapsed')}
-          t={t}
-          locale={language}
-          availableOAuthProviders={authOptions.sourceOAuthProviders}
-        />
-      )
-    }
-  ]
+  const userWorkspaceSections = buildUserWorkspaceSections({
+    authOptions,
+    destination,
+    destinationConfig,
+    destinationFolders,
+    destinationFoldersLoading,
+    destinationMeta,
+    dismissQuickSetupGuide,
+    emailAccounts,
+    focusSection,
+    isPending,
+    isSectionRefreshing,
+    language,
+    loadUserCustomRange,
+    openConfirmation,
+    polling,
+    setDestinationConfig,
+    t,
+    toggleWorkspaceSection,
+    uiPreferences,
+    userPollingStats,
+    userSetupGuideState
+  })
 
-  const adminWorkspaceSections = [
-    {
-      id: 'adminQuickSetup',
-      render: () => adminSetupGuideState.allStepsComplete ? null : (
-        <SetupGuidePanel
-          collapsed={uiPreferences.adminQuickSetupCollapsed}
-          dismissable={false}
-          onDismiss={() => {}}
-          onFocusSection={focusSection}
-          sectionLoading={isSectionRefreshing('adminQuickSetupCollapsed')}
-          onToggleCollapse={() => toggleWorkspaceSection('adminQuickSetupCollapsed')}
-          savingLayout={isPending('uiPreferences')}
-          steps={adminSetupGuideState.steps}
-          t={t}
-        />
-      )
-    },
-    {
-      id: 'systemDashboard',
-      render: () => (
-        <SystemDashboardSection
-          collapsed={uiPreferences.systemDashboardCollapsed}
-          collapseLoading={isPending('uiPreferences') && uiPreferences.persistLayout}
-          dashboard={systemDashboard}
-          onCollapseToggle={() => toggleWorkspaceSection('systemDashboardCollapsed')}
-          onOpenEditor={polling.openSystemPollingDialog}
-          onRunPoll={polling.runPoll}
-          runningPoll={polling.runningPoll}
-          sectionLoading={isSectionRefreshing('systemDashboardCollapsed')}
-          t={t}
-          locale={language}
-        />
-      )
-    },
-    {
-      id: 'oauthApps',
-      render: () => (
-        <OAuthAppsSection
-          collapsed={uiPreferences.oauthAppsCollapsed}
-          collapseLoading={isPending('uiPreferences') && uiPreferences.persistLayout}
-          oauthSettings={systemOAuthSettings}
-          onCollapseToggle={() => toggleWorkspaceSection('oauthAppsCollapsed')}
-          onEditGoogle={() => {
-            setSystemOAuthSettingsDirty(false)
-            setSystemOAuthEditorProvider('google')
-            setShowSystemOAuthAppsDialog(true)
-          }}
-          onEditMicrosoft={() => {
-            setSystemOAuthSettingsDirty(false)
-            setSystemOAuthEditorProvider('microsoft')
-            setShowSystemOAuthAppsDialog(true)
-          }}
-          sectionLoading={isSectionRefreshing('oauthAppsCollapsed')}
-          t={t}
-        />
-      )
-    },
-    {
-      id: 'globalStats',
-      render: () => (
-        <Suspense fallback={<div className="muted-box">{t('common.refreshingSection')}</div>}>
-          <PollingStatisticsSection
-            collapsed={uiPreferences.globalStatsCollapsed}
-            collapseLoading={isPending('uiPreferences') && uiPreferences.persistLayout}
-            copy={t('pollingStats.globalCopy')}
-            customRangeLoader={loadGlobalCustomRange}
-            id="global-polling-stats-section"
-            onCollapseToggle={() => toggleWorkspaceSection('globalStatsCollapsed')}
-            sectionLoading={isSectionRefreshing('systemDashboardCollapsed')}
-            stats={systemDashboard?.stats || null}
-            t={t}
-            title={t('pollingStats.globalTitle')}
-          />
-        </Suspense>
-      )
-    },
-    {
-      id: 'userManagement',
-      render: () => (
-        <UserManagementSection
-          collapsed={uiPreferences.userManagementCollapsed}
-          collapseLoading={isPending('uiPreferences') && uiPreferences.persistLayout}
-          createUserDialogOpen={userManagement.showCreateUserDialog}
-          createUserForm={userManagement.createUserForm}
-          createUserLoading={isPending('createUser')}
-          duplicateUsername={userManagement.duplicateCreateUsername}
-          expandedUserId={userManagement.selectedUserId}
-          onCloseCreateUserDialog={userManagement.closeCreateUserDialog}
-          onCollapseToggle={() => toggleWorkspaceSection('userManagementCollapsed')}
-          onCreateUser={userManagement.createUser}
-          onCreateUserFormChange={userManagement.setCreateUserForm}
-          onForcePasswordChange={userManagement.requestForcePasswordChange}
-          onOpenCreateUserDialog={userManagement.openCreateUserDialog}
-          onOpenResetPasswordDialog={userManagement.openResetPasswordDialog}
-          onDeleteUser={userManagement.requestDeleteUser}
-          onLoadUserCustomRange={loadAdminUserCustomRange}
-          onResetUserPasskeys={userManagement.resetUserPasskeys}
-          onToggleExpandUser={userManagement.toggleExpandedUser}
-          onToggleUserActive={userManagement.requestToggleUserActive}
-          onUpdateUser={userManagement.updateUser}
-          selectedUserConfig={userManagement.selectedUserConfig}
-          selectedUserLoading={userManagement.selectedUserLoading}
-          session={session}
-          multiUserEnabled={authOptions.multiUserEnabled}
-          modeToggleLoading={isPending('multiUserModeSave')}
-          onToggleMultiUserEnabled={userManagement.requestToggleMultiUserMode}
-          updatingPasskeysResetUserId={userManagement.selectedUserConfig?.user?.id && isPending(`resetPasskeys:${userManagement.selectedUserConfig.user.id}`) ? userManagement.selectedUserConfig.user.id : null}
-          updatingUserId={userManagement.selectedUserConfig?.user?.id && (
-            isPending(`updateUser:${userManagement.selectedUserConfig.user.id}`)
-            || isPending(`deleteUser:${userManagement.selectedUserConfig.user.id}`)
-          ) ? userManagement.selectedUserConfig.user.id : null}
-          users={userManagement.users}
-          sectionLoading={isSectionRefreshing('userManagementCollapsed')}
-          t={t}
-          locale={language}
-        />
-      )
-    }
-  ]
+  const adminWorkspaceSections = buildAdminWorkspaceSections({
+    adminSetupGuideState,
+    authOptions,
+    focusSection,
+    isPending,
+    isSectionRefreshing,
+    language,
+    loadAdminUserCustomRange,
+    loadGlobalCustomRange,
+    polling,
+    session,
+    setShowSystemOAuthAppsDialog,
+    setSystemOAuthEditorProvider,
+    setSystemOAuthSettingsDirty,
+    systemDashboard,
+    systemOAuthSettings,
+    t,
+    toggleWorkspaceSection,
+    uiPreferences,
+    userManagement
+  })
 
   const orderedUserWorkspaceSections = applyOrderedSectionIds(
     userWorkspaceSections.map((section) => section.id),
@@ -1127,69 +944,6 @@ function AppContent() {
     adminWorkspaceSections.map((section) => section.id),
     uiPreferences.adminSectionOrder
   )
-
-  function renderWorkspaceSections(workspaceKey, sections, orderedIds) {
-    function renderDropPlaceholder(key) {
-      return (
-        <div className="workspace-section-drop-placeholder" key={key}>
-          <div className="workspace-section-drop-placeholder-inner" />
-        </div>
-      )
-    }
-
-    const visibleSections = orderedIds
-      .map((sectionId) => sections.find((entry) => entry.id === sectionId))
-      .filter(Boolean)
-      .map((section) => ({ section, content: section.render() }))
-      .filter((entry) => Boolean(entry.content))
-    const renderedSections = []
-    visibleSections.forEach(({ section, content }, index) => {
-      if (dragState?.workspaceKey === workspaceKey && dragState.targetIndex === index) {
-        renderedSections.push(renderDropPlaceholder(`${workspaceKey}-${section.id}-placeholder-before`))
-      }
-      renderedSections.push(
-        <WorkspaceSectionWindow
-          canMoveDown={index < orderedIds.length - 1}
-          canMoveUp={index > 0}
-          dragHandleLabel={t('preferences.dragSection')}
-          dragging={dragState?.workspaceKey === workspaceKey && dragState.draggedId === section.id}
-          key={section.id}
-          layoutEditing={uiPreferences.layoutEditEnabled}
-          moveDownLabel={t('preferences.moveSectionDown')}
-          moveUpLabel={t('preferences.moveSectionUp')}
-          onDragHandlePointerDown={(event) => {
-            if (!uiPreferences.layoutEditEnabled) {
-              return
-            }
-            event.preventDefault()
-            setDragState({
-              workspaceKey,
-              draggedId: section.id,
-              targetIndex: index
-            })
-          }}
-          onPointerMove={(event) => {
-            if (!dragState || dragState.workspaceKey !== workspaceKey) {
-              return
-            }
-            const bounds = event.currentTarget.getBoundingClientRect()
-            const nextTargetIndex = event.clientY < (bounds.top + bounds.height / 2) ? index : index + 1
-            setDragState((current) => current && current.workspaceKey === workspaceKey
-              ? { ...current, targetIndex: nextTargetIndex }
-              : current)
-          }}
-          onMoveDown={() => moveSection(workspaceKey, section.id, 'down')}
-          onMoveUp={() => moveSection(workspaceKey, section.id, 'up')}
-        >
-          {content}
-        </WorkspaceSectionWindow>
-      )
-    })
-    if (dragState?.workspaceKey === workspaceKey && dragState.targetIndex === visibleSections.length) {
-      renderedSections.push(renderDropPlaceholder(`${workspaceKey}-placeholder-end`))
-    }
-    return renderedSections
-  }
 
   if (auth.authLoading) {
     return <LoadingScreen label={t('app.loading')} />
@@ -1264,7 +1018,7 @@ function AppContent() {
 
         {showNotificationsDialog ? (
           <NotificationsDialog
-            notifications={notificationHistory}
+            notifications={resolvedNotificationHistory}
             onClearAll={clearAllNotifications}
             onClose={closeNotificationsDialog}
             onDismissNotification={dismissNotification}
@@ -1377,7 +1131,7 @@ function AppContent() {
           {[...persistentNotifications, ...visibleNotifications].map((notification) => (
             <Banner
               key={notification.id}
-              copyText={notification.copyText}
+              copyText={resolveNotificationCopyText(notification)}
               copiedLabel={t('common.copied')}
               copyLabel={t('common.copyError')}
               onDismiss={() => {
@@ -1393,7 +1147,7 @@ function AppContent() {
               tone={notification.tone}
               title={notificationTimestamp(notification)}
             >
-              {notification.message}
+              {resolveNotificationText(notification)}
             </Banner>
           ))}
         </div>
@@ -1422,7 +1176,18 @@ function AppContent() {
         ) : null}
 
         {!isAdmin || adminWorkspace === 'user'
-          ? renderWorkspaceSections('user', userWorkspaceSections, orderedUserWorkspaceSections).filter(Boolean)
+          ? (
+            <WorkspaceSectionList
+              dragState={dragState}
+              layoutEditing={uiPreferences.layoutEditEnabled}
+              moveSection={moveSection}
+              orderedIds={orderedUserWorkspaceSections}
+              sections={userWorkspaceSections}
+              setDragState={setDragState}
+              t={t}
+              workspaceKey="user"
+            />
+            )
           : null}
 
         {polling.showUserPollingDialog && polling.userPollingSettings ? (
@@ -1454,7 +1219,18 @@ function AppContent() {
         ) : null}
 
         {isAdmin && adminWorkspace === 'admin'
-          ? renderWorkspaceSections('admin', adminWorkspaceSections, orderedAdminWorkspaceSections).filter(Boolean)
+          ? (
+            <WorkspaceSectionList
+              dragState={dragState}
+              layoutEditing={uiPreferences.layoutEditEnabled}
+              moveSection={moveSection}
+              orderedIds={orderedAdminWorkspaceSections}
+              sections={adminWorkspaceSections}
+              setDragState={setDragState}
+              t={t}
+              workspaceKey="admin"
+            />
+            )
           : null}
 
         {userManagement.showPasswordResetDialog && userManagement.passwordResetTarget ? (

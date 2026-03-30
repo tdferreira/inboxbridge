@@ -1,6 +1,7 @@
 import { Suspense, lazy, useEffect, useLayoutEffect, useRef, useState } from 'react'
 import { authMethodLabel, formatDate, formatPollError, oauthProviderLabel, protocolLabel, roleLabel, tokenStorageLabel } from '../../lib/formatters'
 import { resolveFloatingMenuPosition } from '../../lib/floatingMenu'
+import { translatedNotification } from '../../lib/notifications'
 import LoadingButton from '../common/LoadingButton'
 
 const PollingStatisticsSection = lazy(() => import('../stats/PollingStatisticsSection'))
@@ -182,7 +183,7 @@ function UserListItem({
           {menuOpen ? (
             <div className="fetcher-menu" data-placement={menuPlacement} ref={menuPanelRef} style={menuStyle}>
               {!user.approved ? (
-                <button className="secondary" onClick={() => { onUpdateUser(user.id, { approved: true, active: true }, t('notifications.userApproved', { username: user.username })); setMenuOpen(false) }} type="button">
+                <button className="secondary" onClick={() => { onUpdateUser(user.id, { approved: true, active: true }, translatedNotification('notifications.userApproved', { username: user.username })); setMenuOpen(false) }} type="button">
                   {t('users.approve')}
                 </button>
               ) : null}
@@ -190,7 +191,7 @@ function UserListItem({
                 {user.active ? t('users.suspend') : t('users.reactivate')}
               </button>
               {user.role === 'ADMIN' ? (
-                <button className="secondary" disabled={viewingSelfAdmin} onClick={() => { onUpdateUser(user.id, { role: 'USER' }, t('notifications.userRoleUpdated', { username: user.username })); setMenuOpen(false) }} type="button">
+                <button className="secondary" disabled={viewingSelfAdmin} onClick={() => { onUpdateUser(user.id, { role: 'USER' }, translatedNotification('notifications.userRoleUpdated', { username: user.username })); setMenuOpen(false) }} type="button">
                   {t('users.makeRegular')}
                 </button>
               ) : null}
@@ -222,11 +223,11 @@ function UserListItem({
 
             <div className="action-row">
             {!user.approved ? (
-              <LoadingButton className="primary" isLoading={updatingUser} loadingLabel={t('users.saving')} type="button" onClick={() => onUpdateUser(user.id, { approved: true, active: true }, t('notifications.userApproved', { username: user.username }))}>
+              <LoadingButton className="primary" isLoading={updatingUser} loadingLabel={t('users.saving')} type="button" onClick={() => onUpdateUser(user.id, { approved: true, active: true }, translatedNotification('notifications.userApproved', { username: user.username }))}>
                 {t('users.approve')}
               </LoadingButton>
             ) : null}
-            <LoadingButton className="secondary" disabled={viewingSelfAdmin} hint={user.role === 'ADMIN' ? t('users.makeRegularHint') : t('users.grantAdminHint')} isLoading={updatingUser} loadingLabel={t('users.saving')} type="button" onClick={() => onUpdateUser(user.id, { role: user.role === 'ADMIN' ? 'USER' : 'ADMIN' }, t('notifications.userRoleUpdated', { username: user.username }))}>
+            <LoadingButton className="secondary" disabled={viewingSelfAdmin} hint={user.role === 'ADMIN' ? t('users.makeRegularHint') : t('users.grantAdminHint')} isLoading={updatingUser} loadingLabel={t('users.saving')} type="button" onClick={() => onUpdateUser(user.id, { role: user.role === 'ADMIN' ? 'USER' : 'ADMIN' }, translatedNotification('notifications.userRoleUpdated', { username: user.username }))}>
               {user.role === 'ADMIN' ? t('users.makeRegular') : t('users.grantAdmin')}
             </LoadingButton>
             <LoadingButton className="secondary" hint={user.active ? t('users.suspendHint') : t('users.reactivateHint')} isLoading={updatingUser} loadingLabel={t('users.saving')} type="button" onClick={() => onToggleUserActive(user)}>

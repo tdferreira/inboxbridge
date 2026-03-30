@@ -1,6 +1,7 @@
 import { Suspense, lazy, useEffect, useLayoutEffect, useRef, useState } from 'react'
 import { authMethodLabel, formatDate, formatPollError, oauthProviderLabel, protocolLabel, statusLabel, statusTone, tokenStorageLabel, triggerLabel } from '../../lib/formatters'
 import { resolveFloatingMenuPosition } from '../../lib/floatingMenu'
+import { buildSourceEmailAccountTargetId } from '../../lib/sectionTargets'
 import CopyButton from '../common/CopyButton'
 import './EmailAccountCard.css'
 import './EmailAccountListItem.css'
@@ -140,7 +141,7 @@ function EmailAccountListItem({
   }, [menuOpen])
 
   return (
-    <article className="surface-card fetcher-list-item">
+    <article className="surface-card fetcher-list-item" id={buildSourceEmailAccountTargetId(fetcher.emailAccountId)} tabIndex="-1">
       <div className="fetcher-list-item-summary">
         <button className="fetcher-list-item-main" onClick={toggleExpanded} type="button">
           <div>

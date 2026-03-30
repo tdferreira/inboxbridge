@@ -9,6 +9,7 @@ import java.util.Optional;
 
 import dev.inboxbridge.config.InboxBridgeConfig;
 import dev.inboxbridge.dto.AdminPollEventSummary;
+import dev.inboxbridge.dto.DestinationMailboxFolderOptionsView;
 import dev.inboxbridge.dto.EmailAccountConnectionTestResult;
 import dev.inboxbridge.dto.UpdateUserEmailAccountRequest;
 import dev.inboxbridge.dto.UserEmailAccountView;
@@ -90,6 +91,14 @@ public class UserEmailAccountService {
     public EmailAccountConnectionTestResult testConnection(AppUser user, UpdateUserEmailAccountRequest request) {
         RuntimeEmailAccount candidate = preview(user, request);
         return mailSourceClient.testConnection(candidate);
+    }
+
+    public DestinationMailboxFolderOptionsView listFolders(AppUser user, UpdateUserEmailAccountRequest request) {
+        RuntimeEmailAccount candidate = preview(user, request);
+        if (candidate.protocol() != InboxBridgeConfig.Protocol.IMAP) {
+            return new DestinationMailboxFolderOptionsView(List.of());
+        }
+        return new DestinationMailboxFolderOptionsView(mailSourceClient.listFolders(candidate));
     }
 
     public RuntimeEmailAccount preview(AppUser user, UpdateUserEmailAccountRequest request) {

@@ -212,6 +212,17 @@ public class UserConfigResource {
     }
 
     @POST
+    @Path("/email-accounts/folders")
+    @Consumes(MediaType.APPLICATION_JSON)
+    public DestinationMailboxFolderOptionsView emailAccountFolders(UpdateUserEmailAccountRequest request) {
+        try {
+            return userEmailAccountService.listFolders(currentUserContext.user(), request);
+        } catch (IllegalArgumentException | IllegalStateException e) {
+            throw new BadRequestException(e.getMessage(), e);
+        }
+    }
+
+    @POST
     @Path("/email-accounts/test-connection")
     @Consumes(MediaType.APPLICATION_JSON)
     public EmailAccountConnectionTestResult testEmailAccountConnection(UpdateUserEmailAccountRequest request) {

@@ -7,6 +7,7 @@ import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Comparator;
 import java.util.HashSet;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Locale;
 import java.util.Optional;
@@ -78,6 +79,13 @@ public class MailSourceClient {
         return switch (bridge.protocol()) {
             case IMAP -> testImapConnection(bridge);
             case POP3 -> testPop3Connection(bridge);
+        };
+    }
+
+    public List<String> listFolders(RuntimeEmailAccount bridge) {
+        return switch (bridge.protocol()) {
+            case IMAP -> listImapFolders(bridge);
+            case POP3 -> List.of();
         };
     }
 
@@ -180,6 +188,52 @@ public class MailSourceClient {
             throw new IllegalStateException("Failed to inspect spam or junk mailbox for source " + bridge.id(), e);
         } finally {
             closeQuietly(folder);
+            closeQuietly(store);
+        }
+    }
+
+    private List<String> listImapFolders(RuntimeEmailAccount bridge) {
+        Properties properties = new Properties();
+        properties.put("mail.store.protocol", bridge.tls() ? "imaps" : "imap");
+        properties.put("mail.imap.ssl.enable", bridge.tls());
+        properties.put("mail.imaps.ssl.enable", bridge.tls());
+        properties.put("mail.imap.ssl.checkserveridentity", "true");
+        properties.put("mail.imaps.ssl.checkserveridentity", "true");
+        properties.put("mail.imap.timeout", "20000");
+        properties.put("mail.imaps.timeout", "20000");
+        properties.put("mail.imap.connectiontimeout", "20000");
+        properties.put("mail.imaps.connectiontimeout", "20000");
+        if (usesOAuth(bridge)) {
+            configureImapOAuth(properties);
+        } else {
+            requireSupportedAuth(bridge);
+        }
+
+        Session session = Session.getInstance(properties);
+        Store store = null;
+        try {
+            store = session.getStore(bridge.tls() ? "imaps" : "imap");
+            connectStore(store, bridge);
+
+            LinkedHashSet<String> folderNames = new LinkedHashSet<>();
+            Folder inbox = store.getFolder("INBOX");
+            if (inbox != null && inbox.exists()) {
+                folderNames.add(inbox.getFullName());
+            }
+
+            Folder defaultFolder = store.getDefaultFolder();
+            if (defaultFolder != null) {
+                collectFolderNames(defaultFolder.list("*"), folderNames);
+            }
+
+            List<String> folders = new ArrayList<>(folderNames);
+            folders.sort(Comparator
+                    .comparing((String folderName) -> !"INBOX".equalsIgnoreCase(folderName))
+                    .thenComparing(String.CASE_INSENSITIVE_ORDER));
+            return folders;
+        } catch (MessagingException e) {
+            throw new IllegalStateException("Failed to list folders for source " + bridge.id(), e);
+        } finally {
             closeQuietly(store);
         }
     }
@@ -670,6 +724,26 @@ public class MailSourceClient {
             store.close();
         } catch (MessagingException ignored) {
             // ignored on shutdown
+        }
+    }
+
+    private void collectFolderNames(Folder[] folders, LinkedHashSet<String> names) throws MessagingException {
+        if (folders == null) {
+            return;
+        }
+        for (Folder folder : folders) {
+            if (folder == null) {
+                continue;
+            }
+            if (folder.exists()) {
+                String fullName = folder.getFullName();
+                if (fullName != null && !fullName.isBlank()) {
+                    names.add(fullName);
+                }
+            }
+            if ((folder.getType() & Folder.HOLDS_FOLDERS) != 0) {
+                collectFolderNames(folder.list("*"), names);
+            }
         }
     }
 

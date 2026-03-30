@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from 'react'
 import { apiErrorText } from './api'
 import { languageOptions, normalizeLocale, translate } from './i18n'
+import { pollErrorNotification, translatedNotification } from './notifications'
 import {
   applyLayoutPreferences,
   captureLayoutPreferences,
@@ -43,8 +44,8 @@ export function useWorkspacePreferencesController({ language, pushNotification, 
       } catch (err) {
         pushNotification({
           autoCloseMs: null,
-          copyText: err.message || translate(language, 'errors.saveLayoutPreference'),
-          message: err.message || translate(language, 'errors.saveLayoutPreference'),
+          copyText: err.message ? pollErrorNotification(err.message) : translatedNotification('errors.saveLayoutPreference'),
+          message: err.message ? pollErrorNotification(err.message) : translatedNotification('errors.saveLayoutPreference'),
           tone: 'error'
         })
       }
@@ -113,7 +114,7 @@ export function useWorkspacePreferencesController({ language, pushNotification, 
       persistLayout: uiPreferences.persistLayout,
       language
     })
-    pushNotification({ message: translate(language, 'notifications.layoutReset'), tone: 'success' })
+    pushNotification({ message: translatedNotification('notifications.layoutReset'), tone: 'success' })
   }
 
   async function toggleSection(sectionKey, onExpand) {

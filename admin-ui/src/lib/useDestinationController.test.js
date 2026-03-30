@@ -75,7 +75,10 @@ describe('useDestinationController', () => {
       provider: 'OUTLOOK_IMAP'
     }))
     expect(pushNotification).toHaveBeenCalledWith(expect.objectContaining({
-      message: 'notifications.destinationSaved',
+      message: expect.objectContaining({
+        key: 'notifications.destinationSaved',
+        kind: 'translation'
+      }),
       tone: 'success'
     }))
     expect(loadAppData).toHaveBeenCalled()
@@ -257,7 +260,10 @@ describe('useDestinationController', () => {
     })
 
     expect(pushNotification).toHaveBeenCalledWith(expect.objectContaining({
-      message: 'notifications.microsoftDestinationUnlinked',
+      message: expect.objectContaining({
+        key: 'notifications.microsoftDestinationUnlinked',
+        kind: 'translation'
+      }),
       tone: 'warning'
     }))
     expect(loadAppData).toHaveBeenCalled()

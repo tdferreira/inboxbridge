@@ -41,4 +41,33 @@ describe('UserPollingSettingsDialog', () => {
     expect(form.pollIntervalOverride).toBe('10m')
     expect(form.fetchWindowOverride).toBe('25')
   })
+
+  it('disables the poll interval override when polling is disabled', () => {
+    render(
+      <UserPollingSettingsDialog
+        isDirty={false}
+        onClose={vi.fn()}
+        onPollingFormChange={vi.fn()}
+        onResetPollingSettings={vi.fn()}
+        onSavePollingSettings={vi.fn((event) => event.preventDefault())}
+        pollingSettings={{
+          defaultPollEnabled: true,
+          effectivePollEnabled: false,
+          defaultPollInterval: '5m',
+          effectivePollInterval: 'disabled',
+          defaultFetchWindow: 50,
+          effectiveFetchWindow: 50
+        }}
+        pollingSettingsForm={{
+          pollEnabledMode: 'DISABLED',
+          pollIntervalOverride: '',
+          fetchWindowOverride: ''
+        }}
+        pollingSettingsLoading={false}
+        t={(key, params) => translate('en', key, params)}
+      />
+    )
+
+    expect(screen.getByLabelText(/Poll Interval Override/)).toBeDisabled()
+  })
 })

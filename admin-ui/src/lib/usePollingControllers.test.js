@@ -2,6 +2,15 @@ import { act, renderHook } from '@testing-library/react'
 import { usePollingControllers } from './usePollingControllers'
 
 describe('usePollingControllers', () => {
+  beforeEach(() => {
+    vi.restoreAllMocks()
+    vi.stubGlobal('fetch', vi.fn())
+  })
+
+  afterEach(() => {
+    vi.unstubAllGlobals()
+  })
+
   function renderController(overrides = {}) {
     const closeConfirmation = vi.fn()
     const loadAppData = vi.fn()
@@ -29,6 +38,7 @@ describe('usePollingControllers', () => {
     return {
       ...hook,
       openConfirmation,
+      pushNotification,
       withPending
     }
   }
@@ -89,6 +99,51 @@ describe('usePollingControllers', () => {
     expect(openConfirmation).toHaveBeenCalledWith(expect.objectContaining({
       actionKey: 'runPoll',
       title: 'system.runPollConfirmTitle'
+    }))
+  })
+
+  it('stores poll errors as localizable notification descriptors', async () => {
+    fetch.mockResolvedValue({
+      ok: true,
+      json: async () => ({
+        fetched: 0,
+        imported: 0,
+        duplicates: 0,
+        errors: [],
+        errorDetails: [
+          {
+            code: 'oauth_refresh_token_missing',
+            sourceId: 'outlook-main',
+            message: 'Source outlook-main is configured for OAuth2 but has no refresh token.'
+          }
+        ],
+        spamJunkMessageCount: 0
+      })
+    })
+
+    const { result, pushNotification } = renderController()
+
+    await act(async () => {
+      await result.current.runUserPoll()
+    })
+
+    expect(pushNotification).toHaveBeenLastCalledWith(expect.objectContaining({
+      copyText: expect.objectContaining({
+        kind: 'pollError',
+        value: expect.objectContaining({
+          code: 'oauth_refresh_token_missing',
+          sourceId: 'outlook-main'
+        })
+      }),
+      message: expect.objectContaining({
+        kind: 'pollError',
+        value: expect.objectContaining({
+          code: 'oauth_refresh_token_missing',
+          sourceId: 'outlook-main'
+        })
+      }),
+      targetId: 'source-email-account-outlook-main',
+      tone: 'error'
     }))
   })
 })

@@ -79,8 +79,8 @@ public class PollingService {
                 trigger,
                 runtimeEmailAccountService.listEnabledForPolling(),
                 actorRateLimitKey(actor),
-                false,
-                false,
+                true,
+                true,
                 false,
                 null);
     }
@@ -90,8 +90,8 @@ public class PollingService {
                 trigger,
                 runtimeEmailAccountService.listEnabledForUser(actor),
                 actorRateLimitKey(actor),
-                false,
-                false,
+                true,
+                true,
                 false,
                 null);
     }

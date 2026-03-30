@@ -168,7 +168,7 @@ Current unit coverage focuses on:
 - admin security-management controls
 - per-user poller settings controls
 - per-account poller settings controls and contextual poll-now actions
-- source email account dialog presets and auth-aware field visibility
+- source email account dialog presets, auth-aware field visibility, and detected IMAP folder selection after a successful connection probe
 - reusable email-account card actions
 - language-aware setup guide generation and formatting helpers
 

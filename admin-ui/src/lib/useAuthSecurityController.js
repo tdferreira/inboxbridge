@@ -1,5 +1,6 @@
 import { useState } from 'react'
 import { apiErrorText } from './api'
+import { pollErrorNotification, translatedNotification } from './notifications'
 import { normalizePasskeyError, parseCreateOptions, parseGetOptions, passkeysSupported, serializeCredential } from './passkeys'
 
 const DEFAULT_LOGIN_FORM = { username: 'admin', password: 'nimda' }
@@ -78,7 +79,7 @@ export function useAuthSecurityController({
     }
     const payload = await finishResponse.json()
     setSession(payload.user)
-    pushNotification({ message: t('notifications.signedInWithPasskey'), tone: 'success' })
+    pushNotification({ message: translatedNotification('notifications.signedInWithPasskey'), tone: 'success' })
   }
 
   async function handleLogin(event) {
@@ -103,7 +104,7 @@ export function useAuthSecurityController({
         if (!payload.user.mustChangePassword) {
           pushNotification({
             autoCloseMs: 10000,
-            message: t('notifications.signedIn'),
+            message: translatedNotification('notifications.signedIn'),
             targetId: null,
             tone: 'success'
           })
@@ -130,7 +131,10 @@ export function useAuthSecurityController({
         const payload = await response.json()
         setRegisterForm(DEFAULT_REGISTER_FORM)
         setRegisterOpen(false)
-        pushNotification({ message: payload.message || t('notifications.registrationSubmitted'), tone: 'success' })
+        pushNotification({
+          message: payload.message ? pollErrorNotification(payload.message) : translatedNotification('notifications.registrationSubmitted'),
+          tone: 'success'
+        })
       } catch (err) {
         setAuthError(err.message || errorText('registrationFailed'))
       }
@@ -168,10 +172,16 @@ export function useAuthSecurityController({
           throw new Error(await apiErrorText(response, errorText('changePassword')))
         }
         setPasswordForm(DEFAULT_PASSWORD_FORM)
-        pushNotification({ message: t('notifications.passwordUpdated'), targetId: 'password-panel-section', tone: 'success' })
+        pushNotification({ message: translatedNotification('notifications.passwordUpdated'), targetId: 'password-panel-section', tone: 'success' })
         await loadSession()
       } catch (err) {
-        pushNotification({ autoCloseMs: null, copyText: err.message || errorText('changePassword'), message: err.message || errorText('changePassword'), targetId: 'password-panel-section', tone: 'error' })
+        pushNotification({
+          autoCloseMs: null,
+          copyText: err.message ? pollErrorNotification(err.message) : translatedNotification('errors.changePassword'),
+          message: err.message ? pollErrorNotification(err.message) : translatedNotification('errors.changePassword'),
+          targetId: 'password-panel-section',
+          tone: 'error'
+        })
       }
     })
   }
@@ -196,11 +206,17 @@ export function useAuthSecurityController({
             }
             closeConfirmation?.()
             setPasswordForm(DEFAULT_PASSWORD_FORM)
-            pushNotification({ autoCloseMs: null, message: t('notifications.passwordRemoved'), targetId: 'password-panel-section', tone: 'warning' })
+            pushNotification({ autoCloseMs: null, message: translatedNotification('notifications.passwordRemoved'), targetId: 'password-panel-section', tone: 'warning' })
             await loadAppData()
             await loadSession()
           } catch (err) {
-            pushNotification({ autoCloseMs: null, copyText: err.message || errorText('removePassword'), message: err.message || errorText('removePassword'), targetId: 'password-panel-section', tone: 'error' })
+            pushNotification({
+              autoCloseMs: null,
+              copyText: err.message ? pollErrorNotification(err.message) : translatedNotification('errors.removePassword'),
+              message: err.message ? pollErrorNotification(err.message) : translatedNotification('errors.removePassword'),
+              targetId: 'password-panel-section',
+              tone: 'error'
+            })
           }
         })
       },
@@ -264,12 +280,12 @@ export function useAuthSecurityController({
         }
         setPasskeyLabel('')
         setShowPasskeyRegistrationDialog(false)
-        pushNotification({ message: t('notifications.passkeyRegistered'), targetId: 'passkey-panel-section', tone: 'success' })
+        pushNotification({ message: translatedNotification('notifications.passkeyRegistered'), targetId: 'passkey-panel-section', tone: 'success' })
         await loadAppData()
         await loadSession()
       } catch (err) {
         const message = normalizePasskeyError(err, t, 'registration')
-        pushNotification({ autoCloseMs: null, copyText: message, message, targetId: 'passkey-panel-section', tone: 'error' })
+        pushNotification({ autoCloseMs: null, copyText: pollErrorNotification(message), message: pollErrorNotification(message), targetId: 'passkey-panel-section', tone: 'error' })
       }
     })
   }
@@ -299,11 +315,17 @@ export function useAuthSecurityController({
               throw new Error(await apiErrorText(response, errorText('removePasskey')))
             }
             closeConfirmation?.()
-            pushNotification({ message: t('notifications.passkeyRemoved'), targetId: 'passkey-panel-section', tone: 'success' })
+            pushNotification({ message: translatedNotification('notifications.passkeyRemoved'), targetId: 'passkey-panel-section', tone: 'success' })
             await loadAppData()
             await loadSession()
           } catch (err) {
-            pushNotification({ autoCloseMs: null, copyText: err.message || errorText('removePasskey'), message: err.message || errorText('removePasskey'), targetId: 'passkey-panel-section', tone: 'error' })
+            pushNotification({
+              autoCloseMs: null,
+              copyText: err.message ? pollErrorNotification(err.message) : translatedNotification('errors.removePasskey'),
+              message: err.message ? pollErrorNotification(err.message) : translatedNotification('errors.removePasskey'),
+              targetId: 'passkey-panel-section',
+              tone: 'error'
+            })
           }
         })
       },

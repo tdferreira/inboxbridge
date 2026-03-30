@@ -109,7 +109,11 @@ describe('useUserManagementController', () => {
     expect(event.preventDefault).toHaveBeenCalled()
     expect(fetch).not.toHaveBeenCalled()
     expect(pushNotification).toHaveBeenCalledWith(expect.objectContaining({
-      message: 'Duplicate alice',
+      message: expect.objectContaining({
+        key: 'users.duplicateUsername',
+        kind: 'translation',
+        params: { username: 'alice' }
+      }),
       tone: 'error'
     }))
   })

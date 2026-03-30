@@ -793,6 +793,7 @@ const english = {
   'errors.unlinkGmailAccount': 'Unable to unlink Gmail account',
   'errors.saveMailFetcher': 'Unable to save mail account',
   'errors.testMailFetcherConnection': 'Unable to test mail account connection',
+  'errors.loadMailFetcherFolders': 'Unable to load mail account folders',
   'errors.deleteMailFetcher': 'Unable to delete mail account',
   'errors.loadFetcherPollingSettings': 'Unable to load mail account polling settings',
   'errors.saveFetcherPollingSettings': 'Unable to save mail account polling settings',
@@ -938,6 +939,7 @@ const simpleTranslations = {
     'errors.unlinkGmailAccount': 'Impossible de dissocier le compte Gmail',
     'errors.saveMailFetcher': 'Impossible d’enregistrer le compte e-mail',
     'errors.testMailFetcherConnection': 'Impossible de tester la connexion du compte e-mail',
+    'errors.loadMailFetcherFolders': 'Impossible de charger les dossiers du compte e-mail',
     'errors.deleteMailFetcher': 'Impossible de supprimer le compte e-mail',
     'errors.loadFetcherPollingSettings': 'Impossible de charger les réglages de vérification du compte e-mail',
     'errors.saveFetcherPollingSettings': 'Impossible d’enregistrer les réglages de vérification du compte e-mail',
@@ -1189,6 +1191,7 @@ const simpleTranslations = {
     'errors.unlinkGmailAccount': 'Gmail-Konto konnte nicht getrennt werden',
     'errors.saveMailFetcher': 'E-Mail-Konto konnte nicht gespeichert werden',
     'errors.testMailFetcherConnection': 'Verbindung des E-Mail-Kontos konnte nicht getestet werden',
+    'errors.loadMailFetcherFolders': 'Ordner des E-Mail-Kontos konnten nicht geladen werden',
     'errors.deleteMailFetcher': 'E-Mail-Konto konnte nicht gelöscht werden',
     'errors.loadFetcherPollingSettings': 'Abruf-Einstellungen des E-Mail-Kontos konnten nicht geladen werden',
     'errors.saveFetcherPollingSettings': 'Abruf-Einstellungen des E-Mail-Kontos konnten nicht gespeichert werden',
@@ -1774,6 +1777,7 @@ const simpleTranslations = {
     'errors.unlinkGmailAccount': 'No se pudo desvincular la cuenta de Gmail',
     'errors.saveMailFetcher': 'No se pudo guardar la cuenta de correo',
     'errors.testMailFetcherConnection': 'No se pudo probar la conexión de la cuenta de correo',
+    'errors.loadMailFetcherFolders': 'No se pudieron cargar las carpetas de la cuenta de correo',
     'errors.deleteMailFetcher': 'No se pudo eliminar la cuenta de correo',
     'errors.loadFetcherPollingSettings': 'No se pudieron cargar los ajustes de sondeo de la cuenta de correo',
     'errors.saveFetcherPollingSettings': 'No se pudieron guardar los ajustes de sondeo de la cuenta de correo',
@@ -2295,6 +2299,7 @@ Object.assign(simpleTranslations.fr, {
   'bridges.envManagedBadge': '.env',
   'bridges.envManagedNote': 'Ce récupérateur vient de l’environnement de déploiement et doit être modifié dans `.env`.',
   'notifications.bridgeSavedStartingMicrosoftOAuth': 'Compte email source {emailAccountId} enregistre. Ouverture de Microsoft OAuth…',
+  'notifications.bridgeSavedStartingProviderOAuth': 'Compte email source {emailAccountId} enregistre. Ouverture de {provider}…',
   'bridge.connectMicrosoft': 'Connecter OAuth Microsoft',
   'bridge.runPollNow': 'Lancer le polling',
   'bridge.pollerSettings': 'Réglages de vérification',
@@ -2702,6 +2707,7 @@ Object.assign(simpleTranslations.de, {
   'bridges.envManagedBadge': '.env',
   'bridges.envManagedNote': 'Dieser Abruf kommt aus der Deployment-Umgebung und muss in `.env` geändert werden.',
   'notifications.bridgeSavedStartingMicrosoftOAuth': 'Quell-E-Mail-Konto {emailAccountId} gespeichert. Microsoft OAuth wird geoeffnet…',
+  'notifications.bridgeSavedStartingProviderOAuth': 'Quell-E-Mail-Konto {emailAccountId} gespeichert. {provider} wird geoeffnet…',
   'bridge.connectMicrosoft': 'Microsoft OAuth verbinden',
   'bridge.runPollNow': 'Polling jetzt ausführen',
   'bridge.pollerSettings': 'Abruf-Einstellungen',
@@ -2923,6 +2929,7 @@ Object.assign(simpleTranslations['pt-PT'], {
   'errors.unlinkGmailAccount': 'Não foi possível desligar a conta Gmail',
   'errors.saveMailFetcher': 'Não foi possível guardar a conta de email',
   'errors.testMailFetcherConnection': 'Não foi possível testar a ligação da conta de email',
+  'errors.loadMailFetcherFolders': 'Não foi possível carregar as pastas da conta de email',
   'errors.deleteMailFetcher': 'Não foi possível eliminar a conta de email',
   'errors.loadFetcherPollingSettings': 'Não foi possível carregar as definições de verificação da conta de email',
   'errors.saveFetcherPollingSettings': 'Não foi possível guardar as definições de verificação da conta de email',
@@ -3272,6 +3279,7 @@ Object.assign(simpleTranslations['pt-PT'], {
   'bridges.envManagedBadge': '.env',
   'bridges.envManagedNote': 'Este recolhedor vem do ambiente da instalação e deve ser alterado no `.env`.',
   'notifications.bridgeSavedStartingMicrosoftOAuth': 'Conta de email de origem {emailAccountId} guardada. A abrir o Microsoft OAuth…',
+  'notifications.bridgeSavedStartingProviderOAuth': 'Conta de email de origem {emailAccountId} guardada. A abrir {provider}…',
   'bridge.connectMicrosoft': 'Ligar OAuth Microsoft',
   'bridge.reconnectMicrosoft': 'Voltar a ligar OAuth Microsoft',
   'bridge.runPollNow': 'Executar polling agora',
@@ -3470,6 +3478,7 @@ Object.assign(simpleTranslations['pt-BR'], {
   'errors.unlinkGmailAccount': 'Não foi possível desvincular a conta do Gmail',
   'errors.saveMailFetcher': 'Não foi possível salvar a conta de email',
   'errors.testMailFetcherConnection': 'Não foi possível testar a conexão da conta de email',
+  'errors.loadMailFetcherFolders': 'Não foi possível carregar as pastas da conta de email',
   'errors.deleteMailFetcher': 'Não foi possível excluir a conta de email',
   'errors.loadFetcherPollingSettings': 'Não foi possível carregar as configurações de verificação da conta de email',
   'errors.saveFetcherPollingSettings': 'Não foi possível salvar as configurações de verificação da conta de email',
@@ -3829,6 +3838,7 @@ Object.assign(simpleTranslations['pt-BR'], {
   'bridges.envManagedBadge': '.env',
   'bridges.envManagedNote': 'Este captador vem do ambiente da implantação e deve ser alterado no `.env`.',
   'notifications.bridgeSavedStartingMicrosoftOAuth': 'Conta de email de origem {emailAccountId} salva. Abrindo o Microsoft OAuth…',
+  'notifications.bridgeSavedStartingProviderOAuth': 'Conta de email de origem {emailAccountId} salva. Abrindo {provider}…',
   'bridge.connectMicrosoft': 'Conectar OAuth da Microsoft',
   'bridge.runPollNow': 'Executar polling agora',
   'bridge.pollerSettings': 'Configurações de verificação',
@@ -4250,6 +4260,7 @@ Object.assign(simpleTranslations.es, {
   'bridges.envManagedBadge': '.env',
   'bridges.envManagedNote': 'Este captador viene del entorno del despliegue y debe cambiarse en `.env`.',
   'notifications.bridgeSavedStartingMicrosoftOAuth': 'Cuenta de correo de origen {emailAccountId} guardada. Abriendo Microsoft OAuth…',
+  'notifications.bridgeSavedStartingProviderOAuth': 'Cuenta de correo de origen {emailAccountId} guardada. Abriendo {provider}…',
   'bridge.connectMicrosoft': 'Conectar OAuth de Microsoft',
   'bridge.runPollNow': 'Ejecutar polling ahora',
   'bridge.pollerSettings': 'Configuración de sondeo',
@@ -4661,6 +4672,12 @@ function applyEmailAccountAliases(dictionary) {
     }
     if (key.startsWith('emailAccount.')) {
       const alias = `bridge.${key.slice('emailAccount.'.length)}`
+      if (!(alias in dictionary)) {
+        dictionary[alias] = value
+      }
+    }
+    if (key.startsWith('notifications.bridgeSavedStarting')) {
+      const alias = `notifications.emailAccountSavedStarting${key.slice('notifications.bridgeSavedStarting'.length)}`
       if (!(alias in dictionary)) {
         dictionary[alias] = value
       }

@@ -1,4 +1,4 @@
-import { act, renderHook } from '@testing-library/react'
+import { act, renderHook, waitFor } from '@testing-library/react'
 import { DEFAULT_EMAIL_ACCOUNT_FORM, applyEmailAccountPreset } from './sourceEmailAccountForm'
 import { useEmailAccountsController } from './useEmailAccountsController'
 
@@ -117,5 +117,103 @@ describe('useEmailAccountsController', () => {
         sourceOAuthProviders: ['GOOGLE', 'MICROSOFT']
       })
     )
+  })
+
+  it('stores duplicate email-account notifications as translation descriptors', async () => {
+    const { result, pushNotification } = renderController()
+
+    act(() => {
+      result.current.applyLoadedEmailAccounts([createEmailAccount({ emailAccountId: 'account-1' })])
+      result.current.handleEmailAccountFormChange({
+        ...DEFAULT_EMAIL_ACCOUNT_FORM,
+        originalEmailAccountId: '',
+        emailAccountId: 'account-1'
+      })
+    })
+
+    await act(async () => {
+      await result.current.saveEmailAccount({ preventDefault: vi.fn() })
+    })
+
+    expect(pushNotification).toHaveBeenCalledWith(expect.objectContaining({
+      message: expect.objectContaining({
+        key: 'emailAccounts.duplicateId',
+        kind: 'translation',
+        params: { emailAccountId: 'account-1' }
+      }),
+      tone: 'error'
+    }))
+  })
+
+  it('loads source folders after a successful IMAP connection test', async () => {
+    const originalFetch = global.fetch
+    global.fetch = vi.fn()
+      .mockResolvedValueOnce({
+        ok: true,
+        json: async () => ({
+          message: 'Connection test succeeded.',
+          protocol: 'IMAP',
+          host: 'imap.example.com',
+          port: 993,
+          tls: true,
+          authMethod: 'PASSWORD',
+          oauthProvider: 'NONE',
+          authenticated: true,
+          folder: 'INBOX',
+          folderAccessible: true
+        })
+      })
+      .mockResolvedValueOnce({
+        ok: true,
+        json: async () => ({ folders: ['INBOX', 'Archive'] })
+      })
+
+    const { result } = renderController()
+
+    act(() => {
+      result.current.handleEmailAccountFormChange({
+        ...DEFAULT_EMAIL_ACCOUNT_FORM,
+        emailAccountId: 'fetcher-a',
+        host: 'imap.example.com',
+        username: 'user@example.com',
+        password: 'secret'
+      })
+    })
+
+    await act(async () => {
+      await result.current.testEmailAccountConnection()
+    })
+
+    expect(global.fetch).toHaveBeenNthCalledWith(1, '/api/app/email-accounts/test-connection', expect.objectContaining({ method: 'POST' }))
+    expect(global.fetch).toHaveBeenNthCalledWith(2, '/api/app/email-accounts/folders', expect.objectContaining({ method: 'POST' }))
+    expect(result.current.emailAccountFolders).toEqual(['INBOX', 'Archive'])
+
+    global.fetch = originalFetch
+  })
+
+  it('loads source folders when editing an existing IMAP account', async () => {
+    const originalFetch = global.fetch
+    global.fetch = vi.fn().mockResolvedValue({
+      ok: true,
+      json: async () => ({ folders: ['INBOX', 'Archive'] })
+    })
+
+    const { result } = renderController()
+    const existingAccount = createEmailAccount({
+      emailAccountId: 'fetcher-a',
+      protocol: 'IMAP',
+      folder: 'INBOX'
+    })
+
+    act(() => {
+      result.current.editEmailAccount(existingAccount)
+    })
+
+    await waitFor(() => {
+      expect(result.current.emailAccountFolders).toEqual(['INBOX', 'Archive'])
+    })
+    expect(global.fetch).toHaveBeenCalledWith('/api/app/email-accounts/folders', expect.objectContaining({ method: 'POST' }))
+
+    global.fetch = originalFetch
   })
 })

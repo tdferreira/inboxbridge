@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import { apiErrorText } from './api'
-import { formatPollError } from './formatters'
+import { pollErrorNotification, translatedNotification } from './notifications'
+import { buildSourceEmailAccountTargetId, extractSourceEmailAccountId } from './sectionTargets'
 
 const DEFAULT_SYSTEM_POLLING_FORM = {
   pollEnabledMode: 'DEFAULT',
@@ -14,6 +15,27 @@ const DEFAULT_USER_POLLING_FORM = {
   pollEnabledMode: 'DEFAULT',
   pollIntervalOverride: '',
   fetchWindowOverride: ''
+}
+
+function notificationTargetForPollErrors(errorDetails = [], messages = [], fallbackTarget) {
+  const details = Array.isArray(errorDetails) ? errorDetails : []
+  if (details.some((detail) => detail?.code === 'gmail_account_not_linked' || detail?.code === 'gmail_access_revoked')) {
+    return 'destination-mailbox-section'
+  }
+  const sourceTarget = details
+    .map((detail) => extractSourceEmailAccountId(detail))
+    .find(Boolean)
+  if (sourceTarget) {
+    return buildSourceEmailAccountTargetId(sourceTarget)
+  }
+  const rawMessages = Array.isArray(messages) ? messages : []
+  const rawSourceTarget = rawMessages
+    .map((message) => extractSourceEmailAccountId(message))
+    .find(Boolean)
+  if (rawSourceTarget) {
+    return buildSourceEmailAccountTargetId(rawSourceTarget)
+  }
+  return fallbackTarget
 }
 
 export function usePollingControllers({
@@ -100,26 +122,52 @@ export function usePollingControllers({
         await withPending('runPoll', async () => {
           try {
             const notificationGroup = 'global-poll'
-            pushNotification({ groupKey: notificationGroup, message: t('notifications.pollStarted'), targetId: 'system-dashboard-section', tone: 'warning' })
+            pushNotification({ groupKey: notificationGroup, message: translatedNotification('notifications.pollStarted'), targetId: 'system-dashboard-section', tone: 'warning' })
             const response = await fetch('/api/admin/poll/run', { method: 'POST' })
             if (!response.ok) {
               throw new Error(await apiErrorText(response, errorText('runPoll')))
             }
             const payload = await response.json()
             if (payload.errorDetails?.length || payload.errors?.length) {
-              const formattedErrors = payload.errorDetails?.length
-                ? payload.errorDetails.map((detail) => formatPollError(detail, language))
-                : payload.errors.map((message) => formatPollError(message, language))
-              throw new Error(formattedErrors.join('\n'))
+              const structuredError = payload.errorDetails?.length
+                ? payload.errorDetails.length === 1
+                  ? payload.errorDetails[0]
+                  : payload.errorDetails
+                : payload.errors.length === 1
+                  ? payload.errors[0]
+                  : payload.errors
+              throw new Error(JSON.stringify(structuredError))
             }
             const completedMessageKey = payload.spamJunkMessageCount > 0
               ? 'notifications.pollFinishedWithSpam'
               : 'notifications.pollFinished'
-            pushNotification({ groupKey: notificationGroup, message: t(completedMessageKey, { fetched: payload.fetched, imported: payload.imported, duplicates: payload.duplicates, errors: payload.errors.length, spamJunkCount: payload.spamJunkMessageCount }), replaceGroup: true, targetId: 'system-dashboard-section', tone: 'success' })
+            pushNotification({
+              groupKey: notificationGroup,
+              message: translatedNotification(completedMessageKey, { fetched: payload.fetched, imported: payload.imported, duplicates: payload.duplicates, errors: payload.errors.length, spamJunkCount: payload.spamJunkMessageCount }),
+              replaceGroup: true,
+              targetId: 'system-dashboard-section',
+              tone: 'success'
+            })
             await loadAppData()
           } catch (err) {
-            const message = formatPollError(err.message || errorText('runPoll'), language)
-            pushNotification({ copyText: message, groupKey: 'global-poll', message, replaceGroup: true, targetId: 'system-dashboard-section', tone: 'error' })
+            let rawMessage = err.message || errorText('runPoll')
+            try {
+              rawMessage = JSON.parse(rawMessage)
+            } catch {
+              // Keep plain-text errors as-is so the notification formatter can handle them.
+            }
+            pushNotification({
+              copyText: pollErrorNotification(rawMessage),
+              groupKey: 'global-poll',
+              message: pollErrorNotification(rawMessage),
+              replaceGroup: true,
+              targetId: notificationTargetForPollErrors(
+                Array.isArray(rawMessage) ? rawMessage : [rawMessage],
+                Array.isArray(rawMessage) ? rawMessage : [rawMessage],
+                'system-dashboard-section'
+              ),
+              tone: 'error'
+            })
           } finally {
             setRunningPoll(false)
           }
@@ -134,26 +182,52 @@ export function usePollingControllers({
     await withPending('runUserPoll', async () => {
       try {
         const notificationGroup = 'user-poll'
-        pushNotification({ groupKey: notificationGroup, message: t('notifications.userPollStarted'), targetId: 'user-polling-section', tone: 'warning' })
+        pushNotification({ groupKey: notificationGroup, message: translatedNotification('notifications.userPollStarted'), targetId: 'user-polling-section', tone: 'warning' })
         const response = await fetch('/api/app/poll/run', { method: 'POST' })
         if (!response.ok) {
           throw new Error(await apiErrorText(response, errorText('runUserPoll')))
         }
         const payload = await response.json()
         if (payload.errorDetails?.length || payload.errors?.length) {
-          const formattedErrors = payload.errorDetails?.length
-            ? payload.errorDetails.map((detail) => formatPollError(detail, language))
-            : payload.errors.map((message) => formatPollError(message, language))
-          throw new Error(formattedErrors.join('\n'))
+          const structuredError = payload.errorDetails?.length
+            ? payload.errorDetails.length === 1
+              ? payload.errorDetails[0]
+              : payload.errorDetails
+            : payload.errors.length === 1
+              ? payload.errors[0]
+              : payload.errors
+          throw new Error(JSON.stringify(structuredError))
         }
         const completedMessageKey = payload.spamJunkMessageCount > 0
           ? 'notifications.userPollFinishedWithSpam'
           : 'notifications.userPollFinished'
-        pushNotification({ groupKey: notificationGroup, message: t(completedMessageKey, { fetched: payload.fetched, imported: payload.imported, duplicates: payload.duplicates, errors: payload.errors.length, spamJunkCount: payload.spamJunkMessageCount }), replaceGroup: true, targetId: 'user-polling-section', tone: 'success' })
+        pushNotification({
+          groupKey: notificationGroup,
+          message: translatedNotification(completedMessageKey, { fetched: payload.fetched, imported: payload.imported, duplicates: payload.duplicates, errors: payload.errors.length, spamJunkCount: payload.spamJunkMessageCount }),
+          replaceGroup: true,
+          targetId: 'user-polling-section',
+          tone: 'success'
+        })
         await loadAppData()
       } catch (err) {
-        const message = formatPollError(err.message || errorText('runUserPoll'), language)
-        pushNotification({ copyText: message, groupKey: 'user-poll', message, replaceGroup: true, targetId: 'user-polling-section', tone: 'error' })
+        let rawMessage = err.message || errorText('runUserPoll')
+        try {
+          rawMessage = JSON.parse(rawMessage)
+        } catch {
+          // Keep plain-text errors as-is so the notification formatter can handle them.
+        }
+        pushNotification({
+          copyText: pollErrorNotification(rawMessage),
+          groupKey: 'user-poll',
+          message: pollErrorNotification(rawMessage),
+          replaceGroup: true,
+          targetId: notificationTargetForPollErrors(
+            Array.isArray(rawMessage) ? rawMessage : [rawMessage],
+            Array.isArray(rawMessage) ? rawMessage : [rawMessage],
+            'user-polling-section'
+          ),
+          tone: 'error'
+        })
       } finally {
         setRunningUserPoll(false)
       }
@@ -188,10 +262,16 @@ export function usePollingControllers({
         }
         setSystemPollingFormDirty(false)
         setShowSystemPollingDialog(false)
-        pushNotification({ message: t('notifications.pollingUpdated'), targetId: 'system-dashboard-section', tone: 'success' })
+        pushNotification({ message: translatedNotification('notifications.pollingUpdated'), targetId: 'system-dashboard-section', tone: 'success' })
         await loadAppData()
       } catch (err) {
-        pushNotification({ autoCloseMs: null, copyText: err.message || errorText('savePollingSettings'), message: err.message || errorText('savePollingSettings'), targetId: 'system-dashboard-section', tone: 'error' })
+        pushNotification({
+          autoCloseMs: null,
+          copyText: err.message ? pollErrorNotification(err.message) : translatedNotification('errors.savePollingSettings'),
+          message: err.message ? pollErrorNotification(err.message) : translatedNotification('errors.savePollingSettings'),
+          targetId: 'system-dashboard-section',
+          tone: 'error'
+        })
       }
     })
   }
@@ -216,10 +296,16 @@ export function usePollingControllers({
         setSystemPollingForm(DEFAULT_SYSTEM_POLLING_FORM)
         setSystemPollingFormDirty(false)
         setShowSystemPollingDialog(false)
-        pushNotification({ message: t('notifications.pollingReset'), targetId: 'system-dashboard-section', tone: 'success' })
+        pushNotification({ message: translatedNotification('notifications.pollingReset'), targetId: 'system-dashboard-section', tone: 'success' })
         await loadAppData()
       } catch (err) {
-        pushNotification({ autoCloseMs: null, copyText: err.message || errorText('resetPollingSettings'), message: err.message || errorText('resetPollingSettings'), targetId: 'system-dashboard-section', tone: 'error' })
+        pushNotification({
+          autoCloseMs: null,
+          copyText: err.message ? pollErrorNotification(err.message) : translatedNotification('errors.resetPollingSettings'),
+          message: err.message ? pollErrorNotification(err.message) : translatedNotification('errors.resetPollingSettings'),
+          targetId: 'system-dashboard-section',
+          tone: 'error'
+        })
       }
     })
   }
@@ -246,10 +332,16 @@ export function usePollingControllers({
         }
         setUserPollingFormDirty(false)
         setShowUserPollingDialog(false)
-        pushNotification({ message: t('notifications.userPollingUpdated'), targetId: 'user-polling-section', tone: 'success' })
+        pushNotification({ message: translatedNotification('notifications.userPollingUpdated'), targetId: 'user-polling-section', tone: 'success' })
         await loadAppData()
       } catch (err) {
-        pushNotification({ autoCloseMs: null, copyText: err.message || errorText('saveUserPollingSettings'), message: err.message || errorText('saveUserPollingSettings'), targetId: 'user-polling-section', tone: 'error' })
+        pushNotification({
+          autoCloseMs: null,
+          copyText: err.message ? pollErrorNotification(err.message) : translatedNotification('errors.saveUserPollingSettings'),
+          message: err.message ? pollErrorNotification(err.message) : translatedNotification('errors.saveUserPollingSettings'),
+          targetId: 'user-polling-section',
+          tone: 'error'
+        })
       }
     })
   }
@@ -272,10 +364,16 @@ export function usePollingControllers({
         setUserPollingForm(DEFAULT_USER_POLLING_FORM)
         setUserPollingFormDirty(false)
         setShowUserPollingDialog(false)
-        pushNotification({ message: t('notifications.userPollingReset'), targetId: 'user-polling-section', tone: 'success' })
+        pushNotification({ message: translatedNotification('notifications.userPollingReset'), targetId: 'user-polling-section', tone: 'success' })
         await loadAppData()
       } catch (err) {
-        pushNotification({ autoCloseMs: null, copyText: err.message || errorText('resetUserPollingSettings'), message: err.message || errorText('resetUserPollingSettings'), targetId: 'user-polling-section', tone: 'error' })
+        pushNotification({
+          autoCloseMs: null,
+          copyText: err.message ? pollErrorNotification(err.message) : translatedNotification('errors.resetUserPollingSettings'),
+          message: err.message ? pollErrorNotification(err.message) : translatedNotification('errors.resetUserPollingSettings'),
+          targetId: 'user-polling-section',
+          tone: 'error'
+        })
       }
     })
   }

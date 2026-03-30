@@ -6,6 +6,36 @@
   line-height: 1.5;
 }
 
+.fetcher-folder-control {
+  display: grid;
+  gap: 10px;
+}
+
+.fetcher-folder-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px;
+}
+
+.fetcher-folder-status {
+  font-size: 0.86rem;
+  color: var(--text-soft);
+}
+
+.fetcher-folder-toggle {
+  border: none;
+  background: none;
+  padding: 0;
+  color: var(--accent-strong);
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.fetcher-folder-toggle:hover {
+  text-decoration: underline;
+}
+
 .form-field-pair {
   display: grid;
   gap: 14px;

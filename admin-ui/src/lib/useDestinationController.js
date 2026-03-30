@@ -1,4 +1,5 @@
 import { normalizeDestinationProviderConfig } from './emailProviderPresets'
+import { pollErrorNotification, translatedNotification } from './notifications'
 
 export function useDestinationController({
   closeConfirmation,
@@ -80,10 +81,16 @@ export function useDestinationController({
         if (!response.ok) {
           throw new Error(await errorText('saveDestinationConfiguration', response))
         }
-        pushNotification({ message: t('notifications.destinationSaved'), targetId: 'destination-mailbox-section', tone: 'success' })
+        pushNotification({ message: translatedNotification('notifications.destinationSaved'), targetId: 'destination-mailbox-section', tone: 'success' })
         await loadAppData()
       } catch (err) {
-        pushNotification({ autoCloseMs: null, copyText: err.message || t('errors.saveDestinationConfiguration'), message: err.message || t('errors.saveDestinationConfiguration'), targetId: 'destination-mailbox-section', tone: 'error' })
+        pushNotification({
+          autoCloseMs: null,
+          copyText: err.message ? pollErrorNotification(err.message) : translatedNotification('errors.saveDestinationConfiguration'),
+          message: err.message ? pollErrorNotification(err.message) : translatedNotification('errors.saveDestinationConfiguration'),
+          targetId: 'destination-mailbox-section',
+          tone: 'error'
+        })
         throw err
       }
     })
@@ -148,25 +155,31 @@ export function useDestinationController({
             if (linkedProvider === 'GMAIL_API' && payload.providerRevocationAttempted && !payload.providerRevoked) {
               pushNotification({
                 autoCloseMs: null,
-                copyText: t('notifications.gmailUnlinkedRevokeFailed'),
-                message: t('notifications.gmailUnlinkedRevokeFailed'),
+                copyText: translatedNotification('notifications.gmailUnlinkedRevokeFailed'),
+                message: translatedNotification('notifications.gmailUnlinkedRevokeFailed'),
                 targetId: 'destination-mailbox-section',
                 tone: 'warning'
               })
             } else if (linkedProvider !== 'GMAIL_API') {
               pushNotification({
                 autoCloseMs: null,
-                copyText: t('notifications.microsoftDestinationUnlinked'),
-                message: t('notifications.microsoftDestinationUnlinked'),
+                copyText: translatedNotification('notifications.microsoftDestinationUnlinked'),
+                message: translatedNotification('notifications.microsoftDestinationUnlinked'),
                 targetId: 'destination-mailbox-section',
                 tone: 'warning'
               })
             } else {
-              pushNotification({ message: t('notifications.destinationUnlinked'), targetId: 'destination-mailbox-section', tone: 'success' })
+              pushNotification({ message: translatedNotification('notifications.destinationUnlinked'), targetId: 'destination-mailbox-section', tone: 'success' })
             }
             await loadAppData()
           } catch (err) {
-            pushNotification({ autoCloseMs: null, copyText: err.message || t('errors.unlinkDestinationAccount'), message: err.message || t('errors.unlinkDestinationAccount'), targetId: 'destination-mailbox-section', tone: 'error' })
+            pushNotification({
+              autoCloseMs: null,
+              copyText: err.message ? pollErrorNotification(err.message) : translatedNotification('errors.unlinkDestinationAccount'),
+              message: err.message ? pollErrorNotification(err.message) : translatedNotification('errors.unlinkDestinationAccount'),
+              targetId: 'destination-mailbox-section',
+              tone: 'error'
+            })
           }
         })
       },

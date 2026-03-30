@@ -1,6 +1,8 @@
 import { useEffect, useMemo, useState } from 'react'
 import { apiErrorText } from './api'
-import { formatPollError, isOauthRevokedError } from './formatters'
+import { isOauthRevokedError } from './formatters'
+import { pollErrorNotification, translatedNotification } from './notifications'
+import { buildSourceEmailAccountTargetId, extractSourceEmailAccountId } from './sectionTargets'
 import { applyEmailAccountPreset, DEFAULT_EMAIL_ACCOUNT_FORM, normalizeEmailAccountForm } from './sourceEmailAccountForm'
 
 const DEFAULT_SOURCE_POLLING_FORM = {
@@ -43,6 +45,21 @@ function buildEmailAccountRequestPayload(emailAccountForm) {
     unreadOnly: emailAccountForm.unreadOnly,
     customLabel: emailAccountForm.customLabel
   }
+}
+
+function sourceFolderSignature(emailAccountForm) {
+  return JSON.stringify({
+    authMethod: emailAccountForm.authMethod,
+    emailAccountId: emailAccountForm.emailAccountId,
+    host: emailAccountForm.host,
+    oauthProvider: emailAccountForm.oauthProvider,
+    originalEmailAccountId: emailAccountForm.originalEmailAccountId,
+    password: emailAccountForm.password,
+    port: emailAccountForm.port,
+    protocol: emailAccountForm.protocol,
+    tls: emailAccountForm.tls,
+    username: emailAccountForm.username
+  })
 }
 
 function normalizeSourcePollingForm(payload) {
@@ -96,6 +113,8 @@ export function useEmailAccountsController({
 }) {
   const [emailAccountForm, setEmailAccountForm] = useState(DEFAULT_EMAIL_ACCOUNT_FORM)
   const [emailAccountDuplicateError, setEmailAccountDuplicateError] = useState('')
+  const [emailAccountFolders, setEmailAccountFolders] = useState([])
+  const [emailAccountFoldersLoading, setEmailAccountFoldersLoading] = useState(false)
   const [emailAccountTestResult, setEmailAccountTestResult] = useState(null)
   const [userEmailAccounts, setUserEmailAccounts] = useState([])
   const [expandedFetcherLoadingId, setExpandedFetcherLoadingId] = useState(null)
@@ -153,6 +172,10 @@ export function useEmailAccountsController({
       .sort((left, right) => left.emailAccountId.localeCompare(right.emailAccountId))
   }, [authOptions.sourceOAuthProviders, sessionUsername, systemDashboardEmailAccounts, userEmailAccounts])
 
+  function translateProviderLabel(provider) {
+    return translatedNotification(provider === 'GOOGLE' ? 'oauthProvider.google' : 'oauthProvider.microsoft')
+  }
+
   const connectingEmailAccountId = visibleFetchers.find((emailAccount) => isPending(`microsoftOAuth:${emailAccount.emailAccountId}`) || isPending(`googleSourceOAuth:${emailAccount.emailAccountId}`))?.emailAccountId || null
   const deletingEmailAccountId = userEmailAccounts.find((emailAccount) => isPending(`bridgeDelete:${emailAccount.emailAccountId}`))?.emailAccountId || null
   const fetcherPollLoadingId = visibleFetchers.find((emailAccount) => isPending(`bridgePoll:${emailAccount.emailAccountId}`))?.emailAccountId || null
@@ -177,7 +200,13 @@ export function useEmailAccountsController({
   function handleEmailAccountFormChange(updater) {
     setEmailAccountDuplicateError('')
     setEmailAccountTestResult(null)
-    setEmailAccountForm((current) => normalizeEmailAccountForm(typeof updater === 'function' ? updater(current) : updater, authOptions))
+    setEmailAccountForm((current) => {
+      const next = normalizeEmailAccountForm(typeof updater === 'function' ? updater(current) : updater, authOptions)
+      if (sourceFolderSignature(current) !== sourceFolderSignature(next)) {
+        setEmailAccountFolders([])
+      }
+      return next
+    })
   }
 
   function applyEmailAccountPresetSelection(presetId) {
@@ -187,12 +216,14 @@ export function useEmailAccountsController({
 
   function openAddFetcherDialog() {
     setEmailAccountDuplicateError('')
+    setEmailAccountFolders([])
     setEmailAccountTestResult(null)
     setEmailAccountForm(DEFAULT_EMAIL_ACCOUNT_FORM)
     setShowFetcherDialog(true)
   }
 
   function editEmailAccount(emailAccount) {
+    setEmailAccountFolders([])
     setEmailAccountTestResult(null)
     handleEmailAccountFormChange({
       originalEmailAccountId: emailAccount.emailAccountId,
@@ -215,8 +246,47 @@ export function useEmailAccountsController({
   }
 
   function closeFetcherDialog() {
+    setEmailAccountFolders([])
     setEmailAccountTestResult(null)
     setShowFetcherDialog(false)
+  }
+
+  async function loadEmailAccountFolders(formOverride = emailAccountForm, options = {}) {
+    const { suppressErrors = false } = options
+    const payload = buildEmailAccountRequestPayload(formOverride)
+    if (payload.protocol !== 'IMAP') {
+      setEmailAccountFolders([])
+      return []
+    }
+    setEmailAccountFoldersLoading(true)
+    try {
+      const response = await fetch('/api/app/email-accounts/folders', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload)
+      })
+      if (!response.ok) {
+        throw new Error(await apiErrorText(response, errorText('loadMailFetcherFolders')))
+      }
+      const folderPayload = await response.json()
+      const folders = Array.isArray(folderPayload?.folders) ? folderPayload.folders : []
+      setEmailAccountFolders(folders)
+      return folders
+    } catch (err) {
+      setEmailAccountFolders([])
+      if (!suppressErrors) {
+        pushNotification({
+          autoCloseMs: null,
+          copyText: err.message ? pollErrorNotification(err.message) : translatedNotification('errors.loadMailFetcherFolders'),
+          message: err.message ? pollErrorNotification(err.message) : translatedNotification('errors.loadMailFetcherFolders'),
+          targetId: 'source-email-accounts-section',
+          tone: 'error'
+        })
+      }
+      throw err
+    } finally {
+      setEmailAccountFoldersLoading(false)
+    }
   }
 
   function startGoogleSourceOAuth(sourceId) {
@@ -265,8 +335,8 @@ export function useEmailAccountsController({
       if (!suppressErrors) {
         pushNotification({
           autoCloseMs: null,
-          copyText: err.message || errorText('loadMailAccountStatistics'),
-          message: err.message || errorText('loadMailAccountStatistics'),
+          copyText: err.message ? pollErrorNotification(err.message) : translatedNotification('errors.loadMailAccountStatistics'),
+          message: err.message ? pollErrorNotification(err.message) : translatedNotification('errors.loadMailAccountStatistics'),
           targetId: 'source-email-accounts-section',
           tone: 'error'
         })
@@ -311,7 +381,7 @@ export function useEmailAccountsController({
     if (duplicateFetcher) {
       const duplicateMessage = t('emailAccounts.duplicateId', { emailAccountId: normalizedEmailAccountId })
       setEmailAccountDuplicateError(duplicateMessage)
-      pushNotification({ autoCloseMs: null, copyText: duplicateMessage, message: duplicateMessage, targetId: 'source-email-accounts-section', tone: 'error' })
+      pushNotification({ autoCloseMs: null, message: translatedNotification('emailAccounts.duplicateId', { emailAccountId: normalizedEmailAccountId }), targetId: 'source-email-accounts-section', tone: 'error' })
       return null
     }
     const actionKey = connectMicrosoftAfterSave ? 'bridgeSaveConnect' : 'bridgeSave'
@@ -329,15 +399,17 @@ export function useEmailAccountsController({
         setEmailAccountDuplicateError('')
         setEmailAccountTestResult(null)
         if (!connectMicrosoftAfterSave) {
-          pushNotification({ message: t('notifications.emailAccountSaved', { emailAccountId: emailAccountForm.emailAccountId }), targetId: 'source-email-accounts-section', tone: 'success' })
+          pushNotification({ message: translatedNotification('notifications.emailAccountSaved', { emailAccountId: emailAccountForm.emailAccountId }), targetId: 'source-email-accounts-section', tone: 'success' })
           setEmailAccountForm(DEFAULT_EMAIL_ACCOUNT_FORM)
           setShowFetcherDialog(false)
           await loadAppData()
         } else {
           pushNotification({
-            message: t('notifications.emailAccountSavedStartingProviderOAuth', {
+            message: translatedNotification('notifications.emailAccountSavedStartingProviderOAuth', {
               emailAccountId: payload.emailAccountId || payload.emailAccountId || emailAccountForm.emailAccountId,
-              provider: emailAccountForm.oauthProvider === 'GOOGLE' ? t('oauthProvider.google') : t('oauthProvider.microsoft')
+              provider: emailAccountForm.oauthProvider === 'GOOGLE'
+                ? translateProviderLabel('GOOGLE')
+                : translateProviderLabel('MICROSOFT')
             }),
             targetId: 'source-email-accounts-section',
             tone: 'warning'
@@ -345,7 +417,7 @@ export function useEmailAccountsController({
         }
         return payload
       } catch (err) {
-        pushNotification({ autoCloseMs: null, copyText: err.message || errorText('saveMailFetcher'), message: err.message || errorText('saveMailFetcher'), targetId: 'source-email-accounts-section', tone: 'error' })
+        pushNotification({ autoCloseMs: null, copyText: err.message ? pollErrorNotification(err.message) : translatedNotification('errors.saveMailFetcher'), message: err.message ? pollErrorNotification(err.message) : translatedNotification('errors.saveMailFetcher'), targetId: 'source-email-accounts-section', tone: 'error' })
         return null
       }
     })
@@ -378,6 +450,9 @@ export function useEmailAccountsController({
         const payload = await response.json()
         const message = payload.message || t('emailAccounts.testSuccess')
         setEmailAccountTestResult({ ...payload, message, tone: 'success' })
+        if (emailAccountForm.protocol === 'IMAP') {
+          await loadEmailAccountFolders(emailAccountForm, { suppressErrors: true })
+        }
         pushNotification({ message, targetId: 'source-email-accounts-section', tone: 'success' })
       } catch (err) {
         const message = err.message || errorText('testMailFetcherConnection')
@@ -401,11 +476,11 @@ export function useEmailAccountsController({
             if (!response.ok) {
               throw new Error(await apiErrorText(response, errorText('deleteMailFetcher')))
             }
-            pushNotification({ message: t('notifications.emailAccountDeleted', { emailAccountId }), targetId: 'source-email-accounts-section', tone: 'success' })
+            pushNotification({ message: translatedNotification('notifications.emailAccountDeleted', { emailAccountId }), targetId: 'source-email-accounts-section', tone: 'success' })
             await loadAppData()
             openConfirmation(null)
           } catch (err) {
-            pushNotification({ autoCloseMs: null, copyText: err.message || errorText('deleteMailFetcher'), message: err.message || errorText('deleteMailFetcher'), targetId: 'source-email-accounts-section', tone: 'error' })
+            pushNotification({ autoCloseMs: null, copyText: err.message ? pollErrorNotification(err.message) : translatedNotification('errors.deleteMailFetcher'), message: err.message ? pollErrorNotification(err.message) : translatedNotification('errors.deleteMailFetcher'), targetId: 'source-email-accounts-section', tone: 'error' })
           }
         })
       },
@@ -427,7 +502,7 @@ export function useEmailAccountsController({
         setShowFetcherPollingDialog(true)
       } catch (err) {
         setFetcherPollingTarget(null)
-        pushNotification({ autoCloseMs: null, copyText: err.message || errorText('loadFetcherPollingSettings'), message: err.message || errorText('loadFetcherPollingSettings'), targetId: 'source-email-accounts-section', tone: 'error' })
+        pushNotification({ autoCloseMs: null, copyText: err.message ? pollErrorNotification(err.message) : translatedNotification('errors.loadFetcherPollingSettings'), message: err.message ? pollErrorNotification(err.message) : translatedNotification('errors.loadFetcherPollingSettings'), targetId: 'source-email-accounts-section', tone: 'error' })
       }
     })
   }
@@ -464,11 +539,11 @@ export function useEmailAccountsController({
         }
         const payload = await response.json()
         setFetcherPollingForm(normalizeSourcePollingForm(payload))
-        pushNotification({ message: t('notifications.fetcherPollingSaved', { emailAccountId: fetcherPollingTarget.emailAccountId }), targetId: 'source-email-accounts-section', tone: 'success' })
+        pushNotification({ message: translatedNotification('notifications.fetcherPollingSaved', { emailAccountId: fetcherPollingTarget.emailAccountId }), targetId: 'source-email-accounts-section', tone: 'success' })
         await loadAppData()
         closeFetcherPollingDialog()
       } catch (err) {
-        pushNotification({ autoCloseMs: null, copyText: err.message || errorText('saveFetcherPollingSettings'), message: err.message || errorText('saveFetcherPollingSettings'), targetId: 'source-email-accounts-section', tone: 'error' })
+        pushNotification({ autoCloseMs: null, copyText: err.message ? pollErrorNotification(err.message) : translatedNotification('errors.saveFetcherPollingSettings'), message: err.message ? pollErrorNotification(err.message) : translatedNotification('errors.saveFetcherPollingSettings'), targetId: 'source-email-accounts-section', tone: 'error' })
       }
     })
   }
@@ -492,10 +567,10 @@ export function useEmailAccountsController({
         }
         const payload = await response.json()
         setFetcherPollingForm(normalizeSourcePollingForm(payload))
-        pushNotification({ message: t('notifications.fetcherPollingReset', { emailAccountId: fetcherPollingTarget.emailAccountId }), targetId: 'source-email-accounts-section', tone: 'success' })
+        pushNotification({ message: translatedNotification('notifications.fetcherPollingReset', { emailAccountId: fetcherPollingTarget.emailAccountId }), targetId: 'source-email-accounts-section', tone: 'success' })
         await loadAppData()
       } catch (err) {
-        pushNotification({ autoCloseMs: null, copyText: err.message || errorText('resetFetcherPollingSettings'), message: err.message || errorText('resetFetcherPollingSettings'), targetId: 'source-email-accounts-section', tone: 'error' })
+        pushNotification({ autoCloseMs: null, copyText: err.message ? pollErrorNotification(err.message) : translatedNotification('errors.resetFetcherPollingSettings'), message: err.message ? pollErrorNotification(err.message) : translatedNotification('errors.resetFetcherPollingSettings'), targetId: 'source-email-accounts-section', tone: 'error' })
       }
     })
   }
@@ -505,11 +580,23 @@ export function useEmailAccountsController({
     if (details.some((detail) => detail?.code === 'gmail_account_not_linked' || detail?.code === 'gmail_access_revoked')) {
       return 'destination-mailbox-section'
     }
+    const sourceTarget = details
+      .map((detail) => extractSourceEmailAccountId(detail))
+      .find(Boolean)
+    if (sourceTarget) {
+      return buildSourceEmailAccountTargetId(sourceTarget)
+    }
     const rawMessages = Array.isArray(messages) ? messages : []
     if (rawMessages.some((message) => typeof message === 'string'
       && (message.includes('The Gmail destination is not linked for this account')
         || message.includes('The linked Gmail account no longer grants InboxBridge access')))) {
       return 'destination-mailbox-section'
+    }
+    const rawSourceTarget = rawMessages
+      .map((message) => extractSourceEmailAccountId(message))
+      .find(Boolean)
+    if (rawSourceTarget) {
+      return buildSourceEmailAccountTargetId(rawSourceTarget)
     }
     return fallbackTarget
   }
@@ -528,7 +615,7 @@ export function useEmailAccountsController({
         pushNotification({
           autoCloseMs: 10000,
           groupKey: notificationGroup,
-          message: t('notifications.fetcherPollStarted', { emailAccountId }),
+          message: translatedNotification('notifications.fetcherPollStarted', { emailAccountId }),
           targetId: 'source-email-accounts-section',
           tone: 'warning'
         })
@@ -539,10 +626,14 @@ export function useEmailAccountsController({
         }
         const payload = await response.json()
         if (payload.errorDetails?.length || payload.errors?.length) {
-          const formattedErrors = payload.errorDetails?.length
-            ? payload.errorDetails.map((detail) => formatPollError(detail, language))
-            : payload.errors.map((message) => formatPollError(message, language))
-          throw Object.assign(new Error(formattedErrors.join('\n')), {
+          const structuredError = payload.errorDetails?.length
+            ? payload.errorDetails.length === 1
+              ? payload.errorDetails[0]
+              : payload.errorDetails
+            : payload.errors.length === 1
+              ? payload.errors[0]
+              : payload.errors
+          throw Object.assign(new Error(JSON.stringify(structuredError)), {
             notificationTargetId: notificationTargetForPollErrors(payload.errorDetails, payload.errors)
           })
         }
@@ -551,7 +642,7 @@ export function useEmailAccountsController({
           : 'notifications.fetcherPollCompleted'
         pushNotification({
           groupKey: notificationGroup,
-          message: t(completedMessageKey, {
+          message: translatedNotification(completedMessageKey, {
             emailAccountId,
             fetched: payload.fetched,
             imported: payload.imported,
@@ -563,11 +654,16 @@ export function useEmailAccountsController({
           tone: 'success'
         })
       } catch (err) {
-        const message = formatPollError(err.message || errorText('runMailFetcherPoll'), language)
+        let message = err.message || errorText('runMailFetcherPoll')
+        try {
+          message = JSON.parse(message)
+        } catch {
+          // Keep plain-text errors as-is so the shared formatter can localize them later.
+        }
         pushNotification({
-          copyText: message,
+          copyText: pollErrorNotification(message),
           groupKey: `fetcher-poll:${emailAccountId}`,
-          message,
+          message: pollErrorNotification(message),
           replaceGroup: true,
           targetId: err.notificationTargetId || notificationTargetForPollErrors([], [err.message || '']),
           tone: 'error'
@@ -602,11 +698,20 @@ export function useEmailAccountsController({
     }
   }, [showFetcherDialog])
 
+  useEffect(() => {
+    if (!showFetcherDialog || emailAccountForm.protocol !== 'IMAP' || !emailAccountForm.originalEmailAccountId) {
+      return
+    }
+    loadEmailAccountFolders(emailAccountForm, { suppressErrors: true }).catch(() => {})
+  }, [emailAccountForm.originalEmailAccountId, emailAccountForm.protocol, showFetcherDialog])
+
   return {
     applyEmailAccountPreset: applyEmailAccountPresetSelection,
     applyLoadedEmailAccounts,
     emailAccountDuplicateError,
     emailAccountForm,
+    emailAccountFolders,
+    emailAccountFoldersLoading,
     emailAccountTestResult,
     closeFetcherDialog,
     closeFetcherPollingDialog,

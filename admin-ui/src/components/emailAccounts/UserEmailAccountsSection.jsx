@@ -12,6 +12,8 @@ function UserEmailAccountsSection({
   connectingEmailAccountId,
   deletingEmailAccountId,
   duplicateIdError,
+  emailAccountFolders,
+  emailAccountFoldersLoading,
   fetchers,
   fetcherDialogOpen,
   fetcherPollLoadingId,
@@ -111,6 +113,8 @@ function UserEmailAccountsSection({
         <EmailAccountDialog
           availableOAuthProviders={resolvedOAuthProviders}
           emailAccountForm={emailAccountForm}
+          emailAccountFolders={emailAccountFolders}
+          emailAccountFoldersLoading={emailAccountFoldersLoading}
           duplicateIdError={duplicateIdError}
           onApplyPreset={onApplyPreset}
           onEmailAccountFormChange={onEmailAccountFormChange}

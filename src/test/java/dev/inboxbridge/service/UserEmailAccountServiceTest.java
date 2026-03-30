@@ -170,6 +170,18 @@ class UserEmailAccountServiceTest {
     }
 
     @Test
+    void listFoldersUsesStoredPasswordWhenEditingWithoutReenteringIt() {
+        UserEmailAccountService service = service();
+        AppUser owner = user(1L);
+        service.upsert(owner, request(null, "fetcher-a"));
+
+        var response = service.listFolders(owner, request("fetcher-a", "fetcher-a"));
+
+        assertEquals(List.of("INBOX", "Archive"), response.folders());
+        assertEquals("Secret#123", ((FakeMailSourceClient) service.mailSourceClient).lastBridge.password());
+    }
+
+    @Test
     void upsertForcesOutlookHostsToMicrosoftOAuth() {
         UserEmailAccountService service = service();
         AppUser owner = user(1L);
@@ -529,6 +541,12 @@ class UserEmailAccountServiceTest {
                     0,
                     Boolean.FALSE,
                     null);
+        }
+
+        @Override
+        public List<String> listFolders(RuntimeEmailAccount bridge) {
+            this.lastBridge = bridge;
+            return List.of("INBOX", "Archive");
         }
     }
 }

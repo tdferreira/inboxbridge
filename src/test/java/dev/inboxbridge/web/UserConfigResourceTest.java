@@ -157,6 +157,31 @@ class UserConfigResourceTest {
     }
 
     @Test
+    void emailAccountFoldersDelegatesToUserEmailAccountService() {
+        UserConfigResource resource = resource();
+        resource.userEmailAccountService = new FakeUserEmailAccountService();
+
+        DestinationMailboxFolderOptionsView response = resource.emailAccountFolders(new UpdateUserEmailAccountRequest(
+                null,
+                "fetcher-1",
+                true,
+                "IMAP",
+                "imap.example.com",
+                993,
+                true,
+                "PASSWORD",
+                "NONE",
+                "alice@example.com",
+                "Secret#123",
+                "",
+                "INBOX",
+                false,
+                "Imported/Test"));
+
+        assertEquals(List.of("INBOX", "Archive"), response.folders());
+    }
+
+    @Test
     void destinationFoldersReturnsUserScopedFolderOptions() {
         UserConfigResource resource = resource();
         resource.userMailDestinationConfigService = new FakeUserMailDestinationConfigService();
@@ -366,6 +391,11 @@ class UserConfigResourceTest {
     }
 
     private static final class FakeUserEmailAccountService extends UserEmailAccountService {
+        @Override
+        public DestinationMailboxFolderOptionsView listFolders(AppUser user, UpdateUserEmailAccountRequest request) {
+            return new DestinationMailboxFolderOptionsView(List.of("INBOX", "Archive"));
+        }
+
         @Override
         public EmailAccountConnectionTestResult testConnection(AppUser user, UpdateUserEmailAccountRequest request) {
             return new EmailAccountConnectionTestResult(true, "Connection test succeeded.", "IMAP", "imap.example.com", 993, true, "PASSWORD", "NONE", true, "INBOX", true, false, Boolean.TRUE, null, 0, 0, Boolean.FALSE, null);
