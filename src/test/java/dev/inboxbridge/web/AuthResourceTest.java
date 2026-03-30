@@ -4,23 +4,38 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 
+import java.time.Instant;
+import java.util.List;
+
 import org.junit.jupiter.api.Test;
 
+import dev.inboxbridge.dto.AccountSessionsResponse;
+import dev.inboxbridge.dto.AuthUiOptionsResponse;
+import dev.inboxbridge.dto.ApiError;
 import dev.inboxbridge.dto.FinishPasskeyCeremonyRequest;
 import dev.inboxbridge.dto.LoginRequest;
 import dev.inboxbridge.dto.LoginResponse;
+import dev.inboxbridge.dto.RegistrationChallengeResponse;
 import dev.inboxbridge.dto.StartPasskeyCeremonyResponse;
 import dev.inboxbridge.dto.StartPasskeyLoginRequest;
 import dev.inboxbridge.persistence.AppUser;
+import dev.inboxbridge.persistence.UserSession;
 import dev.inboxbridge.security.CurrentUserContext;
 import dev.inboxbridge.service.AppUserService;
 import dev.inboxbridge.service.ApplicationModeService;
 import dev.inboxbridge.service.AuthService;
+import dev.inboxbridge.service.AuthClientAddressService;
+import dev.inboxbridge.service.AuthLoginProtectionService;
+import dev.inboxbridge.service.AuthSecuritySettingsService;
 import dev.inboxbridge.service.MicrosoftOAuthService;
 import dev.inboxbridge.service.OAuthProviderRegistryService;
 import dev.inboxbridge.service.PasskeyService;
+import dev.inboxbridge.service.RegistrationChallengeService;
 import dev.inboxbridge.service.SystemOAuthAppSettingsService;
+import dev.inboxbridge.service.UserSessionService;
 import jakarta.ws.rs.BadRequestException;
+import jakarta.ws.rs.core.HttpHeaders;
+import jakarta.ws.rs.core.MultivaluedHashMap;
 import jakarta.ws.rs.core.NewCookie;
 import jakarta.ws.rs.core.Response;
 
@@ -42,6 +57,7 @@ class AuthResourceTest {
     void finishPasskeyLoginReturnsSessionCookie() {
         AuthResource resource = new AuthResource();
         resource.authService = new FakeAuthService();
+        resource.authClientAddressService = new AuthClientAddressService();
         resource.passkeyService = new FakePasskeyService();
         resource.appUserService = new AppUserService();
         resource.currentUserContext = new CurrentUserContext();
@@ -64,12 +80,15 @@ class AuthResourceTest {
         resource.microsoftOAuthService = new FakeMicrosoftOAuthService(false);
         resource.systemOAuthAppSettingsService = new FakeSystemOAuthAppSettingsService(false);
         resource.oAuthProviderRegistryService = new FakeOAuthProviderRegistryService();
+        resource.registrationChallengeService = new FakeRegistrationChallengeService(false);
+        resource.authSecuritySettingsService = new FakeAuthSecuritySettingsService(false);
 
-        var response = resource.options();
+        AuthUiOptionsResponse response = resource.options();
 
         assertEquals(false, response.multiUserEnabled());
         assertEquals(false, response.microsoftOAuthAvailable());
         assertEquals(false, response.googleOAuthAvailable());
+        assertEquals(false, response.registrationChallengeEnabled());
     }
 
     @Test
@@ -77,12 +96,102 @@ class AuthResourceTest {
         AuthResource resource = new AuthResource();
         resource.applicationModeService = new FakeApplicationModeService(false);
         resource.appUserService = new AppUserService();
+        resource.registrationChallengeService = new FakeRegistrationChallengeService(true);
+        resource.authSecuritySettingsService = new FakeAuthSecuritySettingsService(true);
 
         BadRequestException error = assertThrows(
                 BadRequestException.class,
-                () -> resource.register(new dev.inboxbridge.dto.RegisterUserRequest("alice", "Secret#123", "Secret#123")));
+                () -> resource.register(new dev.inboxbridge.dto.RegisterUserRequest("alice", "Secret#123", "Secret#123", "challenge-1", "5")));
 
         assertEquals("Multi-user mode is disabled for this deployment.", error.getMessage());
+    }
+
+    @Test
+    void registrationChallengeReturnsCurrentChallenge() {
+        AuthResource resource = new AuthResource();
+        resource.applicationModeService = new FakeApplicationModeService(true);
+        resource.registrationChallengeService = new FakeRegistrationChallengeService(true);
+        resource.authSecuritySettingsService = new FakeAuthSecuritySettingsService(true);
+
+        RegistrationChallengeResponse response = resource.registrationChallenge();
+
+        assertEquals(true, response.enabled());
+        assertEquals("challenge-1", response.challengeId());
+        assertEquals("2 + 3 = ?", response.prompt());
+    }
+
+    @Test
+    void loginReturnsTooManyRequestsWhenAddressIsBlocked() {
+        AuthResource resource = new AuthResource();
+        resource.authService = new FakeAuthService();
+        resource.authClientAddressService = new AuthClientAddressService();
+        resource.authLoginProtectionService = new FakeAuthLoginProtectionService(Instant.parse("2026-03-30T14:20:00Z"));
+        resource.authSecuritySettingsService = new FakeAuthSecuritySettingsService(true);
+        resource.httpHeaders = new StaticHttpHeaders("203.0.113.4");
+
+        Response response = resource.login(new LoginRequest("admin", "wrong"));
+
+        assertEquals(429, response.getStatus());
+        ApiError error = (ApiError) response.getEntity();
+        assertEquals("auth_login_blocked", error.code());
+        assertEquals("2026-03-30T14:20:00Z", error.meta().get("blockedUntil"));
+    }
+
+    @Test
+    void accountSessionsReturnsRecentAndActiveLists() {
+        AccountResource resource = new AccountResource();
+        CurrentUserContext context = new CurrentUserContext();
+        AppUser user = new AppUser();
+        user.id = 7L;
+        context.setUser(user);
+        UserSession current = new UserSession();
+        current.id = 91L;
+        context.setSession(current);
+        resource.currentUserContext = context;
+        resource.userSessionService = new FakeUserSessionService();
+
+        AccountSessionsResponse response = resource.sessions();
+
+        assertEquals(1, response.recentLogins().size());
+        assertEquals(1, response.activeSessions().size());
+        assertEquals(true, response.activeSessions().get(0).current());
+    }
+
+    @Test
+    void revokeOtherSessionsUsesCurrentSessionId() {
+        AccountResource resource = new AccountResource();
+        CurrentUserContext context = new CurrentUserContext();
+        AppUser user = new AppUser();
+        user.id = 7L;
+        context.setUser(user);
+        UserSession current = new UserSession();
+        current.id = 91L;
+        context.setSession(current);
+        FakeUserSessionService sessionService = new FakeUserSessionService();
+        resource.currentUserContext = context;
+        resource.userSessionService = sessionService;
+
+        resource.revokeOtherSessions();
+
+        assertEquals(7L, sessionService.lastUserId);
+        assertEquals(91L, sessionService.lastCurrentSessionId);
+    }
+
+    @Test
+    void revokeSessionUsesCurrentUserScope() {
+        AccountResource resource = new AccountResource();
+        CurrentUserContext context = new CurrentUserContext();
+        AppUser user = new AppUser();
+        user.id = 7L;
+        context.setUser(user);
+        FakeUserSessionService sessionService = new FakeUserSessionService();
+        resource.currentUserContext = context;
+        resource.userSessionService = sessionService;
+
+        resource.revokeSession(42L);
+
+        assertEquals(7L, sessionService.lastUserId);
+        assertEquals(42L, sessionService.lastRevokedSessionId);
     }
 
     private static final class FakePasskeyService extends PasskeyService {
@@ -97,14 +206,14 @@ class AuthResourceTest {
         }
 
         @Override
-        public AppUser finishAuthentication(FinishPasskeyCeremonyRequest request) {
+        public PasskeyAuthenticationResult finishAuthentication(FinishPasskeyCeremonyRequest request) {
             AppUser user = new AppUser();
             user.id = 7L;
             user.username = "admin";
             user.role = AppUser.Role.ADMIN;
             user.approved = true;
             user.active = true;
-            return user;
+            return new PasskeyAuthenticationResult(user, false);
         }
 
         @Override
@@ -115,13 +224,53 @@ class AuthResourceTest {
 
     private static final class FakeAuthService extends AuthService {
         @Override
-        public LoginResult login(String username, String password) {
+        public LoginResult login(String username, String password, String clientIp, String userAgent) {
             throw new UnsupportedOperationException();
         }
 
         @Override
-        public AuthenticatedSession loginWithPasskey(AppUser user) {
-            return new AuthenticatedSession(user, "session-1");
+        public AuthenticatedSession loginWithPasskey(PasskeyService.PasskeyAuthenticationResult result, String clientIp, String userAgent) {
+            return new AuthenticatedSession(result.user(), "session-1");
+        }
+    }
+
+    private static final class FakeUserSessionService extends UserSessionService {
+        private Long lastUserId;
+        private Long lastCurrentSessionId;
+        private Long lastRevokedSessionId;
+
+        @Override
+        public java.util.List<UserSession> listRecentSessions(Long userId, int limit) {
+            return java.util.List.of(buildSession(91L, userId, true));
+        }
+
+        @Override
+        public java.util.List<UserSession> listActiveSessions(Long userId) {
+            return java.util.List.of(buildSession(91L, userId, true));
+        }
+
+        @Override
+        public void invalidateOtherSessions(Long userId, Long currentSessionId) {
+            this.lastUserId = userId;
+            this.lastCurrentSessionId = currentSessionId;
+        }
+
+        @Override
+        public void invalidateSessionForUser(Long userId, Long sessionId) {
+            this.lastUserId = userId;
+            this.lastRevokedSessionId = sessionId;
+        }
+
+        private UserSession buildSession(Long sessionId, Long userId, boolean active) {
+            UserSession session = new UserSession();
+            session.id = sessionId;
+            session.userId = userId;
+            session.clientIp = "203.0.113.9";
+            session.loginMethod = UserSession.LoginMethod.PASSWORD;
+            session.createdAt = Instant.parse("2026-03-30T12:00:00Z");
+            session.lastSeenAt = Instant.parse("2026-03-30T12:05:00Z");
+            session.expiresAt = active ? Instant.now().plusSeconds(3600) : Instant.now().minusSeconds(3600);
+            return session;
         }
     }
 
@@ -142,6 +291,48 @@ class AuthResourceTest {
         @Override
         public java.util.List<dev.inboxbridge.config.InboxBridgeConfig.OAuthProvider> configuredSourceProviders() {
             return java.util.List.of();
+        }
+    }
+
+    private static final class FakeRegistrationChallengeService extends RegistrationChallengeService {
+        private final boolean enabled;
+
+        private FakeRegistrationChallengeService(boolean enabled) {
+            this.enabled = enabled;
+        }
+
+        @Override
+        public boolean enabled() {
+            return enabled;
+        }
+
+        @Override
+        public RegistrationChallengeResponse currentChallenge() {
+            return enabled
+                    ? new RegistrationChallengeResponse(true, "challenge-1", "2 + 3 = ?")
+                    : RegistrationChallengeResponse.disabled();
+        }
+
+        @Override
+        public void validateAndConsume(String challengeId, String challengeAnswer) {
+        }
+    }
+
+    private static final class FakeAuthSecuritySettingsService extends AuthSecuritySettingsService {
+        private final boolean registrationChallengeEnabled;
+
+        private FakeAuthSecuritySettingsService(boolean registrationChallengeEnabled) {
+            this.registrationChallengeEnabled = registrationChallengeEnabled;
+        }
+
+        @Override
+        public EffectiveAuthSecuritySettings effectiveSettings() {
+            return new EffectiveAuthSecuritySettings(
+                    5,
+                    java.time.Duration.ofMinutes(5),
+                    java.time.Duration.ofHours(1),
+                    registrationChallengeEnabled,
+                    java.time.Duration.ofMinutes(10));
         }
     }
 
@@ -168,6 +359,81 @@ class AuthResourceTest {
         @Override
         public boolean clientConfigured() {
             return configured;
+        }
+    }
+
+    private static final class FakeAuthLoginProtectionService extends AuthLoginProtectionService {
+        private final Instant blockedUntil;
+
+        private FakeAuthLoginProtectionService(Instant blockedUntil) {
+            this.blockedUntil = blockedUntil;
+        }
+
+        @Override
+        public void requireLoginAllowed(String clientKey) {
+            throw new LoginBlockedException(blockedUntil);
+        }
+    }
+
+    private static final class StaticHttpHeaders implements HttpHeaders {
+        private final MultivaluedHashMap<String, String> headers = new MultivaluedHashMap<>();
+
+        private StaticHttpHeaders(String forwardedFor) {
+            headers.put("X-Forwarded-For", List.of(forwardedFor));
+        }
+
+        @Override
+        public List<String> getRequestHeader(String name) {
+            return headers.get(name);
+        }
+
+        @Override
+        public String getHeaderString(String name) {
+            List<String> values = headers.get(name);
+            if (values == null || values.isEmpty()) {
+                return null;
+            }
+            return String.join(",", values);
+        }
+
+        @Override
+        public MultivaluedHashMap<String, String> getRequestHeaders() {
+            return headers;
+        }
+
+        @Override
+        public List<jakarta.ws.rs.core.MediaType> getAcceptableMediaTypes() {
+            return List.of();
+        }
+
+        @Override
+        public List<java.util.Locale> getAcceptableLanguages() {
+            return List.of();
+        }
+
+        @Override
+        public jakarta.ws.rs.core.MediaType getMediaType() {
+            return null;
+        }
+
+        @Override
+        public java.util.Locale getLanguage() {
+            return null;
+        }
+
+        @Override
+        public java.util.Map<String, jakarta.ws.rs.core.Cookie> getCookies() {
+            return java.util.Map.of();
+        }
+
+        @Override
+        public java.util.Date getDate() {
+            return null;
+        }
+
+        @Override
+        public int getLength() {
+            return 0;
         }
     }
 }

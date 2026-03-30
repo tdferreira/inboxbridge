@@ -44,9 +44,12 @@ Key design choices:
 - the login screen supports passkey sign-in for users who have already enrolled one
 - the login screen intentionally avoids exposing live bootstrap-account state to unauthenticated visitors; bootstrap credentials are documented in the operator docs instead
 - self-registration is launched from a dedicated `Register for access` button and uses a modal dialog instead of always rendering the full form
+- self-registration now also loads a short anti-robot challenge before the request can be submitted
 - when the deployment sets `MULTI_USER_ENABLED=false`, the login screen hides self-registration and the post-login UI hides user-management features entirely
 - accounts with both a password and a passkey now use password + passkey login, not passkey-only login
 - accounts with only a passkey ignore any typed password and fall through into the passkey prompt instead of stopping on an error
+- repeated failed sign-ins are rate-limited per client IP address with an exponential lockout, so a hammered login screen starts blocking new attempts for progressively longer periods
+- administrators can tune those login lockout and self-registration anti-robot defaults from a dedicated `Authentication Security` section in the Administration workspace instead of editing `.env`
 - users can remove their password and run the account in passkey-only mode
 - self-service password removal and passkey deletion are guarded by confirmation modals before the backend call is sent
 - the final remaining passkey cannot be removed while the account has no password configured
@@ -123,7 +126,13 @@ Key design choices:
 - broad manual polling runs still respect per-source cooldown and next-window checks, while the single mail-account `Run Poll Now` action remains the explicit force-run path
 - the user poller settings card now uses the same padded section shell as the main dashboard cards, so the form content stays fully inside the card boundaries
 - the hero/header now includes a `Preferences` button that opens a modal for language selection, the persisted `Remember layout on this account` toggle, the `Show Quick Setup Guide` toggle, layout-edit controls, and a reset-layout action
-- the hero/header `Security` button now opens the password and passkey tools in a dedicated modal dialog, with separate tabs so the modal stays less crowded
+- the admin UI enforces HTTPS: nginx redirects plain HTTP traffic on port `80`, and the frontend also upgrades itself to `https://...` if it is ever served over plain HTTP by another deployment path
+- the hero/header `Security` button now opens the password, passkey, and session tools in a dedicated modal dialog, with separate tabs so the modal stays less crowded
+- the new `Sessions` tab shows recent sign-ins, currently active sessions, the login method and IP address for each one, and sign-out actions for one other session or all other sessions
+- if the same account signs in elsewhere while this browser is already open, the normal background refresh raises a warning notification that links directly to the Sessions tab
+- if one browser session revokes another, the revoked browser now detects the next `401` response centrally and immediately returns to the login screen instead of staying on a broken authenticated page
+- approximate location is intentionally shown as unavailable for now unless the deployment is later wired to a dedicated Geo-IP provider
+- raw duration values such as `PT5M` and `PT0.25S` now expose hover hints with their human-readable meaning in the admin polling and authentication-security settings UI
 - the Security dialog now confirms before closing when the password form has in-progress input
 - visible labels route through the in-repo translation dictionary instead of mixing translated and raw JSX text
 - translated subsection headings and the most prominent detail labels inside the user-management panes now follow the selected language too instead of staying stuck in English

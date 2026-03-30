@@ -296,6 +296,36 @@ class MicrosoftOAuthResourceTest {
             public Security security() {
                 return new Security() {
                     @Override
+                    public Auth auth() {
+                        return new Auth() {
+                            @Override
+                            public int loginFailureThreshold() {
+                                return 5;
+                            }
+
+                            @Override
+                            public java.time.Duration loginInitialBlock() {
+                                return java.time.Duration.ofMinutes(5);
+                            }
+
+                            @Override
+                            public java.time.Duration loginMaxBlock() {
+                                return java.time.Duration.ofHours(1);
+                            }
+
+                            @Override
+                            public boolean registrationChallengeEnabled() {
+                                return true;
+                            }
+
+                            @Override
+                            public java.time.Duration registrationChallengeTtl() {
+                                return java.time.Duration.ofMinutes(10);
+                            }
+                        };
+                    }
+
+                    @Override
                     public Passkeys passkeys() {
                         return new Passkeys() {
                             @Override

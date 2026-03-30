@@ -1,5 +1,6 @@
 import LoadingButton from '../common/LoadingButton'
 import PaneToggleButton from '../common/PaneToggleButton'
+import DurationValue from '../common/DurationValue'
 import './SystemDashboardSection.css'
 
 /**
@@ -47,7 +48,15 @@ function SystemDashboardSection({
           <div className="muted-box full user-polling-summary">
             {t('system.effectivePolling', { value: dashboard.polling.effectivePollEnabled ? t('common.yes') : t('common.no') })}<br />
             {t('system.effectiveInterval', { value: dashboard.polling.effectivePollInterval })}<br />
-            {t('system.effectiveFetchWindow', { value: dashboard.polling.effectiveFetchWindow })}
+            {t('system.effectiveFetchWindow', { value: dashboard.polling.effectiveFetchWindow })}<br />
+            {t('system.sourceHostMinSpacing')}: <DurationValue locale={locale} value={dashboard.polling.effectiveSourceHostMinSpacing} /><br />
+            {t('system.sourceHostMaxConcurrency')}: {dashboard.polling.effectiveSourceHostMaxConcurrency}<br />
+            {t('system.destinationProviderMinSpacing')}: <DurationValue locale={locale} value={dashboard.polling.effectiveDestinationProviderMinSpacing} /><br />
+            {t('system.destinationProviderMaxConcurrency')}: {dashboard.polling.effectiveDestinationProviderMaxConcurrency}<br />
+            {t('system.throttleLeaseTtl')}: <DurationValue locale={locale} value={dashboard.polling.effectiveThrottleLeaseTtl} /><br />
+            {t('system.adaptiveThrottleMaxMultiplier')}: {dashboard.polling.effectiveAdaptiveThrottleMaxMultiplier}<br />
+            {t('system.successJitterRatio')}: {dashboard.polling.effectiveSuccessJitterRatio}<br />
+            {t('system.maxSuccessJitter')}: <DurationValue locale={locale} value={dashboard.polling.effectiveMaxSuccessJitter} />
           </div>
         </>
       ) : null}

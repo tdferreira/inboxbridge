@@ -8,7 +8,6 @@ import java.util.UUID;
 
 import org.jboss.logging.Logger;
 
-import dev.inboxbridge.config.InboxBridgeConfig;
 import dev.inboxbridge.domain.GmailApiDestinationTarget;
 import dev.inboxbridge.domain.ImapAppendDestinationTarget;
 import dev.inboxbridge.domain.MailDestinationTarget;
@@ -32,7 +31,7 @@ public class PollThrottleService {
     private static final Logger LOG = Logger.getLogger(PollThrottleService.class);
 
     @Inject
-    InboxBridgeConfig inboxBridgeConfig;
+    PollingSettingsService pollingSettingsService;
 
     @Inject
     PollThrottleStateRepository stateRepository;
@@ -41,13 +40,15 @@ public class PollThrottleService {
     PollThrottleLeaseRepository leaseRepository;
 
     public ThrottleLease acquireSourceMailboxPermit(RuntimeEmailAccount emailAccount) {
-        return acquirePermit(sourceThrottleKey(emailAccount), "SOURCE_HOST", inboxBridgeConfig.sourceHostMinSpacing(),
-                inboxBridgeConfig.sourceHostMaxConcurrency());
+        PollingSettingsService.EffectiveThrottleSettings settings = pollingSettingsService.effectiveThrottleSettings();
+        return acquirePermit(sourceThrottleKey(emailAccount), "SOURCE_HOST", settings.sourceHostMinSpacing(),
+                settings.sourceHostMaxConcurrency());
     }
 
     public ThrottleLease acquireDestinationDeliveryPermit(MailDestinationTarget target) {
+        PollingSettingsService.EffectiveThrottleSettings settings = pollingSettingsService.effectiveThrottleSettings();
         return acquirePermit(destinationThrottleKey(target), destinationThrottleKind(target),
-                inboxBridgeConfig.destinationProviderMinSpacing(), inboxBridgeConfig.destinationProviderMaxConcurrency());
+                settings.destinationProviderMinSpacing(), settings.destinationProviderMaxConcurrency());
     }
 
     public void release(ThrottleLease lease) {
@@ -62,7 +63,8 @@ public class PollThrottleService {
     }
 
     public void recordSourceFailure(RuntimeEmailAccount emailAccount, String errorMessage) {
-        applyOutcome(sourceThrottleKey(emailAccount), "SOURCE_HOST", inboxBridgeConfig.sourceHostMinSpacing(), errorMessage);
+        applyOutcome(sourceThrottleKey(emailAccount), "SOURCE_HOST",
+                pollingSettingsService.effectiveThrottleSettings().sourceHostMinSpacing(), errorMessage);
     }
 
     public void recordDestinationSuccess(MailDestinationTarget target) {
@@ -71,7 +73,7 @@ public class PollThrottleService {
 
     public void recordDestinationFailure(MailDestinationTarget target, String errorMessage) {
         applyOutcome(destinationThrottleKey(target), destinationThrottleKind(target),
-                inboxBridgeConfig.destinationProviderMinSpacing(), errorMessage);
+                pollingSettingsService.effectiveThrottleSettings().destinationProviderMinSpacing(), errorMessage);
     }
 
     public void awaitSourceMailboxTurn(RuntimeEmailAccount emailAccount) {
@@ -206,7 +208,9 @@ public class PollThrottleService {
         }
 
         if (availableAt.isAfter(currentTime)) {
-            state.adaptiveMultiplier = Math.min(inboxBridgeConfig.adaptiveThrottleMaxMultiplier(), multiplier + 1);
+            state.adaptiveMultiplier = Math.min(
+                    pollingSettingsService.effectiveThrottleSettings().adaptiveThrottleMaxMultiplier(),
+                    multiplier + 1);
             state.updatedAt = currentTime;
             stateRepository.persist(state);
             return AcquireDecision.waiting(Duration.between(currentTime, availableAt));
@@ -216,7 +220,7 @@ public class PollThrottleService {
         lease.throttleKey = key;
         lease.leaseToken = UUID.randomUUID().toString();
         lease.acquiredAt = currentTime;
-        lease.expiresAt = currentTime.plus(inboxBridgeConfig.throttleLeaseTtl());
+        lease.expiresAt = currentTime.plus(pollingSettingsService.effectiveThrottleSettings().throttleLeaseTtl());
         leaseRepository.persist(lease);
 
         state.nextAllowedAt = currentTime.plus(effectiveSpacing);
@@ -233,7 +237,7 @@ public class PollThrottleService {
         }
         Instant currentTime = now();
         PollThrottleState state = stateForUpdate(key, kind, currentTime);
-        int maxMultiplier = Math.max(1, inboxBridgeConfig.adaptiveThrottleMaxMultiplier());
+        int maxMultiplier = Math.max(1, pollingSettingsService.effectiveThrottleSettings().adaptiveThrottleMaxMultiplier());
         int currentMultiplier = Math.max(1, state.adaptiveMultiplier);
         int nextMultiplier = currentMultiplier;
         if (delta < 0) {

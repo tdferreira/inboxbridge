@@ -17,7 +17,7 @@ public class AuthService {
     @Inject
     PasskeyService passkeyService;
 
-    public LoginResult login(String username, String password) {
+    public LoginResult login(String username, String password, String clientIp, String userAgent) {
         AppUser user = appUserService.findByUsername(username)
                 .filter(found -> found.active && found.approved)
                 .orElseThrow(() -> new IllegalArgumentException("Invalid username or password"));
@@ -41,27 +41,35 @@ public class AuthService {
         if (!hasPassword || !appUserService.passwordMatches(user, password)) {
             throw new IllegalArgumentException("Invalid username or password");
         }
-        String token = userSessionService.createSession(user);
+        String token = userSessionService.createSession(user, clientIp, null, userAgent, UserSession.LoginMethod.PASSWORD);
         return LoginResult.authenticated(user, token);
     }
 
-    public AuthenticatedSession loginWithPasskey(AppUser user) {
-        AppUser authenticatedUser = appUserService.findById(user.id)
+    public AuthenticatedSession loginWithPasskey(PasskeyService.PasskeyAuthenticationResult result, String clientIp, String userAgent) {
+        AppUser authenticatedUser = appUserService.findById(result.user().id)
                 .filter(found -> found.active && found.approved)
                 .orElseThrow(() -> new IllegalArgumentException("Invalid passkey sign-in"));
-        String token = userSessionService.createSession(authenticatedUser);
+        UserSession.LoginMethod loginMethod = result.passwordVerified()
+                ? UserSession.LoginMethod.PASSWORD_PLUS_PASSKEY
+                : UserSession.LoginMethod.PASSKEY;
+        String token = userSessionService.createSession(authenticatedUser, clientIp, null, userAgent, loginMethod);
         return new AuthenticatedSession(authenticatedUser, token);
     }
 
-    public AppUser requireAuthenticatedUser(String token) {
+    public AuthenticatedRequest requireAuthenticatedRequest(String token) {
         if (token == null || token.isBlank()) {
             throw new IllegalArgumentException("Not authenticated");
         }
         UserSession session = userSessionService.findValidSession(token)
                 .orElseThrow(() -> new IllegalArgumentException("Not authenticated"));
-        return appUserService.findById(session.userId)
-                .filter(user -> user.active && user.approved)
+        AppUser user = appUserService.findById(session.userId)
+                .filter(found -> found.active && found.approved)
                 .orElseThrow(() -> new IllegalArgumentException("Not authenticated"));
+        return new AuthenticatedRequest(user, session);
+    }
+
+    public AppUser requireAuthenticatedUser(String token) {
+        return requireAuthenticatedRequest(token).user();
     }
 
     public void logout(String token) {
@@ -71,6 +79,9 @@ public class AuthService {
     }
 
     public record AuthenticatedSession(AppUser user, String token) {
+    }
+
+    public record AuthenticatedRequest(AppUser user, UserSession session) {
     }
 
     public record LoginResult(LoginStatus status, AuthenticatedSession session,

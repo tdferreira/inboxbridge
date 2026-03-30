@@ -11,7 +11,7 @@ describe('AuthScreen', () => {
     const onRegister = vi.fn((event) => event.preventDefault())
     const onCloseRegisterDialog = vi.fn()
     let loginForm = { username: 'admin', password: 'nimda' }
-    let registerForm = { username: '', password: '', confirmPassword: '' }
+    let registerForm = { username: '', password: '', confirmPassword: '', challengeId: 'challenge-1', challengeAnswer: '' }
     let registerOpen = false
 
     const { rerender } = render(
@@ -45,6 +45,8 @@ describe('AuthScreen', () => {
           registerForm = typeof updater === 'function' ? updater(registerForm) : updater
           rerenderUi()
         }}
+        registerChallenge={{ challengeId: 'challenge-1', prompt: 'What is 2 + 3?' }}
+        registerChallengeLoading={false}
         registerForm={registerForm}
         t={t}
       />
@@ -82,6 +84,8 @@ describe('AuthScreen', () => {
             registerForm = typeof updater === 'function' ? updater(registerForm) : updater
             rerenderUi()
           }}
+          registerChallenge={{ challengeId: 'challenge-1', prompt: 'What is 2 + 3?' }}
+          registerChallengeLoading={false}
           registerForm={registerForm}
           t={t}
         />
@@ -97,6 +101,7 @@ describe('AuthScreen', () => {
     fireEvent.change(screen.getByLabelText('Requested Username'), { target: { value: 'new-user' } })
     fireEvent.change(screen.getByLabelText('Requested Password'), { target: { value: 'Secret#123' } })
     fireEvent.change(screen.getByLabelText('Repeat Requested Password'), { target: { value: 'Secret#123' } })
+    fireEvent.change(screen.getByRole('textbox', { name: /Anti-robot check/i }), { target: { value: '5' } })
     fireEvent.submit(screen.getByRole('button', { name: 'Register For Approval' }).closest('form'))
 
     expect(onLogin).toHaveBeenCalledTimes(1)
@@ -105,6 +110,7 @@ describe('AuthScreen', () => {
     expect(loginForm.username).toBe('ops-admin')
     expect(registerForm.username).toBe('new-user')
     expect(registerForm.confirmPassword).toBe('Secret#123')
+    expect(registerForm.challengeAnswer).toBe('5')
   })
 
   it('shows loading feedback for login and registration buttons', () => {
@@ -123,9 +129,11 @@ describe('AuthScreen', () => {
         onRegister={vi.fn()}
         onRegisterChange={vi.fn()}
         registerOpen={false}
+        registerChallenge={null}
+        registerChallengeLoading={false}
         passkeyLoading
         passkeysSupported={true}
-        registerForm={{ username: '', password: '', confirmPassword: '' }}
+        registerForm={{ username: '', password: '', confirmPassword: '', challengeId: '', challengeAnswer: '' }}
         registerLoading
         t={t}
       />
@@ -151,9 +159,11 @@ describe('AuthScreen', () => {
         onRegister={vi.fn()}
         onRegisterChange={vi.fn()}
         registerOpen
+        registerChallenge={{ challengeId: 'challenge-1', prompt: 'What is 2 + 3?' }}
+        registerChallengeLoading={false}
         passkeyLoading={false}
         passkeysSupported={true}
-        registerForm={{ username: 'new-user', password: 'Secret#123', confirmPassword: 'Mismatch#123' }}
+        registerForm={{ username: 'new-user', password: 'Secret#123', confirmPassword: 'Mismatch#123', challengeId: 'challenge-1', challengeAnswer: '' }}
         registerLoading={false}
         t={t}
       />
@@ -179,9 +189,11 @@ describe('AuthScreen', () => {
         onRegister={vi.fn()}
         onRegisterChange={vi.fn()}
         registerOpen={false}
+        registerChallenge={null}
+        registerChallengeLoading={false}
         passkeyLoading={false}
         passkeysSupported={true}
-        registerForm={{ username: '', password: '', confirmPassword: '' }}
+        registerForm={{ username: '', password: '', confirmPassword: '', challengeId: '', challengeAnswer: '' }}
         registerLoading={false}
         t={t}
       />
@@ -207,9 +219,11 @@ describe('AuthScreen', () => {
         onRegister={vi.fn()}
         onRegisterChange={vi.fn()}
         registerOpen
+        registerChallenge={{ challengeId: 'challenge-1', prompt: 'Quanto é 2 + 3?' }}
+        registerChallengeLoading={false}
         passkeyLoading={false}
         passkeysSupported={true}
-        registerForm={{ username: '', password: '', confirmPassword: '' }}
+        registerForm={{ username: '', password: '', confirmPassword: '', challengeId: 'challenge-1', challengeAnswer: '' }}
         registerLoading={false}
         t={(key, params) => translate('pt-PT', key, params)}
       />
@@ -221,5 +235,35 @@ describe('AuthScreen', () => {
     expect(screen.getByRole('dialog', { name: 'Pedir acesso' })).toBeInTheDocument()
     expect(screen.getByLabelText('Nome de utilizador pedido')).toBeInTheDocument()
     expect(screen.getByRole('button', { name: 'Registar para aprovação' })).toBeInTheDocument()
+    expect(screen.getByRole('textbox', { name: /Verificação anti-robô/i })).toBeInTheDocument()
+  })
+
+  it('requires the anti-robot answer before enabling registration submit', () => {
+    render(
+      <AuthScreen
+        authError=""
+        loginLoading={false}
+        loginForm={{ username: 'admin', password: '' }}
+        multiUserEnabled
+        notice=""
+        onCloseRegisterDialog={vi.fn()}
+        onLogin={vi.fn()}
+        onLoginChange={vi.fn()}
+        onPasskeyLogin={vi.fn()}
+        onOpenRegisterDialog={vi.fn()}
+        onRegister={vi.fn()}
+        onRegisterChange={vi.fn()}
+        registerOpen
+        registerChallenge={{ challengeId: 'challenge-1', prompt: 'What is 2 + 3?' }}
+        registerChallengeLoading={false}
+        passkeyLoading={false}
+        passkeysSupported={true}
+        registerForm={{ username: 'new-user', password: 'Secret#123', confirmPassword: 'Secret#123', challengeId: 'challenge-1', challengeAnswer: '' }}
+        registerLoading={false}
+        t={t}
+      />
+    )
+
+    expect(screen.getByRole('button', { name: 'Register For Approval' })).toBeDisabled()
   })
 })

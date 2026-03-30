@@ -11,10 +11,11 @@ export const DEFAULT_UI_PREFERENCES = {
   adminQuickSetupCollapsed: false,
   systemDashboardCollapsed: false,
   oauthAppsCollapsed: false,
+  authSecurityCollapsed: false,
   globalStatsCollapsed: false,
   userManagementCollapsed: false,
   userSectionOrder: ['quickSetup', 'destination', 'userPolling', 'userStats', 'sourceEmailAccounts'],
-  adminSectionOrder: ['adminQuickSetup', 'systemDashboard', 'oauthApps', 'globalStats', 'userManagement'],
+  adminSectionOrder: ['adminQuickSetup', 'systemDashboard', 'oauthApps', 'authSecurity', 'globalStats', 'userManagement'],
   language: 'en'
 }
 
@@ -29,6 +30,7 @@ export const LAYOUT_PREFERENCE_KEYS = [
   'adminQuickSetupCollapsed',
   'systemDashboardCollapsed',
   'oauthAppsCollapsed',
+  'authSecurityCollapsed',
   'globalStatsCollapsed',
   'userManagementCollapsed',
   'userSectionOrder',
@@ -64,6 +66,7 @@ export function normalizeUiPreferences(payload) {
       adminQuickSetupCollapsed: false,
       systemDashboardCollapsed: false,
       oauthAppsCollapsed: false,
+      authSecurityCollapsed: false,
       globalStatsCollapsed: false,
       userManagementCollapsed: false
     }),

@@ -1,4 +1,5 @@
 import { act, renderHook } from '@testing-library/react'
+import { AUTH_EXPIRED_EVENT } from './api'
 import { useAuthSecurityController } from './useAuthSecurityController'
 
 describe('useAuthSecurityController', () => {
@@ -37,7 +38,8 @@ describe('useAuthSecurityController', () => {
 
     return {
       ...hook,
-      onLogoutReset
+      onLogoutReset,
+      pushNotification
     }
   }
 
@@ -84,5 +86,225 @@ describe('useAuthSecurityController', () => {
     expect(result.current.session).toBeNull()
     expect(result.current.authError).toBe('')
     expect(result.current.authLoading).toBe(false)
+  })
+
+  it('loads a registration challenge when the register dialog opens', async () => {
+    fetch.mockResolvedValue({
+      ok: true,
+      json: vi.fn().mockResolvedValue({
+        enabled: true,
+        challengeId: 'challenge-1',
+        prompt: '2 + 3 = ?'
+      })
+    })
+    const { result } = renderController()
+
+    await act(async () => {
+      await result.current.openRegisterDialog()
+    })
+
+    expect(fetch).toHaveBeenCalledWith('/api/auth/register/challenge')
+    expect(result.current.registerOpen).toBe(true)
+    expect(result.current.registerChallenge).toEqual({
+      enabled: true,
+      challengeId: 'challenge-1',
+      prompt: '2 + 3 = ?'
+    })
+    expect(result.current.registerForm.challengeId).toBe('challenge-1')
+  })
+
+  it('refreshes the challenge after a failed registration attempt', async () => {
+    fetch
+      .mockResolvedValueOnce({
+        ok: false,
+        text: vi.fn().mockResolvedValue(JSON.stringify({
+          code: 'registration_challenge_incorrect',
+          message: 'Registration challenge answer is incorrect'
+        }))
+      })
+      .mockResolvedValueOnce({
+        ok: true,
+        json: vi.fn().mockResolvedValue({
+          enabled: true,
+          challengeId: 'challenge-2',
+          prompt: '4 + 5 = ?'
+        })
+      })
+    const { result } = renderController()
+
+    act(() => {
+      result.current.setRegisterForm({
+        username: 'alice',
+        password: 'Secret#123',
+        confirmPassword: 'Secret#123',
+        challengeId: 'challenge-1',
+        challengeAnswer: '8'
+      })
+    })
+
+    await act(async () => {
+      await result.current.handleRegister({ preventDefault() {} })
+    })
+
+    expect(result.current.authError).toBe('The anti-robot check answer is incorrect. Try the new challenge again.')
+    expect(result.current.registerChallenge?.challengeId).toBe('challenge-2')
+    expect(result.current.registerForm.challengeId).toBe('challenge-2')
+    expect(result.current.registerForm.challengeAnswer).toBe('')
+  })
+
+  it('loads session activity when the sessions tab opens', async () => {
+    fetch.mockResolvedValue({
+      ok: true,
+      json: vi.fn().mockResolvedValue({
+        recentLogins: [{ id: 1, ipAddress: '203.0.113.9' }],
+        activeSessions: [{ id: 1, current: true }]
+      })
+    })
+    const { result } = renderController()
+
+    await act(async () => {
+      await result.current.openSecurityPanel('sessions')
+    })
+
+    expect(fetch).toHaveBeenCalledWith('/api/account/sessions')
+    expect(result.current.sessionActivity.recentLogins).toHaveLength(1)
+    expect(result.current.securityTab).toBe('sessions')
+  })
+
+  it('notifies when a newer non-current session is detected in the background', async () => {
+    fetch
+      .mockResolvedValueOnce({
+        ok: true,
+        json: vi.fn().mockResolvedValue({
+          recentLogins: [{ id: 10, current: true, createdAt: '2026-03-31T10:00:00Z' }],
+          activeSessions: [{ id: 10, current: true }]
+        })
+      })
+      .mockResolvedValueOnce({
+        ok: true,
+        json: vi.fn().mockResolvedValue({
+          recentLogins: [{ id: 11, current: false, createdAt: '2026-03-31T10:05:00Z' }, { id: 10, current: true, createdAt: '2026-03-31T10:00:00Z' }],
+          activeSessions: [{ id: 10, current: true }, { id: 11, current: false }]
+        })
+      })
+    const { result, pushNotification } = renderController()
+
+    await act(async () => {
+      await result.current.pollSessionActivity({ announceNewSessions: true, suppressErrors: true })
+    })
+
+    expect(pushNotification).not.toHaveBeenCalled()
+
+    await act(async () => {
+      await result.current.pollSessionActivity({ announceNewSessions: true, suppressErrors: true })
+    })
+
+    expect(pushNotification).toHaveBeenCalledWith({
+      message: { kind: 'translation', key: 'notifications.newSessionDetected', params: {} },
+      targetId: 'recent-session-11',
+      tone: 'warning'
+    })
+  })
+
+  it('does not show the generic passkey sign-in notification after a successful passkey login', async () => {
+    Object.defineProperty(window, 'PublicKeyCredential', {
+      configurable: true,
+      value: function PublicKeyCredential() {}
+    })
+    Object.defineProperty(window.navigator, 'credentials', {
+      configurable: true,
+      value: {
+        get: vi.fn().mockResolvedValue({
+          id: 'credential-1',
+          rawId: new Uint8Array([1, 2, 3]).buffer,
+          type: 'public-key',
+          response: {
+            clientDataJSON: new Uint8Array([4, 5, 6]).buffer,
+            authenticatorData: new Uint8Array([7, 8, 9]).buffer,
+            signature: new Uint8Array([10, 11, 12]).buffer,
+            userHandle: null
+          },
+          getClientExtensionResults: () => ({})
+        })
+      }
+    })
+
+    fetch
+      .mockResolvedValueOnce({
+        ok: true,
+        json: vi.fn().mockResolvedValue({
+          status: 'PASSKEY_REQUIRED',
+          passkeyChallenge: {
+            ceremonyId: 'ceremony-1',
+            publicKeyJson: JSON.stringify({
+              publicKey: {
+                challenge: 'AQ',
+                allowCredentials: []
+              }
+            })
+          }
+        })
+      })
+      .mockResolvedValueOnce({
+        ok: true,
+        json: vi.fn().mockResolvedValue({
+          user: { id: 1, username: 'admin', mustChangePassword: false }
+        })
+      })
+
+    const { result, pushNotification } = renderController()
+
+    await act(async () => {
+      await result.current.handleLogin({ preventDefault() {} })
+    })
+
+    expect(result.current.session).toEqual({ id: 1, username: 'admin', mustChangePassword: false })
+    expect(pushNotification).not.toHaveBeenCalledWith(
+      expect.objectContaining({
+        message: { kind: 'translation', key: 'notifications.signedInWithPasskey', params: {} }
+      })
+    )
+  })
+
+  it('clears the current session when an auth-expired event is dispatched', async () => {
+    const { result, onLogoutReset } = renderController()
+
+    act(() => {
+      result.current.setSession({ username: 'admin' })
+      result.current.setPasswordForm({
+        currentPassword: 'Current1!',
+        newPassword: 'NewPass1!',
+        confirmNewPassword: 'NewPass1!'
+      })
+      result.current.setPasskeyLabel('Laptop')
+      result.current.setRegisterForm({
+        username: 'alice',
+        password: 'Secret#123',
+        confirmPassword: 'Secret#123',
+        challengeId: 'challenge-1',
+        challengeAnswer: '7'
+      })
+    })
+
+    await act(async () => {
+      window.dispatchEvent(new CustomEvent(AUTH_EXPIRED_EVENT))
+    })
+
+    expect(result.current.session).toBeNull()
+    expect(result.current.passwordForm).toEqual({
+      currentPassword: '',
+      newPassword: '',
+      confirmNewPassword: ''
+    })
+    expect(result.current.passkeyLabel).toBe('')
+    expect(result.current.registerForm).toEqual({
+      username: '',
+      password: '',
+      confirmPassword: '',
+      challengeId: '',
+      challengeAnswer: ''
+    })
+    expect(result.current.authError).toBe('auth.sessionExpired')
+    expect(onLogoutReset).toHaveBeenCalledTimes(1)
   })
 })

@@ -1,4 +1,4 @@
-import { authMethodLabel, formatDate, formatPollError, isOauthRevokedError, oauthProviderLabel, protocolLabel, roleLabel, statusLabel, statusTone, tokenStorageLabel, triggerLabel } from './formatters'
+import { authMethodLabel, formatDate, formatDurationHint, formatDurationMeaning, formatPollError, isOauthRevokedError, oauthProviderLabel, protocolLabel, roleLabel, statusLabel, statusTone, tokenStorageLabel, triggerLabel } from './formatters'
 
 describe('formatters', () => {
   it('formats missing dates as Never', () => {
@@ -16,8 +16,15 @@ describe('formatters', () => {
     expect(roleLabel('ADMIN')).toBe('Admin')
     expect(protocolLabel('IMAP')).toBe('IMAP')
     expect(authMethodLabel('PASSWORD')).toBe('Password')
+    expect(authMethodLabel('PASSWORD_PLUS_PASSKEY')).toBe('Password + passkey')
     expect(oauthProviderLabel('MICROSOFT')).toBe('Microsoft')
     expect(triggerLabel('scheduler')).toBe('scheduler')
+  })
+
+  it('turns ISO-8601 durations into human-readable meanings', () => {
+    expect(formatDurationMeaning('PT0.25S', 'en')).toBe('250 milliseconds')
+    expect(formatDurationMeaning('PT1H30M', 'en')).toBe('1 hour and 30 minutes')
+    expect(formatDurationHint('PT5M', 'en')).toBe('PT5M = 5 minutes')
   })
 
   it('renders token storage labels for known modes', () => {

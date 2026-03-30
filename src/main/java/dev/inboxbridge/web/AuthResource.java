@@ -1,9 +1,11 @@
 package dev.inboxbridge.web;
 
 import dev.inboxbridge.dto.AuthUiOptionsResponse;
+import dev.inboxbridge.dto.ApiError;
 import dev.inboxbridge.dto.FinishPasskeyCeremonyRequest;
 import dev.inboxbridge.dto.LoginRequest;
 import dev.inboxbridge.dto.LoginResponse;
+import dev.inboxbridge.dto.RegistrationChallengeResponse;
 import dev.inboxbridge.dto.RegisterUserRequest;
 import dev.inboxbridge.dto.SessionUserResponse;
 import dev.inboxbridge.dto.StartPasskeyCeremonyResponse;
@@ -15,9 +17,13 @@ import dev.inboxbridge.security.RequireAuth;
 import dev.inboxbridge.service.AppUserService;
 import dev.inboxbridge.service.ApplicationModeService;
 import dev.inboxbridge.service.AuthService;
+import dev.inboxbridge.service.AuthClientAddressService;
+import dev.inboxbridge.service.AuthLoginProtectionService;
+import dev.inboxbridge.service.AuthSecuritySettingsService;
 import dev.inboxbridge.service.MicrosoftOAuthService;
 import dev.inboxbridge.service.OAuthProviderRegistryService;
 import dev.inboxbridge.service.PasskeyService;
+import dev.inboxbridge.service.RegistrationChallengeService;
 import dev.inboxbridge.service.SystemOAuthAppSettingsService;
 import jakarta.inject.Inject;
 import jakarta.ws.rs.BadRequestException;
@@ -29,6 +35,8 @@ import jakarta.ws.rs.Produces;
 import jakarta.ws.rs.core.MediaType;
 import jakarta.ws.rs.core.NewCookie;
 import jakarta.ws.rs.core.Response;
+import jakarta.ws.rs.core.HttpHeaders;
+import jakarta.ws.rs.core.Context;
 
 @Path("/api/auth")
 @Produces(MediaType.APPLICATION_JSON)
@@ -63,6 +71,21 @@ public class AuthResource {
     @Inject
     OAuthProviderRegistryService oAuthProviderRegistryService;
 
+    @Inject
+    AuthClientAddressService authClientAddressService;
+
+    @Inject
+    AuthLoginProtectionService authLoginProtectionService;
+
+    @Inject
+    RegistrationChallengeService registrationChallengeService;
+
+    @Inject
+    AuthSecuritySettingsService authSecuritySettingsService;
+
+    @Context
+    HttpHeaders httpHeaders;
+
     @GET
     @Path("/options")
     public AuthUiOptionsResponse options() {
@@ -70,17 +93,29 @@ public class AuthResource {
                 applicationModeService.multiUserEnabled(),
                 microsoftOAuthService.clientConfigured(),
                 systemOAuthAppSettingsService.googleClientConfigured(),
+                authSecuritySettingsService.effectiveSettings().registrationChallengeEnabled(),
                 oAuthProviderRegistryService.configuredSourceProviders().stream()
                         .map(Enum::name)
                         .toList());
+    }
+
+    @GET
+    @Path("/register/challenge")
+    public RegistrationChallengeResponse registrationChallenge() {
+        applicationModeService.requireMultiUserMode();
+        return registrationChallengeService.currentChallenge();
     }
 
     @POST
     @Path("/login")
     @Consumes(MediaType.APPLICATION_JSON)
     public Response login(LoginRequest request) {
+        String clientKey = authClientAddressService.resolveClientKey(httpHeaders);
+        String userAgent = httpHeaders == null ? null : httpHeaders.getHeaderString("User-Agent");
         try {
-            AuthService.LoginResult result = authService.login(request.username(), request.password());
+            authLoginProtectionService.requireLoginAllowed(clientKey);
+            AuthService.LoginResult result = authService.login(request.username(), request.password(), clientKey, userAgent);
+            authLoginProtectionService.recordSuccessfulLogin(clientKey);
             if (result.status() == AuthService.LoginStatus.PASSKEY_REQUIRED) {
                 return Response.ok(LoginResponse.passkeyRequired(result.passkeyChallenge())).build();
             }
@@ -88,7 +123,13 @@ public class AuthResource {
             return Response.ok(LoginResponse.authenticated(toResponse(session.user())))
                     .cookie(sessionCookie(session.token()))
                     .build();
+        } catch (AuthLoginProtectionService.LoginBlockedException e) {
+            return loginBlockedResponse(e.blockedUntil());
         } catch (IllegalArgumentException e) {
+            AuthLoginProtectionService.FailureResult failure = authLoginProtectionService.recordFailedLogin(clientKey);
+            if (failure.blocked()) {
+                return loginBlockedResponse(failure.blockedUntil());
+            }
             throw new BadRequestException(e.getMessage(), e);
         }
     }
@@ -99,6 +140,7 @@ public class AuthResource {
     public Response register(RegisterUserRequest request) {
         try {
             applicationModeService.requireMultiUserMode();
+            registrationChallengeService.validateAndConsume(request.challengeId(), request.challengeAnswer());
             AppUser user = appUserService.registerUser(request);
             return Response.status(Response.Status.ACCEPTED)
                     .entity(java.util.Map.of(
@@ -138,8 +180,10 @@ public class AuthResource {
     @Consumes(MediaType.APPLICATION_JSON)
     public Response finishPasskeyLogin(FinishPasskeyCeremonyRequest request) {
         try {
-            AppUser user = passkeyService.finishAuthentication(request);
-            AuthService.AuthenticatedSession session = authService.loginWithPasskey(user);
+            String clientKey = authClientAddressService.resolveClientKey(httpHeaders);
+            String userAgent = httpHeaders == null ? null : httpHeaders.getHeaderString("User-Agent");
+            PasskeyService.PasskeyAuthenticationResult authResult = passkeyService.finishAuthentication(request);
+            AuthService.AuthenticatedSession session = authService.loginWithPasskey(authResult, clientKey, userAgent);
             return Response.ok(LoginResponse.authenticated(toResponse(session.user())))
                     .cookie(sessionCookie(session.token()))
                     .build();
@@ -193,6 +237,16 @@ public class AuthResource {
                 .secure(true)
                 .sameSite(NewCookie.SameSite.STRICT)
                 .maxAge(0)
+                .build();
+    }
+
+    private Response loginBlockedResponse(java.time.Instant blockedUntil) {
+        return Response.status(429)
+                .entity(new ApiError(
+                        "auth_login_blocked",
+                        "Too many failed sign-in attempts from this address.",
+                        "Too many failed sign-in attempts from this address.",
+                        java.util.Map.of("blockedUntil", blockedUntil.toString())))
                 .build();
     }
 }

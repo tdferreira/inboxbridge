@@ -35,7 +35,7 @@ class AppUserServiceTest {
     void registerUserCreatesPendingInactiveAccount() {
         AppUserService service = service();
 
-        AppUser user = service.registerUser(new RegisterUserRequest("alice@example.com", "Secret#123", "Secret#123"));
+        AppUser user = service.registerUser(new RegisterUserRequest("alice@example.com", "Secret#123", "Secret#123", "", ""));
 
         assertEquals(AppUser.Role.USER, user.role);
         assertFalse(user.active);
@@ -127,7 +127,7 @@ class AppUserServiceTest {
 
         IllegalArgumentException error = assertThrows(
                 IllegalArgumentException.class,
-                () -> service.registerUser(new RegisterUserRequest("eve@example.com", "Secret#123", "Other#123")));
+                () -> service.registerUser(new RegisterUserRequest("eve@example.com", "Secret#123", "Other#123", "", "")));
 
         assertEquals("New password confirmation does not match", error.getMessage());
     }

@@ -2,17 +2,20 @@ package dev.inboxbridge.web;
 
 import dev.inboxbridge.dto.AdminDashboardResponse;
 import dev.inboxbridge.dto.AdminPollingSettingsView;
+import dev.inboxbridge.dto.AuthSecuritySettingsView;
 import dev.inboxbridge.dto.PollRunResult;
 import dev.inboxbridge.dto.PollingTimelineBundleView;
 import dev.inboxbridge.dto.SourcePollingSettingsView;
 import dev.inboxbridge.dto.SourcePollingStatsView;
 import dev.inboxbridge.dto.SystemOAuthAppSettingsView;
+import dev.inboxbridge.dto.UpdateAuthSecuritySettingsRequest;
 import dev.inboxbridge.dto.UpdateSourcePollingSettingsRequest;
 import dev.inboxbridge.dto.UpdateAdminPollingSettingsRequest;
 import dev.inboxbridge.dto.UpdateSystemOAuthAppSettingsRequest;
 import dev.inboxbridge.security.RequireAdmin;
 import dev.inboxbridge.security.CurrentUserContext;
 import dev.inboxbridge.service.AdminDashboardService;
+import dev.inboxbridge.service.AuthSecuritySettingsService;
 import dev.inboxbridge.service.PollingSettingsService;
 import dev.inboxbridge.service.PollingStatsService;
 import dev.inboxbridge.service.PollingService;
@@ -60,6 +63,9 @@ public class AdminResource {
     @Inject
     SystemOAuthAppSettingsService systemOAuthAppSettingsService;
 
+    @Inject
+    AuthSecuritySettingsService authSecuritySettingsService;
+
     @GET
     @Path("/dashboard")
     public AdminDashboardResponse dashboard() {
@@ -79,6 +85,23 @@ public class AdminResource {
         try {
             return systemOAuthAppSettingsService.update(request);
         } catch (IllegalArgumentException | IllegalStateException e) {
+            throw new BadRequestException(e.getMessage(), e);
+        }
+    }
+
+    @GET
+    @Path("/auth-security-settings")
+    public AuthSecuritySettingsView authSecuritySettings() {
+        return authSecuritySettingsService.view();
+    }
+
+    @PUT
+    @Path("/auth-security-settings")
+    @Consumes(MediaType.APPLICATION_JSON)
+    public AuthSecuritySettingsView updateAuthSecuritySettings(UpdateAuthSecuritySettingsRequest request) {
+        try {
+            return authSecuritySettingsService.update(request);
+        } catch (IllegalArgumentException e) {
             throw new BadRequestException(e.getMessage(), e);
         }
     }

@@ -77,7 +77,26 @@ public interface InboxBridgeConfig {
     }
 
     interface Security {
+        Auth auth();
+
         Passkeys passkeys();
+
+        interface Auth {
+            @WithDefault("5")
+            int loginFailureThreshold();
+
+            @WithDefault("PT5M")
+            Duration loginInitialBlock();
+
+            @WithDefault("PT1H")
+            Duration loginMaxBlock();
+
+            @WithDefault("true")
+            boolean registrationChallengeEnabled();
+
+            @WithDefault("PT10M")
+            Duration registrationChallengeTtl();
+        }
 
         interface Passkeys {
             @WithDefault("true")

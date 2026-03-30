@@ -105,7 +105,7 @@ class SourcePollingStateServiceTest {
     private SourcePollingStateService service() {
         SourcePollingStateService service = new SourcePollingStateService();
         service.repository = new InMemorySourcePollingStateRepository();
-        service.inboxBridgeConfig = new FakeInboxBridgeConfig();
+        service.pollingSettingsService = new FakePollingSettingsService();
         return service;
     }
 
@@ -139,38 +139,18 @@ class SourcePollingStateServiceTest {
         }
     }
 
-    private static final class FakeInboxBridgeConfig implements dev.inboxbridge.config.InboxBridgeConfig {
+    private static final class FakePollingSettingsService extends PollingSettingsService {
         @Override
-        public boolean pollEnabled() { return true; }
-        @Override
-        public String pollInterval() { return "5m"; }
-        @Override
-        public int fetchWindow() { return 50; }
-        @Override
-        public Duration sourceHostMinSpacing() { return Duration.ofSeconds(1); }
-        @Override
-        public int sourceHostMaxConcurrency() { return 2; }
-        @Override
-        public Duration destinationProviderMinSpacing() { return Duration.ofMillis(250); }
-        @Override
-        public int destinationProviderMaxConcurrency() { return 1; }
-        @Override
-        public Duration throttleLeaseTtl() { return Duration.ofMinutes(2); }
-        @Override
-        public int adaptiveThrottleMaxMultiplier() { return 6; }
-        @Override
-        public double successJitterRatio() { return 0.2d; }
-        @Override
-        public Duration maxSuccessJitter() { return Duration.ofSeconds(30); }
-        @Override
-        public boolean multiUserEnabled() { return true; }
-        @Override
-        public Security security() { throw new UnsupportedOperationException(); }
-        @Override
-        public Gmail gmail() { throw new UnsupportedOperationException(); }
-        @Override
-        public Microsoft microsoft() { throw new UnsupportedOperationException(); }
-        @Override
-        public List<dev.inboxbridge.config.InboxBridgeConfig.Source> sources() { return List.of(); }
+        public EffectiveThrottleSettings effectiveThrottleSettings() {
+            return new EffectiveThrottleSettings(
+                    Duration.ofSeconds(1),
+                    2,
+                    Duration.ofMillis(250),
+                    1,
+                    Duration.ofMinutes(2),
+                    6,
+                    0.2d,
+                    Duration.ofSeconds(30));
+        }
     }
 }

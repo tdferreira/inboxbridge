@@ -31,12 +31,13 @@ public class AuthenticatedFilter implements ContainerRequestFilter {
     @Override
     public void filter(ContainerRequestContext requestContext) {
         Cookie sessionCookie = requestContext.getCookies().get(SESSION_COOKIE);
-        AppUser user;
+        AuthService.AuthenticatedRequest authenticatedRequest;
         try {
-            user = authService.requireAuthenticatedUser(sessionCookie == null ? null : sessionCookie.getValue());
+            authenticatedRequest = authService.requireAuthenticatedRequest(sessionCookie == null ? null : sessionCookie.getValue());
         } catch (IllegalArgumentException e) {
             throw new NotAuthorizedException("Not authenticated", e);
         }
-        currentUserContext.setUser(user);
+        currentUserContext.setUser(authenticatedRequest.user());
+        currentUserContext.setSession(authenticatedRequest.session());
     }
 }

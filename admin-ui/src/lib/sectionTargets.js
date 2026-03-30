@@ -1,4 +1,5 @@
 const SOURCE_EMAIL_ACCOUNT_TARGET_PREFIX = 'source-email-account-'
+const RECENT_SESSION_TARGET_PREFIX = 'recent-session-'
 
 export function buildSourceEmailAccountTargetId(emailAccountId) {
   return `${SOURCE_EMAIL_ACCOUNT_TARGET_PREFIX}${encodeURIComponent(String(emailAccountId || ''))}`
@@ -6,6 +7,14 @@ export function buildSourceEmailAccountTargetId(emailAccountId) {
 
 export function isSourceEmailAccountTargetId(targetId) {
   return typeof targetId === 'string' && targetId.startsWith(SOURCE_EMAIL_ACCOUNT_TARGET_PREFIX)
+}
+
+export function buildRecentSessionTargetId(sessionId) {
+  return `${RECENT_SESSION_TARGET_PREFIX}${encodeURIComponent(String(sessionId || ''))}`
+}
+
+export function isRecentSessionTargetId(targetId) {
+  return typeof targetId === 'string' && targetId.startsWith(RECENT_SESSION_TARGET_PREFIX)
 }
 
 export function extractSourceEmailAccountId(errorLike) {

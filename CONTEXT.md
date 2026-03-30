@@ -85,9 +85,12 @@ Bootstrap auth behavior:
 - if an account has only a passkey, the normal login button ignores any typed password and starts the passkey ceremony instead of failing
 - users can remove their password entirely and keep a passkey-only account
 - the last passkey on a passwordless account cannot be removed until another passkey exists or a password is set again
+- repeated failed sign-ins are now tracked per client IP address and use an exponential lockout that starts at the configured initial block and doubles until the configured maximum block duration
+- those login/self-registration abuse-protection defaults can now also be overridden live from `Administration -> Authentication Security`; `.env` remains the startup default and PostgreSQL stores only the deployment override values
 - admin-created users are also forced to change password
 - self-registered users start as `inactive` and `unapproved`
 - self-registration now starts from a focused modal workflow on the unauthenticated screen instead of leaving the request form always visible
+- self-registration now also loads a short anti-robot challenge before submission; challenges are stored server-side with a TTL and must be answered correctly before the pending account is created
 - when single-user mode is enabled, self-registration and admin user-management endpoints are disabled and the UI hides those controls entirely
 - single-user mode still keeps the rest of the admin control plane visible for the bootstrap admin, including destination mailbox setup, source email accounts, security tools, and poller settings
 - switching to single-user mode from the admin UI now deactivates every account except the acting admin and records which accounts were disabled by that mode change, so re-enabling multi-user mode can reactivate those accounts later
@@ -115,6 +118,8 @@ System polling behavior:
 - the admin UI now splits polling into admin-only `Global Poller Settings` and user-scoped `My Poller Settings`
 - `Global Poller Settings` now focuses on effective deployment-wide polling controls, while a separate `Global Statistics` section shows deployment-wide analytics across all users
 - `Global Poller Settings` now keeps only the effective summary in-page and opens a dedicated modal dialog for editing the deployment-wide overrides
+- that admin polling modal now includes the host/provider hardening settings as overrides too: source-host spacing, source-host concurrency, destination-provider spacing, destination-provider concurrency, throttle lease TTL, adaptive throttle ceiling, success-jitter ratio, and max success jitter
+- each of those hardening fields now has an inline help hint, and the modal includes a longer explanation block describing how the scheduler uses them together to avoid hammering shared mailbox hosts and destination providers
 - `My Poller Settings` now focuses on the current user's effective polling overrides, while a separate `My Statistics` section shows analytics scoped only to that user's own imported mail
 - the user poller section now presents a compact effective-settings summary in-page and opens a dedicated modal dialog when the user wants to edit overrides
 - expanded source-email-account cards now also render analytics scoped only to that single source email account
@@ -361,6 +366,7 @@ Polling-scale hardening now adds a persisted protection layer:
 - destination deliveries for the same provider/host are also capped by a configurable concurrency limit (`DESTINATION_PROVIDER_MAX_CONCURRENCY`, default `1`)
 - short-lived throttle leases are persisted in PostgreSQL so in-flight work can be bounded even if the app restarts unexpectedly, with a configurable lease TTL (`THROTTLE_LEASE_TTL`, default `PT2M`)
 - persisted adaptive multipliers now widen spacing after host/provider contention and after throttling-style provider failures, up to a configurable ceiling (`ADAPTIVE_THROTTLE_MAX_MULTIPLIER`, default `6`)
+- admins can now override all of those hardening defaults live from the `Global Poller Settings` modal without editing `.env`, and the UI shows default, override, and effective values together
 - this is still one shared-database coordination layer, not a full distributed quota system; true cluster-wide provider budgeting and smarter queueing are still future work
 
 ### 12. Actionable admin-ui notifications
@@ -670,7 +676,7 @@ Admin UI frontend structure now follows a controller-and-components split:
 - the add/edit source email account dialog now supports IMAP folder discovery after a successful test connection and while editing an existing IMAP account, mirroring the destination mailbox folder-selection flow
 - the frontend production bundle now uses explicit manual chunking for React/vendor, router, i18n, and chart code, which removed the earlier Vite large-chunk build warning
 - polling now includes a first scaling-hardening layer: deterministic per-source success jitter, per-instance minimum spacing between polls to the same source host, and per-instance minimum spacing between deliveries to the same destination provider/host
-- those scaling-hardening knobs are configured through `SOURCE_HOST_MIN_SPACING`, `DESTINATION_PROVIDER_MIN_SPACING`, `SUCCESS_JITTER_RATIO`, and `MAX_SUCCESS_JITTER`
+- those scaling-hardening knobs are configured through `SOURCE_HOST_MIN_SPACING`, `SOURCE_HOST_MAX_CONCURRENCY`, `DESTINATION_PROVIDER_MIN_SPACING`, `DESTINATION_PROVIDER_MAX_CONCURRENCY`, `THROTTLE_LEASE_TTL`, `ADAPTIVE_THROTTLE_MAX_MULTIPLIER`, `SUCCESS_JITTER_RATIO`, and `MAX_SUCCESS_JITTER`
 - the current throttling/jitter protection is per app instance only; true cluster-wide coordination, global provider quotas, and distributed locking are still future work for multi-node deployments
 
 Current live config issue in this workspace:
@@ -685,12 +691,19 @@ Current live config issue in this workspace:
 - The `Administration` workspace now keeps its own admin-specific quick setup guide centered on shared Google OAuth, user creation in multi-user mode, and verifying the first successful import.
 - In the `Administration` workspace, the Google OAuth app editor is now limited to configuring the shared Google Cloud OAuth client registration; mailbox Gmail OAuth consent still happens per user from `My Destination Mailbox`.
 - Language selection, layout persistence, and reset-layout controls now live in a dedicated preferences modal opened from the header instead of an always-visible inline selector.
-- The header `Security` action now opens the password and passkey tools in a dedicated modal with separate tabs, instead of rendering both tools inline in the page.
+- The admin UI now enforces HTTPS both through nginx (`80 -> 443`) and with a frontend-side upgrade guard if the app is ever served over plain HTTP by another deployment path.
+- The header `Security` action now opens the password, passkey, and session tools in a dedicated modal with separate tabs, instead of rendering both tools inline in the page.
+- The new `Sessions` tab shows recent successful sign-ins, active sessions, the login method used, and sign-out actions for one other session or all other sessions for the current account.
+- When a signed-in account detects a newer sign-in from another session during the normal background refresh cycle, the UI now raises a warning notification that links directly to the `Sessions` tab.
+- If one browser session is revoked from another session, the revoked browser now detects the next `401` response centrally and immediately returns to the login screen instead of staying in a broken authenticated shell.
+- `user_session` rows now also persist client IP, login method, user-agent, and revocation timestamp so session history can be shown without guessing from cookies.
+- Approximate session location is intentionally unavailable unless a future Geo-IP provider is configured; the UI shows IP address and login method instead of inventing a location.
 - The Google setup help panel is fully localized across the supported admin-ui languages.
 - The Gmail account layout now collapses to a single full-width column whenever the admin-only setup sidebar is not being shown.
 - The admin Gmail account form now includes inline help hints for all editable fields.
 - The shared modal shell now closes only the front-most dialog on `Escape`; dialogs with dirty forms use a confirmation prompt before discarding in-progress changes.
 - The Security dialog uses that dirty-dialog confirmation when the password form has in-progress input.
+- Raw duration values shown in the admin polling/authentication-security summaries keep their config form visible and now expose hover hints that explain ISO-8601 values like `PT5M`, `PT1H`, and `PT0.25S` in human-readable units.
 - Admin user inspection now shows the configured Gmail API user value. This is the Gmail API `userId` setting and is often `me`, so it should not be interpreted as a guaranteed literal mailbox address.
 - Floating notifications now wrap long text inside the card instead of overflowing past the viewport edges.
 - Per-fetcher polling now exposes a running spinner state in the fetcher status pill, the fetcher poller dialog title uses the fetcher ID directly, and OAuth2 fetchers display whether their provider connection is already established.

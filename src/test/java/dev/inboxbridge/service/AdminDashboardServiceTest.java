@@ -187,7 +187,31 @@ class AdminDashboardServiceTest {
                     5,
                     60,
                     null,
-                    60);
+                    60,
+                    "PT1S",
+                    null,
+                    "PT1S",
+                    2,
+                    null,
+                    2,
+                    "PT0.25S",
+                    null,
+                    "PT0.25S",
+                    1,
+                    null,
+                    1,
+                    "PT2M",
+                    null,
+                    "PT2M",
+                    6,
+                    null,
+                    6,
+                    0.2d,
+                    null,
+                    0.2d,
+                    "PT30S",
+                    null,
+                    "PT30S");
         }
     }
 
@@ -418,6 +442,36 @@ class AdminDashboardServiceTest {
         @Override
         public Security security() {
             return new Security() {
+                @Override
+                public Auth auth() {
+                    return new Auth() {
+                        @Override
+                        public int loginFailureThreshold() {
+                            return 5;
+                        }
+
+                        @Override
+                        public Duration loginInitialBlock() {
+                            return Duration.ofMinutes(5);
+                        }
+
+                        @Override
+                        public Duration loginMaxBlock() {
+                            return Duration.ofHours(1);
+                        }
+
+                        @Override
+                        public boolean registrationChallengeEnabled() {
+                            return true;
+                        }
+
+                        @Override
+                        public Duration registrationChallengeTtl() {
+                            return Duration.ofMinutes(10);
+                        }
+                    };
+                }
+
                 @Override
                 public Passkeys passkeys() {
                     return new Passkeys() {

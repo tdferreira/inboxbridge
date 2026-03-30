@@ -151,6 +151,17 @@ Services:
 - PostgreSQL: `localhost:5432`
 
 The first compose run generates local certificates into `./certs`. You can later replace those files with your own certificates.
+For custom certificates, replace:
+
+- `./certs/backend.crt` and `./certs/backend.key` for the Quarkus backend
+- `./certs/frontend.crt` and `./certs/frontend.key` for the admin UI HTTPS endpoint
+
+For Let's Encrypt, the usual mapping is:
+
+- `fullchain.pem` -> `backend.crt` / `frontend.crt`
+- `privkey.pem` -> `backend.key` / `frontend.key`
+
+If you use your own certificate authority, also replace `./certs/ca.crt` so the frontend proxy still trusts the backend certificate.
 
 After the stack is up:
 
@@ -197,6 +208,9 @@ Current login rules:
 - the dedicated `Sign in with passkey` button is mainly for passkey-only accounts or discoverable-credential sign-in
 - users can intentionally remove their password and stay passkey-only
 - self-registration is opened from a dedicated `Register for access` button and uses a focused modal instead of permanently rendering the request form on the login card
+- repeated failed sign-ins from the same client IP are rate-limited with an exponential lockout: after `SECURITY_AUTH_LOGIN_FAILURE_THRESHOLD` failures the address is blocked for `SECURITY_AUTH_LOGIN_INITIAL_BLOCK`, and each later block doubles until `SECURITY_AUTH_LOGIN_MAX_BLOCK`
+- when self-registration is enabled, the registration modal also requires a short anti-robot challenge before the request is accepted
+- admins can override those login and self-registration protection defaults live from `Administration -> Authentication Security` without editing `.env`
 
 The admin UI also supports these languages, with the user preference stored per account and reused across sessions:
 
@@ -209,7 +223,12 @@ The admin UI also supports these languages, with the user preference stored per 
 
 User preferences now live behind the `Preferences` button in the header, which opens a modal for language selection, the `Remember layout on this account` option, a `Show Quick Setup Guide` toggle, and `layout editing` controls.
 For admin users, the workspace selection is also reflected in the browser URL: `/` stays on the user workspace without rewriting, `/admin` opens the administration workspace directly, and supported locales expose translated workspace slugs such as `/utilizador` and `/administracao`.
-The `Security` tools also open in a dedicated dialog instead of occupying permanent space in the main page layout, with separate tabs for `Password` and `Passkeys`.
+The admin UI enforces HTTPS: nginx already redirects plain HTTP traffic on port `80`, and the frontend also upgrades itself to `https://...` if it is ever served over plain HTTP by another deployment path.
+The `Security` tools also open in a dedicated dialog instead of occupying permanent space in the main page layout, with separate tabs for `Password`, `Passkeys`, and `Sessions`.
+The `Sessions` tab shows the latest successful sign-ins, the currently active sessions for the account, the login method used by each session, and actions for signing out one other session or all other sessions at once.
+If the same account signs in somewhere else while this browser is already open, the normal background refresh now raises a warning notification that links directly to the `Sessions` tab.
+If one browser session is revoked from another, the revoked browser now detects the next authenticated `401` response and immediately returns to the login screen instead of staying in a broken authenticated state.
+Approximate location is intentionally shown as unavailable for now unless the deployment is later wired to a dedicated Geo-IP provider.
 The `Quick Setup Guide` can now be hidden once every step is complete, and it automatically comes back if one of those requirements later becomes invalid again.
 
 ## Admin UI capabilities
@@ -276,7 +295,8 @@ Current features:
 - admin-managed runtime overrides for polling enablement, poll interval, and fetch window while still showing the `.env` defaults
 - an admin-only `Global Poller Settings` section for deployment-wide polling controls, with a separate `Global Statistics` section for the all-users analytics
 - the admin-facing `Global Poller Settings` area now shows effective settings in-page and opens a dedicated modal dialog for editing the deployment-wide overrides
-- the admin-facing `Global Poller Settings` area now also exposes the manual-run rate limit, asks for confirmation before triggering an all-users run, and keeps those broad manual runs subject to cooldown/next-window safety checks so providers are not hammered
+- the admin-facing `Global Poller Settings` area now also exposes the manual-run rate limit plus the host/provider hardening controls, asks for confirmation before triggering an all-users run, and lets admins tune the throttling / jitter behavior without editing `.env`
+- every hardening field in that admin modal now includes an inline `(i)` help hint, and the dialog also includes a longer explanation block describing how host spacing, concurrency caps, adaptive throttle growth, lease expiry, and success jitter work together
 - a dedicated `My Poller Settings` section so each user can override polling enablement, interval, and fetch window for their own UI-managed source email accounts, with a separate `My Statistics` section that only shows analytics for the current account
 - the user-facing `My Poller Settings` area now also includes `Run Poll Now` for that signed-in user’s own mail accounts, while single-account `Run Poll Now` remains the explicit force-run path when the user wants to bypass cooldown/backoff for one source
 - the user-facing `My Poller Settings` area now shows the effective settings as a compact summary and opens a dedicated modal dialog for editing overrides
@@ -419,6 +439,14 @@ What can be overridden:
 - whether scheduled polling is enabled
 - the scheduled poll interval
 - the mailbox fetch window
+- the source-host minimum spacing
+- the source-host max concurrency
+- the destination-provider minimum spacing
+- the destination-provider max concurrency
+- the throttle lease TTL
+- the adaptive throttle max multiplier
+- the successful-poll jitter ratio
+- the successful-poll jitter cap
 - source-specific polling enabled state, interval, and fetch window for each source email account
 
 Behavior:
@@ -446,6 +474,7 @@ Current limits:
 - default throttle lease TTL for persisted host/provider permits: `PT2M`
 - default adaptive throttle max multiplier: `6x`
 - default successful-poll jitter: `20%` of the effective interval, capped at `PT30S`
+- the admin polling modal now exposes those hardening values directly, with inline `(i)` help on every field and a longer explanation about how spacing, concurrency caps, adaptive widening, lease expiry, and success jitter interact
 
 ### Fix Google `403: org_internal`
 
@@ -494,6 +523,14 @@ Security:
 - `SECURITY_PASSKEYS_ENABLED`: enables or disables WebAuthn passkeys.
 - `SECURITY_PASSKEY_RP_ID`, `SECURITY_PASSKEY_RP_NAME`, `SECURITY_PASSKEY_ORIGINS`: passkey relying-party identity settings.
 - `SECURITY_PASSKEY_CHALLENGE_TTL`: lifetime for passkey registration/authentication ceremonies.
+- `SECURITY_AUTH_LOGIN_FAILURE_THRESHOLD`: failed sign-in attempts allowed from one client IP before lockout starts.
+- `SECURITY_AUTH_LOGIN_INITIAL_BLOCK`: initial sign-in lockout duration after the threshold is reached.
+- `SECURITY_AUTH_LOGIN_MAX_BLOCK`: maximum sign-in lockout duration after repeated failures.
+- `SECURITY_AUTH_REGISTRATION_CHALLENGE_ENABLED`: enables the anti-robot challenge on self-registration.
+- `SECURITY_AUTH_REGISTRATION_CHALLENGE_TTL`: lifetime of each anti-robot registration challenge.
+
+Those security-abuse defaults are also available in the admin UI under `Administration -> Authentication Security`, which stores only deployment overrides in PostgreSQL while leaving `.env` as the startup default source of truth.
+Raw duration values shown in the polling/authentication-security admin UI now keep hover hints with a human-readable explanation, for example `PT0.25S = 250 milliseconds`.
 
 Polling defaults:
 
@@ -578,7 +615,9 @@ To replace the generated certs with your own:
 
 1. stop the stack
 2. replace the files in `./certs`
-3. start the stack again
+3. if you are using Let's Encrypt or another public CA, copy the certificate chain file into `./certs/backend.crt` and `./certs/frontend.crt`, and copy the corresponding private key into `./certs/backend.key` and `./certs/frontend.key`
+4. if the backend certificate is signed by a private/internal CA, also replace `./certs/ca.crt` with that CA certificate so the frontend proxy trusts the backend
+5. start the stack again
 
 ## Important current limitations
 

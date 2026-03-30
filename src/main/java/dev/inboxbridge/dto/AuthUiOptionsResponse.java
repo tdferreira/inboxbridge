@@ -9,5 +9,6 @@ public record AuthUiOptionsResponse(
         boolean multiUserEnabled,
         boolean microsoftOAuthAvailable,
         boolean googleOAuthAvailable,
+        boolean registrationChallengeEnabled,
         List<String> sourceOAuthProviders) {
 }

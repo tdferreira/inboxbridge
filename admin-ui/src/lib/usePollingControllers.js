@@ -8,7 +8,15 @@ const DEFAULT_SYSTEM_POLLING_FORM = {
   pollIntervalOverride: '',
   fetchWindowOverride: '',
   manualTriggerLimitCountOverride: '',
-  manualTriggerLimitWindowSecondsOverride: ''
+  manualTriggerLimitWindowSecondsOverride: '',
+  sourceHostMinSpacingOverride: '',
+  sourceHostMaxConcurrencyOverride: '',
+  destinationProviderMinSpacingOverride: '',
+  destinationProviderMaxConcurrencyOverride: '',
+  throttleLeaseTtlOverride: '',
+  adaptiveThrottleMaxMultiplierOverride: '',
+  successJitterRatioOverride: '',
+  maxSuccessJitterOverride: ''
 }
 
 const DEFAULT_USER_POLLING_FORM = {
@@ -81,7 +89,15 @@ export function usePollingControllers({
         pollIntervalOverride: systemPollingPayload.pollIntervalOverride || '',
         fetchWindowOverride: systemPollingPayload.fetchWindowOverride === null ? '' : String(systemPollingPayload.fetchWindowOverride),
         manualTriggerLimitCountOverride: systemPollingPayload.manualTriggerLimitCountOverride === null ? '' : String(systemPollingPayload.manualTriggerLimitCountOverride),
-        manualTriggerLimitWindowSecondsOverride: systemPollingPayload.manualTriggerLimitWindowSecondsOverride === null ? '' : String(systemPollingPayload.manualTriggerLimitWindowSecondsOverride)
+        manualTriggerLimitWindowSecondsOverride: systemPollingPayload.manualTriggerLimitWindowSecondsOverride === null ? '' : String(systemPollingPayload.manualTriggerLimitWindowSecondsOverride),
+        sourceHostMinSpacingOverride: systemPollingPayload.sourceHostMinSpacingOverride || '',
+        sourceHostMaxConcurrencyOverride: systemPollingPayload.sourceHostMaxConcurrencyOverride === null ? '' : String(systemPollingPayload.sourceHostMaxConcurrencyOverride),
+        destinationProviderMinSpacingOverride: systemPollingPayload.destinationProviderMinSpacingOverride || '',
+        destinationProviderMaxConcurrencyOverride: systemPollingPayload.destinationProviderMaxConcurrencyOverride === null ? '' : String(systemPollingPayload.destinationProviderMaxConcurrencyOverride),
+        throttleLeaseTtlOverride: systemPollingPayload.throttleLeaseTtlOverride || '',
+        adaptiveThrottleMaxMultiplierOverride: systemPollingPayload.adaptiveThrottleMaxMultiplierOverride === null ? '' : String(systemPollingPayload.adaptiveThrottleMaxMultiplierOverride),
+        successJitterRatioOverride: systemPollingPayload.successJitterRatioOverride === null ? '' : String(systemPollingPayload.successJitterRatioOverride),
+        maxSuccessJitterOverride: systemPollingPayload.maxSuccessJitterOverride || ''
       })
     }
   }
@@ -254,7 +270,23 @@ export function usePollingControllers({
               : Number(systemPollingForm.manualTriggerLimitCountOverride),
             manualTriggerLimitWindowSecondsOverride: systemPollingForm.manualTriggerLimitWindowSecondsOverride.trim() === ''
               ? null
-              : Number(systemPollingForm.manualTriggerLimitWindowSecondsOverride)
+              : Number(systemPollingForm.manualTriggerLimitWindowSecondsOverride),
+            sourceHostMinSpacingOverride: systemPollingForm.sourceHostMinSpacingOverride.trim() || null,
+            sourceHostMaxConcurrencyOverride: systemPollingForm.sourceHostMaxConcurrencyOverride.trim() === ''
+              ? null
+              : Number(systemPollingForm.sourceHostMaxConcurrencyOverride),
+            destinationProviderMinSpacingOverride: systemPollingForm.destinationProviderMinSpacingOverride.trim() || null,
+            destinationProviderMaxConcurrencyOverride: systemPollingForm.destinationProviderMaxConcurrencyOverride.trim() === ''
+              ? null
+              : Number(systemPollingForm.destinationProviderMaxConcurrencyOverride),
+            throttleLeaseTtlOverride: systemPollingForm.throttleLeaseTtlOverride.trim() || null,
+            adaptiveThrottleMaxMultiplierOverride: systemPollingForm.adaptiveThrottleMaxMultiplierOverride.trim() === ''
+              ? null
+              : Number(systemPollingForm.adaptiveThrottleMaxMultiplierOverride),
+            successJitterRatioOverride: systemPollingForm.successJitterRatioOverride.trim() === ''
+              ? null
+              : Number(systemPollingForm.successJitterRatioOverride),
+            maxSuccessJitterOverride: systemPollingForm.maxSuccessJitterOverride.trim() || null
           })
         })
         if (!response.ok) {

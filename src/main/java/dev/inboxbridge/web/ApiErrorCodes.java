@@ -11,6 +11,7 @@ final class ApiErrorCodes {
         }
         String normalized = message.toLowerCase(java.util.Locale.ROOT);
         if (message.equals("Invalid username or password")) return "auth_invalid_credentials";
+        if (message.equals("Too many failed sign-in attempts from this address.")) return "auth_login_blocked";
         if (message.equals("Not authenticated")) return "auth_not_authenticated";
         if (message.equals("Current password is incorrect")) return "account_current_password_incorrect";
         if (message.equals("This account does not have a password configured.")) return "account_password_not_configured";
@@ -21,6 +22,9 @@ final class ApiErrorCodes {
         if (message.equals("Mail fetcher ID already exists")) return "mail_fetcher_id_exists";
         if (message.equals("A source mailbox cannot be the same as My Destination Mailbox. Choose a different mailbox or keep that source disabled.")) return "source_destination_mailbox_conflict";
         if (message.equals("Password is required")) return "password_required";
+        if (message.equals("Registration challenge answer is required")) return "registration_challenge_required";
+        if (message.equals("Registration challenge is invalid or expired")) return "registration_challenge_invalid";
+        if (message.equals("Registration challenge answer is incorrect")) return "registration_challenge_incorrect";
         if (message.equals("OAuth refresh token is required or connect provider OAuth first")) return "oauth_refresh_token_required";
         if (message.equals("Fetch window override must be between 1 and 500 messages")) return "fetch_window_invalid";
         if (message.equals("Poll interval is required")) return "poll_interval_required";

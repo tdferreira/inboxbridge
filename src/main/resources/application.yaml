@@ -39,6 +39,12 @@ inboxbridge:
   max-success-jitter: ${MAX_SUCCESS_JITTER:PT30S}
   multi-user-enabled: ${MULTI_USER_ENABLED:true}
   security:
+    auth:
+      login-failure-threshold: ${SECURITY_AUTH_LOGIN_FAILURE_THRESHOLD:5}
+      login-initial-block: ${SECURITY_AUTH_LOGIN_INITIAL_BLOCK:PT5M}
+      login-max-block: ${SECURITY_AUTH_LOGIN_MAX_BLOCK:PT1H}
+      registration-challenge-enabled: ${SECURITY_AUTH_REGISTRATION_CHALLENGE_ENABLED:true}
+      registration-challenge-ttl: ${SECURITY_AUTH_REGISTRATION_CHALLENGE_TTL:PT10M}
     passkeys:
       enabled: ${SECURITY_PASSKEYS_ENABLED:true}
       rp-id: ${SECURITY_PASSKEY_RP_ID:localhost}

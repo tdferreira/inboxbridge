@@ -3,6 +3,7 @@ package dev.inboxbridge.service;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.time.Instant;
 import java.util.Optional;
@@ -22,7 +23,7 @@ class AuthServiceTest {
 
         IllegalArgumentException error = assertThrows(
                 IllegalArgumentException.class,
-                () -> service.login("alice@example.com", "secret-123"));
+                () -> service.login("alice@example.com", "secret-123", "203.0.113.5", "JUnit"));
 
         assertEquals("Invalid username or password", error.getMessage());
     }
@@ -47,7 +48,7 @@ class AuthServiceTest {
         service.userSessionService = new FakeUserSessionService();
         service.passkeyService = new FakePasskeyService();
 
-        AuthService.LoginResult result = service.login("alice@example.com", "secret-123");
+        AuthService.LoginResult result = service.login("alice@example.com", "secret-123", "203.0.113.5", "JUnit");
 
         assertEquals(AuthService.LoginStatus.PASSKEY_REQUIRED, result.status());
         assertNotNull(result.passkeyChallenge());
@@ -60,10 +61,43 @@ class AuthServiceTest {
         service.userSessionService = new FakeUserSessionService();
         service.passkeyService = new FakePasskeyService();
 
-        AuthService.LoginResult result = service.login("alice@example.com", "anything");
+        AuthService.LoginResult result = service.login("alice@example.com", "anything", "203.0.113.5", "JUnit");
 
         assertEquals(AuthService.LoginStatus.PASSKEY_REQUIRED, result.status());
         assertNotNull(result.passkeyChallenge());
+    }
+
+    @Test
+    void loginStoresPasswordSessionMetadata() {
+        AuthService service = new AuthService();
+        FakeUserSessionService sessionService = new FakeUserSessionService();
+        service.appUserService = fakeUsers("alice@example.com", "secret-123", true, true, 0);
+        service.userSessionService = sessionService;
+
+        AuthService.LoginResult result = service.login("alice@example.com", "secret-123", "203.0.113.8", "JUnit Browser");
+
+        assertEquals(AuthService.LoginStatus.AUTHENTICATED, result.status());
+        assertEquals("203.0.113.8", sessionService.lastClientIp);
+        assertEquals("JUnit Browser", sessionService.lastUserAgent);
+        assertEquals(UserSession.LoginMethod.PASSWORD, sessionService.lastLoginMethod);
+    }
+
+    @Test
+    void passkeyLoginStoresCombinedMethodWhenPasswordWasVerified() {
+        AuthService service = new AuthService();
+        FakeUserSessionService sessionService = new FakeUserSessionService();
+        service.appUserService = fakeUsers("alice@example.com", "secret-123", true, true, 1);
+        service.userSessionService = sessionService;
+
+        AppUser user = service.appUserService.findByUsername("alice@example.com").orElseThrow();
+        AuthService.AuthenticatedSession session = service.loginWithPasskey(
+                new PasskeyService.PasskeyAuthenticationResult(user, true),
+                "198.51.100.7",
+                "JUnit Browser");
+
+        assertEquals("session-1", session.token());
+        assertEquals(UserSession.LoginMethod.PASSWORD_PLUS_PASSKEY, sessionService.lastLoginMethod);
+        assertTrue(sessionService.lastUserAgent.contains("JUnit"));
     }
 
     private AppUserService fakeUsers(String username, String password, boolean active, boolean approved, long passkeyCount) {
@@ -111,8 +145,15 @@ class AuthServiceTest {
     }
 
     private static final class FakeUserSessionService extends UserSessionService {
+        private String lastClientIp;
+        private String lastUserAgent;
+        private UserSession.LoginMethod lastLoginMethod;
+
         @Override
-        public String createSession(AppUser user) {
+        public String createSession(AppUser user, String clientIp, String locationLabel, String userAgent, UserSession.LoginMethod loginMethod) {
+            this.lastClientIp = clientIp;
+            this.lastUserAgent = userAgent;
+            this.lastLoginMethod = loginMethod;
             return "session-1";
         }
 

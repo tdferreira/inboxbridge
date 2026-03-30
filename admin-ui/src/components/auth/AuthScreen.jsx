@@ -25,10 +25,13 @@ function AuthScreen({
   onOpenRegisterDialog,
   onRegister,
   onRegisterChange,
+  registerChallenge,
+  registerChallengeLoading,
   registerForm,
   t
 }) {
   const registerPasswordsMatch = registerForm.password !== '' && registerForm.password === registerForm.confirmPassword
+  const registrationReady = registerPasswordsMatch && (!registerChallenge || registerForm.challengeAnswer.trim() !== '')
 
   return (
     <div className="page-shell">
@@ -107,9 +110,20 @@ function AuthScreen({
               onChange={(event) => onRegisterChange((current) => ({ ...current, confirmPassword: event.target.value }))}
               showLabel={t('common.showField', { label: t('auth.repeatRequestedPassword') })}
             />
+            {registerChallengeLoading ? <div className="auth-screen-hint">{t('auth.challengeLoading')}</div> : null}
+            {registerChallenge ? (
+              <label>
+                <span>{t('auth.challengeAnswerLabel', { prompt: registerChallenge.prompt })}</span>
+                <input
+                  value={registerForm.challengeAnswer}
+                  onChange={(event) => onRegisterChange((current) => ({ ...current, challengeAnswer: event.target.value }))}
+                />
+                <div className="auth-screen-hint">{t('auth.challengeHelp')}</div>
+              </label>
+            ) : null}
             {!registerPasswordsMatch && registerForm.confirmPassword !== '' ? <div className="auth-screen-hint">{t('auth.repeatPasswordHint')}</div> : null}
             <div className="action-row">
-              <LoadingButton className="primary" disabled={!registerPasswordsMatch} isLoading={registerLoading} loadingLabel={t('auth.registerLoading')} type="submit">
+              <LoadingButton className="primary" disabled={!registrationReady || registerChallengeLoading} isLoading={registerLoading} loadingLabel={t('auth.registerLoading')} type="submit">
                 {t('auth.register')}
               </LoadingButton>
               <button className="secondary" onClick={onCloseRegisterDialog} type="button">

@@ -1,3 +1,4 @@
+import AuthSecuritySection from '../admin/AuthSecuritySection'
 import { Suspense, lazy } from 'react'
 import OAuthAppsSection from '../admin/OAuthAppsSection'
 import SystemDashboardSection from '../admin/SystemDashboardSection'
@@ -169,6 +170,7 @@ export function buildUserWorkspaceSections({
 
 export function buildAdminWorkspaceSections({
   adminSetupGuideState,
+  authSecuritySettings,
   authOptions,
   isPending,
   isSectionRefreshing,
@@ -177,6 +179,7 @@ export function buildAdminWorkspaceSections({
   loadGlobalCustomRange,
   polling,
   session,
+  setShowAuthSecurityDialog,
   setShowSystemOAuthAppsDialog,
   setSystemOAuthEditorProvider,
   setSystemOAuthSettingsDirty,
@@ -241,6 +244,21 @@ export function buildAdminWorkspaceSections({
             setShowSystemOAuthAppsDialog(true)
           }}
           sectionLoading={isSectionRefreshing('oauthAppsCollapsed')}
+          t={t}
+        />
+      )
+    },
+    {
+      id: 'authSecurity',
+      render: () => (
+        <AuthSecuritySection
+          authSecuritySettings={authSecuritySettings}
+          collapsed={uiPreferences.authSecurityCollapsed}
+          collapseLoading={isPending('uiPreferences') && uiPreferences.persistLayout}
+          locale={language}
+          onCollapseToggle={() => toggleWorkspaceSection('authSecurityCollapsed')}
+          onOpenEditor={() => setShowAuthSecurityDialog(true)}
+          sectionLoading={isSectionRefreshing('authSecurityCollapsed')}
           t={t}
         />
       )

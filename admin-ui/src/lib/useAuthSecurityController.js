@@ -1,11 +1,13 @@
-import { useState } from 'react'
-import { apiErrorText } from './api'
+import { useEffect, useRef, useState } from 'react'
+import { AUTH_EXPIRED_EVENT, apiErrorText } from './api'
 import { pollErrorNotification, translatedNotification } from './notifications'
 import { normalizePasskeyError, parseCreateOptions, parseGetOptions, passkeysSupported, serializeCredential } from './passkeys'
+import { buildRecentSessionTargetId } from './sectionTargets'
 
 const DEFAULT_LOGIN_FORM = { username: 'admin', password: 'nimda' }
-const DEFAULT_REGISTER_FORM = { username: '', password: '', confirmPassword: '' }
+const DEFAULT_REGISTER_FORM = { username: '', password: '', confirmPassword: '', challengeId: '', challengeAnswer: '' }
 const DEFAULT_PASSWORD_FORM = { currentPassword: '', newPassword: '', confirmNewPassword: '' }
+const DEFAULT_SESSION_ACTIVITY = { recentLogins: [], activeSessions: [] }
 
 export function useAuthSecurityController({
   closeConfirmation,
@@ -23,12 +25,17 @@ export function useAuthSecurityController({
   const [loginForm, setLoginForm] = useState(DEFAULT_LOGIN_FORM)
   const [registerForm, setRegisterForm] = useState(DEFAULT_REGISTER_FORM)
   const [registerOpen, setRegisterOpen] = useState(false)
+  const [registerChallenge, setRegisterChallenge] = useState(null)
+  const [registerChallengeLoading, setRegisterChallengeLoading] = useState(false)
   const [passwordForm, setPasswordForm] = useState(DEFAULT_PASSWORD_FORM)
   const [myPasskeys, setMyPasskeys] = useState([])
   const [passkeyLabel, setPasskeyLabel] = useState('')
   const [showSecurityPanel, setShowSecurityPanel] = useState(false)
   const [securityTab, setSecurityTab] = useState('password')
   const [showPasskeyRegistrationDialog, setShowPasskeyRegistrationDialog] = useState(false)
+  const [sessionActivity, setSessionActivity] = useState(DEFAULT_SESSION_ACTIVITY)
+  const latestRecentSessionKeyRef = useRef(null)
+  const hasSessionActivityBaselineRef = useRef(false)
 
   const securityDialogDirty = Boolean(
     passwordForm.currentPassword.trim()
@@ -40,12 +47,41 @@ export function useAuthSecurityController({
     setAuthError('')
   }
 
+  async function clearSessionState({ showExpiredMessage = false } = {}) {
+    setSession(null)
+    setPasswordForm(DEFAULT_PASSWORD_FORM)
+    setMyPasskeys([])
+    setSessionActivity(DEFAULT_SESSION_ACTIVITY)
+    setPasskeyLabel('')
+    setShowSecurityPanel(false)
+    setSecurityTab('password')
+    setShowPasskeyRegistrationDialog(false)
+    setRegisterOpen(false)
+    setRegisterChallenge(null)
+    setRegisterChallengeLoading(false)
+    setRegisterForm(DEFAULT_REGISTER_FORM)
+    latestRecentSessionKeyRef.current = null
+    hasSessionActivityBaselineRef.current = false
+    setAuthError(showExpiredMessage ? t('auth.sessionExpired') : '')
+    if (onLogoutReset) {
+      await onLogoutReset()
+    }
+  }
+
+  useEffect(() => {
+    function handleAuthExpired() {
+      void clearSessionState({ showExpiredMessage: true })
+    }
+
+    window.addEventListener(AUTH_EXPIRED_EVENT, handleAuthExpired)
+    return () => window.removeEventListener(AUTH_EXPIRED_EVENT, handleAuthExpired)
+  }, [onLogoutReset, t])
+
   async function loadSession() {
     try {
       const response = await fetch('/api/auth/me')
       if (response.status === 401) {
-        setSession(null)
-        setAuthError('')
+        await clearSessionState()
         return
       }
       if (!response.ok) {
@@ -79,7 +115,6 @@ export function useAuthSecurityController({
     }
     const payload = await finishResponse.json()
     setSession(payload.user)
-    pushNotification({ message: translatedNotification('notifications.signedInWithPasskey'), tone: 'success' })
   }
 
   async function handleLogin(event) {
@@ -131,31 +166,48 @@ export function useAuthSecurityController({
         const payload = await response.json()
         setRegisterForm(DEFAULT_REGISTER_FORM)
         setRegisterOpen(false)
+        setRegisterChallenge(null)
         pushNotification({
           message: payload.message ? pollErrorNotification(payload.message) : translatedNotification('notifications.registrationSubmitted'),
           tone: 'success'
         })
       } catch (err) {
         setAuthError(err.message || errorText('registrationFailed'))
+        await loadRegistrationChallenge()
       }
     })
+  }
+
+  async function loadRegistrationChallenge() {
+    setRegisterChallengeLoading(true)
+    try {
+      const response = await fetch('/api/auth/register/challenge')
+      if (!response.ok) {
+        throw new Error(await apiErrorText(response, errorText('loadRegistrationChallenge')))
+      }
+      const payload = await response.json()
+      if (!payload?.enabled) {
+        setRegisterChallenge(null)
+        setRegisterForm((current) => ({ ...current, challengeId: '', challengeAnswer: '' }))
+        return
+      }
+      setRegisterChallenge(payload)
+      setRegisterForm((current) => ({
+        ...current,
+        challengeId: payload.challengeId || '',
+        challengeAnswer: ''
+      }))
+    } catch (err) {
+      setAuthError(err.message || errorText('loadRegistrationChallenge'))
+    } finally {
+      setRegisterChallengeLoading(false)
+    }
   }
 
   async function handleLogout() {
     await withPending('logout', async () => {
       await fetch('/api/auth/logout', { method: 'POST' })
-      setSession(null)
-      setAuthError('')
-      setPasswordForm(DEFAULT_PASSWORD_FORM)
-      setMyPasskeys([])
-      setPasskeyLabel('')
-      setShowSecurityPanel(false)
-      setSecurityTab('password')
-      setShowPasskeyRegistrationDialog(false)
-      setRegisterOpen(false)
-      if (onLogoutReset) {
-        await onLogoutReset()
-      }
+      await clearSessionState()
     })
   }
 
@@ -333,13 +385,144 @@ export function useAuthSecurityController({
     })
   }
 
-  function openSecurityPanel(tab = 'password') {
+  async function loadSessionActivity({ announceNewSessions = false, suppressErrors = false } = {}) {
+    try {
+      const response = await fetch('/api/account/sessions')
+      if (!response.ok) {
+        throw new Error(await apiErrorText(response, errorText('loadSessions')))
+      }
+      const payload = await response.json()
+      const recentLogins = Array.isArray(payload?.recentLogins) ? payload.recentLogins : []
+      const activeSessions = Array.isArray(payload?.activeSessions) ? payload.activeSessions : []
+      const latestRecentSession = recentLogins[0] || null
+      const latestRecentSessionKey = latestRecentSession
+        ? `${latestRecentSession.id}:${latestRecentSession.createdAt || ''}:${latestRecentSession.current ? 'current' : 'other'}`
+        : null
+
+      if (announceNewSessions && latestRecentSessionKey) {
+        if (!hasSessionActivityBaselineRef.current) {
+          hasSessionActivityBaselineRef.current = true
+          latestRecentSessionKeyRef.current = latestRecentSessionKey
+        } else if (
+          latestRecentSessionKeyRef.current !== latestRecentSessionKey
+          && latestRecentSession
+          && !latestRecentSession.current
+        ) {
+          latestRecentSessionKeyRef.current = latestRecentSessionKey
+          pushNotification({
+            message: translatedNotification('notifications.newSessionDetected'),
+            targetId: buildRecentSessionTargetId(latestRecentSession.id),
+            tone: 'warning'
+          })
+        } else {
+          latestRecentSessionKeyRef.current = latestRecentSessionKey
+        }
+      } else if (!hasSessionActivityBaselineRef.current) {
+        hasSessionActivityBaselineRef.current = true
+        latestRecentSessionKeyRef.current = latestRecentSessionKey
+      } else if (latestRecentSessionKey) {
+        latestRecentSessionKeyRef.current = latestRecentSessionKey
+      }
+
+      setSessionActivity({
+        recentLogins,
+        activeSessions
+      })
+    } catch (err) {
+      if (suppressErrors) {
+        return
+      }
+      pushNotification({
+        autoCloseMs: null,
+        copyText: err.message ? pollErrorNotification(err.message) : translatedNotification('errors.loadSessions'),
+        message: err.message ? pollErrorNotification(err.message) : translatedNotification('errors.loadSessions'),
+        targetId: 'security-sessions-panel-section',
+        tone: 'error'
+      })
+    }
+  }
+
+  async function handleRevokeSession(sessionId) {
+    openConfirmation({
+      actionKey: `sessionRevoke:${sessionId}`,
+      body: t('sessions.revokeConfirmBody'),
+      confirmLabel: t('sessions.revoke'),
+      confirmLoadingLabel: t('sessions.revokeLoading'),
+      confirmTone: 'danger',
+      onConfirm: async () => {
+        await withPending(`sessionRevoke:${sessionId}`, async () => {
+          try {
+            const response = await fetch(`/api/account/sessions/${sessionId}/revoke`, { method: 'POST' })
+            if (!response.ok) {
+              throw new Error(await apiErrorText(response, errorText('revokeSession')))
+            }
+            closeConfirmation?.()
+            await loadSessionActivity()
+            pushNotification({ message: translatedNotification('notifications.sessionRevoked'), targetId: 'security-sessions-panel-section', tone: 'success' })
+          } catch (err) {
+            pushNotification({
+              autoCloseMs: null,
+              copyText: err.message ? pollErrorNotification(err.message) : translatedNotification('errors.revokeSession'),
+              message: err.message ? pollErrorNotification(err.message) : translatedNotification('errors.revokeSession'),
+              targetId: 'security-sessions-panel-section',
+              tone: 'error'
+            })
+          }
+        })
+      },
+      title: t('sessions.revokeConfirmTitle')
+    })
+  }
+
+  async function handleRevokeOtherSessions() {
+    openConfirmation({
+      actionKey: 'sessionsRevokeOthers',
+      body: t('sessions.revokeOthersConfirmBody'),
+      confirmLabel: t('sessions.revokeOthers'),
+      confirmLoadingLabel: t('sessions.revokeOthersLoading'),
+      confirmTone: 'danger',
+      onConfirm: async () => {
+        await withPending('sessionsRevokeOthers', async () => {
+          try {
+            const response = await fetch('/api/account/sessions/revoke-others', { method: 'POST' })
+            if (!response.ok) {
+              throw new Error(await apiErrorText(response, errorText('revokeSession')))
+            }
+            closeConfirmation?.()
+            await loadSessionActivity()
+            pushNotification({ message: translatedNotification('notifications.otherSessionsRevoked'), targetId: 'security-sessions-panel-section', tone: 'success' })
+          } catch (err) {
+            pushNotification({
+              autoCloseMs: null,
+              copyText: err.message ? pollErrorNotification(err.message) : translatedNotification('errors.revokeSession'),
+              message: err.message ? pollErrorNotification(err.message) : translatedNotification('errors.revokeSession'),
+              targetId: 'security-sessions-panel-section',
+              tone: 'error'
+            })
+          }
+        })
+      },
+      title: t('sessions.revokeOthersConfirmTitle')
+    })
+  }
+
+  async function openSecurityPanel(tab = 'password') {
     setSecurityTab(tab)
     setShowSecurityPanel(true)
+    if (tab === 'sessions') {
+      await loadSessionActivity()
+    }
   }
 
   function closeSecurityPanel() {
     setShowSecurityPanel(false)
+  }
+
+  async function selectSecurityTab(tab) {
+    setSecurityTab(tab)
+    if (tab === 'sessions') {
+      await loadSessionActivity()
+    }
   }
 
   function applyLoadedPasskeys(passkeysPayload) {
@@ -351,7 +534,11 @@ export function useAuthSecurityController({
     authError,
     authLoading,
     closePasskeyRegistrationDialog,
-    closeRegisterDialog: () => setRegisterOpen(false),
+    closeRegisterDialog: () => {
+      setRegisterOpen(false)
+      setRegisterChallenge(null)
+      setRegisterForm(DEFAULT_REGISTER_FORM)
+    },
     closeSecurityPanel,
     handleDeletePasskey,
     handleLogin,
@@ -365,16 +552,25 @@ export function useAuthSecurityController({
     loginForm,
     myPasskeys,
     openPasskeyRegistrationDialog,
-    openRegisterDialog: () => setRegisterOpen(true),
+    handleRevokeOtherSessions,
+    handleRevokeSession,
+    pollSessionActivity: loadSessionActivity,
+    openRegisterDialog: async () => {
+      setRegisterOpen(true)
+      await loadRegistrationChallenge()
+    },
     openSecurityPanel,
     passkeyLabel,
     passkeysSupported: passkeysSupported(),
     passwordForm,
     registerForm,
+    registerChallenge,
+    registerChallengeLoading,
     registerOpen,
     securityDialogDirty,
     securityTab,
-    selectSecurityTab: setSecurityTab,
+    sessionActivity,
+    selectSecurityTab,
     session,
     setLoginForm,
     setPasskeyLabel,

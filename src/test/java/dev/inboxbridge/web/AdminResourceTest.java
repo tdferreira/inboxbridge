@@ -8,11 +8,13 @@ import java.util.Optional;
 import org.junit.jupiter.api.Test;
 
 import dev.inboxbridge.dto.AdminPollingSettingsView;
+import dev.inboxbridge.dto.AuthSecuritySettingsView;
 import dev.inboxbridge.dto.PollRunResult;
 import dev.inboxbridge.dto.PollingTimelineBundleView;
 import dev.inboxbridge.dto.SourcePollingSettingsView;
 import dev.inboxbridge.dto.SourcePollingStatsView;
 import dev.inboxbridge.dto.UpdateAdminPollingSettingsRequest;
+import dev.inboxbridge.dto.UpdateAuthSecuritySettingsRequest;
 import dev.inboxbridge.dto.UpdateSourcePollingSettingsRequest;
 import dev.inboxbridge.domain.RuntimeEmailAccount;
 import dev.inboxbridge.persistence.AppUser;
@@ -22,6 +24,7 @@ import dev.inboxbridge.service.PollingSettingsService;
 import dev.inboxbridge.service.PollingStatsService;
 import dev.inboxbridge.service.RuntimeEmailAccountService;
 import dev.inboxbridge.service.SourcePollingSettingsService;
+import dev.inboxbridge.service.AuthSecuritySettingsService;
 import jakarta.ws.rs.BadRequestException;
 
 class AdminResourceTest {
@@ -44,7 +47,20 @@ class AdminResourceTest {
 
         BadRequestException error = assertThrows(
                 BadRequestException.class,
-                () -> resource.updatePollingSettings(new UpdateAdminPollingSettingsRequest(Boolean.TRUE, "1s", Integer.valueOf(10), null, null)));
+                () -> resource.updatePollingSettings(new UpdateAdminPollingSettingsRequest(
+                        Boolean.TRUE,
+                        "1s",
+                        Integer.valueOf(10),
+                        null,
+                        null,
+                        null,
+                        null,
+                        null,
+                        null,
+                        null,
+                        null,
+                        null,
+                        null)));
 
         assertEquals("Poll interval must be at least 5 seconds", error.getMessage());
     }
@@ -97,6 +113,29 @@ class AdminResourceTest {
         assertEquals(1, response.importTimelines().get("custom").size());
     }
 
+    @Test
+    void authSecuritySettingsReturnsCurrentView() {
+        AdminResource resource = new AdminResource();
+        resource.authSecuritySettingsService = new FakeAuthSecuritySettingsService();
+
+        AuthSecuritySettingsView response = resource.authSecuritySettings();
+
+        assertEquals(5, response.defaultLoginFailureThreshold());
+        assertEquals(8, response.effectiveLoginFailureThreshold());
+    }
+
+    @Test
+    void updateAuthSecuritySettingsSurfacesValidationErrors() {
+        AdminResource resource = new AdminResource();
+        resource.authSecuritySettingsService = new ErrorAuthSecuritySettingsService();
+
+        BadRequestException error = assertThrows(
+                BadRequestException.class,
+                () -> resource.updateAuthSecuritySettings(new UpdateAuthSecuritySettingsRequest(5, "PT30M", "PT10M", Boolean.TRUE, "PT10M")));
+
+        assertEquals("Maximum login block must be greater than or equal to the initial login block", error.getMessage());
+    }
+
     private CurrentUserContext currentUserContext() {
         CurrentUserContext context = new CurrentUserContext();
         AppUser user = new AppUser();
@@ -110,7 +149,46 @@ class AdminResourceTest {
     private static class FakePollingSettingsService extends PollingSettingsService {
         @Override
         public AdminPollingSettingsView view() {
-            return new AdminPollingSettingsView(true, Boolean.TRUE, true, "5m", "3m", "3m", 50, Integer.valueOf(25), 25, 5, Integer.valueOf(4), 4, 60, Integer.valueOf(90), 90);
+            return new AdminPollingSettingsView(
+                    true,
+                    Boolean.TRUE,
+                    true,
+                    "5m",
+                    "3m",
+                    "3m",
+                    50,
+                    Integer.valueOf(25),
+                    25,
+                    5,
+                    Integer.valueOf(4),
+                    4,
+                    60,
+                    Integer.valueOf(90),
+                    90,
+                    "PT1S",
+                    null,
+                    "PT1S",
+                    2,
+                    null,
+                    2,
+                    "PT0.25S",
+                    null,
+                    "PT0.25S",
+                    1,
+                    null,
+                    1,
+                    "PT2M",
+                    null,
+                    "PT2M",
+                    6,
+                    null,
+                    6,
+                    0.2d,
+                    null,
+                    0.2d,
+                    "PT30S",
+                    null,
+                    "PT30S");
         }
     }
 
@@ -166,6 +244,35 @@ class AdminResourceTest {
         @Override
         public AdminPollingSettingsView update(UpdateAdminPollingSettingsRequest request) {
             throw new IllegalArgumentException("Poll interval must be at least 5 seconds");
+        }
+    }
+
+    private static final class FakeAuthSecuritySettingsService extends AuthSecuritySettingsService {
+        @Override
+        public AuthSecuritySettingsView view() {
+            return new AuthSecuritySettingsView(
+                    5,
+                    Integer.valueOf(8),
+                    8,
+                    "PT5M",
+                    "PT10M",
+                    "PT10M",
+                    "PT1H",
+                    "PT2H",
+                    "PT2H",
+                    true,
+                    Boolean.FALSE,
+                    false,
+                    "PT10M",
+                    "PT20M",
+                    "PT20M");
+        }
+    }
+
+    private static final class ErrorAuthSecuritySettingsService extends AuthSecuritySettingsService {
+        @Override
+        public AuthSecuritySettingsView update(UpdateAuthSecuritySettingsRequest request) {
+            throw new IllegalArgumentException("Maximum login block must be greater than or equal to the initial login block");
         }
     }
 

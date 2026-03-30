@@ -23,6 +23,86 @@ export function formatDate(value, locale = 'en') {
   return date.toLocaleString(locale)
 }
 
+function parseDurationToMilliseconds(value) {
+  if (value == null) return null
+  const text = String(value).trim()
+  if (!text) return null
+
+  const shorthandMatch = text.match(/^(\d+(?:\.\d+)?)(ms|s|m|h|d)$/i)
+  if (shorthandMatch) {
+    const amount = Number(shorthandMatch[1])
+    const unit = shorthandMatch[2].toLowerCase()
+    if (Number.isNaN(amount)) return null
+    const multipliers = {
+      ms: 1,
+      s: 1000,
+      m: 60_000,
+      h: 3_600_000,
+      d: 86_400_000
+    }
+    return amount * multipliers[unit]
+  }
+
+  const isoMatch = text.match(/^P(?:(\d+(?:\.\d+)?)D)?(?:T(?:(\d+(?:\.\d+)?)H)?(?:(\d+(?:\.\d+)?)M)?(?:(\d+(?:\.\d+)?)S)?)?$/i)
+  if (!isoMatch) return null
+  const days = Number(isoMatch[1] || 0)
+  const hours = Number(isoMatch[2] || 0)
+  const minutes = Number(isoMatch[3] || 0)
+  const seconds = Number(isoMatch[4] || 0)
+  return (days * 86_400_000) + (hours * 3_600_000) + (minutes * 60_000) + (seconds * 1000)
+}
+
+export function formatDurationMeaning(value, locale = 'en') {
+  const milliseconds = parseDurationToMilliseconds(value)
+  if (milliseconds == null) return ''
+
+  const unitFormatter = (unit, amount) => new Intl.NumberFormat(locale, {
+    style: 'unit',
+    unit,
+    unitDisplay: 'long',
+    maximumFractionDigits: unit === 'second' && amount % 1 !== 0 ? 2 : 0
+  }).format(amount)
+  const parts = []
+  let remainder = milliseconds
+
+  const days = Math.floor(remainder / 86_400_000)
+  if (days > 0) {
+    parts.push(unitFormatter('day', days))
+    remainder -= days * 86_400_000
+  }
+  const hours = Math.floor(remainder / 3_600_000)
+  if (hours > 0) {
+    parts.push(unitFormatter('hour', hours))
+    remainder -= hours * 3_600_000
+  }
+  const minutes = Math.floor(remainder / 60_000)
+  if (minutes > 0) {
+    parts.push(unitFormatter('minute', minutes))
+    remainder -= minutes * 60_000
+  }
+  const seconds = Math.floor(remainder / 1000)
+  if (seconds > 0) {
+    parts.push(unitFormatter('second', seconds))
+    remainder -= seconds * 1000
+  }
+  if (remainder > 0 || parts.length === 0) {
+    if (parts.length === 0 && milliseconds >= 1000 && milliseconds % 1000 !== 0) {
+      parts.push(unitFormatter('second', milliseconds / 1000))
+    } else if (remainder > 0 || milliseconds < 1000) {
+      parts.push(unitFormatter('millisecond', remainder || milliseconds))
+    }
+  }
+
+  if (parts.length === 1) return parts[0]
+  return new Intl.ListFormat(locale, { style: 'long', type: 'conjunction' }).format(parts)
+}
+
+export function formatDurationHint(value, locale = 'en') {
+  const meaning = formatDurationMeaning(value, locale)
+  if (!meaning) return ''
+  return `${value} = ${meaning}`
+}
+
 export function formatPollError(message, locale = 'en') {
   if (message && typeof message === 'object') {
     const code = String(message.code || '').trim()
@@ -199,6 +279,10 @@ export function authMethodLabel(method, locale = 'en') {
       return translate(locale, 'authMethod.password')
     case 'OAUTH2':
       return translate(locale, 'authMethod.oauth2')
+    case 'PASSKEY':
+      return translate(locale, 'authMethod.passkey')
+    case 'PASSWORD_PLUS_PASSKEY':
+      return translate(locale, 'authMethod.passwordPlusPasskey')
     default:
       return method || translate(locale, 'tokenStorage.unknown')
   }

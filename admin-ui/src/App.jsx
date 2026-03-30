@@ -7,7 +7,9 @@ import LoadingScreen from './components/common/LoadingScreen'
 import ModalDialog from './components/common/ModalDialog'
 import PasswordPanel from './components/account/PasswordPanel'
 import PasskeyPanel from './components/account/PasskeyPanel'
+import SessionsPanel from './components/account/SessionsPanel'
 import PasskeyRegistrationDialog from './components/account/PasskeyRegistrationDialog'
+import AuthSecuritySettingsDialog from './components/admin/AuthSecuritySettingsDialog'
 import PasswordResetDialog from './components/admin/PasswordResetDialog'
 import HeroPanel from './components/layout/HeroPanel'
 import NotificationsDialog from './components/layout/NotificationsDialog'
@@ -21,8 +23,9 @@ import { apiErrorText } from './lib/api'
 import { buildSetupGuideState } from './lib/setupGuide'
 import { normalizeDestinationProviderConfig } from './lib/emailProviderPresets'
 import { pollErrorNotification, resolveNotificationContent, translatedNotification } from './lib/notifications'
-import { isSourceEmailAccountTargetId } from './lib/sectionTargets'
+import { isRecentSessionTargetId, isSourceEmailAccountTargetId } from './lib/sectionTargets'
 import { normalizeLocale, translate } from './lib/i18n'
+import { enforceHttpsIfNeeded } from './lib/httpsRedirect'
 import { useAuthSecurityController } from './lib/useAuthSecurityController'
 import { useDestinationController } from './lib/useDestinationController'
 import { useEmailAccountsController } from './lib/useEmailAccountsController'
@@ -69,6 +72,23 @@ const DEFAULT_SYSTEM_OAUTH_SETTINGS = {
   microsoftClientSecretConfigured: false,
   secureStorageConfigured: true
 }
+const DEFAULT_AUTH_SECURITY_SETTINGS = {
+  defaultLoginFailureThreshold: 5,
+  loginFailureThresholdOverride: null,
+  effectiveLoginFailureThreshold: 5,
+  defaultLoginInitialBlock: 'PT5M',
+  loginInitialBlockOverride: null,
+  effectiveLoginInitialBlock: 'PT5M',
+  defaultLoginMaxBlock: 'PT1H',
+  loginMaxBlockOverride: null,
+  effectiveLoginMaxBlock: 'PT1H',
+  defaultRegistrationChallengeEnabled: true,
+  registrationChallengeEnabledOverride: null,
+  effectiveRegistrationChallengeEnabled: true,
+  defaultRegistrationChallengeTtl: 'PT10M',
+  registrationChallengeTtlOverride: null,
+  effectiveRegistrationChallengeTtl: 'PT10M'
+}
 const DEFAULT_USER_POLLING_STATS = {
   totalImportedMessages: 0,
   configuredMailFetchers: 0,
@@ -96,6 +116,7 @@ const DEFAULT_AUTH_OPTIONS = {
   multiUserEnabled: true,
   microsoftOAuthAvailable: true,
   googleOAuthAvailable: true,
+  registrationChallengeEnabled: true,
   sourceOAuthProviders: ['MICROSOFT', 'GOOGLE']
 }
 const SECTION_HIGHLIGHT_MS = 2600
@@ -128,11 +149,22 @@ function AppContent() {
   const [systemOAuthSettings, setSystemOAuthSettings] = useState(DEFAULT_SYSTEM_OAUTH_SETTINGS)
   const [systemOAuthSettingsDirty, setSystemOAuthSettingsDirty] = useState(false)
   const [systemOAuthEditorProvider, setSystemOAuthEditorProvider] = useState('google')
+  const [authSecuritySettings, setAuthSecuritySettings] = useState(DEFAULT_AUTH_SECURITY_SETTINGS)
+  const [authSecuritySettingsForm, setAuthSecuritySettingsForm] = useState({
+    loginFailureThresholdOverride: '',
+    loginInitialBlockOverride: '',
+    loginMaxBlockOverride: '',
+    registrationChallengeMode: 'DEFAULT',
+    registrationChallengeTtlOverride: ''
+  })
+  const [authSecuritySettingsDirty, setAuthSecuritySettingsDirty] = useState(false)
   const [dismissedPersistentNotifications, setDismissedPersistentNotifications] = useState({})
   const [language, setLanguage] = useState(() => normalizeLocale(window.localStorage.getItem('inboxbridge.language') || navigator.language))
   const [showSystemOAuthAppsDialog, setShowSystemOAuthAppsDialog] = useState(false)
+  const [showAuthSecurityDialog, setShowAuthSecurityDialog] = useState(false)
   const notificationTimersRef = useRef(new Map())
   const selectedUserLoaderRef = useRef(null)
+  const sessionActivityPollerRef = useRef(null)
   const t = useMemo(() => (key, params) => translate(language, key, params), [language])
   const notificationTimestampFormatter = useMemo(
     () => new Intl.DateTimeFormat(language, { dateStyle: 'medium', timeStyle: 'medium' }),
@@ -145,6 +177,7 @@ function AppContent() {
     loadAppData,
     onLogoutReset: async () => {
       setSystemDashboard(null)
+      setAuthSecuritySettings(DEFAULT_AUTH_SECURITY_SETTINGS)
       resetLayoutState()
       polling.resetPollingControllers()
       userManagement.resetUserManagementState()
@@ -451,6 +484,7 @@ function AppContent() {
       if (session.role === 'ADMIN') {
         requests.push(fetch('/api/admin/dashboard'))
         requests.push(fetch('/api/admin/oauth-app-settings'))
+        requests.push(fetch('/api/admin/auth-security-settings'))
       }
       if (session.role === 'ADMIN' && authOptions.multiUserEnabled) {
         requests.push(fetch('/api/admin/users'))
@@ -463,7 +497,7 @@ function AppContent() {
       }
 
       const payloads = await Promise.all(responses.map((response) => response.json()))
-      const [destinationPayload, userPollingPayload, userPollingStatsPayload, emailAccountsPayload, uiPreferencesPayload, passkeysPayload, adminPayload, oauthSettingsPayload, usersPayload] = payloads
+      const [destinationPayload, userPollingPayload, userPollingStatsPayload, emailAccountsPayload, uiPreferencesPayload, passkeysPayload, adminPayload, oauthSettingsPayload, authSecurityPayload, usersPayload] = payloads
       const normalizedAdminPayload = adminPayload
         ? {
           ...adminPayload,
@@ -519,9 +553,27 @@ function AppContent() {
             microsoftClientSecret: ''
           })
         }
+        if (authSecurityPayload) {
+          const normalizedAuthSecurity = {
+            ...DEFAULT_AUTH_SECURITY_SETTINGS,
+            ...authSecurityPayload
+          }
+          setAuthSecuritySettings(normalizedAuthSecurity)
+          setAuthSecuritySettingsForm({
+            loginFailureThresholdOverride: normalizedAuthSecurity.loginFailureThresholdOverride ?? '',
+            loginInitialBlockOverride: normalizedAuthSecurity.loginInitialBlockOverride ?? '',
+            loginMaxBlockOverride: normalizedAuthSecurity.loginMaxBlockOverride ?? '',
+            registrationChallengeMode: normalizedAuthSecurity.registrationChallengeEnabledOverride == null
+              ? 'DEFAULT'
+              : (normalizedAuthSecurity.registrationChallengeEnabledOverride ? 'ENABLED' : 'DISABLED'),
+            registrationChallengeTtlOverride: normalizedAuthSecurity.registrationChallengeTtlOverride ?? ''
+          })
+          setAuthSecuritySettingsDirty(false)
+        }
       } else {
         setSystemDashboard(null)
         setSystemOAuthSettings(DEFAULT_SYSTEM_OAUTH_SETTINGS)
+        setAuthSecuritySettings(DEFAULT_AUTH_SECURITY_SETTINGS)
       }
       if (usersPayload) {
         userManagement.applyLoadedUsers(usersPayload)
@@ -557,14 +609,27 @@ function AppContent() {
   }
 
   useEffect(() => {
+    enforceHttpsIfNeeded(window.location)
     loadAuthOptions()
     auth.loadSession()
   }, [])
 
   useEffect(() => {
+    sessionActivityPollerRef.current = auth.pollSessionActivity
+  }, [auth.pollSessionActivity])
+
+  useEffect(() => {
     if (!session) return
-    loadAppData()
-    const timer = window.setInterval(loadAppData, REFRESH_MS)
+    void Promise.all([
+      loadAppData(),
+      sessionActivityPollerRef.current?.({ announceNewSessions: true, suppressErrors: true })
+    ])
+    const timer = window.setInterval(() => {
+      void Promise.all([
+        loadAppData(),
+        sessionActivityPollerRef.current?.({ announceNewSessions: true, suppressErrors: true })
+      ])
+    }, REFRESH_MS)
     return () => window.clearInterval(timer)
   }, [authOptions.multiUserEnabled, session])
 
@@ -704,6 +769,102 @@ function AppContent() {
     })
   }
 
+  async function saveAuthSecuritySettings(event) {
+    event.preventDefault()
+    await withPending('authSecuritySettingsSave', async () => {
+      try {
+        const response = await fetch('/api/admin/auth-security-settings', {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            loginFailureThresholdOverride: authSecuritySettingsForm.loginFailureThresholdOverride === ''
+              ? null
+              : Number(authSecuritySettingsForm.loginFailureThresholdOverride),
+            loginInitialBlockOverride: authSecuritySettingsForm.loginInitialBlockOverride || null,
+            loginMaxBlockOverride: authSecuritySettingsForm.loginMaxBlockOverride || null,
+            registrationChallengeEnabledOverride: authSecuritySettingsForm.registrationChallengeMode === 'DEFAULT'
+              ? null
+              : authSecuritySettingsForm.registrationChallengeMode === 'ENABLED',
+            registrationChallengeTtlOverride: authSecuritySettingsForm.registrationChallengeTtlOverride || null
+          })
+        })
+        if (!response.ok) {
+          throw new Error(await apiErrorText(response, errorText('saveAuthSecuritySettings')))
+        }
+        const payload = await response.json()
+        const normalized = {
+          ...DEFAULT_AUTH_SECURITY_SETTINGS,
+          ...payload
+        }
+        setAuthSecuritySettings(normalized)
+        setAuthSecuritySettingsForm({
+          loginFailureThresholdOverride: normalized.loginFailureThresholdOverride ?? '',
+          loginInitialBlockOverride: normalized.loginInitialBlockOverride ?? '',
+          loginMaxBlockOverride: normalized.loginMaxBlockOverride ?? '',
+          registrationChallengeMode: normalized.registrationChallengeEnabledOverride == null
+            ? 'DEFAULT'
+            : (normalized.registrationChallengeEnabledOverride ? 'ENABLED' : 'DISABLED'),
+          registrationChallengeTtlOverride: normalized.registrationChallengeTtlOverride ?? ''
+        })
+        setAuthSecuritySettingsDirty(false)
+        setShowAuthSecurityDialog(false)
+        pushNotification({ message: translatedNotification('notifications.authSecuritySettingsUpdated'), targetId: 'auth-security-section', tone: 'success' })
+        await loadAuthOptions()
+      } catch (err) {
+        pushNotification({
+          copyText: err.message ? pollErrorNotification(err.message) : translatedNotification('errors.saveAuthSecuritySettings'),
+          message: err.message ? pollErrorNotification(err.message) : translatedNotification('errors.saveAuthSecuritySettings'),
+          targetId: 'auth-security-section',
+          tone: 'error'
+        })
+      }
+    })
+  }
+
+  async function resetAuthSecuritySettings() {
+    await withPending('authSecuritySettingsSave', async () => {
+      try {
+        const response = await fetch('/api/admin/auth-security-settings', {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            loginFailureThresholdOverride: null,
+            loginInitialBlockOverride: null,
+            loginMaxBlockOverride: null,
+            registrationChallengeEnabledOverride: null,
+            registrationChallengeTtlOverride: null
+          })
+        })
+        if (!response.ok) {
+          throw new Error(await apiErrorText(response, errorText('saveAuthSecuritySettings')))
+        }
+        const payload = await response.json()
+        const normalized = {
+          ...DEFAULT_AUTH_SECURITY_SETTINGS,
+          ...payload
+        }
+        setAuthSecuritySettings(normalized)
+        setAuthSecuritySettingsForm({
+          loginFailureThresholdOverride: '',
+          loginInitialBlockOverride: '',
+          loginMaxBlockOverride: '',
+          registrationChallengeMode: 'DEFAULT',
+          registrationChallengeTtlOverride: ''
+        })
+        setAuthSecuritySettingsDirty(false)
+        pushNotification({ message: translatedNotification('notifications.authSecuritySettingsReset'), targetId: 'auth-security-section', tone: 'success' })
+        await loadAuthOptions()
+      } catch (err) {
+        pushNotification({
+          copyText: err.message ? pollErrorNotification(err.message) : translatedNotification('errors.saveAuthSecuritySettings'),
+          message: err.message ? pollErrorNotification(err.message) : translatedNotification('errors.saveAuthSecuritySettings'),
+          targetId: 'auth-security-section',
+          tone: 'error'
+        })
+      }
+    })
+  }
+
   async function handleRefresh() {
     await withPending('refresh', async () => {
       await loadAppData()
@@ -730,6 +891,7 @@ function AppContent() {
 
   function focusTarget(targetId, sectionKey = null) {
     const sourceEmailAccountTarget = isSourceEmailAccountTargetId(targetId)
+    const recentSessionTarget = isRecentSessionTargetId(targetId)
     const derivedSectionKey = sectionKey || ({
       'destination-mailbox-section': 'destinationMailboxCollapsed',
       'user-polling-section': 'userPollingCollapsed',
@@ -737,6 +899,7 @@ function AppContent() {
       'source-email-accounts-section': 'sourceEmailAccountsCollapsed',
       'system-dashboard-section': 'systemDashboardCollapsed',
       'oauth-apps-section': 'oauthAppsCollapsed',
+      'auth-security-section': 'authSecurityCollapsed',
       'global-polling-stats-section': 'globalStatsCollapsed',
       'user-management-section': 'userManagementCollapsed'
     }[targetId] || (sourceEmailAccountTarget ? 'sourceEmailAccountsCollapsed' : null))
@@ -749,7 +912,10 @@ function AppContent() {
     if (targetId === 'passkey-panel-section') {
       auth.openSecurityPanel('passkeys')
     }
-    if (targetId === 'user-management-section' || targetId === 'system-dashboard-section' || targetId === 'oauth-apps-section' || targetId === 'global-polling-stats-section') {
+    if (targetId === 'security-sessions-panel-section' || recentSessionTarget) {
+      auth.openSecurityPanel('sessions')
+    }
+    if (targetId === 'user-management-section' || targetId === 'system-dashboard-section' || targetId === 'oauth-apps-section' || targetId === 'auth-security-section' || targetId === 'global-polling-stats-section') {
       setAdminWorkspace('admin')
     }
     if (targetId === 'destination-mailbox-section' || targetId === 'user-polling-section' || targetId === 'user-polling-stats-section' || targetId === 'source-email-accounts-section' || sourceEmailAccountTarget) {
@@ -916,6 +1082,7 @@ function AppContent() {
 
   const adminWorkspaceSections = buildAdminWorkspaceSections({
     adminSetupGuideState,
+    authSecuritySettings,
     authOptions,
     focusSection,
     isPending,
@@ -925,6 +1092,7 @@ function AppContent() {
     loadGlobalCustomRange,
     polling,
     session,
+    setShowAuthSecurityDialog,
     setShowSystemOAuthAppsDialog,
     setSystemOAuthEditorProvider,
     setSystemOAuthSettingsDirty,
@@ -968,6 +1136,8 @@ function AppContent() {
           passkeysSupported={auth.passkeysSupported}
           onRegister={auth.handleRegister}
           onRegisterChange={auth.setRegisterForm}
+          registerChallenge={auth.registerChallenge}
+          registerChallengeLoading={auth.registerChallengeLoading}
           registerForm={auth.registerForm}
           t={t}
       />
@@ -1047,6 +1217,27 @@ function AppContent() {
           />
         ) : null}
 
+        {showAuthSecurityDialog ? (
+          <AuthSecuritySettingsDialog
+            authSecuritySettings={authSecuritySettings}
+            authSecuritySettingsForm={authSecuritySettingsForm}
+            authSecuritySettingsLoading={isPending('authSecuritySettingsSave')}
+            isDirty={authSecuritySettingsDirty}
+            locale={language}
+            onAuthSecurityFormChange={(updater) => {
+              setAuthSecuritySettingsDirty(true)
+              setAuthSecuritySettingsForm((current) => typeof updater === 'function' ? updater(current) : updater)
+            }}
+            onClose={() => {
+              setAuthSecuritySettingsDirty(false)
+              setShowAuthSecurityDialog(false)
+            }}
+            onResetAuthSecuritySettings={resetAuthSecuritySettings}
+            onSaveAuthSecuritySettings={saveAuthSecuritySettings}
+            t={t}
+          />
+        ) : null}
+
         {auth.showSecurityPanel ? (
           <ModalDialog
             className="security-dialog"
@@ -1082,6 +1273,17 @@ function AppContent() {
                 >
                   {t('passkey.title')}
                 </button>
+                <button
+                  aria-controls="security-sessions-tabpanel"
+                  aria-selected={auth.securityTab === 'sessions'}
+                  className={`secondary security-tab-button ${auth.securityTab === 'sessions' ? 'security-tab-button-active' : ''}`.trim()}
+                  id="security-sessions-tab"
+                  onClick={() => auth.selectSecurityTab('sessions')}
+                  role="tab"
+                  type="button"
+                >
+                  {t('sessions.title')}
+                </button>
               </div>
               {auth.securityTab === 'password' ? (
                 <div aria-labelledby="security-password-tab" className="security-tab-panel" id="security-password-tabpanel" role="tabpanel">
@@ -1097,7 +1299,7 @@ function AppContent() {
                     t={t}
                   />
                 </div>
-              ) : (
+              ) : auth.securityTab === 'passkeys' ? (
                 <div aria-labelledby="security-passkeys-tab" className="security-tab-panel" id="security-passkeys-tabpanel" role="tabpanel">
                   <PasskeyPanel
                     createLoading={isPending('passkeyCreate')}
@@ -1109,6 +1311,19 @@ function AppContent() {
                     supported={auth.passkeysSupported}
                     t={t}
                     locale={language}
+                  />
+                </div>
+              ) : (
+                <div aria-labelledby="security-sessions-tab" className="security-tab-panel" id="security-sessions-tabpanel" role="tabpanel">
+                  <SessionsPanel
+                    activeSessions={auth.sessionActivity.activeSessions}
+                    locale={language}
+                    onRevokeOtherSessions={auth.handleRevokeOtherSessions}
+                    onRevokeSession={auth.handleRevokeSession}
+                    recentLogins={auth.sessionActivity.recentLogins}
+                    revokeLoadingId={auth.sessionActivity.activeSessions.find((sessionItem) => isPending(`sessionRevoke:${sessionItem.id}`))?.id || null}
+                    revokeOthersLoading={isPending('sessionsRevokeOthers')}
+                    t={t}
                   />
                 </div>
               )}
@@ -1207,6 +1422,7 @@ function AppContent() {
         {polling.showSystemPollingDialog && systemDashboard?.polling ? (
           <SystemPollingSettingsDialog
             isDirty={polling.systemPollingFormDirty}
+            locale={language}
             onClose={() => polling.setShowSystemPollingDialog(false)}
             onPollingFormChange={polling.handleSystemPollingFormChange}
             onResetPollingSettings={polling.resetPollingSettings}

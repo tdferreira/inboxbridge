@@ -10,7 +10,6 @@ import java.util.function.Function;
 import java.util.stream.Collectors;
 
 import dev.inboxbridge.dto.SourcePollingStateView;
-import dev.inboxbridge.config.InboxBridgeConfig;
 import dev.inboxbridge.persistence.SourcePollingState;
 import dev.inboxbridge.persistence.SourcePollingStateRepository;
 import jakarta.enterprise.context.ApplicationScoped;
@@ -34,7 +33,7 @@ public class SourcePollingStateService {
     SourcePollingStateRepository repository;
 
     @Inject
-    InboxBridgeConfig inboxBridgeConfig;
+    PollingSettingsService pollingSettingsService;
 
     public Optional<SourcePollingStateView> viewForSource(String sourceId) {
         return repository.findBySourceId(sourceId).map(this::toView);
@@ -92,11 +91,12 @@ public class SourcePollingStateService {
         if (pollInterval == null || pollInterval.isZero() || pollInterval.isNegative()) {
             return Duration.ZERO;
         }
-        double configuredRatio = Math.max(0d, inboxBridgeConfig.successJitterRatio());
+        PollingSettingsService.EffectiveThrottleSettings throttleSettings = pollingSettingsService.effectiveThrottleSettings();
+        double configuredRatio = Math.max(0d, throttleSettings.successJitterRatio());
         if (configuredRatio <= 0d) {
             return Duration.ZERO;
         }
-        Duration configuredCap = inboxBridgeConfig.maxSuccessJitter();
+        Duration configuredCap = throttleSettings.maxSuccessJitter();
         if (configuredCap == null || configuredCap.isNegative()) {
             configuredCap = Duration.ZERO;
         }

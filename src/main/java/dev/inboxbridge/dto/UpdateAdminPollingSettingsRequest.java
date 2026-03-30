@@ -10,5 +10,13 @@ public record UpdateAdminPollingSettingsRequest(
         String pollIntervalOverride,
         Integer fetchWindowOverride,
         Integer manualTriggerLimitCountOverride,
-        Integer manualTriggerLimitWindowSecondsOverride) {
+        Integer manualTriggerLimitWindowSecondsOverride,
+        String sourceHostMinSpacingOverride,
+        Integer sourceHostMaxConcurrencyOverride,
+        String destinationProviderMinSpacingOverride,
+        Integer destinationProviderMaxConcurrencyOverride,
+        String throttleLeaseTtlOverride,
+        Integer adaptiveThrottleMaxMultiplierOverride,
+        Double successJitterRatioOverride,
+        String maxSuccessJitterOverride) {
 }

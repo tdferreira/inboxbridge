@@ -226,7 +226,7 @@ public class PasskeyService {
     }
 
     @Transactional
-    public AppUser finishAuthentication(FinishPasskeyCeremonyRequest request) {
+    public PasskeyAuthenticationResult finishAuthentication(FinishPasskeyCeremonyRequest request) {
         requireEnabled();
         cleanupExpiredCeremonies();
         PasskeyCeremony ceremony = requireCeremony(request.ceremonyId(), PasskeyCeremony.CeremonyType.AUTHENTICATION);
@@ -255,10 +255,13 @@ public class PasskeyService {
             storedPasskey.backedUp = result.isBackedUp();
             storedPasskey.lastUsedAt = Instant.now();
             ceremony.delete();
-            return user;
+            return new PasskeyAuthenticationResult(user, ceremony.passwordVerified);
         } catch (Exception e) {
             throw new IllegalArgumentException("Passkey sign-in failed: " + rootMessage(e), e);
         }
+    }
+
+    public record PasskeyAuthenticationResult(AppUser user, boolean passwordVerified) {
     }
 
     @Transactional

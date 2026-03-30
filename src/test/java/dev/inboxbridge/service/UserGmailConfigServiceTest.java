@@ -362,6 +362,36 @@ class UserGmailConfigServiceTest {
         public Security security() {
             return new Security() {
                 @Override
+                public Auth auth() {
+                    return new Auth() {
+                        @Override
+                        public int loginFailureThreshold() {
+                            return 5;
+                        }
+
+                        @Override
+                        public Duration loginInitialBlock() {
+                            return Duration.ofMinutes(5);
+                        }
+
+                        @Override
+                        public Duration loginMaxBlock() {
+                            return Duration.ofHours(1);
+                        }
+
+                        @Override
+                        public boolean registrationChallengeEnabled() {
+                            return true;
+                        }
+
+                        @Override
+                        public Duration registrationChallengeTtl() {
+                            return Duration.ofMinutes(10);
+                        }
+                    };
+                }
+
+                @Override
                 public Passkeys passkeys() {
                     return new Passkeys() {
                         @Override

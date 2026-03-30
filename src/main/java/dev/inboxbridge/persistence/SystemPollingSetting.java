@@ -13,7 +13,8 @@ import jakarta.persistence.Table;
  *
  * <p>The environment remains the source of default values. This table only
  * stores admin-selected overrides for the poll enabled flag, scheduler
- * interval, mailbox fetch window, and manual trigger rate limiting.</p>
+ * interval, mailbox fetch window, manual trigger rate limiting, and the
+ * provider/host-aware throttling controls.</p>
  */
 @Entity
 @Table(name = "system_polling_setting")
@@ -38,6 +39,30 @@ public class SystemPollingSetting extends PanacheEntityBase {
 
     @Column(name = "manual_trigger_limit_window_seconds_override")
     public Integer manualTriggerLimitWindowSecondsOverride;
+
+    @Column(name = "source_host_min_spacing_override")
+    public String sourceHostMinSpacingOverride;
+
+    @Column(name = "source_host_max_concurrency_override")
+    public Integer sourceHostMaxConcurrencyOverride;
+
+    @Column(name = "destination_provider_min_spacing_override")
+    public String destinationProviderMinSpacingOverride;
+
+    @Column(name = "destination_provider_max_concurrency_override")
+    public Integer destinationProviderMaxConcurrencyOverride;
+
+    @Column(name = "throttle_lease_ttl_override")
+    public String throttleLeaseTtlOverride;
+
+    @Column(name = "adaptive_throttle_max_multiplier_override")
+    public Integer adaptiveThrottleMaxMultiplierOverride;
+
+    @Column(name = "success_jitter_ratio_override")
+    public Double successJitterRatioOverride;
+
+    @Column(name = "max_success_jitter_override")
+    public String maxSuccessJitterOverride;
 
     @Column(name = "updated_at", nullable = false)
     public Instant updatedAt;

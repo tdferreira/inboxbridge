@@ -1,4 +1,10 @@
-import { buildSourceEmailAccountTargetId, extractSourceEmailAccountId, isSourceEmailAccountTargetId } from './sectionTargets'
+import {
+  buildRecentSessionTargetId,
+  buildSourceEmailAccountTargetId,
+  extractSourceEmailAccountId,
+  isRecentSessionTargetId,
+  isSourceEmailAccountTargetId
+} from './sectionTargets'
 
 describe('sectionTargets', () => {
   it('builds stable target ids for source email accounts', () => {
@@ -9,6 +15,12 @@ describe('sectionTargets', () => {
   it('detects source email account target ids', () => {
     expect(isSourceEmailAccountTargetId('source-email-account-outlook-main')).toBe(true)
     expect(isSourceEmailAccountTargetId('destination-mailbox-section')).toBe(false)
+  })
+
+  it('builds and detects recent session target ids', () => {
+    expect(buildRecentSessionTargetId(42)).toBe('recent-session-42')
+    expect(isRecentSessionTargetId('recent-session-42')).toBe(true)
+    expect(isRecentSessionTargetId('security-sessions-panel-section')).toBe(false)
   })
 
   it('extracts the source email account id from structured or raw errors', () => {

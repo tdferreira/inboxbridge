@@ -37,6 +37,16 @@ describe('i18n catalog', () => {
       'users.accountSection',
       'users.destinationSection',
       'users.mailFetchersSection',
+      'authSecurity.sectionTitle',
+      'authSecurity.editTitle',
+      'authSecurity.failedAttempts',
+      'authSecurity.registrationChallengeMode',
+      'notifications.authSecuritySettingsUpdated',
+      'notifications.authSecuritySettingsReset',
+      'notifications.newSessionDetected',
+      'errors.saveAuthSecuritySettings',
+      'common.enabled',
+      'common.disabled',
       'password.title',
       'password.change',
       'passkey.title',
@@ -44,7 +54,16 @@ describe('i18n catalog', () => {
       'common.copyError',
       'common.oauthRefreshTokenMissingError',
       'common.dismissNotification',
-      'common.focusSection'
+      'common.focusSection',
+      'auth.challengeLoading',
+      'auth.challengeAnswerLabel',
+      'auth.challengeHelp',
+      'auth.sessionExpired',
+      'errors.loadRegistrationChallenge',
+      'api.auth_login_blocked',
+      'api.registration_challenge_required',
+      'api.registration_challenge_invalid',
+      'api.registration_challenge_incorrect'
     ]
 
     languageOptions
