@@ -119,6 +119,9 @@ function RemoteApp() {
     try {
       const payload = await remoteLogin(loginForm)
       if (payload?.status === 'PASSKEY_REQUIRED') {
+        if (!passkeysSupported()) {
+          throw new Error(t('errors.passkeyIpHostUnsupported', { host: window.location.hostname || 'this host' }))
+        }
         await continuePasskeyLogin(loginForm.username.trim())
         return
       }

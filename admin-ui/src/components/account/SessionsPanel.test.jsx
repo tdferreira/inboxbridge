@@ -23,8 +23,8 @@ describe('SessionsPanel', () => {
     render(
       <SessionsPanel
         activeSessions={[
-          { id: 1, sessionType: 'BROWSER', current: true, ipAddress: '203.0.113.10', locationLabel: null, deviceLocationLabel: '38.7223, -9.1393 (±25 m)', deviceLatitude: 38.7223, deviceLongitude: -9.1393, deviceLocationCapturedAt: '2026-03-30T12:03:00Z', loginMethod: 'PASSWORD', lastSeenAt: '2026-03-30T12:05:00Z', expiresAt: '2026-03-30T13:00:00Z' },
-          { id: 2, sessionType: 'REMOTE', current: false, ipAddress: '203.0.113.11', locationLabel: null, deviceLocationLabel: null, deviceLocationCapturedAt: null, loginMethod: 'PASSKEY', lastSeenAt: '2026-03-30T11:05:00Z', expiresAt: '2026-03-30T13:00:00Z' }
+          { id: 1, sessionType: 'BROWSER', current: true, browserLabel: 'Microsoft Edge', deviceLabel: 'Desktop (Windows)', ipAddress: '203.0.113.10', locationLabel: null, deviceLocationLabel: '38.7223, -9.1393 (±25 m)', deviceLatitude: 38.7223, deviceLongitude: -9.1393, deviceLocationCapturedAt: '2026-03-30T12:03:00Z', loginMethod: 'PASSWORD', lastSeenAt: '2026-03-30T12:05:00Z', expiresAt: '2026-03-30T13:00:00Z' },
+          { id: 2, sessionType: 'REMOTE', current: false, browserLabel: 'Safari', deviceLabel: 'Mobile phone (iOS)', ipAddress: '203.0.113.11', locationLabel: null, deviceLocationLabel: null, deviceLocationCapturedAt: null, loginMethod: 'PASSKEY', lastSeenAt: '2026-03-30T11:05:00Z', expiresAt: '2026-03-30T13:00:00Z' }
         ]}
         currentSessionCanRequestDeviceLocation={false}
         currentSessionDeviceLocationError=""
@@ -34,7 +34,7 @@ describe('SessionsPanel', () => {
         onRevokeOtherSessions={onRevokeOtherSessions}
         onRevokeSession={onRevokeSession}
         recentLogins={[
-          { id: 1, sessionType: 'BROWSER', current: true, active: true, ipAddress: '203.0.113.10', locationLabel: null, deviceLocationLabel: '38.7223, -9.1393 (±25 m)', deviceLatitude: 38.7223, deviceLongitude: -9.1393, deviceLocationCapturedAt: '2026-03-30T12:03:00Z', loginMethod: 'PASSWORD', createdAt: '2026-03-30T12:00:00Z', lastSeenAt: '2026-03-30T12:05:00Z' }
+          { id: 1, sessionType: 'BROWSER', current: true, active: true, browserLabel: 'Microsoft Edge', deviceLabel: 'Desktop (Windows)', ipAddress: '203.0.113.10', locationLabel: null, deviceLocationLabel: '38.7223, -9.1393 (±25 m)', deviceLatitude: 38.7223, deviceLongitude: -9.1393, deviceLocationCapturedAt: '2026-03-30T12:03:00Z', loginMethod: 'PASSWORD', createdAt: '2026-03-30T12:00:00Z', lastSeenAt: '2026-03-30T12:05:00Z' }
         ]}
         revokeLoadingId={null}
         revokeOthersLoading={false}
@@ -47,6 +47,8 @@ describe('SessionsPanel', () => {
     expect(screen.getByText('sessions.recentTitle')).toBeInTheDocument()
     expect(screen.getByText('sessions.locationNotice')).toBeInTheDocument()
     expect(screen.getByText((value) => value.includes('sessions.sessionKind:sessions.kindRemote'))).toBeInTheDocument()
+    expect(screen.getAllByText((value) => value.includes('sessions.browser:Microsoft Edge')).length).toBeGreaterThan(0)
+    expect(screen.getByText((value) => value.includes('sessions.deviceType:Mobile phone (iOS)'))).toBeInTheDocument()
     await waitFor(() => expect(screen.getAllByText('Lisbon, Lisbon, PT')).toHaveLength(2))
     expect(screen.getAllByRole('link', { name: 'sessions.openInMaps' })).toHaveLength(2)
 
@@ -85,7 +87,7 @@ describe('SessionsPanel', () => {
     render(
       <SessionsPanel
         activeSessions={[
-          { id: 7, sessionType: 'BROWSER', current: true, ipAddress: '203.0.113.12', locationLabel: null, deviceLocationLabel: null, deviceLatitude: null, deviceLongitude: null, deviceLocationCapturedAt: null, loginMethod: 'PASSWORD', lastSeenAt: '2026-03-30T12:05:00Z', expiresAt: '2026-03-30T13:00:00Z' }
+          { id: 7, sessionType: 'BROWSER', current: true, browserLabel: 'Chrome', deviceLabel: 'Desktop (Linux)', ipAddress: '203.0.113.12', locationLabel: null, deviceLocationLabel: null, deviceLatitude: null, deviceLongitude: null, deviceLocationCapturedAt: null, loginMethod: 'PASSWORD', lastSeenAt: '2026-03-30T12:05:00Z', expiresAt: '2026-03-30T13:00:00Z' }
         ]}
         currentSessionCanRequestDeviceLocation
         currentSessionDeviceLocationError="deviceLocation.errors.timeout"

@@ -64,6 +64,8 @@ function SessionsPanel({
                   {session.current ? t('sessions.currentSession') : t('sessions.activeSession')}
                 </strong><br />
                 {t('sessions.sessionKind', { value: sessionKindLabel(session) })}<br />
+                {t('sessions.browser', { value: session.browserLabel || t('common.unavailable') })}<br />
+                {t('sessions.deviceType', { value: session.deviceLabel || t('common.unavailable') })}<br />
                 {t('sessions.loginMethod', { value: authMethodLabel(session.loginMethod, locale) })}<br />
                 {t('sessions.ipAddress', { value: session.ipAddress || t('common.unavailable') })}<br />
                 {t('sessions.location', { value: session.locationLabel || t('sessions.locationUnavailable') })}<br />
@@ -123,6 +125,8 @@ function SessionsPanel({
               <div>
                 <strong>{formatDate(session.createdAt, locale)}</strong><br />
                 {t('sessions.sessionKind', { value: sessionKindLabel(session) })}<br />
+                {t('sessions.browser', { value: session.browserLabel || t('common.unavailable') })}<br />
+                {t('sessions.deviceType', { value: session.deviceLabel || t('common.unavailable') })}<br />
                 {t('sessions.loginMethod', { value: authMethodLabel(session.loginMethod, locale) })}<br />
                 {t('sessions.ipAddress', { value: session.ipAddress || t('common.unavailable') })}<br />
                 {t('sessions.location', { value: session.locationLabel || t('sessions.locationUnavailable') })}<br />

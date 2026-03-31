@@ -1,3 +1,20 @@
+function currentHostname() {
+  return typeof window !== 'undefined' ? window.location?.hostname || '' : ''
+}
+
+function isIpV4Host(hostname) {
+  return /^\d{1,3}(\.\d{1,3}){3}$/.test(hostname)
+}
+
+function isIpV6Host(hostname) {
+  return hostname.includes(':')
+}
+
+export function hostSupportsPasskeys(hostname = currentHostname()) {
+  if (!hostname) return false
+  return !isIpV4Host(hostname) && !isIpV6Host(hostname)
+}
+
 function base64UrlToBuffer(base64Url) {
   const padding = '='.repeat((4 - (base64Url.length % 4 || 4)) % 4)
   const base64 = `${base64Url}${padding}`.replace(/-/g, '+').replace(/_/g, '/')
@@ -35,7 +52,10 @@ function normalizePublicKeyOptions(publicKeyJson) {
 }
 
 export function passkeysSupported() {
-  return typeof window !== 'undefined' && typeof window.PublicKeyCredential !== 'undefined' && typeof navigator?.credentials !== 'undefined'
+  return typeof window !== 'undefined'
+    && typeof window.PublicKeyCredential !== 'undefined'
+    && typeof navigator?.credentials !== 'undefined'
+    && hostSupportsPasskeys()
 }
 
 export function parseCreateOptions(publicKeyJson) {
@@ -117,6 +137,10 @@ export function normalizePasskeyError(error, t, mode = 'login') {
     return mode === 'registration'
       ? t('errors.passkeyAlreadyRegistered')
       : t('errors.passkeyLoginFailed')
+  }
+
+  if (name === 'SecurityError' && /effective domain|valid domain/i.test(message)) {
+    return t('errors.passkeyIpHostUnsupported', { host: currentHostname() || 'this host' })
   }
 
   return message || (mode === 'registration'

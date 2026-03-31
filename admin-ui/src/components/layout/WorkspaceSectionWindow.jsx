@@ -1,6 +1,7 @@
 import './WorkspaceSectionWindow.css'
 
 function WorkspaceSectionWindow({
+  sectionId,
   dragHandleLabel,
   dragging = false,
   layoutEditing = false,
@@ -15,7 +16,12 @@ function WorkspaceSectionWindow({
   onMoveUp
 }) {
   return (
-    <div className={`workspace-section-window ${dragging ? 'workspace-section-window-dragging' : ''}`.trim()} onPointerMove={onPointerMove}>
+    <div
+      className={`workspace-section-window ${dragging ? 'workspace-section-window-dragging' : ''}`.trim()}
+      data-section-id={sectionId}
+      data-workspace-section-window="true"
+      onPointerMove={onPointerMove}
+    >
       {layoutEditing ? (
         <div className="workspace-section-window-toolbar">
           <button

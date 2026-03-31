@@ -35,6 +35,7 @@ import { usePollingControllers } from './lib/usePollingControllers'
 import { useUserManagementController } from './lib/useUserManagementController'
 import { useWorkspacePreferencesController } from './lib/useWorkspacePreferencesController'
 import { applyOrderedSectionIds } from './lib/workspacePreferences'
+import { computeWorkspaceDropTargetIndex } from './lib/workspaceDrag'
 import { buildWorkspacePath, canonicalWorkspacePath, resolveWorkspaceRoute } from './lib/workspaceRoutes'
 import { useSessionDeviceLocation } from './lib/useSessionDeviceLocation'
 
@@ -167,6 +168,7 @@ const DEFAULT_USER_POLLING_STATS = {
 }
 const DEFAULT_AUTH_OPTIONS = {
   multiUserEnabled: true,
+  bootstrapLoginPrefillEnabled: false,
   microsoftOAuthAvailable: true,
   googleOAuthAvailable: true,
   registrationChallengeEnabled: true,
@@ -247,6 +249,7 @@ function AppContent() {
   )
   const errorText = (key) => t(`errors.${key}`)
   const auth = useAuthSecurityController({
+    bootstrapLoginPrefillEnabled: authOptions.bootstrapLoginPrefillEnabled,
     closeConfirmation: () => setConfirmationDialog(null),
     errorText,
     loadAppData,
@@ -1084,14 +1087,32 @@ function AppContent() {
 
     document.body.classList.add('workspace-layout-dragging')
 
-    async function finishDrag() {
-      const current = dragState
-      setDragState(null)
-      await reorderSections(current.workspaceKey, current.draggedId, current.targetIndex)
+    function resolveDropTargetIndex(current, clientY) {
+      const workspaceList = document.querySelector(`[data-workspace-key="${current.workspaceKey}"]`)
+      if (!workspaceList) {
+        return current.targetIndex
+      }
+      const windows = Array.from(
+        workspaceList.querySelectorAll('[data-workspace-section-window="true"]')
+      )
+      if (!windows.length) {
+        return current.targetIndex
+      }
+      return computeWorkspaceDropTargetIndex(windows, clientY, current.targetIndex)
     }
 
-    function handlePointerUp() {
-      finishDrag()
+    async function finishDrag(pointerEvent = null) {
+      const current = dragState
+      setDragState(null)
+      await reorderSections(
+        current.workspaceKey,
+        current.draggedId,
+        resolveDropTargetIndex(current, pointerEvent?.clientY)
+      )
+    }
+
+    function handlePointerUp(event) {
+      finishDrag(event)
     }
 
     function handleKeyDown(event) {
@@ -1102,10 +1123,12 @@ function AppContent() {
     }
 
     window.addEventListener('pointerup', handlePointerUp)
+    window.addEventListener('pointercancel', handlePointerUp)
     window.addEventListener('keydown', handleKeyDown)
     return () => {
       document.body.classList.remove('workspace-layout-dragging')
       window.removeEventListener('pointerup', handlePointerUp)
+      window.removeEventListener('pointercancel', handlePointerUp)
       window.removeEventListener('keydown', handleKeyDown)
     }
   }, [dragState])

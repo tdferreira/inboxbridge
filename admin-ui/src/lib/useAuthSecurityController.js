@@ -4,7 +4,8 @@ import { pollErrorNotification, translatedNotification } from './notifications'
 import { normalizePasskeyError, parseCreateOptions, parseGetOptions, passkeysSupported, serializeCredential } from './passkeys'
 import { buildRecentSessionTargetId } from './sectionTargets'
 
-const DEFAULT_LOGIN_FORM = { username: 'admin', password: 'nimda' }
+const BOOTSTRAP_LOGIN_FORM = { username: 'admin', password: 'nimda' }
+const EMPTY_LOGIN_FORM = { username: '', password: '' }
 const DEFAULT_REGISTER_FORM = { username: '', password: '', confirmPassword: '', captchaToken: '' }
 const DEFAULT_PASSWORD_FORM = { currentPassword: '', newPassword: '', confirmNewPassword: '' }
 const DEFAULT_SESSION_ACTIVITY = { recentLogins: [], activeSessions: [], geoIpConfigured: false }
@@ -14,6 +15,7 @@ const SESSION_KIND_KEYS = Object.freeze({
 })
 
 export function useAuthSecurityController({
+  bootstrapLoginPrefillEnabled = false,
   closeConfirmation,
   errorText,
   loadAppData,
@@ -26,7 +28,7 @@ export function useAuthSecurityController({
   const [session, setSession] = useState(null)
   const [authLoading, setAuthLoading] = useState(true)
   const [authError, setAuthError] = useState('')
-  const [loginForm, setLoginForm] = useState(DEFAULT_LOGIN_FORM)
+  const [loginForm, setLoginForm] = useState(() => (bootstrapLoginPrefillEnabled ? BOOTSTRAP_LOGIN_FORM : EMPTY_LOGIN_FORM))
   const [registerForm, setRegisterForm] = useState(DEFAULT_REGISTER_FORM)
   const [registerOpen, setRegisterOpen] = useState(false)
   const [registerChallenge, setRegisterChallenge] = useState(null)
@@ -80,6 +82,27 @@ export function useAuthSecurityController({
     window.addEventListener(AUTH_EXPIRED_EVENT, handleAuthExpired)
     return () => window.removeEventListener(AUTH_EXPIRED_EVENT, handleAuthExpired)
   }, [onLogoutReset, t])
+
+  useEffect(() => {
+    if (session) {
+      return
+    }
+    const usingBootstrapPrefill = loginForm.username === BOOTSTRAP_LOGIN_FORM.username
+      && loginForm.password === BOOTSTRAP_LOGIN_FORM.password
+    const usingEmptyForm = loginForm.username === ''
+      && loginForm.password === ''
+
+    if (bootstrapLoginPrefillEnabled && (usingBootstrapPrefill || usingEmptyForm)) {
+      if (!usingBootstrapPrefill) {
+        setLoginForm(BOOTSTRAP_LOGIN_FORM)
+      }
+      return
+    }
+
+    if (!bootstrapLoginPrefillEnabled && usingBootstrapPrefill) {
+      setLoginForm(EMPTY_LOGIN_FORM)
+    }
+  }, [bootstrapLoginPrefillEnabled, loginForm.password, loginForm.username, session])
 
   async function loadSession() {
     try {
@@ -136,6 +159,9 @@ export function useAuthSecurityController({
         }
         const payload = await response.json()
         if (payload.status === 'PASSKEY_REQUIRED' && payload.passkeyChallenge) {
+          if (!passkeysSupported()) {
+            throw new Error(t('errors.passkeyIpHostUnsupported', { host: window.location.hostname || 'this host' }))
+          }
           await completePasskeyLogin(payload.passkeyChallenge)
           return
         }

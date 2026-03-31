@@ -10,10 +10,12 @@ const t = (key) => ({
 
 describe('RemoteControlLaunchSection', () => {
   it('renders the remote launch card through shared section and link primitives', () => {
-    render(<RemoteControlLaunchSection t={t} />)
+    const { container } = render(<RemoteControlLaunchSection t={t} />)
 
     expect(screen.getByText('Remote control')).toBeInTheDocument()
     expect(screen.getByRole('link', { name: 'Open Remote Control' })).toHaveAttribute('href', '/remote')
     expect(screen.getByText('The remote page uses its own scoped session and is designed for quick poll-now actions when you are away from the main My InboxBridge dashboard.')).toBeInTheDocument()
+    expect(container.querySelector('.section-card-shell')).toBeInTheDocument()
+    expect(container.querySelector('.section-with-corner-toggle')).not.toBeInTheDocument()
   })
 })

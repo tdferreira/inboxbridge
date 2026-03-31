@@ -234,6 +234,7 @@ Initial bootstrap credentials:
 
 The bootstrap admin is marked `mustChangePassword=true`, so change it immediately after first login.
 The running unauthenticated login screen does not expose whether those bootstrap credentials are still active, so setup operators should rely on this documentation rather than a public status endpoint.
+For convenience, the login form only prefills `admin` / `nimda` while the untouched bootstrap admin is still in its original first-login state. As soon as that admin changes the password, enrolls a passkey, is removed, or otherwise leaves the initial bootstrap state, the login form stops prefilling those credentials.
 After that, the user can enroll one or more passkeys from the `Security` panel and use `Sign in with passkey` on later visits.
 If `MULTI_USER_ENABLED=false`, the login screen hides self-registration entirely and the admin UI does not expose user-management features.
 Single-user mode still keeps the rest of the control plane visible for the bootstrap admin, including destination mailbox setup, source email accounts, poller settings, and dashboard views.
@@ -267,7 +268,9 @@ It now includes both full admin-ui browser sessions and `/remote` remote-control
 If the same account signs in somewhere else while this browser is already open, the normal background refresh now raises a warning notification that links directly to the `Sessions` tab.
 If one browser session is revoked from another, the revoked browser now detects the next authenticated `401` response and immediately returns to the login screen instead of staying in a broken authenticated state.
 Approximate session location can now be enabled with a Geo-IP provider chain, but InboxBridge still resolves it only on new sign-ins, caches by IP aggressively, and falls back to the next configured provider only when the primary is down or rate-limited. The default chain is `IPWHOIS -> IPAPI_CO -> IP_API`, with optional `IPINFO_LITE` after that when a token is configured.
-Users can also opt in to sharing the browser/device location for the current session. InboxBridge now attempts to capture that location automatically when a user signs in to either the main app or `/remote`, and still offers a retry action from the `Sessions` tab if no sample was saved yet. The device-reported location is stored separately from Geo-IP and shown alongside it in the shared `Sessions` tab so both signals can be compared rather than one silently replacing the other. When coordinates are present, the UI also tries to reverse-geocode them into a friendlier place label and provides an `Open in Maps` link.
+Users can also opt in to sharing the browser/device location for the current session. InboxBridge now auto-captures that location on sign-in only when the browser already reports geolocation permission as granted; on mobile and other gesture-gated browsers, the explicit `Share Device Location` action remains the reliable path, and the `Sessions` tab still offers a retry action if no sample was saved yet. The device-reported location is stored separately from Geo-IP and shown alongside it in the shared `Sessions` tab so both signals can be compared rather than one silently replacing the other. When coordinates are present, the UI also tries to reverse-geocode them into a friendlier place label and provides an `Open in Maps` link.
+
+The `Sessions` tab now also shows a best-effort browser label and device type for each recent or active session, derived from the recorded `User-Agent`. This helps distinguish mobile Safari vs desktop Edge, remote-control sign-ins vs normal browser sessions, and similar cases when reviewing account activity.
 The admin `Authentication Security` editor now exposes that chain as a primary-provider dropdown plus a tag-style fallback input, and it shows readiness cards with provider docs, terms, and any provider-specific credentials that must be configured before a provider can be enabled.
 The `Quick Setup Guide` can now be hidden once every step is complete, and it automatically comes back if one of those requirements later becomes invalid again.
 
@@ -463,6 +466,7 @@ For a deployed hostname, set these to your public origin:
 Notes:
 
 - passkeys require HTTPS or localhost
+- passkeys do not work from raw IP hosts such as `https://192.168.50.6`; use `localhost` for local-only access or a real hostname/domain and set `SECURITY_PASSKEY_*` accordingly
 - passkeys require a browser with WebAuthn support
 - only public credential material is stored for passkeys; the private key stays with the authenticator
 - admins can wipe all passkeys for a user, after which that user must enroll a new passkey to sign in passwordlessly again

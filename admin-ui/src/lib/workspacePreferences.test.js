@@ -22,9 +22,22 @@ describe('workspacePreferences', () => {
 
   it('appends missing sections after preferred ids', () => {
     expect(applyOrderedSectionIds(
-      ['destination', 'userPolling', 'sourceEmailAccounts'],
+      ['destination', 'userPolling', 'sourceEmailAccounts', 'remoteControl'],
       ['sourceEmailAccounts', 'destination']
-    )).toEqual(['sourceEmailAccounts', 'destination', 'userPolling'])
+    )).toEqual(['sourceEmailAccounts', 'destination', 'userPolling', 'remoteControl'])
+  })
+
+  it('defaults user workspace order with the remote control section included', () => {
+    const normalized = normalizeUiPreferences({})
+
+    expect(normalized.userSectionOrder).toEqual([
+      'quickSetup',
+      'destination',
+      'userPolling',
+      'remoteControl',
+      'userStats',
+      'sourceEmailAccounts'
+    ])
   })
 
   it('captures and reapplies only layout-specific preferences', () => {

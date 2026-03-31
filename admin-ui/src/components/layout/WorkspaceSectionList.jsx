@@ -1,4 +1,5 @@
 import WorkspaceSectionWindow from './WorkspaceSectionWindow'
+import { computeWorkspaceDropTargetIndex } from '../../lib/workspaceDrag'
 
 function WorkspaceSectionList({
   dragState,
@@ -10,6 +11,22 @@ function WorkspaceSectionList({
   t,
   workspaceKey
 }) {
+  function handlePointerMove(event) {
+    if (!dragState || dragState.workspaceKey !== workspaceKey) {
+      return
+    }
+    const windows = Array.from(
+      event.currentTarget.querySelectorAll('[data-workspace-section-window="true"]')
+    )
+    if (!windows.length) {
+      return
+    }
+    const nextTargetIndex = computeWorkspaceDropTargetIndex(windows, event.clientY, dragState.targetIndex)
+    setDragState((current) => current && current.workspaceKey === workspaceKey
+      ? { ...current, targetIndex: nextTargetIndex }
+      : current)
+  }
+
   function renderDropPlaceholder(key) {
     return (
       <div className="workspace-section-drop-placeholder" key={key}>
@@ -23,15 +40,22 @@ function WorkspaceSectionList({
     .filter(Boolean)
     .map((section) => ({ section, content: section.render() }))
     .filter((entry) => Boolean(entry.content))
+  const draggedIndex = dragState?.workspaceKey === workspaceKey
+    ? visibleSections.findIndex(({ section }) => section.id === dragState.draggedId)
+    : -1
 
   const renderedSections = []
   visibleSections.forEach(({ section, content }, index) => {
-    if (dragState?.workspaceKey === workspaceKey && dragState.targetIndex === index) {
+    if (
+      dragState?.workspaceKey === workspaceKey &&
+      dragState.targetIndex === index &&
+      index !== draggedIndex
+    ) {
       renderedSections.push(renderDropPlaceholder(`${workspaceKey}-${section.id}-placeholder-before`))
     }
     renderedSections.push(
       <WorkspaceSectionWindow
-        canMoveDown={index < orderedIds.length - 1}
+        canMoveDown={index < visibleSections.length - 1}
         canMoveUp={index > 0}
         dragHandleLabel={t('preferences.dragSection')}
         dragging={dragState?.workspaceKey === workspaceKey && dragState.draggedId === section.id}
@@ -50,18 +74,10 @@ function WorkspaceSectionList({
             targetIndex: index
           })
         }}
-        onPointerMove={(event) => {
-          if (!dragState || dragState.workspaceKey !== workspaceKey) {
-            return
-          }
-          const bounds = event.currentTarget.getBoundingClientRect()
-          const nextTargetIndex = event.clientY < (bounds.top + bounds.height / 2) ? index : index + 1
-          setDragState((current) => current && current.workspaceKey === workspaceKey
-            ? { ...current, targetIndex: nextTargetIndex }
-            : current)
-        }}
+        onPointerMove={undefined}
         onMoveDown={() => moveSection(workspaceKey, section.id, 'down')}
         onMoveUp={() => moveSection(workspaceKey, section.id, 'up')}
+        sectionId={section.id}
       >
         {content}
       </WorkspaceSectionWindow>
@@ -72,7 +88,11 @@ function WorkspaceSectionList({
     renderedSections.push(renderDropPlaceholder(`${workspaceKey}-placeholder-end`))
   }
 
-  return renderedSections
+  return (
+    <div className="workspace-section-list" data-workspace-key={workspaceKey} onPointerMove={handlePointerMove}>
+      {renderedSections}
+    </div>
+  )
 }
 
 export default WorkspaceSectionList

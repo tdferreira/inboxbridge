@@ -57,6 +57,32 @@ describe('useAuthSecurityController', () => {
     expect(result.current.securityDialogDirty).toBe(true)
   })
 
+  it('starts with empty login fields when bootstrap prefill is not enabled', () => {
+    const { result } = renderController({ bootstrapLoginPrefillEnabled: false })
+
+    expect(result.current.loginForm).toEqual({ username: '', password: '' })
+  })
+
+  it('prefills bootstrap credentials only when explicitly enabled', () => {
+    const { result, rerender } = renderController({ bootstrapLoginPrefillEnabled: true })
+
+    expect(result.current.loginForm).toEqual({ username: 'admin', password: 'nimda' })
+
+    rerender({
+      bootstrapLoginPrefillEnabled: false,
+      closeConfirmation: vi.fn(),
+      errorText: vi.fn((key) => key),
+      loadAppData: vi.fn(),
+      onLogoutReset: vi.fn(),
+      openConfirmation: vi.fn(),
+      pushNotification: vi.fn(),
+      t: vi.fn((key) => key),
+      withPending: vi.fn(async (_key, action) => action())
+    })
+
+    expect(result.current.loginForm).toEqual({ username: '', password: '' })
+  })
+
   it('normalizes loaded passkeys to an array', () => {
     const { result } = renderController()
 

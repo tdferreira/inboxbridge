@@ -7,6 +7,7 @@ import java.util.List;
  */
 public record AuthUiOptionsResponse(
         boolean multiUserEnabled,
+        boolean bootstrapLoginPrefillEnabled,
         boolean microsoftOAuthAvailable,
         boolean googleOAuthAvailable,
         boolean registrationChallengeEnabled,

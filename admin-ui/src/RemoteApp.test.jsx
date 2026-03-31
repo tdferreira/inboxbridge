@@ -230,7 +230,7 @@ describe('RemoteApp', () => {
     expect(screen.queryByText('Remote request failed (401)')).not.toBeInTheDocument()
   })
 
-  it('automatically captures browser-reported device location for the current remote session', async () => {
+  it('automatically captures browser-reported device location for the current remote session when permission is already granted', async () => {
     Object.assign(navigator, {
       geolocation: {
         getCurrentPosition: vi.fn((success) => success({
@@ -240,6 +240,9 @@ describe('RemoteApp', () => {
             accuracy: 25
           }
         }))
+      },
+      permissions: {
+        query: vi.fn().mockResolvedValue({ state: 'granted' })
       }
     })
 
@@ -335,6 +338,62 @@ describe('RemoteApp', () => {
     vi.stubGlobal('fetch', fetchMock)
 
     render(<RemoteApp />)
+
+    await waitFor(() => expect(fetchMock).toHaveBeenCalledWith('/api/remote/auth/session/device-location', expect.any(Object)))
+  })
+
+  it('captures remote device location after an explicit button click when the browser still needs a user gesture', async () => {
+    Object.assign(navigator, {
+      geolocation: {
+        getCurrentPosition: vi.fn((success) => success({
+          coords: {
+            latitude: 38.7223,
+            longitude: -9.1393,
+            accuracy: 25
+          }
+        }))
+      }
+    })
+
+    const fetchMock = vi.fn((url) => {
+      if (url === '/api/remote/auth/me') {
+        return jsonResponse({
+          id: 18,
+          username: 'admin',
+          role: 'ADMIN',
+          canRunUserPoll: true,
+          canRunAllUsersPoll: true,
+          deviceLocationCaptured: false
+        })
+      }
+      if (url === '/api/remote/control') {
+        return jsonResponse({
+          session: {
+            id: 18,
+            username: 'admin',
+            role: 'ADMIN',
+            canRunUserPoll: true,
+            canRunAllUsersPoll: true
+          },
+          sources: [],
+          hasOwnSourceEmailAccounts: true,
+          hasReadyDestinationMailbox: true,
+          setupRequired: false,
+          remotePollRateLimitCount: 60,
+          remotePollRateLimitWindow: 'PT1M'
+        })
+      }
+      if (url === '/api/remote/auth/session/device-location') {
+        return jsonResponse({}, 204)
+      }
+      throw new Error(`Unexpected fetch: ${url}`)
+    })
+    vi.stubGlobal('fetch', fetchMock)
+
+    render(<RemoteApp />)
+
+    expect(fetchMock).not.toHaveBeenCalledWith('/api/remote/auth/session/device-location', expect.any(Object))
+    fireEvent.click(await screen.findByRole('button', { name: 'Share Device Location' }))
 
     await waitFor(() => expect(fetchMock).toHaveBeenCalledWith('/api/remote/auth/session/device-location', expect.any(Object)))
   })

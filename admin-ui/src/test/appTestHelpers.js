@@ -48,6 +48,7 @@ export function createWorkspaceRouteFetch({ session, uiPreferences = {}, session
     if (url === '/api/auth/options') {
       return jsonResponse({
         multiUserEnabled: true,
+        bootstrapLoginPrefillEnabled: false,
         microsoftOAuthAvailable: true,
         googleOAuthAvailable: true,
         sourceOAuthProviders: ['MICROSOFT', 'GOOGLE']

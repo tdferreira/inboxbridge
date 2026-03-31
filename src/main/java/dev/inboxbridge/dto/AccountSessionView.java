@@ -5,6 +5,8 @@ import java.time.Instant;
 public record AccountSessionView(
         Long id,
         String sessionType,
+        String browserLabel,
+        String deviceLabel,
         String ipAddress,
         String locationLabel,
         String deviceLocationLabel,

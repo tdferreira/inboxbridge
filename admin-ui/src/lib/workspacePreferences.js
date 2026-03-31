@@ -14,7 +14,7 @@ export const DEFAULT_UI_PREFERENCES = {
   authSecurityCollapsed: false,
   globalStatsCollapsed: false,
   userManagementCollapsed: false,
-  userSectionOrder: ['quickSetup', 'destination', 'userPolling', 'userStats', 'sourceEmailAccounts'],
+  userSectionOrder: ['quickSetup', 'destination', 'userPolling', 'remoteControl', 'userStats', 'sourceEmailAccounts'],
   adminSectionOrder: ['adminQuickSetup', 'systemDashboard', 'oauthApps', 'authSecurity', 'globalStats', 'userManagement'],
   language: 'en'
 }

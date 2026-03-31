@@ -16,6 +16,11 @@ function AuthSecuritySection({
 }) {
   return (
     <CollapsibleSection
+      actions={
+        <LoadingButton className="secondary" onClick={onOpenEditor} type="button">
+          {t('authSecurity.edit')}
+        </LoadingButton>
+      }
       className="system-dashboard-section"
       collapsed={collapsed}
       collapseLoading={collapseLoading}
@@ -57,11 +62,6 @@ function AuthSecuritySection({
           <article className="surface-card polling-statistics-card">
             <div className="polling-statistics-card-title">{t('authSecurity.runtimeSectionTitle')}</div>
             <p className="section-copy">{t('authSecurity.summaryHelp')}</p>
-            <div className="action-row">
-              <LoadingButton className="secondary" onClick={onOpenEditor} type="button">
-                {t('authSecurity.edit')}
-              </LoadingButton>
-            </div>
           </article>
         </div>
     </CollapsibleSection>

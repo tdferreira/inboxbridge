@@ -102,6 +102,20 @@ class SourcePollingStateServiceTest {
         assertEquals("READY", eligibility.reason());
     }
 
+    @Test
+    void disabledPollingSettingsBlockPollingImmediately() {
+        SourcePollingStateService service = service();
+
+        SourcePollingStateService.PollEligibility eligibility = service.eligibility(
+                "fetcher-1",
+                settings(false, "5m", 25),
+                Instant.parse("2026-03-26T12:10:00Z"),
+                false);
+
+        assertFalse(eligibility.shouldPoll());
+        assertEquals("DISABLED", eligibility.reason());
+    }
+
     private SourcePollingStateService service() {
         SourcePollingStateService service = new SourcePollingStateService();
         service.repository = new InMemorySourcePollingStateRepository();

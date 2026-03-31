@@ -2,6 +2,7 @@ import { useEffect, useMemo, useRef, useState } from 'react'
 
 const DISMISS_PREFIX = 'inboxbridge.device-location.dismissed'
 const AUTO_CAPTURE_RETRY_DELAYS_MS = [5000, 15000, 30000]
+const PERMISSION_UNSUPPORTED = 'unsupported'
 
 function errorMessage(error, t) {
   const detail = typeof error?.message === 'string' && error.message.trim() ? ` ${error.message.trim()}` : ''
@@ -48,6 +49,7 @@ export function useSessionDeviceLocation({ captureLocation, session, storageScop
   const [dismissed, setDismissed] = useState(false)
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState('')
+  const [permissionState, setPermissionState] = useState('')
   const [success, setSuccess] = useState('')
   const autoCaptureAttemptedRef = useRef(new Set())
   const autoCaptureRetryCountRef = useRef(new Map())
@@ -62,6 +64,7 @@ export function useSessionDeviceLocation({ captureLocation, session, storageScop
     if (typeof window === 'undefined') return
     setDismissed(window.localStorage.getItem(sessionKey) === 'true')
     setError('')
+    setPermissionState('')
     setSuccess('')
     autoCaptureAttemptedRef.current.delete(sessionKey)
     autoCaptureRetryCountRef.current.delete(sessionKey)
@@ -128,7 +131,48 @@ export function useSessionDeviceLocation({ captureLocation, session, storageScop
   }
 
   useEffect(() => {
+    if (!supported || !session || typeof navigator === 'undefined') {
+      return
+    }
+    if (!navigator.permissions?.query) {
+      setPermissionState(PERMISSION_UNSUPPORTED)
+      return
+    }
+
+    let active = true
+    let permissionStatus = null
+
+    async function loadPermissionState() {
+      try {
+        permissionStatus = await navigator.permissions.query({ name: 'geolocation' })
+        if (!active) return
+        setPermissionState(permissionStatus.state || '')
+        permissionStatus.onchange = () => {
+          if (!active) return
+          setPermissionState(permissionStatus.state || '')
+        }
+      } catch {
+        if (active) {
+          setPermissionState(PERMISSION_UNSUPPORTED)
+        }
+      }
+    }
+
+    void loadPermissionState()
+
+    return () => {
+      active = false
+      if (permissionStatus) {
+        permissionStatus.onchange = null
+      }
+    }
+  }, [session, supported])
+
+  useEffect(() => {
     if (!supported || !session || session.deviceLocationCaptured || typeof navigator === 'undefined') {
+      return
+    }
+    if (permissionState !== 'granted') {
       return
     }
     if (autoCaptureAttemptedRef.current.has(sessionKey)) {
@@ -137,7 +181,7 @@ export function useSessionDeviceLocation({ captureLocation, session, storageScop
 
     autoCaptureAttemptedRef.current.add(sessionKey)
     void requestLocation({ automatic: true })
-  }, [session, sessionKey, supported])
+  }, [permissionState, session, sessionKey, supported])
 
   useEffect(() => () => {
     if (typeof window === 'undefined') return
@@ -152,6 +196,7 @@ export function useSessionDeviceLocation({ captureLocation, session, storageScop
     shouldPrompt,
     success,
     supported,
+    permissionState,
     requestLocation
   }
 }

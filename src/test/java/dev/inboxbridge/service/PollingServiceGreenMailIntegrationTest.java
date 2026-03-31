@@ -46,6 +46,8 @@ class PollingServiceGreenMailIntegrationTest {
     private static final String DESTINATION_USERNAME = "destination@example.com";
     private static final String DESTINATION_PASSWORD = "Destination#123";
     private static final String DESTINATION_FOLDER = "Imported";
+    private static final Long ALICE_USER_ID = 7L;
+    private static final Long BOB_USER_ID = 8L;
 
     private GreenMail sourceMail;
     private GreenMail destinationMail;
@@ -160,6 +162,86 @@ class PollingServiceGreenMailIntegrationTest {
                 listSubjects(destinationMail, DESTINATION_USERNAME, DESTINATION_PASSWORD, "INBOX"));
     }
 
+    @Test
+    void userScopedAndAllUsersPollingNeverMixMessagesAcrossUserDestinations() throws Exception {
+        String aliceSourceOne = "alice-one@example.com";
+        String aliceSourceTwo = "alice-two@example.com";
+        String bobSourceOne = "bob-one@example.com";
+        String bobSourceTwo = "bob-two@example.com";
+        String sharedSourcePassword = "Source#456";
+        String aliceDestination = "alice-destination@example.com";
+        String bobDestination = "bob-destination@example.com";
+        String sharedDestinationPassword = "Destination#456";
+
+        sourceMail.setUser(aliceSourceOne, sharedSourcePassword);
+        sourceMail.setUser(aliceSourceTwo, sharedSourcePassword);
+        sourceMail.setUser(bobSourceOne, sharedSourcePassword);
+        sourceMail.setUser(bobSourceTwo, sharedSourcePassword);
+        destinationMail.setUser(aliceDestination, sharedDestinationPassword);
+        destinationMail.setUser(bobDestination, sharedDestinationPassword);
+
+        appendMessage(sourceMail, aliceSourceOne, sharedSourcePassword, "INBOX", "alice-one-1", "Alice source one message", "<alice-one-1@example.com>");
+        appendMessage(sourceMail, aliceSourceTwo, sharedSourcePassword, "INBOX", "alice-two-1", "Alice source two message", "<alice-two-1@example.com>");
+        appendMessage(sourceMail, bobSourceOne, sharedSourcePassword, "INBOX", "bob-one-1", "Bob source one message", "<bob-one-1@example.com>");
+        appendMessage(sourceMail, bobSourceTwo, sharedSourcePassword, "INBOX", "bob-two-1", "Bob source two message", "<bob-two-1@example.com>");
+
+        PollingService service = new PollingService();
+        MailSourceClient mailSourceClient = new MailSourceClient();
+        mailSourceClient.mimeHashService = new MimeHashService();
+        ImapAppendMailDestinationService destinationService = new ImapAppendMailDestinationService();
+        RecordingImportedMessageRepository importedMessageRepository = new RecordingImportedMessageRepository();
+        ImportDeduplicationService deduplicationService = new ImportDeduplicationService();
+        deduplicationService.importedMessageRepository = importedMessageRepository;
+        deduplicationService.mimeHashService = new MimeHashService();
+
+        service.mailSourceClient = mailSourceClient;
+        service.importDeduplicationService = deduplicationService;
+        service.mailDestinationServices = new SingleMailDestinationServices(destinationService);
+        service.sourcePollEventService = new NoopSourcePollEventService();
+        service.runtimeEmailAccountService = new FixedRuntimeEmailAccountService(List.of(
+                runtimeAccount("alice-source-one", ALICE_USER_ID, "alice", aliceSourceOne, sharedSourcePassword, aliceDestination, sharedDestinationPassword),
+                runtimeAccount("alice-source-two", ALICE_USER_ID, "alice", aliceSourceTwo, sharedSourcePassword, aliceDestination, sharedDestinationPassword),
+                runtimeAccount("bob-source-one", BOB_USER_ID, "bob", bobSourceOne, sharedSourcePassword, bobDestination, sharedDestinationPassword),
+                runtimeAccount("bob-source-two", BOB_USER_ID, "bob", bobSourceTwo, sharedSourcePassword, bobDestination, sharedDestinationPassword)));
+        service.pollingSettingsService = new FixedPollingSettingsService();
+        service.userPollingSettingsService = new FixedUserPollingSettingsService();
+        service.sourcePollingSettingsService = new FixedSourcePollingSettingsService();
+        service.sourcePollingStateService = new ReadySourcePollingStateService();
+        service.manualPollRateLimitService = new ManualPollRateLimitService();
+
+        PollRunResult aliceRun = service.runPollForUser(userActor(ALICE_USER_ID), "greenmail-integration:user-alice");
+
+        assertEquals(2, aliceRun.getFetched());
+        assertEquals(2, aliceRun.getImported());
+        assertEquals(0, aliceRun.getDuplicates());
+        assertTrue(aliceRun.getErrorDetails().isEmpty());
+        assertEquals(
+                List.of("alice-one-1", "alice-two-1"),
+                listSubjects(destinationMail, aliceDestination, sharedDestinationPassword, DESTINATION_FOLDER));
+        assertEquals(
+                List.of(),
+                listSubjectsIfFolderExists(destinationMail, bobDestination, sharedDestinationPassword, DESTINATION_FOLDER));
+
+        PollRunResult allUsersRun = service.runPollForAllUsers(adminActor(1L), "greenmail-integration:all-users");
+
+        assertEquals(4, allUsersRun.getFetched());
+        assertEquals(2, allUsersRun.getImported());
+        assertEquals(2, allUsersRun.getDuplicates());
+        assertTrue(allUsersRun.getErrorDetails().isEmpty());
+        assertEquals(
+                List.of("alice-one-1", "alice-two-1"),
+                listSubjects(destinationMail, aliceDestination, sharedDestinationPassword, DESTINATION_FOLDER));
+        assertEquals(
+                List.of("bob-one-1", "bob-two-1"),
+                listSubjects(destinationMail, bobDestination, sharedDestinationPassword, DESTINATION_FOLDER));
+        assertTrue(listSubjects(destinationMail, aliceDestination, sharedDestinationPassword, DESTINATION_FOLDER)
+                .stream()
+                .noneMatch((subject) -> subject.startsWith("bob-")));
+        assertTrue(listSubjects(destinationMail, bobDestination, sharedDestinationPassword, DESTINATION_FOLDER)
+                .stream()
+                .noneMatch((subject) -> subject.startsWith("alice-")));
+    }
+
     private RuntimeEmailAccount runtimeAccount() {
         return runtimeAccount("INBOX", DESTINATION_FOLDER);
     }
@@ -196,6 +278,47 @@ class PollingServiceGreenMailIntegrationTest {
                         DESTINATION_USERNAME,
                         DESTINATION_PASSWORD,
                         destinationFolder));
+    }
+
+    private RuntimeEmailAccount runtimeAccount(
+            String sourceId,
+            Long userId,
+            String ownerUsername,
+            String sourceUsername,
+            String sourcePassword,
+            String destinationUsername,
+            String destinationPassword) {
+        return new RuntimeEmailAccount(
+                sourceId,
+                "USER",
+                userId,
+                ownerUsername,
+                true,
+                InboxBridgeConfig.Protocol.IMAP,
+                "127.0.0.1",
+                sourceMail.getImap().getPort(),
+                false,
+                InboxBridgeConfig.AuthMethod.PASSWORD,
+                InboxBridgeConfig.OAuthProvider.NONE,
+                sourceUsername,
+                sourcePassword,
+                "",
+                Optional.of("INBOX"),
+                false,
+                Optional.of("Imported/Test"),
+                new ImapAppendDestinationTarget(
+                        "user-destination:" + userId,
+                        userId,
+                        ownerUsername,
+                        UserMailDestinationConfigService.PROVIDER_CUSTOM,
+                        "127.0.0.1",
+                        destinationMail.getImap().getPort(),
+                        false,
+                        InboxBridgeConfig.AuthMethod.PASSWORD,
+                        InboxBridgeConfig.OAuthProvider.NONE,
+                        destinationUsername,
+                        destinationPassword,
+                        DESTINATION_FOLDER));
     }
 
     private static void appendMessage(
@@ -245,6 +368,31 @@ class PollingServiceGreenMailIntegrationTest {
             store.connect("127.0.0.1", greenMail.getImap().getPort(), username, password);
             folder = store.getFolder(folderName);
             assertTrue(folder.exists(), "Expected destination folder to exist after import");
+            folder.open(Folder.READ_ONLY);
+            Message[] messages = folder.getMessages();
+            List<String> subjects = new ArrayList<>();
+            for (Message message : messages) {
+                subjects.add(message.getSubject());
+            }
+            return subjects;
+        } finally {
+            closeQuietly(folder);
+            closeQuietly(store);
+        }
+    }
+
+    private static List<String> listSubjectsIfFolderExists(GreenMail greenMail, String username, String password, String folderName) throws Exception {
+        Properties properties = new Properties();
+        properties.put("mail.store.protocol", "imap");
+        Session session = Session.getInstance(properties);
+        Store store = session.getStore("imap");
+        Folder folder = null;
+        try {
+            store.connect("127.0.0.1", greenMail.getImap().getPort(), username, password);
+            folder = store.getFolder(folderName);
+            if (!folder.exists()) {
+                return List.of();
+            }
             folder.open(Folder.READ_ONLY);
             Message[] messages = folder.getMessages();
             List<String> subjects = new ArrayList<>();
@@ -325,12 +473,24 @@ class PollingServiceGreenMailIntegrationTest {
         public List<RuntimeEmailAccount> listEnabledForPolling() {
             return emailAccounts;
         }
+
+        @Override
+        public List<RuntimeEmailAccount> listEnabledForUser(dev.inboxbridge.persistence.AppUser actor) {
+            return emailAccounts.stream()
+                    .filter(emailAccount -> actor != null && actor.id != null && actor.id.equals(emailAccount.ownerUserId()))
+                    .toList();
+        }
     }
 
     private static final class FixedPollingSettingsService extends PollingSettingsService {
         @Override
         public EffectivePollingSettings effectiveSettings() {
             return new EffectivePollingSettings(true, "5m", Duration.ofMinutes(5), 10);
+        }
+
+        @Override
+        public ManualPollRateLimit effectiveManualPollRateLimit() {
+            return new ManualPollRateLimit(5, Duration.ofMinutes(1), 60);
         }
     }
 
@@ -429,5 +589,19 @@ class PollingServiceGreenMailIntegrationTest {
         public Iterable<? extends Handle<MailDestinationService>> handles() {
             throw new UnsupportedOperationException();
         }
+    }
+
+    private static dev.inboxbridge.persistence.AppUser userActor(Long userId) {
+        dev.inboxbridge.persistence.AppUser actor = new dev.inboxbridge.persistence.AppUser();
+        actor.id = userId;
+        actor.role = dev.inboxbridge.persistence.AppUser.Role.USER;
+        return actor;
+    }
+
+    private static dev.inboxbridge.persistence.AppUser adminActor(Long userId) {
+        dev.inboxbridge.persistence.AppUser actor = new dev.inboxbridge.persistence.AppUser();
+        actor.id = userId;
+        actor.role = dev.inboxbridge.persistence.AppUser.Role.ADMIN;
+        return actor;
     }
 }

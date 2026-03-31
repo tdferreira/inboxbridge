@@ -42,11 +42,15 @@ Key design choices:
 - the same hero/header security area now also handles passkey enrollment and removal
 - passkey registration now opens in a focused modal dialog instead of stretching the security panel inline layout
 - the login screen supports passkey sign-in for users who have already enrolled one
+- the login form only prefills the bootstrap `admin` / `nimda` credentials while the untouched bootstrap admin is still in its original first-login state; after a password change, passkey enrollment, or user removal, the form falls back to empty fields
+- passkey UI is intentionally disabled on raw IP hosts because WebAuthn does not work there; LAN access should use a real hostname configured in `SECURITY_PASSKEY_*` instead of a bare address like `192.168.50.6`
 - the app now also ships a dedicated `/remote` mobile-first remote-control surface with its own scoped session, tiny source list, and poll-now actions for phones and quick-access devices
 - the main `My InboxBridge` workspace now includes a dedicated `Remote control` launch card so the lightweight `/remote` page is discoverable from the normal dashboard
 - the `/remote` surface can now expose an in-app install prompt when the browser considers that remote page installable as a PWA
+- browser/device geolocation prompts are now mobile-safe: InboxBridge only auto-captures when the browser already reports permission as granted, while phones and other gesture-gated browsers should rely on the explicit `Share Device Location` action
+- the Security `Sessions` tab now also shows a best-effort browser label and device type for each session, derived from the stored `User-Agent`, so users can quickly tell desktop/admin-ui sessions from mobile/remote-control sign-ins
 - both the main app and `/remote` now offer an explicit opt-in browser location prompt for the current session so device-reported location can be stored separately from Geo-IP
-- both the main app and `/remote` now also attempt to capture device location automatically as soon as a new authenticated session begins, while still leaving a retry path in the Sessions UI when no sample was saved
+- both the main app and `/remote` now auto-capture device location only when geolocation permission is already granted, while still leaving an explicit share action and a retry path in the Sessions UI when no sample was saved
 - when a session includes device coordinates, the Sessions view now tries to turn them into a friendlier place label in the browser and exposes an `Open in Maps` action for that device-reported location
 - the login screen intentionally avoids exposing live bootstrap-account state to unauthenticated visitors; bootstrap credentials are documented in the operator docs instead
 - self-registration is launched from a dedicated `Register for access` button and uses a modal dialog instead of always rendering the full form
@@ -178,6 +182,9 @@ Current design-system foundation includes:
 - utility prompts such as install/location nudges should compose `SectionCard` instead of introducing bespoke card markup
 
 New top-level sections should compose these primitives rather than recreating `surface-card`, header, action, toggle, or CTA-link markup locally.
+The movable workspace sections in both `My InboxBridge` and `Administration` should always render through `CollapsibleSection`, and the layout-edit controller must preserve edit mode while arrow moves or drag-and-drop reorder operations are being applied.
+Section reordering must also operate on the effective visible workspace order, so newly introduced movable sections such as `Remote control` still move correctly for users with older saved layouts, and the top/bottom arrow buttons only enable moves that are actually possible on the rendered list.
+Drag-and-drop should resolve against the final pointer-up position using midpoint-based insertion slots between rendered cards, so dragging the first card downward or the last card upward lands in the expected adjacent position, cards do not overshoot by an extra slot, and transient layout-edit mode is not lost during a background preference refresh.
 
 ## Tests
 

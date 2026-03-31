@@ -1,4 +1,4 @@
-import { normalizePasskeyError, parseCreateOptions, parseGetOptions, serializeCredential } from './passkeys'
+import { hostSupportsPasskeys, normalizePasskeyError, parseCreateOptions, parseGetOptions, serializeCredential } from './passkeys'
 
 describe('passkeys helpers', () => {
   it('hydrates wrapped WebAuthn option payloads and serializes credentials', () => {
@@ -51,16 +51,24 @@ describe('passkeys helpers', () => {
   })
 
   it('maps browser WebAuthn errors to translated friendly messages', () => {
-    const t = (key) => ({
+    const t = (key, params = {}) => ({
       'errors.passkeyCancelled': 'Cancelado',
       'errors.passkeyRegistrationCancelled': 'Registo cancelado',
       'errors.passkeyAlreadyRegistered': 'Ja registada',
       'errors.passkeyLoginFailed': 'Falha no login',
-      'errors.passkeyRegistrationFailed': 'Falha no registo'
+      'errors.passkeyRegistrationFailed': 'Falha no registo',
+      'errors.passkeyIpHostUnsupported': `IP nao suportado: ${params.host}`
     }[key] || key)
 
     expect(normalizePasskeyError(new DOMException('raw browser message', 'NotAllowedError'), t, 'registration')).toBe('Registo cancelado')
     expect(normalizePasskeyError({ name: 'InvalidStateError', message: 'raw browser message' }, t, 'registration')).toBe('Ja registada')
     expect(normalizePasskeyError({ name: 'UnknownError', message: 'custom failure' }, t, 'login')).toBe('custom failure')
+  })
+
+  it('treats raw ip hosts as unsupported for passkeys', () => {
+    expect(hostSupportsPasskeys('localhost')).toBe(true)
+    expect(hostSupportsPasskeys('inboxbridge.local')).toBe(true)
+    expect(hostSupportsPasskeys('192.168.50.6')).toBe(false)
+    expect(hostSupportsPasskeys('::1')).toBe(false)
   })
 })

@@ -77,6 +77,64 @@ class PollingServiceTest {
     }
 
     @Test
+    void runPollSkipsSourcesWhoseEffectivePollingSettingsAreDisabled() {
+        PollingService service = new PollingService();
+        MultiSourceRecordingMailSourceClient mailSourceClient = new MultiSourceRecordingMailSourceClient();
+        service.mailSourceClient = mailSourceClient;
+        service.importDeduplicationService = new ImportDeduplicationService() {
+            @Override
+            public boolean alreadyImported(FetchedMessage fetchedMessage, MailDestinationTarget destinationTarget) {
+                return false;
+            }
+
+            @Override
+            public void recordImport(FetchedMessage fetchedMessage, MailDestinationTarget destinationTarget, MailImportResponse response) {
+            }
+        };
+        service.mailDestinationServices = new FakeMailDestinationServices(new FakeMailDestinationService(true));
+        service.sourcePollEventService = new NoopSourcePollEventService();
+        service.runtimeEmailAccountService = new FakeRuntimeEmailAccountService(List.of(
+                userBridge("enabled-fetcher", 7L, "alice", "alice-destination"),
+                userBridge("disabled-fetcher", 7L, "alice", "alice-destination")));
+        service.pollingSettingsService = new FakePollingSettingsService(true, Duration.ofMinutes(5), "5m", 10);
+        service.userPollingSettingsService = new FakeUserPollingSettingsService(true, Duration.ofMinutes(5), "5m", 10);
+        service.sourcePollingSettingsService = new SourcePollingSettingsService() {
+            @Override
+            public PollingSettingsService.EffectivePollingSettings effectiveSettingsFor(RuntimeEmailAccount bridge) {
+                if ("disabled-fetcher".equals(bridge.id())) {
+                    return new PollingSettingsService.EffectivePollingSettings(false, "5m", Duration.ofMinutes(5), 10);
+                }
+                return new PollingSettingsService.EffectivePollingSettings(true, "5m", Duration.ofMinutes(5), 10);
+            }
+        };
+        SourcePollingStateService sourcePollingStateService = new SourcePollingStateService() {
+            @Override
+            public PollEligibility eligibility(
+                    String sourceId,
+                    PollingSettingsService.EffectivePollingSettings settings,
+                    Instant now,
+                    boolean ignoreInterval,
+                    boolean ignoreCooldown) {
+                if (!settings.pollEnabled()) {
+                    return new PollEligibility(false, "DISABLED", null);
+                }
+                return new PollEligibility(true, "READY", null);
+            }
+
+            @Override
+            public void recordSuccess(String sourceId, Instant finishedAt, PollingSettingsService.EffectivePollingSettings settings) {
+            }
+        };
+        service.sourcePollingStateService = sourcePollingStateService;
+        service.manualPollRateLimitService = new ManualPollRateLimitService();
+
+        PollRunResult result = service.runPoll("manual-api");
+
+        assertEquals(1, result.getErrors().size());
+        assertEquals(List.of("enabled-fetcher"), mailSourceClient.fetchedSourceIds);
+    }
+
+    @Test
     void runPollForSourceBypassesCooldownWhenExplicitlyTriggered() {
         PollingService service = new PollingService();
         RecordingMailSourceClient mailSourceClient = new RecordingMailSourceClient();
@@ -99,6 +157,33 @@ class PollingServiceTest {
         assertEquals(0, result.getErrors().size());
         assertEquals(10, mailSourceClient.lastFetchWindow);
         assertEquals("outlook-main", sourcePollingStateService.lastRecordedSuccessSourceId);
+    }
+
+    @Test
+    void runPollForSourceUsesSourceSpecificFetchWindowOverride() {
+        PollingService service = new PollingService();
+        RecordingMailSourceClient mailSourceClient = new RecordingMailSourceClient();
+        service.mailSourceClient = mailSourceClient;
+        service.importDeduplicationService = new ImportDeduplicationService();
+        service.mailDestinationServices = new FakeMailDestinationServices(new FakeMailDestinationService(true));
+        service.sourcePollEventService = new NoopSourcePollEventService();
+        RuntimeEmailAccount emailAccount = userBridge("user-fetcher", 7L, "alice", "alice-destination");
+        service.runtimeEmailAccountService = new FakeRuntimeEmailAccountService(List.of(emailAccount));
+        service.pollingSettingsService = new FakePollingSettingsService(true, Duration.ofMinutes(5), "5m", 50);
+        service.userPollingSettingsService = new FakeUserPollingSettingsService(true, Duration.ofMinutes(3), "3m", 25);
+        service.sourcePollingSettingsService = new SourcePollingSettingsService() {
+            @Override
+            public PollingSettingsService.EffectivePollingSettings effectiveSettingsFor(RuntimeEmailAccount bridge) {
+                return new PollingSettingsService.EffectivePollingSettings(true, "1m", Duration.ofMinutes(1), 7);
+            }
+        };
+        service.sourcePollingStateService = new RecordingSourcePollingStateService();
+        service.manualPollRateLimitService = new ManualPollRateLimitService();
+
+        PollRunResult result = service.runPollForSource(emailAccount, "manual-source");
+
+        assertEquals(0, result.getErrors().size());
+        assertEquals(7, mailSourceClient.lastFetchWindow);
     }
 
     @Test
@@ -234,6 +319,69 @@ class PollingServiceTest {
     }
 
     @Test
+    void runPollKeepsUserMailboxesIsolatedAcrossUserScopedAndAllUsersRuns() {
+        PollingService service = new PollingService();
+        MultiSourceRecordingMailSourceClient mailSourceClient = new MultiSourceRecordingMailSourceClient();
+        RecordingDestinationMailboxService destinationService = new RecordingDestinationMailboxService();
+        service.mailSourceClient = mailSourceClient;
+        service.importDeduplicationService = new ImportDeduplicationService() {
+            @Override
+            public boolean alreadyImported(FetchedMessage fetchedMessage, MailDestinationTarget destinationTarget) {
+                return false;
+            }
+
+            @Override
+            public void recordImport(FetchedMessage fetchedMessage, MailDestinationTarget destinationTarget, MailImportResponse response) {
+            }
+        };
+        service.mailDestinationServices = new FakeMailDestinationServices(destinationService);
+        service.sourcePollEventService = new NoopSourcePollEventService();
+        service.runtimeEmailAccountService = new FakeRuntimeEmailAccountService(List.of(
+                userBridge("alice-source-a", 7L, "alice", "alice-destination"),
+                userBridge("alice-source-b", 7L, "alice", "alice-destination"),
+                userBridge("bob-source-a", 8L, "bob", "bob-destination"),
+                userBridge("bob-source-b", 8L, "bob", "bob-destination")));
+        service.pollingSettingsService = new FakePollingSettingsService(true, Duration.ofMinutes(5), "5m", 10);
+        service.userPollingSettingsService = new FakeUserPollingSettingsService(true, Duration.ofMinutes(5), "5m", 10);
+        service.sourcePollingSettingsService = new FakeSourcePollingSettingsService();
+        service.sourcePollingStateService = new RecordingSourcePollingStateService();
+        service.manualPollRateLimitService = new ManualPollRateLimitService();
+
+        PollRunResult userRun = service.runPollForUser(userActor(7L), "user-ui");
+
+        assertEquals(0, userRun.getErrors().size());
+        assertEquals(List.of("alice-source-a", "alice-source-b"), mailSourceClient.fetchedSourceIds);
+        assertEquals(
+                List.of("alice-source-a->alice-destination", "alice-source-b->alice-destination"),
+                destinationService.importRoutes);
+
+        mailSourceClient.fetchedSourceIds.clear();
+        destinationService.importRoutes.clear();
+
+        dev.inboxbridge.persistence.AppUser admin = new dev.inboxbridge.persistence.AppUser();
+        admin.id = 1L;
+        admin.role = dev.inboxbridge.persistence.AppUser.Role.ADMIN;
+
+        PollRunResult allUsersRun = service.runPollForAllUsers(admin, "admin-ui");
+
+        assertEquals(0, allUsersRun.getErrors().size());
+        assertEquals(
+                List.of("alice-source-a", "alice-source-b", "bob-source-a", "bob-source-b"),
+                mailSourceClient.fetchedSourceIds);
+        assertEquals(
+                List.of(
+                        "alice-source-a->alice-destination",
+                        "alice-source-b->alice-destination",
+                        "bob-source-a->bob-destination",
+                        "bob-source-b->bob-destination"),
+                destinationService.importRoutes);
+        assertTrue(destinationService.importRoutes.stream().noneMatch((route) ->
+                route.contains("alice-source") && route.contains("bob-destination")));
+        assertTrue(destinationService.importRoutes.stream().noneMatch((route) ->
+                route.contains("bob-source") && route.contains("alice-destination")));
+    }
+
+    @Test
     void runPollForUserRateLimitsRepeatedManualRuns() {
         PollingService service = new PollingService();
         service.mailSourceClient = new RecordingMailSourceClient();
@@ -333,11 +481,15 @@ class PollingServiceTest {
     }
 
     private static RuntimeEmailAccount userBridge(Long userId) {
+        return userBridge("user-fetcher", userId, "alice", "target");
+    }
+
+    private static RuntimeEmailAccount userBridge(String sourceId, Long userId, String ownerUsername, String destinationSubjectKey) {
         return new RuntimeEmailAccount(
-                "user-fetcher",
+                sourceId,
                 "USER",
                 userId,
-                "alice",
+                ownerUsername,
                 true,
                 dev.inboxbridge.config.InboxBridgeConfig.Protocol.IMAP,
                 "imap.example.com",
@@ -351,7 +503,19 @@ class PollingServiceTest {
                 java.util.Optional.of("INBOX"),
                 false,
                 java.util.Optional.of("Imported/Test"),
-                new GmailApiDestinationTarget("target", userId, "alice", UserMailDestinationConfigService.PROVIDER_GMAIL, "me", "client", "secret", "refresh", "https://localhost", true, false, false));
+                new GmailApiDestinationTarget(
+                        destinationSubjectKey,
+                        userId,
+                        ownerUsername,
+                        UserMailDestinationConfigService.PROVIDER_GMAIL,
+                        "me",
+                        "client",
+                        "secret",
+                        "refresh",
+                        "https://localhost",
+                        true,
+                        false,
+                        false));
     }
 
     private static RuntimeEmailAccount systemBridge(String sourceId) {
@@ -429,6 +593,22 @@ class PollingServiceTest {
         @Override
         public java.util.Optional<MailboxCountProbe> probeSpamOrJunkFolder(RuntimeEmailAccount bridge) {
             return java.util.Optional.of(new MailboxCountProbe("Spam", 4));
+        }
+    }
+
+    private static final class MultiSourceRecordingMailSourceClient extends RecordingMailSourceClient {
+        private final java.util.List<String> fetchedSourceIds = new java.util.ArrayList<>();
+
+        @Override
+        public List<dev.inboxbridge.domain.FetchedMessage> fetch(RuntimeEmailAccount bridge, int fetchWindow) {
+            lastFetchWindow = fetchWindow;
+            fetchedSourceIds.add(bridge.id());
+            return List.of(new FetchedMessage(
+                    bridge.id(),
+                    bridge.id() + ":message-1",
+                    java.util.Optional.of("<" + bridge.id() + "@example.com>"),
+                    Instant.parse("2026-03-31T10:00:00Z"),
+                    bridge.id().getBytes(java.nio.charset.StandardCharsets.UTF_8)));
         }
     }
 
@@ -629,6 +809,31 @@ class PollingServiceTest {
         @Override
         public MailImportResponse importMessage(MailDestinationTarget target, RuntimeEmailAccount bridge, dev.inboxbridge.domain.FetchedMessage message) {
             return new MailImportResponse("imported-1", null);
+        }
+    }
+
+    private static final class RecordingDestinationMailboxService implements MailDestinationService {
+        private final java.util.List<String> importRoutes = new java.util.ArrayList<>();
+
+        @Override
+        public boolean supports(MailDestinationTarget target) {
+            return true;
+        }
+
+        @Override
+        public boolean isLinked(MailDestinationTarget target) {
+            return true;
+        }
+
+        @Override
+        public String notLinkedMessage(MailDestinationTarget target) {
+            return GmailApiMailDestinationService.GMAIL_ACCOUNT_NOT_LINKED_MESSAGE;
+        }
+
+        @Override
+        public MailImportResponse importMessage(MailDestinationTarget target, RuntimeEmailAccount bridge, FetchedMessage message) {
+            importRoutes.add(bridge.id() + "->" + target.subjectKey());
+            return new MailImportResponse(bridge.id() + ":imported", null);
         }
     }
 

@@ -100,6 +100,7 @@ public class AuthResource {
     public AuthUiOptionsResponse options() {
         return new AuthUiOptionsResponse(
                 applicationModeService.multiUserEnabled(),
+                appUserService.bootstrapLoginPrefillEnabled(),
                 microsoftOAuthService.clientConfigured(),
                 systemOAuthAppSettingsService.googleClientConfigured(),
                 authSecuritySettingsService.effectiveSettings().registrationChallengeEnabled(),

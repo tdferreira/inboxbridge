@@ -34,6 +34,7 @@ import dev.inboxbridge.service.OAuthProviderRegistryService;
 import dev.inboxbridge.service.PasskeyService;
 import dev.inboxbridge.service.RemoteSessionService;
 import dev.inboxbridge.service.RegistrationChallengeService;
+import dev.inboxbridge.service.SessionClientInfoService;
 import dev.inboxbridge.service.SystemOAuthAppSettingsService;
 import dev.inboxbridge.service.UserSessionService;
 import io.vertx.core.http.HttpServerRequest;
@@ -83,6 +84,7 @@ class AuthResourceTest {
     void optionsReturnsSingleUserSetting() {
         AuthResource resource = new AuthResource();
         resource.applicationModeService = new FakeApplicationModeService(false);
+        resource.appUserService = new FakeAppUserService(false);
         resource.microsoftOAuthService = new FakeMicrosoftOAuthService(false);
         resource.systemOAuthAppSettingsService = new FakeSystemOAuthAppSettingsService(false);
         resource.oAuthProviderRegistryService = new FakeOAuthProviderRegistryService();
@@ -92,10 +94,27 @@ class AuthResourceTest {
         AuthUiOptionsResponse response = resource.options();
 
         assertEquals(false, response.multiUserEnabled());
+        assertEquals(false, response.bootstrapLoginPrefillEnabled());
         assertEquals(false, response.microsoftOAuthAvailable());
         assertEquals(false, response.googleOAuthAvailable());
         assertEquals(false, response.registrationChallengeEnabled());
         assertEquals("ALTCHA", response.registrationChallengeProvider());
+    }
+
+    @Test
+    void optionsCanExposeBootstrapPrefillWhenStillSafe() {
+        AuthResource resource = new AuthResource();
+        resource.applicationModeService = new FakeApplicationModeService(true);
+        resource.appUserService = new FakeAppUserService(true);
+        resource.microsoftOAuthService = new FakeMicrosoftOAuthService(false);
+        resource.systemOAuthAppSettingsService = new FakeSystemOAuthAppSettingsService(false);
+        resource.oAuthProviderRegistryService = new FakeOAuthProviderRegistryService();
+        resource.registrationChallengeService = new FakeRegistrationChallengeService(false);
+        resource.authSecuritySettingsService = new FakeAuthSecuritySettingsService(false);
+
+        AuthUiOptionsResponse response = resource.options();
+
+        assertEquals(true, response.bootstrapLoginPrefillEnabled());
     }
 
     @Test
@@ -159,6 +178,7 @@ class AuthResourceTest {
         resource.userSessionService = new FakeUserSessionService();
         resource.remoteSessionService = new FakeRemoteSessionService();
         resource.geoIpLocationService = new FakeGeoIpLocationService(true);
+        resource.sessionClientInfoService = new SessionClientInfoService();
 
         AccountSessionsResponse response = resource.sessions();
 
@@ -426,6 +446,19 @@ class AuthResourceTest {
         @Override
         public boolean multiUserEnabled() {
             return enabled;
+        }
+    }
+
+    private static final class FakeAppUserService extends AppUserService {
+        private final boolean bootstrapPrefillEnabled;
+
+        private FakeAppUserService(boolean bootstrapPrefillEnabled) {
+            this.bootstrapPrefillEnabled = bootstrapPrefillEnabled;
+        }
+
+        @Override
+        public boolean bootstrapLoginPrefillEnabled() {
+            return bootstrapPrefillEnabled;
         }
     }
 

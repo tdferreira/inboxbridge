@@ -159,6 +159,17 @@ public class AppUserService {
         return user != null && user.passwordHash != null && !user.passwordHash.isBlank();
     }
 
+    public boolean bootstrapLoginPrefillEnabled() {
+        return repository.findByUsername("admin")
+                .filter(user -> user.role == AppUser.Role.ADMIN)
+                .filter(user -> user.active && user.approved && !user.disabledBySingleUserMode)
+                .filter(user -> user.mustChangePassword)
+                .filter(this::hasPassword)
+                .filter(user -> passwordMatches(user, "nimda"))
+                .filter(user -> passkeyCount(user.id) == 0)
+                .isPresent();
+    }
+
     public boolean requiresPasskey(AppUser user) {
         return user != null && user.id != null && userPasskeyRepository.countByUserId(user.id) > 0;
     }

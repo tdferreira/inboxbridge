@@ -41,6 +41,35 @@ class UserPollingSettingsServiceTest {
     }
 
     @Test
+    void effectiveSettingsForUserInheritGlobalValuesWhenOnlyOneFieldIsOverridden() {
+        UserPollingSettingsService service = service();
+        service.repository.persist(storedSetting(7L, null, "2m", null));
+
+        PollingSettingsService.EffectivePollingSettings effective = service.effectiveSettingsForUser(7L);
+
+        assertEquals(true, effective.pollEnabled());
+        assertEquals("2m", effective.pollIntervalText());
+        assertEquals(Duration.ofMinutes(2), effective.pollInterval());
+        assertEquals(50, effective.fetchWindow());
+    }
+
+    @Test
+    void updateClearsUserOverridesWhenRequestUsesNulls() {
+        UserPollingSettingsService service = service();
+        AppUser user = user(7L);
+        service.update(user, new UpdateUserPollingSettingsRequest(Boolean.FALSE, "2m", Integer.valueOf(20)));
+
+        var view = service.update(user, new UpdateUserPollingSettingsRequest(null, null, null));
+
+        assertEquals(null, view.pollEnabledOverride());
+        assertEquals(null, view.pollIntervalOverride());
+        assertEquals(null, view.fetchWindowOverride());
+        assertEquals(true, view.effectivePollEnabled());
+        assertEquals("5m", view.effectivePollInterval());
+        assertEquals(50, view.effectiveFetchWindow());
+    }
+
+    @Test
     void invalidFetchWindowIsRejected() {
         UserPollingSettingsService service = service();
 
@@ -63,6 +92,15 @@ class UserPollingSettingsServiceTest {
         user.id = id;
         user.username = "user-" + id;
         return user;
+    }
+
+    private UserPollingSetting storedSetting(Long userId, Boolean enabled, String interval, Integer fetchWindow) {
+        UserPollingSetting setting = new UserPollingSetting();
+        setting.userId = userId;
+        setting.pollEnabledOverride = enabled;
+        setting.pollIntervalOverride = interval;
+        setting.fetchWindowOverride = fetchWindow;
+        return setting;
     }
 
     private static final class FakePollingSettingsService extends PollingSettingsService {

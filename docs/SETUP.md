@@ -52,6 +52,8 @@ Bootstrap admin credentials:
 - username: `admin`
 - password: `nimda`
 
+The login screen only prefills those bootstrap credentials while the original bootstrap admin is still untouched and still required to change that default password. Once the password changes or a passkey is added, the UI stops prefilling them.
+
 ## Google Cloud Setup For Gmail API
 
 If you want InboxBridge to use the Gmail API, you must first register this application in Google Cloud.

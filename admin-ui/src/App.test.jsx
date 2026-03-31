@@ -95,7 +95,7 @@ describe('App', () => {
     expect(screen.queryByText('Signed in with passkey.')).not.toBeInTheDocument()
   })
 
-  it('automatically captures browser-reported device location for the current admin session', async () => {
+  it('automatically captures browser-reported device location for the current admin session when permission is already granted', async () => {
     Object.assign(navigator, {
       geolocation: {
         getCurrentPosition: vi.fn((success) => success({
@@ -105,6 +105,9 @@ describe('App', () => {
             accuracy: 25
           }
         }))
+      },
+      permissions: {
+        query: vi.fn().mockResolvedValue({ state: 'granted' })
       }
     })
 
@@ -176,6 +179,129 @@ describe('App', () => {
     await waitFor(() => expect(fetchMock).toHaveBeenCalledWith('/api/auth/session/device-location', expect.any(Object)))
   })
 
+  it('captures browser-reported device location after an explicit button click when permission still needs a user gesture', async () => {
+    Object.assign(navigator, {
+      geolocation: {
+        getCurrentPosition: vi.fn((success) => success({
+          coords: {
+            latitude: 38.7223,
+            longitude: -9.1393,
+            accuracy: 25
+          }
+        }))
+      }
+    })
+
+    const baseFetch = createWorkspaceRouteFetch({
+      session: {
+        id: 21,
+        username: 'alice',
+        role: 'USER',
+        approved: true,
+        mustChangePassword: false,
+        passkeyCount: 0,
+        passwordConfigured: true,
+        deviceLocationCaptured: false
+      }
+    })
+
+    const fetchMock = vi.fn((input, init = {}) => {
+      if (String(input) === '/api/auth/session/device-location') {
+        return jsonResponse({})
+      }
+      return baseFetch(input, init)
+    })
+    vi.stubGlobal('fetch', fetchMock)
+
+    render(<App />)
+
+    expect(fetchMock).not.toHaveBeenCalledWith('/api/auth/session/device-location', expect.any(Object))
+    fireEvent.click(await screen.findByRole('button', { name: 'Share Device Location' }))
+
+    await waitFor(() => expect(fetchMock).toHaveBeenCalledWith('/api/auth/session/device-location', expect.any(Object)))
+  })
+
+  it('keeps layout editing active after moving a section from the workspace controls', async () => {
+    const fetchMock = createWorkspaceRouteFetch({
+      session: {
+        id: 30,
+        username: 'alice',
+        role: 'USER',
+        approved: true,
+        mustChangePassword: false,
+        passkeyCount: 0,
+        passwordConfigured: true,
+        deviceLocationCaptured: true
+      },
+      uiPreferences: {
+        persistLayout: true
+      }
+    })
+
+    vi.stubGlobal('fetch', fetchMock)
+
+    const { container } = render(<App />)
+
+    fireEvent.click(await screen.findByRole('button', { name: 'Preferences' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Edit Layout' }))
+
+    await waitFor(() => {
+      expect(container.querySelector('.hero-layout-editing-dock')).toBeInTheDocument()
+    })
+
+    const moveButtons = Array.from(container.querySelectorAll('.workspace-section-window-button'))
+    const enabledMoveButton = moveButtons.find((button) => !button.disabled)
+
+    expect(enabledMoveButton).toBeTruthy()
+    fireEvent.click(enabledMoveButton)
+
+    await waitFor(() => {
+      expect(container.querySelector('.hero-layout-editing-dock')).toBeInTheDocument()
+    })
+  })
+
+  it('moves the remote control section through the layout editor even for older saved layouts', async () => {
+    const fetchMock = createWorkspaceRouteFetch({
+      session: {
+        id: 31,
+        username: 'alice',
+        role: 'USER',
+        approved: true,
+        mustChangePassword: false,
+        passkeyCount: 0,
+        passwordConfigured: true,
+        deviceLocationCaptured: true
+      },
+      uiPreferences: {
+        persistLayout: true,
+        userSectionOrder: ['quickSetup', 'destination', 'userPolling', 'userStats', 'sourceEmailAccounts']
+      }
+    })
+
+    vi.stubGlobal('fetch', fetchMock)
+
+    render(<App />)
+
+    fireEvent.click(await screen.findByRole('button', { name: 'Preferences' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Edit Layout' }))
+
+    const remoteHeading = await screen.findByText('Remote control')
+    const remoteWindow = await waitFor(() => {
+      const node = remoteHeading.closest('[data-workspace-section-window="true"]')
+      expect(node).toBeTruthy()
+      return node
+    })
+    const moveUpButton = remoteWindow.querySelectorAll('.workspace-section-window-button')[0]
+
+    fireEvent.click(moveUpButton)
+
+    await waitFor(() => {
+      const windows = Array.from(document.querySelectorAll('[data-workspace-section-window="true"]'))
+      const order = windows.map((windowNode) => windowNode.getAttribute('data-section-id'))
+      expect(order.indexOf('remoteControl')).toBeLessThan(order.indexOf('sourceEmailAccounts'))
+    })
+  })
+
   it('falls back to a lower-accuracy browser location lookup when the first attempt fails', async () => {
     const getCurrentPosition = vi.fn()
       .mockImplementationOnce((success, reject) => reject({ code: 2 }))
@@ -190,6 +316,9 @@ describe('App', () => {
     Object.assign(navigator, {
       geolocation: {
         getCurrentPosition
+      },
+      permissions: {
+        query: vi.fn().mockResolvedValue({ state: 'granted' })
       }
     })
 
@@ -232,7 +361,7 @@ describe('App', () => {
     )
   })
 
-  it('shows actionable guidance when the browser cannot determine a location', async () => {
+  it('shows actionable guidance when the browser cannot determine a location after an explicit request', async () => {
     Object.assign(navigator, {
       geolocation: {
         getCurrentPosition: vi.fn((success, reject) => reject({ code: 2, message: 'Position unavailable' }))
@@ -256,6 +385,7 @@ describe('App', () => {
 
     render(<App />)
 
+    fireEvent.click(await screen.findByRole('button', { name: 'Share Device Location' }))
     expect(await screen.findByText(/could not determine its current location/i)).toBeInTheDocument()
     expect(screen.getByText(/os\/browser location services/i)).toBeInTheDocument()
     expect(screen.getByText(/position unavailable/i)).toBeInTheDocument()

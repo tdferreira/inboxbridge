@@ -15,6 +15,7 @@ import dev.inboxbridge.service.AppUserService;
 import dev.inboxbridge.service.GeoIpLocationService;
 import dev.inboxbridge.service.PasskeyService;
 import dev.inboxbridge.service.RemoteSessionService;
+import dev.inboxbridge.service.SessionClientInfoService;
 import dev.inboxbridge.service.UserSessionService;
 import dev.inboxbridge.service.UserGmailConfigService;
 import dev.inboxbridge.service.UserMailDestinationConfigService;
@@ -63,6 +64,9 @@ public class AccountResource {
 
     @Inject
     GeoIpLocationService geoIpLocationService;
+
+    @Inject
+    SessionClientInfoService sessionClientInfoService;
 
     @POST
     @Path("/password")
@@ -190,9 +194,12 @@ public class AccountResource {
     }
 
     private AccountSessionView toSessionView(dev.inboxbridge.persistence.UserSession session, Long currentSessionId, Instant now) {
+        SessionClientInfoService.SessionClientInfo clientInfo = sessionClientInfoService.describe(session.userAgent);
         return new AccountSessionView(
                 session.id,
                 "BROWSER",
+                clientInfo.browserLabel(),
+                clientInfo.deviceLabel(),
                 session.clientIp,
                 session.locationLabel,
                 session.deviceLocationLabel,
@@ -208,9 +215,12 @@ public class AccountResource {
     }
 
     private AccountSessionView toRemoteSessionView(dev.inboxbridge.persistence.RemoteSession session, Instant now) {
+        SessionClientInfoService.SessionClientInfo clientInfo = sessionClientInfoService.describe(session.userAgent);
         return new AccountSessionView(
                 session.id,
                 "REMOTE",
+                clientInfo.browserLabel(),
+                clientInfo.deviceLabel(),
                 session.clientIp,
                 session.locationLabel,
                 session.deviceLocationLabel,

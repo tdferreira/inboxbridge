@@ -1,9 +1,10 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { apiErrorText } from './api'
 import { languageOptions, normalizeLocale, translate } from './i18n'
 import { pollErrorNotification, translatedNotification } from './notifications'
 import {
-  applyLayoutPreferences,
+    applyLayoutPreferences,
+  applyOrderedSectionIds,
   captureLayoutPreferences,
   DEFAULT_UI_PREFERENCES,
   hasLayoutPreferenceChanges,
@@ -17,6 +18,26 @@ export function useWorkspacePreferencesController({ language, pushNotification, 
   const [showNotificationsDialog, setShowNotificationsDialog] = useState(false)
   const [dragState, setDragState] = useState(null)
   const [layoutEditSnapshot, setLayoutEditSnapshot] = useState(null)
+  const uiPreferencesRef = useRef(DEFAULT_UI_PREFERENCES)
+  const layoutEditSnapshotRef = useRef(null)
+
+  function commitUiPreferences(nextPreferences) {
+    uiPreferencesRef.current = nextPreferences
+    setUiPreferences(nextPreferences)
+  }
+
+  function commitLayoutEditSnapshot(nextSnapshot) {
+    layoutEditSnapshotRef.current = nextSnapshot
+    setLayoutEditSnapshot(nextSnapshot)
+  }
+
+  function normalizeUiPreferencesWithTransientState(nextPreferences) {
+    const normalized = normalizeUiPreferences(nextPreferences)
+    return {
+      ...normalized,
+      layoutEditEnabled: nextPreferences.layoutEditEnabled ?? uiPreferencesRef.current.layoutEditEnabled
+    }
+  }
 
   const selectableLanguages = useMemo(() => languageOptions.map((value) => ({
     value,
@@ -38,8 +59,11 @@ export function useWorkspacePreferencesController({ language, pushNotification, 
           throw new Error(await apiErrorText(response, translate(language, 'errors.saveLayoutPreference')))
         }
         const payload = await response.json()
-        const normalized = normalizeUiPreferences(payload)
-        setUiPreferences(normalized)
+        const normalized = normalizeUiPreferencesWithTransientState({
+          ...payload,
+          layoutEditEnabled: nextPreferences.layoutEditEnabled
+        })
+        commitUiPreferences(normalized)
         setLanguage(normalized.language)
       } catch (err) {
         pushNotification({
@@ -57,14 +81,17 @@ export function useWorkspacePreferencesController({ language, pushNotification, 
       return
     }
     const nextUiPreferences = normalizeUiPreferences(payload)
-    setUiPreferences(nextUiPreferences)
+    if (layoutEditSnapshotRef.current) {
+      nextUiPreferences.layoutEditEnabled = uiPreferencesRef.current.layoutEditEnabled
+    }
+    commitUiPreferences(nextUiPreferences)
     setLanguage(nextUiPreferences.language)
     setUiPreferencesLoadedForUserId(userId)
   }
 
   async function updateUiPreferencesLocally(nextPreferences) {
-    const normalized = normalizeUiPreferences(nextPreferences)
-    setUiPreferences(normalized)
+    const normalized = normalizeUiPreferencesWithTransientState(nextPreferences)
+    commitUiPreferences(normalized)
     setLanguage(normalized.language)
     if (normalized.persistLayout) {
       await persistUiPreferences(normalized)
@@ -72,8 +99,10 @@ export function useWorkspacePreferencesController({ language, pushNotification, 
   }
 
   async function moveSection(workspaceKey, sectionId, direction) {
+    const currentPreferences = uiPreferencesRef.current
+    const currentLayoutEditSnapshot = layoutEditSnapshotRef.current
     const preferenceKey = workspaceKey === 'admin' ? 'adminSectionOrder' : 'userSectionOrder'
-    const currentOrder = [...uiPreferences[preferenceKey]]
+    const currentOrder = applyOrderedSectionIds(DEFAULT_UI_PREFERENCES[preferenceKey], currentPreferences[preferenceKey])
     const currentIndex = currentOrder.indexOf(sectionId)
     if (currentIndex < 0) {
       return
@@ -85,14 +114,17 @@ export function useWorkspacePreferencesController({ language, pushNotification, 
     const nextOrder = [...currentOrder]
     ;[nextOrder[currentIndex], nextOrder[targetIndex]] = [nextOrder[targetIndex], nextOrder[currentIndex]]
     await updateUiPreferencesLocally({
-      ...uiPreferences,
+      ...currentPreferences,
+      layoutEditEnabled: currentPreferences.layoutEditEnabled || currentLayoutEditSnapshot != null,
       [preferenceKey]: nextOrder
     })
   }
 
   async function reorderSections(workspaceKey, draggedId, targetIndex) {
+    const currentPreferences = uiPreferencesRef.current
+    const currentLayoutEditSnapshot = layoutEditSnapshotRef.current
     const preferenceKey = workspaceKey === 'admin' ? 'adminSectionOrder' : 'userSectionOrder'
-    const currentOrder = [...uiPreferences[preferenceKey]]
+    const currentOrder = applyOrderedSectionIds(DEFAULT_UI_PREFERENCES[preferenceKey], currentPreferences[preferenceKey])
     const currentIndex = currentOrder.indexOf(draggedId)
     if (currentIndex < 0) {
       return
@@ -102,28 +134,31 @@ export function useWorkspacePreferencesController({ language, pushNotification, 
     const adjustedTargetIndex = currentIndex < boundedTargetIndex ? boundedTargetIndex - 1 : boundedTargetIndex
     currentOrder.splice(adjustedTargetIndex, 0, movedSection)
     await updateUiPreferencesLocally({
-      ...uiPreferences,
+      ...currentPreferences,
+      layoutEditEnabled: currentPreferences.layoutEditEnabled || currentLayoutEditSnapshot != null,
       [preferenceKey]: currentOrder
     })
   }
 
   async function resetLayoutPreferences() {
+    const currentPreferences = uiPreferencesRef.current
     await updateUiPreferencesLocally({
-      ...uiPreferences,
+      ...currentPreferences,
       ...DEFAULT_UI_PREFERENCES,
-      persistLayout: uiPreferences.persistLayout,
+      persistLayout: currentPreferences.persistLayout,
       language
     })
     pushNotification({ message: translatedNotification('notifications.layoutReset'), tone: 'success' })
   }
 
   async function toggleSection(sectionKey, onExpand) {
-    const wasCollapsed = uiPreferences[sectionKey]
+    const currentPreferences = uiPreferencesRef.current
+    const wasCollapsed = currentPreferences[sectionKey]
     const nextPreferences = {
-      ...uiPreferences,
-      [sectionKey]: !uiPreferences[sectionKey]
+      ...currentPreferences,
+      [sectionKey]: !currentPreferences[sectionKey]
     }
-    setUiPreferences(nextPreferences)
+    commitUiPreferences(nextPreferences)
     if (nextPreferences.persistLayout) {
       await persistUiPreferences(nextPreferences)
     }
@@ -133,37 +168,40 @@ export function useWorkspacePreferencesController({ language, pushNotification, 
   }
 
   async function expandSection(sectionKey) {
-    if (!uiPreferences[sectionKey]) {
+    const currentPreferences = uiPreferencesRef.current
+    if (!currentPreferences[sectionKey]) {
       return
     }
     const nextPreferences = {
-      ...uiPreferences,
+      ...currentPreferences,
       [sectionKey]: false
     }
-    setUiPreferences(nextPreferences)
+    commitUiPreferences(nextPreferences)
     if (nextPreferences.persistLayout) {
       await persistUiPreferences(nextPreferences)
     }
   }
 
   function handlePersistLayoutChange(enabled) {
+    const currentPreferences = uiPreferencesRef.current
     const nextPreferences = {
-      ...uiPreferences,
+      ...currentPreferences,
       persistLayout: enabled
     }
-    setUiPreferences(nextPreferences)
+    commitUiPreferences(nextPreferences)
     void persistUiPreferences(nextPreferences)
   }
 
   function handleLayoutEditChange(enabled) {
-    if (enabled && !layoutEditSnapshot) {
-      setLayoutEditSnapshot(captureLayoutPreferences(uiPreferences))
+    const currentPreferences = uiPreferencesRef.current
+    if (enabled && !layoutEditSnapshotRef.current) {
+      commitLayoutEditSnapshot(captureLayoutPreferences(currentPreferences))
     }
     const nextPreferences = {
-      ...uiPreferences,
+      ...currentPreferences,
       layoutEditEnabled: enabled
     }
-    setUiPreferences(nextPreferences)
+    commitUiPreferences(nextPreferences)
     if (!enabled) {
       void persistUiPreferences(nextPreferences)
     }
@@ -175,35 +213,38 @@ export function useWorkspacePreferencesController({ language, pushNotification, 
   }
 
   async function commitLayoutEditingChanges() {
+    const currentPreferences = uiPreferencesRef.current
     const nextPreferences = {
-      ...uiPreferences,
+      ...currentPreferences,
       layoutEditEnabled: false
     }
     setDragState(null)
-    setLayoutEditSnapshot(null)
-    setUiPreferences(nextPreferences)
+    commitLayoutEditSnapshot(null)
+    commitUiPreferences(nextPreferences)
     await persistUiPreferences(nextPreferences)
   }
 
   async function discardLayoutEditingChanges() {
+    const currentPreferences = uiPreferencesRef.current
     const restoredPreferences = applyLayoutPreferences({
-      ...uiPreferences,
+      ...currentPreferences,
       layoutEditEnabled: false
-    }, layoutEditSnapshot)
+    }, layoutEditSnapshotRef.current)
     setDragState(null)
-    setLayoutEditSnapshot(null)
-    setUiPreferences(restoredPreferences)
+    commitLayoutEditSnapshot(null)
+    commitUiPreferences(restoredPreferences)
     await persistUiPreferences(restoredPreferences)
   }
 
   function handleQuickSetupVisibilityChange(visible, allStepsComplete) {
+    const currentPreferences = uiPreferencesRef.current
     const nextPreferences = {
-      ...uiPreferences,
+      ...currentPreferences,
       quickSetupPinnedVisible: visible,
       quickSetupDismissed: visible ? false : allStepsComplete,
       quickSetupCollapsed: visible ? false : true
     }
-    setUiPreferences(nextPreferences)
+    commitUiPreferences(nextPreferences)
     if (nextPreferences.persistLayout) {
       void persistUiPreferences(nextPreferences)
     }
@@ -211,22 +252,23 @@ export function useWorkspacePreferencesController({ language, pushNotification, 
 
   function handleLanguageChange(nextLanguage) {
     const normalizedLanguage = normalizeLocale(nextLanguage)
+    const currentPreferences = uiPreferencesRef.current
     const nextPreferences = {
-      ...uiPreferences,
+      ...currentPreferences,
       language: normalizedLanguage
     }
-    setUiPreferences(nextPreferences)
+    commitUiPreferences(nextPreferences)
     setLanguage(normalizedLanguage)
     void persistUiPreferences(nextPreferences)
   }
 
   function resetLayoutState() {
-    setUiPreferences(DEFAULT_UI_PREFERENCES)
+    commitUiPreferences(DEFAULT_UI_PREFERENCES)
     setUiPreferencesLoadedForUserId(null)
     setShowPreferencesDialog(false)
     setShowNotificationsDialog(false)
     setDragState(null)
-    setLayoutEditSnapshot(null)
+    commitLayoutEditSnapshot(null)
   }
 
   useEffect(() => {

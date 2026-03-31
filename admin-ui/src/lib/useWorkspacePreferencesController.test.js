@@ -135,6 +135,10 @@ describe('useWorkspacePreferencesController', () => {
       result.current.startLayoutEditingFromPreferences()
     })
 
+    await waitFor(() => {
+      expect(result.current.uiPreferences.layoutEditEnabled).toBe(true)
+    })
+
     await act(async () => {
       await result.current.moveSection('user', 'sourceEmailAccounts', 'up')
     })
@@ -145,7 +149,8 @@ describe('useWorkspacePreferencesController', () => {
         'destination',
         'userPolling',
         'sourceEmailAccounts',
-        'userStats'
+        'userStats',
+        'remoteControl'
       ])
     })
 
@@ -161,5 +166,115 @@ describe('useWorkspacePreferencesController', () => {
       'userStats',
       'sourceEmailAccounts'
     ])
+  })
+
+  it('keeps layout editing active while moving sections during an edit session', async () => {
+    fetch.mockImplementation(async (_url, options = {}) => createFetchResponse({
+      ...(options.body ? JSON.parse(options.body) : {}),
+      persistLayout: true
+    }))
+
+    const { result } = renderController()
+
+    act(() => {
+      result.current.applyLoadedUiPreferences({
+        persistLayout: true,
+        userSectionOrder: ['quickSetup', 'destination', 'userPolling', 'userStats', 'sourceEmailAccounts']
+      }, 42)
+      result.current.startLayoutEditingFromPreferences()
+    })
+
+    await act(async () => {
+      await result.current.moveSection('user', 'sourceEmailAccounts', 'up')
+    })
+
+    expect(result.current.uiPreferences.layoutEditEnabled).toBe(true)
+  })
+
+  it('can move the remote control section even when older saved preferences did not include it yet', async () => {
+    fetch.mockImplementation(async (_url, options = {}) => createFetchResponse({
+      ...(options.body ? JSON.parse(options.body) : {}),
+      persistLayout: true
+    }))
+
+    const { result } = renderController()
+
+    act(() => {
+      result.current.applyLoadedUiPreferences({
+        persistLayout: true,
+        userSectionOrder: ['quickSetup', 'destination', 'userPolling', 'userStats', 'sourceEmailAccounts']
+      }, 42)
+      result.current.startLayoutEditingFromPreferences()
+    })
+
+    await act(async () => {
+      await result.current.moveSection('user', 'remoteControl', 'up')
+    })
+
+    expect(result.current.uiPreferences.userSectionOrder).toEqual([
+      'quickSetup',
+      'destination',
+      'userPolling',
+      'userStats',
+      'remoteControl',
+      'sourceEmailAccounts'
+    ])
+    expect(result.current.uiPreferences.layoutEditEnabled).toBe(true)
+  })
+
+  it('reorders the first section into the second position when dropped into the next insertion slot', async () => {
+    fetch.mockImplementation(async (_url, options = {}) => createFetchResponse({
+      ...(options.body ? JSON.parse(options.body) : {}),
+      persistLayout: true
+    }))
+
+    const { result } = renderController()
+
+    act(() => {
+      result.current.applyLoadedUiPreferences({
+        persistLayout: true,
+        userSectionOrder: ['quickSetup', 'destination', 'userPolling']
+      }, 42)
+      result.current.startLayoutEditingFromPreferences()
+    })
+
+    await act(async () => {
+      await result.current.reorderSections('user', 'quickSetup', 2)
+    })
+
+    expect(result.current.uiPreferences.userSectionOrder.slice(0, 3)).toEqual([
+      'destination',
+      'quickSetup',
+      'userPolling'
+    ])
+    expect(result.current.uiPreferences.layoutEditEnabled).toBe(true)
+  })
+
+  it('reorders the last section into the previous position when dropped into the prior insertion slot', async () => {
+    fetch.mockImplementation(async (_url, options = {}) => createFetchResponse({
+      ...(options.body ? JSON.parse(options.body) : {}),
+      persistLayout: true
+    }))
+
+    const { result } = renderController()
+
+    act(() => {
+      result.current.applyLoadedUiPreferences({
+        persistLayout: true,
+        userSectionOrder: ['quickSetup', 'destination', 'userPolling']
+      }, 42)
+      result.current.startLayoutEditingFromPreferences()
+    })
+
+    await act(async () => {
+      await result.current.reorderSections('user', 'userPolling', 1)
+    })
+
+    expect(result.current.uiPreferences.userSectionOrder.slice(0, 3)).toEqual([
+      'quickSetup',
+      'userPolling',
+      'destination'
+    ])
+    expect(result.current.uiPreferences.layoutEditEnabled).toBe(true)
   })
 })

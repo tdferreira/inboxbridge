@@ -30,6 +30,29 @@ class SourcePollingSettingsServiceTest {
     }
 
     @Test
+    void effectiveSettingsForSystemSourceFallBackToGlobalPolling() {
+        SourcePollingSettingsService service = service();
+
+        var effective = service.effectiveSettingsFor(systemBridge());
+
+        assertEquals(true, effective.pollEnabled());
+        assertEquals("5m", effective.pollIntervalText());
+        assertEquals(50, effective.fetchWindow());
+    }
+
+    @Test
+    void sourceOverridesTakePrecedenceOverUserAndGlobalSettingsPerField() {
+        SourcePollingSettingsService service = service();
+        service.repository.persist(storedSetting("fetcher-1", Boolean.TRUE, null, Integer.valueOf(33)));
+
+        var effective = service.effectiveSettingsFor(runtimeBridge());
+
+        assertEquals(true, effective.pollEnabled());
+        assertEquals("7m", effective.pollIntervalText());
+        assertEquals(33, effective.fetchWindow());
+    }
+
+    @Test
     void updateStoresPerSourceOverrides() {
         SourcePollingSettingsService service = service();
 
@@ -59,6 +82,11 @@ class SourcePollingSettingsServiceTest {
             @Override
             public Optional<RuntimeEmailAccount> findAccessibleForUser(AppUser actor, String sourceId) {
                 return "fetcher-1".equals(sourceId) ? Optional.of(runtimeBridge()) : Optional.empty();
+            }
+
+            @Override
+            public Optional<RuntimeEmailAccount> findSystemBridge(String sourceId) {
+                return "system-fetcher".equals(sourceId) ? Optional.of(systemBridge()) : Optional.empty();
             }
         };
         service.pollingSettingsService = new PollingSettingsService() {
@@ -103,6 +131,38 @@ class SourcePollingSettingsServiceTest {
                 false,
                 Optional.of("Imported/Test"),
                 null);
+    }
+
+    private RuntimeEmailAccount systemBridge() {
+        return new RuntimeEmailAccount(
+                "system-fetcher",
+                "SYSTEM",
+                null,
+                "system",
+                true,
+                InboxBridgeConfig.Protocol.IMAP,
+                "imap.system.example.com",
+                993,
+                true,
+                InboxBridgeConfig.AuthMethod.PASSWORD,
+                InboxBridgeConfig.OAuthProvider.NONE,
+                "system@example.com",
+                "secret",
+                "",
+                Optional.of("INBOX"),
+                false,
+                Optional.empty(),
+                null);
+    }
+
+    private SourcePollingSetting storedSetting(String sourceId, Boolean enabled, String interval, Integer fetchWindow) {
+        SourcePollingSetting setting = new SourcePollingSetting();
+        setting.sourceId = sourceId;
+        setting.ownerUserId = 7L;
+        setting.pollEnabledOverride = enabled;
+        setting.pollIntervalOverride = interval;
+        setting.fetchWindowOverride = fetchWindow;
+        return setting;
     }
 
     private static final class InMemorySourcePollingSettingRepository extends SourcePollingSettingRepository {

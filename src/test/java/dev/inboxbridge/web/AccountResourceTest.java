@@ -11,6 +11,7 @@ import dev.inboxbridge.persistence.AppUser;
 import dev.inboxbridge.persistence.RemoteSession;
 import dev.inboxbridge.security.CurrentUserContext;
 import dev.inboxbridge.service.AppUserService;
+import dev.inboxbridge.service.SessionClientInfoService;
 import dev.inboxbridge.service.RemoteSessionService;
 import dev.inboxbridge.service.UserGmailConfigService;
 import jakarta.ws.rs.BadRequestException;
@@ -101,11 +102,14 @@ class AccountResourceTest {
         resource.userSessionService = new FakeAppUserSessionService();
         resource.remoteSessionService = new FakeRemoteSessionService();
         resource.geoIpLocationService = new FakeGeoIpLocationService(true);
+        resource.sessionClientInfoService = new SessionClientInfoService();
 
         var response = resource.sessions();
 
         assertEquals(2, response.activeSessions().size());
         assertEquals("REMOTE", response.activeSessions().get(0).sessionType());
+        assertEquals("Safari", response.activeSessions().get(0).browserLabel());
+        assertEquals("Mobile phone (iOS)", response.activeSessions().get(0).deviceLabel());
         assertEquals("38.7223, -9.1393 (±25 m)", response.activeSessions().get(0).deviceLocationLabel());
         assertEquals(38.7223, response.activeSessions().get(0).deviceLatitude());
         assertEquals(-9.1393, response.activeSessions().get(0).deviceLongitude());
@@ -149,6 +153,7 @@ class AccountResourceTest {
             session.createdAt = java.time.Instant.parse("2026-03-31T09:00:00Z");
             session.lastSeenAt = java.time.Instant.parse("2026-03-31T09:05:00Z");
             session.expiresAt = java.time.Instant.now().plusSeconds(3600);
+            session.userAgent = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/134.0.0.0 Safari/537.36 Edg/134.0.0.0";
             session.deviceLocationLabel = "38.7223, -9.1393 (±25 m)";
             session.deviceLatitude = 38.7223;
             session.deviceLongitude = -9.1393;
@@ -171,6 +176,7 @@ class AccountResourceTest {
             session.createdAt = java.time.Instant.parse("2026-03-31T10:00:00Z");
             session.lastSeenAt = java.time.Instant.parse("2026-03-31T10:05:00Z");
             session.expiresAt = java.time.Instant.now().plusSeconds(7200);
+            session.userAgent = "Mozilla/5.0 (iPhone; CPU iPhone OS 17_4 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.4 Mobile/15E148 Safari/604.1";
             session.deviceLocationLabel = "38.7223, -9.1393 (±25 m)";
             session.deviceLatitude = 38.7223;
             session.deviceLongitude = -9.1393;
