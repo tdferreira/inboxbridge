@@ -45,3 +45,15 @@ export function apiErrorText(response, fallback) {
     }
   })
 }
+
+export async function requestSessionDeviceLocation(payload) {
+  const response = await fetch('/api/auth/session/device-location', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(payload)
+  })
+  if (!response.ok) {
+    throw new Error(await apiErrorText(response, 'Unable to save this device location'))
+  }
+  return null
+}

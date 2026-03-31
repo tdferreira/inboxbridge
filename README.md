@@ -41,6 +41,7 @@ Google help: https://support.google.com/accounts/answer/13533235
 10. Supports per-user poller overrides plus automatic per-source cooldown/backoff when providers start rejecting or throttling requests.
 11. Can run either in single-user mode or multi-user mode, controlled by `.env`.
 12. Exposes a lightweight remote control surface at `/remote` so users can trigger polling from phones or other devices without opening the full admin workspace.
+13. Lets both the main app and `/remote` store an optional browser-reported device location for the current session, separate from Geo-IP, with a guessed place label and maps link in the Sessions view when coordinates are available.
 
 ## What it still does not do
 
@@ -220,6 +221,9 @@ Remote capabilities:
 - when the signed-in account is missing a personal destination mailbox or has no personal source email accounts yet, the remote page pauses there and points the user back to `My InboxBridge` to finish setup first
 - source cards on `/remote` are collapsed by default so polling actions stay compact on phones and tablets, while each source still keeps its individual poll button visible without expanding the card
 - the main `My InboxBridge` workspace now includes a dedicated `Remote control` card that explains the lightweight page and links directly to `/remote`
+- both the main app and `/remote` now expose an explicit opt-in browser location prompt so the current session can record a device-reported location beside the server-side Geo-IP result
+- when a session has browser-reported coordinates, the Sessions tab now tries to infer a human-readable place label from those coordinates and offers an `Open in Maps` link that can hand off to the device's preferred maps app/browser
+- local PWA installation still depends on the browser trusting your HTTPS certificate; an untrusted self-signed certificate can suppress installability even when the manifest and service worker are present
 
 ## Admin UI login
 
@@ -263,6 +267,7 @@ It now includes both full admin-ui browser sessions and `/remote` remote-control
 If the same account signs in somewhere else while this browser is already open, the normal background refresh now raises a warning notification that links directly to the `Sessions` tab.
 If one browser session is revoked from another, the revoked browser now detects the next authenticated `401` response and immediately returns to the login screen instead of staying in a broken authenticated state.
 Approximate session location can now be enabled with a Geo-IP provider chain, but InboxBridge still resolves it only on new sign-ins, caches by IP aggressively, and falls back to the next configured provider only when the primary is down or rate-limited. The default chain is `IPWHOIS -> IPAPI_CO -> IP_API`, with optional `IPINFO_LITE` after that when a token is configured.
+Users can also opt in to sharing the browser/device location for the current session. InboxBridge now attempts to capture that location automatically when a user signs in to either the main app or `/remote`, and still offers a retry action from the `Sessions` tab if no sample was saved yet. The device-reported location is stored separately from Geo-IP and shown alongside it in the shared `Sessions` tab so both signals can be compared rather than one silently replacing the other. When coordinates are present, the UI also tries to reverse-geocode them into a friendlier place label and provides an `Open in Maps` link.
 The admin `Authentication Security` editor now exposes that chain as a primary-provider dropdown plus a tag-style fallback input, and it shows readiness cards with provider docs, terms, and any provider-specific credentials that must be configured before a provider can be enabled.
 The `Quick Setup Guide` can now be hidden once every step is complete, and it automatically comes back if one of those requirements later becomes invalid again.
 

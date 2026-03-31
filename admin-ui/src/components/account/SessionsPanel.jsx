@@ -1,21 +1,32 @@
 import SectionCard from '../common/SectionCard'
 import LoadingButton from '../common/LoadingButton'
+import DeviceLocationValue from './DeviceLocationValue'
 import { authMethodLabel, formatDate } from '../../lib/formatters'
 import { buildRecentSessionTargetId } from '../../lib/sectionTargets'
 import './SessionsPanel.css'
 
 function SessionsPanel({
   activeSessions,
+  currentSessionCanRequestDeviceLocation = false,
+  currentSessionDeviceLocationError = '',
   geoIpConfigured = false,
   locale,
+  onRequestCurrentDeviceLocation,
   onRevokeOtherSessions,
   onRevokeSession,
   recentLogins,
   revokeLoadingId,
   revokeOthersLoading,
+  requestCurrentDeviceLocationLoading = false,
   t
 }) {
   const sessionKindLabel = (session) => t(session.sessionType === 'REMOTE' ? 'sessions.kindRemote' : 'sessions.kindBrowser')
+  const canRequestCurrentDeviceLocation = (session) => (
+    session.current && session.sessionType === 'BROWSER' && !session.deviceLocationCapturedAt && currentSessionCanRequestDeviceLocation
+  )
+  const deviceLocationFallback = (session) => (
+    canRequestCurrentDeviceLocation(session) ? t('sessions.deviceLocationPending') : t('sessions.deviceLocationUnavailable')
+  )
 
   return (
     <SectionCard
@@ -56,8 +67,35 @@ function SessionsPanel({
                 {t('sessions.loginMethod', { value: authMethodLabel(session.loginMethod, locale) })}<br />
                 {t('sessions.ipAddress', { value: session.ipAddress || t('common.unavailable') })}<br />
                 {t('sessions.location', { value: session.locationLabel || t('sessions.locationUnavailable') })}<br />
+                {t('sessions.deviceLocationLabel')}{' '}
+                <DeviceLocationValue
+                  fallbackLabel={session.deviceLocationLabel}
+                  latitude={session.deviceLatitude}
+                  locale={locale}
+                  longitude={session.deviceLongitude}
+                  placeholderLabel={deviceLocationFallback(session)}
+                  t={t}
+                /><br />
+                {t('sessions.deviceLocationCapturedAt', { value: session.deviceLocationCapturedAt ? formatDate(session.deviceLocationCapturedAt, locale) : deviceLocationFallback(session) })}<br />
                 {t('sessions.lastSeen', { value: formatDate(session.lastSeenAt, locale) })}<br />
                 {t('sessions.expiresAt', { value: formatDate(session.expiresAt, locale) })}
+                {canRequestCurrentDeviceLocation(session) ? (
+                  <>
+                    <br />
+                    <LoadingButton
+                      className="secondary session-device-location-action"
+                      isLoading={requestCurrentDeviceLocationLoading}
+                      loadingLabel={t('sessions.captureDeviceLocationLoading')}
+                      onClick={onRequestCurrentDeviceLocation}
+                      type="button"
+                    >
+                      {t('sessions.captureDeviceLocation')}
+                    </LoadingButton>
+                  </>
+                ) : null}
+                {canRequestCurrentDeviceLocation(session) && currentSessionDeviceLocationError ? (
+                  <div className="muted-box utility-prompt-error session-device-location-feedback">{currentSessionDeviceLocationError}</div>
+                ) : null}
               </div>
               {!session.current ? (
                 <LoadingButton
@@ -88,6 +126,16 @@ function SessionsPanel({
                 {t('sessions.loginMethod', { value: authMethodLabel(session.loginMethod, locale) })}<br />
                 {t('sessions.ipAddress', { value: session.ipAddress || t('common.unavailable') })}<br />
                 {t('sessions.location', { value: session.locationLabel || t('sessions.locationUnavailable') })}<br />
+                {t('sessions.deviceLocationLabel')}{' '}
+                <DeviceLocationValue
+                  fallbackLabel={session.deviceLocationLabel}
+                  latitude={session.deviceLatitude}
+                  locale={locale}
+                  longitude={session.deviceLongitude}
+                  placeholderLabel={deviceLocationFallback(session)}
+                  t={t}
+                /><br />
+                {t('sessions.deviceLocationCapturedAt', { value: session.deviceLocationCapturedAt ? formatDate(session.deviceLocationCapturedAt, locale) : deviceLocationFallback(session) })}<br />
                 {t('sessions.sessionStatus', { value: t(session.active ? 'sessions.statusActive' : 'sessions.statusClosed') })}<br />
                 {t('sessions.lastSeen', { value: formatDate(session.lastSeenAt, locale) })}
               </div>

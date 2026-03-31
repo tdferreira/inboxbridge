@@ -54,6 +54,21 @@ public class RemoteSession extends PanacheEntityBase {
     @Column(name = "location_label", length = 160)
     public String locationLabel;
 
+    @Column(name = "device_latitude")
+    public Double deviceLatitude;
+
+    @Column(name = "device_longitude")
+    public Double deviceLongitude;
+
+    @Column(name = "device_accuracy_meters")
+    public Double deviceAccuracyMeters;
+
+    @Column(name = "device_location_label", length = 160)
+    public String deviceLocationLabel;
+
+    @Column(name = "device_location_captured_at")
+    public Instant deviceLocationCapturedAt;
+
     @Column(name = "user_agent", length = 512)
     public String userAgent;
 

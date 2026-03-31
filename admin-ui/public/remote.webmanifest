@@ -1,7 +1,10 @@
 {
+  "id": "/remote",
   "name": "InboxBridge Remote",
   "short_name": "InboxBridge",
+  "description": "Quick remote polling controls for InboxBridge.",
   "start_url": "/remote",
+  "scope": "/remote",
   "display": "standalone",
   "background_color": "#f5f8fc",
   "theme_color": "#1d5fbf",

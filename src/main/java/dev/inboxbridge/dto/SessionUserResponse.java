@@ -7,5 +7,6 @@ public record SessionUserResponse(
         boolean approved,
         boolean mustChangePassword,
         int passkeyCount,
-        boolean passwordConfigured) {
+        boolean passwordConfigured,
+        boolean deviceLocationCaptured) {
 }

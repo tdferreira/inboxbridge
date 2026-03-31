@@ -103,6 +103,27 @@ class RemoteAuthResourceTest {
         assertEquals("ADMIN", payload.role());
     }
 
+    @Test
+    void recordDeviceLocationUsesCurrentRemoteSession() {
+        RemoteAuthResource resource = new RemoteAuthResource();
+        CurrentUserContext context = new CurrentUserContext();
+        AppUser user = new AppUser();
+        user.id = 7L;
+        context.setUser(user);
+        RemoteSession remoteSession = new RemoteSession();
+        remoteSession.id = 12L;
+        context.setRemoteSession(remoteSession);
+        FakeRemoteSessionService remoteSessionService = new FakeRemoteSessionService();
+        resource.currentUserContext = context;
+        resource.remoteSessionService = remoteSessionService;
+
+        Response response = resource.recordDeviceLocation(new dev.inboxbridge.dto.SessionDeviceLocationRequest(38.7223, -9.1393, 25d));
+
+        assertEquals(204, response.getStatus());
+        assertEquals(12L, remoteSessionService.lastLocationSessionId);
+        assertEquals(-9.1393, remoteSessionService.lastLongitude);
+    }
+
     private static final class FakeAuthService extends AuthService {
         private final boolean passkeyRequired;
 
@@ -187,12 +208,21 @@ class RemoteAuthResourceTest {
     }
 
     private static final class FakeRemoteSessionService extends RemoteSessionService {
+        private Long lastLocationSessionId;
+        private Double lastLongitude;
+
         @Override
         public CreatedRemoteSession createSession(AppUser user, String clientIp, String locationLabel, String userAgent, UserSession.LoginMethod loginMethod) {
             RemoteSession session = new RemoteSession();
             session.id = 1L;
             session.userId = user.id;
             return new CreatedRemoteSession("remote-session-1", "remote-csrf-1", session);
+        }
+
+        @Override
+        public void recordDeviceLocation(Long sessionId, Double latitude, Double longitude, Double accuracyMeters) {
+            this.lastLocationSessionId = sessionId;
+            this.lastLongitude = longitude;
         }
     }
 

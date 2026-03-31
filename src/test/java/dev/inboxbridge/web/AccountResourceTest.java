@@ -106,6 +106,9 @@ class AccountResourceTest {
 
         assertEquals(2, response.activeSessions().size());
         assertEquals("REMOTE", response.activeSessions().get(0).sessionType());
+        assertEquals("38.7223, -9.1393 (±25 m)", response.activeSessions().get(0).deviceLocationLabel());
+        assertEquals(38.7223, response.activeSessions().get(0).deviceLatitude());
+        assertEquals(-9.1393, response.activeSessions().get(0).deviceLongitude());
     }
 
     private static final class FakeAppUserService extends AppUserService {
@@ -146,6 +149,10 @@ class AccountResourceTest {
             session.createdAt = java.time.Instant.parse("2026-03-31T09:00:00Z");
             session.lastSeenAt = java.time.Instant.parse("2026-03-31T09:05:00Z");
             session.expiresAt = java.time.Instant.now().plusSeconds(3600);
+            session.deviceLocationLabel = "38.7223, -9.1393 (±25 m)";
+            session.deviceLatitude = 38.7223;
+            session.deviceLongitude = -9.1393;
+            session.deviceLocationCapturedAt = java.time.Instant.parse("2026-03-31T09:03:00Z");
             return java.util.List.of(session);
         }
 
@@ -164,6 +171,10 @@ class AccountResourceTest {
             session.createdAt = java.time.Instant.parse("2026-03-31T10:00:00Z");
             session.lastSeenAt = java.time.Instant.parse("2026-03-31T10:05:00Z");
             session.expiresAt = java.time.Instant.now().plusSeconds(7200);
+            session.deviceLocationLabel = "38.7223, -9.1393 (±25 m)";
+            session.deviceLatitude = 38.7223;
+            session.deviceLongitude = -9.1393;
+            session.deviceLocationCapturedAt = java.time.Instant.parse("2026-03-31T10:03:00Z");
             return java.util.List.of(session);
         }
 

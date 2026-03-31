@@ -1,4 +1,4 @@
-const CACHE_NAME = 'inboxbridge-remote-v1'
+const CACHE_NAME = 'inboxbridge-app-v2'
 const CORE_ASSETS = ['/remote', '/remote.webmanifest', '/remote-icon.svg']
 
 self.addEventListener('install', (event) => {

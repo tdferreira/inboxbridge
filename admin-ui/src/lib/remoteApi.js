@@ -86,3 +86,11 @@ export function remoteRunAllUsersPoll() {
 export function remoteRunSourcePoll(sourceId) {
   return request(`/api/remote/sources/${encodeURIComponent(sourceId)}/poll/run`, { method: 'POST' })
 }
+
+export function recordRemoteDeviceLocation(payload) {
+  return request('/api/remote/auth/session/device-location', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(payload)
+  })
+}

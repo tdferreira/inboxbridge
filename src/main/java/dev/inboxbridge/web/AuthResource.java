@@ -8,6 +8,7 @@ import dev.inboxbridge.dto.LoginResponse;
 import dev.inboxbridge.dto.RegistrationChallengeResponse;
 import dev.inboxbridge.dto.RegisterUserRequest;
 import dev.inboxbridge.dto.SessionUserResponse;
+import dev.inboxbridge.dto.SessionDeviceLocationRequest;
 import dev.inboxbridge.dto.StartPasskeyCeremonyResponse;
 import dev.inboxbridge.dto.StartPasskeyLoginRequest;
 import dev.inboxbridge.persistence.AppUser;
@@ -25,6 +26,7 @@ import dev.inboxbridge.service.OAuthProviderRegistryService;
 import dev.inboxbridge.service.PasskeyService;
 import dev.inboxbridge.service.RegistrationChallengeService;
 import dev.inboxbridge.service.SystemOAuthAppSettingsService;
+import dev.inboxbridge.service.UserSessionService;
 import io.vertx.core.http.HttpServerRequest;
 import jakarta.inject.Inject;
 import jakarta.ws.rs.BadRequestException;
@@ -83,6 +85,9 @@ public class AuthResource {
 
     @Inject
     AuthSecuritySettingsService authSecuritySettingsService;
+
+    @Inject
+    UserSessionService userSessionService;
 
     @Context
     HttpHeaders httpHeaders;
@@ -214,6 +219,23 @@ public class AuthResource {
         return toResponse(currentUserContext.user());
     }
 
+    @POST
+    @Path("/session/device-location")
+    @RequireAuth
+    @Consumes(MediaType.APPLICATION_JSON)
+    public Response recordDeviceLocation(SessionDeviceLocationRequest request) {
+        try {
+            userSessionService.recordDeviceLocation(
+                    currentUserContext.session() == null ? null : currentUserContext.session().id,
+                    request == null ? null : request.latitude(),
+                    request == null ? null : request.longitude(),
+                    request == null ? null : request.accuracyMeters());
+            return Response.noContent().build();
+        } catch (IllegalArgumentException e) {
+            throw new BadRequestException(e.getMessage(), e);
+        }
+    }
+
     private SessionUserResponse toResponse(AppUser user) {
         return new SessionUserResponse(
                 user.id,
@@ -222,7 +244,8 @@ public class AuthResource {
                 user.approved,
                 user.mustChangePassword,
                 (int) passkeyService.countForUser(user.id),
-                appUserService.hasPassword(user));
+                appUserService.hasPassword(user),
+                currentUserContext.session() != null && currentUserContext.session().deviceLocationCapturedAt != null);
     }
 
     private NewCookie sessionCookie(String token) {

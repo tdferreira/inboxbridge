@@ -74,6 +74,7 @@ public class RemoteControlFilter implements ContainerRequestFilter {
         }
 
         currentUserContext.setUser(user);
+        currentUserContext.setRemoteSession(remoteSession);
     }
 
     private boolean requiresCsrfValidation(ContainerRequestContext requestContext) {

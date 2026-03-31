@@ -1,4 +1,4 @@
-import { fireEvent, render, screen, waitFor, within } from '@testing-library/react'
+import { act, fireEvent, render, screen, waitFor, within } from '@testing-library/react'
 import App from './App'
 import { clearLocalStorage, createWorkspaceRouteFetch, htmlError, jsonResponse, textError } from './test/appTestHelpers'
 
@@ -11,6 +11,7 @@ describe('App', () => {
   afterEach(() => {
     clearLocalStorage()
     window.history.replaceState({}, '', '/')
+    vi.useRealTimers()
   })
 
   it('falls back to passkey login when password login is blocked by passkey policy', async () => {
@@ -92,6 +93,172 @@ describe('App', () => {
     await screen.findByText(/signed in as/i)
     expect(fetchMock).toHaveBeenCalledWith('/api/auth/passkey/verify', expect.any(Object))
     expect(screen.queryByText('Signed in with passkey.')).not.toBeInTheDocument()
+  })
+
+  it('automatically captures browser-reported device location for the current admin session', async () => {
+    Object.assign(navigator, {
+      geolocation: {
+        getCurrentPosition: vi.fn((success) => success({
+          coords: {
+            latitude: 38.7223,
+            longitude: -9.1393,
+            accuracy: 25
+          }
+        }))
+      }
+    })
+
+    const baseFetch = createWorkspaceRouteFetch({
+      session: {
+        id: 1,
+        username: 'alice',
+        role: 'USER',
+        approved: true,
+        mustChangePassword: false,
+        passkeyCount: 0,
+        passwordConfigured: true,
+        deviceLocationCaptured: false
+      }
+    })
+
+    const fetchMock = vi.fn((input, init = {}) => {
+      if (String(input) === '/api/auth/session/device-location') {
+        return jsonResponse({})
+      }
+      return baseFetch(input, init)
+    })
+    vi.stubGlobal('fetch', fetchMock)
+
+    render(<App />)
+
+    await waitFor(() => expect(fetchMock).toHaveBeenCalledWith('/api/auth/session/device-location', expect.any(Object)))
+  })
+
+  it('still captures browser-reported device location when the permissions api already reports granted', async () => {
+    Object.assign(navigator, {
+      geolocation: {
+        getCurrentPosition: vi.fn((success) => success({
+          coords: {
+            latitude: 38.7223,
+            longitude: -9.1393,
+            accuracy: 25
+          }
+        }))
+      },
+      permissions: {
+        query: vi.fn().mockResolvedValue({ state: 'granted' })
+      }
+    })
+
+    const baseFetch = createWorkspaceRouteFetch({
+      session: {
+        id: 2,
+        username: 'alice',
+        role: 'USER',
+        approved: true,
+        mustChangePassword: false,
+        passkeyCount: 0,
+        passwordConfigured: true,
+        deviceLocationCaptured: false
+      }
+    })
+
+    const fetchMock = vi.fn((input, init = {}) => {
+      if (String(input) === '/api/auth/session/device-location') {
+        return jsonResponse({})
+      }
+      return baseFetch(input, init)
+    })
+    vi.stubGlobal('fetch', fetchMock)
+
+    render(<App />)
+
+    await waitFor(() => expect(fetchMock).toHaveBeenCalledWith('/api/auth/session/device-location', expect.any(Object)))
+  })
+
+  it('falls back to a lower-accuracy browser location lookup when the first attempt fails', async () => {
+    const getCurrentPosition = vi.fn()
+      .mockImplementationOnce((success, reject) => reject({ code: 2 }))
+      .mockImplementationOnce((success) => success({
+        coords: {
+          latitude: 38.7223,
+          longitude: -9.1393,
+          accuracy: 250
+        }
+      }))
+
+    Object.assign(navigator, {
+      geolocation: {
+        getCurrentPosition
+      }
+    })
+
+    const baseFetch = createWorkspaceRouteFetch({
+      session: {
+        id: 3,
+        username: 'alice',
+        role: 'USER',
+        approved: true,
+        mustChangePassword: false,
+        passkeyCount: 0,
+        passwordConfigured: true,
+        deviceLocationCaptured: false
+      }
+    })
+
+    const fetchMock = vi.fn((input, init = {}) => {
+      if (String(input) === '/api/auth/session/device-location') {
+        return jsonResponse({})
+      }
+      return baseFetch(input, init)
+    })
+    vi.stubGlobal('fetch', fetchMock)
+
+    render(<App />)
+
+    await waitFor(() => expect(fetchMock).toHaveBeenCalledWith('/api/auth/session/device-location', expect.any(Object)))
+    expect(getCurrentPosition).toHaveBeenCalledTimes(2)
+    expect(getCurrentPosition).toHaveBeenNthCalledWith(
+      1,
+      expect.any(Function),
+      expect.any(Function),
+      expect.objectContaining({ enableHighAccuracy: true })
+    )
+    expect(getCurrentPosition).toHaveBeenNthCalledWith(
+      2,
+      expect.any(Function),
+      expect.any(Function),
+      expect.objectContaining({ enableHighAccuracy: false })
+    )
+  })
+
+  it('shows actionable guidance when the browser cannot determine a location', async () => {
+    Object.assign(navigator, {
+      geolocation: {
+        getCurrentPosition: vi.fn((success, reject) => reject({ code: 2, message: 'Position unavailable' }))
+      }
+    })
+
+    const baseFetch = createWorkspaceRouteFetch({
+      session: {
+        id: 4,
+        username: 'alice',
+        role: 'USER',
+        approved: true,
+        mustChangePassword: false,
+        passkeyCount: 0,
+        passwordConfigured: true,
+        deviceLocationCaptured: false
+      }
+    })
+
+    vi.stubGlobal('fetch', baseFetch)
+
+    render(<App />)
+
+    expect(await screen.findByText(/could not determine its current location/i)).toBeInTheDocument()
+    expect(screen.getByText(/os\/browser location services/i)).toBeInTheDocument()
+    expect(screen.getByText(/position unavailable/i)).toBeInTheDocument()
   })
 
   it('confirms password removal before deleting the password', async () => {

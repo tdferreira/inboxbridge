@@ -1,6 +1,8 @@
 import { useEffect, useMemo, useState } from 'react'
 import Banner from './components/common/Banner'
 import ButtonLink from './components/common/ButtonLink'
+import DeviceLocationPrompt from './components/common/DeviceLocationPrompt'
+import InstallPromptCard from './components/common/InstallPromptCard'
 import LoadingButton from './components/common/LoadingButton'
 import LoadingScreen from './components/common/LoadingScreen'
 import PasswordField from './components/common/PasswordField'
@@ -12,6 +14,7 @@ import {
   remoteLogin,
   remoteLogout,
   remoteRunAllUsersPoll,
+  recordRemoteDeviceLocation,
   remoteRunSourcePoll,
   remoteRunUserPoll,
   remoteSession,
@@ -19,6 +22,8 @@ import {
 } from './lib/remoteApi'
 import { normalizeLocale, translate } from './lib/i18n'
 import { formatDate, formatDurationMeaning, formatPollError } from './lib/formatters'
+import { usePwaInstallPrompt } from './lib/usePwaInstallPrompt'
+import { useSessionDeviceLocation } from './lib/useSessionDeviceLocation'
 import './RemoteApp.css'
 
 const DEFAULT_LOGIN_FORM = {
@@ -41,21 +46,33 @@ function RemoteApp() {
   const [pollingKey, setPollingKey] = useState('')
   const [lastResult, setLastResult] = useState(null)
   const [expandedSources, setExpandedSources] = useState(() => new Set())
+  const [installLoading, setInstallLoading] = useState(false)
+  const installPrompt = usePwaInstallPrompt()
+  const deviceLocation = useSessionDeviceLocation({
+    captureLocation: async (payload) => {
+      await recordRemoteDeviceLocation(payload)
+      setSession((current) => current ? { ...current, deviceLocationCaptured: true } : current)
+    },
+    session,
+    storageScope: 'remote',
+    t
+  })
 
   useEffect(() => {
     document.title = t('remote.title')
-    let manifestLink = document.querySelector('link[data-inboxbridge-remote-manifest]')
-    if (!manifestLink) {
-      manifestLink = document.createElement('link')
-      manifestLink.rel = 'manifest'
-      manifestLink.href = '/remote.webmanifest'
-      manifestLink.setAttribute('data-inboxbridge-remote-manifest', 'true')
-      document.head.appendChild(manifestLink)
-    }
     return () => {
       document.title = 'InboxBridge Admin'
     }
   }, [t])
+
+  async function handleInstallApp() {
+    setInstallLoading(true)
+    try {
+      await installPrompt.promptInstall()
+    } finally {
+      setInstallLoading(false)
+    }
+  }
 
   useEffect(() => {
     void loadRemoteState()
@@ -244,6 +261,19 @@ function RemoteApp() {
     return (
       <div className="remote-shell">
         <main className="remote-panel">
+          {installPrompt.canPromptInstall ? (
+            <InstallPromptCard installLoading={installLoading} onInstall={handleInstallApp} t={t} />
+          ) : null}
+          {deviceLocation.shouldPrompt ? (
+            <DeviceLocationPrompt
+              error={deviceLocation.error}
+              onDismiss={deviceLocation.dismissPrompt}
+              onRequestLocation={deviceLocation.requestLocation}
+              saving={deviceLocation.saving}
+              success={deviceLocation.success}
+              t={t}
+            />
+          ) : null}
           <section className="remote-hero">
             <div>
               <p className="remote-eyebrow">{t('remote.eyebrow')}</p>
@@ -276,6 +306,19 @@ function RemoteApp() {
   return (
     <div className="remote-shell">
       <main className="remote-panel">
+        {installPrompt.canPromptInstall ? (
+          <InstallPromptCard installLoading={installLoading} onInstall={handleInstallApp} t={t} />
+        ) : null}
+        {deviceLocation.shouldPrompt ? (
+          <DeviceLocationPrompt
+            error={deviceLocation.error}
+            onDismiss={deviceLocation.dismissPrompt}
+            onRequestLocation={deviceLocation.requestLocation}
+            saving={deviceLocation.saving}
+            success={deviceLocation.success}
+            t={t}
+          />
+        ) : null}
         <section className="remote-hero">
           <div>
             <p className="remote-eyebrow">{t('remote.eyebrow')}</p>

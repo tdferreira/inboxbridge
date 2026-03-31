@@ -97,6 +97,23 @@ public class UserSessionService {
                 .forEach(session -> session.revokedAt = now);
     }
 
+    @Transactional
+    public void recordDeviceLocation(Long sessionId, Double latitude, Double longitude, Double accuracyMeters) {
+        if (sessionId == null) {
+            throw new IllegalArgumentException("Missing current session");
+        }
+        UserSession session = repository.findByIdOptional(sessionId)
+                .orElseThrow(() -> new IllegalArgumentException("Unknown session id"));
+        session.deviceLatitude = normalizeCoordinate(latitude, -90d, 90d, "latitude");
+        session.deviceLongitude = normalizeCoordinate(longitude, -180d, 180d, "longitude");
+        session.deviceAccuracyMeters = normalizeAccuracy(accuracyMeters);
+        session.deviceLocationLabel = normalizeDeviceLocationLabel(SessionDeviceLocationFormatter.format(
+                session.deviceLatitude,
+                session.deviceLongitude,
+                session.deviceAccuracyMeters));
+        session.deviceLocationCapturedAt = Instant.now();
+    }
+
     private String normalize(String value) {
         if (value == null) {
             return null;
@@ -111,6 +128,34 @@ public class UserSessionService {
             return null;
         }
         return normalized.length() > 512 ? normalized.substring(0, 512) : normalized;
+    }
+
+    private Double normalizeCoordinate(Double value, double minimum, double maximum, String fieldName) {
+        if (value == null || value.isNaN() || value.isInfinite()) {
+            throw new IllegalArgumentException("Invalid " + fieldName);
+        }
+        if (value < minimum || value > maximum) {
+            throw new IllegalArgumentException("Invalid " + fieldName);
+        }
+        return value;
+    }
+
+    private Double normalizeAccuracy(Double value) {
+        if (value == null) {
+            return null;
+        }
+        if (value.isNaN() || value.isInfinite() || value < 0d) {
+            throw new IllegalArgumentException("Invalid accuracy");
+        }
+        return value;
+    }
+
+    private String normalizeDeviceLocationLabel(String value) {
+        String normalized = normalize(value);
+        if (normalized == null) {
+            return null;
+        }
+        return normalized.length() > 160 ? normalized.substring(0, 160) : normalized;
     }
 
     private String sha256(String value) {

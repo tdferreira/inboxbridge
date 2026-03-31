@@ -1,4 +1,4 @@
-import { fireEvent, render, screen, waitFor } from '@testing-library/react'
+import { act, fireEvent, render, screen, waitFor } from '@testing-library/react'
 import RemoteApp from './RemoteApp'
 
 function jsonResponse(payload, status = 200) {
@@ -28,7 +28,8 @@ describe('RemoteApp', () => {
           username: 'admin',
           role: 'ADMIN',
           canRunUserPoll: true,
-          canRunAllUsersPoll: true
+          canRunAllUsersPoll: true,
+          deviceLocationCaptured: true
         })
       }
       if (url === '/api/remote/control') {
@@ -227,5 +228,163 @@ describe('RemoteApp', () => {
     expect(await screen.findByRole('heading', { name: 'Quick polling control' })).toBeInTheDocument()
     expect(screen.getByText('Your remote session is no longer valid, so you were signed out. Please sign in again.')).toBeInTheDocument()
     expect(screen.queryByText('Remote request failed (401)')).not.toBeInTheDocument()
+  })
+
+  it('automatically captures browser-reported device location for the current remote session', async () => {
+    Object.assign(navigator, {
+      geolocation: {
+        getCurrentPosition: vi.fn((success) => success({
+          coords: {
+            latitude: 38.7223,
+            longitude: -9.1393,
+            accuracy: 25
+          }
+        }))
+      }
+    })
+
+    const fetchMock = vi.fn((url) => {
+      if (url === '/api/remote/auth/me') {
+        return jsonResponse({
+          id: 7,
+          username: 'admin',
+          role: 'ADMIN',
+          canRunUserPoll: true,
+          canRunAllUsersPoll: true,
+          deviceLocationCaptured: false
+        })
+      }
+      if (url === '/api/remote/control') {
+        return jsonResponse({
+          session: {
+            id: 7,
+            username: 'admin',
+            role: 'ADMIN',
+            canRunUserPoll: true,
+            canRunAllUsersPoll: true
+          },
+          sources: [],
+          hasOwnSourceEmailAccounts: true,
+          hasReadyDestinationMailbox: true,
+          setupRequired: false,
+          remotePollRateLimitCount: 60,
+          remotePollRateLimitWindow: 'PT1M'
+        })
+      }
+      if (url === '/api/remote/auth/session/device-location') {
+        return jsonResponse({}, 204)
+      }
+      throw new Error(`Unexpected fetch: ${url}`)
+    })
+    vi.stubGlobal('fetch', fetchMock)
+
+    render(<RemoteApp />)
+
+    await waitFor(() => expect(fetchMock).toHaveBeenCalledWith('/api/remote/auth/session/device-location', expect.any(Object)))
+  })
+
+  it('still captures remote device location when the permissions api already reports granted', async () => {
+    Object.assign(navigator, {
+      geolocation: {
+        getCurrentPosition: vi.fn((success) => success({
+          coords: {
+            latitude: 38.7223,
+            longitude: -9.1393,
+            accuracy: 25
+          }
+        }))
+      },
+      permissions: {
+        query: vi.fn().mockResolvedValue({ state: 'granted' })
+      }
+    })
+
+    const fetchMock = vi.fn((url) => {
+      if (url === '/api/remote/auth/me') {
+        return jsonResponse({
+          id: 8,
+          username: 'admin',
+          role: 'ADMIN',
+          canRunUserPoll: true,
+          canRunAllUsersPoll: true,
+          deviceLocationCaptured: false
+        })
+      }
+      if (url === '/api/remote/control') {
+        return jsonResponse({
+          session: {
+            id: 8,
+            username: 'admin',
+            role: 'ADMIN',
+            canRunUserPoll: true,
+            canRunAllUsersPoll: true
+          },
+          sources: [],
+          hasOwnSourceEmailAccounts: true,
+          hasReadyDestinationMailbox: true,
+          setupRequired: false,
+          remotePollRateLimitCount: 60,
+          remotePollRateLimitWindow: 'PT1M'
+        })
+      }
+      if (url === '/api/remote/auth/session/device-location') {
+        return jsonResponse({})
+      }
+      throw new Error(`Unexpected fetch: ${url}`)
+    })
+    vi.stubGlobal('fetch', fetchMock)
+
+    render(<RemoteApp />)
+
+    await waitFor(() => expect(fetchMock).toHaveBeenCalledWith('/api/remote/auth/session/device-location', expect.any(Object)))
+  })
+
+  it('shows an install prompt card when the browser exposes PWA installation', async () => {
+    const fetchMock = vi.fn((url) => {
+      if (url === '/api/remote/auth/me') {
+        return jsonResponse({
+          id: 7,
+          username: 'admin',
+          role: 'ADMIN',
+          canRunUserPoll: true,
+          canRunAllUsersPoll: true,
+          deviceLocationCaptured: true
+        })
+      }
+      if (url === '/api/remote/control') {
+        return jsonResponse({
+          session: {
+            id: 7,
+            username: 'admin',
+            role: 'ADMIN',
+            canRunUserPoll: true,
+            canRunAllUsersPoll: true
+          },
+          sources: [],
+          hasOwnSourceEmailAccounts: true,
+          hasReadyDestinationMailbox: true,
+          setupRequired: false,
+          remotePollRateLimitCount: 60,
+          remotePollRateLimitWindow: 'PT1M'
+        })
+      }
+      throw new Error(`Unexpected fetch: ${url}`)
+    })
+    vi.stubGlobal('fetch', fetchMock)
+
+    const prompt = vi.fn().mockResolvedValue(undefined)
+
+    render(<RemoteApp />)
+
+    const installEvent = new Event('beforeinstallprompt')
+    Object.defineProperty(installEvent, 'prompt', { configurable: true, value: prompt })
+    Object.defineProperty(installEvent, 'userChoice', { configurable: true, value: Promise.resolve({ outcome: 'accepted' }) })
+    await act(async () => {
+      window.dispatchEvent(installEvent)
+    })
+
+    fireEvent.click(await screen.findByRole('button', { name: 'Install App' }))
+
+    await waitFor(() => expect(prompt).toHaveBeenCalled())
   })
 })

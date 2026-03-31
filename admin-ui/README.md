@@ -44,6 +44,10 @@ Key design choices:
 - the login screen supports passkey sign-in for users who have already enrolled one
 - the app now also ships a dedicated `/remote` mobile-first remote-control surface with its own scoped session, tiny source list, and poll-now actions for phones and quick-access devices
 - the main `My InboxBridge` workspace now includes a dedicated `Remote control` launch card so the lightweight `/remote` page is discoverable from the normal dashboard
+- the `/remote` surface can now expose an in-app install prompt when the browser considers that remote page installable as a PWA
+- both the main app and `/remote` now offer an explicit opt-in browser location prompt for the current session so device-reported location can be stored separately from Geo-IP
+- both the main app and `/remote` now also attempt to capture device location automatically as soon as a new authenticated session begins, while still leaving a retry path in the Sessions UI when no sample was saved
+- when a session includes device coordinates, the Sessions view now tries to turn them into a friendlier place label in the browser and exposes an `Open in Maps` action for that device-reported location
 - the login screen intentionally avoids exposing live bootstrap-account state to unauthenticated visitors; bootstrap credentials are documented in the operator docs instead
 - self-registration is launched from a dedicated `Register for access` button and uses a modal dialog instead of always rendering the full form
 - self-registration now also loads a real CAPTCHA challenge before the request can be submitted; the default path is a self-hosted ALTCHA proof-of-work flow that does not require any external registration or token
@@ -138,6 +142,8 @@ Key design choices:
 - the header `Refresh` action now also runs that same session-activity poll, so a manual refresh can surface the same new-sign-in notification immediately
 - if one browser session revokes another, the revoked browser now detects the next `401` response centrally and immediately returns to the login screen instead of staying on a broken authenticated page
 - approximate location is now resolved only when a new session is created, using the backend Geo-IP provider chain when configured; that admin section can now override enablement, provider order, cache TTL, provider cooldown, and request timeout live without editing `.env`
+- the Sessions view now also shows an optional device-reported location and capture timestamp for each session when the user allowed browser geolocation on that device, including a best-effort guessed place name plus an `Open in Maps` link when coordinates are available
+- when the current browser session supports geolocation but no sample has been captured yet, the Sessions view now labels that state explicitly as pending and offers an inline retry action instead of showing the same `Not shared` copy used for older sessions with no recorded device location
 - the Geo-IP editor now exposes a primary-provider dropdown, a chip-based fallback-provider input, provider readiness cards with documentation/terms links, and provider-specific secret inputs such as the optional `IPinfo Lite` token; providers that require missing credentials stay disabled until they are configured
 - the same admin dialog now also exposes a primary registration CAPTCHA provider selector plus provider-specific configuration cards; `ALTCHA` is available by default with no extra credentials, while `Cloudflare Turnstile` and `hCaptcha` stay disabled until their required site-key and secret values are configured
 - raw duration values such as `PT5M` and `PT0.25S` now expose hover hints with their human-readable meaning in the admin polling and authentication-security settings UI
@@ -169,6 +175,7 @@ Current design-system foundation includes:
 - `ModalDialog` and `ConfirmationDialog` for modal workflows
 - `PaneToggleButton` for compact expand/collapse controls
 - `Banner`, `CopyButton`, `DurationValue`, and `InfoHint` for repeated feedback and inline help patterns
+- utility prompts such as install/location nudges should compose `SectionCard` instead of introducing bespoke card markup
 
 New top-level sections should compose these primitives rather than recreating `surface-card`, header, action, toggle, or CTA-link markup locally.
 
@@ -204,6 +211,7 @@ Current unit coverage focuses on:
 - per-user poller settings controls
 - per-account poller settings controls and contextual poll-now actions
 - the standalone remote-control login and source-poll workflow
+- the remote-only PWA install prompt plus the shared per-session browser-location capture flow on both the main app and `/remote`
 - source email account dialog presets, auth-aware field visibility, and detected IMAP folder selection after a successful connection probe
 - reusable email-account card actions
 - language-aware setup guide generation and formatting helpers

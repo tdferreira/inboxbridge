@@ -207,6 +207,27 @@ class AuthResourceTest {
         assertEquals(42L, sessionService.lastRevokedSessionId);
     }
 
+    @Test
+    void recordDeviceLocationUsesCurrentBrowserSession() {
+        AuthResource resource = new AuthResource();
+        CurrentUserContext context = new CurrentUserContext();
+        AppUser user = new AppUser();
+        user.id = 7L;
+        context.setUser(user);
+        UserSession current = new UserSession();
+        current.id = 91L;
+        context.setSession(current);
+        FakeUserSessionService sessionService = new FakeUserSessionService();
+        resource.currentUserContext = context;
+        resource.userSessionService = sessionService;
+
+        Response response = resource.recordDeviceLocation(new dev.inboxbridge.dto.SessionDeviceLocationRequest(38.7223, -9.1393, 25d));
+
+        assertEquals(204, response.getStatus());
+        assertEquals(91L, sessionService.lastLocationSessionId);
+        assertEquals(38.7223, sessionService.lastLatitude);
+    }
+
     private static final class FakePasskeyService extends PasskeyService {
         @Override
         public StartPasskeyCeremonyResponse startAuthentication() {
@@ -251,6 +272,8 @@ class AuthResourceTest {
         private Long lastUserId;
         private Long lastCurrentSessionId;
         private Long lastRevokedSessionId;
+        private Long lastLocationSessionId;
+        private Double lastLatitude;
 
         @Override
         public java.util.List<UserSession> listRecentSessions(Long userId, int limit) {
@@ -272,6 +295,12 @@ class AuthResourceTest {
         public void invalidateSessionForUser(Long userId, Long sessionId) {
             this.lastUserId = userId;
             this.lastRevokedSessionId = sessionId;
+        }
+
+        @Override
+        public void recordDeviceLocation(Long sessionId, Double latitude, Double longitude, Double accuracyMeters) {
+            this.lastLocationSessionId = sessionId;
+            this.lastLatitude = latitude;
         }
 
         private UserSession buildSession(Long sessionId, Long userId, boolean active) {

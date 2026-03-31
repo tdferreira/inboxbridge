@@ -5,6 +5,7 @@ import dev.inboxbridge.dto.FinishPasskeyCeremonyRequest;
 import dev.inboxbridge.dto.LoginRequest;
 import dev.inboxbridge.dto.LoginResponse;
 import dev.inboxbridge.dto.RemoteSessionUserResponse;
+import dev.inboxbridge.dto.SessionDeviceLocationRequest;
 import dev.inboxbridge.config.InboxBridgeConfig;
 import dev.inboxbridge.persistence.AppUser;
 import dev.inboxbridge.persistence.UserSession;
@@ -154,6 +155,23 @@ public class RemoteAuthResource {
                 .build();
     }
 
+    @POST
+    @Path("/session/device-location")
+    @RequireRemoteControl
+    @Consumes(MediaType.APPLICATION_JSON)
+    public Response recordDeviceLocation(SessionDeviceLocationRequest request) {
+        try {
+            remoteSessionService.recordDeviceLocation(
+                    currentUserContext.remoteSession() == null ? null : currentUserContext.remoteSession().id,
+                    request == null ? null : request.latitude(),
+                    request == null ? null : request.longitude(),
+                    request == null ? null : request.accuracyMeters());
+            return Response.noContent().build();
+        } catch (IllegalArgumentException e) {
+            throw new BadRequestException(e.getMessage(), e);
+        }
+    }
+
     private Response authenticated(AppUser user, UserSession.LoginMethod loginMethod, String clientIp, String userAgent) {
         String location = geoIpLocationService.resolveLocation(clientIp).orElse(null);
         RemoteSessionService.CreatedRemoteSession session = remoteSessionService.createSession(
@@ -174,7 +192,8 @@ public class RemoteAuthResource {
                 user.username,
                 user.role.name(),
                 true,
-                user.role == AppUser.Role.ADMIN);
+                user.role == AppUser.Role.ADMIN,
+                currentUserContext.remoteSession() != null && currentUserContext.remoteSession().deviceLocationCapturedAt != null);
     }
 
     private NewCookie remoteSessionCookie(String token) {

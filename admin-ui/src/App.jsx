@@ -3,6 +3,7 @@ import { BrowserRouter, useLocation, useNavigate } from 'react-router-dom'
 import AuthScreen from './components/auth/AuthScreen'
 import Banner from './components/common/Banner'
 import ConfirmationDialog from './components/common/ConfirmationDialog'
+import DeviceLocationPrompt from './components/common/DeviceLocationPrompt'
 import LoadingScreen from './components/common/LoadingScreen'
 import ModalDialog from './components/common/ModalDialog'
 import PasswordPanel from './components/account/PasswordPanel'
@@ -20,6 +21,7 @@ import UserPollingSettingsDialog from './components/polling/UserPollingSettingsD
 import WorkspaceSectionList from './components/layout/WorkspaceSectionList'
 import { buildAdminWorkspaceSections, buildUserWorkspaceSections } from './components/layout/workspaceSectionBuilders'
 import { apiErrorText } from './lib/api'
+import { requestSessionDeviceLocation } from './lib/api'
 import { buildSetupGuideState } from './lib/setupGuide'
 import { normalizeDestinationProviderConfig } from './lib/emailProviderPresets'
 import { pollErrorNotification, resolveNotificationContent, translatedNotification } from './lib/notifications'
@@ -34,6 +36,7 @@ import { useUserManagementController } from './lib/useUserManagementController'
 import { useWorkspacePreferencesController } from './lib/useWorkspacePreferencesController'
 import { applyOrderedSectionIds } from './lib/workspacePreferences'
 import { buildWorkspacePath, canonicalWorkspacePath, resolveWorkspaceRoute } from './lib/workspaceRoutes'
+import { useSessionDeviceLocation } from './lib/useSessionDeviceLocation'
 
 const REFRESH_MS = 30000
 const DEFAULT_AUTH_SECURITY_FORM = {
@@ -262,6 +265,15 @@ function AppContent() {
     withPending
   })
   const session = auth.session
+  const deviceLocation = useSessionDeviceLocation({
+    captureLocation: async (payload) => {
+      await requestSessionDeviceLocation(payload)
+      auth.setSession((current) => current ? { ...current, deviceLocationCaptured: true } : current)
+    },
+    session,
+    storageScope: 'browser',
+    t
+  })
   const isAdmin = session?.role === 'ADMIN'
   const workspaceRoute = useMemo(() => resolveWorkspaceRoute(location.pathname), [location.pathname])
   const adminWorkspace = isAdmin && workspaceRoute.workspace === 'admin' ? 'admin' : 'user'
@@ -1247,6 +1259,16 @@ function AppContent() {
           signOutLoading={isPending('logout')}
           t={t}
         />
+        {deviceLocation.shouldPrompt ? (
+          <DeviceLocationPrompt
+            error={deviceLocation.error}
+            onDismiss={deviceLocation.dismissPrompt}
+            onRequestLocation={deviceLocation.requestLocation}
+            saving={deviceLocation.saving}
+            success={deviceLocation.success}
+            t={t}
+          />
+        ) : null}
 
         {showPreferencesDialog ? (
           <PreferencesDialog
@@ -1399,13 +1421,17 @@ function AppContent() {
                 <div aria-labelledby="security-sessions-tab" className="security-tab-panel" id="security-sessions-tabpanel" role="tabpanel">
                   <SessionsPanel
                     activeSessions={auth.sessionActivity.activeSessions}
+                    currentSessionCanRequestDeviceLocation={deviceLocation.supported}
+                    currentSessionDeviceLocationError={deviceLocation.error}
                     geoIpConfigured={auth.sessionActivity.geoIpConfigured}
                     locale={language}
+                    onRequestCurrentDeviceLocation={deviceLocation.requestLocation}
                     onRevokeOtherSessions={auth.handleRevokeOtherSessions}
                     onRevokeSession={auth.handleRevokeSession}
                     recentLogins={auth.sessionActivity.recentLogins}
                     revokeLoadingId={auth.sessionActivity.activeSessions.find((sessionItem) => isPending(`sessionRevoke:${sessionItem.id}`))?.id || null}
                     revokeOthersLoading={isPending('sessionsRevokeOthers')}
+                    requestCurrentDeviceLocationLoading={deviceLocation.saving}
                     t={t}
                   />
                 </div>
