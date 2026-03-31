@@ -6,10 +6,20 @@ package dev.inboxbridge.dto;
  */
 public record RegistrationChallengeResponse(
         boolean enabled,
-        String challengeId,
-        String prompt) {
+        String provider,
+        String siteKey,
+        AltchaChallengeResponse altcha) {
+
+    public record AltchaChallengeResponse(
+            String challengeId,
+            String algorithm,
+            String challenge,
+            String salt,
+            String signature,
+            long maxNumber) {
+    }
 
     public static RegistrationChallengeResponse disabled() {
-        return new RegistrationChallengeResponse(false, null, null);
+        return new RegistrationChallengeResponse(false, null, null, null);
     }
 }

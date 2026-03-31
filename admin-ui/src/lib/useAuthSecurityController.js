@@ -5,9 +5,13 @@ import { normalizePasskeyError, parseCreateOptions, parseGetOptions, passkeysSup
 import { buildRecentSessionTargetId } from './sectionTargets'
 
 const DEFAULT_LOGIN_FORM = { username: 'admin', password: 'nimda' }
-const DEFAULT_REGISTER_FORM = { username: '', password: '', confirmPassword: '', challengeId: '', challengeAnswer: '' }
+const DEFAULT_REGISTER_FORM = { username: '', password: '', confirmPassword: '', captchaToken: '' }
 const DEFAULT_PASSWORD_FORM = { currentPassword: '', newPassword: '', confirmNewPassword: '' }
-const DEFAULT_SESSION_ACTIVITY = { recentLogins: [], activeSessions: [] }
+const DEFAULT_SESSION_ACTIVITY = { recentLogins: [], activeSessions: [], geoIpConfigured: false }
+const SESSION_KIND_KEYS = Object.freeze({
+  REMOTE: 'sessions.kindRemote',
+  BROWSER: 'sessions.kindBrowser'
+})
 
 export function useAuthSecurityController({
   closeConfirmation,
@@ -158,7 +162,12 @@ export function useAuthSecurityController({
         const response = await fetch('/api/auth/register', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify(registerForm)
+          body: JSON.stringify({
+            username: registerForm.username,
+            password: registerForm.password,
+            confirmPassword: registerForm.confirmPassword,
+            captchaToken: registerForm.captchaToken
+          })
         })
         if (!response.ok) {
           throw new Error(await apiErrorText(response, errorText('registrationFailed')))
@@ -188,15 +197,11 @@ export function useAuthSecurityController({
       const payload = await response.json()
       if (!payload?.enabled) {
         setRegisterChallenge(null)
-        setRegisterForm((current) => ({ ...current, challengeId: '', challengeAnswer: '' }))
+        setRegisterForm((current) => ({ ...current, captchaToken: '' }))
         return
       }
       setRegisterChallenge(payload)
-      setRegisterForm((current) => ({
-        ...current,
-        challengeId: payload.challengeId || '',
-        challengeAnswer: ''
-      }))
+      setRegisterForm((current) => ({ ...current, captchaToken: '' }))
     } catch (err) {
       setAuthError(err.message || errorText('loadRegistrationChallenge'))
     } finally {
@@ -396,7 +401,7 @@ export function useAuthSecurityController({
       const activeSessions = Array.isArray(payload?.activeSessions) ? payload.activeSessions : []
       const latestRecentSession = recentLogins[0] || null
       const latestRecentSessionKey = latestRecentSession
-        ? `${latestRecentSession.id}:${latestRecentSession.createdAt || ''}:${latestRecentSession.current ? 'current' : 'other'}`
+        ? `${latestRecentSession.sessionType || 'BROWSER'}:${latestRecentSession.id}:${latestRecentSession.createdAt || ''}:${latestRecentSession.current ? 'current' : 'other'}`
         : null
 
       if (announceNewSessions && latestRecentSessionKey) {
@@ -410,8 +415,8 @@ export function useAuthSecurityController({
         ) {
           latestRecentSessionKeyRef.current = latestRecentSessionKey
           pushNotification({
-            message: translatedNotification('notifications.newSessionDetected'),
-            targetId: buildRecentSessionTargetId(latestRecentSession.id),
+            message: buildNewSessionNotification(latestRecentSession),
+            targetId: buildRecentSessionTargetId(latestRecentSession.sessionType, latestRecentSession.id),
             tone: 'warning'
           })
         } else {
@@ -426,7 +431,8 @@ export function useAuthSecurityController({
 
       setSessionActivity({
         recentLogins,
-        activeSessions
+        activeSessions,
+        geoIpConfigured: Boolean(payload?.geoIpConfigured)
       })
     } catch (err) {
       if (suppressErrors) {
@@ -442,17 +448,19 @@ export function useAuthSecurityController({
     }
   }
 
-  async function handleRevokeSession(sessionId) {
+  async function handleRevokeSession(session) {
+    const sessionId = session?.id
+    const sessionType = session?.sessionType || 'BROWSER'
     openConfirmation({
-      actionKey: `sessionRevoke:${sessionId}`,
+      actionKey: `sessionRevoke:${sessionType}:${sessionId}`,
       body: t('sessions.revokeConfirmBody'),
       confirmLabel: t('sessions.revoke'),
       confirmLoadingLabel: t('sessions.revokeLoading'),
       confirmTone: 'danger',
       onConfirm: async () => {
-        await withPending(`sessionRevoke:${sessionId}`, async () => {
+        await withPending(`sessionRevoke:${sessionType}:${sessionId}`, async () => {
           try {
-            const response = await fetch(`/api/account/sessions/${sessionId}/revoke`, { method: 'POST' })
+            const response = await fetch(`/api/account/sessions/${sessionId}/revoke?type=${encodeURIComponent(sessionType)}`, { method: 'POST' })
             if (!response.ok) {
               throw new Error(await apiErrorText(response, errorText('revokeSession')))
             }
@@ -527,6 +535,24 @@ export function useAuthSecurityController({
 
   function applyLoadedPasskeys(passkeysPayload) {
     setMyPasskeys(Array.isArray(passkeysPayload) ? passkeysPayload : [])
+  }
+
+  function sessionKindKey(sessionType) {
+    return SESSION_KIND_KEYS[sessionType] || SESSION_KIND_KEYS.BROWSER
+  }
+
+  function buildNewSessionNotification(sessionLike) {
+    const locationLabel = String(sessionLike?.locationLabel || '').trim()
+    const params = {
+      sessionType: translatedNotification(sessionKindKey(sessionLike?.sessionType))
+    }
+    if (locationLabel) {
+      return translatedNotification('notifications.newSessionDetectedWithLocation', {
+        ...params,
+        location: locationLabel
+      })
+    }
+    return translatedNotification('notifications.newSessionDetectedWithoutLocation', params)
   }
 
   return {

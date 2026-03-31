@@ -18,8 +18,9 @@ describe('sectionTargets', () => {
   })
 
   it('builds and detects recent session target ids', () => {
-    expect(buildRecentSessionTargetId(42)).toBe('recent-session-42')
-    expect(isRecentSessionTargetId('recent-session-42')).toBe(true)
+    expect(buildRecentSessionTargetId('BROWSER', 42)).toBe('recent-session-BROWSER-42')
+    expect(buildRecentSessionTargetId('REMOTE', 42)).toBe('recent-session-REMOTE-42')
+    expect(isRecentSessionTargetId('recent-session-BROWSER-42')).toBe(true)
     expect(isRecentSessionTargetId('security-sessions-panel-section')).toBe(false)
   })
 

@@ -1,4 +1,4 @@
-import PaneToggleButton from '../common/PaneToggleButton'
+import CollapsibleSection from '../common/CollapsibleSection'
 import './SetupGuidePanel.css'
 
 /**
@@ -17,29 +17,23 @@ function SetupGuidePanel({
   t
 }) {
   return (
-    <section className="surface-card setup-guide-panel section-with-corner-toggle" id="quick-setup-guide-section" tabIndex="-1">
-      <div className="panel-header">
-        <div>
-          <div className="section-title">{t('setup.title')}</div>
-          <p className="section-copy">
-            {t('setup.copy')}
-          </p>
-        </div>
-        {dismissable ? (
-          <button className="secondary" onClick={onDismiss} title={t('setup.dismissHint')} type="button">
-            {t('setup.dismiss')}
-          </button>
-        ) : null}
-      </div>
-      <PaneToggleButton className="pane-toggle-button-corner" collapseLabel={t('common.collapseSection')} collapsed={collapsed} disabled={savingLayout} expandLabel={t('common.expandSection')} isLoading={savingLayout} onClick={onToggleCollapse} />
-      {savingLayout ? <div className="section-copy">{t('common.savingLayoutPreference')}</div> : null}
-      {sectionLoading ? (
-        <div className="section-refresh-indicator" role="status">
-          <span aria-hidden="true" className="section-refresh-spinner" />
-          {t('common.refreshingSection')}
-        </div>
+    <CollapsibleSection
+      actions={dismissable ? (
+        <button className="secondary" onClick={onDismiss} title={t('setup.dismissHint')} type="button">
+          {t('setup.dismiss')}
+        </button>
       ) : null}
-      {!collapsed ? (
+      className="setup-guide-panel"
+      collapsed={collapsed}
+      collapseLoading={savingLayout}
+      copy={t('setup.copy')}
+      id="quick-setup-guide-section"
+      onCollapseToggle={onToggleCollapse}
+      sectionLoading={sectionLoading}
+      statusContent={savingLayout ? <div className="section-copy">{t('common.savingLayoutPreference')}</div> : null}
+      t={t}
+      title={t('setup.title')}
+    >
         <div className="setup-guide-grid">
           {steps.map((step) => (
             <a
@@ -53,8 +47,7 @@ function SetupGuidePanel({
             </a>
           ))}
         </div>
-      ) : null}
-    </section>
+    </CollapsibleSection>
   )
 }
 

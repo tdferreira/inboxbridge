@@ -1,5 +1,6 @@
 import LoadingButton from '../common/LoadingButton'
 import PasswordField from '../common/PasswordField'
+import SectionCard from '../common/SectionCard'
 import { buildPasswordChecks, canSubmitPasswordChange } from '../../lib/passwordPolicy'
 import './PasswordPanel.css'
 
@@ -24,17 +25,8 @@ function PasswordPanel({
   const canRemovePassword = passwordConfigured && passkeyCount > 0 && passwordForm.currentPassword.trim().length > 0
 
   return (
-    <section className="surface-card password-panel" id="password-panel-section" tabIndex="-1">
-      <div className="panel-header">
-        <div>
-          <div className="section-title">{t('password.title')}</div>
-          <p className="section-copy">
-            {passwordConfigured
-              ? t('password.configuredCopy')
-              : t('password.passwordlessCopy')}
-          </p>
-        </div>
-        {passwordConfigured ? (
+    <SectionCard
+      actions={passwordConfigured ? (
           <LoadingButton
             className="secondary"
             disabled={!canRemovePassword}
@@ -45,8 +37,14 @@ function PasswordPanel({
           >
             {t('password.remove')}
           </LoadingButton>
-        ) : null}
-      </div>
+      ) : null}
+      className="password-panel"
+      copy={passwordConfigured
+        ? t('password.configuredCopy')
+        : t('password.passwordlessCopy')}
+      id="password-panel-section"
+      title={t('password.title')}
+    >
       {!passwordConfigured ? (
         <div className="muted-box">
           {t('password.passwordlessNotice')}
@@ -92,7 +90,7 @@ function PasswordPanel({
           {passwordConfigured ? t('password.change') : t('password.set')}
         </LoadingButton>
       </form>
-    </section>
+    </SectionCard>
   )
 }
 

@@ -6,6 +6,7 @@ import static org.junit.jupiter.api.Assertions.assertThrows;
 
 import java.time.Instant;
 import java.util.List;
+import java.lang.reflect.Proxy;
 
 import org.junit.jupiter.api.Test;
 
@@ -27,12 +28,16 @@ import dev.inboxbridge.service.AuthService;
 import dev.inboxbridge.service.AuthClientAddressService;
 import dev.inboxbridge.service.AuthLoginProtectionService;
 import dev.inboxbridge.service.AuthSecuritySettingsService;
+import dev.inboxbridge.service.GeoIpLocationService;
 import dev.inboxbridge.service.MicrosoftOAuthService;
 import dev.inboxbridge.service.OAuthProviderRegistryService;
 import dev.inboxbridge.service.PasskeyService;
+import dev.inboxbridge.service.RemoteSessionService;
 import dev.inboxbridge.service.RegistrationChallengeService;
 import dev.inboxbridge.service.SystemOAuthAppSettingsService;
 import dev.inboxbridge.service.UserSessionService;
+import io.vertx.core.http.HttpServerRequest;
+import io.vertx.core.net.SocketAddress;
 import jakarta.ws.rs.BadRequestException;
 import jakarta.ws.rs.core.HttpHeaders;
 import jakarta.ws.rs.core.MultivaluedHashMap;
@@ -62,6 +67,7 @@ class AuthResourceTest {
         resource.appUserService = new AppUserService();
         resource.currentUserContext = new CurrentUserContext();
         resource.applicationModeService = new FakeApplicationModeService(true);
+        resource.httpServerRequest = staticHttpServerRequest("172.18.0.2");
 
         Response response = resource.finishPasskeyLogin(new FinishPasskeyCeremonyRequest("ceremony-1", "{\"id\":\"cred\"}"));
 
@@ -89,6 +95,7 @@ class AuthResourceTest {
         assertEquals(false, response.microsoftOAuthAvailable());
         assertEquals(false, response.googleOAuthAvailable());
         assertEquals(false, response.registrationChallengeEnabled());
+        assertEquals("ALTCHA", response.registrationChallengeProvider());
     }
 
     @Test
@@ -101,7 +108,7 @@ class AuthResourceTest {
 
         BadRequestException error = assertThrows(
                 BadRequestException.class,
-                () -> resource.register(new dev.inboxbridge.dto.RegisterUserRequest("alice", "Secret#123", "Secret#123", "challenge-1", "5")));
+                () -> resource.register(new dev.inboxbridge.dto.RegisterUserRequest("alice", "Secret#123", "Secret#123", "captcha-token")));
 
         assertEquals("Multi-user mode is disabled for this deployment.", error.getMessage());
     }
@@ -116,8 +123,8 @@ class AuthResourceTest {
         RegistrationChallengeResponse response = resource.registrationChallenge();
 
         assertEquals(true, response.enabled());
-        assertEquals("challenge-1", response.challengeId());
-        assertEquals("2 + 3 = ?", response.prompt());
+        assertEquals("ALTCHA", response.provider());
+        assertEquals("challenge-1", response.altcha().challengeId());
     }
 
     @Test
@@ -128,6 +135,7 @@ class AuthResourceTest {
         resource.authLoginProtectionService = new FakeAuthLoginProtectionService(Instant.parse("2026-03-30T14:20:00Z"));
         resource.authSecuritySettingsService = new FakeAuthSecuritySettingsService(true);
         resource.httpHeaders = new StaticHttpHeaders("203.0.113.4");
+        resource.httpServerRequest = staticHttpServerRequest("172.18.0.2");
 
         Response response = resource.login(new LoginRequest("admin", "wrong"));
 
@@ -149,12 +157,15 @@ class AuthResourceTest {
         context.setSession(current);
         resource.currentUserContext = context;
         resource.userSessionService = new FakeUserSessionService();
+        resource.remoteSessionService = new FakeRemoteSessionService();
+        resource.geoIpLocationService = new FakeGeoIpLocationService(true);
 
         AccountSessionsResponse response = resource.sessions();
 
         assertEquals(1, response.recentLogins().size());
         assertEquals(1, response.activeSessions().size());
         assertEquals(true, response.activeSessions().get(0).current());
+        assertEquals(true, response.geoIpConfigured());
     }
 
     @Test
@@ -170,6 +181,7 @@ class AuthResourceTest {
         FakeUserSessionService sessionService = new FakeUserSessionService();
         resource.currentUserContext = context;
         resource.userSessionService = sessionService;
+        resource.remoteSessionService = new FakeRemoteSessionService();
 
         resource.revokeOtherSessions();
 
@@ -187,8 +199,9 @@ class AuthResourceTest {
         FakeUserSessionService sessionService = new FakeUserSessionService();
         resource.currentUserContext = context;
         resource.userSessionService = sessionService;
+        resource.remoteSessionService = new FakeRemoteSessionService();
 
-        resource.revokeSession(42L);
+        resource.revokeSession(42L, null);
 
         assertEquals(7L, sessionService.lastUserId);
         assertEquals(42L, sessionService.lastRevokedSessionId);
@@ -274,6 +287,22 @@ class AuthResourceTest {
         }
     }
 
+    private static final class FakeRemoteSessionService extends RemoteSessionService {
+        @Override
+        public java.util.List<dev.inboxbridge.persistence.RemoteSession> listRecentSessions(Long userId, int limit) {
+            return java.util.List.of();
+        }
+
+        @Override
+        public java.util.List<dev.inboxbridge.persistence.RemoteSession> listActiveSessions(Long userId) {
+            return java.util.List.of();
+        }
+
+        @Override
+        public void invalidateOtherSessions(Long userId) {
+        }
+    }
+
     private static final class FakeSystemOAuthAppSettingsService extends SystemOAuthAppSettingsService {
         private final boolean googleConfigured;
 
@@ -309,12 +338,22 @@ class AuthResourceTest {
         @Override
         public RegistrationChallengeResponse currentChallenge() {
             return enabled
-                    ? new RegistrationChallengeResponse(true, "challenge-1", "2 + 3 = ?")
+                    ? new RegistrationChallengeResponse(
+                            true,
+                            "ALTCHA",
+                            null,
+                            new RegistrationChallengeResponse.AltchaChallengeResponse(
+                                    "challenge-1",
+                                    "SHA-256",
+                                    "challenge",
+                                    "salt",
+                                    "signature",
+                                    1000))
                     : RegistrationChallengeResponse.disabled();
         }
 
         @Override
-        public void validateAndConsume(String challengeId, String challengeAnswer) {
+        public void validateAndConsume(String captchaToken, String remoteIpAddress) {
         }
     }
 
@@ -332,7 +371,19 @@ class AuthResourceTest {
                     java.time.Duration.ofMinutes(5),
                     java.time.Duration.ofHours(1),
                     registrationChallengeEnabled,
-                    java.time.Duration.ofMinutes(10));
+                    java.time.Duration.ofMinutes(10),
+                    "ALTCHA",
+                    "",
+                    "",
+                    "",
+                    "",
+                    false,
+                    "IPWHOIS",
+                    "IPAPI_CO,IP_API,IPINFO_LITE",
+                    java.time.Duration.ofDays(30),
+                    java.time.Duration.ofMinutes(5),
+                    java.time.Duration.ofSeconds(3),
+                    "");
         }
     }
 
@@ -346,6 +397,19 @@ class AuthResourceTest {
         @Override
         public boolean multiUserEnabled() {
             return enabled;
+        }
+    }
+
+    private static final class FakeGeoIpLocationService extends GeoIpLocationService {
+        private final boolean configured;
+
+        private FakeGeoIpLocationService(boolean configured) {
+            this.configured = configured;
+        }
+
+        @Override
+        public boolean isConfigured() {
+            return configured;
         }
     }
 
@@ -435,5 +499,17 @@ class AuthResourceTest {
         public int getLength() {
             return 0;
         }
+    }
+
+    static HttpServerRequest staticHttpServerRequest(String remoteAddress) {
+        return (HttpServerRequest) Proxy.newProxyInstance(
+                HttpServerRequest.class.getClassLoader(),
+                new Class<?>[] { HttpServerRequest.class },
+                (proxy, method, args) -> {
+                    if ("remoteAddress".equals(method.getName())) {
+                        return SocketAddress.inetSocketAddress(443, remoteAddress);
+                    }
+                    return null;
+                });
     }
 }

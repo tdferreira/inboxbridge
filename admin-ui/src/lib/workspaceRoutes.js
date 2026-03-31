@@ -55,9 +55,8 @@ export function resolveWorkspaceRoute(pathname) {
 
 export function buildWorkspacePath(locale, workspace, options = {}) {
   const normalizedLocale = normalizeLocale(locale)
-  const explicitUserRoute = Boolean(options.explicitUserRoute)
 
-  if (workspace !== 'admin' && !explicitUserRoute) {
+  if (workspace !== 'admin') {
     return '/'
   }
 
@@ -79,7 +78,7 @@ export function canonicalWorkspacePath(pathname, locale, isAdmin) {
     return buildWorkspacePath(locale, 'admin')
   }
   if (route.kind === 'user') {
-    return buildWorkspacePath(locale, 'user', { explicitUserRoute: true })
+    return '/'
   }
 
   return '/'

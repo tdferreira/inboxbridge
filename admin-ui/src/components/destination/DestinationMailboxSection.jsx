@@ -1,6 +1,6 @@
 import { useState } from 'react'
 
-import PaneToggleButton from '../common/PaneToggleButton'
+import CollapsibleSection from '../common/CollapsibleSection'
 import DestinationMailboxDialog from './DestinationMailboxDialog'
 import GoogleDestinationSetupPanel from './GoogleDestinationSetupPanel'
 import { findDestinationProviderPreset, normalizeDestinationProviderConfig } from '../../lib/emailProviderPresets'
@@ -54,33 +54,26 @@ function DestinationMailboxSection({
 
   return (
     <section className={`app-columns ${hasSidebar ? '' : 'app-columns-single'}`.trim()}>
-      <section className="surface-card destination-mailbox-panel section-with-corner-toggle" id="destination-mailbox-section" tabIndex="-1">
-        <div className="panel-header">
-          <div>
-            <div className="section-title">{t('destination.title')}</div>
-            <p className="section-copy">{t(savedIsGmailProvider ? (isAdmin ? 'destination.gmailAdminCopy' : 'destination.gmailUserCopy') : 'destination.imapCopy')}</p>
-          </div>
-          <div className="panel-header-actions">
-            {configured ? (
-              <button className="secondary" onClick={openDialog} type="button">
-                {t('destination.edit')}
-              </button>
-            ) : (
-              <button className="primary" onClick={openDialog} type="button">
-                {t('destination.add')}
-              </button>
-            )}
-          </div>
-        </div>
-        <PaneToggleButton className="pane-toggle-button-corner" collapseLabel={t('common.collapseSection')} collapsed={collapsed} disabled={collapseLoading} expandLabel={t('common.expandSection')} isLoading={collapseLoading} onClick={onCollapseToggle} />
-        {sectionLoading ? (
-          <div className="section-refresh-indicator" role="status">
-            <span aria-hidden="true" className="section-refresh-spinner" />
-            {t('common.refreshingSection')}
-          </div>
-        ) : null}
-        {!collapsed ? (
-          <>
+      <CollapsibleSection
+        actions={configured ? (
+          <button className="secondary" onClick={openDialog} type="button">
+            {t('destination.edit')}
+          </button>
+        ) : (
+          <button className="primary" onClick={openDialog} type="button">
+            {t('destination.add')}
+          </button>
+        )}
+        className="destination-mailbox-panel"
+        collapsed={collapsed}
+        collapseLoading={collapseLoading}
+        copy={t(savedIsGmailProvider ? (isAdmin ? 'destination.gmailAdminCopy' : 'destination.gmailUserCopy') : 'destination.imapCopy')}
+        id="destination-mailbox-section"
+        onCollapseToggle={onCollapseToggle}
+        sectionLoading={sectionLoading}
+        t={t}
+        title={t('destination.title')}
+      >
             {configured ? (
               <div className="destination-credential-status muted-box">
                 <strong>{t('destination.savedStatus')}</strong><br />
@@ -144,9 +137,7 @@ function DestinationMailboxSection({
                 unlinkLoading={unlinkLoading}
               />
             ) : null}
-          </>
-        ) : null}
-      </section>
+      </CollapsibleSection>
 
       {hasSidebar ? (
         <aside className="sidebar-stack">

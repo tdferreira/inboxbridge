@@ -131,7 +131,10 @@ class AdminResourceTest {
 
         BadRequestException error = assertThrows(
                 BadRequestException.class,
-                () -> resource.updateAuthSecuritySettings(new UpdateAuthSecuritySettingsRequest(5, "PT30M", "PT10M", Boolean.TRUE, "PT10M")));
+                () -> resource.updateAuthSecuritySettings(new UpdateAuthSecuritySettingsRequest(
+                        5, "PT30M", "PT10M", Boolean.TRUE, "PT10M", "ALTCHA",
+                        null, null, null, null,
+                        null, null, null, null, null, null, null)));
 
         assertEquals("Maximum login block must be greater than or equal to the initial login block", error.getMessage());
     }
@@ -265,7 +268,38 @@ class AdminResourceTest {
                     false,
                     "PT10M",
                     "PT20M",
-                    "PT20M");
+                    "PT20M",
+                    "ALTCHA",
+                    null,
+                    "ALTCHA",
+                    "ALTCHA, TURNSTILE, HCAPTCHA",
+                    "",
+                    null,
+                    false,
+                    "",
+                    null,
+                    false,
+                    false,
+                    Boolean.TRUE,
+                    true,
+                    "IPWHOIS",
+                    "IPAPI_CO",
+                    "IPAPI_CO",
+                    "IPAPI_CO,IP_API,IPINFO_LITE",
+                    "IP_API,IPINFO_LITE",
+                    "IP_API,IPINFO_LITE",
+                    "PT720H",
+                    "PT240H",
+                    "PT240H",
+                    "PT5M",
+                    "PT10M",
+                    "PT10M",
+                    "PT3S",
+                    "PT5S",
+                    "PT5S",
+                    "IPWHOIS, IPAPI_CO, IP_API, IPINFO_LITE",
+                    false,
+                    true);
         }
     }
 

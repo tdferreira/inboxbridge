@@ -1,0 +1,42 @@
+.user-polling-dialog-form {
+  display: grid;
+  gap: 18px;
+}
+
+.user-polling-dialog-sections {
+  display: grid;
+  gap: 14px;
+}
+
+.user-polling-dialog-section {
+  display: grid;
+  gap: 14px;
+  padding: 18px;
+  border: 1px solid rgba(36, 26, 20, 0.1);
+  border-radius: 24px;
+  background: rgba(255, 255, 255, 0.62);
+}
+
+.user-polling-dialog-section-header {
+  display: grid;
+  gap: 6px;
+}
+
+.user-polling-dialog-section-title {
+  font-size: 1rem;
+  font-weight: 700;
+  line-height: 1.2;
+}
+
+.user-polling-dialog-section-copy {
+  margin: 0;
+  color: var(--muted);
+  font-size: 0.95rem;
+  line-height: 1.45;
+}
+
+@media (max-width: 720px) {
+  .user-polling-dialog-section {
+    padding: 16px;
+  }
+}

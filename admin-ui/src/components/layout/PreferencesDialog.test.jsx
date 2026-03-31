@@ -36,6 +36,8 @@ describe('PreferencesDialog', () => {
 
     expect(screen.getByRole('button', { name: 'Edit Layout' })).toBeInTheDocument()
     expect(checkboxForText('Show Quick Setup Guide')).toBeInTheDocument()
+    expect(screen.getByText('Show Quick Setup Guide').closest('label')).toHaveClass('checkbox-row')
+    expect(screen.getByText('Remember layout on this account').closest('label')).toHaveClass('checkbox-row')
   })
 
   it('starts layout editing from the action button', () => {

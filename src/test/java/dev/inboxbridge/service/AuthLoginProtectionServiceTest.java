@@ -64,7 +64,19 @@ class AuthLoginProtectionServiceTest {
                         initialBlock,
                         maxBlock,
                         true,
-                        Duration.ofMinutes(10));
+                        Duration.ofMinutes(10),
+                        "ALTCHA",
+                        "",
+                        "",
+                        "",
+                        "",
+                        false,
+                        "IPWHOIS",
+                        "IPAPI_CO,IP_API,IPINFO_LITE",
+                        Duration.ofDays(30),
+                        Duration.ofMinutes(5),
+                        Duration.ofSeconds(3),
+                        "");
             }
         };
     }

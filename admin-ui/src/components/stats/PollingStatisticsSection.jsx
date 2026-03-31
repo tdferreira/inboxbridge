@@ -1,5 +1,5 @@
+import CollapsibleSection from '../common/CollapsibleSection'
 import ImportTimelineChart from '../common/ImportTimelineChart'
-import PaneToggleButton from '../common/PaneToggleButton'
 import './PollingStatisticsSection.css'
 
 function formatDuration(milliseconds, t) {
@@ -53,32 +53,19 @@ function PollingStatisticsSection({
   const isSourceVariant = variant === 'source'
 
   return (
-    <section className="surface-card polling-statistics-section section-with-corner-toggle" id={id} tabIndex="-1">
-      <div className="panel-header">
-        <div>
-          <div className="section-title">{title}</div>
-          <p className="section-copy">{copy}</p>
-        </div>
-      </div>
-      {showCollapseToggle ? (
-        <PaneToggleButton
-          className="pane-toggle-button-corner"
-          collapseLabel={t('common.collapseSection')}
-          collapsed={collapsed}
-          disabled={collapseLoading}
-          expandLabel={t('common.expandSection')}
-          isLoading={collapseLoading}
-          onClick={onCollapseToggle}
-        />
-      ) : null}
-      {sectionLoading ? (
-        <div className="section-refresh-indicator" role="status">
-          <span aria-hidden="true" className="section-refresh-spinner" />
-          {t('common.refreshingSection')}
-        </div>
-      ) : null}
-
-      {!collapsed && stats ? (
+    <CollapsibleSection
+      className="polling-statistics-section"
+      collapsed={collapsed}
+      collapseLoading={collapseLoading}
+      copy={copy}
+      id={id}
+      onCollapseToggle={onCollapseToggle}
+      sectionLoading={sectionLoading}
+      showCollapseToggle={showCollapseToggle}
+      t={t}
+      title={title}
+    >
+      {stats ? (
         <>
           {isSourceVariant ? (
             <div className="system-dashboard-summary">
@@ -149,10 +136,10 @@ function PollingStatisticsSection({
             ) : null}
           </div>
         </>
-      ) : !collapsed ? (
+      ) : (
         <div className="muted-box">{t('pollingStats.notEnoughData')}</div>
-      ) : null}
-    </section>
+      )}
+    </CollapsibleSection>
   )
 }
 

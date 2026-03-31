@@ -5,6 +5,7 @@ import SystemDashboardSection from '../admin/SystemDashboardSection'
 import UserManagementSection from '../admin/UserManagementSection'
 import DestinationMailboxSection from '../destination/DestinationMailboxSection'
 import UserEmailAccountsSection from '../emailAccounts/UserEmailAccountsSection'
+import RemoteControlLaunchSection from './RemoteControlLaunchSection'
 import SetupGuidePanel from './SetupGuidePanel'
 import UserPollingSettingsSection from '../polling/UserPollingSettingsSection'
 
@@ -94,6 +95,10 @@ export function buildUserWorkspaceSections({
           t={t}
         />
       )
+    },
+    {
+      id: 'remoteControl',
+      render: () => <RemoteControlLaunchSection t={t} />
     },
     {
       id: 'userStats',

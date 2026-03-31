@@ -469,6 +469,56 @@ class AdminDashboardServiceTest {
                         public Duration registrationChallengeTtl() {
                             return Duration.ofMinutes(10);
                         }
+
+                        @Override
+                        public String registrationChallengeProvider() {
+                            return "ALTCHA";
+                        }
+
+                        @Override
+                        public RegistrationCaptcha registrationCaptcha() {
+                            return captchaDefaults();
+                        }
+
+                        @Override
+                        public GeoIp geoIp() {
+                            return new GeoIp() {
+                                @Override
+                                public boolean enabled() {
+                                    return false;
+                                }
+
+                                @Override
+                                public String primaryProvider() {
+                                    return "IPWHOIS";
+                                }
+
+                                @Override
+                                public String fallbackProviders() {
+                                    return "IPINFO_LITE";
+                                }
+
+                                @Override
+                                public Duration cacheTtl() {
+                                    return Duration.ofDays(30);
+                                }
+
+                                @Override
+                                public Duration providerCooldown() {
+                                    return Duration.ofMinutes(5);
+                                }
+
+                                @Override
+                                public Duration requestTimeout() {
+                                    return Duration.ofSeconds(3);
+                                }
+
+                                @Override
+                                public java.util.Optional<String> ipinfoToken() {
+                                    return java.util.Optional.empty();
+                                }
+                            };
+                        }
                     };
                 }
 
@@ -500,6 +550,11 @@ class AdminDashboardServiceTest {
                             return "PT5M";
                         }
                     };
+                }
+
+                @Override
+                public Remote remote() {
+                    return remoteDefaults();
                 }
             };
         }
@@ -579,6 +634,89 @@ class AdminDashboardServiceTest {
             return List.of(
                     new TestSource("outlook-main-imap", true, Protocol.IMAP, AuthMethod.OAUTH2, OAuthProvider.MICROSOFT),
                     new TestSource("legacy-pop", false, Protocol.POP3, AuthMethod.PASSWORD, OAuthProvider.NONE));
+        }
+
+        private InboxBridgeConfig.Security.Auth.RegistrationCaptcha captchaDefaults() {
+            return new InboxBridgeConfig.Security.Auth.RegistrationCaptcha() {
+                @Override
+                public InboxBridgeConfig.Security.Auth.RegistrationCaptcha.Altcha altcha() {
+                    return new InboxBridgeConfig.Security.Auth.RegistrationCaptcha.Altcha() {
+                        @Override
+                        public long maxNumber() {
+                            return 100000L;
+                        }
+
+                        @Override
+                        public Optional<String> hmacKey() {
+                            return Optional.empty();
+                        }
+                    };
+                }
+
+                @Override
+                public InboxBridgeConfig.Security.Auth.RegistrationCaptcha.Turnstile turnstile() {
+                    return new InboxBridgeConfig.Security.Auth.RegistrationCaptcha.Turnstile() {
+                        @Override
+                        public Optional<String> siteKey() {
+                            return Optional.empty();
+                        }
+
+                        @Override
+                        public Optional<String> secret() {
+                            return Optional.empty();
+                        }
+                    };
+                }
+
+                @Override
+                public InboxBridgeConfig.Security.Auth.RegistrationCaptcha.Hcaptcha hcaptcha() {
+                    return new InboxBridgeConfig.Security.Auth.RegistrationCaptcha.Hcaptcha() {
+                        @Override
+                        public Optional<String> siteKey() {
+                            return Optional.empty();
+                        }
+
+                        @Override
+                        public Optional<String> secret() {
+                            return Optional.empty();
+                        }
+                    };
+                }
+            };
+        }
+
+        private Security.Remote remoteDefaults() {
+            return new Security.Remote() {
+                @Override
+                public boolean enabled() {
+                    return true;
+                }
+
+                @Override
+                public Duration sessionTtl() {
+                    return Duration.ofHours(12);
+                }
+
+                @Override
+                public int pollRateLimitCount() {
+                    return 60;
+                }
+
+                @Override
+                public Duration pollRateLimitWindow() {
+                    return Duration.ofMinutes(1);
+                }
+
+                @Override
+                public Optional<String> serviceToken() {
+                    return Optional.empty();
+                }
+
+                @Override
+                public Optional<String> serviceUsername() {
+                    return Optional.empty();
+                }
+            };
         }
     }
 

@@ -10,6 +10,18 @@
 6. `MailDestinationService` dispatches to the active destination provider, such as Gmail API import or IMAP APPEND
 7. Import metadata is stored in PostgreSQL
 
+## Remote control flow
+
+The `/remote` surface now sits beside the full admin UI:
+
+1. The browser signs in through `/api/remote/auth/...`
+2. InboxBridge validates the same user credentials / passkey ceremonies used by the main app
+3. A separate `remote_session` row is created with its own token hash and CSRF token hash
+4. The browser calls `/api/remote/control` to list visible sources and allowed actions
+5. Remote poll actions call dedicated `/api/remote/...` endpoints, which still route into the normal `PollingService`
+
+This keeps the polling engine and hardening behavior shared, while reducing the privilege and blast radius of the public quick-access surface.
+
 ## Why Gmail import is still one destination mode
 
 When the destination provider is Gmail, `messages.import` is the right API for this use case because it imports a raw MIME message into the mailbox without re-sending it to the world. That preserves the original sender, headers, dates, attachments, and threading signals much better than forwarding.

@@ -93,8 +93,15 @@ describe('useAuthSecurityController', () => {
       ok: true,
       json: vi.fn().mockResolvedValue({
         enabled: true,
-        challengeId: 'challenge-1',
-        prompt: '2 + 3 = ?'
+        provider: 'ALTCHA',
+        altcha: {
+          challengeId: 'challenge-1',
+          algorithm: 'SHA-256',
+          challenge: 'abc',
+          salt: 'salt',
+          signature: 'sig',
+          maxNumber: 1000
+        }
       })
     })
     const { result } = renderController()
@@ -107,10 +114,17 @@ describe('useAuthSecurityController', () => {
     expect(result.current.registerOpen).toBe(true)
     expect(result.current.registerChallenge).toEqual({
       enabled: true,
-      challengeId: 'challenge-1',
-      prompt: '2 + 3 = ?'
+      provider: 'ALTCHA',
+      altcha: {
+        challengeId: 'challenge-1',
+        algorithm: 'SHA-256',
+        challenge: 'abc',
+        salt: 'salt',
+        signature: 'sig',
+        maxNumber: 1000
+      }
     })
-    expect(result.current.registerForm.challengeId).toBe('challenge-1')
+    expect(result.current.registerForm.captchaToken).toBe('')
   })
 
   it('refreshes the challenge after a failed registration attempt', async () => {
@@ -126,8 +140,15 @@ describe('useAuthSecurityController', () => {
         ok: true,
         json: vi.fn().mockResolvedValue({
           enabled: true,
-          challengeId: 'challenge-2',
-          prompt: '4 + 5 = ?'
+          provider: 'ALTCHA',
+          altcha: {
+            challengeId: 'challenge-2',
+            algorithm: 'SHA-256',
+            challenge: 'def',
+            salt: 'salt-2',
+            signature: 'sig-2',
+            maxNumber: 1000
+          }
         })
       })
     const { result } = renderController()
@@ -137,8 +158,7 @@ describe('useAuthSecurityController', () => {
         username: 'alice',
         password: 'Secret#123',
         confirmPassword: 'Secret#123',
-        challengeId: 'challenge-1',
-        challengeAnswer: '8'
+        captchaToken: 'solved-token'
       })
     })
 
@@ -147,9 +167,8 @@ describe('useAuthSecurityController', () => {
     })
 
     expect(result.current.authError).toBe('The anti-robot check answer is incorrect. Try the new challenge again.')
-    expect(result.current.registerChallenge?.challengeId).toBe('challenge-2')
-    expect(result.current.registerForm.challengeId).toBe('challenge-2')
-    expect(result.current.registerForm.challengeAnswer).toBe('')
+    expect(result.current.registerChallenge?.altcha?.challengeId).toBe('challenge-2')
+    expect(result.current.registerForm.captchaToken).toBe('')
   })
 
   it('loads session activity when the sessions tab opens', async () => {
@@ -157,7 +176,8 @@ describe('useAuthSecurityController', () => {
       ok: true,
       json: vi.fn().mockResolvedValue({
         recentLogins: [{ id: 1, ipAddress: '203.0.113.9' }],
-        activeSessions: [{ id: 1, current: true }]
+        activeSessions: [{ id: 1, current: true }],
+        geoIpConfigured: true
       })
     })
     const { result } = renderController()
@@ -168,6 +188,7 @@ describe('useAuthSecurityController', () => {
 
     expect(fetch).toHaveBeenCalledWith('/api/account/sessions')
     expect(result.current.sessionActivity.recentLogins).toHaveLength(1)
+    expect(result.current.sessionActivity.geoIpConfigured).toBe(true)
     expect(result.current.securityTab).toBe('sessions')
   })
 
@@ -176,15 +197,15 @@ describe('useAuthSecurityController', () => {
       .mockResolvedValueOnce({
         ok: true,
         json: vi.fn().mockResolvedValue({
-          recentLogins: [{ id: 10, current: true, createdAt: '2026-03-31T10:00:00Z' }],
-          activeSessions: [{ id: 10, current: true }]
+          recentLogins: [{ id: 10, sessionType: 'BROWSER', current: true, createdAt: '2026-03-31T10:00:00Z' }],
+          activeSessions: [{ id: 10, sessionType: 'BROWSER', current: true }]
         })
       })
       .mockResolvedValueOnce({
         ok: true,
         json: vi.fn().mockResolvedValue({
-          recentLogins: [{ id: 11, current: false, createdAt: '2026-03-31T10:05:00Z' }, { id: 10, current: true, createdAt: '2026-03-31T10:00:00Z' }],
-          activeSessions: [{ id: 10, current: true }, { id: 11, current: false }]
+          recentLogins: [{ id: 11, sessionType: 'REMOTE', current: false, createdAt: '2026-03-31T10:05:00Z' }, { id: 10, sessionType: 'BROWSER', current: true, createdAt: '2026-03-31T10:00:00Z' }],
+          activeSessions: [{ id: 10, sessionType: 'BROWSER', current: true }, { id: 11, sessionType: 'REMOTE', current: false }]
         })
       })
     const { result, pushNotification } = renderController()
@@ -200,8 +221,14 @@ describe('useAuthSecurityController', () => {
     })
 
     expect(pushNotification).toHaveBeenCalledWith({
-      message: { kind: 'translation', key: 'notifications.newSessionDetected', params: {} },
-      targetId: 'recent-session-11',
+      message: {
+        kind: 'translation',
+        key: 'notifications.newSessionDetectedWithoutLocation',
+        params: {
+          sessionType: { kind: 'translation', key: 'sessions.kindRemote', params: {} }
+        }
+      },
+      targetId: 'recent-session-REMOTE-11',
       tone: 'warning'
     })
   })
@@ -281,8 +308,7 @@ describe('useAuthSecurityController', () => {
         username: 'alice',
         password: 'Secret#123',
         confirmPassword: 'Secret#123',
-        challengeId: 'challenge-1',
-        challengeAnswer: '7'
+        captchaToken: 'solved-token'
       })
     })
 
@@ -301,8 +327,7 @@ describe('useAuthSecurityController', () => {
       username: '',
       password: '',
       confirmPassword: '',
-      challengeId: '',
-      challengeAnswer: ''
+      captchaToken: ''
     })
     expect(result.current.authError).toBe('auth.sessionExpired')
     expect(onLogoutReset).toHaveBeenCalledTimes(1)

@@ -36,6 +36,25 @@ import { applyOrderedSectionIds } from './lib/workspacePreferences'
 import { buildWorkspacePath, canonicalWorkspacePath, resolveWorkspaceRoute } from './lib/workspaceRoutes'
 
 const REFRESH_MS = 30000
+const DEFAULT_AUTH_SECURITY_FORM = {
+  loginFailureThresholdOverride: '',
+  loginInitialBlockOverride: '',
+  loginMaxBlockOverride: '',
+  registrationChallengeMode: 'DEFAULT',
+  registrationChallengeTtlOverride: '',
+  registrationChallengeProviderOverride: '',
+  registrationTurnstileSiteKeyOverride: '',
+  registrationTurnstileSecret: '',
+  registrationHcaptchaSiteKeyOverride: '',
+  registrationHcaptchaSecret: '',
+  geoIpMode: 'DEFAULT',
+  geoIpPrimaryProviderOverride: '',
+  geoIpFallbackProvidersOverride: '',
+  geoIpCacheTtlOverride: '',
+  geoIpProviderCooldownOverride: '',
+  geoIpRequestTimeoutOverride: '',
+  geoIpIpinfoToken: ''
+}
 
 const DEFAULT_DESTINATION_CONFIG = {
   provider: 'GMAIL_API',
@@ -87,7 +106,38 @@ const DEFAULT_AUTH_SECURITY_SETTINGS = {
   effectiveRegistrationChallengeEnabled: true,
   defaultRegistrationChallengeTtl: 'PT10M',
   registrationChallengeTtlOverride: null,
-  effectiveRegistrationChallengeTtl: 'PT10M'
+  effectiveRegistrationChallengeTtl: 'PT10M',
+  defaultRegistrationChallengeProvider: 'ALTCHA',
+  registrationChallengeProviderOverride: null,
+  effectiveRegistrationChallengeProvider: 'ALTCHA',
+  availableRegistrationCaptchaProviders: 'ALTCHA, TURNSTILE, HCAPTCHA',
+  defaultRegistrationTurnstileSiteKey: '',
+  registrationTurnstileSiteKeyOverride: null,
+  registrationTurnstileConfigured: false,
+  defaultRegistrationHcaptchaSiteKey: '',
+  registrationHcaptchaSiteKeyOverride: null,
+  registrationHcaptchaConfigured: false,
+  defaultGeoIpEnabled: false,
+  geoIpEnabledOverride: null,
+  effectiveGeoIpEnabled: false,
+  defaultGeoIpPrimaryProvider: 'IPWHOIS',
+  geoIpPrimaryProviderOverride: null,
+  effectiveGeoIpPrimaryProvider: 'IPWHOIS',
+  defaultGeoIpFallbackProviders: 'IPAPI_CO,IP_API,IPINFO_LITE',
+  geoIpFallbackProvidersOverride: null,
+  effectiveGeoIpFallbackProviders: 'IPAPI_CO,IP_API,IPINFO_LITE',
+  defaultGeoIpCacheTtl: 'PT720H',
+  geoIpCacheTtlOverride: null,
+  effectiveGeoIpCacheTtl: 'PT720H',
+  defaultGeoIpProviderCooldown: 'PT5M',
+  geoIpProviderCooldownOverride: null,
+  effectiveGeoIpProviderCooldown: 'PT5M',
+  defaultGeoIpRequestTimeout: 'PT3S',
+  geoIpRequestTimeoutOverride: null,
+  effectiveGeoIpRequestTimeout: 'PT3S',
+  availableGeoIpProviders: 'IPWHOIS, IPAPI_CO, IP_API, IPINFO_LITE',
+  geoIpIpinfoTokenConfigured: false,
+  secureStorageConfigured: true
 }
 const DEFAULT_USER_POLLING_STATS = {
   totalImportedMessages: 0,
@@ -117,6 +167,7 @@ const DEFAULT_AUTH_OPTIONS = {
   microsoftOAuthAvailable: true,
   googleOAuthAvailable: true,
   registrationChallengeEnabled: true,
+  registrationChallengeProvider: 'ALTCHA',
   sourceOAuthProviders: ['MICROSOFT', 'GOOGLE']
 }
 const SECTION_HIGHLIGHT_MS = 2600
@@ -124,6 +175,33 @@ const NOTIFICATION_AUTO_CLOSE_MS = {
   success: 8000,
   warning: 12000,
   error: 16000
+}
+
+function authSecurityFormFromSettings(settings) {
+  return {
+    ...DEFAULT_AUTH_SECURITY_FORM,
+    loginFailureThresholdOverride: settings.loginFailureThresholdOverride ?? '',
+    loginInitialBlockOverride: settings.loginInitialBlockOverride ?? '',
+    loginMaxBlockOverride: settings.loginMaxBlockOverride ?? '',
+    registrationChallengeMode: settings.registrationChallengeEnabledOverride == null
+      ? 'DEFAULT'
+      : (settings.registrationChallengeEnabledOverride ? 'ENABLED' : 'DISABLED'),
+    registrationChallengeTtlOverride: settings.registrationChallengeTtlOverride ?? '',
+    registrationChallengeProviderOverride: settings.registrationChallengeProviderOverride ?? '',
+    registrationTurnstileSiteKeyOverride: settings.registrationTurnstileSiteKeyOverride ?? '',
+    registrationTurnstileSecret: '',
+    registrationHcaptchaSiteKeyOverride: settings.registrationHcaptchaSiteKeyOverride ?? '',
+    registrationHcaptchaSecret: '',
+    geoIpMode: settings.geoIpEnabledOverride == null
+      ? 'DEFAULT'
+      : (settings.geoIpEnabledOverride ? 'ENABLED' : 'DISABLED'),
+    geoIpPrimaryProviderOverride: settings.geoIpPrimaryProviderOverride ?? '',
+    geoIpFallbackProvidersOverride: settings.geoIpFallbackProvidersOverride ?? '',
+    geoIpCacheTtlOverride: settings.geoIpCacheTtlOverride ?? '',
+    geoIpProviderCooldownOverride: settings.geoIpProviderCooldownOverride ?? '',
+    geoIpRequestTimeoutOverride: settings.geoIpRequestTimeoutOverride ?? '',
+    geoIpIpinfoToken: ''
+  }
 }
 /**
  * Coordinates admin-ui data fetching and browser interactions while delegating
@@ -150,13 +228,7 @@ function AppContent() {
   const [systemOAuthSettingsDirty, setSystemOAuthSettingsDirty] = useState(false)
   const [systemOAuthEditorProvider, setSystemOAuthEditorProvider] = useState('google')
   const [authSecuritySettings, setAuthSecuritySettings] = useState(DEFAULT_AUTH_SECURITY_SETTINGS)
-  const [authSecuritySettingsForm, setAuthSecuritySettingsForm] = useState({
-    loginFailureThresholdOverride: '',
-    loginInitialBlockOverride: '',
-    loginMaxBlockOverride: '',
-    registrationChallengeMode: 'DEFAULT',
-    registrationChallengeTtlOverride: ''
-  })
+  const [authSecuritySettingsForm, setAuthSecuritySettingsForm] = useState(DEFAULT_AUTH_SECURITY_FORM)
   const [authSecuritySettingsDirty, setAuthSecuritySettingsDirty] = useState(false)
   const [dismissedPersistentNotifications, setDismissedPersistentNotifications] = useState({})
   const [language, setLanguage] = useState(() => normalizeLocale(window.localStorage.getItem('inboxbridge.language') || navigator.language))
@@ -230,8 +302,7 @@ function AppContent() {
   } = layout
 
   function setAdminWorkspace(nextWorkspace, options = {}) {
-    const explicitUserRoute = nextWorkspace === 'user' && Boolean(options.explicitUserRoute ?? (isAdmin && location.pathname !== '/'))
-    const nextPath = buildWorkspacePath(language, nextWorkspace, { explicitUserRoute })
+    const nextPath = buildWorkspacePath(language, nextWorkspace)
     if (location.pathname === nextPath) {
       return
     }
@@ -559,15 +630,7 @@ function AppContent() {
             ...authSecurityPayload
           }
           setAuthSecuritySettings(normalizedAuthSecurity)
-          setAuthSecuritySettingsForm({
-            loginFailureThresholdOverride: normalizedAuthSecurity.loginFailureThresholdOverride ?? '',
-            loginInitialBlockOverride: normalizedAuthSecurity.loginInitialBlockOverride ?? '',
-            loginMaxBlockOverride: normalizedAuthSecurity.loginMaxBlockOverride ?? '',
-            registrationChallengeMode: normalizedAuthSecurity.registrationChallengeEnabledOverride == null
-              ? 'DEFAULT'
-              : (normalizedAuthSecurity.registrationChallengeEnabledOverride ? 'ENABLED' : 'DISABLED'),
-            registrationChallengeTtlOverride: normalizedAuthSecurity.registrationChallengeTtlOverride ?? ''
-          })
+          setAuthSecuritySettingsForm(authSecurityFormFromSettings(normalizedAuthSecurity))
           setAuthSecuritySettingsDirty(false)
         }
       } else {
@@ -595,6 +658,19 @@ function AppContent() {
     }
   }
 
+  async function refreshRuntimeState({ announceNewSessions = false, suppressSessionErrors = false } = {}) {
+    const pendingLoads = [loadAppData()]
+    if (sessionActivityPollerRef.current) {
+      pendingLoads.push(
+        sessionActivityPollerRef.current({
+          announceNewSessions,
+          suppressErrors: suppressSessionErrors
+        })
+      )
+    }
+    await Promise.all(pendingLoads)
+  }
+
   async function refreshSectionData(sectionKey, loader) {
     setSectionRefreshLoading((current) => ({ ...current, [sectionKey]: true }))
     try {
@@ -620,15 +696,9 @@ function AppContent() {
 
   useEffect(() => {
     if (!session) return
-    void Promise.all([
-      loadAppData(),
-      sessionActivityPollerRef.current?.({ announceNewSessions: true, suppressErrors: true })
-    ])
+    void refreshRuntimeState({ announceNewSessions: true, suppressSessionErrors: true })
     const timer = window.setInterval(() => {
-      void Promise.all([
-        loadAppData(),
-        sessionActivityPollerRef.current?.({ announceNewSessions: true, suppressErrors: true })
-      ])
+      void refreshRuntimeState({ announceNewSessions: true, suppressSessionErrors: true })
     }, REFRESH_MS)
     return () => window.clearInterval(timer)
   }, [authOptions.multiUserEnabled, session])
@@ -785,7 +855,21 @@ function AppContent() {
             registrationChallengeEnabledOverride: authSecuritySettingsForm.registrationChallengeMode === 'DEFAULT'
               ? null
               : authSecuritySettingsForm.registrationChallengeMode === 'ENABLED',
-            registrationChallengeTtlOverride: authSecuritySettingsForm.registrationChallengeTtlOverride || null
+            registrationChallengeTtlOverride: authSecuritySettingsForm.registrationChallengeTtlOverride || null,
+            registrationChallengeProviderOverride: authSecuritySettingsForm.registrationChallengeProviderOverride || null,
+            registrationTurnstileSiteKeyOverride: authSecuritySettingsForm.registrationTurnstileSiteKeyOverride || null,
+            registrationTurnstileSecret: authSecuritySettingsForm.registrationTurnstileSecret || null,
+            registrationHcaptchaSiteKeyOverride: authSecuritySettingsForm.registrationHcaptchaSiteKeyOverride || null,
+            registrationHcaptchaSecret: authSecuritySettingsForm.registrationHcaptchaSecret || null,
+            geoIpEnabledOverride: authSecuritySettingsForm.geoIpMode === 'DEFAULT'
+              ? null
+              : authSecuritySettingsForm.geoIpMode === 'ENABLED',
+            geoIpPrimaryProviderOverride: authSecuritySettingsForm.geoIpPrimaryProviderOverride || null,
+            geoIpFallbackProvidersOverride: authSecuritySettingsForm.geoIpFallbackProvidersOverride || null,
+            geoIpCacheTtlOverride: authSecuritySettingsForm.geoIpCacheTtlOverride || null,
+            geoIpProviderCooldownOverride: authSecuritySettingsForm.geoIpProviderCooldownOverride || null,
+            geoIpRequestTimeoutOverride: authSecuritySettingsForm.geoIpRequestTimeoutOverride || null,
+            geoIpIpinfoToken: authSecuritySettingsForm.geoIpIpinfoToken || null
           })
         })
         if (!response.ok) {
@@ -797,15 +881,7 @@ function AppContent() {
           ...payload
         }
         setAuthSecuritySettings(normalized)
-        setAuthSecuritySettingsForm({
-          loginFailureThresholdOverride: normalized.loginFailureThresholdOverride ?? '',
-          loginInitialBlockOverride: normalized.loginInitialBlockOverride ?? '',
-          loginMaxBlockOverride: normalized.loginMaxBlockOverride ?? '',
-          registrationChallengeMode: normalized.registrationChallengeEnabledOverride == null
-            ? 'DEFAULT'
-            : (normalized.registrationChallengeEnabledOverride ? 'ENABLED' : 'DISABLED'),
-          registrationChallengeTtlOverride: normalized.registrationChallengeTtlOverride ?? ''
-        })
+        setAuthSecuritySettingsForm(authSecurityFormFromSettings(normalized))
         setAuthSecuritySettingsDirty(false)
         setShowAuthSecurityDialog(false)
         pushNotification({ message: translatedNotification('notifications.authSecuritySettingsUpdated'), targetId: 'auth-security-section', tone: 'success' })
@@ -832,7 +908,19 @@ function AppContent() {
             loginInitialBlockOverride: null,
             loginMaxBlockOverride: null,
             registrationChallengeEnabledOverride: null,
-            registrationChallengeTtlOverride: null
+            registrationChallengeTtlOverride: null,
+            registrationChallengeProviderOverride: null,
+            registrationTurnstileSiteKeyOverride: null,
+            registrationTurnstileSecret: '',
+            registrationHcaptchaSiteKeyOverride: null,
+            registrationHcaptchaSecret: '',
+            geoIpEnabledOverride: null,
+            geoIpPrimaryProviderOverride: null,
+            geoIpFallbackProvidersOverride: null,
+            geoIpCacheTtlOverride: null,
+            geoIpProviderCooldownOverride: null,
+            geoIpRequestTimeoutOverride: null,
+            geoIpIpinfoToken: ''
           })
         })
         if (!response.ok) {
@@ -844,13 +932,7 @@ function AppContent() {
           ...payload
         }
         setAuthSecuritySettings(normalized)
-        setAuthSecuritySettingsForm({
-          loginFailureThresholdOverride: '',
-          loginInitialBlockOverride: '',
-          loginMaxBlockOverride: '',
-          registrationChallengeMode: 'DEFAULT',
-          registrationChallengeTtlOverride: ''
-        })
+        setAuthSecuritySettingsForm(DEFAULT_AUTH_SECURITY_FORM)
         setAuthSecuritySettingsDirty(false)
         pushNotification({ message: translatedNotification('notifications.authSecuritySettingsReset'), targetId: 'auth-security-section', tone: 'success' })
         await loadAuthOptions()
@@ -867,7 +949,7 @@ function AppContent() {
 
   async function handleRefresh() {
     await withPending('refresh', async () => {
-      await loadAppData()
+      await refreshRuntimeState({ announceNewSessions: true, suppressSessionErrors: false })
     })
   }
 
@@ -1317,6 +1399,7 @@ function AppContent() {
                 <div aria-labelledby="security-sessions-tab" className="security-tab-panel" id="security-sessions-tabpanel" role="tabpanel">
                   <SessionsPanel
                     activeSessions={auth.sessionActivity.activeSessions}
+                    geoIpConfigured={auth.sessionActivity.geoIpConfigured}
                     locale={language}
                     onRevokeOtherSessions={auth.handleRevokeOtherSessions}
                     onRevokeSession={auth.handleRevokeSession}

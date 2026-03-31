@@ -3,6 +3,7 @@ import LoadingButton from '../common/LoadingButton'
 import ModalDialog from '../common/ModalDialog'
 import DurationValue from '../common/DurationValue'
 import { formatDurationHint } from '../../lib/formatters'
+import './SystemPollingSettingsDialog.css'
 
 function SystemPollingSettingsDialog({
   isDirty,
@@ -16,6 +17,8 @@ function SystemPollingSettingsDialog({
   pollingSettingsLoading,
   t
 }) {
+  const pollingDisabled = pollingSettingsForm.pollEnabledMode === 'DISABLED'
+
   return (
     <ModalDialog
       closeLabel={t('common.closeDialog')}
@@ -24,11 +27,14 @@ function SystemPollingSettingsDialog({
       title={t('system.editTitle')}
       unsavedChangesMessage={t('dialogs.unsavedChanges')}
     >
-      <form className="settings-grid system-polling-grid" onSubmit={onSavePollingSettings}>
-        {(() => {
-          const pollingDisabled = pollingSettingsForm.pollEnabledMode === 'DISABLED'
-          return (
-            <>
+      <form className="system-polling-form" onSubmit={onSavePollingSettings}>
+        <div className="system-polling-sections">
+          <section className="surface-card system-polling-section">
+            <div className="system-polling-section-header">
+              <div className="system-polling-section-title">{t('system.schedulerSectionTitle')}</div>
+              <p className="system-polling-section-copy">{t('system.schedulerSectionCopy')}</p>
+            </div>
+            <div className="settings-grid system-polling-grid">
         <label>
           <span className="field-label-row">
             <span>{t('system.pollingMode')}</span>
@@ -67,6 +73,15 @@ function SystemPollingSettingsDialog({
             onChange={(event) => onPollingFormChange((current) => ({ ...current, fetchWindowOverride: event.target.value }))}
           />
         </label>
+            </div>
+          </section>
+
+          <section className="surface-card system-polling-section">
+            <div className="system-polling-section-header">
+              <div className="system-polling-section-title">{t('system.manualRunsSectionTitle')}</div>
+              <p className="system-polling-section-copy">{t('system.manualRunsSectionCopy')}</p>
+            </div>
+            <div className="settings-grid system-polling-grid">
         <div className="form-field-pair full">
           <label>
             <span className="field-label-row">
@@ -97,11 +112,15 @@ function SystemPollingSettingsDialog({
             />
           </label>
         </div>
-        <div className="muted-box full">
-          <strong>{t('system.throttleSectionTitle')}</strong><br />
-          {t('system.throttleSectionCopy')}<br />
-          {t('system.throttleExplanation')}
-        </div>
+            </div>
+          </section>
+
+          <section className="surface-card system-polling-section">
+            <div className="system-polling-section-header">
+              <div className="system-polling-section-title">{t('system.sourceThrottleSectionTitle')}</div>
+              <p className="system-polling-section-copy">{t('system.sourceThrottleSectionCopy')}</p>
+            </div>
+            <div className="settings-grid system-polling-grid">
         <div className="form-field-pair full">
           <label>
             <span className="field-label-row">
@@ -130,6 +149,15 @@ function SystemPollingSettingsDialog({
             />
           </label>
         </div>
+            </div>
+          </section>
+
+          <section className="surface-card system-polling-section">
+            <div className="system-polling-section-header">
+              <div className="system-polling-section-title">{t('system.destinationThrottleSectionTitle')}</div>
+              <p className="system-polling-section-copy">{t('system.destinationThrottleSectionCopy')}</p>
+            </div>
+            <div className="settings-grid system-polling-grid">
         <div className="form-field-pair full">
           <label>
             <span className="field-label-row">
@@ -158,6 +186,15 @@ function SystemPollingSettingsDialog({
             />
           </label>
         </div>
+            </div>
+          </section>
+
+          <section className="surface-card system-polling-section">
+            <div className="system-polling-section-header">
+              <div className="system-polling-section-title">{t('system.adaptiveSectionTitle')}</div>
+              <p className="system-polling-section-copy">{t('system.adaptiveSectionCopy')}</p>
+            </div>
+            <div className="settings-grid system-polling-grid">
         <div className="form-field-pair full">
           <label>
             <span className="field-label-row">
@@ -185,6 +222,11 @@ function SystemPollingSettingsDialog({
               onChange={(event) => onPollingFormChange((current) => ({ ...current, adaptiveThrottleMaxMultiplierOverride: event.target.value }))}
             />
           </label>
+        </div>
+        <div className="muted-box full">
+          <strong>{t('system.throttleSectionTitle')}</strong><br />
+          {t('system.throttleSectionCopy')}<br />
+          {t('system.throttleExplanation')}
         </div>
         <div className="form-field-pair full">
           <label>
@@ -215,7 +257,15 @@ function SystemPollingSettingsDialog({
             />
           </label>
         </div>
-        <div className="muted-box full">
+            </div>
+          </section>
+
+          <section className="surface-card system-polling-section system-polling-summary-card">
+            <div className="system-polling-section-header">
+              <div className="system-polling-section-title">{t('system.effectiveSectionTitle')}</div>
+              <p className="system-polling-section-copy">{t('system.effectiveSectionCopy')}</p>
+            </div>
+            <div className="muted-box">
           {t('system.effectivePolling', { value: pollingSettings.effectivePollEnabled ? t('common.yes') : t('common.no') })}<br />
           {t('system.effectiveInterval', { value: pollingSettings.effectivePollInterval })}<br />
           {t('system.effectiveFetchWindow', { value: pollingSettings.effectiveFetchWindow })}<br />
@@ -233,7 +283,9 @@ function SystemPollingSettingsDialog({
           {t('system.maxSuccessJitter')}: <DurationValue locale={locale} value={pollingSettings.effectiveMaxSuccessJitter} /><br />
           {t('system.intervalExamples')}
         </div>
-        <div className="action-row full">
+          </section>
+        </div>
+        <div className="action-row">
           <LoadingButton className="primary" isLoading={pollingSettingsLoading} loadingLabel={t('system.savePollSettingsLoading')} type="submit">
             {t('system.savePollSettings')}
           </LoadingButton>
@@ -241,9 +293,6 @@ function SystemPollingSettingsDialog({
             {t('system.useEnvDefaults')}
           </LoadingButton>
         </div>
-            </>
-          )
-        })()}
       </form>
     </ModalDialog>
   )

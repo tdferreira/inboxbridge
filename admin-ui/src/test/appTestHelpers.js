@@ -124,7 +124,8 @@ export function createWorkspaceRouteFetch({ session, uiPreferences = {}, session
       }
       return jsonResponse({
         recentLogins: [],
-        activeSessions: []
+        activeSessions: [],
+        geoIpConfigured: false
       })
     }
 
@@ -160,7 +161,28 @@ export function createWorkspaceRouteFetch({ session, uiPreferences = {}, session
           effectiveRegistrationChallengeEnabled: true,
           defaultRegistrationChallengeTtl: 'PT10M',
           registrationChallengeTtlOverride: null,
-          effectiveRegistrationChallengeTtl: 'PT10M'
+          effectiveRegistrationChallengeTtl: 'PT10M',
+          defaultGeoIpEnabled: false,
+          geoIpEnabledOverride: null,
+          effectiveGeoIpEnabled: false,
+          defaultGeoIpPrimaryProvider: 'IPWHOIS',
+          geoIpPrimaryProviderOverride: null,
+          effectiveGeoIpPrimaryProvider: 'IPWHOIS',
+          defaultGeoIpFallbackProviders: 'IPAPI_CO,IP_API,IPINFO_LITE',
+          geoIpFallbackProvidersOverride: null,
+          effectiveGeoIpFallbackProviders: 'IPAPI_CO,IP_API,IPINFO_LITE',
+          defaultGeoIpCacheTtl: 'PT720H',
+          geoIpCacheTtlOverride: null,
+          effectiveGeoIpCacheTtl: 'PT720H',
+          defaultGeoIpProviderCooldown: 'PT5M',
+          geoIpProviderCooldownOverride: null,
+          effectiveGeoIpProviderCooldown: 'PT5M',
+          defaultGeoIpRequestTimeout: 'PT3S',
+          geoIpRequestTimeoutOverride: null,
+          effectiveGeoIpRequestTimeout: 'PT3S',
+          availableGeoIpProviders: 'IPWHOIS, IPAPI_CO, IP_API, IPINFO_LITE',
+          geoIpIpinfoTokenConfigured: false,
+          secureStorageConfigured: true
         })
       }
       if (url === '/api/admin/dashboard') {

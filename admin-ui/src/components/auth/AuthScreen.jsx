@@ -2,6 +2,7 @@ import Banner from '../common/Banner'
 import LoadingButton from '../common/LoadingButton'
 import ModalDialog from '../common/ModalDialog'
 import PasswordField from '../common/PasswordField'
+import RegistrationCaptchaField from './RegistrationCaptchaField'
 import './AuthScreen.css'
 
 /**
@@ -31,7 +32,7 @@ function AuthScreen({
   t
 }) {
   const registerPasswordsMatch = registerForm.password !== '' && registerForm.password === registerForm.confirmPassword
-  const registrationReady = registerPasswordsMatch && (!registerChallenge || registerForm.challengeAnswer.trim() !== '')
+  const registrationReady = registerPasswordsMatch && (!registerChallenge?.enabled || registerForm.captchaToken.trim() !== '')
 
   return (
     <div className="page-shell">
@@ -82,8 +83,9 @@ function AuthScreen({
       {multiUserEnabled && registerOpen ? (
         <ModalDialog
           closeLabel={t('auth.closeRegisterDialog')}
-          isDirty={registerForm.username.trim() !== '' || registerForm.password !== '' || registerForm.confirmPassword !== ''}
+          isDirty={registerForm.username.trim() !== '' || registerForm.password !== '' || registerForm.confirmPassword !== '' || registerForm.captchaToken !== ''}
           onClose={onCloseRegisterDialog}
+          size="wide"
           title={t('auth.registerDialogTitle')}
           unsavedChangesMessage={t('common.unsavedChangesConfirm')}
         >
@@ -110,17 +112,13 @@ function AuthScreen({
               onChange={(event) => onRegisterChange((current) => ({ ...current, confirmPassword: event.target.value }))}
               showLabel={t('common.showField', { label: t('auth.repeatRequestedPassword') })}
             />
-            {registerChallengeLoading ? <div className="auth-screen-hint">{t('auth.challengeLoading')}</div> : null}
-            {registerChallenge ? (
-              <label>
-                <span>{t('auth.challengeAnswerLabel', { prompt: registerChallenge.prompt })}</span>
-                <input
-                  value={registerForm.challengeAnswer}
-                  onChange={(event) => onRegisterChange((current) => ({ ...current, challengeAnswer: event.target.value }))}
-                />
-                <div className="auth-screen-hint">{t('auth.challengeHelp')}</div>
-              </label>
-            ) : null}
+            <RegistrationCaptchaField
+              onRegisterChange={onRegisterChange}
+              registerChallenge={registerChallenge}
+              registerChallengeLoading={registerChallengeLoading}
+              registerForm={registerForm}
+              t={t}
+            />
             {!registerPasswordsMatch && registerForm.confirmPassword !== '' ? <div className="auth-screen-hint">{t('auth.repeatPasswordHint')}</div> : null}
             <div className="action-row">
               <LoadingButton className="primary" disabled={!registrationReady || registerChallengeLoading} isLoading={registerLoading} loadingLabel={t('auth.registerLoading')} type="submit">

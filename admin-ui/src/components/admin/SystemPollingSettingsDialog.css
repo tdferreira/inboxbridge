@@ -1,0 +1,51 @@
+.system-polling-form {
+  display: grid;
+  gap: 18px;
+}
+
+.system-polling-sections {
+  display: grid;
+  gap: 14px;
+}
+
+.system-polling-section {
+  display: grid;
+  gap: 14px;
+  padding: 18px;
+  border: 1px solid rgba(36, 26, 20, 0.1);
+  border-radius: 24px;
+  background: rgba(255, 255, 255, 0.62);
+}
+
+.system-polling-section-header {
+  display: grid;
+  gap: 6px;
+}
+
+.system-polling-section-title {
+  font-size: 1rem;
+  font-weight: 700;
+  line-height: 1.2;
+}
+
+.system-polling-section-copy {
+  margin: 0;
+  color: var(--muted);
+  font-size: 0.95rem;
+  line-height: 1.45;
+}
+
+.system-polling-summary-card {
+  display: grid;
+  gap: 8px;
+}
+
+.system-polling-summary-card .system-polling-section-copy {
+  margin-bottom: 4px;
+}
+
+@media (max-width: 720px) {
+  .system-polling-section {
+    padding: 16px;
+  }
+}

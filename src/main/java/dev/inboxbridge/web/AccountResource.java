@@ -12,7 +12,9 @@ import dev.inboxbridge.dto.StartPasskeyRegistrationRequest;
 import dev.inboxbridge.security.CurrentUserContext;
 import dev.inboxbridge.security.RequireAuth;
 import dev.inboxbridge.service.AppUserService;
+import dev.inboxbridge.service.GeoIpLocationService;
 import dev.inboxbridge.service.PasskeyService;
+import dev.inboxbridge.service.RemoteSessionService;
 import dev.inboxbridge.service.UserSessionService;
 import dev.inboxbridge.service.UserGmailConfigService;
 import dev.inboxbridge.service.UserMailDestinationConfigService;
@@ -25,7 +27,9 @@ import jakarta.ws.rs.POST;
 import jakarta.ws.rs.Path;
 import jakarta.ws.rs.PathParam;
 import jakarta.ws.rs.Produces;
+import jakarta.ws.rs.QueryParam;
 import jakarta.ws.rs.core.MediaType;
+import java.util.Comparator;
 import java.util.List;
 
 @Path("/api/account")
@@ -53,6 +57,12 @@ public class AccountResource {
 
     @Inject
     UserSessionService userSessionService;
+
+    @Inject
+    RemoteSessionService remoteSessionService;
+
+    @Inject
+    GeoIpLocationService geoIpLocationService;
 
     @POST
     @Path("/password")
@@ -135,20 +145,36 @@ public class AccountResource {
     public AccountSessionsResponse sessions() {
         Long currentSessionId = currentUserContext.session() == null ? null : currentUserContext.session().id;
         Instant now = Instant.now();
+        List<AccountSessionView> recentLogins = java.util.stream.Stream.concat(
+                        userSessionService.listRecentSessions(currentUserContext.user().id, 5).stream()
+                                .map(session -> toSessionView(session, currentSessionId, now)),
+                        remoteSessionService.listRecentSessions(currentUserContext.user().id, 5).stream()
+                                .map(session -> toRemoteSessionView(session, now)))
+                .sorted(Comparator.comparing(AccountSessionView::createdAt, Comparator.nullsLast(Comparator.reverseOrder())))
+                .limit(5)
+                .toList();
+        List<AccountSessionView> activeSessions = java.util.stream.Stream.concat(
+                        userSessionService.listActiveSessions(currentUserContext.user().id).stream()
+                                .map(session -> toSessionView(session, currentSessionId, now)),
+                        remoteSessionService.listActiveSessions(currentUserContext.user().id).stream()
+                                .map(session -> toRemoteSessionView(session, now)))
+                .sorted(Comparator.comparing(AccountSessionView::lastSeenAt, Comparator.nullsLast(Comparator.reverseOrder())))
+                .toList();
         return new AccountSessionsResponse(
-                userSessionService.listRecentSessions(currentUserContext.user().id, 5).stream()
-                        .map(session -> toSessionView(session, currentSessionId, now))
-                        .toList(),
-                userSessionService.listActiveSessions(currentUserContext.user().id).stream()
-                        .map(session -> toSessionView(session, currentSessionId, now))
-                        .toList());
+                recentLogins,
+                activeSessions,
+                geoIpLocationService.isConfigured());
     }
 
     @POST
     @Path("/sessions/{sessionId}/revoke")
-    public void revokeSession(@PathParam("sessionId") Long sessionId) {
+    public void revokeSession(@PathParam("sessionId") Long sessionId, @QueryParam("type") String type) {
         try {
-            userSessionService.invalidateSessionForUser(currentUserContext.user().id, sessionId);
+            if ("REMOTE".equalsIgnoreCase(type)) {
+                remoteSessionService.invalidateSessionForUser(currentUserContext.user().id, sessionId);
+            } else {
+                userSessionService.invalidateSessionForUser(currentUserContext.user().id, sessionId);
+            }
         } catch (IllegalArgumentException e) {
             throw new BadRequestException(e.getMessage(), e);
         }
@@ -160,11 +186,13 @@ public class AccountResource {
         userSessionService.invalidateOtherSessions(
                 currentUserContext.user().id,
                 currentUserContext.session() == null ? null : currentUserContext.session().id);
+        remoteSessionService.invalidateOtherSessions(currentUserContext.user().id);
     }
 
     private AccountSessionView toSessionView(dev.inboxbridge.persistence.UserSession session, Long currentSessionId, Instant now) {
         return new AccountSessionView(
                 session.id,
+                "BROWSER",
                 session.clientIp,
                 session.locationLabel,
                 session.loginMethod == null ? null : session.loginMethod.name(),
@@ -172,6 +200,20 @@ public class AccountResource {
                 session.lastSeenAt,
                 session.expiresAt,
                 currentSessionId != null && currentSessionId.equals(session.id),
+                session.revokedAt == null && now.isBefore(session.expiresAt));
+    }
+
+    private AccountSessionView toRemoteSessionView(dev.inboxbridge.persistence.RemoteSession session, Instant now) {
+        return new AccountSessionView(
+                session.id,
+                "REMOTE",
+                session.clientIp,
+                session.locationLabel,
+                session.loginMethod == null ? null : session.loginMethod.name(),
+                session.createdAt,
+                session.lastSeenAt,
+                session.expiresAt,
+                false,
                 session.revokedAt == null && now.isBefore(session.expiresAt));
     }
 }

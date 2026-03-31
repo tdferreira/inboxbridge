@@ -25,6 +25,7 @@ import dev.inboxbridge.service.OAuthProviderRegistryService;
 import dev.inboxbridge.service.PasskeyService;
 import dev.inboxbridge.service.RegistrationChallengeService;
 import dev.inboxbridge.service.SystemOAuthAppSettingsService;
+import io.vertx.core.http.HttpServerRequest;
 import jakarta.inject.Inject;
 import jakarta.ws.rs.BadRequestException;
 import jakarta.ws.rs.Consumes;
@@ -86,6 +87,9 @@ public class AuthResource {
     @Context
     HttpHeaders httpHeaders;
 
+    @Context
+    HttpServerRequest httpServerRequest;
+
     @GET
     @Path("/options")
     public AuthUiOptionsResponse options() {
@@ -94,6 +98,7 @@ public class AuthResource {
                 microsoftOAuthService.clientConfigured(),
                 systemOAuthAppSettingsService.googleClientConfigured(),
                 authSecuritySettingsService.effectiveSettings().registrationChallengeEnabled(),
+                authSecuritySettingsService.effectiveSettings().registrationChallengeProvider(),
                 oAuthProviderRegistryService.configuredSourceProviders().stream()
                         .map(Enum::name)
                         .toList());
@@ -110,7 +115,7 @@ public class AuthResource {
     @Path("/login")
     @Consumes(MediaType.APPLICATION_JSON)
     public Response login(LoginRequest request) {
-        String clientKey = authClientAddressService.resolveClientKey(httpHeaders);
+        String clientKey = authClientAddressService.resolveClientKey(httpHeaders, directRemoteAddress());
         String userAgent = httpHeaders == null ? null : httpHeaders.getHeaderString("User-Agent");
         try {
             authLoginProtectionService.requireLoginAllowed(clientKey);
@@ -140,7 +145,9 @@ public class AuthResource {
     public Response register(RegisterUserRequest request) {
         try {
             applicationModeService.requireMultiUserMode();
-            registrationChallengeService.validateAndConsume(request.challengeId(), request.challengeAnswer());
+            registrationChallengeService.validateAndConsume(
+                    request.captchaToken(),
+                    authClientAddressService.resolveClientKey(httpHeaders, directRemoteAddress()));
             AppUser user = appUserService.registerUser(request);
             return Response.status(Response.Status.ACCEPTED)
                     .entity(java.util.Map.of(
@@ -180,7 +187,7 @@ public class AuthResource {
     @Consumes(MediaType.APPLICATION_JSON)
     public Response finishPasskeyLogin(FinishPasskeyCeremonyRequest request) {
         try {
-            String clientKey = authClientAddressService.resolveClientKey(httpHeaders);
+            String clientKey = authClientAddressService.resolveClientKey(httpHeaders, directRemoteAddress());
             String userAgent = httpHeaders == null ? null : httpHeaders.getHeaderString("User-Agent");
             PasskeyService.PasskeyAuthenticationResult authResult = passkeyService.finishAuthentication(request);
             AuthService.AuthenticatedSession session = authService.loginWithPasskey(authResult, clientKey, userAgent);
@@ -248,5 +255,12 @@ public class AuthResource {
                         "Too many failed sign-in attempts from this address.",
                         java.util.Map.of("blockedUntil", blockedUntil.toString())))
                 .build();
+    }
+
+    private String directRemoteAddress() {
+        if (httpServerRequest == null || httpServerRequest.remoteAddress() == null) {
+            return null;
+        }
+        return httpServerRequest.remoteAddress().hostAddress();
     }
 }

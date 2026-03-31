@@ -1,6 +1,8 @@
 import LoadingButton from '../common/LoadingButton'
-import PaneToggleButton from '../common/PaneToggleButton'
+import CollapsibleSection from '../common/CollapsibleSection'
 import DurationValue from '../common/DurationValue'
+import { captchaProviderLabel } from '../../lib/captchaProviders'
+import { parseProviderList, providerLabel } from '../../lib/geoIpProviders'
 
 function AuthSecuritySection({
   authSecuritySettings,
@@ -13,22 +15,17 @@ function AuthSecuritySection({
   t
 }) {
   return (
-    <section className="surface-card system-dashboard-section section-with-corner-toggle" id="auth-security-section" tabIndex="-1">
-      <div className="panel-header">
-        <div>
-          <div className="section-title">{t('authSecurity.sectionTitle')}</div>
-          <p className="section-copy">{t('authSecurity.sectionCopy')}</p>
-        </div>
-      </div>
-      <PaneToggleButton className="pane-toggle-button-corner" collapseLabel={t('common.collapseSection')} collapsed={collapsed} disabled={collapseLoading} expandLabel={t('common.expandSection')} isLoading={collapseLoading} onClick={onCollapseToggle} />
-      {sectionLoading ? (
-        <div className="section-refresh-indicator" role="status">
-          <span aria-hidden="true" className="section-refresh-spinner" />
-          {t('common.refreshingSection')}
-        </div>
-      ) : null}
-
-      {!collapsed ? (
+    <CollapsibleSection
+      className="system-dashboard-section"
+      collapsed={collapsed}
+      collapseLoading={collapseLoading}
+      copy={t('authSecurity.sectionCopy')}
+      id="auth-security-section"
+      onCollapseToggle={onCollapseToggle}
+      sectionLoading={sectionLoading}
+      t={t}
+      title={t('authSecurity.sectionTitle')}
+    >
         <div className="polling-statistics-grid">
           <article className="surface-card polling-statistics-card">
             <div className="polling-statistics-card-title">{t('authSecurity.loginProtectionTitle')}</div>
@@ -44,7 +41,21 @@ function AuthSecuritySection({
             <div className="polling-statistics-breakdown">
               <div><span>{t('authSecurity.registrationChallengeMode')}</span><strong>{t(authSecuritySettings?.effectiveRegistrationChallengeEnabled ? 'common.enabled' : 'common.disabled')}</strong></div>
               <div><span>{t('authSecurity.registrationChallengeTtl')}</span><strong>{authSecuritySettings?.effectiveRegistrationChallengeTtl ? <DurationValue locale={locale} value={authSecuritySettings.effectiveRegistrationChallengeTtl} /> : t('common.unavailable')}</strong></div>
+              <div><span>{t('authSecurity.registrationChallengeProvider')}</span><strong>{authSecuritySettings?.effectiveRegistrationChallengeProvider ? captchaProviderLabel(authSecuritySettings.effectiveRegistrationChallengeProvider) : t('common.unavailable')}</strong></div>
             </div>
+          </article>
+
+          <article className="surface-card polling-statistics-card">
+            <div className="polling-statistics-card-title">{t('authSecurity.geoIpProtectionTitle')}</div>
+            <div className="polling-statistics-breakdown">
+              <div><span>{t('authSecurity.geoIpMode')}</span><strong>{t(authSecuritySettings?.effectiveGeoIpEnabled ? 'common.enabled' : 'common.disabled')}</strong></div>
+              <div><span>{t('authSecurity.geoIpPrimaryProvider')}</span><strong>{authSecuritySettings?.effectiveGeoIpPrimaryProvider ? providerLabel(authSecuritySettings.effectiveGeoIpPrimaryProvider) : t('common.unavailable')}</strong></div>
+              <div><span>{t('authSecurity.geoIpFallbackProviders')}</span><strong>{authSecuritySettings?.effectiveGeoIpFallbackProviders ? parseProviderList(authSecuritySettings.effectiveGeoIpFallbackProviders).map(providerLabel).join(', ') : t('common.unavailable')}</strong></div>
+            </div>
+          </article>
+
+          <article className="surface-card polling-statistics-card">
+            <div className="polling-statistics-card-title">{t('authSecurity.runtimeSectionTitle')}</div>
             <p className="section-copy">{t('authSecurity.summaryHelp')}</p>
             <div className="action-row">
               <LoadingButton className="secondary" onClick={onOpenEditor} type="button">
@@ -53,8 +64,7 @@ function AuthSecuritySection({
             </div>
           </article>
         </div>
-      ) : null}
-    </section>
+    </CollapsibleSection>
   )
 }
 

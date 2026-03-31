@@ -4,6 +4,7 @@ import java.time.Instant;
 
 public record AccountSessionView(
         Long id,
+        String sessionType,
         String ipAddress,
         String locationLabel,
         String loginMethod,

@@ -9,8 +9,11 @@ export function isSourceEmailAccountTargetId(targetId) {
   return typeof targetId === 'string' && targetId.startsWith(SOURCE_EMAIL_ACCOUNT_TARGET_PREFIX)
 }
 
-export function buildRecentSessionTargetId(sessionId) {
-  return `${RECENT_SESSION_TARGET_PREFIX}${encodeURIComponent(String(sessionId || ''))}`
+export function buildRecentSessionTargetId(sessionType, sessionId) {
+  if (sessionId == null) {
+    return `${RECENT_SESSION_TARGET_PREFIX}${encodeURIComponent(String(sessionType || ''))}`
+  }
+  return `${RECENT_SESSION_TARGET_PREFIX}${encodeURIComponent(String(sessionType || 'BROWSER'))}-${encodeURIComponent(String(sessionId || ''))}`
 }
 
 export function isRecentSessionTargetId(targetId) {

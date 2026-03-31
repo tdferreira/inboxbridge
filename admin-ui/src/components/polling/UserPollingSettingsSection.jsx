@@ -1,5 +1,5 @@
 import LoadingButton from '../common/LoadingButton'
-import PaneToggleButton from '../common/PaneToggleButton'
+import CollapsibleSection from '../common/CollapsibleSection'
 import './UserPollingSettingsSection.css'
 
 /**
@@ -19,15 +19,14 @@ function UserPollingSettingsSection({
   t
 }) {
   return (
-    <section className="surface-card user-polling-section section-with-corner-toggle" id="user-polling-section" tabIndex="-1">
-      <div className="panel-header">
-        <div>
-          <div className="section-title">{t('userPolling.title')}</div>
-          <p className="section-copy">{t('userPolling.copy')}</p>
-        </div>
-        <div className="panel-header-actions">
+    <CollapsibleSection
+      actions={
+        <>
+          <LoadingButton className="secondary" onClick={onOpenEditor} type="button">
+            {t('userPolling.edit')}
+          </LoadingButton>
           <LoadingButton
-            className="secondary"
+            className="primary"
             disabled={!hasFetchers}
             isLoading={runningPoll}
             loadingLabel={t('userPolling.runPollLoading')}
@@ -36,20 +35,19 @@ function UserPollingSettingsSection({
           >
             {t('userPolling.runPoll')}
           </LoadingButton>
-          <LoadingButton className="primary" onClick={onOpenEditor} type="button">
-            {t('userPolling.edit')}
-          </LoadingButton>
-        </div>
-      </div>
-      <PaneToggleButton className="pane-toggle-button-corner" collapseLabel={t('common.collapseSection')} collapsed={collapsed} disabled={collapseLoading} expandLabel={t('common.expandSection')} isLoading={collapseLoading} onClick={onCollapseToggle} />
-      {sectionLoading ? (
-        <div className="section-refresh-indicator" role="status">
-          <span aria-hidden="true" className="section-refresh-spinner" />
-          {t('common.refreshingSection')}
-        </div>
-      ) : null}
-
-      {!collapsed && pollingSettings ? (
+        </>
+      }
+      className="user-polling-section"
+      collapsed={collapsed}
+      collapseLoading={collapseLoading}
+      copy={t('userPolling.copy')}
+      id="user-polling-section"
+      onCollapseToggle={onCollapseToggle}
+      sectionLoading={sectionLoading}
+      t={t}
+      title={t('userPolling.title')}
+    >
+      {pollingSettings ? (
         <>
           {!hasFetchers ? (
             <div className="muted-box user-polling-empty-state">{t('userPolling.noFetchers')}</div>
@@ -61,7 +59,7 @@ function UserPollingSettingsSection({
           </div>
         </>
       ) : null}
-    </section>
+    </CollapsibleSection>
   )
 }
 

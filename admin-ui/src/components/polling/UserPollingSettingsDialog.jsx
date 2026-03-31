@@ -1,6 +1,7 @@
 import InfoHint from '../common/InfoHint'
 import LoadingButton from '../common/LoadingButton'
 import ModalDialog from '../common/ModalDialog'
+import './UserPollingSettingsDialog.css'
 
 function UserPollingSettingsDialog({
   isDirty,
@@ -13,6 +14,8 @@ function UserPollingSettingsDialog({
   pollingSettingsLoading,
   t
 }) {
+  const pollingDisabled = pollingSettingsForm.pollEnabledMode === 'DISABLED'
+
   return (
     <ModalDialog
       closeLabel={t('common.closeDialog')}
@@ -21,11 +24,14 @@ function UserPollingSettingsDialog({
       title={t('userPolling.editTitle')}
       unsavedChangesMessage={t('dialogs.unsavedChanges')}
     >
-      <form className="settings-grid user-polling-grid" onSubmit={onSavePollingSettings}>
-        {(() => {
-          const pollingDisabled = pollingSettingsForm.pollEnabledMode === 'DISABLED'
-          return (
-            <>
+      <form className="user-polling-dialog-form" onSubmit={onSavePollingSettings}>
+        <div className="user-polling-dialog-sections">
+          <section className="surface-card user-polling-dialog-section">
+            <div className="user-polling-dialog-section-header">
+              <div className="user-polling-dialog-section-title">{t('userPolling.schedulerSectionTitle')}</div>
+              <p className="user-polling-dialog-section-copy">{t('userPolling.schedulerSectionCopy')}</p>
+            </div>
+            <div className="settings-grid user-polling-grid">
         <label>
           <span className="field-label-row">
             <span>{t('userPolling.pollingMode')}</span>
@@ -63,12 +69,22 @@ function UserPollingSettingsDialog({
             onChange={(event) => onPollingFormChange((current) => ({ ...current, fetchWindowOverride: event.target.value }))}
           />
         </label>
-        <div className="muted-box full">
+            </div>
+          </section>
+
+          <section className="surface-card user-polling-dialog-section">
+            <div className="user-polling-dialog-section-header">
+              <div className="user-polling-dialog-section-title">{t('userPolling.effectiveSectionTitle')}</div>
+              <p className="user-polling-dialog-section-copy">{t('userPolling.effectiveSectionCopy')}</p>
+            </div>
+            <div className="muted-box">
           {t('userPolling.effectivePolling', { value: pollingSettings.effectivePollEnabled ? t('common.yes') : t('common.no') })}<br />
           {t('userPolling.effectiveInterval', { value: pollingSettings.effectivePollInterval })}<br />
           {t('userPolling.effectiveFetchWindow', { value: pollingSettings.effectiveFetchWindow })}
+            </div>
+          </section>
         </div>
-        <div className="action-row full">
+        <div className="action-row">
           <LoadingButton className="primary" isLoading={pollingSettingsLoading} loadingLabel={t('userPolling.saveLoading')} type="submit">
             {t('userPolling.save')}
           </LoadingButton>
@@ -76,9 +92,6 @@ function UserPollingSettingsDialog({
             {t('userPolling.useDefaults')}
           </LoadingButton>
         </div>
-            </>
-          )
-        })()}
       </form>
     </ModalDialog>
   )

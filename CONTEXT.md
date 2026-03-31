@@ -87,6 +87,7 @@ Bootstrap auth behavior:
 - the last passkey on a passwordless account cannot be removed until another passkey exists or a password is set again
 - repeated failed sign-ins are now tracked per client IP address and use an exponential lockout that starts at the configured initial block and doubles until the configured maximum block duration
 - those login/self-registration abuse-protection defaults can now also be overridden live from `Administration -> Authentication Security`; `.env` remains the startup default and PostgreSQL stores only the deployment override values
+- the `Edit Authentication Security` modal now mirrors the grouped-card style used by the polling editor, splitting login protection, registration protection, Geo-IP provider chain, Geo-IP timing, provider-specific configuration, and effective-value summary into separate visual blocks
 - admin-created users are also forced to change password
 - self-registered users start as `inactive` and `unapproved`
 - self-registration now starts from a focused modal workflow on the unauthenticated screen instead of leaving the request form always visible
@@ -120,6 +121,7 @@ System polling behavior:
 - `Global Poller Settings` now keeps only the effective summary in-page and opens a dedicated modal dialog for editing the deployment-wide overrides
 - that admin polling modal now includes the host/provider hardening settings as overrides too: source-host spacing, source-host concurrency, destination-provider spacing, destination-provider concurrency, throttle lease TTL, adaptive throttle ceiling, success-jitter ratio, and max success jitter
 - each of those hardening fields now has an inline help hint, and the modal includes a longer explanation block describing how the scheduler uses them together to avoid hammering shared mailbox hosts and destination providers
+- the admin polling modal now groups those controls into human-oriented subsections so scheduler defaults, manual-run limits, source pacing, destination pacing, adaptive recovery, and effective values are easier to scan together
 - `My Poller Settings` now focuses on the current user's effective polling overrides, while a separate `My Statistics` section shows analytics scoped only to that user's own imported mail
 - the user poller section now presents a compact effective-settings summary in-page and opens a dedicated modal dialog when the user wants to edit overrides
 - expanded source-email-account cards now also render analytics scoped only to that single source email account
@@ -129,8 +131,8 @@ System polling behavior:
 - statistics charts now use multi-series line charts with preset ranges like today, yesterday, past week, past month, past trimester, past semester, and past year, derived from persisted `imported_at` timestamps and recent poll-event history
 - polling statistics now also expose provider mix, current health buckets, duplicate trends, error trends, manual-vs-scheduled runs, and average poll duration
 - nested statistics sections inside expanded source-email-account cards and expanded admin user cards are independently collapsible, and should default to collapsed when there is no meaningful data to display yet
-- the admin UI now separates admin users into `User` and `Administration` workspaces so personal account setup is distinct from deployment-wide controls
-- those workspaces are now route-backed in the browser, so `/` stays on the user workspace, `/admin` opens the administration workspace directly, and supported locales can expose translated workspace slugs such as `/utilizador` and `/administracao`
+- the admin UI now separates admin users into `My InboxBridge` and `Administration` workspaces so personal account setup is distinct from deployment-wide controls
+- those workspaces are now route-backed in the browser, so `/` stays on the `My InboxBridge` workspace, `/admin` opens the administration workspace directly, translated admin slugs such as `/administracao` remain supported, and older explicit user-workspace slugs are normalized back to `/`
 - the movable content sections inside each workspace now support per-account reordering, while the header and workspace switcher stay fixed
 - the movable workspace sections can now also be rearranged by drag-and-drop when the user enables layout editing from `Preferences`, and a dotted placeholder shows the drop position
 - reconnecting Gmail to the same already-linked account should not revoke that account's Google grant; replacement and revocation only happen when the user actually links a different Gmail account
@@ -139,6 +141,9 @@ System polling behavior:
 - the preferences model now also stores dismissible quick-setup state, a persisted layout-edit toggle, and separate user/admin workspace section order
 - statistics rendering now uses `Recharts 3.x`, giving the polling dashboards shared hover tooltips and more maintainable chart behavior than the previous custom SVG chart
 - the frontend package set is intentionally kept on current stable major versions, including React 19, Vite 7, Vitest 3, and Recharts 3.x
+- the frontend now also ships a dedicated `/remote` remote-control route with a tiny mobile-first polling UI, its own manifest/service-worker assets, and source-level poll actions without opening the full admin workspace
+- the main `My InboxBridge` workspace now also includes a dedicated `Remote control` launch card so the lightweight remote page is discoverable from the normal dashboard
+- reusable admin-ui primitives now include a shared `SectionCard` shell for non-collapsible panels, a shared `CollapsibleSection` shell for standard workspace/admin sections with the corner-toggle UX, and a shared `ButtonLink` component for navigational CTA actions, so new sections do not need one-off layout/button styling
 - the contextual menu trigger used in user/mail-account lists now renders as a hamburger menu icon instead of a visible `...` text label
 - that hamburger icon now uses one shared global style so both lists render the same equal-width menu glyph
 - each fetcher now has its own persisted polling state, including next poll time, cooldown-until timestamp, consecutive failure count, and last failure reason
@@ -150,6 +155,7 @@ System polling behavior:
 - the add/edit mail-fetcher dialog now has a connection test action that validates the entered IMAP/POP3 settings, including password and Microsoft OAuth2 authentication, and returns structured protocol / endpoint / TLS / authentication / mailbox-reachability diagnostics before save
 - those fetcher connection diagnostics are rendered beneath the dialog action row, and the shared modal shell now constrains itself to the viewport with internal scrolling so action buttons remain reachable
 - env-managed fetchers route those per-fetcher poller actions through admin-only endpoints, while UI-managed fetchers use user-scoped endpoints
+- the new `/api/remote/...` surface exposes the same polling engine through a narrower remote-scoped auth model, with separate session cookies, CSRF protection for browser writes, remote-specific rate limiting, and optional bearer service-token auth mapped to a real InboxBridge account
 - IMAP raw-message materialization now retries once after a `FolderClosedException` by reopening the folder and reacquiring the message before the whole fetch attempt is treated as failed
 - Microsoft IMAP/POP connects now retry once with a freshly refreshed access token if Outlook rejects the cached token as invalid before its stored expiry time
 - busy poll results now include metadata about the currently running trigger/source so the UI does not only show a generic `A poll is already running` message
@@ -377,6 +383,24 @@ Authenticated notifications below the setup guide now support:
 - click-to-focus behavior for the related section
 - automatic closure after 10 seconds for low-priority success notices
 - floating viewport-level rendering so feedback remains visible while the user is scrolled away from the related section
+
+### 13. Remote control surface
+
+InboxBridge now includes a dedicated quick-access polling surface at `/remote`.
+
+Key behavior:
+
+- it uses the same InboxBridge identity and passkey/password login rules as the main app, but it mints a separate remote-only session instead of reusing the broad admin-ui session
+- remote browser writes require both the remote session cookie and a matching CSRF header/cookie pair
+- remote endpoints can also accept an optional bearer service token when `SECURITY_REMOTE_SERVICE_TOKEN` and `SECURITY_REMOTE_SERVICE_USERNAME` are configured
+- service-token auth is intentionally mapped onto a real InboxBridge user account so source visibility and admin powers still follow the existing role model
+- remote source lists are intentionally action-oriented: they focus on sources the current actor can actually poll right now rather than duplicating the full admin editing experience
+- the remote page is installable as a small PWA and is meant for quick mobile or secondary-device access
+- remote summaries, poll intervals, cooldown windows, and run timestamps should be rendered with user-friendly localized date/time and duration formatting instead of exposing raw ISO-8601 values
+- the remote page must also verify the signed-in account has a ready personal destination mailbox plus at least one personal source email account; otherwise it should replace poll actions with a setup prompt that links back to `My InboxBridge`
+- remote source cards should start collapsed by default, keep the per-source poll button visible in the collapsed state, and stay responsive across narrow mobile widths, tablets, and desktop browsers
+- when a revoked or expired remote session forces `/remote` back to login, the login card should explain that the user was signed out instead of appearing without context
+- remote-trigger requests have their own rate limiter on top of the existing manual poll, cooldown/backoff, and host/provider throttle protections in `PollingService`
 
 High-importance warnings and errors remain visible until the user dismisses them.
 
@@ -694,10 +718,16 @@ Current live config issue in this workspace:
 - The admin UI now enforces HTTPS both through nginx (`80 -> 443`) and with a frontend-side upgrade guard if the app is ever served over plain HTTP by another deployment path.
 - The header `Security` action now opens the password, passkey, and session tools in a dedicated modal with separate tabs, instead of rendering both tools inline in the page.
 - The new `Sessions` tab shows recent successful sign-ins, active sessions, the login method used, and sign-out actions for one other session or all other sessions for the current account.
+- The `Sessions` tab now also includes `/remote` remote-control sessions beside normal admin-ui sessions, labels the session type explicitly, and treats revoke-all-others as applying to both session stores.
+- Client IP capture for auth and remote-session activity should prefer the direct socket address unless the request came through a local/private trusted proxy hop; in that trusted-proxy case the app may use `CF-Connecting-IP`, `True-Client-IP`, `X-Real-IP`, or forwarded headers from the proxy chain instead of blindly trusting arbitrary client-supplied `X-Forwarded-For` values.
 - When a signed-in account detects a newer sign-in from another session during the normal background refresh cycle, the UI now raises a warning notification that links directly to the `Sessions` tab.
+- The header `Refresh` action now runs the same session-activity poll as the background refresh cycle, so clicking it can also surface new-sign-in notifications instead of only reloading the main dashboard data.
 - If one browser session is revoked from another session, the revoked browser now detects the next `401` response centrally and immediately returns to the login screen instead of staying in a broken authenticated shell.
 - `user_session` rows now also persist client IP, login method, user-agent, and revocation timestamp so session history can be shown without guessing from cookies.
-- Approximate session location is intentionally unavailable unless a future Geo-IP provider is configured; the UI shows IP address and login method instead of inventing a location.
+- Approximate session location is now resolved only on new sign-ins, never on every request. The current backend strategy is: one primary Geo-IP provider, aggressive cache-by-IP in PostgreSQL, and ordered fallback providers only when the primary is down or rate-limited. The default chain is `IPWHOIS -> IPAPI_CO -> IP_API`, with optional `IPINFO_LITE` when a token is configured. Those Geo-IP settings are now also overridable from `Administration -> Authentication Security`. If Geo-IP is not configured, the UI still shows the explicit “location unavailable” notice instead of inventing a location.
+- the admin Geo-IP editor now uses a primary-provider dropdown plus a chip/tag fallback input, and each provider is represented by a readiness card that can show provider-specific configuration requirements, docs, and terms links; providers that need credentials (currently `IPINFO_LITE`) remain disabled until those secrets are configured through secure storage
+- self-registration no longer relies on the old arithmetic challenge; it now uses a provider-driven CAPTCHA flow. The default provider is `ALTCHA`, which is self-hosted and works without external registration or tokens. `Cloudflare Turnstile` and `hCaptcha` are also supported and can be selected from `Administration -> Authentication Security` once their required credentials are configured.
+- the `Edit Authentication Security` modal is intentionally wider than the standard settings dialogs and now mirrors the grouped-card structure used by the polling editor, including dedicated registration CAPTCHA selection/configuration sections plus the translated effective-value summary block
 - The Google setup help panel is fully localized across the supported admin-ui languages.
 - The Gmail account layout now collapses to a single full-width column whenever the admin-only setup sidebar is not being shown.
 - The admin Gmail account form now includes inline help hints for all editable fields.

@@ -9,12 +9,12 @@ describe('workspaceRoutes', () => {
 
   it('builds locale-aware paths while keeping root as the default user path', () => {
     expect(buildWorkspacePath('pt-PT', 'user')).toBe('/')
-    expect(buildWorkspacePath('pt-PT', 'user', { explicitUserRoute: true })).toBe('/utilizador')
+    expect(buildWorkspacePath('pt-PT', 'user', { explicitUserRoute: true })).toBe('/')
     expect(buildWorkspacePath('pt-PT', 'admin')).toBe('/administracao')
   })
 
   it('canonicalizes explicit routes per locale and collapses non-admin user routes to root', () => {
-    expect(canonicalWorkspacePath('/user', 'pt-PT', true)).toBe('/utilizador')
+    expect(canonicalWorkspacePath('/user', 'pt-PT', true)).toBe('/')
     expect(canonicalWorkspacePath('/admin', 'pt-PT', true)).toBe('/administracao')
     expect(canonicalWorkspacePath('/utilizador', 'pt-PT', false)).toBe('/')
     expect(canonicalWorkspacePath('/', 'pt-PT', false)).toBeNull()

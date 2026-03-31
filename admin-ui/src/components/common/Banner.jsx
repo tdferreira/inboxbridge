@@ -16,6 +16,20 @@ function Banner({
   title,
   tone = 'success'
 }) {
+  function handleFocusActivate() {
+    onFocus?.()
+  }
+
+  function handleKeyDown(event) {
+    if (!onFocus) {
+      return
+    }
+    if (event.key === 'Enter' || event.key === ' ') {
+      event.preventDefault()
+      handleFocusActivate()
+    }
+  }
+
   const toneClass = tone === 'error'
     ? 'banner-error'
     : tone === 'warning'
@@ -23,15 +37,19 @@ function Banner({
       : 'banner-success'
 
   return (
-    <section className={`app-banner ${toneClass}`} title={title}>
+    <section
+      aria-label={onFocus ? focusLabel : undefined}
+      className={`app-banner ${toneClass} ${onFocus ? 'app-banner-actionable' : ''}`.trim()}
+      onClick={onFocus ? handleFocusActivate : undefined}
+      onKeyDown={handleKeyDown}
+      role={onFocus ? 'button' : undefined}
+      tabIndex={onFocus ? 0 : undefined}
+      title={title}
+    >
       <div className="app-banner-content">
-        {onFocus ? (
-          <button aria-label={focusLabel} className="banner-focus-button" onClick={onFocus} title={focusLabel} type="button">
-            {children}
-          </button>
-        ) : children}
+        {children}
       </div>
-      <div className="app-banner-actions">
+      <div className="app-banner-actions" onClick={(event) => event.stopPropagation()} onKeyDown={(event) => event.stopPropagation()}>
         {copyText ? <CopyButton copiedLabel={copiedLabel} label={copyLabel} text={copyText} /> : null}
         {onDismiss ? (
           <button

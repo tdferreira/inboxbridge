@@ -45,12 +45,38 @@ inboxbridge:
       login-max-block: ${SECURITY_AUTH_LOGIN_MAX_BLOCK:PT1H}
       registration-challenge-enabled: ${SECURITY_AUTH_REGISTRATION_CHALLENGE_ENABLED:true}
       registration-challenge-ttl: ${SECURITY_AUTH_REGISTRATION_CHALLENGE_TTL:PT10M}
+      registration-challenge-provider: ${SECURITY_AUTH_REGISTRATION_CHALLENGE_PROVIDER:ALTCHA}
+      registration-captcha:
+        altcha:
+          max-number: ${SECURITY_AUTH_REGISTRATION_ALTCHA_MAX_NUMBER:100000}
+          hmac-key: ${SECURITY_AUTH_REGISTRATION_ALTCHA_HMAC_KEY:}
+        turnstile:
+          site-key: ${SECURITY_AUTH_REGISTRATION_TURNSTILE_SITE_KEY:}
+          secret: ${SECURITY_AUTH_REGISTRATION_TURNSTILE_SECRET:}
+        hcaptcha:
+          site-key: ${SECURITY_AUTH_REGISTRATION_HCAPTCHA_SITE_KEY:}
+          secret: ${SECURITY_AUTH_REGISTRATION_HCAPTCHA_SECRET:}
+      geo-ip:
+        enabled: ${SECURITY_AUTH_GEO_IP_ENABLED:false}
+        primary-provider: ${SECURITY_AUTH_GEO_IP_PRIMARY_PROVIDER:IPWHOIS}
+        fallback-providers: ${SECURITY_AUTH_GEO_IP_FALLBACK_PROVIDERS:IPAPI_CO,IP_API,IPINFO_LITE}
+        cache-ttl: ${SECURITY_AUTH_GEO_IP_CACHE_TTL:PT720H}
+        provider-cooldown: ${SECURITY_AUTH_GEO_IP_PROVIDER_COOLDOWN:PT5M}
+        request-timeout: ${SECURITY_AUTH_GEO_IP_REQUEST_TIMEOUT:PT3S}
+        ipinfo-token: ${SECURITY_AUTH_GEO_IP_IPINFO_TOKEN:}
     passkeys:
       enabled: ${SECURITY_PASSKEYS_ENABLED:true}
       rp-id: ${SECURITY_PASSKEY_RP_ID:localhost}
       rp-name: ${SECURITY_PASSKEY_RP_NAME:InboxBridge}
       origins: ${SECURITY_PASSKEY_ORIGINS:${PUBLIC_BASE_URL:https://localhost:3000}}
       challenge-ttl: ${SECURITY_PASSKEY_CHALLENGE_TTL:PT5M}
+    remote:
+      enabled: ${SECURITY_REMOTE_ENABLED:true}
+      session-ttl: ${SECURITY_REMOTE_SESSION_TTL:PT12H}
+      poll-rate-limit-count: ${SECURITY_REMOTE_POLL_RATE_LIMIT_COUNT:60}
+      poll-rate-limit-window: ${SECURITY_REMOTE_POLL_RATE_LIMIT_WINDOW:PT1M}
+      service-token: ${SECURITY_REMOTE_SERVICE_TOKEN:}
+      service-username: ${SECURITY_REMOTE_SERVICE_USERNAME:}
   gmail:
     destination-user: ${GMAIL_DESTINATION_USER:me}
     client-id: ${GOOGLE_CLIENT_ID:replace-me}

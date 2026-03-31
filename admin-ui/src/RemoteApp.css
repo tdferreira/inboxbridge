@@ -1,0 +1,203 @@
+.remote-shell {
+  min-height: 100vh;
+  padding: 24px;
+  background:
+    radial-gradient(circle at top left, rgba(29, 140, 248, 0.18), transparent 32%),
+    radial-gradient(circle at bottom right, rgba(33, 191, 115, 0.18), transparent 28%),
+    linear-gradient(180deg, #f5f8fc 0%, #eaf0f7 100%);
+}
+
+.remote-auth-card,
+.remote-panel {
+  width: min(1080px, 100%);
+  margin: 0 auto;
+}
+
+.remote-auth-card,
+.remote-result-card,
+.remote-summary-card,
+.remote-setup-card,
+.remote-source-card,
+.remote-hero {
+  background: rgba(255, 255, 255, 0.9);
+  border: 1px solid rgba(20, 37, 63, 0.08);
+  border-radius: 24px;
+  box-shadow: 0 20px 60px rgba(20, 37, 63, 0.08);
+}
+
+.remote-auth-card {
+  max-width: 520px;
+  padding: 32px;
+}
+
+.remote-panel {
+  display: grid;
+  gap: 20px;
+}
+
+.remote-hero,
+.remote-result-card,
+.remote-setup-card,
+.remote-source-card {
+  padding: 24px;
+}
+
+.remote-eyebrow {
+  margin: 0 0 8px;
+  font-size: 0.78rem;
+  font-weight: 700;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: #1d5fbf;
+}
+
+.remote-copy,
+.remote-source-meta {
+  color: #4f617b;
+}
+
+.remote-auth-actions,
+.remote-hero-actions,
+.remote-source-header {
+  display: flex;
+  gap: 12px;
+  flex-wrap: wrap;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.remote-source-heading {
+  min-width: 0;
+}
+
+.remote-source-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  justify-content: flex-end;
+  align-items: center;
+}
+
+.remote-toggle-button {
+  white-space: nowrap;
+}
+
+.remote-summary-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  gap: 16px;
+}
+
+.remote-summary-card {
+  padding: 18px 20px;
+}
+
+.remote-summary-label {
+  display: block;
+  margin-bottom: 8px;
+  color: #4f617b;
+}
+
+.remote-sources-section {
+  display: grid;
+  gap: 16px;
+}
+
+.remote-source-list {
+  display: grid;
+  gap: 16px;
+}
+
+.remote-setup-list {
+  margin: 18px 0;
+  padding-left: 20px;
+  color: #13233a;
+}
+
+.remote-setup-list li + li {
+  margin-top: 8px;
+}
+
+.remote-source-details {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  gap: 14px 18px;
+  margin: 18px 0;
+}
+
+.remote-source-details dt {
+  margin-bottom: 4px;
+  font-size: 0.82rem;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: #61738f;
+}
+
+.remote-source-details dd {
+  margin: 0;
+  font-weight: 600;
+  color: #13233a;
+}
+
+.remote-note {
+  margin-top: 16px;
+}
+
+@media (max-width: 720px) {
+  .remote-shell {
+    padding: 14px;
+  }
+
+  .remote-panel {
+    gap: 14px;
+  }
+
+  .remote-auth-card,
+  .remote-hero,
+  .remote-result-card,
+  .remote-setup-card,
+  .remote-source-card {
+    padding: 18px;
+    border-radius: 18px;
+  }
+
+  .remote-auth-actions,
+  .remote-hero-actions,
+  .remote-source-header,
+  .remote-source-actions {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .remote-source-header {
+    justify-content: flex-start;
+  }
+
+  .remote-source-actions > .primary,
+  .remote-source-actions > .secondary,
+  .remote-hero-actions > .primary,
+  .remote-hero-actions > .secondary,
+  .remote-auth-actions > .primary,
+  .remote-auth-actions > .secondary {
+    width: 100%;
+  }
+
+  .remote-source-details {
+    grid-template-columns: 1fr;
+    gap: 12px;
+  }
+}
+
+@media (min-width: 721px) and (max-width: 1024px) {
+  .remote-panel {
+    gap: 18px;
+  }
+
+  .remote-source-header {
+    align-items: flex-start;
+  }
+
+  .remote-source-actions {
+    max-width: 100%;
+  }
+}

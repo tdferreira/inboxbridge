@@ -10,6 +10,10 @@
   max-width: 100%;
 }
 
+.app-banner-actionable {
+  cursor: pointer;
+}
+
 .app-banner-content {
   min-width: 0;
   flex: 1 1 auto;
@@ -24,25 +28,14 @@
   gap: 8px;
 }
 
-.banner-focus-button {
-  padding: 0;
-  border: none;
-  background: transparent;
-  color: inherit;
-  text-align: left;
-  font: inherit;
+.app-banner-actionable .app-banner-content {
   font-weight: 600;
-  border-radius: 10px;
-  min-width: 0;
-  max-width: 100%;
-  white-space: normal;
-  overflow-wrap: anywhere;
-  word-break: break-word;
 }
 
-.banner-focus-button:hover,
-.banner-focus-button:focus-visible {
-  text-decoration: underline;
+.app-banner-actionable:hover,
+.app-banner-actionable:focus-visible {
+  box-shadow: 0 18px 36px rgba(36, 26, 20, 0.14);
+  border-color: rgba(23, 101, 75, 0.24);
   outline: none;
 }
 
@@ -59,4 +52,15 @@
 
 .banner-error {
   background: rgba(139, 45, 32, 0.14);
+}
+
+@media (max-width: 640px) {
+  .app-banner {
+    padding: 14px;
+    align-items: stretch;
+  }
+
+  .app-banner-actions {
+    align-self: flex-start;
+  }
 }

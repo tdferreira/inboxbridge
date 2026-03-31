@@ -4,5 +4,6 @@ import java.util.List;
 
 public record AccountSessionsResponse(
         List<AccountSessionView> recentLogins,
-        List<AccountSessionView> activeSessions) {
+        List<AccountSessionView> activeSessions,
+        boolean geoIpConfigured) {
 }

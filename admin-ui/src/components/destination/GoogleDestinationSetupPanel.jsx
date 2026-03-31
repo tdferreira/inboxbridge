@@ -1,11 +1,11 @@
+import SectionCard from '../common/SectionCard'
 import './GoogleDestinationSetupPanel.css'
 
 function GoogleDestinationSetupPanel({ destinationMeta, t }) {
   const redirectUri = destinationMeta?.defaultRedirectUri || `${window.location.origin}/api/google-oauth/callback`
 
   return (
-    <section className="surface-card google-setup-panel">
-      <div className="section-title">{t('googleSetup.title')}</div>
+    <SectionCard className="google-setup-panel" title={t('googleSetup.title')}>
       {destinationMeta?.sharedClientConfigured ? (
         <div className="muted-box">
           <strong>{t('googleSetup.sharedTitle')}</strong><br />
@@ -27,7 +27,7 @@ function GoogleDestinationSetupPanel({ destinationMeta, t }) {
         <strong>{t('googleSetup.errorTitle')}</strong><br />
         <code>{t('googleSetup.errorBody')}</code>
       </div>
-    </section>
+    </SectionCard>
   )
 }
 

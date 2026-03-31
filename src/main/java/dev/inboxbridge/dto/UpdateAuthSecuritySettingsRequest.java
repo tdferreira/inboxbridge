@@ -9,5 +9,17 @@ public record UpdateAuthSecuritySettingsRequest(
         String loginInitialBlockOverride,
         String loginMaxBlockOverride,
         Boolean registrationChallengeEnabledOverride,
-        String registrationChallengeTtlOverride) {
+        String registrationChallengeTtlOverride,
+        String registrationChallengeProviderOverride,
+        String registrationTurnstileSiteKeyOverride,
+        String registrationTurnstileSecret,
+        String registrationHcaptchaSiteKeyOverride,
+        String registrationHcaptchaSecret,
+        Boolean geoIpEnabledOverride,
+        String geoIpPrimaryProviderOverride,
+        String geoIpFallbackProvidersOverride,
+        String geoIpCacheTtlOverride,
+        String geoIpProviderCooldownOverride,
+        String geoIpRequestTimeoutOverride,
+        String geoIpIpinfoToken) {
 }

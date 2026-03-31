@@ -387,6 +387,26 @@ describe('App', () => {
     expect(screen.queryByLabelText('Current Password')).not.toBeInTheDocument()
   })
 
+  it('shows a remote control entry point in the My InboxBridge workspace', async () => {
+    vi.stubGlobal('fetch', createWorkspaceRouteFetch({
+      session: {
+        id: 1,
+        username: 'alice',
+        role: 'USER',
+        approved: true,
+        mustChangePassword: false,
+        passkeyCount: 0,
+        passwordConfigured: true
+      }
+    }))
+
+    render(<App />)
+
+    expect(await screen.findByText('Remote control')).toBeInTheDocument()
+    expect(screen.getByText('Use the lightweight remote page to trigger polling quickly from phones, tablets, laptops, or shared devices without opening the full workspace.')).toBeInTheDocument()
+    expect(screen.getByRole('link', { name: 'Open Remote Control' })).toHaveAttribute('href', '/remote')
+  })
+
   it('lets admins switch between user and administration workspaces', async () => {
     const fetchMock = vi.fn(async (input) => {
       const url = String(input)
@@ -527,7 +547,7 @@ describe('App', () => {
     render(<App />)
 
     await screen.findByText(/signed in as/i)
-    expect(screen.getByRole('tab', { name: /User|Utilizador/, selected: true })).toBeInTheDocument()
+    expect(screen.getByRole('tab', { name: /My InboxBridge/, selected: true })).toBeInTheDocument()
     expect(screen.getByText(/My Destination Mailbox/, { selector: '.section-title' })).toBeInTheDocument()
     expect(screen.queryByText(/Global Polling Settings|Definições globais de verificação/)).not.toBeInTheDocument()
 
@@ -1483,7 +1503,7 @@ describe('App', () => {
     expect(window.location.pathname).toBe('/admin')
   })
 
-  it('supports translated workspace URLs for admins', async () => {
+  it('normalizes localized user workspace URLs back to root for admins', async () => {
     window.history.replaceState({}, '', '/utilizador')
     const fetchMock = createWorkspaceRouteFetch({
       session: {
@@ -1506,12 +1526,12 @@ describe('App', () => {
 
     await screen.findByText(/sess[aã]o iniciada como/i)
 
-    expect(await screen.findByRole('tab', { name: 'Utilizador', selected: true })).toBeInTheDocument()
+    expect(await screen.findByRole('tab', { name: 'My InboxBridge', selected: true })).toBeInTheDocument()
     expect(screen.getByRole('tab', { name: 'Administração', selected: false })).toBeInTheDocument()
-    expect(window.location.pathname).toBe('/utilizador')
+    expect(window.location.pathname).toBe('/')
   })
 
-  it('normalizes explicit workspace URLs back to / for non-admin sessions', async () => {
+  it('normalizes explicit user workspace URLs back to / for non-admin sessions', async () => {
     window.history.replaceState({}, '', '/user')
     const fetchMock = createWorkspaceRouteFetch({
       session: {
@@ -1564,6 +1584,60 @@ describe('App', () => {
       expect(window.location.pathname).toBe('/administracao')
     })
     expect(await screen.findByRole('tab', { name: 'Administração', selected: true })).toBeInTheDocument()
+  })
+
+  it('announces new sign-ins when the header refresh button is used', async () => {
+    const fetchMock = createWorkspaceRouteFetch({
+      session: {
+        id: 1,
+        username: 'alice',
+        role: 'USER',
+        approved: true,
+        mustChangePassword: false,
+        passkeyCount: 1,
+        passwordConfigured: true
+      },
+      sessionActivityResponses: [
+        {
+          recentLogins: [
+            {
+              id: 'session-current',
+              sessionType: 'BROWSER',
+              current: true,
+              createdAt: '2026-03-31T09:00:00Z',
+              loginMethod: 'PASSWORD',
+              ipAddress: '127.0.0.1'
+            }
+          ],
+          activeSessions: [],
+          geoIpConfigured: false
+        },
+        {
+          recentLogins: [
+            {
+              id: 'session-other',
+              sessionType: 'REMOTE',
+              current: false,
+              createdAt: '2026-03-31T09:05:00Z',
+              loginMethod: 'PASSWORD',
+              ipAddress: '192.168.1.20',
+              locationLabel: 'Lisbon, PT'
+            }
+          ],
+          activeSessions: [],
+          geoIpConfigured: false
+        }
+      ]
+    })
+
+    vi.stubGlobal('fetch', fetchMock)
+
+    render(<App />)
+
+    await screen.findByText(/signed in as/i)
+    fireEvent.click(screen.getByRole('button', { name: 'Refresh' }))
+
+    expect(await screen.findByText('A new Remote control sign-in was detected for this account from approximately Lisbon, PT. Review the Sessions tab.')).toBeInTheDocument()
   })
 
 })

@@ -1,3 +1,4 @@
+import SectionCard from '../common/SectionCard'
 import LoadingButton from '../common/LoadingButton'
 import { formatDate } from '../../lib/formatters'
 import './PasskeyPanel.css'
@@ -18,15 +19,9 @@ function PasskeyPanel({
   locale
 }) {
   return (
-    <section className="surface-card passkey-panel" id="passkey-panel-section" tabIndex="-1">
-      <div className="panel-header">
-        <div>
-          <div className="section-title">{t('passkey.title')}</div>
-          <p className="section-copy">
-            {t('passkey.copy')}
-          </p>
-        </div>
-        <div className="panel-header-actions">
+    <SectionCard
+      actions={
+        <>
           <div className={`status-pill ${supported ? 'tone-success' : 'tone-error'}`}>
             {supported ? t('common.browserReady') : t('common.unavailable')}
           </div>
@@ -41,8 +36,13 @@ function PasskeyPanel({
           >
             {t('passkey.register')}
           </LoadingButton>
-        </div>
-      </div>
+        </>
+      }
+      className="passkey-panel"
+      copy={t('passkey.copy')}
+      id="passkey-panel-section"
+      title={t('passkey.title')}
+    >
 
       {!supported ? (
         <div className="muted-box">
@@ -79,7 +79,7 @@ function PasskeyPanel({
           {t('passkey.onlyMethod')}
         </div>
       ) : null}
-    </section>
+    </SectionCard>
   )
 }
 

@@ -1,0 +1,16 @@
+{
+  "name": "InboxBridge Remote",
+  "short_name": "InboxBridge",
+  "start_url": "/remote",
+  "display": "standalone",
+  "background_color": "#f5f8fc",
+  "theme_color": "#1d5fbf",
+  "icons": [
+    {
+      "src": "/remote-icon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any maskable"
+    }
+  ]
+}

@@ -40,6 +40,7 @@ Google help: https://support.google.com/accounts/answer/13533235
 9. Supports WebAuthn passkeys for browser sign-in after a user enrolls one from the security panel.
 10. Supports per-user poller overrides plus automatic per-source cooldown/backoff when providers start rejecting or throttling requests.
 11. Can run either in single-user mode or multi-user mode, controlled by `.env`.
+12. Exposes a lightweight remote control surface at `/remote` so users can trigger polling from phones or other devices without opening the full admin workspace.
 
 ## What it still does not do
 
@@ -128,6 +129,10 @@ Important values when you want a shared, env-managed deployment setup:
 - `GOOGLE_*` only if you want a deployment-level shared Gmail account configuration
 - `MICROSOFT_*` for Microsoft OAuth sources
 - `SECURITY_PASSKEY_*` if you need to override the default local WebAuthn relying-party settings
+- `SECURITY_REMOTE_ENABLED=true` to keep the remote control surface available
+- `SECURITY_REMOTE_SESSION_TTL=PT12H` to control how long remote sessions remain valid
+- `SECURITY_REMOTE_POLL_RATE_LIMIT_COUNT=60` and `SECURITY_REMOTE_POLL_RATE_LIMIT_WINDOW=PT1M` to harden the remote trigger surface against hammering
+- `SECURITY_REMOTE_SERVICE_TOKEN` and `SECURITY_REMOTE_SERVICE_USERNAME` if you want a bearer-token automation path that acts as a dedicated InboxBridge account
 
 For the clearest end-to-end bootstrap instructions, see `docs/SETUP.md`.
 
@@ -146,6 +151,7 @@ docker compose up --build
 Services:
 
 - admin UI: `https://localhost:3000`
+- remote control page: `https://localhost:3000/remote`
 - backend HTTP: `http://localhost:8080`
 - backend HTTPS: `https://localhost:8443`
 - PostgreSQL: `localhost:5432`
@@ -188,6 +194,33 @@ The `Quick Setup Guide` cards in the admin UI are clickable and jump to the sect
 - the step numbering is assigned dynamically, so conditional steps never leave numbering gaps
 - the `Administration` workspace now uses its own admin-focused quick setup guide instead of repeating the user-area checklist
 
+## Remote control
+
+InboxBridge now includes a small mobile-friendly remote control page at `/remote`.
+
+It is designed for public exposure behind your normal HTTPS endpoint and works well behind Cloudflare Zero Trust as an outer gate.
+
+Security model:
+
+- the remote page does not reuse the full admin-ui browser session
+- it uses the same InboxBridge identity and passkey/password flows, but mints a separate remote-scoped session cookie
+- remote session writes require a CSRF header that matches a remote-only CSRF cookie
+- remote actions are rate-limited independently of the normal admin UI
+- the existing polling hardening still applies underneath, including manual trigger limits, host/provider throttling, and busy-run protection
+- optional bearer service-token access is available for automation when `SECURITY_REMOTE_SERVICE_TOKEN` and `SECURITY_REMOTE_SERVICE_USERNAME` are configured
+
+Remote capabilities:
+
+- sign in with password or passkey
+- poll all sources visible to the signed-in user
+- poll all users when the signed-in user is an admin
+- poll one specific source from the remote source list
+- install the `/remote` page as a PWA shortcut on supported devices
+- when a remote session is revoked or expires, the page returns to the remote login screen with an explicit signed-out notice instead of silently dropping back to sign-in
+- when the signed-in account is missing a personal destination mailbox or has no personal source email accounts yet, the remote page pauses there and points the user back to `My InboxBridge` to finish setup first
+- source cards on `/remote` are collapsed by default so polling actions stay compact on phones and tablets, while each source still keeps its individual poll button visible without expanding the card
+- the main `My InboxBridge` workspace now includes a dedicated `Remote control` card that explains the lightweight page and links directly to `/remote`
+
 ## Admin UI login
 
 Initial bootstrap credentials:
@@ -222,13 +255,15 @@ The admin UI also supports these languages, with the user preference stored per 
 - Spanish
 
 User preferences now live behind the `Preferences` button in the header, which opens a modal for language selection, the `Remember layout on this account` option, a `Show Quick Setup Guide` toggle, and `layout editing` controls.
-For admin users, the workspace selection is also reflected in the browser URL: `/` stays on the user workspace without rewriting, `/admin` opens the administration workspace directly, and supported locales expose translated workspace slugs such as `/utilizador` and `/administracao`.
+For admin users, the workspace selection is also reflected in the browser URL: `/` stays on the `My InboxBridge` workspace without rewriting, `/admin` opens the administration workspace directly, and translated admin slugs such as `/administracao` are still supported. Older explicit user-workspace slugs are normalized back to `/`.
 The admin UI enforces HTTPS: nginx already redirects plain HTTP traffic on port `80`, and the frontend also upgrades itself to `https://...` if it is ever served over plain HTTP by another deployment path.
 The `Security` tools also open in a dedicated dialog instead of occupying permanent space in the main page layout, with separate tabs for `Password`, `Passkeys`, and `Sessions`.
 The `Sessions` tab shows the latest successful sign-ins, the currently active sessions for the account, the login method used by each session, and actions for signing out one other session or all other sessions at once.
+It now includes both full admin-ui browser sessions and `/remote` remote-control sessions in the same list, with the session type clearly labeled.
 If the same account signs in somewhere else while this browser is already open, the normal background refresh now raises a warning notification that links directly to the `Sessions` tab.
 If one browser session is revoked from another, the revoked browser now detects the next authenticated `401` response and immediately returns to the login screen instead of staying in a broken authenticated state.
-Approximate location is intentionally shown as unavailable for now unless the deployment is later wired to a dedicated Geo-IP provider.
+Approximate session location can now be enabled with a Geo-IP provider chain, but InboxBridge still resolves it only on new sign-ins, caches by IP aggressively, and falls back to the next configured provider only when the primary is down or rate-limited. The default chain is `IPWHOIS -> IPAPI_CO -> IP_API`, with optional `IPINFO_LITE` after that when a token is configured.
+The admin `Authentication Security` editor now exposes that chain as a primary-provider dropdown plus a tag-style fallback input, and it shows readiness cards with provider docs, terms, and any provider-specific credentials that must be configured before a provider can be enabled.
 The `Quick Setup Guide` can now be hidden once every step is complete, and it automatically comes back if one of those requirements later becomes invalid again.
 
 ## Admin UI capabilities
@@ -528,9 +563,30 @@ Security:
 - `SECURITY_AUTH_LOGIN_MAX_BLOCK`: maximum sign-in lockout duration after repeated failures.
 - `SECURITY_AUTH_REGISTRATION_CHALLENGE_ENABLED`: enables the anti-robot challenge on self-registration.
 - `SECURITY_AUTH_REGISTRATION_CHALLENGE_TTL`: lifetime of each anti-robot registration challenge.
+- `SECURITY_AUTH_REGISTRATION_CHALLENGE_PROVIDER`: selects the registration CAPTCHA provider (`ALTCHA`, `TURNSTILE`, or `HCAPTCHA`).
+- `SECURITY_AUTH_REGISTRATION_ALTCHA_MAX_NUMBER`: proof-of-work difficulty ceiling for the built-in ALTCHA flow.
+- `SECURITY_AUTH_REGISTRATION_ALTCHA_HMAC_KEY`: optional stable signing key for ALTCHA challenges.
+- `SECURITY_AUTH_REGISTRATION_TURNSTILE_SITE_KEY`, `SECURITY_AUTH_REGISTRATION_TURNSTILE_SECRET`: optional Cloudflare Turnstile credentials.
+- `SECURITY_AUTH_REGISTRATION_HCAPTCHA_SITE_KEY`, `SECURITY_AUTH_REGISTRATION_HCAPTCHA_SECRET`: optional hCaptcha credentials.
+- `SECURITY_AUTH_GEO_IP_ENABLED`: enables approximate session-location lookup during new sign-ins.
+- `SECURITY_AUTH_GEO_IP_PRIMARY_PROVIDER`: the first Geo-IP provider InboxBridge will try.
+- `SECURITY_AUTH_GEO_IP_FALLBACK_PROVIDERS`: ordered fallback providers used only when the primary provider is down or rate-limited.
+- `SECURITY_AUTH_GEO_IP_CACHE_TTL`: how long successful and not-found Geo-IP results stay cached by IP.
+- `SECURITY_AUTH_GEO_IP_PROVIDER_COOLDOWN`: cooldown applied to a provider after retryable failures such as 429 or 5xx responses.
+- `SECURITY_AUTH_GEO_IP_REQUEST_TIMEOUT`: per-provider request timeout.
+- `SECURITY_AUTH_GEO_IP_IPINFO_TOKEN`: optional token used when `IPINFO_LITE` is part of the provider chain.
 
 Those security-abuse defaults are also available in the admin UI under `Administration -> Authentication Security`, which stores only deployment overrides in PostgreSQL while leaving `.env` as the startup default source of truth.
 Raw duration values shown in the polling/authentication-security admin UI now keep hover hints with a human-readable explanation, for example `PT0.25S = 250 milliseconds`.
+For registration CAPTCHA, InboxBridge now defaults to `ALTCHA`, which is self-hosted, privacy-friendlier, and works without any external account or token. The admin UI can switch the active provider to `Cloudflare Turnstile` or `hCaptcha` once their required credentials are configured, and it keeps providers disabled until their mandatory settings are present.
+Geo-IP session-location lookup is also available in `Administration -> Authentication Security`. The current strategy is:
+
+- one primary provider is tried first
+- successful and not-found results are cached by IP in PostgreSQL for the configured TTL
+- fallback providers are only tried when the primary provider is down or returns a retryable throttle/server response
+- location is resolved only when a new browser session is created, not on every authenticated request
+
+By default, InboxBridge uses `IPwho.is` as the zero-config primary provider, then `ipapi.co`, then `ip-api`, and can optionally use `IPinfo Lite` as a token-backed fallback when an IPinfo token is configured.
 
 Polling defaults:
 

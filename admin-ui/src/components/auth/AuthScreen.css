@@ -22,3 +22,23 @@
 .auth-screen-register-trigger {
   justify-self: start;
 }
+
+.auth-captcha-block {
+  display: grid;
+  gap: 12px;
+}
+
+.auth-altcha-box,
+.auth-external-captcha-frame {
+  min-height: 80px;
+}
+
+.auth-external-captcha-frame {
+  display: grid;
+  align-items: center;
+  justify-content: start;
+  padding: 12px;
+  border: 1px dashed var(--line);
+  border-radius: 18px;
+  background: rgba(255, 255, 255, 0.68);
+}

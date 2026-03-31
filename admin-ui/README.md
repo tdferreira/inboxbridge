@@ -42,14 +42,17 @@ Key design choices:
 - the same hero/header security area now also handles passkey enrollment and removal
 - passkey registration now opens in a focused modal dialog instead of stretching the security panel inline layout
 - the login screen supports passkey sign-in for users who have already enrolled one
+- the app now also ships a dedicated `/remote` mobile-first remote-control surface with its own scoped session, tiny source list, and poll-now actions for phones and quick-access devices
+- the main `My InboxBridge` workspace now includes a dedicated `Remote control` launch card so the lightweight `/remote` page is discoverable from the normal dashboard
 - the login screen intentionally avoids exposing live bootstrap-account state to unauthenticated visitors; bootstrap credentials are documented in the operator docs instead
 - self-registration is launched from a dedicated `Register for access` button and uses a modal dialog instead of always rendering the full form
-- self-registration now also loads a short anti-robot challenge before the request can be submitted
+- self-registration now also loads a real CAPTCHA challenge before the request can be submitted; the default path is a self-hosted ALTCHA proof-of-work flow that does not require any external registration or token
 - when the deployment sets `MULTI_USER_ENABLED=false`, the login screen hides self-registration and the post-login UI hides user-management features entirely
 - accounts with both a password and a passkey now use password + passkey login, not passkey-only login
 - accounts with only a passkey ignore any typed password and fall through into the passkey prompt instead of stopping on an error
 - repeated failed sign-ins are rate-limited per client IP address with an exponential lockout, so a hammered login screen starts blocking new attempts for progressively longer periods
-- administrators can tune those login lockout and self-registration anti-robot defaults from a dedicated `Authentication Security` section in the Administration workspace instead of editing `.env`
+- administrators can tune those login lockout, self-registration anti-robot, and Geo-IP session-visibility defaults from a dedicated `Authentication Security` section in the Administration workspace instead of editing `.env`
+- the `Edit Authentication Security` dialog now follows the same grouped-card structure as the polling editor, separating login protection, registration protection, CAPTCHA provider selection, CAPTCHA provider configuration, Geo-IP provider chain, Geo-IP timing, provider-specific configuration, and effective values
 - users can remove their password and run the account in passkey-only mode
 - self-service password removal and passkey deletion are guarded by confirmation modals before the backend call is sent
 - the final remaining passkey cannot be removed while the account has no password configured
@@ -73,7 +76,7 @@ Key design choices:
 - the nested statistics cards inside each expanded source-email-account row and each expanded admin user row can now be collapsed independently, and they default to collapsed when there is not yet any meaningful data to render
 - the statistics charts now support a `Custom` range that opens a modal dialog for `date-time from` and optional `date-time to`; the charts then reload scoped timeline data for that selected window
 - admin users now get a workspace switcher that separates their normal user-facing setup flow from the deployment `Administration` controls
-- those admin/user workspaces are now also addressable through URL paths, with `/` remaining the canonical user workspace and explicit workspace slugs translated per UI language where supported, such as `/admin`, `/user`, `/administracao`, and `/utilizador`
+- those admin/My InboxBridge workspaces are now also addressable through URL paths, with `/` remaining the canonical `My InboxBridge` workspace and `/admin` (or its translated admin slug) opening the administration workspace directly; older localized user slugs are normalized back to `/`
 - inside those workspaces, the movable content sections can now be reordered independently while the header and workspace switcher remain fixed in place
 - the statistics charts now use `Recharts 3.x`, which adds shared hover tooltips and cleaner multi-series trend rendering without migrating the whole UI to Material UI
 - contextual `actions` buttons now render as compact hamburger menu icons while keeping the same translated accessibility labels and tooltips
@@ -123,15 +126,20 @@ Key design choices:
 - the polling area is now framed as `Poller Settings` and focuses on runtime scheduler controls plus polling-health metrics
 - `My Polling Settings` now also includes a `Run Poll Now` action for the signed-in user’s own mail accounts
 - `Global Polling Settings` now asks for confirmation before starting an all-users manual run, and the dialog also exposes the manual-run rate limit configuration used to prevent repeated hammering
+- the `Edit Global Polling Settings` modal is now grouped into scheduler, manual-run, source pacing, destination pacing, adaptive recovery, and effective-value subsections so the deployment-wide controls are easier to scan
 - broad manual polling runs still respect per-source cooldown and next-window checks, while the single mail-account `Run Poll Now` action remains the explicit force-run path
 - the user poller settings card now uses the same padded section shell as the main dashboard cards, so the form content stays fully inside the card boundaries
 - the hero/header now includes a `Preferences` button that opens a modal for language selection, the persisted `Remember layout on this account` toggle, the `Show Quick Setup Guide` toggle, layout-edit controls, and a reset-layout action
 - the admin UI enforces HTTPS: nginx redirects plain HTTP traffic on port `80`, and the frontend also upgrades itself to `https://...` if it is ever served over plain HTTP by another deployment path
 - the hero/header `Security` button now opens the password, passkey, and session tools in a dedicated modal dialog, with separate tabs so the modal stays less crowded
 - the new `Sessions` tab shows recent sign-ins, currently active sessions, the login method and IP address for each one, and sign-out actions for one other session or all other sessions
+- that same `Sessions` tab now merges both normal admin-ui sessions and `/remote` remote-control sessions, with a visible session-type label and shared revoke controls
 - if the same account signs in elsewhere while this browser is already open, the normal background refresh raises a warning notification that links directly to the Sessions tab
+- the header `Refresh` action now also runs that same session-activity poll, so a manual refresh can surface the same new-sign-in notification immediately
 - if one browser session revokes another, the revoked browser now detects the next `401` response centrally and immediately returns to the login screen instead of staying on a broken authenticated page
-- approximate location is intentionally shown as unavailable for now unless the deployment is later wired to a dedicated Geo-IP provider
+- approximate location is now resolved only when a new session is created, using the backend Geo-IP provider chain when configured; that admin section can now override enablement, provider order, cache TTL, provider cooldown, and request timeout live without editing `.env`
+- the Geo-IP editor now exposes a primary-provider dropdown, a chip-based fallback-provider input, provider readiness cards with documentation/terms links, and provider-specific secret inputs such as the optional `IPinfo Lite` token; providers that require missing credentials stay disabled until they are configured
+- the same admin dialog now also exposes a primary registration CAPTCHA provider selector plus provider-specific configuration cards; `ALTCHA` is available by default with no extra credentials, while `Cloudflare Turnstile` and `hCaptcha` stay disabled until their required site-key and secret values are configured
 - raw duration values such as `PT5M` and `PT0.25S` now expose hover hints with their human-readable meaning in the admin polling and authentication-security settings UI
 - the Security dialog now confirms before closing when the password form has in-progress input
 - visible labels route through the in-repo translation dictionary instead of mixing translated and raw JSX text
@@ -144,7 +152,25 @@ Key design choices:
 - shared button styles now include clearer hover, focus, and pressed states so actions feel more obviously interactive across the UI
 - Each component imports its own CSS file for local structure and appearance.
 - Shared visual tokens and generic form/layout helpers live in `src/styles.css`.
+- shared layout/action primitives now also include reusable `SectionCard`, `CollapsibleSection`, and `ButtonLink` components so new dashboard sections and navigational CTA actions do not need one-off structure or button-link styling
 - Formatting and API helpers live in `src/lib/...`.
+
+## UI primitives
+
+When building or updating UI in `admin-ui`, prefer the shared primitives under `src/components/common` before introducing a new bespoke component or local layout pattern.
+
+Current design-system foundation includes:
+
+- `SectionCard` for non-collapsible section shells with standard header, copy, actions, and body spacing
+- `CollapsibleSection` for top-level workspace/admin panels that need the same section shell plus the standard corner collapse button and section-loading treatment
+- `ButtonLink` for navigational CTA links that should look and behave like the existing button system
+- `LoadingButton` for async button states
+- `PasswordField` for reusable password entry with show/hide behavior
+- `ModalDialog` and `ConfirmationDialog` for modal workflows
+- `PaneToggleButton` for compact expand/collapse controls
+- `Banner`, `CopyButton`, `DurationValue`, and `InfoHint` for repeated feedback and inline help patterns
+
+New top-level sections should compose these primitives rather than recreating `surface-card`, header, action, toggle, or CTA-link markup locally.
 
 ## Tests
 
@@ -177,6 +203,7 @@ Current unit coverage focuses on:
 - admin security-management controls
 - per-user poller settings controls
 - per-account poller settings controls and contextual poll-now actions
+- the standalone remote-control login and source-poll workflow
 - source email account dialog presets, auth-aware field visibility, and detected IMAP folder selection after a successful connection probe
 - reusable email-account card actions
 - language-aware setup guide generation and formatting helpers
@@ -214,6 +241,22 @@ The `...` menus in both the source-email-account list and the user-management li
 The Gmail account area now has two modes:
 
 - regular users see only connection status and a connect/reconnect Gmail OAuth action
+
+## Remote control surface
+
+The `/remote` route is intentionally separate from the full admin workspace.
+
+It reuses the same InboxBridge account identity, but it does not reuse the broad admin-ui session cookie.
+Instead it signs in through `/api/remote/auth/...`, stores a remote-only session cookie plus CSRF cookie, and talks only to `/api/remote/...`.
+
+That remote surface is deliberately optimized for:
+
+- small screens
+- quick poll-now actions
+- installability as a PWA
+- reduced exposed functionality on public endpoints
+- collapsed-by-default source cards that keep each per-source poll button visible even before the user expands the extra details
+- an explicit signed-out notice on the login card whenever a revoked or expired remote session sends the page back to sign-in
 - admins can still open the advanced Gmail account override form when they need to manage redirect URIs, shared-client overrides, or other expert settings, but that is an exception path rather than the default model
 
 When that admin-only form is shown, it explains that `Gmail API User` is the Gmail API user id, which is normally `me`, and that the actual Gmail mailbox is the Google account that completed OAuth consent.

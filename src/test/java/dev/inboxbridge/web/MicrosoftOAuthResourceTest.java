@@ -11,6 +11,7 @@ import java.util.Optional;
 import org.junit.jupiter.api.Test;
 
 import dev.inboxbridge.config.InboxBridgeConfig;
+import dev.inboxbridge.config.InboxBridgeConfig.Security.Auth;
 import dev.inboxbridge.dto.ApiError;
 import dev.inboxbridge.dto.MicrosoftOAuthSourceOption;
 import dev.inboxbridge.persistence.AppUser;
@@ -322,6 +323,56 @@ class MicrosoftOAuthResourceTest {
                             public java.time.Duration registrationChallengeTtl() {
                                 return java.time.Duration.ofMinutes(10);
                             }
+
+                            @Override
+                            public String registrationChallengeProvider() {
+                                return "ALTCHA";
+                            }
+
+                            @Override
+                            public RegistrationCaptcha registrationCaptcha() {
+                                return captchaDefaults();
+                            }
+
+                            @Override
+                            public GeoIp geoIp() {
+                                return new GeoIp() {
+                                    @Override
+                                    public boolean enabled() {
+                                        return false;
+                                    }
+
+                                    @Override
+                                    public String primaryProvider() {
+                                        return "IPWHOIS";
+                                    }
+
+                                    @Override
+                                    public String fallbackProviders() {
+                                        return "IPINFO_LITE";
+                                    }
+
+                                    @Override
+                                    public java.time.Duration cacheTtl() {
+                                        return java.time.Duration.ofDays(30);
+                                    }
+
+                                    @Override
+                                    public java.time.Duration providerCooldown() {
+                                        return java.time.Duration.ofMinutes(5);
+                                    }
+
+                                    @Override
+                                    public java.time.Duration requestTimeout() {
+                                        return java.time.Duration.ofSeconds(3);
+                                    }
+
+                                    @Override
+                                    public java.util.Optional<String> ipinfoToken() {
+                                        return java.util.Optional.empty();
+                                    }
+                                };
+                            }
                         };
                     }
 
@@ -353,6 +404,11 @@ class MicrosoftOAuthResourceTest {
                                 return "PT5M";
                             }
                         };
+                    }
+
+                    @Override
+                    public Remote remote() {
+                        return remoteDefaults();
                     }
                 };
             }
@@ -440,6 +496,89 @@ class MicrosoftOAuthResourceTest {
                         return Optional.empty();
                     }
                 });
+            }
+
+            private Auth.RegistrationCaptcha captchaDefaults() {
+                return new Auth.RegistrationCaptcha() {
+                    @Override
+                    public Auth.RegistrationCaptcha.Altcha altcha() {
+                        return new Auth.RegistrationCaptcha.Altcha() {
+                            @Override
+                            public long maxNumber() {
+                                return 100000L;
+                            }
+
+                            @Override
+                            public java.util.Optional<String> hmacKey() {
+                                return java.util.Optional.empty();
+                            }
+                        };
+                    }
+
+                    @Override
+                    public Auth.RegistrationCaptcha.Turnstile turnstile() {
+                        return new Auth.RegistrationCaptcha.Turnstile() {
+                            @Override
+                            public java.util.Optional<String> siteKey() {
+                                return java.util.Optional.empty();
+                            }
+
+                            @Override
+                            public java.util.Optional<String> secret() {
+                                return java.util.Optional.empty();
+                            }
+                        };
+                    }
+
+                    @Override
+                    public Auth.RegistrationCaptcha.Hcaptcha hcaptcha() {
+                        return new Auth.RegistrationCaptcha.Hcaptcha() {
+                            @Override
+                            public java.util.Optional<String> siteKey() {
+                                return java.util.Optional.empty();
+                            }
+
+                            @Override
+                            public java.util.Optional<String> secret() {
+                                return java.util.Optional.empty();
+                            }
+                        };
+                    }
+                };
+            }
+
+            private InboxBridgeConfig.Security.Remote remoteDefaults() {
+                return new InboxBridgeConfig.Security.Remote() {
+                    @Override
+                    public boolean enabled() {
+                        return true;
+                    }
+
+                    @Override
+                    public java.time.Duration sessionTtl() {
+                        return java.time.Duration.ofHours(12);
+                    }
+
+                    @Override
+                    public int pollRateLimitCount() {
+                        return 60;
+                    }
+
+                    @Override
+                    public java.time.Duration pollRateLimitWindow() {
+                        return java.time.Duration.ofMinutes(1);
+                    }
+
+                    @Override
+                    public java.util.Optional<String> serviceToken() {
+                        return java.util.Optional.empty();
+                    }
+
+                    @Override
+                    public java.util.Optional<String> serviceUsername() {
+                        return java.util.Optional.empty();
+                    }
+                };
             }
         };
     }

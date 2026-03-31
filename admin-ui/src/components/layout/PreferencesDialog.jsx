@@ -38,7 +38,7 @@ function PreferencesDialog({
             ))}
           </select>
         </label>
-        <label className="preferences-checkbox-row">
+        <label className="checkbox-row">
           <input
             checked={quickSetupVisible}
             disabled={savingLayout || !canHideQuickSetup}
@@ -56,7 +56,7 @@ function PreferencesDialog({
             <InfoHint text={t('preferences.editLayoutHelp')} />
           </span>
         </div>
-        <label className="preferences-checkbox-row">
+        <label className="checkbox-row">
           <input
             checked={persistLayout}
             disabled={savingLayout}

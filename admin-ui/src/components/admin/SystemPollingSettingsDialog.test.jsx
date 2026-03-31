@@ -221,4 +221,68 @@ describe('SystemPollingSettingsDialog', () => {
     expect(screen.getByText(/PT0.25S for 250 milliseconds/i)).toBeInTheDocument()
     expect(screen.getByText(/Decimal from 0 to 1/i)).toBeInTheDocument()
   })
+
+  it('organizes the form into grouped admin subsections', () => {
+    render(
+      <SystemPollingSettingsDialog
+        isDirty={false}
+        onClose={vi.fn()}
+        onPollingFormChange={vi.fn()}
+        onResetPollingSettings={vi.fn()}
+        onSavePollingSettings={vi.fn((event) => event.preventDefault())}
+        pollingSettings={{
+          defaultPollEnabled: true,
+          effectivePollEnabled: true,
+          defaultPollInterval: '5m',
+          effectivePollInterval: '5m',
+          defaultFetchWindow: 50,
+          effectiveFetchWindow: 50,
+          defaultManualTriggerLimitCount: 5,
+          effectiveManualTriggerLimitCount: 5,
+          defaultManualTriggerLimitWindowSeconds: 60,
+          effectiveManualTriggerLimitWindowSeconds: 60,
+          defaultSourceHostMinSpacing: 'PT1S',
+          effectiveSourceHostMinSpacing: 'PT1S',
+          defaultSourceHostMaxConcurrency: 2,
+          effectiveSourceHostMaxConcurrency: 2,
+          defaultDestinationProviderMinSpacing: 'PT0.25S',
+          effectiveDestinationProviderMinSpacing: 'PT0.25S',
+          defaultDestinationProviderMaxConcurrency: 1,
+          effectiveDestinationProviderMaxConcurrency: 1,
+          defaultThrottleLeaseTtl: 'PT2M',
+          effectiveThrottleLeaseTtl: 'PT2M',
+          defaultAdaptiveThrottleMaxMultiplier: 6,
+          effectiveAdaptiveThrottleMaxMultiplier: 6,
+          defaultSuccessJitterRatio: 0.2,
+          effectiveSuccessJitterRatio: 0.2,
+          defaultMaxSuccessJitter: 'PT30S',
+          effectiveMaxSuccessJitter: 'PT30S'
+        }}
+        pollingSettingsForm={{
+          pollEnabledMode: 'DEFAULT',
+          pollIntervalOverride: '',
+          fetchWindowOverride: '',
+          manualTriggerLimitCountOverride: '',
+          manualTriggerLimitWindowSecondsOverride: '',
+          sourceHostMinSpacingOverride: '',
+          sourceHostMaxConcurrencyOverride: '',
+          destinationProviderMinSpacingOverride: '',
+          destinationProviderMaxConcurrencyOverride: '',
+          throttleLeaseTtlOverride: '',
+          adaptiveThrottleMaxMultiplierOverride: '',
+          successJitterRatioOverride: '',
+          maxSuccessJitterOverride: ''
+        }}
+        pollingSettingsLoading={false}
+        t={(key, params) => translate('en', key, params)}
+      />
+    )
+
+    expect(screen.getByText('Scheduler Defaults')).toBeInTheDocument()
+    expect(screen.getByText('Manual Runs')).toBeInTheDocument()
+    expect(screen.getByText('Source Mailbox Pacing')).toBeInTheDocument()
+    expect(screen.getByText('Destination Delivery Pacing')).toBeInTheDocument()
+    expect(screen.getByText('Adaptive Recovery and Jitter')).toBeInTheDocument()
+    expect(screen.getByText('Effective Values')).toBeInTheDocument()
+  })
 })

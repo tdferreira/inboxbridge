@@ -56,6 +56,19 @@ public class RuntimeEmailAccountService {
         return toRuntimeEmailAccount(emailAccount.get());
     }
 
+    public Optional<RuntimeEmailAccount> findUserManagedById(String sourceId) {
+        return userEmailAccountService.findByEmailAccountId(sourceId)
+                .flatMap(this::toRuntimeEmailAccount);
+    }
+
+    public Optional<RuntimeEmailAccount> findAnyAccessibleForAdmin(String sourceId) {
+        Optional<RuntimeEmailAccount> systemSource = findSystemBridge(sourceId);
+        if (systemSource.isPresent()) {
+            return systemSource;
+        }
+        return findUserManagedById(sourceId);
+    }
+
     public List<RuntimeEmailAccount> listEnabledForPolling() {
         List<RuntimeEmailAccount> emailAccounts = new ArrayList<>();
         MailDestinationTarget systemTarget = systemDestinationTarget();

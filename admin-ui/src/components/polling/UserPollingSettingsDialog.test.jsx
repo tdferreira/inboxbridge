@@ -70,4 +70,34 @@ describe('UserPollingSettingsDialog', () => {
 
     expect(screen.getByLabelText(/Poll Interval Override/)).toBeDisabled()
   })
+
+  it('renders grouped scheduler and effective-value sections', () => {
+    render(
+      <UserPollingSettingsDialog
+        isDirty={false}
+        onClose={vi.fn()}
+        onPollingFormChange={vi.fn()}
+        onResetPollingSettings={vi.fn()}
+        onSavePollingSettings={vi.fn((event) => event.preventDefault())}
+        pollingSettings={{
+          defaultPollEnabled: true,
+          effectivePollEnabled: true,
+          defaultPollInterval: '5m',
+          effectivePollInterval: '2m',
+          defaultFetchWindow: 50,
+          effectiveFetchWindow: 50
+        }}
+        pollingSettingsForm={{
+          pollEnabledMode: 'DEFAULT',
+          pollIntervalOverride: '',
+          fetchWindowOverride: ''
+        }}
+        pollingSettingsLoading={false}
+        t={(key, params) => translate('en', key, params)}
+      />
+    )
+
+    expect(screen.getByText('My Polling Defaults')).toBeInTheDocument()
+    expect(screen.getByText('Effective Values')).toBeInTheDocument()
+  })
 })

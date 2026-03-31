@@ -38,4 +38,25 @@ describe('Banner', () => {
     expect(onFocus).toHaveBeenCalledTimes(1)
     expect(onDismiss).toHaveBeenCalledTimes(1)
   })
+
+  it('makes the whole banner clickable without letting action buttons trigger focus', async () => {
+    const onDismiss = vi.fn()
+    const onFocus = vi.fn()
+    const writeText = vi.fn().mockResolvedValue()
+    Object.assign(navigator, { clipboard: { writeText } })
+
+    render(
+      <Banner copyText="payload-123" onDismiss={onDismiss} onFocus={onFocus} tone="warning">
+        Password must be updated.
+      </Banner>
+    )
+
+    fireEvent.click(screen.getByRole('button', { name: 'Focus the related section' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Copy Error' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Dismiss notification' }))
+
+    await waitFor(() => expect(writeText).toHaveBeenCalledWith('payload-123'))
+    expect(onFocus).toHaveBeenCalledTimes(1)
+    expect(onDismiss).toHaveBeenCalledTimes(1)
+  })
 })

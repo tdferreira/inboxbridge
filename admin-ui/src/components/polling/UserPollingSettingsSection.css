@@ -17,3 +17,13 @@
   line-height: 1.7;
   margin-top: 1rem;
 }
+
+@media (max-width: 760px) {
+  .user-polling-section .panel-header-actions {
+    width: 100%;
+  }
+
+  .user-polling-section .panel-header-actions > * {
+    flex: 1 1 100%;
+  }
+}

@@ -4,6 +4,5 @@ public record RegisterUserRequest(
         String username,
         String password,
         String confirmPassword,
-        String challengeId,
-        String challengeAnswer) {
+        String captchaToken) {
 }

@@ -8,17 +8,6 @@
   gap: 8px;
 }
 
-.preferences-checkbox-row {
-  display: grid;
-  grid-template-columns: auto 1fr;
-  align-items: start;
-  gap: 12px;
-}
-
-.preferences-checkbox-row input[type='checkbox'] {
-  margin-top: 2px;
-}
-
 @media (max-width: 560px) {
   .preferences-dialog .action-row > * {
     width: 100%;

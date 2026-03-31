@@ -1,5 +1,5 @@
 import LoadingButton from '../common/LoadingButton'
-import PaneToggleButton from '../common/PaneToggleButton'
+import CollapsibleSection from '../common/CollapsibleSection'
 import DurationValue from '../common/DurationValue'
 import './SystemDashboardSection.css'
 
@@ -20,30 +20,28 @@ function SystemDashboardSection({
   locale
 }) {
   return (
-    <section className="surface-card system-dashboard-section section-with-corner-toggle" id="system-dashboard-section" tabIndex="-1">
-      <div className="panel-header">
-        <div>
-          <div className="section-title">{t('system.title')}</div>
-          <p className="section-copy">{t('system.copy')}</p>
-        </div>
-        <div className="panel-header-actions">
+    <CollapsibleSection
+      actions={
+        <>
           <LoadingButton className="secondary" onClick={onOpenEditor} type="button">
             {t('system.edit')}
           </LoadingButton>
           <LoadingButton className="primary" isLoading={runningPoll} loadingLabel={t('system.runPollLoading')} onClick={onRunPoll}>
             {t('system.runPoll')}
           </LoadingButton>
-        </div>
-      </div>
-      <PaneToggleButton className="pane-toggle-button-corner" collapseLabel={t('common.collapseSection')} collapsed={collapsed} disabled={collapseLoading} expandLabel={t('common.expandSection')} isLoading={collapseLoading} onClick={onCollapseToggle} />
-      {sectionLoading ? (
-        <div className="section-refresh-indicator" role="status">
-          <span aria-hidden="true" className="section-refresh-spinner" />
-          {t('common.refreshingSection')}
-        </div>
-      ) : null}
-
-      {!collapsed && dashboard ? (
+        </>
+      }
+      className="system-dashboard-section"
+      collapsed={collapsed}
+      collapseLoading={collapseLoading}
+      copy={t('system.copy')}
+      id="system-dashboard-section"
+      onCollapseToggle={onCollapseToggle}
+      sectionLoading={sectionLoading}
+      t={t}
+      title={t('system.title')}
+    >
+      {dashboard ? (
         <>
           <div className="muted-box full user-polling-summary">
             {t('system.effectivePolling', { value: dashboard.polling.effectivePollEnabled ? t('common.yes') : t('common.no') })}<br />
@@ -60,7 +58,7 @@ function SystemDashboardSection({
           </div>
         </>
       ) : null}
-    </section>
+    </CollapsibleSection>
   )
 }
 

@@ -76,6 +76,11 @@
             <artifactId>webauthn-server-core</artifactId>
             <version>2.8.1</version>
         </dependency>
+        <dependency>
+            <groupId>org.altcha</groupId>
+            <artifactId>altcha</artifactId>
+            <version>1.3.0</version>
+        </dependency>
 
         <dependency>
             <groupId>io.quarkus</groupId>

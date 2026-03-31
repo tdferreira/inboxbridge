@@ -20,6 +20,7 @@ class AuthServiceTest {
         AuthService service = new AuthService();
         service.appUserService = fakeUsers("alice@example.com", "secret-123", true, false, 0);
         service.userSessionService = new FakeUserSessionService();
+        service.geoIpLocationService = new FakeGeoIpLocationService(null);
 
         IllegalArgumentException error = assertThrows(
                 IllegalArgumentException.class,
@@ -33,6 +34,7 @@ class AuthServiceTest {
         AuthService service = new AuthService();
         service.appUserService = fakeUsers("alice@example.com", "secret-123", false, true, 0);
         service.userSessionService = new FakeUserSessionService();
+        service.geoIpLocationService = new FakeGeoIpLocationService(null);
 
         IllegalArgumentException error = assertThrows(
                 IllegalArgumentException.class,
@@ -47,6 +49,7 @@ class AuthServiceTest {
         service.appUserService = fakeUsers("alice@example.com", "secret-123", true, true, 1);
         service.userSessionService = new FakeUserSessionService();
         service.passkeyService = new FakePasskeyService();
+        service.geoIpLocationService = new FakeGeoIpLocationService(null);
 
         AuthService.LoginResult result = service.login("alice@example.com", "secret-123", "203.0.113.5", "JUnit");
 
@@ -60,6 +63,7 @@ class AuthServiceTest {
         service.appUserService = fakeUsers("alice@example.com", null, true, true, 1);
         service.userSessionService = new FakeUserSessionService();
         service.passkeyService = new FakePasskeyService();
+        service.geoIpLocationService = new FakeGeoIpLocationService(null);
 
         AuthService.LoginResult result = service.login("alice@example.com", "anything", "203.0.113.5", "JUnit");
 
@@ -73,11 +77,13 @@ class AuthServiceTest {
         FakeUserSessionService sessionService = new FakeUserSessionService();
         service.appUserService = fakeUsers("alice@example.com", "secret-123", true, true, 0);
         service.userSessionService = sessionService;
+        service.geoIpLocationService = new FakeGeoIpLocationService("Lisbon, Portugal");
 
         AuthService.LoginResult result = service.login("alice@example.com", "secret-123", "203.0.113.8", "JUnit Browser");
 
         assertEquals(AuthService.LoginStatus.AUTHENTICATED, result.status());
         assertEquals("203.0.113.8", sessionService.lastClientIp);
+        assertEquals("Lisbon, Portugal", sessionService.lastLocationLabel);
         assertEquals("JUnit Browser", sessionService.lastUserAgent);
         assertEquals(UserSession.LoginMethod.PASSWORD, sessionService.lastLoginMethod);
     }
@@ -88,6 +94,7 @@ class AuthServiceTest {
         FakeUserSessionService sessionService = new FakeUserSessionService();
         service.appUserService = fakeUsers("alice@example.com", "secret-123", true, true, 1);
         service.userSessionService = sessionService;
+        service.geoIpLocationService = new FakeGeoIpLocationService("Paris, France");
 
         AppUser user = service.appUserService.findByUsername("alice@example.com").orElseThrow();
         AuthService.AuthenticatedSession session = service.loginWithPasskey(
@@ -96,6 +103,7 @@ class AuthServiceTest {
                 "JUnit Browser");
 
         assertEquals("session-1", session.token());
+        assertEquals("Paris, France", sessionService.lastLocationLabel);
         assertEquals(UserSession.LoginMethod.PASSWORD_PLUS_PASSKEY, sessionService.lastLoginMethod);
         assertTrue(sessionService.lastUserAgent.contains("JUnit"));
     }
@@ -146,12 +154,14 @@ class AuthServiceTest {
 
     private static final class FakeUserSessionService extends UserSessionService {
         private String lastClientIp;
+        private String lastLocationLabel;
         private String lastUserAgent;
         private UserSession.LoginMethod lastLoginMethod;
 
         @Override
         public String createSession(AppUser user, String clientIp, String locationLabel, String userAgent, UserSession.LoginMethod loginMethod) {
             this.lastClientIp = clientIp;
+            this.lastLocationLabel = locationLabel;
             this.lastUserAgent = userAgent;
             this.lastLoginMethod = loginMethod;
             return "session-1";
@@ -169,6 +179,19 @@ class AuthServiceTest {
         @Override
         public dev.inboxbridge.dto.StartPasskeyCeremonyResponse startAuthenticationForUser(AppUser user, boolean passwordVerified) {
             return new dev.inboxbridge.dto.StartPasskeyCeremonyResponse("ceremony-1", "{\"challenge\":\"abc\"}");
+        }
+    }
+
+    private static final class FakeGeoIpLocationService extends GeoIpLocationService {
+        private final String locationLabel;
+
+        private FakeGeoIpLocationService(String locationLabel) {
+            this.locationLabel = locationLabel;
+        }
+
+        @Override
+        public Optional<String> resolveLocation(String clientIp) {
+            return Optional.ofNullable(locationLabel);
         }
     }
 }

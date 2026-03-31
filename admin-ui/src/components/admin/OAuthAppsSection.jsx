@@ -1,5 +1,5 @@
 import LoadingButton from '../common/LoadingButton'
-import PaneToggleButton from '../common/PaneToggleButton'
+import CollapsibleSection from '../common/CollapsibleSection'
 
 function OAuthAppsSection({
   collapsed,
@@ -12,22 +12,17 @@ function OAuthAppsSection({
   t
 }) {
   return (
-    <section className="surface-card system-dashboard-section section-with-corner-toggle" id="oauth-apps-section" tabIndex="-1">
-      <div className="panel-header">
-        <div>
-          <div className="section-title">{t('system.oauthAppsSectionTitle')}</div>
-          <p className="section-copy">{t('system.oauthAppsSectionCopy')}</p>
-        </div>
-      </div>
-      <PaneToggleButton className="pane-toggle-button-corner" collapseLabel={t('common.collapseSection')} collapsed={collapsed} disabled={collapseLoading} expandLabel={t('common.expandSection')} isLoading={collapseLoading} onClick={onCollapseToggle} />
-      {sectionLoading ? (
-        <div className="section-refresh-indicator" role="status">
-          <span aria-hidden="true" className="section-refresh-spinner" />
-          {t('common.refreshingSection')}
-        </div>
-      ) : null}
-
-      {!collapsed ? (
+    <CollapsibleSection
+      className="system-dashboard-section"
+      collapsed={collapsed}
+      collapseLoading={collapseLoading}
+      copy={t('system.oauthAppsSectionCopy')}
+      id="oauth-apps-section"
+      onCollapseToggle={onCollapseToggle}
+      sectionLoading={sectionLoading}
+      t={t}
+      title={t('system.oauthAppsSectionTitle')}
+    >
         <div className="polling-statistics-grid">
           <article className="surface-card polling-statistics-card">
             <div className="polling-statistics-card-title">{t('system.oauthGoogleTitle')}</div>
@@ -57,8 +52,7 @@ function OAuthAppsSection({
             </div>
           </article>
         </div>
-      ) : null}
-    </section>
+    </CollapsibleSection>
   )
 }
 

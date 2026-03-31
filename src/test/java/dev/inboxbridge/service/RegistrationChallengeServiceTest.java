@@ -1,69 +1,63 @@
 package dev.inboxbridge.service;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.time.Duration;
-import java.time.Instant;
-import java.util.LinkedHashMap;
-import java.util.List;
-import java.util.Map;
 import java.util.Optional;
 
 import org.junit.jupiter.api.Test;
 
+import com.fasterxml.jackson.databind.ObjectMapper;
+import dev.inboxbridge.config.InboxBridgeConfig;
 import dev.inboxbridge.dto.RegistrationChallengeResponse;
-import dev.inboxbridge.persistence.RegistrationChallenge;
-import dev.inboxbridge.persistence.RegistrationChallengeRepository;
 
 class RegistrationChallengeServiceTest {
 
     @Test
-    void issueChallengeCreatesLanguageNeutralPromptAndStoresHash() {
+    void currentChallengeReturnsAltchaPayloadByDefault() {
         RegistrationChallengeService service = new RegistrationChallengeService();
-        InMemoryRegistrationChallengeRepository repository = new InMemoryRegistrationChallengeRepository();
-        service.repository = repository;
-        service.authSecuritySettingsService = authSecuritySettingsService(true);
+        service.authSecuritySettingsService = authSecuritySettingsService(true, "ALTCHA");
+        service.inboxBridgeConfig = new TestConfig();
+        service.objectMapper = new ObjectMapper();
 
-        RegistrationChallengeResponse response = service.issueChallenge();
+        RegistrationChallengeResponse response = service.currentChallenge();
 
         assertTrue(response.enabled());
-        assertNotNull(response.challengeId());
-        assertTrue(response.prompt().matches("\\d+ \\+ \\d+ = \\?"));
-        assertEquals(1, repository.size());
+        assertEquals("ALTCHA", response.provider());
+        assertNotNull(response.altcha());
+        assertEquals("SHA-256", response.altcha().algorithm());
+        assertTrue(response.altcha().maxNumber() > 0);
     }
 
     @Test
-    void validateAndConsumeRejectsWrongAnswerAndConsumesChallenge() {
+    void validateAndConsumeRejectsInvalidAltchaPayload() {
         RegistrationChallengeService service = new RegistrationChallengeService();
-        InMemoryRegistrationChallengeRepository repository = new InMemoryRegistrationChallengeRepository();
-        service.repository = repository;
-        service.authSecuritySettingsService = authSecuritySettingsService(true);
-
-        RegistrationChallengeResponse response = service.issueChallenge();
+        service.authSecuritySettingsService = authSecuritySettingsService(true, "ALTCHA");
+        service.inboxBridgeConfig = new TestConfig();
+        service.objectMapper = new ObjectMapper();
 
         IllegalArgumentException error = assertThrows(
                 IllegalArgumentException.class,
-                () -> service.validateAndConsume(response.challengeId(), "999"));
+                () -> service.validateAndConsume("invalid-payload", "203.0.113.7"));
 
-        assertEquals("Registration challenge answer is incorrect", error.getMessage());
-        assertFalse(repository.findByToken(response.challengeId()).isPresent());
+        assertEquals("Registration CAPTCHA is invalid or expired", error.getMessage());
     }
 
     @Test
-    void disabledModeSkipsChallengeValidation() {
+    void disabledModeSkipsCaptchaValidation() {
         RegistrationChallengeService service = new RegistrationChallengeService();
-        service.repository = new InMemoryRegistrationChallengeRepository();
-        service.authSecuritySettingsService = authSecuritySettingsService(false);
+        service.authSecuritySettingsService = authSecuritySettingsService(false, "ALTCHA");
+        service.inboxBridgeConfig = new TestConfig();
+        service.objectMapper = new ObjectMapper();
 
         assertEquals(false, service.currentChallenge().enabled());
         service.validateAndConsume(null, null);
     }
 
-    private AuthSecuritySettingsService authSecuritySettingsService(boolean enabled) {
+    private AuthSecuritySettingsService authSecuritySettingsService(boolean enabled, String provider) {
         return new AuthSecuritySettingsService() {
             @Override
             public EffectiveAuthSecuritySettings effectiveSettings() {
@@ -72,40 +66,232 @@ class RegistrationChallengeServiceTest {
                         Duration.ofMinutes(5),
                         Duration.ofHours(1),
                         enabled,
-                        Duration.ofMinutes(10));
+                        Duration.ofMinutes(10),
+                        provider,
+                        "",
+                        "",
+                        "",
+                        "",
+                        false,
+                        "IPWHOIS",
+                        "IPAPI_CO,IP_API,IPINFO_LITE",
+                        Duration.ofDays(30),
+                        Duration.ofMinutes(5),
+                        Duration.ofSeconds(3),
+                        "");
             }
         };
     }
 
-    private static final class InMemoryRegistrationChallengeRepository extends RegistrationChallengeRepository {
-        private final Map<String, RegistrationChallenge> challenges = new LinkedHashMap<>();
-
+    private static final class TestConfig implements InboxBridgeConfig {
         @Override
-        public Optional<RegistrationChallenge> findByToken(String challengeToken) {
-            return Optional.ofNullable(challenges.get(challengeToken));
+        public boolean pollEnabled() {
+            return true;
         }
 
         @Override
-        public void persist(RegistrationChallenge entity) {
-            challenges.put(entity.challengeToken, entity);
+        public String pollInterval() {
+            return "5m";
         }
 
         @Override
-        public long deleteExpired(Instant now) {
-            long before = challenges.size();
-            challenges.entrySet().removeIf((entry) -> entry.getValue().expiresAt != null && entry.getValue().expiresAt.isBefore(now));
-            return before - challenges.size();
+        public int fetchWindow() {
+            return 50;
         }
 
         @Override
-        public void delete(RegistrationChallenge entity) {
-            if (entity != null) {
-                challenges.remove(entity.challengeToken);
-            }
+        public Duration sourceHostMinSpacing() {
+            return Duration.ofSeconds(1);
         }
 
-        private int size() {
-            return challenges.size();
+        @Override
+        public int sourceHostMaxConcurrency() {
+            return 2;
+        }
+
+        @Override
+        public Duration destinationProviderMinSpacing() {
+            return Duration.ofMillis(250);
+        }
+
+        @Override
+        public int destinationProviderMaxConcurrency() {
+            return 1;
+        }
+
+        @Override
+        public Duration throttleLeaseTtl() {
+            return Duration.ofMinutes(2);
+        }
+
+        @Override
+        public int adaptiveThrottleMaxMultiplier() {
+            return 6;
+        }
+
+        @Override
+        public double successJitterRatio() {
+            return 0.2;
+        }
+
+        @Override
+        public Duration maxSuccessJitter() {
+            return Duration.ofSeconds(30);
+        }
+
+        @Override
+        public boolean multiUserEnabled() {
+            return true;
+        }
+
+        @Override
+        public Security security() {
+            return new Security() {
+                @Override
+                public Auth auth() {
+                    return new Auth() {
+                        @Override
+                        public int loginFailureThreshold() {
+                            return 5;
+                        }
+
+                        @Override
+                        public Duration loginInitialBlock() {
+                            return Duration.ofMinutes(5);
+                        }
+
+                        @Override
+                        public Duration loginMaxBlock() {
+                            return Duration.ofHours(1);
+                        }
+
+                        @Override
+                        public boolean registrationChallengeEnabled() {
+                            return true;
+                        }
+
+                        @Override
+                        public Duration registrationChallengeTtl() {
+                            return Duration.ofMinutes(10);
+                        }
+
+                        @Override
+                        public String registrationChallengeProvider() {
+                            return "ALTCHA";
+                        }
+
+                        @Override
+                        public RegistrationCaptcha registrationCaptcha() {
+                            return new RegistrationCaptcha() {
+                                @Override
+                                public Altcha altcha() {
+                                    return new Altcha() {
+                                        @Override
+                                        public long maxNumber() {
+                                            return 1000;
+                                        }
+
+                                        @Override
+                                        public Optional<String> hmacKey() {
+                                            return Optional.empty();
+                                        }
+                                    };
+                                }
+
+                                @Override
+                                public Turnstile turnstile() {
+                                    return new Turnstile() {
+                                        @Override
+                                        public Optional<String> siteKey() {
+                                            return Optional.empty();
+                                        }
+
+                                        @Override
+                                        public Optional<String> secret() {
+                                            return Optional.empty();
+                                        }
+                                    };
+                                }
+
+                                @Override
+                                public Hcaptcha hcaptcha() {
+                                    return new Hcaptcha() {
+                                        @Override
+                                        public Optional<String> siteKey() {
+                                            return Optional.empty();
+                                        }
+
+                                        @Override
+                                        public Optional<String> secret() {
+                                            return Optional.empty();
+                                        }
+                                    };
+                                }
+                            };
+                        }
+
+                        @Override
+                        public GeoIp geoIp() {
+                            throw new UnsupportedOperationException();
+                        }
+                    };
+                }
+
+                @Override
+                public Passkeys passkeys() {
+                    throw new UnsupportedOperationException();
+                }
+
+                @Override
+                public Remote remote() {
+                    return new Remote() {
+                        @Override
+                        public boolean enabled() {
+                            return true;
+                        }
+
+                        @Override
+                        public Duration sessionTtl() {
+                            return Duration.ofHours(12);
+                        }
+
+                        @Override
+                        public int pollRateLimitCount() {
+                            return 60;
+                        }
+
+                        @Override
+                        public Duration pollRateLimitWindow() {
+                            return Duration.ofMinutes(1);
+                        }
+
+                        @Override
+                        public Optional<String> serviceToken() {
+                            return Optional.empty();
+                        }
+
+                        @Override
+                        public Optional<String> serviceUsername() {
+                            return Optional.empty();
+                        }
+                    };
+                }
+            };
+        }
+
+        @Override
+        public Gmail gmail() {
+            throw new UnsupportedOperationException();
+        }
+
+        @Override
+        public Microsoft microsoft() {
+            throw new UnsupportedOperationException();
+        }
+
+        @Override
+        public java.util.List<Source> sources() {
+            return java.util.List.of();
         }
     }
 }

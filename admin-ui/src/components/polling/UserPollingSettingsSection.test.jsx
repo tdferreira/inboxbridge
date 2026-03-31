@@ -39,8 +39,8 @@ describe('UserPollingSettingsSection', () => {
     expect(screen.getByText(/Effective interval:/)).toBeInTheDocument()
     expect(screen.getByText(/Effective fetch window:/)).toBeInTheDocument()
 
-    fireEvent.click(screen.getByRole('button', { name: 'Run Poll Now' }))
     fireEvent.click(screen.getByRole('button', { name: 'Edit Polling Settings' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Run Poll Now' }))
     expect(onRunPoll).toHaveBeenCalled()
     expect(onOpenEditor).toHaveBeenCalled()
   })
@@ -73,6 +73,17 @@ describe('UserPollingSettingsSection', () => {
     expect(screen.getByText('As minhas definições de verificação')).toBeInTheDocument()
     expect(screen.getByText(/Polling efetivo:/)).toBeInTheDocument()
     expect(screen.getByRole('button', { name: 'Editar definições de verificação' })).toBeInTheDocument()
+  })
+
+  it('keeps the edit action first and the run action as the primary button', () => {
+    const { container } = renderSection()
+    const actionButtons = container.querySelectorAll('.panel-header-actions button')
+
+    expect(actionButtons).toHaveLength(2)
+    expect(actionButtons[0]).toHaveTextContent('Edit Polling Settings')
+    expect(actionButtons[0]).toHaveClass('secondary')
+    expect(actionButtons[1]).toHaveTextContent('Run Poll Now')
+    expect(actionButtons[1]).toHaveClass('primary')
   })
 
   it('shows a refresh indicator while loading the latest polling values', () => {

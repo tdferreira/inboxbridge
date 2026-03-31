@@ -11,6 +11,7 @@ import java.util.Optional;
 import org.junit.jupiter.api.Test;
 
 import dev.inboxbridge.config.InboxBridgeConfig;
+import dev.inboxbridge.config.InboxBridgeConfig.Security.Auth;
 import dev.inboxbridge.dto.UpdateUserGmailConfigRequest;
 import dev.inboxbridge.dto.UserGmailConfigView;
 import dev.inboxbridge.persistence.AppUser;
@@ -388,6 +389,56 @@ class UserGmailConfigServiceTest {
                         public Duration registrationChallengeTtl() {
                             return Duration.ofMinutes(10);
                         }
+
+                        @Override
+                        public String registrationChallengeProvider() {
+                            return "ALTCHA";
+                        }
+
+                        @Override
+                        public RegistrationCaptcha registrationCaptcha() {
+                            return captchaDefaults();
+                        }
+
+                        @Override
+                        public GeoIp geoIp() {
+                            return new GeoIp() {
+                                @Override
+                                public boolean enabled() {
+                                    return false;
+                                }
+
+                                @Override
+                                public String primaryProvider() {
+                                    return "IPWHOIS";
+                                }
+
+                                @Override
+                                public String fallbackProviders() {
+                                    return "IPINFO_LITE";
+                                }
+
+                                @Override
+                                public Duration cacheTtl() {
+                                    return Duration.ofDays(30);
+                                }
+
+                                @Override
+                                public Duration providerCooldown() {
+                                    return Duration.ofMinutes(5);
+                                }
+
+                                @Override
+                                public Duration requestTimeout() {
+                                    return Duration.ofSeconds(3);
+                                }
+
+                                @Override
+                                public java.util.Optional<String> ipinfoToken() {
+                                    return java.util.Optional.empty();
+                                }
+                            };
+                        }
                     };
                 }
 
@@ -419,6 +470,11 @@ class UserGmailConfigServiceTest {
                             return "PT5M";
                         }
                     };
+                }
+
+                @Override
+                public Remote remote() {
+                    return remoteDefaults();
                 }
             };
         }
@@ -476,6 +532,89 @@ class UserGmailConfigServiceTest {
         @Override
         public java.util.List<Source> sources() {
             return java.util.List.of();
+        }
+
+        private Auth.RegistrationCaptcha captchaDefaults() {
+            return new Auth.RegistrationCaptcha() {
+                @Override
+                public Auth.RegistrationCaptcha.Altcha altcha() {
+                    return new Auth.RegistrationCaptcha.Altcha() {
+                        @Override
+                        public long maxNumber() {
+                            return 100000L;
+                        }
+
+                        @Override
+                        public java.util.Optional<String> hmacKey() {
+                            return java.util.Optional.empty();
+                        }
+                    };
+                }
+
+                @Override
+                public Auth.RegistrationCaptcha.Turnstile turnstile() {
+                    return new Auth.RegistrationCaptcha.Turnstile() {
+                        @Override
+                        public java.util.Optional<String> siteKey() {
+                            return java.util.Optional.empty();
+                        }
+
+                        @Override
+                        public java.util.Optional<String> secret() {
+                            return java.util.Optional.empty();
+                        }
+                    };
+                }
+
+                @Override
+                public Auth.RegistrationCaptcha.Hcaptcha hcaptcha() {
+                    return new Auth.RegistrationCaptcha.Hcaptcha() {
+                        @Override
+                        public java.util.Optional<String> siteKey() {
+                            return java.util.Optional.empty();
+                        }
+
+                        @Override
+                        public java.util.Optional<String> secret() {
+                            return java.util.Optional.empty();
+                        }
+                    };
+                }
+            };
+        }
+
+        private InboxBridgeConfig.Security.Remote remoteDefaults() {
+            return new InboxBridgeConfig.Security.Remote() {
+                @Override
+                public boolean enabled() {
+                    return true;
+                }
+
+                @Override
+                public Duration sessionTtl() {
+                    return Duration.ofHours(12);
+                }
+
+                @Override
+                public int pollRateLimitCount() {
+                    return 60;
+                }
+
+                @Override
+                public Duration pollRateLimitWindow() {
+                    return Duration.ofMinutes(1);
+                }
+
+                @Override
+                public java.util.Optional<String> serviceToken() {
+                    return java.util.Optional.empty();
+                }
+
+                @Override
+                public java.util.Optional<String> serviceUsername() {
+                    return java.util.Optional.empty();
+                }
+            };
         }
     }
 

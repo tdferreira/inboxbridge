@@ -17,43 +17,66 @@ public class AuthService {
     @Inject
     PasskeyService passkeyService;
 
-    public LoginResult login(String username, String password, String clientIp, String userAgent) {
+    @Inject
+    GeoIpLocationService geoIpLocationService;
+
+    public AuthenticationResult authenticate(String username, String password) {
         AppUser user = appUserService.findByUsername(username)
                 .filter(found -> found.active && found.approved)
                 .orElseThrow(() -> new IllegalArgumentException("Invalid username or password"));
         boolean hasPassword = appUserService.hasPassword(user);
         boolean requiresPasskey = appUserService.requiresPasskey(user);
 
-        // Accounts with both factors configured treat the password form as the
-        // first factor and only create the session after a successful passkey
-        // ceremony completes.
         if (requiresPasskey && hasPassword) {
             if (!appUserService.passwordMatches(user, password)) {
                 throw new IllegalArgumentException("Invalid username or password");
             }
-            return LoginResult.passkeyRequired(passkeyService.startAuthenticationForUser(user, true));
+            return AuthenticationResult.passkeyRequired(passkeyService.startAuthenticationForUser(user, true));
         }
 
         if (requiresPasskey) {
-            return LoginResult.passkeyRequired(passkeyService.startAuthenticationForUser(user, false));
+            return AuthenticationResult.passkeyRequired(passkeyService.startAuthenticationForUser(user, false));
         }
 
         if (!hasPassword || !appUserService.passwordMatches(user, password)) {
             throw new IllegalArgumentException("Invalid username or password");
         }
-        String token = userSessionService.createSession(user, clientIp, null, userAgent, UserSession.LoginMethod.PASSWORD);
-        return LoginResult.authenticated(user, token);
+        return AuthenticationResult.authenticated(user, UserSession.LoginMethod.PASSWORD);
+    }
+
+    public LoginResult login(String username, String password, String clientIp, String userAgent) {
+        AuthenticationResult result = authenticate(username, password);
+        if (result.status() == AuthenticationStatus.PASSKEY_REQUIRED) {
+            return LoginResult.passkeyRequired(result.passkeyChallenge());
+        }
+        String token = userSessionService.createSession(
+                result.user(),
+                clientIp,
+                geoIpLocationService.resolveLocation(clientIp).orElse(null),
+                userAgent,
+                result.loginMethod());
+        return LoginResult.authenticated(result.user(), token);
     }
 
     public AuthenticatedSession loginWithPasskey(PasskeyService.PasskeyAuthenticationResult result, String clientIp, String userAgent) {
         AppUser authenticatedUser = appUserService.findById(result.user().id)
                 .filter(found -> found.active && found.approved)
                 .orElseThrow(() -> new IllegalArgumentException("Invalid passkey sign-in"));
-        UserSession.LoginMethod loginMethod = result.passwordVerified()
-                ? UserSession.LoginMethod.PASSWORD_PLUS_PASSKEY
-                : UserSession.LoginMethod.PASSKEY;
-        String token = userSessionService.createSession(authenticatedUser, clientIp, null, userAgent, loginMethod);
+        UserSession.LoginMethod loginMethod = loginMethodForPasskey(result);
+        String token = userSessionService.createSession(
+                authenticatedUser,
+                clientIp,
+                geoIpLocationService.resolveLocation(clientIp).orElse(null),
+                userAgent,
+                loginMethod);
         return new AuthenticatedSession(authenticatedUser, token);
+    }
+
+    public AuthenticationResult authenticateWithPasskey(PasskeyService.PasskeyAuthenticationResult result) {
+        AppUser authenticatedUser = appUserService.findById(result.user().id)
+                .filter(found -> found.active && found.approved)
+                .orElseThrow(() -> new IllegalArgumentException("Invalid passkey sign-in"));
+        return AuthenticationResult.authenticated(authenticatedUser, loginMethodForPasskey(result));
     }
 
     public AuthenticatedRequest requireAuthenticatedRequest(String token) {
@@ -99,5 +122,31 @@ public class AuthService {
     public enum LoginStatus {
         AUTHENTICATED,
         PASSKEY_REQUIRED
+    }
+
+    public record AuthenticationResult(
+            AuthenticationStatus status,
+            AppUser user,
+            UserSession.LoginMethod loginMethod,
+            dev.inboxbridge.dto.StartPasskeyCeremonyResponse passkeyChallenge) {
+
+        public static AuthenticationResult authenticated(AppUser user, UserSession.LoginMethod loginMethod) {
+            return new AuthenticationResult(AuthenticationStatus.AUTHENTICATED, user, loginMethod, null);
+        }
+
+        public static AuthenticationResult passkeyRequired(dev.inboxbridge.dto.StartPasskeyCeremonyResponse challenge) {
+            return new AuthenticationResult(AuthenticationStatus.PASSKEY_REQUIRED, null, null, challenge);
+        }
+    }
+
+    public enum AuthenticationStatus {
+        AUTHENTICATED,
+        PASSKEY_REQUIRED
+    }
+
+    private UserSession.LoginMethod loginMethodForPasskey(PasskeyService.PasskeyAuthenticationResult result) {
+        return result.passwordVerified()
+                ? UserSession.LoginMethod.PASSWORD_PLUS_PASSKEY
+                : UserSession.LoginMethod.PASSKEY;
     }
 }

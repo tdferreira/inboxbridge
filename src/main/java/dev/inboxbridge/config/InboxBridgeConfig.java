@@ -81,6 +81,8 @@ public interface InboxBridgeConfig {
 
         Passkeys passkeys();
 
+        Remote remote();
+
         interface Auth {
             @WithDefault("5")
             int loginFailureThreshold();
@@ -91,11 +93,67 @@ public interface InboxBridgeConfig {
             @WithDefault("PT1H")
             Duration loginMaxBlock();
 
-            @WithDefault("true")
-            boolean registrationChallengeEnabled();
+        @WithDefault("true")
+        boolean registrationChallengeEnabled();
 
-            @WithDefault("PT10M")
-            Duration registrationChallengeTtl();
+        @WithDefault("PT10M")
+        Duration registrationChallengeTtl();
+
+        @WithDefault("ALTCHA")
+        String registrationChallengeProvider();
+
+        RegistrationCaptcha registrationCaptcha();
+
+            GeoIp geoIp();
+
+            interface RegistrationCaptcha {
+                Altcha altcha();
+
+                Turnstile turnstile();
+
+                Hcaptcha hcaptcha();
+
+                interface Altcha {
+                    @WithDefault("100000")
+                    long maxNumber();
+
+                    Optional<String> hmacKey();
+                }
+
+                interface Turnstile {
+                    Optional<String> siteKey();
+
+                    Optional<String> secret();
+                }
+
+                interface Hcaptcha {
+                    Optional<String> siteKey();
+
+                    Optional<String> secret();
+                }
+            }
+
+            interface GeoIp {
+                @WithDefault("false")
+                boolean enabled();
+
+                @WithDefault("IPWHOIS")
+                String primaryProvider();
+
+                @WithDefault("IPAPI_CO,IP_API,IPINFO_LITE")
+                String fallbackProviders();
+
+                @WithDefault("PT720H")
+                Duration cacheTtl();
+
+                @WithDefault("PT5M")
+                Duration providerCooldown();
+
+                @WithDefault("PT3S")
+                Duration requestTimeout();
+
+                Optional<String> ipinfoToken();
+            }
         }
 
         interface Passkeys {
@@ -113,6 +171,24 @@ public interface InboxBridgeConfig {
 
             @WithDefault("PT5M")
             String challengeTtl();
+        }
+
+        interface Remote {
+            @WithDefault("true")
+            boolean enabled();
+
+            @WithDefault("PT12H")
+            Duration sessionTtl();
+
+            @WithDefault("60")
+            int pollRateLimitCount();
+
+            @WithDefault("PT1M")
+            Duration pollRateLimitWindow();
+
+            Optional<String> serviceToken();
+
+            Optional<String> serviceUsername();
         }
     }
 

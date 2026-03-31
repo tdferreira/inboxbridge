@@ -3,8 +3,10 @@ package dev.inboxbridge.service;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.time.Duration;
+import java.util.Base64;
 import java.util.Optional;
 
 import org.junit.jupiter.api.Test;
@@ -26,7 +28,19 @@ class AuthSecuritySettingsServiceTest {
         setting.loginMaxBlockOverride = "PT2H";
         setting.registrationChallengeEnabledOverride = Boolean.FALSE;
         setting.registrationChallengeTtlOverride = "PT20M";
+        setting.registrationChallengeProviderOverride = "HCAPTCHA";
+        setting.registrationHcaptchaSiteKeyOverride = "site-key";
+        setting.registrationHcaptchaSecretCiphertext = "cipher";
+        setting.registrationHcaptchaSecretNonce = "nonce";
+        setting.keyVersion = "test-key";
+        setting.geoIpEnabledOverride = Boolean.TRUE;
+        setting.geoIpPrimaryProviderOverride = "IPAPI_CO";
+        setting.geoIpFallbackProvidersOverride = "IPWHOIS,IP_API";
+        setting.geoIpCacheTtlOverride = "PT48H";
+        setting.geoIpProviderCooldownOverride = "PT10M";
+        setting.geoIpRequestTimeoutOverride = "PT5S";
         AuthSecuritySettingsService service = service(new TestConfig(), new InMemorySystemAuthSecuritySettingRepository(setting));
+        service.secretEncryptionService = passthroughSecrets();
 
         AuthSecuritySettingsService.EffectiveAuthSecuritySettings effective = service.effectiveSettings();
 
@@ -35,6 +49,15 @@ class AuthSecuritySettingsServiceTest {
         assertEquals(Duration.ofHours(2), effective.loginMaxBlock());
         assertEquals(false, effective.registrationChallengeEnabled());
         assertEquals(Duration.ofMinutes(20), effective.registrationChallengeTtl());
+        assertEquals("HCAPTCHA", effective.registrationChallengeProvider());
+        assertEquals("site-key", effective.registrationHcaptchaSiteKey());
+        assertEquals("cipher", effective.registrationHcaptchaSecret());
+        assertEquals(true, effective.geoIpEnabled());
+        assertEquals("IPAPI_CO", effective.geoIpPrimaryProvider());
+        assertEquals("IPWHOIS,IP_API", effective.geoIpFallbackProviders());
+        assertEquals(Duration.ofHours(48), effective.geoIpCacheTtl());
+        assertEquals(Duration.ofMinutes(10), effective.geoIpProviderCooldown());
+        assertEquals(Duration.ofSeconds(5), effective.geoIpRequestTimeout());
     }
 
     @Test
@@ -46,18 +69,31 @@ class AuthSecuritySettingsServiceTest {
         setting.loginMaxBlockOverride = "PT2H";
         setting.registrationChallengeEnabledOverride = Boolean.FALSE;
         setting.registrationChallengeTtlOverride = "PT20M";
+        setting.registrationChallengeProviderOverride = "TURNSTILE";
+        setting.registrationTurnstileSiteKeyOverride = "site-key";
+        setting.geoIpEnabledOverride = Boolean.TRUE;
+        setting.geoIpPrimaryProviderOverride = "IPAPI_CO";
         InMemorySystemAuthSecuritySettingRepository repository = new InMemorySystemAuthSecuritySettingRepository(setting);
         AuthSecuritySettingsService service = service(new TestConfig(), repository);
 
-        AuthSecuritySettingsView view = service.update(new UpdateAuthSecuritySettingsRequest(null, null, null, null, null));
+        AuthSecuritySettingsView view = service.update(new UpdateAuthSecuritySettingsRequest(
+                null, null, null,
+                null, null, null,
+                null, null, null, null,
+                null, null, null, null, null, null, null));
 
         assertNull(repository.setting.loginFailureThresholdOverride);
         assertNull(repository.setting.loginInitialBlockOverride);
         assertNull(repository.setting.loginMaxBlockOverride);
         assertNull(repository.setting.registrationChallengeEnabledOverride);
         assertNull(repository.setting.registrationChallengeTtlOverride);
+        assertNull(repository.setting.registrationChallengeProviderOverride);
+        assertNull(repository.setting.registrationTurnstileSiteKeyOverride);
+        assertNull(repository.setting.geoIpEnabledOverride);
+        assertNull(repository.setting.geoIpPrimaryProviderOverride);
         assertEquals(5, view.effectiveLoginFailureThreshold());
-        assertEquals("PT5M", view.effectiveLoginInitialBlock());
+        assertEquals("ALTCHA", view.effectiveRegistrationChallengeProvider());
+        assertEquals("IPWHOIS", view.effectiveGeoIpPrimaryProvider());
     }
 
     @Test
@@ -66,16 +102,87 @@ class AuthSecuritySettingsServiceTest {
 
         IllegalArgumentException error = assertThrows(
                 IllegalArgumentException.class,
-                () -> service.update(new UpdateAuthSecuritySettingsRequest(5, "PT30M", "PT10M", Boolean.TRUE, "PT10M")));
+                () -> service.update(new UpdateAuthSecuritySettingsRequest(
+                        5, "PT30M", "PT10M",
+                        Boolean.TRUE, "PT10M", "ALTCHA",
+                        null, null, null, null,
+                        null, null, null, null, null, null, null)));
 
         assertEquals("Maximum login block must be greater than or equal to the initial login block", error.getMessage());
+    }
+
+    @Test
+    void rejectsTurnstileProviderWithoutConfiguredSecret() {
+        AuthSecuritySettingsService service = service(new TestConfig(), new InMemorySystemAuthSecuritySettingRepository(null));
+
+        IllegalArgumentException error = assertThrows(
+                IllegalArgumentException.class,
+                () -> service.update(new UpdateAuthSecuritySettingsRequest(
+                        null, null, null,
+                        Boolean.TRUE, null, "TURNSTILE",
+                        "site-key", null, null, null,
+                        null, null, null, null, null, null, null)));
+
+        assertEquals("TURNSTILE requires both a site key and secret before it can be enabled", error.getMessage());
+    }
+
+    @Test
+    void rejectsGeoIpFallbacksThatRepeatPrimaryProvider() {
+        AuthSecuritySettingsService service = service(new TestConfig(), new InMemorySystemAuthSecuritySettingRepository(null));
+
+        IllegalArgumentException error = assertThrows(
+                IllegalArgumentException.class,
+                () -> service.update(new UpdateAuthSecuritySettingsRequest(
+                        null, null, null,
+                        null, null, null,
+                        null, null, null, null,
+                        Boolean.TRUE, "IPWHOIS", "IPWHOIS,IP_API", null, null, null, null)));
+
+        assertEquals("Geo-IP fallback providers must not repeat the primary provider", error.getMessage());
+    }
+
+    @Test
+    void storesIpinfoTokenWhenSecureStorageIsConfigured() {
+        InMemorySystemAuthSecuritySettingRepository repository = new InMemorySystemAuthSecuritySettingRepository(null);
+        AuthSecuritySettingsService service = service(new TestConfig(), repository);
+
+        AuthSecuritySettingsView view = service.update(new UpdateAuthSecuritySettingsRequest(
+                null, null, null,
+                null, null, null,
+                null, null, null, null,
+                Boolean.TRUE, "IPWHOIS", "IPAPI_CO,IPINFO_LITE", null, null, null, "token-123"));
+
+        assertTrue(repository.setting.geoIpIpinfoTokenCiphertext != null && !repository.setting.geoIpIpinfoTokenCiphertext.isBlank());
+        assertTrue(view.geoIpIpinfoTokenConfigured());
     }
 
     private AuthSecuritySettingsService service(InboxBridgeConfig config, SystemAuthSecuritySettingRepository repository) {
         AuthSecuritySettingsService service = new AuthSecuritySettingsService();
         service.inboxBridgeConfig = config;
         service.repository = repository;
+        service.secretEncryptionService = configuredSecretEncryptionService();
         return service;
+    }
+
+    private SecretEncryptionService configuredSecretEncryptionService() {
+        SecretEncryptionService service = new SecretEncryptionService();
+        service.tokenEncryptionKey = Base64.getEncoder().encodeToString("0123456789abcdef0123456789abcdef".getBytes());
+        service.tokenEncryptionKeyId = "test-key";
+        return service;
+    }
+
+    private SecretEncryptionService passthroughSecrets() {
+        return new SecretEncryptionService() {
+            @Override
+            public boolean isConfigured() {
+                return true;
+            }
+
+            @Override
+            public String decrypt(String ciphertextBase64, String nonceBase64, String keyVersion, String context) {
+                return ciphertextBase64;
+            }
+        };
     }
 
     private static final class InMemorySystemAuthSecuritySettingRepository extends SystemAuthSecuritySettingRepository {
@@ -144,7 +251,7 @@ class AuthSecuritySettingsServiceTest {
 
         @Override
         public double successJitterRatio() {
-            return 0.2d;
+            return 0.2;
         }
 
         @Override
@@ -187,49 +294,124 @@ class AuthSecuritySettingsServiceTest {
                         public Duration registrationChallengeTtl() {
                             return Duration.ofMinutes(10);
                         }
+
+                        @Override
+                        public String registrationChallengeProvider() {
+                            return "ALTCHA";
+                        }
+
+                        @Override
+                        public RegistrationCaptcha registrationCaptcha() {
+                            return new RegistrationCaptcha() {
+                                @Override
+                                public Altcha altcha() {
+                                    return new Altcha() {
+                                        @Override
+                                        public long maxNumber() {
+                                            return 1000;
+                                        }
+
+                                        @Override
+                                        public Optional<String> hmacKey() {
+                                            return Optional.empty();
+                                        }
+                                    };
+                                }
+
+                                @Override
+                                public Turnstile turnstile() {
+                                    return new Turnstile() {
+                                        @Override
+                                        public Optional<String> siteKey() {
+                                            return Optional.of("replace-me");
+                                        }
+
+                                        @Override
+                                        public Optional<String> secret() {
+                                            return Optional.of("replace-me");
+                                        }
+                                    };
+                                }
+
+                                @Override
+                                public Hcaptcha hcaptcha() {
+                                    return new Hcaptcha() {
+                                        @Override
+                                        public Optional<String> siteKey() {
+                                            return Optional.of("replace-me");
+                                        }
+
+                                        @Override
+                                        public Optional<String> secret() {
+                                            return Optional.of("replace-me");
+                                        }
+                                    };
+                                }
+                            };
+                        }
+
+                        @Override
+                        public GeoIp geoIp() {
+                            return new GeoIp() {
+                                @Override
+                                public boolean enabled() {
+                                    return false;
+                                }
+
+                                @Override
+                                public String primaryProvider() {
+                                    return "IPWHOIS";
+                                }
+
+                                @Override
+                                public String fallbackProviders() {
+                                    return "IPAPI_CO,IP_API,IPINFO_LITE";
+                                }
+
+                                @Override
+                                public Duration cacheTtl() {
+                                    return Duration.ofDays(30);
+                                }
+
+                                @Override
+                                public Duration providerCooldown() {
+                                    return Duration.ofMinutes(5);
+                                }
+
+                                @Override
+                                public Duration requestTimeout() {
+                                    return Duration.ofSeconds(3);
+                                }
+
+                                @Override
+                                public Optional<String> ipinfoToken() {
+                                    return Optional.empty();
+                                }
+                            };
+                        }
                     };
                 }
 
                 @Override
                 public Passkeys passkeys() {
-                    return new Passkeys() {
-                        @Override
-                        public boolean enabled() {
-                            return true;
-                        }
+                    throw new UnsupportedOperationException();
+                }
 
-                        @Override
-                        public String rpId() {
-                            return "localhost";
-                        }
-
-                        @Override
-                        public String rpName() {
-                            return "InboxBridge";
-                        }
-
-                        @Override
-                        public String origins() {
-                            return "https://localhost:3000";
-                        }
-
-                        @Override
-                        public String challengeTtl() {
-                            return "PT5M";
-                        }
-                    };
+                @Override
+                public Remote remote() {
+                    throw new UnsupportedOperationException();
                 }
             };
         }
 
         @Override
         public Gmail gmail() {
-            return null;
+            throw new UnsupportedOperationException();
         }
 
         @Override
         public Microsoft microsoft() {
-            return null;
+            throw new UnsupportedOperationException();
         }
 
         @Override

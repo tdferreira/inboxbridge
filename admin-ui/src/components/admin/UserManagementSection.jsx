@@ -1,8 +1,8 @@
 import { roleLabel } from '../../lib/formatters'
+import CollapsibleSection from '../common/CollapsibleSection'
 import CreateUserDialog from './CreateUserDialog'
 import UserListItem from './UserListItem'
 import LoadingButton from '../common/LoadingButton'
-import PaneToggleButton from '../common/PaneToggleButton'
 import './UserManagementSection.css'
 
 function sortUsersByUsername(users = []) {
@@ -109,98 +109,90 @@ function UserManagementSection({
   const sortedUsers = sortUsersByUsername(users)
 
   return (
-    <section className="surface-card user-management-panel section-with-corner-toggle" id="user-management-section" tabIndex="-1">
-      <div className="panel-header">
-        <div>
-          <div className="section-title">{t('users.title')}</div>
-          <p className="section-copy">{t('users.copy')}</p>
-        </div>
-        {!collapsed && multiUserEnabled ? (
-          <div className="panel-header-actions">
+    <CollapsibleSection
+      actions={!collapsed && multiUserEnabled ? (
             <LoadingButton className="primary" isLoading={false} onClick={onOpenCreateUserDialog} type="button">
               {t('users.create')}
             </LoadingButton>
+      ) : null}
+      className="user-management-panel"
+      collapsed={collapsed}
+      collapseLoading={collapseLoading}
+      copy={t('users.copy')}
+      id="user-management-section"
+      onCollapseToggle={onCollapseToggle}
+      sectionLoading={sectionLoading}
+      t={t}
+      title={t('users.title')}
+    >
+      <>
+        <div className="muted-box">
+          <strong>{t('users.modeTitle')}</strong><br />
+          {multiUserEnabled ? t('users.multiUserEnabledCopy') : t('users.singleUserEnabledCopy')}
+          <div className="action-row" style={{ marginTop: '0.85rem' }}>
+            <LoadingButton
+              className="secondary"
+              isLoading={modeToggleLoading}
+              onClick={() => onToggleMultiUserEnabled(!multiUserEnabled)}
+              type="button"
+            >
+              {multiUserEnabled ? t('users.switchToSingleUser') : t('users.switchToMultiUser')}
+            </LoadingButton>
           </div>
-        ) : null}
-      </div>
-      <PaneToggleButton className="pane-toggle-button-corner" collapseLabel={t('common.collapseSection')} collapsed={collapsed} disabled={collapseLoading} expandLabel={t('common.expandSection')} isLoading={collapseLoading} onClick={onCollapseToggle} />
-      {sectionLoading ? (
-        <div className="section-refresh-indicator" role="status">
-          <span aria-hidden="true" className="section-refresh-spinner" />
-          {t('common.refreshingSection')}
         </div>
-      ) : null}
+        {multiUserEnabled ? (
+          sortedUsers.length > 0 ? (
+            <div className="list-stack">
+              {sortedUsers.map((user) => {
+                const isExpanded = expandedUserId === user.id
+                const config = isExpanded && selectedUserConfig?.user?.id === user.id
+                  ? normalizeExpandedUserConfig(selectedUserConfig, user, t)
+                  : createFallbackUserConfig(user, t)
 
-      {!collapsed ? (
-        <>
-          <div className="muted-box">
-            <strong>{t('users.modeTitle')}</strong><br />
-            {multiUserEnabled ? t('users.multiUserEnabledCopy') : t('users.singleUserEnabledCopy')}
-            <div className="action-row" style={{ marginTop: '0.85rem' }}>
-              <LoadingButton
-                className="secondary"
-                isLoading={modeToggleLoading}
-                onClick={() => onToggleMultiUserEnabled(!multiUserEnabled)}
-                type="button"
-              >
-                {multiUserEnabled ? t('users.switchToSingleUser') : t('users.switchToMultiUser')}
-              </LoadingButton>
+                return (
+                  <UserListItem
+                    key={user.id}
+                    config={config}
+                    isExpanded={isExpanded}
+                    isLoading={isExpanded && selectedUserLoading}
+                    locale={locale}
+                    onDeleteUser={onDeleteUser}
+                    onForcePasswordChange={onForcePasswordChange}
+                    onLoadCustomRange={onLoadUserCustomRange}
+                    onOpenResetPasswordDialog={onOpenResetPasswordDialog}
+                    onResetUserPasskeys={onResetUserPasskeys}
+                    onToggleExpand={() => onToggleExpandUser(user.id)}
+                    onToggleUserActive={onToggleUserActive}
+                    onUpdateUser={onUpdateUser}
+                    session={session}
+                    t={t}
+                    updatingPasskeysReset={updatingPasskeysResetUserId === user.id}
+                    updatingUser={updatingUserId === user.id}
+                  />
+                )
+              })}
             </div>
-          </div>
-          {multiUserEnabled ? (
-        sortedUsers.length > 0 ? (
-          <div className="list-stack">
-            {sortedUsers.map((user) => {
-              const isExpanded = expandedUserId === user.id
-              const config = isExpanded && selectedUserConfig?.user?.id === user.id
-                ? normalizeExpandedUserConfig(selectedUserConfig, user, t)
-                : createFallbackUserConfig(user, t)
-
-              return (
-                <UserListItem
-                  key={user.id}
-                  config={config}
-                  isExpanded={isExpanded}
-                  isLoading={isExpanded && selectedUserLoading}
-                  locale={locale}
-                  onDeleteUser={onDeleteUser}
-                  onForcePasswordChange={onForcePasswordChange}
-                  onLoadCustomRange={onLoadUserCustomRange}
-                  onOpenResetPasswordDialog={onOpenResetPasswordDialog}
-                  onResetUserPasskeys={onResetUserPasskeys}
-                  onToggleExpand={() => onToggleExpandUser(user.id)}
-                  onToggleUserActive={onToggleUserActive}
-                  onUpdateUser={onUpdateUser}
-                  session={session}
-                  t={t}
-                  updatingPasskeysReset={updatingPasskeysResetUserId === user.id}
-                  updatingUser={updatingUserId === user.id}
-                />
-              )
-            })}
-          </div>
-        ) : (
-          <div className="muted-box">{t('users.emptyState')}</div>
-        )
           ) : (
-            <div className="muted-box">{t('users.singleUserModeNote')}</div>
-          )}
-        </>
-      ) : null}
+            <div className="muted-box">{t('users.emptyState')}</div>
+          )
+        ) : (
+          <div className="muted-box">{t('users.singleUserModeNote')}</div>
+        )}
 
-      {createUserDialogOpen ? (
-        <CreateUserDialog
-          createUserForm={createUserForm}
-          createUserLoading={createUserLoading}
-          duplicateUsername={duplicateUsername}
-          onClose={onCloseCreateUserDialog}
-          onFormChange={onCreateUserFormChange}
-          onSubmit={onCreateUser}
-          roleLabel={(role) => roleLabel(role, locale)}
-          t={t}
-        />
-      ) : null}
-    </section>
+        {createUserDialogOpen ? (
+          <CreateUserDialog
+            createUserForm={createUserForm}
+            createUserLoading={createUserLoading}
+            duplicateUsername={duplicateUsername}
+            onClose={onCloseCreateUserDialog}
+            onFormChange={onCreateUserFormChange}
+            onSubmit={onCreateUser}
+            roleLabel={(role) => roleLabel(role, locale)}
+            t={t}
+          />
+        ) : null}
+      </>
+    </CollapsibleSection>
   )
 }
 
