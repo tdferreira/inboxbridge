@@ -1,7 +1,7 @@
 const english = {
   'app.loading': 'Loading InboxBridge…',
   'auth.brand': 'InboxBridge',
-  'auth.title': 'Secure admin sign-in',
+  'auth.title': 'InboxBridge',
   'auth.username': 'Username',
   'auth.password': 'Password',
   'auth.signIn': 'Sign in',
@@ -1117,7 +1117,7 @@ const english = {
 
 const simpleTranslations = {
   fr: {
-    'auth.title': 'Connexion d’administration sécurisée',
+    'auth.title': 'InboxBridge',
     'auth.username': 'Nom d’utilisateur',
     'auth.password': 'Mot de passe',
     'auth.signIn': 'Se connecter',
@@ -1389,7 +1389,7 @@ const simpleTranslations = {
     'tokenStorage.unknown': 'Inconnu'
   },
   de: {
-    'auth.title': 'Sichere Admin-Anmeldung',
+    'auth.title': 'InboxBridge',
     'auth.username': 'Benutzername',
     'auth.password': 'Passwort',
     'auth.signIn': 'Anmelden',
@@ -1661,7 +1661,7 @@ const simpleTranslations = {
     'tokenStorage.unknown': 'Unbekannt'
   },
   'pt-PT': {
-    'auth.title': 'Início de sessão administrativo seguro',
+    'auth.title': 'InboxBridge',
     'auth.username': 'Utilizador',
     'auth.password': 'Palavra-passe',
     'auth.signIn': 'Entrar',
@@ -1870,7 +1870,7 @@ const simpleTranslations = {
     'tokenStorage.unknown': 'Desconhecido'
   },
   'pt-BR': {
-    'auth.title': 'Login administrativo seguro',
+    'auth.title': 'InboxBridge',
     'auth.username': 'Usuário',
     'auth.password': 'Senha',
     'auth.signIn': 'Entrar',
@@ -2070,7 +2070,7 @@ const simpleTranslations = {
     'tokenStorage.unknown': 'Desconhecido'
   },
   es: {
-    'auth.title': 'Inicio de sesión administrativo seguro',
+    'auth.title': 'InboxBridge',
     'auth.username': 'Usuario',
     'auth.password': 'Contraseña',
     'auth.signIn': 'Iniciar sesión',

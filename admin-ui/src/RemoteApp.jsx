@@ -38,6 +38,9 @@ const DEFAULT_LOGIN_FORM = {
 }
 const LOGIN_STAGE_USERNAME = 'username'
 const LOGIN_STAGE_CREDENTIALS = 'credentials'
+const AUTH_ACTION_NONE = ''
+const AUTH_ACTION_SIGN_IN = 'sign-in'
+const AUTH_ACTION_PASSKEY = 'passkey'
 
 function RemoteApp() {
   const [language, setLanguage] = useState(() => normalizeLocale(window.localStorage.getItem('inboxbridge.language') || navigator.language))
@@ -52,6 +55,7 @@ function RemoteApp() {
   const [loginStage, setLoginStage] = useState(LOGIN_STAGE_USERNAME)
   const [loginLoading, setLoginLoading] = useState(false)
   const [passkeyLoading, setPasskeyLoading] = useState(false)
+  const [activeAuthAction, setActiveAuthAction] = useState(AUTH_ACTION_NONE)
   const [pollingKey, setPollingKey] = useState('')
   const [lastResult, setLastResult] = useState(null)
   const [livePoll, setLivePoll] = useState(null)
@@ -159,6 +163,7 @@ function RemoteApp() {
     setLoginStage(LOGIN_STAGE_USERNAME)
     setLoginLoading(false)
     setPasskeyLoading(false)
+    setActiveAuthAction(AUTH_ACTION_NONE)
     setExpandedSources(new Set())
   }
 
@@ -170,6 +175,7 @@ function RemoteApp() {
       setLoginStage(LOGIN_STAGE_CREDENTIALS)
       return
     }
+    setActiveAuthAction(AUTH_ACTION_SIGN_IN)
     setLoginLoading(true)
     await submitLogin()
   }
@@ -197,6 +203,7 @@ function RemoteApp() {
       setAuthError(error.message)
     } finally {
       setLoginLoading(false)
+      setActiveAuthAction((current) => (current === AUTH_ACTION_SIGN_IN ? AUTH_ACTION_NONE : current))
     }
   }
 
@@ -231,6 +238,7 @@ function RemoteApp() {
     } finally {
       setPasskeyLoading(false)
       setLoginLoading(false)
+      setActiveAuthAction(AUTH_ACTION_NONE)
     }
   }
 
@@ -444,13 +452,14 @@ function RemoteApp() {
               />
             ) : null}
             <div className="remote-auth-actions">
-              <LoadingButton className="primary" disabled={!loginReady} isLoading={loginLoading} loadingLabel={t('auth.signInLoading')} type="submit">
+              <LoadingButton className="primary" disabled={!loginReady} isLoading={loginLoading && activeAuthAction === AUTH_ACTION_SIGN_IN} loadingLabel={t('auth.signInLoading')} type="submit">
                 {t('remote.signIn')}
               </LoadingButton>
               {showCredentialStep ? (
-                <LoadingButton className="secondary" disabled={!passkeysSupported() || !loginReady} isLoading={passkeyLoading || loginLoading} loadingLabel={loginForm.password.trim() ? t('auth.signInLoading') : t('auth.signInWithPasskeyLoading')} onClick={() => {
+                <LoadingButton className="secondary" disabled={!passkeysSupported() || !loginReady} isLoading={passkeyLoading || (loginLoading && activeAuthAction === AUTH_ACTION_PASSKEY)} loadingLabel={loginForm.password.trim() ? t('auth.signInLoading') : t('auth.signInWithPasskeyLoading')} onClick={() => {
                   setAuthError('')
                   setAuthNotice('')
+                  setActiveAuthAction(AUTH_ACTION_PASSKEY)
                   if (loginForm.password.trim()) {
                     setLoginLoading(true)
                     void submitLogin()
@@ -734,7 +743,17 @@ function RemoteApp() {
                           <dt>{t('remote.lastResult')}</dt>
                           <dd>
                             {source.lastEvent?.status ? (
-                              <span className={`status-pill ${resultStatusTone}`}>{formatRemoteStateLabel(source.lastEvent.status)}</span>
+                              <div className="remote-source-last-result">
+                                <span className={`status-pill remote-source-summary-pill ${resultStatusTone}`}>{formatRemoteStateLabel(source.lastEvent.status)}</span>
+                                {source.lastEvent.finishedAt || source.lastEvent.startedAt ? (
+                                  <span className="status-pill tone-neutral remote-source-summary-pill remote-source-last-result-pill remote-source-last-result-time">
+                                    {formatDate(source.lastEvent.finishedAt || source.lastEvent.startedAt, language)}
+                                  </span>
+                                ) : null}
+                                <span className="status-pill tone-neutral remote-source-summary-pill remote-source-last-result-pill">{t('remote.fetched')}: {source.lastEvent.fetched}</span>
+                                <span className="status-pill tone-neutral remote-source-summary-pill remote-source-last-result-pill">{t('remote.imported')}: {source.lastEvent.imported}</span>
+                                <span className="status-pill tone-neutral remote-source-summary-pill remote-source-last-result-pill">{t('remote.duplicates')}: {source.lastEvent.duplicates}</span>
+                              </div>
                             ) : t('common.never')}
                           </dd>
                         </div>

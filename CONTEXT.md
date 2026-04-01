@@ -85,6 +85,7 @@ Bootstrap auth behavior:
 - the unauthenticated login form should only prefill `admin` / `nimda` while the untouched bootstrap admin is still in its original first-login state; once that admin changes the password, enrolls a passkey, is removed, or otherwise leaves the bootstrap state, the form should fall back to empty credentials
 - the login screen no longer exposes live bootstrap-account state to unauthenticated visitors; bootstrap credentials are documented, but runtime bootstrap status is not published through a public endpoint
 - the main login screen and `/remote` now start with a username-only step, then move into a generic continue-sign-in step so the UI does not reveal whether the account is password-only, passkey-only, or password-plus-passkey before the user actually continues
+- the main unauthenticated login card title is intentionally just `InboxBridge`, and the eyebrow is suppressed when it would only duplicate that same product name
 - users can register WebAuthn passkeys after signing in
 - passkey registration now happens in a dedicated modal dialog so the security panel stays compact instead of rendering a tall inline form
 - users can sign in later with a passkey from the login screen
@@ -160,6 +161,7 @@ System polling behavior:
 - disabled source accounts are excluded from the `/remote` source list entirely so that quick-access surface only shows mailboxes that can actually be triggered there
 - collapsed `/remote` source cards now keep a denser layout with always-visible summary pills for owner, folder, effective polling cadence, and latest result, so the quick-access list consumes less vertical space before the user opens full details
 - `/remote` now folds live polling state and actions into the existing source cards instead of rendering a second live-progress source list, so each source row stays the single place for status, controls, and expanded error details
+- expanded `/remote` source details now also keep the latest completed fetched/imported/duplicate counts under `Last result`, so operators can still inspect the final per-source totals after the live progress row disappears
 - the live progress copy inside `/remote` source cards no longer repeats `Owner ...`; ownership stays in the summary/details UI, while the live line is reserved for queue position and result counters
 - the `/remote` login screen now exposes its own unauthenticated language selector, but the remote UI should switch to the signed-in user's saved `UserUiPreference.language` immediately after auth so the quick-access surface stays aligned with the main app Preferences
 - the main `My InboxBridge` workspace now also includes a dedicated `InboxBridge Go` launch card so the lightweight remote page is discoverable from the normal dashboard

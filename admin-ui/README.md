@@ -51,6 +51,7 @@ Key design choices:
 - disabled source accounts are filtered out of `/remote`, so the quick-access list only shows sources that can actually be triggered from that surface
 - collapsed source cards on `/remote` now use tighter spacing and always-visible summary badges for owner, folder, polling cadence, and latest result, so the source list fits more comfortably on smaller screens
 - `/remote` now folds live polling state and controls into the existing source cards instead of rendering a separate `Live Poll Progress` source list, so each source row stays the single place for status, actions, and expanded error details even when several sources are `RUNNING` concurrently
+- expanded source details on `/remote` now also keep the latest fetched/imported/duplicate counts under `Last result`, so those totals remain visible after the transient live-progress row disappears
 - the `/remote` sign-in screen now has its own language selector, and the authenticated remote surface adopts the language saved in the signed-in user's Preferences after login instead of staying pinned to the browser default
 - the main `My InboxBridge` workspace now includes a dedicated `InboxBridge Go` launch card so the lightweight `/remote` page is discoverable from the normal dashboard
 - the `/remote` surface can now expose an in-app install prompt when the browser considers that remote page installable as a PWA
@@ -64,6 +65,7 @@ Key design choices:
 - the login screen intentionally avoids exposing live bootstrap-account state to unauthenticated visitors; bootstrap credentials are documented in the operator docs instead
 - the unauthenticated login screen now also exposes the language selector directly, and the self-registration modal mirrors that selector so users can pick their locale before signing in
 - the main login screen and `/remote` now start with a username-only step, then move into the same generic continue-sign-in step instead of exposing account-specific password/passkey hints up front
+- the main login card title is now simply `InboxBridge`, and the eyebrow is hidden when it would only repeat that same product name
 - the admin UI installs a same-origin fetch wrapper during bootstrap so unsafe browser writes automatically include the current CSRF header for the authenticated session, while cross-origin requests are left untouched
 - live polling now hydrates an immediate snapshot after sign-in and keeps Pause/Resume/Stop controls visible in the polling section headers whenever the current viewer can control the active run, instead of making those controls depend only on the next SSE event or the inner progress panel
 - local HTTPS trust still matters for the browser UX: passkeys/WebAuthn, PWA installability, and some secure-context APIs require the browser/device to trust the local CA in `certs/ca.crt`, not only the generated leaf certificate

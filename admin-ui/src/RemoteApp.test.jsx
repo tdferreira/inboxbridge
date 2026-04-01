@@ -1,4 +1,5 @@
 import { act, fireEvent, render, screen, waitFor } from '@testing-library/react'
+import { within } from '@testing-library/react'
 import RemoteApp from './RemoteApp'
 
 class FakeEventSource {
@@ -36,6 +37,16 @@ function jsonResponse(payload, status = 200) {
     text: () => Promise.resolve(JSON.stringify(payload)),
     json: () => Promise.resolve(payload)
   })
+}
+
+function deferred() {
+  let resolve
+  let reject
+  const promise = new Promise((res, rej) => {
+    resolve = res
+    reject = rej
+  })
+  return { promise, resolve, reject }
 }
 
 describe('RemoteApp', () => {
@@ -145,6 +156,89 @@ describe('RemoteApp', () => {
     expect(fetchMock).not.toHaveBeenCalledWith('/api/remote/auth/passkey/options', expect.any(Object))
   })
 
+  it('shows loading only on the clicked remote auth button while a password-aware passkey login is in flight', async () => {
+    Object.defineProperty(window, 'PublicKeyCredential', {
+      configurable: true,
+      value: function PublicKeyCredential() {}
+    })
+    Object.assign(navigator, {
+      credentials: {
+        get: vi.fn().mockResolvedValue({
+          id: 'cred-1',
+          rawId: new Uint8Array([1, 2, 3]).buffer,
+          type: 'public-key',
+          response: {
+            clientDataJSON: new Uint8Array([1, 2, 3]).buffer,
+            authenticatorData: new Uint8Array([4, 5, 6]).buffer,
+            signature: new Uint8Array([7, 8, 9]).buffer,
+            userHandle: null
+          },
+          getClientExtensionResults: () => ({})
+        })
+      }
+    })
+
+    const loginRequest = deferred()
+    const fetchMock = vi.fn((url) => {
+      if (url === '/api/remote/auth/me') {
+        return jsonResponse({ code: 'unauthorized', message: 'Not authenticated' }, 401)
+      }
+      if (url === '/api/remote/auth/login') {
+        return loginRequest.promise
+      }
+      if (url === '/api/remote/auth/passkey/verify') {
+        return jsonResponse({
+          id: 7,
+          username: 'admin',
+          role: 'ADMIN',
+          canRunUserPoll: true,
+          canRunAllUsersPoll: true,
+          language: 'en'
+        })
+      }
+      if (url === '/api/remote/control') {
+        return jsonResponse({
+          session: {
+            id: 7,
+            username: 'admin',
+            role: 'ADMIN',
+            canRunUserPoll: true,
+            canRunAllUsersPoll: true,
+            language: 'en'
+          },
+          sources: [],
+          hasOwnSourceEmailAccounts: true,
+          hasReadyDestinationMailbox: true,
+          setupRequired: false,
+          remotePollRateLimitCount: 60,
+          remotePollRateLimitWindow: 'PT1M'
+        })
+      }
+      if (url === '/api/remote/poll/live') {
+        return jsonResponse({ running: false, sources: [] })
+      }
+      throw new Error(`Unexpected fetch: ${url}`)
+    })
+    vi.stubGlobal('fetch', fetchMock)
+
+    render(<RemoteApp />)
+
+    fireEvent.change(await screen.findByLabelText('Username'), { target: { value: 'alice' } })
+    fireEvent.click(screen.getByRole('button', { name: 'Open InboxBridge Go' }))
+    fireEvent.change(await screen.findByLabelText('Password'), { target: { value: 'Secret#123' } })
+    fireEvent.click(screen.getByRole('button', { name: 'Sign in with passkey' }))
+
+    expect(await screen.findByRole('button', { name: 'Signing in…' })).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Open InboxBridge Go' })).toBeInTheDocument()
+
+    loginRequest.resolve(jsonResponse({
+      status: 'PASSKEY_REQUIRED',
+      passkeyChallenge: { ceremonyId: 'ceremony-1', publicKeyJson: '{"challenge":"AQID","allowCredentials":[]}' }
+    }))
+
+    await screen.findByRole('button', { name: 'Poll My Sources' })
+  })
+
   it('moves focus to the password field when InboxBridge Go opens the credential step', async () => {
     vi.stubGlobal('fetch', vi.fn(() => jsonResponse({ code: 'unauthorized', message: 'Not authenticated' }, 401)))
 
@@ -157,6 +251,7 @@ describe('RemoteApp', () => {
   })
 
   it('runs a source poll from the remote dashboard', async () => {
+    let controlRequests = 0
     const fetchMock = vi.fn((url) => {
       if (url === '/api/remote/auth/me') {
         return jsonResponse({
@@ -170,6 +265,7 @@ describe('RemoteApp', () => {
         })
       }
       if (url === '/api/remote/control') {
+        controlRequests += 1
         return jsonResponse({
           session: {
             id: 7,
@@ -190,7 +286,19 @@ describe('RemoteApp', () => {
               effectivePollEnabled: true,
               effectivePollInterval: '5m',
               lastImportedAt: null,
-              lastEvent: null,
+              lastEvent: controlRequests > 1
+                ? {
+                    sourceId: 'source-1',
+                    trigger: 'MANUAL',
+                    status: 'SUCCESS',
+                    startedAt: '2026-03-31T10:00:00Z',
+                    finishedAt: '2026-03-31T10:00:10Z',
+                    fetched: 2,
+                    imported: 1,
+                    duplicates: 1,
+                    error: null
+                  }
+                : null,
               customLabel: 'Main Inbox'
             }
           ],
@@ -231,6 +339,10 @@ describe('RemoteApp', () => {
     await waitFor(() => expect(fetchMock).toHaveBeenCalledWith('/api/remote/sources/source-1/poll/run', expect.any(Object)))
     expect(await screen.findByText('The remote polling request finished without reported errors.')).toBeInTheDocument()
     expect(screen.queryByText('2026-03-31T10:00:10Z')).not.toBeInTheDocument()
+    expect(screen.getByText(/Fetched: 2 · Imported: 1 · Duplicates: 1/)).toBeInTheDocument()
+    expect(screen.getByText('Fetched: 2')).toBeInTheDocument()
+    expect(screen.getByText('Imported: 1')).toBeInTheDocument()
+    expect(screen.getByText('Duplicates: 1')).toBeInTheDocument()
   })
 
   it('keeps each source collapsed by default while leaving the poll action visible', async () => {
@@ -428,6 +540,84 @@ describe('RemoteApp', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Show details' }))
 
     expect(await screen.findByText('Mailbox auth failed')).toBeInTheDocument()
+  })
+
+  it('shows the latest completed source counts in expanded details', async () => {
+    vi.stubGlobal('fetch', vi.fn((url) => {
+      if (url === '/api/remote/auth/me') {
+        return jsonResponse({
+          id: 7,
+          username: 'admin',
+          role: 'ADMIN',
+          canRunUserPoll: true,
+          canRunAllUsersPoll: true,
+          language: 'en'
+        })
+      }
+      if (url === '/api/remote/control') {
+        return jsonResponse({
+          session: {
+            id: 7,
+            username: 'admin',
+            role: 'ADMIN',
+            canRunUserPoll: true,
+            canRunAllUsersPoll: true,
+            language: 'en'
+          },
+          sources: [
+            {
+              sourceId: 'source-1',
+              ownerLabel: 'System',
+              protocol: 'IMAP',
+              host: 'imap.example.com',
+              port: 993,
+              folder: 'INBOX',
+              effectivePollEnabled: true,
+              effectivePollInterval: '5m',
+              lastImportedAt: '2026-03-31T10:00:10Z',
+              lastEvent: {
+                sourceId: 'source-1',
+                trigger: 'MANUAL',
+                status: 'SUCCESS',
+                startedAt: '2026-03-31T10:00:00Z',
+                finishedAt: '2026-03-31T10:00:10Z',
+                fetched: 7,
+                imported: 4,
+                duplicates: 3,
+                error: null
+              },
+              customLabel: 'Main Inbox'
+            }
+          ],
+          hasOwnSourceEmailAccounts: true,
+          hasReadyDestinationMailbox: true,
+          setupRequired: false,
+          remotePollRateLimitCount: 60,
+          remotePollRateLimitWindow: 'PT1M'
+        })
+      }
+      if (url === '/api/remote/poll/live') {
+        return jsonResponse({ running: false, sources: [] })
+      }
+      throw new Error(`Unexpected fetch: ${url}`)
+    }))
+
+    render(<RemoteApp />)
+
+    fireEvent.click(await screen.findByRole('button', { name: 'Show details' }))
+
+    const lastResultLabel = screen.getByText('Last result')
+    const lastResultValue = lastResultLabel.closest('div')
+    const scoped = within(lastResultValue)
+    const successPill = scoped.getByText('SUCCESS')
+    const fetchedPill = scoped.getByText('Fetched: 7')
+    const importedPill = scoped.getByText('Imported: 4')
+    const duplicatesPill = scoped.getByText('Duplicates: 3')
+
+    expect(successPill.closest('.status-pill')).toBeInTheDocument()
+    expect(fetchedPill.closest('.remote-source-last-result-pill')).toBeInTheDocument()
+    expect(importedPill.closest('.remote-source-last-result-pill')).toBeInTheDocument()
+    expect(duplicatesPill.closest('.remote-source-last-result-pill')).toBeInTheDocument()
   })
 
   it('shows setup guidance when the signed-in user is not ready to poll', async () => {

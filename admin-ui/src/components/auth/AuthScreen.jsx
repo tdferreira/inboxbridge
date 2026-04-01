@@ -41,6 +41,7 @@ function AuthScreen({
   const showLanguageSelector = languageOptions.length > 0
   const showCredentialStep = loginStage === 'credentials'
   const loginReady = loginForm.username.trim() !== ''
+  const showBrandEyebrow = t('auth.brand') !== t('auth.title')
   const passwordInputRef = useRef(null)
 
   useEffect(() => {
@@ -70,7 +71,7 @@ function AuthScreen({
     <div className="page-shell">
       <main className="auth-screen-card">
         {renderLanguageSelector('login')}
-        <div className="eyebrow">{t('auth.brand')}</div>
+        {showBrandEyebrow ? <div className="eyebrow">{t('auth.brand')}</div> : null}
         <h1>{t('auth.title')}</h1>
         <form className="stack-form" onSubmit={onLogin}>
           <label>

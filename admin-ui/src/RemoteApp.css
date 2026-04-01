@@ -204,6 +204,29 @@
   color: #13233a;
 }
 
+.remote-source-last-result {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+}
+
+.remote-source-last-result > .status-pill {
+  flex: 0 0 auto;
+  white-space: nowrap;
+}
+
+.remote-source-last-result-pill {
+  letter-spacing: 0.03em;
+  text-transform: none;
+}
+
+.remote-source-last-result-time {
+  font-size: 0.86rem;
+  font-weight: 600;
+  color: #4f617b;
+}
+
 .remote-note {
   margin-top: 16px;
 }
