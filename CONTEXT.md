@@ -164,6 +164,7 @@ System polling behavior:
 - expanded `/remote` source details now also keep the latest completed fetched/imported/duplicate counts under `Last result`, so operators can still inspect the final per-source totals after the live progress row disappears
 - the live progress copy inside `/remote` source cards no longer repeats `Owner ...`; ownership stays in the summary/details UI, while the live line is reserved for queue position and result counters
 - the `/remote` login screen now exposes its own unauthenticated language selector, but the remote UI should switch to the signed-in user's saved `UserUiPreference.language` immediately after auth so the quick-access surface stays aligned with the main app Preferences
+- all `/remote` labels, install-card copy, live-control buttons, state pills, and helper-generated progress/session strings should resolve through translation keys instead of falling back to raw English helper text
 - the main `My InboxBridge` workspace now also includes a dedicated `InboxBridge Go` launch card so the lightweight remote page is discoverable from the normal dashboard
 - the `Preferences` dialog now applies the `Show Quick Setup Guide` toggle to the currently selected workspace only, because the `My InboxBridge` and `Administration` guides are distinct and keep separate persisted visibility state
 - the main app and `/remote` now reuse the same `SectionCard`-based utility prompt pattern for optional browser-location capture, while only `/remote` exposes the installability prompt

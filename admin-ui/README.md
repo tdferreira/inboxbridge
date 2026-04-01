@@ -53,6 +53,7 @@ Key design choices:
 - `/remote` now folds live polling state and controls into the existing source cards instead of rendering a separate `Live Poll Progress` source list, so each source row stays the single place for status, actions, and expanded error details even when several sources are `RUNNING` concurrently
 - expanded source details on `/remote` now also keep the latest fetched/imported/duplicate counts under `Last result`, so those totals remain visible after the transient live-progress row disappears
 - the `/remote` sign-in screen now has its own language selector, and the authenticated remote surface adopts the language saved in the signed-in user's Preferences after login instead of staying pinned to the browser default
+- the `/remote` surface should not render raw English helper strings; status pills, live-progress copy, action buttons, and the install/PWA guidance card all route through the translation dictionary the same way as the main workspace
 - the main `My InboxBridge` workspace now includes a dedicated `InboxBridge Go` launch card so the lightweight `/remote` page is discoverable from the normal dashboard
 - the `/remote` surface can now expose an in-app install prompt when the browser considers that remote page installable as a PWA
 - the `/remote` surface now also keeps a visible install-help card even when the browser uses a manual install path, with guidance for Chrome/Edge, Safari `Add to Home Screen` / `Add to Dock`, Firefox Android install, and a note that Firefox desktop does not currently expose a full install flow

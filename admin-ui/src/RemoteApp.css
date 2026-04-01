@@ -204,6 +204,10 @@
   color: #13233a;
 }
 
+.remote-source-detail-full {
+  grid-column: 1 / -1;
+}
+
 .remote-source-last-result {
   display: flex;
   flex-wrap: wrap;

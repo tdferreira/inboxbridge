@@ -533,7 +533,7 @@ describe('RemoteApp', () => {
 
     render(<RemoteApp />)
 
-    const errorPill = await screen.findByText('ERROR')
+    const errorPill = await screen.findByText('Error')
     expect(errorPill).toHaveClass('tone-error')
     expect(screen.queryByText('Mailbox auth failed')).not.toBeInTheDocument()
 
@@ -609,7 +609,7 @@ describe('RemoteApp', () => {
     const lastResultLabel = screen.getByText('Last result')
     const lastResultValue = lastResultLabel.closest('div')
     const scoped = within(lastResultValue)
-    const successPill = scoped.getByText('SUCCESS')
+    const successPill = scoped.getByText('Success')
     const fetchedPill = scoped.getByText('Fetched: 7')
     const importedPill = scoped.getByText('Imported: 4')
     const duplicatesPill = scoped.getByText('Duplicates: 3')
@@ -1138,7 +1138,7 @@ describe('RemoteApp', () => {
       })
     })
 
-    expect(screen.getAllByText('RUNNING').length).toBeGreaterThan(0)
+    expect(screen.getAllByText('Running…').length).toBeGreaterThan(0)
     expect(screen.queryByText('Live Poll Progress')).not.toBeInTheDocument()
     expect(await screen.findByRole('button', { name: 'Pause' })).toBeInTheDocument()
     expect(screen.queryByText(/Queue 2147483647/)).not.toBeInTheDocument()
@@ -1401,5 +1401,85 @@ describe('RemoteApp', () => {
 
     expect(await screen.findByRole('heading', { name: 'InboxBridge Go' })).toBeInTheDocument()
     expect(screen.getByRole('button', { name: 'Sair' })).toBeInTheDocument()
+  })
+
+  it('renders the remote dashboard and install guidance fully translated in Portuguese', async () => {
+    vi.stubGlobal('fetch', vi.fn((url) => {
+      if (url === '/api/remote/auth/me') {
+        return jsonResponse({
+          id: 12,
+          username: 'alice',
+          role: 'USER',
+          canRunUserPoll: true,
+          canRunAllUsersPoll: false,
+          deviceLocationCaptured: true,
+          language: 'pt-PT'
+        })
+      }
+      if (url === '/api/remote/control') {
+        return jsonResponse({
+          session: {
+            id: 12,
+            username: 'alice',
+            role: 'USER',
+            canRunUserPoll: true,
+            canRunAllUsersPoll: false,
+            language: 'pt-PT'
+          },
+          sources: [
+            {
+              sourceId: 'source-1',
+              ownerLabel: 'Sistema',
+              protocol: 'IMAP',
+              host: 'imap.example.com',
+              port: 993,
+              folder: 'INBOX',
+              effectivePollEnabled: true,
+              effectivePollInterval: 'PT5M',
+              lastImportedAt: '2026-03-31T10:00:10Z',
+              lastEvent: {
+                sourceId: 'source-1',
+                trigger: 'MANUAL',
+                status: 'SUCCESS',
+                startedAt: '2026-03-31T10:00:00Z',
+                finishedAt: '2026-03-31T10:00:10Z',
+                fetched: 7,
+                imported: 4,
+                duplicates: 3,
+                error: null
+              },
+              customLabel: 'Caixa principal'
+            }
+          ],
+          hasOwnSourceEmailAccounts: true,
+          hasReadyDestinationMailbox: true,
+          setupRequired: false,
+          remotePollRateLimitCount: 60,
+          remotePollRateLimitWindow: 'PT1M'
+        })
+      }
+      if (url === '/api/remote/poll/live') {
+        return jsonResponse({ running: false, sources: [] })
+      }
+      throw new Error(`Unexpected fetch: ${url}`)
+    }))
+
+    render(<RemoteApp />)
+
+    expect(await screen.findByText('Instalar InboxBridge')).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Recolher as minhas origens' })).toBeInTheDocument()
+    expect(screen.getByText('Origens visíveis')).toBeInTheDocument()
+    expect(screen.getByText('Limite de ações remotas')).toBeInTheDocument()
+    expect(screen.getByText(/60 ações por 1 minuto/)).toBeInTheDocument()
+    expect(screen.getByRole('heading', { name: 'Contas de email de origem' })).toBeInTheDocument()
+    expect(screen.getByText('Execute uma recolha direcionada para uma origem ou dispare uma execução mais abrangente a partir das ações no topo.')).toBeInTheDocument()
+    expect(screen.getAllByText('Sucesso').length).toBeGreaterThan(0)
+
+    fireEvent.click(screen.getByRole('button', { name: 'Mostrar detalhes' }))
+
+    expect(screen.getByText('Último resultado')).toBeInTheDocument()
+    expect(screen.getByText('Obtidas: 7')).toBeInTheDocument()
+    expect(screen.getByText('Importadas: 4')).toBeInTheDocument()
+    expect(screen.getByText('Duplicadas: 3')).toBeInTheDocument()
   })
 })

@@ -606,28 +606,28 @@ function RemoteApp() {
                   <LoadingButton
                     className="secondary"
                     isLoading={pollingKey === 'resume-live-poll'}
-                    loadingLabel="Resuming…"
+                    loadingLabel={t('remote.resumeLoading')}
                     onClick={() => runLivePollAction('resume-live-poll', remoteResumeLivePoll)}
                   >
-                    Resume
+                    {t('remote.resume')}
                   </LoadingButton>
                 ) : (
                   <LoadingButton
                     className="secondary"
                     isLoading={pollingKey === 'pause-live-poll'}
-                    loadingLabel="Pausing…"
+                    loadingLabel={t('remote.pauseLoading')}
                     onClick={() => runLivePollAction('pause-live-poll', remotePauseLivePoll)}
                   >
-                    Pause
+                    {t('remote.pause')}
                   </LoadingButton>
                 )}
                 <LoadingButton
                   className="danger"
                   isLoading={pollingKey === 'stop-live-poll'}
-                  loadingLabel="Stopping…"
+                  loadingLabel={t('remote.stopLoading')}
                   onClick={() => runLivePollAction('stop-live-poll', remoteStopLivePoll)}
                 >
-                  Stop
+                  {t('remote.stop')}
                 </LoadingButton>
               </div>
             ) : null}
@@ -643,7 +643,7 @@ function RemoteApp() {
                 <article className={`remote-source-card${liveSource?.state === 'RUNNING' ? ' remote-source-card-running' : ''}`} key={source.sourceId}>
                   {liveSource?.state ? (
                     <div className="remote-source-live-row">
-                      <span className={`status-pill ${liveStatusTone}`}>{formatRemoteStateLabel(liveSource.state)}</span>
+                      <span className={`status-pill ${liveStatusTone}`}>{formatRemoteStateLabel(liveSource.state, t)}</span>
                     </div>
                   ) : null}
                   <div className="remote-source-header">
@@ -678,13 +678,13 @@ function RemoteApp() {
                       {source.effectivePollEnabled ? formatDurationDisplay(source.effectivePollInterval, language) : t('common.disabled')}
                     </span>
                     {source.lastEvent?.status ? (
-                      <span className={`status-pill remote-source-summary-pill ${resultStatusTone}`}>{formatRemoteStateLabel(source.lastEvent.status)}</span>
+                      <span className={`status-pill remote-source-summary-pill ${resultStatusTone}`}>{formatRemoteStateLabel(source.lastEvent.status, t)}</span>
                     ) : null}
                   </div>
                   {liveSource ? (
                     <div className="remote-source-progress">
                       <p className="remote-source-progress-copy">
-                        {formatRemoteLiveCopy(liveSource)}
+                        {formatRemoteLiveCopy(liveSource, t)}
                       </p>
                       {livePoll?.viewerCanControl && liveSource.actionable ? (
                         <div className="remote-source-progress-actions">
@@ -692,20 +692,20 @@ function RemoteApp() {
                             <LoadingButton
                               className="secondary"
                               isLoading={pollingKey === `move-next:${source.sourceId}`}
-                              loadingLabel="Moving…"
+                              loadingLabel={t('remote.moveNextLoading')}
                               onClick={() => runLivePollAction(`move-next:${source.sourceId}`, () => remoteMoveSourceNext(source.sourceId))}
                             >
-                              Move Next
+                              {t('remote.moveNext')}
                             </LoadingButton>
                           ) : null}
                           {(liveSource.state === 'FAILED' || liveSource.state === 'COMPLETED' || liveSource.state === 'STOPPED') ? (
                             <LoadingButton
                               className="secondary"
                               isLoading={pollingKey === `retry-live-source:${source.sourceId}`}
-                              loadingLabel="Retrying…"
+                              loadingLabel={t('remote.retryLoading')}
                               onClick={() => runLivePollAction(`retry-live-source:${source.sourceId}`, () => remoteRetrySource(source.sourceId))}
                             >
-                              Retry
+                              {t('remote.retry')}
                             </LoadingButton>
                           ) : null}
                         </div>
@@ -739,12 +739,12 @@ function RemoteApp() {
                           <dt>{t('remote.lastImport')}</dt>
                           <dd>{source.lastImportedAt ? formatDate(source.lastImportedAt, language) : t('common.never')}</dd>
                         </div>
-                        <div>
+                        <div className="remote-source-detail-full">
                           <dt>{t('remote.lastResult')}</dt>
                           <dd>
                             {source.lastEvent?.status ? (
                               <div className="remote-source-last-result">
-                                <span className={`status-pill remote-source-summary-pill ${resultStatusTone}`}>{formatRemoteStateLabel(source.lastEvent.status)}</span>
+                                <span className={`status-pill remote-source-summary-pill ${resultStatusTone}`}>{formatRemoteStateLabel(source.lastEvent.status, t)}</span>
                                 {source.lastEvent.finishedAt || source.lastEvent.startedAt ? (
                                   <span className="status-pill tone-neutral remote-source-summary-pill remote-source-last-result-pill remote-source-last-result-time">
                                     {formatDate(source.lastEvent.finishedAt || source.lastEvent.startedAt, language)}
@@ -803,8 +803,33 @@ function formatDurationDisplay(value, locale) {
   return formatDurationMeaning(value, locale) || String(value)
 }
 
-function formatRemoteStateLabel(value) {
-  return String(value || '').replaceAll('_', ' ')
+function formatRemoteStateLabel(value, t) {
+  const normalized = String(value || '').toUpperCase()
+  switch (normalized) {
+    case 'SUCCESS':
+      return t('status.success')
+    case 'ERROR':
+    case 'FAILED':
+      return t('status.error')
+    case 'RUNNING':
+      return t('status.running')
+    case 'NOT_RUN':
+      return t('status.notRun')
+    case 'QUEUED':
+      return t('remote.stateQueued')
+    case 'RETRY_QUEUED':
+      return t('remote.stateRetryQueued')
+    case 'PAUSED':
+      return t('remote.statePaused')
+    case 'PAUSING':
+      return t('remote.statePausing')
+    case 'STOPPED':
+      return t('remote.stateStopped')
+    case 'COMPLETED':
+      return t('remote.stateCompleted')
+    default:
+      return normalized.replaceAll('_', ' ')
+  }
 }
 
 function isPausedLivePoll(livePoll) {
@@ -823,13 +848,17 @@ function statusToneForRemoteState(value) {
   return 'tone-neutral'
 }
 
-function formatRemoteLiveCopy(source) {
+function formatRemoteLiveCopy(source, t) {
   const details = []
   if ((source.state === 'QUEUED' || source.state === 'RETRY_QUEUED') && Number.isInteger(source.position) && source.position > 0) {
-    details.push(`Queue ${source.position}`)
+    details.push(t('remote.queuePosition', { position: source.position }))
   }
   if (source.state !== 'RUNNING' && source.state !== 'QUEUED' && source.state !== 'RETRY_QUEUED') {
-    details.push(`Fetched ${source.fetched}, imported ${source.imported}, duplicates ${source.duplicates}`)
+    details.push(t('remote.progressSummary', {
+      fetched: source.fetched,
+      imported: source.imported,
+      duplicates: source.duplicates
+    }))
   }
   return details.join(' · ')
 }
@@ -839,7 +868,7 @@ function formatRemoteSessionLine(session, t) {
     return ''
   }
   if (session.multiUserEnabled === false) {
-    return `Signed in as ${session.username}.`
+    return t('remote.sessionLineSingleUser', { username: session.username })
   }
   return t('remote.sessionLine', { username: session.username, role: session.role })
 }
