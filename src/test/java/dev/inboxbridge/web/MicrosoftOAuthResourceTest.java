@@ -54,8 +54,8 @@ class MicrosoftOAuthResourceTest {
         assertTrue(html.contains("outlook-main-imap"));
         assertTrue(html.contains("abc123"));
         assertTrue(html.contains("Exchange Code In Browser"));
-        assertTrue(html.contains("Cancel automatic return"));
-        assertTrue(html.contains("Return To Admin UI"));
+        assertTrue(html.contains("Cancel automatic redirect"));
+        assertTrue(html.contains("Return to InboxBridge"));
         assertTrue(html.contains("Leave this page without exchanging the code?"));
         assertTrue(html.contains("Attempting automatic exchange"));
         assertTrue(html.contains("const callbackParams = new URLSearchParams(window.location.search);"));
@@ -67,11 +67,11 @@ class MicrosoftOAuthResourceTest {
         assertTrue(html.contains("function clearAutoReturn()"));
         assertTrue(html.contains("function cancelAutoReturn()"));
         assertTrue(html.contains("cancelReturnButton?.addEventListener(\"click\""));
-        assertTrue(html.contains("Automatic return canceled. You can stay on this page and inspect the exchange details."));
+        assertTrue(html.contains("Automatic redirect canceled. You can stay on this page and inspect the exchange details."));
         assertTrue(html.contains("if (exchanged || allowLeave) {"));
         assertTrue(html.contains("allowLeave = true;"));
         assertTrue(html.contains("window.setTimeout(() => {"));
-        assertTrue(html.contains("Returning to the admin UI in"));
+        assertTrue(html.contains("Redirecting to InboxBridge in"));
         assertTrue(html.contains("Secure token storage is enabled."));
         assertTrue(html.contains("id=\"copyStatus\""));
         assertFalse(html.contains("Env Refresh Token Key"));
@@ -93,9 +93,10 @@ class MicrosoftOAuthResourceTest {
         Response response = resource.callback("abc123", "state-1", null, null);
         String html = (String) response.getEntity();
 
-        assertTrue(html.contains("MAIL_ACCOUNT_0__OAUTH_REFRESH_TOKEN"));
-        assertTrue(html.contains("Env Refresh Token Key"));
-        assertTrue(html.contains("Secure token storage is not configured."));
+        assertFalse(html.contains("MAIL_ACCOUNT_0__OAUTH_REFRESH_TOKEN"));
+        assertFalse(html.contains("Env Refresh Token Key"));
+        assertTrue(html.contains("Secure token storage is required before exchanging this authorization code."));
+        assertTrue(html.contains("SECURITY_TOKEN_ENCRYPTION_KEY"));
     }
 
     @Test
@@ -127,7 +128,7 @@ class MicrosoftOAuthResourceTest {
         assertEquals(200, response.getStatus());
         assertTrue(html.contains("Microsoft OAuth Permission Required"));
         assertTrue(html.contains("required consent"));
-        assertTrue(html.contains("Return To Admin UI"));
+        assertTrue(html.contains("Return to InboxBridge"));
     }
 
     @Test
@@ -145,7 +146,7 @@ class MicrosoftOAuthResourceTest {
 
         assertTrue(html.contains("Codigo do Microsoft OAuth recebido"));
         assertTrue(html.contains("Trocar codigo no browser"));
-        assertTrue(html.contains("Voltar a interface de administracao"));
+        assertTrue(html.contains("Voltar ao InboxBridge"));
     }
 
     @Test

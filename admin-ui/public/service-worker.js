@@ -1,4 +1,4 @@
-const CACHE_NAME = 'inboxbridge-app-v2'
+const CACHE_NAME = 'inboxbridge-app-v3'
 const CORE_ASSETS = ['/remote', '/remote.webmanifest', '/remote-icon.svg']
 
 self.addEventListener('install', (event) => {
@@ -20,11 +20,22 @@ self.addEventListener('fetch', (event) => {
   const url = new URL(request.url)
   if (url.pathname.startsWith('/api/')) return
 
+  if (request.mode === 'navigate') {
+    event.respondWith(
+      fetch(request).then((response) => {
+        const copy = response.clone()
+        caches.open(CACHE_NAME).then((cache) => cache.put('/remote', copy)).catch(() => {})
+        return response
+      }).catch(() => caches.match('/remote'))
+    )
+    return
+  }
+
   event.respondWith(
-    caches.match(request).then((cached) => cached || fetch(request).then((response) => {
+    fetch(request).then((response) => {
       const copy = response.clone()
       caches.open(CACHE_NAME).then((cache) => cache.put(request, copy)).catch(() => {})
       return response
-    }))
+    }).catch(() => caches.match(request))
   )
 })

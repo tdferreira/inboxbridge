@@ -18,7 +18,10 @@ describe('EmailAccountDialog', () => {
       oauthRefreshToken: '',
       folder: 'INBOX',
       unreadOnly: false,
-      customLabel: ''
+      customLabel: '',
+      markReadAfterPoll: false,
+      postPollAction: 'NONE',
+      postPollTargetFolder: ''
     }
     const onApplyPreset = vi.fn()
     const { rerender } = renderUi()
@@ -89,7 +92,10 @@ describe('EmailAccountDialog', () => {
           oauthRefreshToken: '',
           folder: 'INBOX',
           unreadOnly: false,
-          customLabel: ''
+          customLabel: '',
+          markReadAfterPoll: false,
+          postPollAction: 'NONE',
+          postPollTargetFolder: ''
         }}
         availableOAuthProviders={[]}
         microsoftOAuthAvailable={false}
@@ -123,7 +129,10 @@ describe('EmailAccountDialog', () => {
           oauthRefreshToken: '',
           folder: 'INBOX',
           unreadOnly: false,
-          customLabel: ''
+          customLabel: '',
+          markReadAfterPoll: false,
+          postPollAction: 'NONE',
+          postPollTargetFolder: ''
         }}
         onApplyPreset={vi.fn()}
         onEmailAccountFormChange={vi.fn()}
@@ -155,7 +164,10 @@ describe('EmailAccountDialog', () => {
           oauthRefreshToken: '',
           folder: 'INBOX',
           unreadOnly: false,
-          customLabel: ''
+          customLabel: '',
+          markReadAfterPoll: false,
+          postPollAction: 'NONE',
+          postPollTargetFolder: ''
         }}
         duplicateIdError="A source email account with ID duplicate-id already exists. Choose a different ID."
         onApplyPreset={vi.fn()}
@@ -188,7 +200,10 @@ describe('EmailAccountDialog', () => {
           oauthRefreshToken: '',
           folder: 'INBOX',
           unreadOnly: false,
-          customLabel: ''
+          customLabel: '',
+          markReadAfterPoll: false,
+          postPollAction: 'NONE',
+          postPollTargetFolder: ''
         }}
         onApplyPreset={vi.fn()}
         onEmailAccountFormChange={vi.fn()}
@@ -227,7 +242,10 @@ describe('EmailAccountDialog', () => {
           oauthRefreshToken: '',
           folder: 'INBOX',
           unreadOnly: false,
-          customLabel: ''
+          customLabel: '',
+          markReadAfterPoll: false,
+          postPollAction: 'NONE',
+          postPollTargetFolder: ''
         }}
         onApplyPreset={vi.fn()}
         onEmailAccountFormChange={vi.fn()}
@@ -266,7 +284,10 @@ describe('EmailAccountDialog', () => {
           oauthRefreshToken: '',
           folder: 'INBOX',
           unreadOnly: false,
-          customLabel: ''
+          customLabel: '',
+          markReadAfterPoll: false,
+          postPollAction: 'NONE',
+          postPollTargetFolder: ''
         }}
         onApplyPreset={vi.fn()}
         onEmailAccountFormChange={vi.fn()}
@@ -488,7 +509,10 @@ describe('EmailAccountDialog', () => {
           oauthRefreshToken: '',
           folder: 'Archive',
           unreadOnly: false,
-          customLabel: ''
+          customLabel: '',
+          markReadAfterPoll: false,
+          postPollAction: 'NONE',
+          postPollTargetFolder: ''
         }}
         onApplyPreset={vi.fn()}
         onEmailAccountFormChange={vi.fn()}
@@ -502,5 +526,80 @@ describe('EmailAccountDialog', () => {
 
     expect(screen.getByLabelText(/Provider preset/)).toBeDisabled()
     expect(screen.getByRole('button', { name: 'Save' })).toBeInTheDocument()
+  })
+
+  it('shows post-poll source actions for IMAP accounts', () => {
+    render(
+      <EmailAccountDialog
+        emailAccountForm={{
+          originalEmailAccountId: '',
+          emailAccountId: 'fetcher-a',
+          enabled: true,
+          protocol: 'IMAP',
+          host: 'imap.example.com',
+          port: 993,
+          tls: true,
+          authMethod: 'PASSWORD',
+          oauthProvider: 'NONE',
+          username: 'user@example.com',
+          password: 'secret',
+          oauthRefreshToken: '',
+          folder: 'INBOX',
+          unreadOnly: false,
+          customLabel: '',
+          markReadAfterPoll: true,
+          postPollAction: 'MOVE',
+          postPollTargetFolder: 'Archive'
+        }}
+        emailAccountFolders={['INBOX', 'Archive']}
+        onApplyPreset={vi.fn()}
+        onEmailAccountFormChange={vi.fn()}
+        onClose={vi.fn()}
+        onSave={vi.fn((event) => event.preventDefault())}
+        saveLoading={false}
+        t={(key, params) => translate('en', key, params)}
+      />
+    )
+
+    expect(screen.getByLabelText(/Mark as read after polling/)).toBeInTheDocument()
+    expect(screen.getByLabelText(/After polling/)).toHaveValue('MOVE')
+    expect(screen.getByLabelText(/Move to folder/)).toHaveValue('Archive')
+  })
+
+  it('hides post-poll source actions for POP3 accounts', () => {
+    render(
+      <EmailAccountDialog
+        emailAccountForm={{
+          originalEmailAccountId: '',
+          emailAccountId: 'fetcher-a',
+          enabled: true,
+          protocol: 'POP3',
+          host: 'pop.example.com',
+          port: 995,
+          tls: true,
+          authMethod: 'PASSWORD',
+          oauthProvider: 'NONE',
+          username: 'user@example.com',
+          password: 'secret',
+          oauthRefreshToken: '',
+          folder: 'INBOX',
+          unreadOnly: false,
+          customLabel: '',
+          markReadAfterPoll: false,
+          postPollAction: 'NONE',
+          postPollTargetFolder: ''
+        }}
+        onApplyPreset={vi.fn()}
+        onEmailAccountFormChange={vi.fn()}
+        onClose={vi.fn()}
+        onSave={vi.fn((event) => event.preventDefault())}
+        saveLoading={false}
+        t={(key, params) => translate('en', key, params)}
+      />
+    )
+
+    expect(screen.queryByLabelText(/Mark as read after polling/)).not.toBeInTheDocument()
+    expect(screen.queryByLabelText(/After polling/)).not.toBeInTheDocument()
+    expect(screen.queryByLabelText(/Move to folder/)).not.toBeInTheDocument()
   })
 })

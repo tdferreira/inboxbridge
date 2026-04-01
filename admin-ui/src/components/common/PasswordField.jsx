@@ -1,4 +1,4 @@
-import { useId, useState } from 'react'
+import { forwardRef, useId, useState } from 'react'
 import InfoHint from './InfoHint'
 import './PasswordField.css'
 
@@ -6,7 +6,10 @@ import './PasswordField.css'
  * Shared password input with an inline show/hide toggle so authentication and
  * account-security flows behave consistently across the admin UI.
  */
-function PasswordField({ className = '', helpText, hideLabel, id, label, showLabel, ...inputProps }) {
+const PasswordField = forwardRef(function PasswordField(
+  { className = '', helpText, hideLabel, id, label, showLabel, ...inputProps },
+  ref
+) {
   const generatedId = useId()
   const inputId = id || generatedId
   const [visible, setVisible] = useState(false)
@@ -23,6 +26,7 @@ function PasswordField({ className = '', helpText, hideLabel, id, label, showLab
         <input
           {...inputProps}
           id={inputId}
+          ref={ref}
           type={visible ? 'text' : 'password'}
         />
         <button
@@ -51,6 +55,6 @@ function PasswordField({ className = '', helpText, hideLabel, id, label, showLab
       </span>
     </label>
   )
-}
+})
 
 export default PasswordField

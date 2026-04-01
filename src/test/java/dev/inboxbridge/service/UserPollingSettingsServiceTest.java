@@ -13,6 +13,7 @@ import dev.inboxbridge.dto.UpdateUserPollingSettingsRequest;
 import dev.inboxbridge.persistence.AppUser;
 import dev.inboxbridge.persistence.UserPollingSetting;
 import dev.inboxbridge.persistence.UserPollingSettingRepository;
+import jakarta.transaction.Transactional;
 
 class UserPollingSettingsServiceTest {
 
@@ -78,6 +79,13 @@ class UserPollingSettingsServiceTest {
                 () -> service.update(user(7L), new UpdateUserPollingSettingsRequest(Boolean.TRUE, "5m", Integer.valueOf(0))));
 
         assertEquals("Fetch window override must be between 1 and 500 messages", error.getMessage());
+    }
+
+    @Test
+    void effectiveSettingsReadMethodRemainsTransactional() throws NoSuchMethodException {
+        assertEquals(
+                true,
+                UserPollingSettingsService.class.getMethod("effectiveSettingsForUser", Long.class).isAnnotationPresent(Transactional.class));
     }
 
     private UserPollingSettingsService service() {

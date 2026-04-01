@@ -22,7 +22,10 @@ describe('UserEmailAccountsSection', () => {
           oauthRefreshToken: '',
           folder: 'INBOX',
           unreadOnly: false,
-          customLabel: ''
+          customLabel: '',
+          markReadAfterPoll: false,
+          postPollAction: 'NONE',
+          postPollTargetFolder: ''
         }}
         collapsed={false}
         collapseLoading={false}
@@ -31,7 +34,7 @@ describe('UserEmailAccountsSection', () => {
         duplicateIdError=""
         fetchers={[]}
         fetcherDialogOpen={false}
-        fetcherPollLoadingId=""
+        fetcherPollLoadingIds={[]}
         fetcherPollingDialog={null}
         fetcherPollingForm={null}
         fetcherPollingLoading={false}
@@ -83,7 +86,10 @@ describe('UserEmailAccountsSection', () => {
           oauthRefreshToken: '',
           folder: 'INBOX',
           unreadOnly: false,
-          customLabel: ''
+          customLabel: '',
+          markReadAfterPoll: false,
+          postPollAction: 'NONE',
+          postPollTargetFolder: ''
         }}
         collapsed={false}
         collapseLoading={false}
@@ -92,7 +98,7 @@ describe('UserEmailAccountsSection', () => {
         duplicateIdError=""
         fetchers={[]}
         fetcherDialogOpen={false}
-        fetcherPollLoadingId=""
+        fetcherPollLoadingIds={[]}
         fetcherPollingDialog={null}
         fetcherPollingForm={null}
         fetcherPollingLoading={false}

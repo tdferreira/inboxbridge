@@ -1,4 +1,4 @@
-import { act, renderHook } from '@testing-library/react'
+import { act, renderHook, waitFor } from '@testing-library/react'
 import { AUTH_EXPIRED_EVENT } from './api'
 import { useAuthSecurityController } from './useAuthSecurityController'
 
@@ -81,6 +81,27 @@ describe('useAuthSecurityController', () => {
     })
 
     expect(result.current.loginForm).toEqual({ username: '', password: '' })
+  })
+
+  it('clears login credentials on logout and does not reapply bootstrap prefill', async () => {
+    fetch.mockResolvedValue({ ok: true, status: 204 })
+    const { result } = renderController({ bootstrapLoginPrefillEnabled: true })
+
+    expect(result.current.loginForm).toEqual({ username: 'admin', password: 'nimda' })
+
+    act(() => {
+      result.current.setSession({ username: 'alice' })
+      result.current.setLoginForm({ username: 'alice', password: 'Secret#123' })
+    })
+
+    await act(async () => {
+      await result.current.handleLogout()
+    })
+
+    expect(fetch).toHaveBeenCalledWith('/api/auth/logout', { method: 'POST' })
+    expect(result.current.session).toBeNull()
+    expect(result.current.loginForm).toEqual({ username: '', password: '' })
+    expect(result.current.loginStage).toBe('username')
   })
 
   it('normalizes loaded passkeys to an array', () => {
@@ -308,10 +329,20 @@ describe('useAuthSecurityController', () => {
     const { result, pushNotification } = renderController()
 
     await act(async () => {
+      result.current.setLoginForm({ username: 'admin', password: '' })
+    })
+
+    await act(async () => {
       await result.current.handleLogin({ preventDefault() {} })
     })
 
-    expect(result.current.session).toEqual({ id: 1, username: 'admin', mustChangePassword: false })
+    await act(async () => {
+      await result.current.handleLogin({ preventDefault() {} })
+    })
+
+    await waitFor(() => {
+      expect(result.current.session).toEqual({ id: 1, username: 'admin', mustChangePassword: false })
+    })
     expect(pushNotification).not.toHaveBeenCalledWith(
       expect.objectContaining({
         message: { kind: 'translation', key: 'notifications.signedInWithPasskey', params: {} }

@@ -18,5 +18,45 @@ public record UpdateUserEmailAccountRequest(
         String oauthRefreshToken,
         String folder,
         Boolean unreadOnly,
-        String customLabel) {
+        String customLabel,
+        Boolean markReadAfterPoll,
+        String postPollAction,
+        String postPollTargetFolder) {
+
+    public UpdateUserEmailAccountRequest(
+            String originalEmailAccountId,
+            String emailAccountId,
+            Boolean enabled,
+            String protocol,
+            String host,
+            Integer port,
+            Boolean tls,
+            String authMethod,
+            String oauthProvider,
+            String username,
+            String password,
+            String oauthRefreshToken,
+            String folder,
+            Boolean unreadOnly,
+            String customLabel) {
+        this(
+                originalEmailAccountId,
+                emailAccountId,
+                enabled,
+                protocol,
+                host,
+                port,
+                tls,
+                authMethod,
+                oauthProvider,
+                username,
+                password,
+                oauthRefreshToken,
+                folder,
+                unreadOnly,
+                customLabel,
+                false,
+                "NONE",
+                "");
+    }
 }

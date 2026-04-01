@@ -1,7 +1,5 @@
 package dev.inboxbridge.security;
 
-import java.net.URI;
-
 import dev.inboxbridge.persistence.AppUser;
 import dev.inboxbridge.persistence.RemoteSession;
 import dev.inboxbridge.service.AppUserService;
@@ -43,6 +41,9 @@ public class RemoteControlFilter implements ContainerRequestFilter {
     @Inject
     CurrentUserContext currentUserContext;
 
+    @Inject
+    BrowserSessionSecurity browserSessionSecurity;
+
     @Override
     public void filter(ContainerRequestContext requestContext) {
         if (!remoteControlEnabled) {
@@ -78,66 +79,14 @@ public class RemoteControlFilter implements ContainerRequestFilter {
     }
 
     private boolean requiresCsrfValidation(ContainerRequestContext requestContext) {
-        String method = requestContext.getMethod();
-        return !"GET".equals(method) && !"HEAD".equals(method) && !"OPTIONS".equals(method);
+        return browserSessionSecurity.requiresCsrfValidation(requestContext);
     }
 
     private void validateOrigin(ContainerRequestContext requestContext) {
-        String originHeader = requestContext.getHeaderString("Origin");
-        if (originHeader == null || originHeader.isBlank()) {
-            return;
+        try {
+            browserSessionSecurity.validateOrigin(requestContext);
+        } catch (ForbiddenException forbidden) {
+            throw new ForbiddenException("Remote session origin validation failed", forbidden);
         }
-        URI originUri = URI.create(originHeader);
-        String forwardedProto = firstForwardedValue(requestContext.getHeaderString("X-Forwarded-Proto"));
-        String forwardedHost = firstForwardedValue(requestContext.getHeaderString("X-Forwarded-Host"));
-        String forwardedPort = firstForwardedValue(requestContext.getHeaderString("X-Forwarded-Port"));
-        String hostHeader = firstForwardedValue(requestContext.getHeaderString(HttpHeaders.HOST));
-
-        URI requestUri = requestContext.getUriInfo().getRequestUri();
-        String expectedScheme = forwardedProto != null ? forwardedProto : requestUri.getScheme();
-        String expectedHostPort = forwardedHost != null ? forwardedHost : hostHeader;
-        if (expectedHostPort == null || expectedHostPort.isBlank()) {
-            expectedHostPort = requestUri.getHost()
-                    + (requestUri.getPort() > 0 ? ":" + requestUri.getPort() : "");
-        }
-        if (forwardedPort != null && !forwardedPort.isBlank() && !containsExplicitPort(expectedHostPort)) {
-            expectedHostPort = expectedHostPort + ":" + forwardedPort;
-        }
-
-        URI expectedOrigin = URI.create(expectedScheme + "://" + expectedHostPort);
-        boolean sameOrigin = equalsIgnoreCase(originUri.getScheme(), expectedOrigin.getScheme())
-                && equalsIgnoreCase(originUri.getHost(), expectedOrigin.getHost())
-                && effectivePort(originUri) == effectivePort(expectedOrigin);
-        if (!sameOrigin) {
-            throw new ForbiddenException("Remote session origin validation failed");
-        }
-    }
-
-    private String firstForwardedValue(String headerValue) {
-        if (headerValue == null || headerValue.isBlank()) {
-            return null;
-        }
-        String first = headerValue.split(",", 2)[0].trim();
-        return first.isBlank() ? null : first;
-    }
-
-    private boolean containsExplicitPort(String hostValue) {
-        if (hostValue == null || hostValue.isBlank()) {
-            return false;
-        }
-        int closingBracket = hostValue.lastIndexOf(']');
-        int colonIndex = hostValue.lastIndexOf(':');
-        return colonIndex > -1 && colonIndex > closingBracket;
-    }
-
-    private boolean equalsIgnoreCase(String left, String right) {
-        return left == null ? right == null : left.equalsIgnoreCase(right);
-    }
-
-    private int effectivePort(URI uri) {
-        if (uri.getPort() > 0) {
-            return uri.getPort();
-        }
-        return "https".equalsIgnoreCase(uri.getScheme()) ? 443 : 80;
     }
 }

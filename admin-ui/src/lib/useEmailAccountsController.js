@@ -43,7 +43,10 @@ function buildEmailAccountRequestPayload(emailAccountForm) {
     oauthRefreshToken: emailAccountForm.oauthRefreshToken,
     folder: emailAccountForm.folder,
     unreadOnly: emailAccountForm.unreadOnly,
-    customLabel: emailAccountForm.customLabel
+    customLabel: emailAccountForm.customLabel,
+    markReadAfterPoll: emailAccountForm.markReadAfterPoll,
+    postPollAction: emailAccountForm.postPollAction,
+    postPollTargetFolder: emailAccountForm.postPollTargetFolder
   }
 }
 
@@ -99,6 +102,7 @@ function pruneFetcherStats(currentStats, userEmailAccounts, systemEmailAccounts)
 }
 
 export function useEmailAccountsController({
+  activeBatchPollSourceIds = [],
   authOptions,
   errorText,
   isPending,
@@ -135,11 +139,11 @@ export function useEmailAccountsController({
       canEdit: true,
       canConnectOAuth: authOptions.sourceOAuthProviders.includes(emailAccount.oauthProvider) && emailAccount.authMethod === 'OAUTH2',
       canConfigurePolling: true,
-      canRunPoll: true
+      canRunPoll: emailAccount.enabled !== false
     }))
     const envFetchers = sessionUsername === 'admin'
       ? (systemDashboardEmailAccounts || []).map((emailAccount) => ({
-        emailAccountId: emailAccount.id,
+        emailAccountId: emailAccount.id || emailAccount.emailAccountId,
         enabled: emailAccount.enabled,
         effectivePollEnabled: emailAccount.effectivePollEnabled,
         effectivePollInterval: emailAccount.effectivePollInterval,
@@ -153,6 +157,9 @@ export function useEmailAccountsController({
         folder: emailAccount.folder,
         unreadOnly: emailAccount.unreadOnly,
         customLabel: emailAccount.customLabel,
+        markReadAfterPoll: emailAccount.markReadAfterPoll,
+        postPollAction: emailAccount.postPollAction,
+        postPollTargetFolder: emailAccount.postPollTargetFolder,
         tokenStorageMode: emailAccount.tokenStorageMode,
         totalImportedMessages: emailAccount.totalImportedMessages,
         lastImportedAt: emailAccount.lastImportedAt,
@@ -164,7 +171,7 @@ export function useEmailAccountsController({
         canEdit: false,
         canConnectOAuth: authOptions.sourceOAuthProviders.includes(emailAccount.oauthProvider) && emailAccount.authMethod === 'OAUTH2',
         canConfigurePolling: true,
-        canRunPoll: true
+        canRunPoll: emailAccount.enabled !== false
       }))
       : []
 
@@ -178,7 +185,21 @@ export function useEmailAccountsController({
 
   const connectingEmailAccountId = visibleFetchers.find((emailAccount) => isPending(`microsoftOAuth:${emailAccount.emailAccountId}`) || isPending(`googleSourceOAuth:${emailAccount.emailAccountId}`))?.emailAccountId || null
   const deletingEmailAccountId = userEmailAccounts.find((emailAccount) => isPending(`bridgeDelete:${emailAccount.emailAccountId}`))?.emailAccountId || null
-  const fetcherPollLoadingId = visibleFetchers.find((emailAccount) => isPending(`bridgePoll:${emailAccount.emailAccountId}`))?.emailAccountId || null
+  const fetcherPollLoadingIds = useMemo(() => {
+    const loadingIds = new Set()
+    for (const emailAccount of visibleFetchers) {
+      if (isPending(`bridgePoll:${emailAccount.emailAccountId}`)) {
+        loadingIds.add(emailAccount.emailAccountId)
+      }
+    }
+    for (const activeBatchPollSourceId of activeBatchPollSourceIds) {
+      const activeFetcher = visibleFetchers.find((fetcher) => fetcher.emailAccountId === activeBatchPollSourceId)
+      if (activeFetcher?.enabled !== false) {
+        loadingIds.add(activeBatchPollSourceId)
+      }
+    }
+    return [...loadingIds]
+  }, [activeBatchPollSourceIds, isPending, visibleFetchers])
   const fetcherPollingLoading = fetcherPollingTarget
     ? isPending(`fetcherPollingSave:${fetcherPollingTarget.emailAccountId}`) || isPending(`fetcherPollingLoad:${fetcherPollingTarget.emailAccountId}`)
     : false
@@ -240,7 +261,10 @@ export function useEmailAccountsController({
       oauthRefreshToken: '',
       folder: emailAccount.folder,
       unreadOnly: emailAccount.unreadOnly,
-      customLabel: emailAccount.customLabel
+      customLabel: emailAccount.customLabel,
+      markReadAfterPoll: emailAccount.markReadAfterPoll ?? false,
+      postPollAction: emailAccount.postPollAction || 'NONE',
+      postPollTargetFolder: emailAccount.postPollTargetFolder || ''
     })
     setShowFetcherDialog(true)
   }
@@ -606,7 +630,7 @@ export function useEmailAccountsController({
       ? visibleFetchers.find((entry) => entry.emailAccountId === fetcherOrBridgeId)
       : fetcherOrBridgeId
     const emailAccountId = typeof fetcherOrBridgeId === 'string' ? fetcherOrBridgeId : fetcherOrBridgeId?.emailAccountId
-    if (!emailAccountId) {
+    if (!emailAccountId || fetcher?.enabled === false || fetcher?.canRunPoll === false) {
       return
     }
     await withPending(`bridgePoll:${emailAccountId}`, async () => {
@@ -720,7 +744,7 @@ export function useEmailAccountsController({
     deletingEmailAccountId,
     editEmailAccount,
     expandedFetcherLoadingId,
-    fetcherPollLoadingId,
+    fetcherPollLoadingIds,
     fetcherPollingForm,
     fetcherPollingLoading,
     fetcherPollingTarget: showFetcherPollingDialog ? fetcherPollingTarget : null,
@@ -740,6 +764,7 @@ export function useEmailAccountsController({
     showFetcherDialog,
     startSourceOAuth,
     testEmailAccountConnection,
+    runnableUserEmailAccounts: userEmailAccounts.filter((emailAccount) => emailAccount.enabled !== false),
     userEmailAccounts,
     visibleFetchers
   }

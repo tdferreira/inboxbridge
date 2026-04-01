@@ -231,6 +231,8 @@ export function isOauthRevokedError(message) {
 
 export function statusTone(status) {
   switch (status) {
+    case 'DISABLED':
+      return 'tone-neutral'
     case 'SUCCESS':
       return 'tone-success'
     case 'ERROR':
@@ -242,6 +244,8 @@ export function statusTone(status) {
 
 export function statusLabel(status, locale = 'en') {
   switch (status) {
+    case 'DISABLED':
+      return translate(locale, 'common.disabled')
     case 'SUCCESS':
       return translate(locale, 'status.success')
     case 'ERROR':
@@ -249,6 +253,13 @@ export function statusLabel(status, locale = 'en') {
     default:
       return translate(locale, 'status.notRun')
   }
+}
+
+export function effectiveEmailAccountStatus(emailAccount) {
+  if (emailAccount?.enabled === false) {
+    return 'DISABLED'
+  }
+  return emailAccount?.lastEvent?.status || null
 }
 
 export function roleLabel(role, locale = 'en') {

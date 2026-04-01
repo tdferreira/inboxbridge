@@ -28,8 +28,13 @@ The app supports two source-email-account sources of truth:
 In the current admin UI, both kinds of source email accounts are shown together in the `My Source Email Accounts` section, but env-managed entries are explicitly marked as read-only `.env` items and are only surfaced to the account named `admin`.
 Fallback placeholder values from `application.yaml` are filtered out before that merge, so if the deployment does not actually define any `MAIL_ACCOUNT_*` values then no env-managed source email account is surfaced.
 User-scoped source-email-account actions now resolve only DB-managed accounts, while env-managed accounts are handled exclusively through the admin endpoints. New DB-managed source email accounts are also rejected if their ID collides with an env-managed account ID.
+UI-managed IMAP source email accounts now also persist post-poll source-message actions: the default is no source-side change, but users can opt to mark handled messages as read, delete them, or move them into another source folder after either a successful import or a duplicate match. Those actions are rejected for POP3 accounts and for move configurations without a target folder.
+Authenticated notifications are now also persisted in each user's UI-preferences record, so recent poll/security notices survive refreshes and normal sign-out/sign-in cycles instead of living only in React memory.
+Authenticated workspaces now also expose an SSE-backed live-poll snapshot/event model with pause/resume/stop controls plus per-source `Move Next` and `Retry` actions while a run is active. The polling engine now executes eligible sources through a bounded virtual-thread worker pool, so unrelated mailboxes can progress concurrently while the live model tracks several `RUNNING` sources at once. Live `Stop` requests also register cancellation actions that close active mailbox sessions and interrupt worker threads, which makes stop behavior materially faster than the older checkpoint-only model.
+Because those workers no longer inherit a request context from the original REST thread, any repository-backed async polling lookup now needs its own narrow `@Transactional` boundary instead of depending on ambient CDI request scope.
 
 Deployment-wide browser callback defaults can now be anchored on `PUBLIC_BASE_URL`, which feeds the default Google and Microsoft OAuth redirect URIs shown in the UI and docs.
+The local `cert-init` flow now derives frontend/backend SAN coverage from `PUBLIC_BASE_URL` plus optional `TLS_FRONTEND_CERT_HOSTNAMES` / `TLS_BACKEND_CERT_HOSTNAMES`, and it automatically reissues the generated leaf certs when the expected hostname set changes.
 
 ## Technical stack
 
@@ -79,11 +84,13 @@ Bootstrap auth behavior:
 - bootstrap admin is forced to change password
 - the unauthenticated login form should only prefill `admin` / `nimda` while the untouched bootstrap admin is still in its original first-login state; once that admin changes the password, enrolls a passkey, is removed, or otherwise leaves the bootstrap state, the form should fall back to empty credentials
 - the login screen no longer exposes live bootstrap-account state to unauthenticated visitors; bootstrap credentials are documented, but runtime bootstrap status is not published through a public endpoint
+- the main login screen and `/remote` now start with a username-only step, then move into a generic continue-sign-in step so the UI does not reveal whether the account is password-only, passkey-only, or password-plus-passkey before the user actually continues
 - users can register WebAuthn passkeys after signing in
 - passkey registration now happens in a dedicated modal dialog so the security panel stays compact instead of rendering a tall inline form
 - users can sign in later with a passkey from the login screen
 - if an account has both a password and at least one passkey, the normal login flow now requires both factors in sequence
 - if an account has only a passkey, the normal login button ignores any typed password and starts the passkey ceremony instead of failing
+- the dedicated unauthenticated `Sign in with passkey` action now appears on that generic continue-sign-in step, starts a discoverable-credential ceremony without using the typed username as an account-state probe, and if the login form already contains a password it follows the same password + passkey flow as the main `Sign in` action
 - users can remove their password entirely and keep a passkey-only account
 - the last passkey on a passwordless account cannot be removed until another passkey exists or a password is set again
 - repeated failed sign-ins are now tracked per client IP address and use an exponential lockout that starts at the configured initial block and doubles until the configured maximum block duration
@@ -93,6 +100,7 @@ Bootstrap auth behavior:
 - self-registered users start as `inactive` and `unapproved`
 - self-registration now starts from a focused modal workflow on the unauthenticated screen instead of leaving the request form always visible
 - self-registration now also loads a short anti-robot challenge before submission; challenges are stored server-side with a TTL and must be answered correctly before the pending account is created
+- the self-registration modal keeps that anti-robot wording generic for end users and avoids surfacing provider-specific implementation details in the normal registration copy
 - when single-user mode is enabled, self-registration and admin user-management endpoints are disabled and the UI hides those controls entirely
 - single-user mode still keeps the rest of the admin control plane visible for the bootstrap admin, including destination mailbox setup, source email accounts, security tools, and poller settings
 - switching to single-user mode from the admin UI now deactivates every account except the acting admin and records which accounts were disabled by that mode change, so re-enabling multi-user mode can reactivate those accounts later
@@ -136,9 +144,11 @@ System polling behavior:
 - those workspaces are now route-backed in the browser, so `/` stays on the `My InboxBridge` workspace, `/admin` opens the administration workspace directly, translated admin slugs such as `/administracao` remain supported, and older explicit user-workspace slugs are normalized back to `/`
 - the movable content sections inside each workspace now support per-account reordering, while the header and workspace switcher stay fixed
 - the movable workspace sections can now also be rearranged by drag-and-drop when the user enables layout editing from `Preferences`, and a dotted placeholder shows the drop position
+- the default `My InboxBridge` section order is now `Quick Setup Guide`, `My Destination Mailbox`, `My Source Email Accounts`, `My Polling Settings`, `InboxBridge Go`, `My Statistics`
+- the default `Administration` section order is now `Quick Setup Guide`, `Global Polling Settings`, `OAuth Apps`, `Users`, `Authentication Security`, `Global Statistics`
 - moving sections with the arrow controls or drag-and-drop should keep layout-edit mode active until the user explicitly exits or discards it; the persisted UI-preferences payload must never silently clear that transient edit state during a reorder
 - the user-workspace section order now treats `remoteControl` as a first-class movable section, even for older saved layouts that predate it, and move buttons should be enabled or disabled based on the visible rendered section list rather than hidden entries in the stored order
-- drag-and-drop now resolves the final drop target from the pointer-up location using midpoint-based insertion slots between cards, so dragging the first card downward or the last card upward lands in the expected adjacent slot instead of sticking in place or overshooting by an extra position; the active layout-edit session should also stay alive even if preferences are reloaded during the edit
+- drag-and-drop now resolves the final drop target from the pointer-up location using midpoint-based insertion slots between cards and reorders against the actual visible section list, so dragging the first card downward or the last card upward lands in the expected adjacent slot, visible sections can be moved into the final slot, and the active layout-edit session should also stay alive even if preferences are reloaded during the edit
 - reconnecting Gmail to the same already-linked account should not revoke that account's Google grant; replacement and revocation only happen when the user actually links a different Gmail account
 - the frontend layout now includes explicit responsive behavior for small screens, especially for hero actions, section headers, mail-account and user list rows, modal dialogs, and metric/stat cards
 - when Gmail API access is manually revoked outside InboxBridge, a confirmed repeated Gmail `401` now clears the saved Gmail OAuth link for that user and should cause the UI to show the Gmail account as no longer linked
@@ -146,7 +156,14 @@ System polling behavior:
 - statistics rendering now uses `Recharts 3.x`, giving the polling dashboards shared hover tooltips and more maintainable chart behavior than the previous custom SVG chart
 - the frontend package set is intentionally kept on current stable major versions, including React 19, Vite 7, Vitest 3, and Recharts 3.x
 - the frontend now also ships a dedicated `/remote` remote-control route with a tiny mobile-first polling UI, its own manifest/service-worker assets, and source-level poll actions without opening the full admin workspace
-- the main `My InboxBridge` workspace now also includes a dedicated `Remote control` launch card so the lightweight remote page is discoverable from the normal dashboard
+- the `/remote` route now also hydrates the current live poll snapshot on load, subscribes to a remote-scoped SSE stream for per-source progress, and surfaces pause/resume/stop plus per-source `Move Next` / `Retry` controls whenever the remote viewer is allowed to manage the active run
+- disabled source accounts are excluded from the `/remote` source list entirely so that quick-access surface only shows mailboxes that can actually be triggered there
+- collapsed `/remote` source cards now keep a denser layout with always-visible summary pills for owner, folder, effective polling cadence, and latest result, so the quick-access list consumes less vertical space before the user opens full details
+- `/remote` now folds live polling state and actions into the existing source cards instead of rendering a second live-progress source list, so each source row stays the single place for status, controls, and expanded error details
+- the live progress copy inside `/remote` source cards no longer repeats `Owner ...`; ownership stays in the summary/details UI, while the live line is reserved for queue position and result counters
+- the `/remote` login screen now exposes its own unauthenticated language selector, but the remote UI should switch to the signed-in user's saved `UserUiPreference.language` immediately after auth so the quick-access surface stays aligned with the main app Preferences
+- the main `My InboxBridge` workspace now also includes a dedicated `InboxBridge Go` launch card so the lightweight remote page is discoverable from the normal dashboard
+- the `Preferences` dialog now applies the `Show Quick Setup Guide` toggle to the currently selected workspace only, because the `My InboxBridge` and `Administration` guides are distinct and keep separate persisted visibility state
 - the main app and `/remote` now reuse the same `SectionCard`-based utility prompt pattern for optional browser-location capture, while only `/remote` exposes the installability prompt
 - reusable admin-ui primitives now include a shared `SectionCard` shell for non-collapsible panels, a shared `CollapsibleSection` shell for standard workspace/admin sections with the corner-toggle UX, and a shared `ButtonLink` component for navigational CTA actions, so new sections do not need one-off layout/button styling
 - the top-level movable workspace sections in both `My InboxBridge` and `Administration` are expected to render through `CollapsibleSection`, while non-collapsible launch/utility cards should use `SectionCard`; dedicated unit tests now audit those section-shell expectations directly
@@ -158,19 +175,34 @@ System polling behavior:
 - the per-user poller settings card uses the same padded section shell as the global dashboard cards so the form layout stays visually aligned
 - the fetcher contextual `...` menu now supports running one specific fetcher immediately and opening a source-specific poller settings dialog
 - the fetcher running-state badge now keeps a clearly visible spinner aligned beside the `Running` label
+- disabled source email accounts now show a `Disabled` status badge in the UI even if their most recent saved poll result was `Success` or `Error`, so the visible badge reflects the current source state before stale last-run history
+- disabled source email accounts also keep their per-row `Run Poll Now` actions disabled, and explicit single-source manual poll requests now short-circuit as `source_disabled` instead of trying to poll anyway
 - the add/edit mail-fetcher dialog now has a connection test action that validates the entered IMAP/POP3 settings, including password and Microsoft OAuth2 authentication, and returns structured protocol / endpoint / TLS / authentication / mailbox-reachability diagnostics before save
 - those fetcher connection diagnostics are rendered beneath the dialog action row, and the shared modal shell now constrains itself to the viewport with internal scrolling so action buttons remain reachable
 - env-managed fetchers route those per-fetcher poller actions through admin-only endpoints, while UI-managed fetchers use user-scoped endpoints
 - the new `/api/remote/...` surface exposes the same polling engine through a narrower remote-scoped auth model, with separate session cookies, CSRF protection for browser writes, remote-specific rate limiting, and optional bearer service-token auth mapped to a real InboxBridge account
+- the `/remote` page now injects its own PWA manifest/theme metadata at boot so Chromium browsers can actually see that route as installable, while the authenticated remote UI keeps its install card visible with manual browser-specific instructions for Safari and Firefox even when `beforeinstallprompt` never fires
+- the `/remote` PWA service worker now prefers fresh network responses for the remote shell and other same-origin GET assets, falling back to cache only when offline, so login copy and bundle updates do not get stuck behind an old cache-first app shell
+- when single-user mode is active, the `/remote` source cards now hide the owner pill and owner details entirely because every visible source belongs to the only active account
+- the main authenticated admin-ui browser session now mirrors that hardening model for unsafe `/api/...` writes, using a separate non-HTTP-only CSRF cookie plus matching `X-InboxBridge-CSRF` header validation and same-origin checks in the auth/admin request filters instead of relying only on `SameSite=Strict`
+- API responses now also add stricter browser-facing headers such as `X-Content-Type-Options`, `X-Frame-Options`, `Referrer-Policy`, `no-store` cache control, HTTPS-only HSTS, and `X-Accel-Buffering: no` for SSE polling endpoints so live streams are less likely to leak through caches or be buffered by reverse proxies
 - IMAP raw-message materialization now retries once after a `FolderClosedException` by reopening the folder and reacquiring the message before the whole fetch attempt is treated as failed
 - Microsoft IMAP/POP connects now retry once with a freshly refreshed access token if Outlook rejects the cached token as invalid before its stored expiry time
 - busy poll results now include metadata about the currently running trigger/source so the UI does not only show a generic `A poll is already running` message
 - floating notifications now use compact icon-only copy actions with tooltip text and increase opacity on hover so long payloads stay readable without taking extra horizontal space
 - compact `...` action buttons now use a fixed square footprint, and shared button styling prevents label text from wrapping onto a second line
 - the floating notification stack now also uses a stronger default opacity and a subtle backdrop blur so notifications stay readable even over visually busy sections of the dashboard
+- admin-ui notifications are now persisted in the authenticated user's UI-preferences record, with a bounded per-account history that survives browser refreshes and normal sign-out/sign-in cycles instead of being lost with the React runtime
 - mail-fetcher detail data is refreshed automatically after manual poll attempts and when the user expands a fetcher row, so the visible status no longer waits only for the periodic dashboard refresh
 - expanding any major collapsible admin-ui section now triggers a fresh reload for that section and shows an inline loading indicator while the refresh is happening
 - expanding an individual user entry now refreshes the latest user list/configuration data as part of that expansion flow, while the row shows loading feedback
+- user-facing storage labels in the admin UI and OAuth callback pages now stay technology-neutral, using wording like `Encrypted storage` instead of exposing backend implementation details such as PostgreSQL
+- broad manual polling runs now expose the backend's currently active source through `/api/poll/status`, so the admin UI can move the per-row running spinner from source to source as the batch progresses instead of lighting every eligible row at once
+- the live polling snapshot is now the authoritative source for row-level running state, because several sources may be `RUNNING` concurrently while bounded virtual-thread workers drain the queue
+- the admin UI installs a same-origin fetch wrapper at boot so unsafe browser writes automatically carry the current browser-session CSRF header, while cross-origin requests are left untouched
+- authenticated workspaces now also load an immediate live-poll snapshot from `/api/poll/live` or `/api/admin/poll/live` after sign-in, so Pause/Resume/Stop controls and per-source progress remain visible even if the user lands mid-run before the next SSE event arrives
+- the `My Polling Settings` and `Global Polling Settings` section headers now surface Pause/Resume/Stop buttons whenever the signed-in viewer can control the active live run, instead of hiding those controls only inside the live-progress panel body
+- live pause/stop requests now apply during the active source as well as between queued sources because `PollingService` no longer precomputes the whole live queue up front, checks the live-control state between fetched messages, and now registers cancellation hooks that close active mailbox sessions when a stop is requested
 - destination mailbox preset descriptions, destination test-connection actions, and admin destination-section labels are localized across the supported admin-ui locales instead of falling back to English strings from preset metadata
 - expanded admin user cards also defensively render partial configuration payloads so missing sub-objects do not blank the page while the latest data is loading
 - IMAP fetch materialization now snapshots UID / Message-ID / timestamp metadata before reading the raw MIME payload so an already-invalidated folder does not fail a message after the bytes were successfully read
@@ -190,7 +222,7 @@ DB-managed user config now stores:
 - encrypted OAuth credentials
 - recent source poll events
 - imported-message dedupe state
-- per-user admin-ui preferences, including language
+- per-user admin-ui preferences, including language and persisted notification history
 
 Why:
 
@@ -280,6 +312,7 @@ Compose now includes a `cert-init` container that generates:
 The admin UI serves HTTPS and proxies to the backend over HTTPS while trusting the local CA.
 
 These files can be replaced with operator-supplied certs later.
+The generated self-signed cert SANs are no longer hardcoded only to localhost: `cert-init` now reads `.env` through Compose, derives the hostname from `PUBLIC_BASE_URL`, preserves the mandatory Docker-internal names, and accepts extra comma-separated SAN entries through `TLS_FRONTEND_CERT_HOSTNAMES` and `TLS_BACKEND_CERT_HOSTNAMES`. If those configured hostnames change, `cert-init` automatically reissues the generated certs on the next compose startup instead of leaving stale SANs behind.
 
 ### 9. WebAuthn passkeys for admin-ui sign-in
 
@@ -336,6 +369,8 @@ Constraints:
 
 - minimum interval is `5s`
 - fetch window must stay between `1` and `500`
+- fetch window always means "inspect the latest N messages this run", not "page backward through older mail across future runs"
+- for historical backfill, temporarily raise the fetch window, run imports, then lower it again
 
 This model preserves bootstrap simplicity while making the running system tunable without editing deployment files.
 
@@ -429,12 +464,14 @@ Design choices:
 - translations are stored in `admin-ui/src/lib/i18n.js`
 - the backend persists the selected language in `user_ui_preference.language`
 - the browser also mirrors the last selected language in local storage so the login screen can reuse it before session data is loaded
+- the unauthenticated login screen now exposes that language selector directly, and the self-registration modal mirrors it so users can switch locales before authentication
 - visible labels now route through the translation helper instead of mixing translated and raw JSX text
 - expanded user-management entries are grouped into explicit subsections for user configuration, Gmail account, poller settings, passkeys, and source email accounts
 - the most prominent labels inside those subsection bodies now follow the selected language too instead of remaining in English
 - quick-setup guidance, Gmail account controls, poller-setting forms, and source-email-account forms/lists now have broader locale coverage so changing language updates section bodies as well as headings
 - translation regression coverage now includes localized rendering tests for the major admin-ui surfaces plus a critical-key catalog test in `admin-ui/src/lib/i18n.test.js`
 - password-policy checklists and normalized passkey failure/cancellation messages are now translated too, instead of depending on raw browser English
+- ALTCHA verification now yields to the browser before solving the local proof-of-work challenge so the shared loading spinner and `Verifying…` button state are visible during processing
 - expandable list rows rely on row click plus hover affordance for expansion, so contextual `...` menus focus only on actions and no longer repeat expand/collapse controls
 - the `...` contextual menus in both the mail-fetcher and user-management lists measure the real floating panel and use viewport-aware placement so they stay attached to the trigger button while scrolling without extending the page layout off-screen; if the trigger leaves the viewport, the open menu closes instead of lingering detached
 - the structure is intentionally simple so additional languages can be added without bringing in a heavier i18n framework
@@ -676,17 +713,23 @@ src/main/resources/db/migration
 
 ## Current validation status
 
-Validated on 2026-03-30:
+Validated on 2026-04-01:
 
-- targeted backend polling tests pass, including `PollingServiceTest`, `SourcePollingStateServiceTest`, and `PollThrottleServiceTest`
-- targeted frontend notification tests pass, including `src/lib/notifications.test.js`
+- full backend Maven suite passes with `mvn -q test` when run in an environment that allows the GreenMail integration tests to bind local ports
+- focused backend polling coverage also passes with `mvn -q -Dtest=PollingSettingsServiceTest,UserPollingSettingsServiceTest,SourcePollingSettingsServiceTest,SourcePollingStateServiceTest,PollingServiceTest,PollingServiceGreenMailIntegrationTest test`
+- full frontend Vitest suite passes with `cd admin-ui && npm run test:run`
+- frontend coverage can now be generated with `cd admin-ui && npm run test:coverage`
+- backend coverage can now be generated as part of `mvn -q test` through JaCoCo under `target/site/jacoco/`
+- the current frontend Vitest coverage report is about `85.97%%` statements / `75.61%%` branches / `65.18%%` functions
+- the current backend JaCoCo report is about `55.47%%` lines / `39.65%%` branches / `57.51%%` instructions, so backend coverage remains well below the frontend baseline
+- polling regression coverage now explicitly exercises effective-settings inheritance and precedence across global, per-user, and per-source polling settings, plus GreenMail-backed multi-user mailbox-isolation checks so one user's source mail cannot land in another user's destination
 - admin-ui Docker build succeeds with the Vitest suite enabled in-container
 - `docker compose up --build -d` succeeds
 - backend starts on both HTTP `8080` and HTTPS `8443`
 - admin UI serves correctly over HTTPS in the container
 - unauthenticated `GET /api/auth/me` returns `401`
 - bootstrap login `admin` / `nimda` succeeds and returns `mustChangePassword=true`
-- Flyway migrations `V1` through `V29` apply successfully
+- Flyway migrations `V1` through `V40` apply successfully
 - direct backend startup works with the current polling pacing defaults because `DESTINATION_PROVIDER_MIN_SPACING` now uses the valid ISO-8601 duration `PT0.25S`
 
 Admin UI frontend structure now follows a controller-and-components split:
@@ -750,3 +793,7 @@ Current live config issue in this workspace:
 - Admin user inspection now shows the configured Gmail API user value. This is the Gmail API `userId` setting and is often `me`, so it should not be interpreted as a guaranteed literal mailbox address.
 - Floating notifications now wrap long text inside the card instead of overflowing past the viewport edges.
 - Per-fetcher polling now exposes a running spinner state in the fetcher status pill, the fetcher poller dialog title uses the fetcher ID directly, and OAuth2 fetchers display whether their provider connection is already established.
+- Authenticated polling now also exposes an SSE-backed live run coordinator with per-source progress snapshots, so the UI can follow the active source in real time instead of relying only on periodic `/api/poll/status` refreshes.
+- That live coordinator remains intentionally single-run-per-instance. Admins can see and control the active run across users, while non-admin users only receive filtered live state and notifications for sources they actually own.
+- Live polling controls now support pause, resume, stop-after-current-source, move-a-queued-source-next, and retry-a-completed-source during the same active run through authenticated `POST` endpoints.
+- The admin UI now subscribes to authenticated SSE poll events for live batch progress and immediate poll notifications, but it falls back to the existing `/api/poll/status` refresh path if the stream disconnects or the browser lacks `EventSource`.

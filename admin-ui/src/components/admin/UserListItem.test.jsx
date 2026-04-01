@@ -1,6 +1,7 @@
 import { fireEvent, render, screen, waitFor, within } from '@testing-library/react'
 import UserListItem from './UserListItem'
 import { translate } from '../../lib/i18n'
+import { resolveNotificationContent } from '../../lib/notifications'
 
 function buildConfig() {
   return {
@@ -106,7 +107,7 @@ describe('UserListItem', () => {
     const mailFetchersSectionTitle = screen.getByText('Contas de email de origem')
     expect(screen.getByText(/Provider: OUTLOOK_IMAP/i)).toBeInTheDocument()
     expect(screen.getByText(/armazenamento do token:/i)).toBeInTheDocument()
-    expect(mailFetchersSectionTitle.closest('section')).toHaveTextContent('BD encriptada')
+    expect(mailFetchersSectionTitle.closest('section')).toHaveTextContent('Armazenamento encriptado')
   })
 
   it('renders fallback detail values without crashing when the admin payload is partial', () => {
@@ -225,6 +226,87 @@ describe('UserListItem', () => {
     Object.defineProperty(window, 'innerWidth', { configurable: true, value: originalInnerWidth })
     Object.defineProperty(window, 'innerHeight', { configurable: true, value: originalInnerHeight })
     HTMLElement.prototype.getBoundingClientRect = originalGetBoundingClientRect
+  })
+
+  it('uses specific administration permission notifications when changing roles', () => {
+    const onUpdateUser = vi.fn()
+
+    const adminConfig = buildConfig()
+    const regularConfig = {
+      ...buildConfig(),
+      user: {
+        ...buildConfig().user,
+        id: 8,
+        username: 'operator',
+        role: 'USER'
+      }
+    }
+
+    const { rerender } = render(
+      <UserListItem
+        config={adminConfig}
+        isExpanded
+        isLoading={false}
+        locale="en"
+        onDeleteUser={vi.fn()}
+        onForcePasswordChange={vi.fn()}
+        onOpenResetPasswordDialog={vi.fn()}
+        onResetUserPasskeys={vi.fn()}
+        onToggleExpand={vi.fn()}
+        onToggleUserActive={vi.fn()}
+        onUpdateUser={onUpdateUser}
+        session={{ id: 99, role: 'ADMIN' }}
+        t={(key, params) => translate('en', key, params)}
+        updatingPasskeysReset={false}
+        updatingUser={false}
+      />
+    )
+
+    fireEvent.click(screen.getByRole('button', { name: 'Make regular user' }))
+
+    expect(onUpdateUser).toHaveBeenCalledWith(
+      7,
+      { role: 'USER' },
+      expect.objectContaining({
+        key: 'notifications.userAdminRevoked',
+        kind: 'translation',
+        params: { username: 'admin' }
+      })
+    )
+    expect(resolveNotificationContent(onUpdateUser.mock.calls[0][2], 'en')).toBe('admin has now the administration permissions revoked.')
+
+    rerender(
+      <UserListItem
+        config={regularConfig}
+        isExpanded
+        isLoading={false}
+        locale="en"
+        onDeleteUser={vi.fn()}
+        onForcePasswordChange={vi.fn()}
+        onOpenResetPasswordDialog={vi.fn()}
+        onResetUserPasskeys={vi.fn()}
+        onToggleExpand={vi.fn()}
+        onToggleUserActive={vi.fn()}
+        onUpdateUser={onUpdateUser}
+        session={{ id: 99, role: 'ADMIN' }}
+        t={(key, params) => translate('en', key, params)}
+        updatingPasskeysReset={false}
+        updatingUser={false}
+      />
+    )
+
+    fireEvent.click(screen.getByRole('button', { name: 'Grant admin rights' }))
+
+    expect(onUpdateUser).toHaveBeenLastCalledWith(
+      8,
+      { role: 'ADMIN' },
+      expect.objectContaining({
+        key: 'notifications.userAdminGranted',
+        kind: 'translation',
+        params: { username: 'operator' }
+      })
+    )
+    expect(resolveNotificationContent(onUpdateUser.mock.calls[1][2], 'en')).toBe('operator is now granted administration permissions.')
   })
 
   it('starts the nested statistics section collapsed when the user has no meaningful stats', async () => {

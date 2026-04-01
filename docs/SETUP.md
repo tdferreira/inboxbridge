@@ -13,6 +13,7 @@ Optional but useful:
 - a modern browser with passkey/WebAuthn support
 - a Google Cloud account if you want Gmail API access
 - a Microsoft Entra / Azure account if you want Microsoft OAuth for Outlook source or destination accounts
+- a real hostname or additional certificate SANs if you plan to open InboxBridge from other devices on your LAN or tailnet
 
 ## Minimum Local Bootstrap
 
@@ -26,7 +27,7 @@ openssl rand -base64 32
 docker compose up --build
 ```
 
-The admin UI image now skips the full Vitest suite during `docker compose up --build` so the container can be prepared reliably for manual testing even on tighter Docker memory limits. Run the frontend test suite separately from `admin-ui/` before shipping changes, or build the image with `RUN_TESTS=true` if you specifically want the Docker build to enforce it.
+The Docker Compose build path now runs the frontend Vitest suite during the admin UI image build again, so `docker compose up --build` is the reliable end-to-end validation path before manual testing. If you need to skip that suite for a constrained standalone image build, pass `--build-arg RUN_TESTS=false` to `docker build -f admin-ui/Dockerfile ...`.
 
 At minimum, set these values in `.env`:
 
@@ -35,6 +36,8 @@ JDBC_URL=jdbc:postgresql://postgres:5432/inboxbridge
 JDBC_USERNAME=inboxbridge
 JDBC_PASSWORD=inboxbridge
 PUBLIC_BASE_URL=https://localhost:3000
+TLS_FRONTEND_CERT_HOSTNAMES=
+TLS_BACKEND_CERT_HOSTNAMES=
 SECURITY_TOKEN_ENCRYPTION_KEY=<base64-32-byte-key>
 SECURITY_TOKEN_ENCRYPTION_KEY_ID=v1
 SECURITY_PASSKEY_RP_ID=localhost
@@ -44,8 +47,40 @@ SECURITY_PASSKEY_ORIGINS=https://localhost:3000
 After startup:
 
 - admin UI: `https://localhost:3000`
+- remote control page: `https://localhost:3000/remote`
 - backend HTTP: `http://localhost:8080`
 - backend HTTPS: `https://localhost:8443`
+
+If you want the generated self-signed certs to cover extra LAN or Tailscale hostnames, set:
+
+```dotenv
+TLS_FRONTEND_CERT_HOSTNAMES=inboxbridge.local,inboxbridge.your-tailnet.ts.net
+TLS_BACKEND_CERT_HOSTNAMES=inboxbridge.local,inboxbridge.your-tailnet.ts.net
+```
+
+`cert-init` always includes `localhost`, the internal Docker service names, and the hostname from `PUBLIC_BASE_URL`; these variables add more SAN entries on top. If the expected SAN list changes later, `cert-init` regenerates the self-signed frontend/backend certs automatically.
+
+For passkeys/WebAuthn, prefer one canonical hostname everywhere instead of mixing unrelated hostnames such as `raspberrypi.local` and `something.ts.net`. One `SECURITY_PASSKEY_RP_ID` cannot span unrelated domains.
+
+After the stack creates or refreshes the generated certs, trust `certs/ca.crt` on every browser/device that will open InboxBridge. Otherwise the browser will still treat the site as having a TLS error even if the hostname is present in the SAN list.
+
+Important host/access notes:
+
+- if you want to sign in from another device such as a phone, tablet, or another laptop, prefer a hostname covered by the generated or custom certificate
+- passkeys/WebAuthn do not work reliably on raw IP hosts such as `https://192.168.50.6:3000`
+- the `/remote` PWA install prompt also depends on the browser treating the HTTPS origin as trusted
+- browser geolocation prompts can fail or behave inconsistently on self-signed or otherwise untrusted HTTPS origins
+
+If you already have your own certificates, replace:
+
+- `certs/backend.crt` and `certs/backend.key` for the backend
+- `certs/frontend.crt` and `certs/frontend.key` for the admin UI
+- `certs/ca.crt` too if the frontend proxy must trust a private CA
+
+For Let's Encrypt, the usual mapping is:
+
+- `fullchain.pem` -> `*.crt`
+- `privkey.pem` -> `*.key`
 
 Bootstrap admin credentials:
 
@@ -53,6 +88,13 @@ Bootstrap admin credentials:
 - password: `nimda`
 
 The login screen only prefills those bootstrap credentials while the original bootstrap admin is still untouched and still required to change that default password. Once the password changes or a passkey is added, the UI stops prefilling them.
+
+The `Security -> Sessions` view now shows:
+
+- normal browser sessions and `/remote` sessions together
+- best-effort browser/device labels
+- approximate Geo-IP location when configured
+- optional device-reported location captured from the browser, including an `Open in Maps` action when coordinates are available
 
 ## Google Cloud Setup For Gmail API
 
@@ -97,6 +139,7 @@ Notes:
 - `GOOGLE_REFRESH_TOKEN` is optional in multi-user mode.
 - Most users should connect their Gmail account from the admin UI instead of placing a Gmail refresh token in `.env`.
 - `GMAIL_DESTINATION_USER` should usually stay `me`.
+- the destination Gmail flow asks only for the Gmail import/label scopes it actually needs; reading Gmail mailboxes through OAuth applies only to source email accounts that explicitly use Google OAuth
 
 ## Microsoft Setup For Outlook Source And Destination Accounts
 
@@ -131,6 +174,32 @@ Notes:
 - one Microsoft app can usually be reused across many personal mailboxes and Outlook destination mailboxes
 - each mailbox still grants its own consent
 - `SECURITY_TOKEN_ENCRYPTION_KEY` must already be configured before the browser callback page can exchange Google or Microsoft OAuth authorization codes
+- the Microsoft callback page now surfaces the backend's structured exchange errors directly and returns to InboxBridge automatically after a successful in-browser exchange
+
+## Registration CAPTCHA And Authentication Security
+
+InboxBridge now protects self-registration with a real CAPTCHA flow instead of
+the older arithmetic challenge.
+
+Current providers:
+
+- `ALTCHA`: default, self-hosted, privacy-friendlier, no external registration or token
+- `TURNSTILE`: optional Cloudflare Turnstile provider
+- `HCAPTCHA`: optional hCaptcha provider
+
+Recommended operator path:
+
+- leave the default `ALTCHA` provider in place for a new deployment
+- switch to `TURNSTILE` or `HCAPTCHA` only if you intentionally want an external CAPTCHA provider
+- configure and override those settings from `Administration -> Authentication Security`
+
+That same admin section also controls:
+
+- login lockout thresholds and durations
+- registration challenge TTL
+- Geo-IP provider order and timing
+- provider-specific credentials such as Turnstile, hCaptcha, and optional IPinfo Lite secrets
+- new-session notifications that now differentiate `Admin UI` vs `Remote control` sign-ins and can include approximate location details when available
 
 ## Destination Mailbox Options
 
@@ -148,10 +217,13 @@ Rules enforced by the app:
 
 - a source mailbox cannot be the same mailbox as `My Destination Mailbox`
 - if changing the destination would make an existing source point to the same mailbox, InboxBridge disables that source automatically until the conflict is resolved
+- InboxBridge also treats cross-user mailbox mixing as a hard privacy boundary: polling is expected to keep every source tied to its owning destination mailbox, and the backend regression suite now includes multi-user GreenMail isolation coverage for that rule
 - Gmail destinations are only considered ready after `Save and Authenticate` finishes successfully
 - Outlook destinations can save folder-only edits without reconnecting, but changes that affect the connected mailbox identity still require Microsoft OAuth again
 - new Outlook source accounts rely on `Save and Connect Microsoft`; the plain `Add` action is hidden until the account is no longer in the first-link flow
 - editing an existing source account keeps its provider preset fixed and only shows provider-specific fields such as `Folder` or `Custom Label` when that provider supports them
+
+After the destination mailbox and at least one personal source email account are configured, the user can also use the lightweight `/remote` page to trigger polling without opening the full admin workspace. That page now also mirrors the live polling progress model, so it can show the currently running source during a batch poll and expose pause/resume/stop plus per-source `Move Next` / `Retry` controls when the signed-in remote viewer is allowed to manage that run. Pause/stop requests are now honored during the current source too, because the backend checks the live-control state between fetched messages instead of waiting for the entire source to finish.
 
 ## Single-User vs Multi-User
 
@@ -196,6 +268,15 @@ MAIL_ACCOUNT_0__CUSTOM_LABEL=Imported/Outlook
 
 If no `MAIL_ACCOUNT_*` values are configured, InboxBridge loads no env-managed source accounts.
 
+For UI-managed IMAP source accounts, the admin UI can also store optional post-poll source-side actions:
+
+- leave handled mail untouched
+- mark handled mail as read
+- delete handled mail
+- move handled mail into another source folder
+
+Those actions run after either a successful import or a duplicate match. POP3 accounts do not expose them because the protocol does not support equivalent source-side folder or flag operations.
+
 ## Recommended First Run
 
 1. Boot the stack.
@@ -205,6 +286,14 @@ If no `MAIL_ACCOUNT_*` values are configured, InboxBridge loads no env-managed s
 5. Add one source email account.
 6. Complete provider OAuth if needed.
 7. Run a manual poll.
+8. Optionally open `https://localhost:3000/remote` after setup if you want the lightweight remote-control page on phones or quick-access devices.
+
+Once signed in, users can optionally:
+
+- install `/remote` as a PWA shortcut on supported devices
+- share the current session's device location from either the main app or `/remote`
+- verify recent sign-ins, device/browser labels, and session types from `Security -> Sessions`
+- control an active poll from the live progress panel in `My Poller Settings` or `Global Poller Settings`, including pause/resume/stop plus per-source `Move Next` / `Retry` actions when the current viewer is allowed to manage that run
 
 ## Related Docs
 

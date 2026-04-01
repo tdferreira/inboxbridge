@@ -14,6 +14,8 @@ import dev.inboxbridge.dto.EmailAccountConnectionTestResult;
 import dev.inboxbridge.dto.UpdateUserEmailAccountRequest;
 import dev.inboxbridge.dto.UserEmailAccountView;
 import dev.inboxbridge.domain.RuntimeEmailAccount;
+import dev.inboxbridge.domain.SourcePostPollAction;
+import dev.inboxbridge.domain.SourcePostPollSettings;
 import dev.inboxbridge.persistence.AppUser;
 import dev.inboxbridge.persistence.ImportedMessageRepository;
 import dev.inboxbridge.persistence.UserEmailAccount;
@@ -130,6 +132,7 @@ public class UserEmailAccountService {
                 Optional.ofNullable(blankToNull(request.folder())),
                 request.unreadOnly() != null && request.unreadOnly(),
                 Optional.ofNullable(blankToNull(request.customLabel())),
+                resolvePostPollSettings(protocol, request.markReadAfterPoll(), request.postPollAction(), request.postPollTargetFolder()),
                 null);
         if (candidate.enabled() && mailboxConflictService.conflictsWithCurrentDestination(user.id, candidate)) {
             throw new IllegalArgumentException(MailboxConflictService.SOURCE_DESTINATION_CONFLICT_MESSAGE);
@@ -179,6 +182,14 @@ public class UserEmailAccountService {
         emailAccount.folderName = blankToNull(request.folder());
         emailAccount.unreadOnly = request.unreadOnly() != null && request.unreadOnly();
         emailAccount.customLabel = blankToNull(request.customLabel());
+        SourcePostPollSettings postPollSettings = resolvePostPollSettings(
+                emailAccount.protocol,
+                request.markReadAfterPoll(),
+                request.postPollAction(),
+                request.postPollTargetFolder());
+        emailAccount.markReadAfterPoll = postPollSettings.markAsRead();
+        emailAccount.postPollAction = postPollSettings.action();
+        emailAccount.postPollTargetFolder = postPollSettings.targetFolder().orElse(null);
         emailAccount.updatedAt = Instant.now();
         if (isNew) {
             emailAccount.createdAt = emailAccount.updatedAt;
@@ -202,6 +213,7 @@ public class UserEmailAccountService {
                 Optional.ofNullable(blankToNull(request.folder())),
                 emailAccount.unreadOnly,
                 Optional.ofNullable(emailAccount.customLabel),
+                postPollSettings,
                 null);
         if (candidate.enabled() && mailboxConflictService.conflictsWithCurrentDestination(user.id, candidate)) {
             throw new IllegalArgumentException(MailboxConflictService.SOURCE_DESTINATION_CONFLICT_MESSAGE);
@@ -284,6 +296,7 @@ public class UserEmailAccountService {
                         Optional.ofNullable(emailAccount.folderName),
                         emailAccount.unreadOnly,
                         Optional.ofNullable(emailAccount.customLabel),
+                        storedPostPollSettings(emailAccount),
                         null));
         AdminPollEventSummary lastEvent = sourcePollEventService.latestForSource(emailAccount.emailAccountId).orElse(null);
         dev.inboxbridge.dto.SourcePollingStateView sanitizedPollingState = sanitizePollingState(emailAccount, pollingState);
@@ -305,6 +318,9 @@ public class UserEmailAccountService {
                 emailAccount.folderName == null ? "INBOX" : emailAccount.folderName,
                 emailAccount.unreadOnly,
                 emailAccount.customLabel == null ? "" : emailAccount.customLabel,
+                emailAccount.markReadAfterPoll,
+                storedPostPollAction(emailAccount).name(),
+                emailAccount.postPollTargetFolder == null ? "" : emailAccount.postPollTargetFolder,
                 tokenStorageMode(emailAccount),
                 importStats.totalImported(),
                 importStats.lastImportedAt(),
@@ -459,6 +475,46 @@ public class UserEmailAccountService {
 
     private InboxBridgeConfig.OAuthProvider parseOAuthProvider(String value) {
         return value == null || value.isBlank() ? InboxBridgeConfig.OAuthProvider.NONE : InboxBridgeConfig.OAuthProvider.valueOf(value.toUpperCase());
+    }
+
+    private SourcePostPollSettings resolvePostPollSettings(
+            InboxBridgeConfig.Protocol protocol,
+            Boolean markReadAfterPoll,
+            String postPollAction,
+            String postPollTargetFolder) {
+        SourcePostPollAction action = parsePostPollAction(postPollAction);
+        boolean markAsRead = markReadAfterPoll != null && markReadAfterPoll;
+        String targetFolder = blankToNull(postPollTargetFolder);
+        if (protocol != InboxBridgeConfig.Protocol.IMAP) {
+            if (markAsRead || action != SourcePostPollAction.NONE || targetFolder != null) {
+                throw new IllegalArgumentException("Source-side message actions are only supported for IMAP accounts");
+            }
+            return SourcePostPollSettings.none();
+        }
+        if (action == SourcePostPollAction.MOVE && targetFolder == null) {
+            throw new IllegalArgumentException("A target folder is required when moving source messages after polling");
+        }
+        if (action != SourcePostPollAction.MOVE && targetFolder != null) {
+            throw new IllegalArgumentException("A target folder can only be set when the post-poll action is Move");
+        }
+        return new SourcePostPollSettings(markAsRead, action, Optional.ofNullable(targetFolder));
+    }
+
+    private SourcePostPollAction parsePostPollAction(String value) {
+        return value == null || value.isBlank()
+                ? SourcePostPollAction.NONE
+                : SourcePostPollAction.valueOf(value.trim().toUpperCase(Locale.ROOT));
+    }
+
+    private SourcePostPollSettings storedPostPollSettings(UserEmailAccount emailAccount) {
+        return new SourcePostPollSettings(
+                emailAccount.markReadAfterPoll,
+                storedPostPollAction(emailAccount),
+                Optional.ofNullable(emailAccount.postPollTargetFolder));
+    }
+
+    private SourcePostPollAction storedPostPollAction(UserEmailAccount emailAccount) {
+        return emailAccount.postPollAction == null ? SourcePostPollAction.NONE : emailAccount.postPollAction;
     }
 
     private int defaultPort(InboxBridgeConfig.Protocol protocol) {

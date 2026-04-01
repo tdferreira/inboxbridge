@@ -5,12 +5,16 @@ import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 
 import org.junit.jupiter.api.Test;
 
+import com.fasterxml.jackson.databind.ObjectMapper;
+
 import dev.inboxbridge.dto.UpdateUserUiPreferenceRequest;
+import dev.inboxbridge.dto.UserUiNotificationView;
 import dev.inboxbridge.dto.UserUiPreferenceView;
 import dev.inboxbridge.persistence.AppUser;
 import dev.inboxbridge.persistence.UserUiPreference;
@@ -21,6 +25,7 @@ class UserUiPreferenceServiceTest {
     @Test
     void defaultViewStartsWithCollapsedStateDisabled() {
         UserUiPreferenceService service = new UserUiPreferenceService();
+        service.objectMapper = new ObjectMapper();
 
         UserUiPreferenceView view = service.defaultView();
 
@@ -29,6 +34,8 @@ class UserUiPreferenceServiceTest {
         assertFalse(view.quickSetupCollapsed());
         assertFalse(view.quickSetupDismissed());
         assertFalse(view.quickSetupPinnedVisible());
+        assertFalse(view.adminQuickSetupDismissed());
+        assertFalse(view.adminQuickSetupPinnedVisible());
         assertFalse(view.destinationMailboxCollapsed());
         assertFalse(view.userPollingCollapsed());
         assertFalse(view.userStatsCollapsed());
@@ -41,6 +48,7 @@ class UserUiPreferenceServiceTest {
         assertEquals(UserUiPreferenceService.DEFAULT_USER_SECTION_ORDER, view.userSectionOrder());
         assertEquals(UserUiPreferenceService.DEFAULT_ADMIN_SECTION_ORDER, view.adminSectionOrder());
         assertEquals("en", view.language());
+        assertEquals(List.of(), view.notificationHistory());
     }
 
     @Test
@@ -48,6 +56,7 @@ class UserUiPreferenceServiceTest {
         UserUiPreferenceService service = new UserUiPreferenceService();
         InMemoryUserUiPreferenceRepository repository = new InMemoryUserUiPreferenceRepository();
         service.repository = repository;
+        service.objectMapper = new ObjectMapper();
         AppUser user = new AppUser();
         user.id = 11L;
 
@@ -60,21 +69,35 @@ class UserUiPreferenceServiceTest {
                 true,
                 true,
                 true,
-            true,
+                true,
+                true,
+                true,
                 false,
                 false,
                 false,
                 true,
                 true,
                 java.util.List.of("sourceEmailAccounts", "destination"),
-                java.util.List.of("userManagement"),
-                "pt-PT"));
+                java.util.List.of("userManagement", "authSecurity"),
+                "pt-PT",
+                List.of(new UserUiNotificationView(
+                        "note-1",
+                        Map.of("kind", "translation", "key", "notifications.signedIn", "params", Map.of()),
+                        null,
+                        "success",
+                        "password-panel-section",
+                        null,
+                        1234L,
+                        true,
+                        10_000L))));
 
         assertTrue(updated.persistLayout());
         assertTrue(updated.layoutEditEnabled());
         assertTrue(updated.quickSetupCollapsed());
         assertFalse(updated.quickSetupDismissed());
         assertFalse(updated.quickSetupPinnedVisible());
+        assertTrue(updated.adminQuickSetupDismissed());
+        assertTrue(updated.adminQuickSetupPinnedVisible());
         assertTrue(updated.destinationMailboxCollapsed());
         assertTrue(updated.userPollingCollapsed());
         assertTrue(updated.userStatsCollapsed());
@@ -84,9 +107,11 @@ class UserUiPreferenceServiceTest {
         assertFalse(updated.oauthAppsCollapsed());
         assertTrue(updated.globalStatsCollapsed());
         assertTrue(updated.userManagementCollapsed());
-        assertEquals(java.util.List.of("sourceEmailAccounts", "destination", "quickSetup", "userPolling", "userStats"), updated.userSectionOrder());
-        assertEquals(java.util.List.of("userManagement", "adminQuickSetup", "systemDashboard", "oauthApps", "globalStats"), updated.adminSectionOrder());
+        assertEquals(java.util.List.of("sourceEmailAccounts", "destination", "quickSetup", "userPolling", "remoteControl", "userStats"), updated.userSectionOrder());
+        assertEquals(java.util.List.of("userManagement", "authSecurity", "adminQuickSetup", "systemDashboard", "oauthApps", "globalStats"), updated.adminSectionOrder());
         assertEquals("pt-PT", updated.language());
+        assertEquals(1, updated.notificationHistory().size());
+        assertEquals("note-1", updated.notificationHistory().getFirst().id());
         assertEquals(Optional.of(updated), service.viewForUser(user.id));
     }
 

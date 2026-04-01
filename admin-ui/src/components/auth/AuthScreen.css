@@ -14,6 +14,15 @@
   color: var(--muted);
 }
 
+.auth-language-picker {
+  display: grid;
+  gap: 6px;
+}
+
+.auth-language-picker select {
+  min-width: 220px;
+}
+
 .auth-screen-hint {
   color: var(--danger);
   font-size: 0.92rem;

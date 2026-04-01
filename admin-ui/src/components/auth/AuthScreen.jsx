@@ -1,3 +1,4 @@
+import { useEffect, useRef } from 'react'
 import Banner from '../common/Banner'
 import LoadingButton from '../common/LoadingButton'
 import ModalDialog from '../common/ModalDialog'
@@ -11,10 +12,14 @@ import './AuthScreen.css'
  */
 function AuthScreen({
   authError,
+  language,
+  languageOptions = [],
+  loginStage = 'username',
   loginLoading,
   loginForm,
   multiUserEnabled,
   notice,
+  onLanguageChange = () => {},
   onLogin,
   onLoginChange,
   onPasskeyLogin,
@@ -33,10 +38,38 @@ function AuthScreen({
 }) {
   const registerPasswordsMatch = registerForm.password !== '' && registerForm.password === registerForm.confirmPassword
   const registrationReady = registerPasswordsMatch && (!registerChallenge?.enabled || registerForm.captchaToken.trim() !== '')
+  const showLanguageSelector = languageOptions.length > 0
+  const showCredentialStep = loginStage === 'credentials'
+  const loginReady = loginForm.username.trim() !== ''
+  const passwordInputRef = useRef(null)
+
+  useEffect(() => {
+    if (showCredentialStep) {
+      passwordInputRef.current?.focus()
+      passwordInputRef.current?.select?.()
+    }
+  }, [showCredentialStep])
+
+  function renderLanguageSelector(keySuffix) {
+    if (!showLanguageSelector) {
+      return null
+    }
+    return (
+      <label className="auth-language-picker" key={keySuffix}>
+        <span>{t('preferences.language')}</span>
+        <select value={language} onChange={(event) => onLanguageChange(event.target.value)}>
+          {languageOptions.map((option) => (
+            <option key={option.value} value={option.value}>{option.label}</option>
+          ))}
+        </select>
+      </label>
+    )
+  }
 
   return (
     <div className="page-shell">
       <main className="auth-screen-card">
+        {renderLanguageSelector('login')}
         <div className="eyebrow">{t('auth.brand')}</div>
         <h1>{t('auth.title')}</h1>
         <form className="stack-form" onSubmit={onLogin}>
@@ -47,19 +80,24 @@ function AuthScreen({
               onChange={(event) => onLoginChange((current) => ({ ...current, username: event.target.value }))}
             />
           </label>
-          <PasswordField
-            hideLabel={t('common.hideField', { label: t('auth.password') })}
-            label={t('auth.password')}
-            value={loginForm.password}
-            onChange={(event) => onLoginChange((current) => ({ ...current, password: event.target.value }))}
-            showLabel={t('common.showField', { label: t('auth.password') })}
-          />
-          <LoadingButton className="primary" isLoading={loginLoading} loadingLabel={t('auth.signInLoading')} type="submit">
+          {showCredentialStep ? (
+            <PasswordField
+              hideLabel={t('common.hideField', { label: t('auth.password') })}
+              label={t('auth.password')}
+              ref={passwordInputRef}
+              value={loginForm.password}
+              onChange={(event) => onLoginChange((current) => ({ ...current, password: event.target.value }))}
+              showLabel={t('common.showField', { label: t('auth.password') })}
+            />
+          ) : null}
+          <LoadingButton className="primary" disabled={!loginReady} isLoading={loginLoading} loadingLabel={t('auth.signInLoading')} type="submit">
             {t('auth.signIn')}
           </LoadingButton>
-          <LoadingButton className="secondary" disabled={!passkeysSupported} isLoading={passkeyLoading} loadingLabel={t('auth.signInWithPasskeyLoading')} onClick={onPasskeyLogin} type="button">
-            {t('auth.signInWithPasskey')}
-          </LoadingButton>
+          {showCredentialStep ? (
+            <LoadingButton className="secondary" disabled={!passkeysSupported || !loginReady} isLoading={passkeyLoading} loadingLabel={t('auth.signInWithPasskeyLoading')} onClick={onPasskeyLogin} type="button">
+              {t('auth.signInWithPasskey')}
+            </LoadingButton>
+          ) : null}
         </form>
         {!passkeysSupported ? <div className="muted-box auth-screen-note">{t('auth.passkeySupport')}</div> : null}
 
@@ -90,6 +128,7 @@ function AuthScreen({
           unsavedChangesMessage={t('common.unsavedChangesConfirm')}
         >
           <p className="section-copy">{t('auth.registerDialogCopy')}</p>
+          {renderLanguageSelector('register')}
           <form className="stack-form" onSubmit={onRegister}>
             <label>
               <span>{t('auth.requestedUsername')}</span>

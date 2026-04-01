@@ -13,6 +13,7 @@ import dev.inboxbridge.dto.StartPasskeyCeremonyResponse;
 import dev.inboxbridge.dto.StartPasskeyLoginRequest;
 import dev.inboxbridge.persistence.AppUser;
 import dev.inboxbridge.security.AuthenticatedFilter;
+import dev.inboxbridge.security.BrowserSessionSecurity;
 import dev.inboxbridge.security.CurrentUserContext;
 import dev.inboxbridge.security.RequireAuth;
 import dev.inboxbridge.service.AppUserService;
@@ -133,6 +134,7 @@ public class AuthResource {
             AuthService.AuthenticatedSession session = result.session();
             return Response.ok(LoginResponse.authenticated(toResponse(session.user())))
                     .cookie(sessionCookie(session.token()))
+                    .cookie(csrfCookie(session.csrfToken()))
                     .build();
         } catch (AuthLoginProtectionService.LoginBlockedException e) {
             return loginBlockedResponse(e.blockedUntil());
@@ -170,18 +172,6 @@ public class AuthResource {
     @Consumes(MediaType.APPLICATION_JSON)
     public StartPasskeyCeremonyResponse startPasskeyLogin(StartPasskeyLoginRequest request) {
         try {
-            if (request != null && request.username() != null && !request.username().isBlank()) {
-                AppUser user = appUserService.findByUsername(request.username().trim())
-                        .filter(found -> found.active && found.approved)
-                        .orElseThrow(() -> new IllegalArgumentException("Unknown account for passkey sign-in"));
-                if (appUserService.hasPassword(user) && appUserService.requiresPasskey(user)) {
-                    throw new IllegalArgumentException("This account requires password verification before passkey sign-in.");
-                }
-                if (!appUserService.requiresPasskey(user)) {
-                    throw new IllegalArgumentException("This account does not have a passkey configured.");
-                }
-                return passkeyService.startAuthenticationForUser(user, false);
-            }
             return passkeyService.startAuthentication();
         } catch (IllegalArgumentException | IllegalStateException e) {
             throw new BadRequestException(e.getMessage(), e);
@@ -199,6 +189,7 @@ public class AuthResource {
             AuthService.AuthenticatedSession session = authService.loginWithPasskey(authResult, clientKey, userAgent);
             return Response.ok(LoginResponse.authenticated(toResponse(session.user())))
                     .cookie(sessionCookie(session.token()))
+                    .cookie(csrfCookie(session.csrfToken()))
                     .build();
         } catch (IllegalArgumentException | IllegalStateException e) {
             throw new BadRequestException(e.getMessage(), e);
@@ -210,7 +201,7 @@ public class AuthResource {
     @RequireAuth
     public Response logout(@jakarta.ws.rs.CookieParam(AuthenticatedFilter.SESSION_COOKIE) String token) {
         authService.logout(token);
-        return Response.noContent().cookie(expiredCookie()).build();
+        return Response.noContent().cookie(expiredCookie()).cookie(expiredCsrfCookie()).build();
     }
 
     @GET
@@ -265,6 +256,26 @@ public class AuthResource {
                 .value("")
                 .path("/")
                 .httpOnly(true)
+                .secure(true)
+                .sameSite(NewCookie.SameSite.STRICT)
+                .maxAge(0)
+                .build();
+    }
+
+    private NewCookie csrfCookie(String token) {
+        return new NewCookie.Builder(BrowserSessionSecurity.CSRF_COOKIE)
+                .value(token)
+                .path("/")
+                .secure(true)
+                .sameSite(NewCookie.SameSite.STRICT)
+                .maxAge((int) java.time.Duration.ofDays(7).getSeconds())
+                .build();
+    }
+
+    private NewCookie expiredCsrfCookie() {
+        return new NewCookie.Builder(BrowserSessionSecurity.CSRF_COOKIE)
+                .value("")
+                .path("/")
                 .secure(true)
                 .sameSite(NewCookie.SameSite.STRICT)
                 .maxAge(0)

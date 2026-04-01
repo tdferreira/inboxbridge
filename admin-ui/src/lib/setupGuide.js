@@ -2,6 +2,10 @@ function renumberStepTitle(title, index) {
   return String(title).replace(/^\d+\.\s*/, `${index}. `)
 }
 
+function isSetupGuideRelevantEmailAccount(emailAccount) {
+  return emailAccount?.enabled !== false && emailAccount?.effectivePollEnabled !== false
+}
+
 export function buildSetupGuideState({ workspace = 'user', destinationMeta, myEmailAccounts = [], session, systemDashboard, systemOAuthSettings, users = [], t }) {
   if (!session) {
     return {
@@ -15,13 +19,14 @@ export function buildSetupGuideState({ workspace = 'user', destinationMeta, myEm
     const visibleSystemEmailAccounts = session.username === 'admin'
       ? systemDashboardEmailAccounts
       : []
+    const activeSystemEmailAccounts = visibleSystemEmailAccounts.filter(isSetupGuideRelevantEmailAccount)
     const sharedGoogleReady = Boolean(systemOAuthSettings?.googleClientId && systemOAuthSettings?.googleClientSecretConfigured && systemOAuthSettings?.googleRefreshTokenConfigured)
     const sharedMicrosoftReady = Boolean(systemOAuthSettings?.microsoftClientId && systemOAuthSettings?.microsoftClientSecretConfigured)
     const sharedOAuthReady = sharedGoogleReady || sharedMicrosoftReady
     const importsReady = sharedOAuthReady
       && (systemDashboard?.overall?.totalImportedMessages || 0) > 0
-      && visibleSystemEmailAccounts.every((emailAccount) => emailAccount.lastEvent?.status !== 'ERROR' && !emailAccount.lastEvent?.error)
-    const importsErrored = visibleSystemEmailAccounts.some((emailAccount) => emailAccount.lastEvent?.status === 'ERROR' || emailAccount.lastEvent?.error)
+      && activeSystemEmailAccounts.every((emailAccount) => emailAccount.lastEvent?.status !== 'ERROR' && !emailAccount.lastEvent?.error)
+    const importsErrored = activeSystemEmailAccounts.some((emailAccount) => emailAccount.lastEvent?.status === 'ERROR' || emailAccount.lastEvent?.error)
     const multiUserEnabled = systemOAuthSettings?.effectiveMultiUserEnabled !== false
     const hasAdditionalUser = users.some((user) => user.id !== session.id)
     const steps = [
@@ -66,8 +71,9 @@ export function buildSetupGuideState({ workspace = 'user', destinationMeta, myEm
     ...myEmailAccounts,
     ...visibleSystemEmailAccounts
   ]
-  const oauthEmailAccounts = allEmailAccounts.filter((emailAccount) => emailAccount.authMethod === 'OAUTH2')
-  const emailAccountErrors = allEmailAccounts.filter((emailAccount) => emailAccount.lastEvent?.status === 'ERROR' || emailAccount.lastEvent?.error)
+  const activeEmailAccounts = allEmailAccounts.filter(isSetupGuideRelevantEmailAccount)
+  const oauthEmailAccounts = activeEmailAccounts.filter((emailAccount) => emailAccount.authMethod === 'OAUTH2')
+  const emailAccountErrors = activeEmailAccounts.filter((emailAccount) => emailAccount.lastEvent?.status === 'ERROR' || emailAccount.lastEvent?.error)
   const oauthErrors = oauthEmailAccounts.filter((emailAccount) => emailAccount.lastEvent?.status === 'ERROR' || emailAccount.lastEvent?.error)
   const importedMessages = systemDashboard?.overall?.totalImportedMessages
     ?? allEmailAccounts.reduce((total, emailAccount) => total + (emailAccount.totalImportedMessages || 0), 0)
@@ -132,8 +138,8 @@ export function buildSetupGuideState({ workspace = 'user', destinationMeta, myEm
         : importsReady
           ? t('setup.step5Ready')
           : t('setup.step5Pending'),
-      targetId: session.role === 'ADMIN' ? 'system-dashboard-section' : 'source-email-accounts-section',
-      sectionKey: session.role === 'ADMIN' ? 'systemDashboardCollapsed' : 'sourceEmailAccountsCollapsed',
+      targetId: 'user-polling-section',
+      sectionKey: 'userPollingCollapsed',
       status: importsErrored ? 'error' : importsReady ? 'complete' : 'pending'
     })
 

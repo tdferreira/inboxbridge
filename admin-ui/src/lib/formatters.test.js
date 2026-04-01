@@ -1,4 +1,4 @@
-import { authMethodLabel, formatDate, formatDurationHint, formatDurationMeaning, formatPollError, isOauthRevokedError, oauthProviderLabel, protocolLabel, roleLabel, statusLabel, statusTone, tokenStorageLabel, triggerLabel } from './formatters'
+import { authMethodLabel, effectiveEmailAccountStatus, formatDate, formatDurationHint, formatDurationMeaning, formatPollError, isOauthRevokedError, oauthProviderLabel, protocolLabel, roleLabel, statusLabel, statusTone, tokenStorageLabel, triggerLabel } from './formatters'
 
 describe('formatters', () => {
   it('formats missing dates as Never', () => {
@@ -6,12 +6,14 @@ describe('formatters', () => {
   })
 
   it('maps statuses to tone classes', () => {
+    expect(statusTone('DISABLED')).toBe('tone-neutral')
     expect(statusTone('SUCCESS')).toBe('tone-success')
     expect(statusTone('ERROR')).toBe('tone-error')
     expect(statusTone('PENDING')).toBe('tone-neutral')
   })
 
   it('renders translated labels for common enums', () => {
+    expect(statusLabel('DISABLED')).toBe('Disabled')
     expect(statusLabel('SUCCESS')).toBe('Success')
     expect(roleLabel('ADMIN')).toBe('Admin')
     expect(protocolLabel('IMAP')).toBe('IMAP')
@@ -21,6 +23,17 @@ describe('formatters', () => {
     expect(triggerLabel('scheduler')).toBe('scheduler')
   })
 
+  it('prefers the disabled status for disabled email accounts', () => {
+    expect(effectiveEmailAccountStatus({
+      enabled: false,
+      lastEvent: { status: 'ERROR' }
+    })).toBe('DISABLED')
+    expect(effectiveEmailAccountStatus({
+      enabled: true,
+      lastEvent: { status: 'SUCCESS' }
+    })).toBe('SUCCESS')
+  })
+
   it('turns ISO-8601 durations into human-readable meanings', () => {
     expect(formatDurationMeaning('PT0.25S', 'en')).toBe('250 milliseconds')
     expect(formatDurationMeaning('PT1H30M', 'en')).toBe('1 hour and 30 minutes')
@@ -28,7 +41,7 @@ describe('formatters', () => {
   })
 
   it('renders token storage labels for known modes', () => {
-    expect(tokenStorageLabel('DATABASE')).toBe('Encrypted DB')
+    expect(tokenStorageLabel('DATABASE')).toBe('Encrypted storage')
     expect(tokenStorageLabel('PASSWORD')).toBe('Password auth')
     expect(tokenStorageLabel('SOMETHING_ELSE')).toBe('SOMETHING_ELSE')
   })

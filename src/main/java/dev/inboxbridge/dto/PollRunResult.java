@@ -28,6 +28,22 @@ public class PollRunResult {
         duplicates++;
     }
 
+    public void addFetched(int count) {
+        fetched += Math.max(0, count);
+    }
+
+    public void addImported(int count) {
+        imported += Math.max(0, count);
+    }
+
+    public void addDuplicates(int count) {
+        duplicates += Math.max(0, count);
+    }
+
+    public void addSpamJunkMessageCount(int count) {
+        spamJunkMessageCount += Math.max(0, count);
+    }
+
     public void addError(String error) {
         errors.add(error);
     }
@@ -43,8 +59,13 @@ public class PollRunResult {
     }
 
     public void addSpamJunkFolderSummary(String sourceId, String folderName, int messageCount) {
-        spamJunkMessageCount += Math.max(0, messageCount);
         spamJunkFolderSummaries.add(sourceId + " -> " + folderName + " (" + messageCount + ")");
+    }
+
+    public void addSpamJunkFolderSummary(String summary) {
+        if (summary != null && !summary.isBlank()) {
+            spamJunkFolderSummaries.add(summary);
+        }
     }
 
     public void finish() {

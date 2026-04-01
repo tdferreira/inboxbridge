@@ -34,9 +34,11 @@ Key design choices:
 - the setup guide uses neutral / green / red state styling to reflect pending, complete, and error conditions
 - the setup guide auto-collapses once every tracked step is complete
 - once every tracked step is complete, the setup guide can also be hidden entirely and it automatically reappears if any requirement later becomes invalid again
+- `My InboxBridge` and `Administration` now keep separate quick-setup visibility preferences, and the `Preferences` dialog controls the guide for the currently selected workspace instead of one generic global toggle
 - users can opt into per-account persisted collapse state for the major admin-ui sections
 - users can now also persist a custom per-workspace section order and reset it back to the default arrangement from `Preferences`
 - section reordering controls are only shown while `layout editing` is enabled from `Preferences`, and sections can then also be rearranged by drag-and-drop with a dotted placeholder
+- layout editing now reorders against the actual visible sections in the active workspace, so the last visible section can be moved down into the final slot or moved back out again without getting stuck
 - expanding any major section now forces a fresh data reload for that section and shows an inline loading indicator while the refresh is running
 - password changes are exposed from the hero/header controls instead of being buried inside Gmail setup
 - the same hero/header security area now also handles passkey enrollment and removal
@@ -45,22 +47,38 @@ Key design choices:
 - the login form only prefills the bootstrap `admin` / `nimda` credentials while the untouched bootstrap admin is still in its original first-login state; after a password change, passkey enrollment, or user removal, the form falls back to empty fields
 - passkey UI is intentionally disabled on raw IP hosts because WebAuthn does not work there; LAN access should use a real hostname configured in `SECURITY_PASSKEY_*` instead of a bare address like `192.168.50.6`
 - the app now also ships a dedicated `/remote` mobile-first remote-control surface with its own scoped session, tiny source list, and poll-now actions for phones and quick-access devices
-- the main `My InboxBridge` workspace now includes a dedicated `Remote control` launch card so the lightweight `/remote` page is discoverable from the normal dashboard
+- that `/remote` surface now also hydrates the active live poll snapshot on load, listens to the SSE progress stream, highlights the source or sources currently being processed, and exposes pause/resume/stop plus per-source `Move Next` / `Retry` controls when the current remote viewer can manage the run
+- disabled source accounts are filtered out of `/remote`, so the quick-access list only shows sources that can actually be triggered from that surface
+- collapsed source cards on `/remote` now use tighter spacing and always-visible summary badges for owner, folder, polling cadence, and latest result, so the source list fits more comfortably on smaller screens
+- `/remote` now folds live polling state and controls into the existing source cards instead of rendering a separate `Live Poll Progress` source list, so each source row stays the single place for status, actions, and expanded error details even when several sources are `RUNNING` concurrently
+- the `/remote` sign-in screen now has its own language selector, and the authenticated remote surface adopts the language saved in the signed-in user's Preferences after login instead of staying pinned to the browser default
+- the main `My InboxBridge` workspace now includes a dedicated `InboxBridge Go` launch card so the lightweight `/remote` page is discoverable from the normal dashboard
 - the `/remote` surface can now expose an in-app install prompt when the browser considers that remote page installable as a PWA
+- the `/remote` surface now also keeps a visible install-help card even when the browser uses a manual install path, with guidance for Chrome/Edge, Safari `Add to Home Screen` / `Add to Dock`, Firefox Android install, and a note that Firefox desktop does not currently expose a full install flow
+- the `/remote` bootstrap path now injects the route-scoped manifest and related mobile-web-app metadata into the document head so Chromium can evaluate `/remote` for installation without making the main workspace advertise itself as a PWA
 - browser/device geolocation prompts are now mobile-safe: InboxBridge only auto-captures when the browser already reports permission as granted, while phones and other gesture-gated browsers should rely on the explicit `Share Device Location` action
 - the Security `Sessions` tab now also shows a best-effort browser label and device type for each session, derived from the stored `User-Agent`, so users can quickly tell desktop/admin-ui sessions from mobile/remote-control sign-ins
 - both the main app and `/remote` now offer an explicit opt-in browser location prompt for the current session so device-reported location can be stored separately from Geo-IP
 - both the main app and `/remote` now auto-capture device location only when geolocation permission is already granted, while still leaving an explicit share action and a retry path in the Sessions UI when no sample was saved
 - when a session includes device coordinates, the Sessions view now tries to turn them into a friendlier place label in the browser and exposes an `Open in Maps` action for that device-reported location
 - the login screen intentionally avoids exposing live bootstrap-account state to unauthenticated visitors; bootstrap credentials are documented in the operator docs instead
+- the unauthenticated login screen now also exposes the language selector directly, and the self-registration modal mirrors that selector so users can pick their locale before signing in
+- the main login screen and `/remote` now start with a username-only step, then move into the same generic continue-sign-in step instead of exposing account-specific password/passkey hints up front
+- the admin UI installs a same-origin fetch wrapper during bootstrap so unsafe browser writes automatically include the current CSRF header for the authenticated session, while cross-origin requests are left untouched
+- live polling now hydrates an immediate snapshot after sign-in and keeps Pause/Resume/Stop controls visible in the polling section headers whenever the current viewer can control the active run, instead of making those controls depend only on the next SSE event or the inner progress panel
+- local HTTPS trust still matters for the browser UX: passkeys/WebAuthn, PWA installability, and some secure-context APIs require the browser/device to trust the local CA in `certs/ca.crt`, not only the generated leaf certificate
 - self-registration is launched from a dedicated `Register for access` button and uses a modal dialog instead of always rendering the full form
 - self-registration now also loads a real CAPTCHA challenge before the request can be submitted; the default path is a self-hosted ALTCHA proof-of-work flow that does not require any external registration or token
+- the self-registration modal keeps its anti-robot wording generic and user-facing; provider and challenge implementation details stay in the admin configuration surface rather than the normal registration copy
+- the ALTCHA verification action now yields to the browser before solving so the shared loading-button spinner and `Verifying…` state stay visible while the proof-of-work challenge is processed locally
 - when the deployment sets `MULTI_USER_ENABLED=false`, the login screen hides self-registration and the post-login UI hides user-management features entirely
 - accounts with both a password and a passkey now use password + passkey login, not passkey-only login
 - accounts with only a passkey ignore any typed password and fall through into the passkey prompt instead of stopping on an error
+- the dedicated unauthenticated passkey button now appears on that generic continue-sign-in step, starts a discoverable passkey flow without using the typed username as an account lookup, and if a password is already filled in it reuses the normal password + passkey login path
 - repeated failed sign-ins are rate-limited per client IP address with an exponential lockout, so a hammered login screen starts blocking new attempts for progressively longer periods
 - administrators can tune those login lockout, self-registration anti-robot, and Geo-IP session-visibility defaults from a dedicated `Authentication Security` section in the Administration workspace instead of editing `.env`
 - the `Edit Authentication Security` dialog now follows the same grouped-card structure as the polling editor, separating login protection, registration protection, CAPTCHA provider selection, CAPTCHA provider configuration, Geo-IP provider chain, Geo-IP timing, provider-specific configuration, and effective values
+- user-facing secret-storage labels now stay implementation-neutral, using copy like `Encrypted storage` instead of surfacing backend technology names in the UI
 - users can remove their password and run the account in passkey-only mode
 - self-service password removal and passkey deletion are guarded by confirmation modals before the backend call is sent
 - the final remaining passkey cannot be removed while the account has no password configured
@@ -75,6 +93,7 @@ Key design choices:
 - expanded user entries are now split into clear detail subsections such as `User Configuration`, `Gmail Destination`, `Poller Settings`, `Passkeys`, and `Source Email Accounts`
 - contextual `...` menus no longer duplicate expand/collapse actions; expansion is handled directly by clicking the row itself
 - admins can override scheduled polling enablement, poll interval, and fetch window without changing `.env`
+- fetch window help now explicitly explains that InboxBridge rechecks the latest `N` messages on each run rather than paging backward automatically, and recommends temporarily raising the window when doing historical backfill
 - admins now see an admin-only `Global Poller Settings` section for deployment-wide polling controls, while the actual global override form lives in a focused modal dialog opened from `Edit Poller Settings`
 - each user now gets a dedicated `My Poller Settings` section whose main page stays focused on effective values while the actual override form lives in a focused modal dialog opened from `Edit Poller Settings`
 - polling analytics now live in separate `Global Statistics` and `My Statistics` sections instead of being mixed into the settings editors
@@ -86,6 +105,8 @@ Key design choices:
 - admin users now get a workspace switcher that separates their normal user-facing setup flow from the deployment `Administration` controls
 - those admin/My InboxBridge workspaces are now also addressable through URL paths, with `/` remaining the canonical `My InboxBridge` workspace and `/admin` (or its translated admin slug) opening the administration workspace directly; older localized user slugs are normalized back to `/`
 - inside those workspaces, the movable content sections can now be reordered independently while the header and workspace switcher remain fixed in place
+- the default `My InboxBridge` order is `Quick Setup Guide`, `My Destination Mailbox`, `My Source Email Accounts`, `My Polling Settings`, `InboxBridge Go`, `My Statistics`
+- the default `Administration` order is `Quick Setup Guide`, `Global Polling Settings`, `OAuth Apps`, `Users`, `Authentication Security`, `Global Statistics`
 - the statistics charts now use `Recharts 3.x`, which adds shared hover tooltips and cleaner multi-series trend rendering without migrating the whole UI to Material UI
 - contextual `actions` buttons now render as compact hamburger menu icons while keeping the same translated accessibility labels and tooltips
 - that hamburger icon styling now comes from the shared global stylesheet so the user list and source-email-account list render the same menu trigger
@@ -136,6 +157,13 @@ Key design choices:
 - `Global Polling Settings` now asks for confirmation before starting an all-users manual run, and the dialog also exposes the manual-run rate limit configuration used to prevent repeated hammering
 - the `Edit Global Polling Settings` modal is now grouped into scheduler, manual-run, source pacing, destination pacing, adaptive recovery, and effective-value subsections so the deployment-wide controls are easier to scan
 - broad manual polling runs still respect per-source cooldown and next-window checks, while the single mail-account `Run Poll Now` action remains the explicit force-run path
+- effective polling behavior now follows a three-layer precedence chain: deployment-wide defaults, optional per-user overrides for DB-managed sources, and optional per-source overrides on top
+- those broad manual polling runs now follow the backend's active source and move the per-row spinner/status pill one mailbox at a time, so the user can see which source is actually being processed right now
+- the user and admin polling sections now also show a live poll-progress panel driven by authenticated SSE, including pause/resume/stop controls plus per-source `Move Next` and `Retry` actions during the active run
+- live pause/stop controls are now honored during the currently active source as well as between queued sources because the backend advances the live queue one source at a time and checks for pause/stop between fetched messages instead of only when the run first starts
+- admins see the live panel across user-owned sources with owner labels, while non-admin users only receive the subset of live progress and notifications that belongs to their own mail sources
+- if the live SSE stream disconnects, the UI falls back to the live snapshot refresh path so row-level running indicators continue to work until the stream reconnects, including runs where multiple sources are active at once
+- disabled source email accounts keep their row-level `Run Poll Now` actions disabled and never show the batch spinner while another source is being processed
 - the user poller settings card now uses the same padded section shell as the main dashboard cards, so the form content stays fully inside the card boundaries
 - the hero/header now includes a `Preferences` button that opens a modal for language selection, the persisted `Remember layout on this account` toggle, the `Show Quick Setup Guide` toggle, layout-edit controls, and a reset-layout action
 - the admin UI enforces HTTPS: nginx redirects plain HTTP traffic on port `80`, and the frontend also upgrades itself to `https://...` if it is ever served over plain HTTP by another deployment path
@@ -183,7 +211,7 @@ Current design-system foundation includes:
 
 New top-level sections should compose these primitives rather than recreating `surface-card`, header, action, toggle, or CTA-link markup locally.
 The movable workspace sections in both `My InboxBridge` and `Administration` should always render through `CollapsibleSection`, and the layout-edit controller must preserve edit mode while arrow moves or drag-and-drop reorder operations are being applied.
-Section reordering must also operate on the effective visible workspace order, so newly introduced movable sections such as `Remote control` still move correctly for users with older saved layouts, and the top/bottom arrow buttons only enable moves that are actually possible on the rendered list.
+Section reordering must also operate on the effective visible workspace order, so newly introduced movable sections such as `InboxBridge Go` still move correctly for users with older saved layouts, and the top/bottom arrow buttons only enable moves that are actually possible on the rendered list.
 Drag-and-drop should resolve against the final pointer-up position using midpoint-based insertion slots between rendered cards, so dragging the first card downward or the last card upward lands in the expected adjacent position, cards do not overshoot by an extra slot, and transient layout-edit mode is not lost during a background preference refresh.
 
 ## Tests
@@ -197,10 +225,20 @@ cd admin-ui
 npm test -- --run
 ```
 
-The Docker image build no longer runs the full Vitest suite by default because the complete jsdom suite can exhaust the Node heap inside constrained Docker builds before `vite build` runs. To keep test execution in the container build, opt in explicitly:
+Generate a coverage report with:
 
 ```bash
-docker build -f admin-ui/Dockerfile --build-arg RUN_TESTS=true .
+cd admin-ui
+npm run test:coverage
+```
+
+The Docker Compose build path now runs the frontend Vitest suite during the
+admin UI image build, so `docker compose up --build` remains the reliable
+end-to-end validation path before manual testing.
+If you need to skip the frontend suite for a constrained standalone image build, override the Docker build arg explicitly:
+
+```bash
+docker build -f admin-ui/Dockerfile --build-arg RUN_TESTS=false .
 ```
 
 Current unit coverage focuses on:
@@ -220,8 +258,10 @@ Current unit coverage focuses on:
 - the standalone remote-control login and source-poll workflow
 - the remote-only PWA install prompt plus the shared per-session browser-location capture flow on both the main app and `/remote`
 - source email account dialog presets, auth-aware field visibility, and detected IMAP folder selection after a successful connection probe
+- IMAP source email account dialogs now also expose post-poll source-message actions so users can keep the source mailbox untouched, mark handled mail as read, delete it, or move it into another detected/manual folder
 - reusable email-account card actions
 - language-aware setup guide generation and formatting helpers
+- the polling test suite now also covers global/per-user/per-source settings precedence and multi-user destination-isolation regressions on the backend side, with GreenMail integration tests reserved for real mailbox I/O paths
 
 The Google and Microsoft OAuth callback pages include a direct return path back to the admin UI after in-browser token exchange.
 
@@ -250,6 +290,7 @@ Buttons that trigger backend calls now show inline loading spinners so the user 
 
 Authenticated notifications beneath the setup guide are now dismissable, can focus the related section when action is needed, and automatically close after 10 seconds when they are low-priority success messages.
 Those notifications now render in a floating top-right stack so they remain visible even when the related section is outside the current viewport.
+Their recent-history state is now also persisted per account through the backend UI-preferences API, so refreshes and normal sign-out/sign-in cycles do not silently discard important notices.
 
 The `...` menus in both the source-email-account list and the user-management list now measure the real floating panel, stay attached to the trigger button while scrolling, flip above it when there is not enough room below, and close automatically when the trigger scrolls out of view.
 

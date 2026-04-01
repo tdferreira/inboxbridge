@@ -8,6 +8,8 @@ import dev.inboxbridge.config.InboxBridgeConfig;
 import dev.inboxbridge.domain.GmailApiDestinationTarget;
 import dev.inboxbridge.domain.MailDestinationTarget;
 import dev.inboxbridge.domain.RuntimeEmailAccount;
+import dev.inboxbridge.domain.SourcePostPollAction;
+import dev.inboxbridge.domain.SourcePostPollSettings;
 import dev.inboxbridge.persistence.AppUser;
 import dev.inboxbridge.persistence.AppUserRepository;
 import dev.inboxbridge.persistence.UserEmailAccount;
@@ -133,6 +135,7 @@ public class RuntimeEmailAccountService {
                 source.folder(),
                 source.unreadOnly(),
                 source.customLabel(),
+                SourcePostPollSettings.none(),
                 destinationTarget);
     }
 
@@ -163,6 +166,10 @@ public class RuntimeEmailAccountService {
                 Optional.ofNullable(emailAccount.folderName),
                 emailAccount.unreadOnly,
                 Optional.ofNullable(emailAccount.customLabel),
+                new SourcePostPollSettings(
+                        emailAccount.markReadAfterPoll,
+                        emailAccount.postPollAction == null ? SourcePostPollAction.NONE : emailAccount.postPollAction,
+                        Optional.ofNullable(emailAccount.postPollTargetFolder)),
                 destinationTarget.get()));
     }
 }

@@ -28,6 +28,38 @@ describe('buildSetupGuideState', () => {
     expect(result.allStepsComplete).toBe(false)
   })
 
+  it('ignores disabled or effectively non-polling accounts when deciding whether imports are errored', () => {
+    const result = buildSetupGuideState({
+      destinationMeta: { linked: true },
+      myEmailAccounts: [{
+        emailAccountId: 'source-disabled',
+        enabled: false,
+        effectivePollEnabled: false,
+        authMethod: 'PASSWORD',
+        tokenStorageMode: 'PASSWORD',
+        totalImportedMessages: 0,
+        lastEvent: { status: 'ERROR', error: 'stale_failure' }
+      }, {
+        emailAccountId: 'source-active',
+        enabled: true,
+        effectivePollEnabled: true,
+        authMethod: 'PASSWORD',
+        tokenStorageMode: 'PASSWORD',
+        totalImportedMessages: 3,
+        lastEvent: { status: 'SUCCESS', error: null }
+      }],
+      session: { username: 'alice', role: 'USER', mustChangePassword: false },
+      systemDashboard: {
+        overall: {
+          totalImportedMessages: 3
+        }
+      },
+      t
+    })
+
+    expect(result.steps.at(-1).status).toBe('complete')
+  })
+
   it('does not count env-managed fetchers for non-admin usernames', () => {
     const result = buildSetupGuideState({
       destinationMeta: { linked: true },
@@ -98,6 +130,32 @@ describe('buildSetupGuideState', () => {
       '3. Add at least one email account',
       '4. Run and verify imports'
     ])
+    expect(result.steps[3].targetId).toBe('user-polling-section')
+    expect(result.steps[3].sectionKey).toBe('userPollingCollapsed')
+  })
+
+  it('keeps the My InboxBridge import-verification step pointed at user polling even for admin users', () => {
+    const result = buildSetupGuideState({
+      destinationMeta: { linked: true },
+      myEmailAccounts: [{
+        emailAccountId: 'source-main',
+        authMethod: 'PASSWORD',
+        tokenStorageMode: 'PASSWORD',
+        totalImportedMessages: 0,
+        lastEvent: { status: 'SUCCESS', error: null }
+      }],
+      session: { username: 'admin', role: 'ADMIN', mustChangePassword: false },
+      systemDashboard: {
+        overall: {
+          totalImportedMessages: 0
+        }
+      },
+      t
+    })
+
+    expect(result.steps.at(-1).title).toBe('4. Run and verify imports')
+    expect(result.steps.at(-1).targetId).toBe('user-polling-section')
+    expect(result.steps.at(-1).sectionKey).toBe('userPollingCollapsed')
   })
 
   it('shows the admin guide without the user mail-account step', () => {

@@ -1,4 +1,4 @@
-import { describe, expect, it, beforeEach, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { apiErrorText, AUTH_EXPIRED_EVENT } from './api'
 
 describe('apiErrorText', () => {
@@ -70,5 +70,48 @@ describe('apiErrorText', () => {
 
     expect(listener).toHaveBeenCalledTimes(1)
     window.removeEventListener(AUTH_EXPIRED_EVENT, listener)
+  })
+})
+
+describe('installSecureApiFetch', () => {
+  afterEach(() => {
+    document.cookie = 'inboxbridge_csrf=; expires=Thu, 01 Jan 1970 00:00:00 GMT; path=/'
+    vi.unstubAllGlobals()
+    vi.resetModules()
+  })
+
+  it('adds the csrf header to unsafe same-origin requests', async () => {
+    const baseFetch = vi.fn().mockResolvedValue({ ok: true })
+    vi.stubGlobal('fetch', baseFetch)
+    document.cookie = 'inboxbridge_csrf=csrf-123; path=/'
+
+    const { installSecureApiFetch } = await import('./api')
+    installSecureApiFetch()
+
+    await window.fetch('/api/poll/live/pause', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' }
+    })
+
+    expect(baseFetch).toHaveBeenCalledTimes(1)
+    const [, init] = baseFetch.mock.calls[0]
+    const headers = new Headers(init.headers)
+    expect(init.credentials).toBe('same-origin')
+    expect(headers.get('X-InboxBridge-CSRF')).toBe('csrf-123')
+  })
+
+  it('does not inject the csrf header into cross-origin requests', async () => {
+    const baseFetch = vi.fn().mockResolvedValue({ ok: true })
+    vi.stubGlobal('fetch', baseFetch)
+    document.cookie = 'inboxbridge_csrf=csrf-123; path=/'
+
+    const { installSecureApiFetch } = await import('./api')
+    installSecureApiFetch()
+
+    await window.fetch('https://other.example.com/api/poll/live/pause', { method: 'POST' })
+
+    const [, init] = baseFetch.mock.calls[0]
+    const headers = new Headers(init.headers)
+    expect(headers.has('X-InboxBridge-CSRF')).toBe(false)
   })
 })

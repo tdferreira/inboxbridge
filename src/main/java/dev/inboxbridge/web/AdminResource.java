@@ -1,8 +1,12 @@
 package dev.inboxbridge.web;
 
+import org.jboss.resteasy.reactive.RestStreamElementType;
+
 import dev.inboxbridge.dto.AdminDashboardResponse;
 import dev.inboxbridge.dto.AdminPollingSettingsView;
 import dev.inboxbridge.dto.AuthSecuritySettingsView;
+import dev.inboxbridge.dto.LiveEventView;
+import dev.inboxbridge.dto.PollLiveView;
 import dev.inboxbridge.dto.PollRunResult;
 import dev.inboxbridge.dto.PollingTimelineBundleView;
 import dev.inboxbridge.dto.SourcePollingSettingsView;
@@ -18,6 +22,7 @@ import dev.inboxbridge.service.AdminDashboardService;
 import dev.inboxbridge.service.AuthSecuritySettingsService;
 import dev.inboxbridge.service.PollingSettingsService;
 import dev.inboxbridge.service.PollingStatsService;
+import dev.inboxbridge.service.PollingLiveService;
 import dev.inboxbridge.service.PollingService;
 import dev.inboxbridge.service.RuntimeEmailAccountService;
 import dev.inboxbridge.service.SourcePollingSettingsService;
@@ -32,6 +37,7 @@ import jakarta.ws.rs.Path;
 import jakarta.ws.rs.Produces;
 import jakarta.ws.rs.QueryParam;
 import jakarta.ws.rs.core.MediaType;
+import io.smallrye.mutiny.Multi;
 import java.time.Instant;
 
 @Path("/api/admin")
@@ -47,6 +53,9 @@ public class AdminResource {
 
     @Inject
     PollingService pollingService;
+
+    @Inject
+    PollingLiveService pollingLiveService;
 
     @Inject
     PollingSettingsService pollingSettingsService;
@@ -110,6 +119,55 @@ public class AdminResource {
     @Path("/poll/run")
     public PollRunResult runPoll() {
         return pollingService.runPollForAllUsers(currentUserContext.user(), "admin-ui");
+    }
+
+    @GET
+    @Path("/poll/live")
+    public PollLiveView livePoll() {
+        return pollingLiveService.snapshotFor(currentUserContext.user());
+    }
+
+    @GET
+    @Path("/poll/events")
+    @Produces(MediaType.SERVER_SENT_EVENTS)
+    @RestStreamElementType(MediaType.APPLICATION_JSON)
+    public Multi<LiveEventView> pollEvents() {
+        return pollingLiveService.subscribe(currentUserContext.user());
+    }
+
+    @POST
+    @Path("/poll/live/pause")
+    public PollLiveView pauseLivePoll() {
+        pollingLiveService.requestPause(currentUserContext.user());
+        return pollingLiveService.snapshotFor(currentUserContext.user());
+    }
+
+    @POST
+    @Path("/poll/live/resume")
+    public PollLiveView resumeLivePoll() {
+        pollingLiveService.requestResume(currentUserContext.user());
+        return pollingLiveService.snapshotFor(currentUserContext.user());
+    }
+
+    @POST
+    @Path("/poll/live/stop")
+    public PollLiveView stopLivePoll() {
+        pollingLiveService.requestStop(currentUserContext.user());
+        return pollingLiveService.snapshotFor(currentUserContext.user());
+    }
+
+    @POST
+    @Path("/poll/live/sources/{emailAccountId}/move-next")
+    public PollLiveView moveSourceNext(@jakarta.ws.rs.PathParam("emailAccountId") String emailAccountId) {
+        pollingLiveService.moveSourceToFront(currentUserContext.user(), emailAccountId);
+        return pollingLiveService.snapshotFor(currentUserContext.user());
+    }
+
+    @POST
+    @Path("/poll/live/sources/{emailAccountId}/retry")
+    public PollLiveView retrySource(@jakarta.ws.rs.PathParam("emailAccountId") String emailAccountId) {
+        pollingLiveService.retrySource(currentUserContext.user(), emailAccountId);
+        return pollingLiveService.snapshotFor(currentUserContext.user());
     }
 
     @GET

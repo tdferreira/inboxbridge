@@ -1,5 +1,5 @@
 import { Suspense, lazy, useEffect, useLayoutEffect, useRef, useState } from 'react'
-import { authMethodLabel, formatDate, formatPollError, oauthProviderLabel, protocolLabel, statusLabel, statusTone, tokenStorageLabel, triggerLabel } from '../../lib/formatters'
+import { authMethodLabel, effectiveEmailAccountStatus, formatDate, formatPollError, oauthProviderLabel, protocolLabel, statusLabel, statusTone, tokenStorageLabel, triggerLabel } from '../../lib/formatters'
 import { resolveFloatingMenuPosition } from '../../lib/floatingMenu'
 import { buildSourceEmailAccountTargetId } from '../../lib/sectionTargets'
 import CopyButton from '../common/CopyButton'
@@ -30,6 +30,17 @@ function hasMeaningfulStats(stats) {
     || (stats.errorPolls || 0) > 0
     || (stats.sourcesWithErrors || 0) > 0
     || (stats.providerBreakdown?.length || 0) > 0
+}
+
+function describePostPollAction(fetcher, t) {
+  switch (fetcher.postPollAction) {
+    case 'DELETE':
+      return t('emailAccount.postPollAction.delete')
+    case 'MOVE':
+      return t('emailAccount.postPollAction.moveToFolder', { folder: fetcher.postPollTargetFolder || t('users.notSet') })
+    default:
+      return t('emailAccount.postPollAction.none')
+  }
 }
 
 function EmailAccountListItem({
@@ -63,6 +74,8 @@ function EmailAccountListItem({
   const canConnectOAuth = fetcher.canConnectOAuth ?? fetcher.canConnectMicrosoft ?? false
   const handleConnectOAuth = onConnectOAuth || ((emailAccountId) => onConnectMicrosoft?.(emailAccountId))
   const statsAvailable = hasMeaningfulStats(stats)
+  const effectiveStatus = effectiveEmailAccountStatus(fetcher)
+  const pollActionDisabled = pollLoading || fetcher.enabled === false || fetcher.canRunPoll === false
   const [statsCollapsed, setStatsCollapsed] = useState(!statsAvailable)
 
   useEffect(() => {
@@ -165,7 +178,7 @@ function EmailAccountListItem({
               {t('status.running')}
             </span>
           ) : (
-            <span className={`status-pill ${statusTone(fetcher.lastEvent?.status)}`}>{statusLabel(fetcher.lastEvent?.status, locale)}</span>
+            <span className={`status-pill ${statusTone(effectiveStatus)}`}>{statusLabel(effectiveStatus, locale)}</span>
           )}
         </button>
         <div ref={menuContainerRef} className="fetcher-list-item-menu">
@@ -173,7 +186,7 @@ function EmailAccountListItem({
             <button
               aria-label={t('emailAccount.runPollNow')}
               className="icon-button fetcher-run-button"
-              disabled={pollLoading}
+              disabled={pollActionDisabled}
               onClick={() => onRunPoll(fetcher)}
               title={t('emailAccount.runPollNow')}
               type="button"
@@ -196,7 +209,7 @@ function EmailAccountListItem({
           </div>
           {menuOpen ? (
             <div className="fetcher-menu" data-placement={menuPlacement} ref={menuPanelRef} style={menuStyle}>
-              <button className="secondary" disabled={pollLoading} onClick={() => { onRunPoll(fetcher); setMenuOpen(false) }} type="button">{t('emailAccount.runPollNow')}</button>
+              <button className="secondary" disabled={pollActionDisabled} onClick={() => { onRunPoll(fetcher); setMenuOpen(false) }} type="button">{t('emailAccount.runPollNow')}</button>
               <button className="secondary" onClick={() => { onConfigurePolling(fetcher); setMenuOpen(false) }} type="button">{t('emailAccount.pollerSettings')}</button>
               {fetcher.canEdit ? <button className="secondary" onClick={() => { onEdit(fetcher); setMenuOpen(false) }} type="button">{t('emailAccount.edit')}</button> : null}
               {canConnectOAuth ? (
@@ -235,6 +248,8 @@ function EmailAccountListItem({
             <div><dt>{t('emailAccount.lastImport')}</dt><dd>{formatDate(fetcher.lastImportedAt, locale)}</dd></div>
             <div><dt>{t('emailAccount.folder')}</dt><dd>{fetcher.folder || 'INBOX'}</dd></div>
             <div><dt>{t('emailAccount.customLabel')}</dt><dd>{fetcher.customLabel || t('users.notSet')}</dd></div>
+            <div><dt>{t('emailAccount.markReadAfterPoll')}</dt><dd>{fetcher.markReadAfterPoll ? t('common.yes') : t('common.no')}</dd></div>
+            <div><dt>{t('emailAccount.postPollAction')}</dt><dd>{describePostPollAction(fetcher, t)}</dd></div>
             {fetcher.authMethod === 'OAUTH2' ? (
               <div><dt>{t('emailAccount.oauthConnected')}</dt><dd>{oauthConnected ? t('common.yes') : t('common.no')}</dd></div>
             ) : null}

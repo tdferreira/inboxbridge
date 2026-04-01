@@ -285,7 +285,7 @@ public class GoogleOAuthService {
                 token.scope(),
                 token.tokenType(),
                 expiresAt,
-                "Stored securely in the database. Future Google access token refreshes will be handled automatically.");
+                "Stored securely in encrypted storage. Future Google access token refreshes will be handled automatically.");
     }
 
     private void requireSecureTokenStorage() {

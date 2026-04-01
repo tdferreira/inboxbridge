@@ -14,6 +14,7 @@ import dev.inboxbridge.dto.AdminPollingSettingsView;
 import dev.inboxbridge.dto.UpdateAdminPollingSettingsRequest;
 import dev.inboxbridge.persistence.SystemPollingSetting;
 import dev.inboxbridge.persistence.SystemPollingSettingRepository;
+import jakarta.transaction.Transactional;
 
 class PollingSettingsServiceTest {
 
@@ -129,6 +130,13 @@ class PollingSettingsServiceTest {
                         "PT30S")));
 
         assertEquals("Success jitter ratio must be between 0 and 1", error.getMessage());
+    }
+
+    @Test
+    void repositoryBackedReadMethodsRemainTransactional() throws NoSuchMethodException {
+        assertEquals(true, PollingSettingsService.class.getMethod("effectiveSettings").isAnnotationPresent(Transactional.class));
+        assertEquals(true, PollingSettingsService.class.getMethod("effectiveManualPollRateLimit").isAnnotationPresent(Transactional.class));
+        assertEquals(true, PollingSettingsService.class.getMethod("effectiveThrottleSettings").isAnnotationPresent(Transactional.class));
     }
 
     private PollingSettingsService service(InboxBridgeConfig config, SystemPollingSettingRepository repository) {

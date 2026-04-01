@@ -1,0 +1,46 @@
+.live-poll-panel {
+  display: grid;
+  gap: 0.75rem;
+  margin-bottom: 1rem;
+}
+
+.live-poll-panel-actions,
+.live-poll-source-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+}
+
+.live-poll-source-list {
+  display: grid;
+  gap: 0.75rem;
+}
+
+.live-poll-source {
+  border: 1px solid var(--panel-border, rgba(15, 23, 42, 0.1));
+  border-radius: 1rem;
+  padding: 0.85rem 1rem;
+}
+
+.live-poll-source-main {
+  align-items: center;
+  display: flex;
+  gap: 1rem;
+  justify-content: space-between;
+}
+
+.live-poll-source-copy {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.live-poll-source-main .status-pill {
+  flex-shrink: 0;
+}
+
+@media (max-width: 720px) {
+  .live-poll-source-main {
+    align-items: stretch;
+    flex-direction: column;
+  }
+}

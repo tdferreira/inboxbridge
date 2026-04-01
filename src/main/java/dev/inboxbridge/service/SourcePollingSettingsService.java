@@ -44,6 +44,7 @@ public class SourcePollingSettingsService {
         return Optional.of(toView(emailAccount, repository.findBySourceId(sourceId).orElse(null)));
     }
 
+    @Transactional
     public PollingSettingsService.EffectivePollingSettings effectiveSettingsFor(RuntimeEmailAccount emailAccount) {
         PollingSettingsService.EffectivePollingSettings base = baseSettingsFor(emailAccount);
         SourcePollingSetting setting = repository.findBySourceId(emailAccount.id()).orElse(null);

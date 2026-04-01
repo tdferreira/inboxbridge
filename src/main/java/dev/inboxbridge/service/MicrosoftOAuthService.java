@@ -172,6 +172,7 @@ public class MicrosoftOAuthService {
         throw new IllegalArgumentException("Invalid or expired OAuth state");
     }
 
+    @Transactional
     public boolean destinationLinked(Long userId) {
         return oAuthCredentialService.findMicrosoftCredential(destinationSubjectKey(userId))
                 .map(credential -> credential.refreshToken() != null && !credential.refreshToken().isBlank())
@@ -363,7 +364,7 @@ public class MicrosoftOAuthService {
                 token.scope(),
                 token.tokenType(),
                 expiresAt,
-                "Stored securely in the database. Future Microsoft token refreshes will be handled automatically.");
+                "Stored securely in encrypted storage. Future Microsoft token refreshes will be handled automatically.");
     }
 
     private MicrosoftTokenResponse refreshAccessToken(SourceRef sourceRef, String configuredRefreshToken) {
@@ -454,7 +455,7 @@ public class MicrosoftOAuthService {
                 token.scope(),
                 token.tokenType(),
                 expiresAt,
-                "Stored securely in the database for the Outlook destination mailbox.");
+                "Stored securely in encrypted storage for the Outlook destination mailbox.");
     }
 
     private void requireSecureTokenStorage(String flowLabel) {

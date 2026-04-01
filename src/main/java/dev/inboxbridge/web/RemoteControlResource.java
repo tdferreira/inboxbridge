@@ -1,11 +1,17 @@
 package dev.inboxbridge.web;
 
+import org.jboss.resteasy.reactive.RestStreamElementType;
+
+import dev.inboxbridge.dto.LiveEventView;
+import dev.inboxbridge.dto.PollLiveView;
 import dev.inboxbridge.dto.PollRunResult;
 import dev.inboxbridge.dto.RemoteControlView;
 import dev.inboxbridge.security.CurrentUserContext;
 import dev.inboxbridge.security.RequireRemoteControl;
 import dev.inboxbridge.service.AuthClientAddressService;
+import dev.inboxbridge.service.PollingLiveService;
 import dev.inboxbridge.service.RemoteControlService;
+import io.smallrye.mutiny.Multi;
 import io.vertx.core.http.HttpServerRequest;
 import jakarta.inject.Inject;
 import jakarta.ws.rs.BadRequestException;
@@ -31,6 +37,9 @@ public class RemoteControlResource {
 
     @Inject
     AuthClientAddressService authClientAddressService;
+
+    @Inject
+    PollingLiveService pollingLiveService;
 
     @Context
     HttpHeaders httpHeaders;
@@ -64,6 +73,55 @@ public class RemoteControlResource {
         } catch (IllegalArgumentException e) {
             throw new BadRequestException(e.getMessage(), e);
         }
+    }
+
+    @GET
+    @Path("/poll/live")
+    public PollLiveView livePoll() {
+        return pollingLiveService.snapshotFor(currentUserContext.user());
+    }
+
+    @GET
+    @Path("/poll/events")
+    @Produces(MediaType.SERVER_SENT_EVENTS)
+    @RestStreamElementType(MediaType.APPLICATION_JSON)
+    public Multi<LiveEventView> pollEvents() {
+        return pollingLiveService.subscribe(currentUserContext.user());
+    }
+
+    @POST
+    @Path("/poll/live/pause")
+    public PollLiveView pauseLivePoll() {
+        pollingLiveService.requestPause(currentUserContext.user());
+        return pollingLiveService.snapshotFor(currentUserContext.user());
+    }
+
+    @POST
+    @Path("/poll/live/resume")
+    public PollLiveView resumeLivePoll() {
+        pollingLiveService.requestResume(currentUserContext.user());
+        return pollingLiveService.snapshotFor(currentUserContext.user());
+    }
+
+    @POST
+    @Path("/poll/live/stop")
+    public PollLiveView stopLivePoll() {
+        pollingLiveService.requestStop(currentUserContext.user());
+        return pollingLiveService.snapshotFor(currentUserContext.user());
+    }
+
+    @POST
+    @Path("/poll/live/sources/{sourceId}/move-next")
+    public PollLiveView moveSourceNext(@PathParam("sourceId") String sourceId) {
+        pollingLiveService.moveSourceToFront(currentUserContext.user(), sourceId);
+        return pollingLiveService.snapshotFor(currentUserContext.user());
+    }
+
+    @POST
+    @Path("/poll/live/sources/{sourceId}/retry")
+    public PollLiveView retrySource(@PathParam("sourceId") String sourceId) {
+        pollingLiveService.retrySource(currentUserContext.user(), sourceId);
+        return pollingLiveService.snapshotFor(currentUserContext.user());
     }
 
     private String actorKey(String prefix) {

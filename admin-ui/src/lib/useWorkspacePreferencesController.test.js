@@ -70,6 +70,23 @@ describe('useWorkspacePreferencesController', () => {
     ])
   })
 
+  it('updates only the selected workspace quick setup visibility state', () => {
+    const { result } = renderController()
+
+    act(() => {
+      result.current.applyLoadedUiPreferences({
+        persistLayout: true,
+        quickSetupPinnedVisible: true,
+        adminQuickSetupPinnedVisible: false
+      }, 42)
+      result.current.handleQuickSetupVisibilityChange('admin', true, true)
+    })
+
+    expect(result.current.uiPreferences.quickSetupPinnedVisible).toBe(true)
+    expect(result.current.uiPreferences.adminQuickSetupPinnedVisible).toBe(true)
+    expect(result.current.uiPreferences.adminQuickSetupDismissed).toBe(false)
+  })
+
   it('expands a collapsed section and persists the updated preferences', async () => {
     fetch.mockResolvedValue(createFetchResponse({ persistLayout: true }))
 
@@ -273,6 +290,35 @@ describe('useWorkspacePreferencesController', () => {
     expect(result.current.uiPreferences.userSectionOrder.slice(0, 3)).toEqual([
       'quickSetup',
       'userPolling',
+      'destination'
+    ])
+    expect(result.current.uiPreferences.layoutEditEnabled).toBe(true)
+  })
+
+  it('moves a visible section into the last visible position', async () => {
+    fetch.mockImplementation(async (_url, options = {}) => createFetchResponse({
+      ...(options.body ? JSON.parse(options.body) : {}),
+      persistLayout: true
+    }))
+
+    const { result } = renderController()
+
+    act(() => {
+      result.current.applyLoadedUiPreferences({
+        persistLayout: true,
+        userSectionOrder: ['quickSetup', 'destination', 'sourceEmailAccounts', 'userPolling', 'remoteControl', 'userStats']
+      }, 42)
+      result.current.startLayoutEditingFromPreferences()
+    })
+
+    await act(async () => {
+      await result.current.reorderSections('user', 'destination', 4, ['destination', 'sourceEmailAccounts', 'userPolling', 'remoteControl'])
+    })
+
+    expect(result.current.uiPreferences.userSectionOrder.slice(0, 4)).toEqual([
+      'sourceEmailAccounts',
+      'userPolling',
+      'remoteControl',
       'destination'
     ])
     expect(result.current.uiPreferences.layoutEditEnabled).toBe(true)

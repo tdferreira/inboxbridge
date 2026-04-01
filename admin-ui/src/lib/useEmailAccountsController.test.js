@@ -13,6 +13,9 @@ function createEmailAccount(overrides = {}) {
     port: '993',
     connectionSecurity: 'SSL_TLS',
     folders: ['INBOX'],
+    markReadAfterPoll: false,
+    postPollAction: 'NONE',
+    postPollTargetFolder: '',
     ...overrides
   }
 }
@@ -32,8 +35,9 @@ describe('useEmailAccountsController', () => {
 
     const hook = renderHook((props) => useEmailAccountsController(props), {
       initialProps: {
+        activeBatchPollSourceIds: [],
         authOptions: { sourceOAuthProviders: ['GOOGLE', 'MICROSOFT'] },
-        errorText,
+      errorText,
         isPending: () => false,
         language: 'en',
         loadAppData,
@@ -215,5 +219,90 @@ describe('useEmailAccountsController', () => {
     expect(global.fetch).toHaveBeenCalledWith('/api/app/email-accounts/folders', expect.objectContaining({ method: 'POST' }))
 
     global.fetch = originalFetch
+  })
+
+  it('includes post-poll source actions in the save payload', async () => {
+    const originalFetch = global.fetch
+    global.fetch = vi.fn().mockResolvedValue({
+      ok: true,
+      json: async () => ({ emailAccountId: 'fetcher-a' })
+    })
+
+    const { result, loadAppData } = renderController()
+
+    act(() => {
+      result.current.handleEmailAccountFormChange({
+        ...DEFAULT_EMAIL_ACCOUNT_FORM,
+        emailAccountId: 'fetcher-a',
+        host: 'imap.example.com',
+        username: 'user@example.com',
+        password: 'secret',
+        markReadAfterPoll: true,
+        postPollAction: 'MOVE',
+        postPollTargetFolder: 'Archive'
+      })
+    })
+
+    await act(async () => {
+      await result.current.saveEmailAccount({ preventDefault: vi.fn() })
+    })
+
+    const [, request] = global.fetch.mock.calls[0]
+    expect(request.method).toBe('PUT')
+    expect(JSON.parse(request.body)).toEqual(expect.objectContaining({
+      markReadAfterPoll: true,
+      postPollAction: 'MOVE',
+      postPollTargetFolder: 'Archive'
+    }))
+    expect(loadAppData).toHaveBeenCalled()
+
+    global.fetch = originalFetch
+  })
+
+  it('marks only the active batch-polled fetcher as loading', () => {
+    const { result } = renderController({ activeBatchPollSourceIds: ['beta'] })
+
+    act(() => {
+      result.current.applyLoadedEmailAccounts([
+        createEmailAccount({ emailAccountId: 'alpha' }),
+        createEmailAccount({ emailAccountId: 'beta' })
+      ])
+    })
+
+    expect(result.current.fetcherPollLoadingIds).toEqual(['beta'])
+  })
+
+  it('marks every running batch-polled fetcher as loading when multiple sources run in parallel', () => {
+    const { result } = renderController({ activeBatchPollSourceIds: ['alpha', 'beta'] })
+
+    act(() => {
+      result.current.applyLoadedEmailAccounts([
+        createEmailAccount({ emailAccountId: 'alpha' }),
+        createEmailAccount({ emailAccountId: 'beta' }),
+        createEmailAccount({ emailAccountId: 'gamma' })
+      ])
+    })
+
+    expect(result.current.fetcherPollLoadingIds.slice().sort()).toEqual(['alpha', 'beta'])
+  })
+
+  it('ignores disabled fetchers when the active batch source matches them', () => {
+    const { result } = renderController({
+      activeBatchPollSourceIds: ['env-fetcher'],
+      sessionUsername: 'admin',
+      systemDashboardEmailAccounts: [
+        createEmailAccount({ emailAccountId: 'env-fetcher', managementSource: 'ENVIRONMENT', enabled: false })
+      ]
+    })
+
+    act(() => {
+      result.current.applyLoadedEmailAccounts([
+        createEmailAccount({ emailAccountId: 'db-fetcher' })
+      ], [
+        { id: 'env-fetcher', emailAccountId: 'env-fetcher', enabled: false, effectivePollEnabled: true, effectivePollInterval: '5m', effectiveFetchWindow: 50, protocol: 'IMAP', authMethod: 'PASSWORD', oauthProvider: 'NONE', host: 'imap.example.com', port: 993, tls: true, folder: 'INBOX', unreadOnly: false, customLabel: '', markReadAfterPoll: false, postPollAction: 'NONE', postPollTargetFolder: '', tokenStorageMode: 'PASSWORD', totalImportedMessages: 0, lastImportedAt: null, lastEvent: null, pollingState: null }
+      ])
+    })
+
+    expect(result.current.fetcherPollLoadingIds).toEqual([])
   })
 })

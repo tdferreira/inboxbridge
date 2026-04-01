@@ -4,12 +4,14 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 
 import org.junit.jupiter.api.Test;
 
+import dev.inboxbridge.dto.PollLiveView;
 import dev.inboxbridge.dto.PollRunResult;
 import dev.inboxbridge.dto.RemoteControlView;
 import dev.inboxbridge.dto.RemoteSessionUserResponse;
 import dev.inboxbridge.persistence.AppUser;
 import dev.inboxbridge.security.CurrentUserContext;
 import dev.inboxbridge.service.AuthClientAddressService;
+import dev.inboxbridge.service.PollingLiveService;
 import dev.inboxbridge.service.RemoteControlService;
 
 class RemoteControlResourceTest {
@@ -56,13 +58,42 @@ class RemoteControlResourceTest {
         assertEquals(0, result.getErrors().size());
     }
 
+    @Test
+    void livePollEndpointsDelegateToPollingLiveService() {
+        RemoteControlResource resource = new RemoteControlResource();
+        CurrentUserContext context = new CurrentUserContext();
+        AppUser user = new AppUser();
+        user.id = 12L;
+        user.username = "carol";
+        user.role = AppUser.Role.USER;
+        context.setUser(user);
+        TrackingPollingLiveService liveService = new TrackingPollingLiveService();
+        resource.currentUserContext = context;
+        resource.pollingLiveService = liveService;
+
+        assertEquals("RUNNING", resource.livePoll().state());
+        assertEquals("RUNNING", resource.pauseLivePoll().state());
+        assertEquals("RUNNING", resource.resumeLivePoll().state());
+        assertEquals("RUNNING", resource.stopLivePoll().state());
+        assertEquals("RUNNING", resource.moveSourceNext("source-1").state());
+        assertEquals("RUNNING", resource.retrySource("source-1").state());
+        assertEquals(
+                java.util.List.of(
+                        "pause:carol",
+                        "resume:carol",
+                        "stop:carol",
+                        "move:carol:source-1",
+                        "retry:carol:source-1"),
+                liveService.actions);
+    }
+
     private static final class FakeRemoteControlService extends RemoteControlService {
         private String lastSourceId;
 
         @Override
         public RemoteControlView viewFor(AppUser actor) {
             return new RemoteControlView(
-                    new RemoteSessionUserResponse(actor.id, actor.username, actor.role.name(), true, false, false),
+                    new RemoteSessionUserResponse(actor.id, actor.username, actor.role.name(), true, false, true, false, "pt-PT"),
                     java.util.List.of(new dev.inboxbridge.dto.RemoteSourceView(
                             "source-1", "USER", actor.id, actor.username, true, true, "5m", 50,
                             "IMAP", "imap.example.com", 993, "carol@example.com", "INBOX", "", 0, null, null, null)),
@@ -79,6 +110,56 @@ class RemoteControlResourceTest {
             PollRunResult result = new PollRunResult();
             result.finish();
             return result;
+        }
+    }
+
+    private static final class TrackingPollingLiveService extends PollingLiveService {
+        private final java.util.List<String> actions = new java.util.ArrayList<>();
+        private final PollLiveView view = new PollLiveView(
+                true,
+                "run-1",
+                "RUNNING",
+                "remote-ui",
+                "carol",
+                true,
+                "source-1",
+                java.time.Instant.parse("2026-04-01T10:00:00Z"),
+                java.time.Instant.parse("2026-04-01T10:00:05Z"),
+                java.util.List.of());
+
+        @Override
+        public PollLiveView snapshotFor(AppUser viewer) {
+            return view;
+        }
+
+        @Override
+        public boolean requestPause(AppUser actor) {
+            actions.add("pause:" + actor.username);
+            return true;
+        }
+
+        @Override
+        public boolean requestResume(AppUser actor) {
+            actions.add("resume:" + actor.username);
+            return true;
+        }
+
+        @Override
+        public boolean requestStop(AppUser actor) {
+            actions.add("stop:" + actor.username);
+            return true;
+        }
+
+        @Override
+        public boolean moveSourceToFront(AppUser actor, String sourceId) {
+            actions.add("move:" + actor.username + ":" + sourceId);
+            return true;
+        }
+
+        @Override
+        public boolean retrySource(AppUser actor, String sourceId) {
+            actions.add("retry:" + actor.username + ":" + sourceId);
+            return true;
         }
     }
 }

@@ -220,6 +220,7 @@ public class UserGmailConfigService {
                         GoogleOAuthService.GMAIL_TARGET_SCOPE));
     }
 
+    @Transactional
     public boolean destinationLinked(Long userId) {
         return linkedGoogleProfileForUser(userId).isPresent();
     }

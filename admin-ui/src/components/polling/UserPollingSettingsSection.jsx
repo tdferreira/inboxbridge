@@ -1,5 +1,6 @@
 import LoadingButton from '../common/LoadingButton'
 import CollapsibleSection from '../common/CollapsibleSection'
+import LivePollPanel from './LivePollPanel'
 import './UserPollingSettingsSection.css'
 
 /**
@@ -12,16 +13,42 @@ function UserPollingSettingsSection({
   hasFetchers,
   onCollapseToggle,
   onOpenEditor,
+  onPausePoll,
+  onMovePollSourceNext,
+  onResumePoll,
+  onRetryPollSource,
   onRunPoll,
+  onStopPoll,
   pollingSettings,
   runningPoll = false,
+  livePoll = null,
   sectionLoading = false,
   t
 }) {
+  const livePollRunning = Boolean(livePoll?.running)
+  const canControlLivePoll = Boolean(livePollRunning && livePoll?.viewerCanControl)
+  const isPaused = livePoll?.state === 'PAUSED' || livePoll?.state === 'PAUSING'
+
   return (
     <CollapsibleSection
       actions={
         <>
+          {canControlLivePoll ? (
+            <>
+              {isPaused ? (
+                <LoadingButton className="secondary" onClick={onResumePoll} type="button">
+                  Resume
+                </LoadingButton>
+              ) : (
+                <LoadingButton className="secondary" onClick={onPausePoll} type="button">
+                  Pause
+                </LoadingButton>
+              )}
+              <LoadingButton className="danger" onClick={onStopPoll} type="button">
+                Stop
+              </LoadingButton>
+            </>
+          ) : null}
           <LoadingButton className="secondary" onClick={onOpenEditor} type="button">
             {t('userPolling.edit')}
           </LoadingButton>
@@ -49,6 +76,14 @@ function UserPollingSettingsSection({
     >
       {pollingSettings ? (
         <>
+          <LivePollPanel
+            livePoll={livePoll}
+            onMoveNext={onMovePollSourceNext}
+            onPause={onPausePoll}
+            onResume={onResumePoll}
+            onRetry={onRetryPollSource}
+            onStop={onStopPoll}
+          />
           {!hasFetchers ? (
             <div className="muted-box user-polling-empty-state">{t('userPolling.noFetchers')}</div>
           ) : null}

@@ -15,6 +15,7 @@ import jakarta.persistence.Table;
 import jakarta.persistence.UniqueConstraint;
 
 import dev.inboxbridge.config.InboxBridgeConfig;
+import dev.inboxbridge.domain.SourcePostPollAction;
 
 @Entity
 @Table(name = "user_email_account",
@@ -87,6 +88,16 @@ public class UserEmailAccount extends PanacheEntityBase {
 
     @Column(name = "custom_label", length = 255)
     public String customLabel;
+
+    @Column(name = "mark_read_after_poll", nullable = false)
+    public boolean markReadAfterPoll;
+
+    @Enumerated(EnumType.STRING)
+    @Column(name = "post_poll_action", nullable = false, length = 20)
+    public SourcePostPollAction postPollAction;
+
+    @Column(name = "post_poll_target_folder", length = 255)
+    public String postPollTargetFolder;
 
     @Column(name = "created_at", nullable = false)
     public Instant createdAt;

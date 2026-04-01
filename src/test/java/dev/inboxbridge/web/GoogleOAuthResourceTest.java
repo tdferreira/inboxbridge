@@ -36,12 +36,12 @@ class GoogleOAuthResourceTest {
         assertTrue(html.contains("Google OAuth Code Received"));
         assertTrue(html.contains("Copy Code"));
         assertTrue(html.contains("Exchange Code In Browser"));
-        assertTrue(html.contains("Return To Admin UI"));
+        assertTrue(html.contains("Return to InboxBridge"));
         assertTrue(html.contains("Leave this page without exchanging the code?"));
         assertTrue(html.contains("Attempting automatic exchange"));
-        assertTrue(html.contains("Cancel automatic return"));
+        assertTrue(html.contains("Cancel automatic redirect"));
         assertTrue(html.contains("window.setTimeout(() => {"));
-        assertTrue(html.contains("Returning to the admin UI in"));
+        assertTrue(html.contains("Redirecting to InboxBridge in"));
         assertTrue(html.contains("new URLSearchParams(window.location.search)"));
         assertTrue(html.contains("callbackParams.get('code')"));
         assertTrue(html.contains("Google OAuth is still missing one or more required permissions"));
@@ -60,7 +60,7 @@ class GoogleOAuthResourceTest {
 
         assertTrue(html.contains("Google OAuth Permission Required"));
         assertTrue(html.contains("did not receive the required consent"));
-        assertTrue(html.contains("Return To Admin UI"));
+        assertTrue(html.contains("Return to InboxBridge"));
     }
 
     @Test
@@ -82,7 +82,7 @@ class GoogleOAuthResourceTest {
         assertTrue(html.contains("Codigo do Google OAuth recebido"));
         assertTrue(html.contains("Copiar codigo"));
         assertTrue(html.contains("Trocar codigo no browser"));
-        assertTrue(html.contains("Voltar a interface de administracao"));
+        assertTrue(html.contains("Voltar ao InboxBridge"));
     }
 
     private static class FakeGoogleOAuthService extends GoogleOAuthService {
@@ -129,7 +129,7 @@ class GoogleOAuthResourceTest {
                     "gmail.insert gmail.labels",
                     "Bearer",
                     Instant.parse("2026-03-26T11:00:00Z"),
-                    "Stored securely in the database.");
+                    "Stored securely in encrypted storage.");
         }
 
         @Override

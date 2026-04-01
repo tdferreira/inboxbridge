@@ -6,5 +6,7 @@ public record RemoteSessionUserResponse(
         String role,
         boolean canRunUserPoll,
         boolean canRunAllUsersPoll,
-        boolean deviceLocationCaptured) {
+        boolean multiUserEnabled,
+        boolean deviceLocationCaptured,
+        String language) {
 }

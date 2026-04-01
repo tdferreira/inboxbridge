@@ -20,6 +20,7 @@ public class ImportDeduplicationService {
     @Inject
     MimeHashService mimeHashService;
 
+    @Transactional
     public boolean alreadyImported(FetchedMessage message, MailDestinationTarget target) {
         if (importedMessageRepository.existsBySourceMessageKey(target.subjectKey(), message.sourceAccountId(), message.sourceMessageKey())) {
             return true;

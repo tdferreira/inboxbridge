@@ -6,6 +6,12 @@ import LoadingButton from '../common/LoadingButton'
 
 const PollingStatisticsSection = lazy(() => import('../stats/PollingStatisticsSection'))
 
+function roleUpdateNotification(user) {
+  return user.role === 'ADMIN'
+    ? translatedNotification('notifications.userAdminRevoked', { username: user.username })
+    : translatedNotification('notifications.userAdminGranted', { username: user.username })
+}
+
 function hasMeaningfulStats(stats) {
   if (!stats) return false
   return (stats.totalImportedMessages || 0) > 0
@@ -191,7 +197,7 @@ function UserListItem({
                 {user.active ? t('users.suspend') : t('users.reactivate')}
               </button>
               {user.role === 'ADMIN' ? (
-                <button className="secondary" disabled={viewingSelfAdmin} onClick={() => { onUpdateUser(user.id, { role: 'USER' }, translatedNotification('notifications.userRoleUpdated', { username: user.username })); setMenuOpen(false) }} type="button">
+                <button className="secondary" disabled={viewingSelfAdmin} onClick={() => { onUpdateUser(user.id, { role: 'USER' }, roleUpdateNotification(user)); setMenuOpen(false) }} type="button">
                   {t('users.makeRegular')}
                 </button>
               ) : null}
@@ -227,7 +233,7 @@ function UserListItem({
                 {t('users.approve')}
               </LoadingButton>
             ) : null}
-            <LoadingButton className="secondary" disabled={viewingSelfAdmin} hint={user.role === 'ADMIN' ? t('users.makeRegularHint') : t('users.grantAdminHint')} isLoading={updatingUser} loadingLabel={t('users.saving')} type="button" onClick={() => onUpdateUser(user.id, { role: user.role === 'ADMIN' ? 'USER' : 'ADMIN' }, translatedNotification('notifications.userRoleUpdated', { username: user.username }))}>
+            <LoadingButton className="secondary" disabled={viewingSelfAdmin} hint={user.role === 'ADMIN' ? t('users.makeRegularHint') : t('users.grantAdminHint')} isLoading={updatingUser} loadingLabel={t('users.saving')} type="button" onClick={() => onUpdateUser(user.id, { role: user.role === 'ADMIN' ? 'USER' : 'ADMIN' }, roleUpdateNotification(user))}>
               {user.role === 'ADMIN' ? t('users.makeRegular') : t('users.grantAdmin')}
             </LoadingButton>
             <LoadingButton className="secondary" hint={user.active ? t('users.suspendHint') : t('users.reactivateHint')} isLoading={updatingUser} loadingLabel={t('users.saving')} type="button" onClick={() => onToggleUserActive(user)}>

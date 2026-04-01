@@ -71,12 +71,13 @@ function WorkspaceSectionList({
           setDragState({
             workspaceKey,
             draggedId: section.id,
-            targetIndex: index
+            targetIndex: index,
+            visibleSectionIds: visibleSections.map(({ section: visibleSection }) => visibleSection.id)
           })
         }}
         onPointerMove={undefined}
-        onMoveDown={() => moveSection(workspaceKey, section.id, 'down')}
-        onMoveUp={() => moveSection(workspaceKey, section.id, 'up')}
+        onMoveDown={() => moveSection(workspaceKey, section.id, 'down', visibleSections.map(({ section: visibleSection }) => visibleSection.id))}
+        onMoveUp={() => moveSection(workspaceKey, section.id, 'up', visibleSections.map(({ section: visibleSection }) => visibleSection.id))}
         sectionId={section.id}
       >
         {content}

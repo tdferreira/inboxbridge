@@ -56,11 +56,16 @@ function EmailAccountDialog({
   const editingExistingAccount = Boolean(emailAccountForm.originalEmailAccountId)
   const supportsFolder = emailAccountForm.protocol === 'IMAP'
   const supportsCustomLabel = !requiresMicrosoftOAuth
+  const supportsPostPollActions = emailAccountForm.protocol === 'IMAP'
   const detectedFolders = supportsFolder ? emailAccountFolders : []
   const currentFolder = emailAccountForm.folder || ''
   const currentFolderDetected = detectedFolders.includes(currentFolder)
   const defaultDetectedFolder = detectedFolders.find((folder) => folder.toUpperCase() === 'INBOX') || detectedFolders[0] || ''
+  const currentPostPollAction = emailAccountForm.postPollAction || 'NONE'
+  const currentPostPollTargetFolder = emailAccountForm.postPollTargetFolder || ''
+  const currentPostPollTargetDetected = detectedFolders.includes(currentPostPollTargetFolder)
   const [manualFolderEntry, setManualFolderEntry] = useState(detectedFolders.length === 0)
+  const [manualPostPollTargetEntry, setManualPostPollTargetEntry] = useState(detectedFolders.length === 0)
   const canSaveWithoutOAuth = !requiresMicrosoftOAuth || editingExistingAccount
   const hasRequiredConnectionFields = Boolean(
     emailAccountForm.emailAccountId?.trim()
@@ -68,6 +73,7 @@ function EmailAccountDialog({
     && emailAccountForm.username?.trim()
     && emailAccountForm.port
     && (!supportsFolder || emailAccountForm.folder?.trim())
+    && (currentPostPollAction !== 'MOVE' || emailAccountForm.postPollTargetFolder?.trim())
     && (!usingPassword || emailAccountForm.password?.trim() || editingExistingAccount)
   )
   const providerLabel = effectiveOauthProvider === 'GOOGLE' ? t('oauthProvider.google') : t('oauthProvider.microsoft')
@@ -81,14 +87,19 @@ function EmailAccountDialog({
   useEffect(() => {
     if (!detectedFolders.length) {
       setManualFolderEntry(true)
-      return
-    }
-    if (currentFolder && !currentFolderDetected) {
+    } else if (currentFolder && !currentFolderDetected) {
       setManualFolderEntry(true)
-      return
+    } else {
+      setManualFolderEntry(false)
     }
-    setManualFolderEntry(false)
-  }, [currentFolder, currentFolderDetected, detectedFolders])
+    if (!detectedFolders.length) {
+      setManualPostPollTargetEntry(true)
+    } else if (currentPostPollTargetFolder && !currentPostPollTargetDetected) {
+      setManualPostPollTargetEntry(true)
+    } else {
+      setManualPostPollTargetEntry(false)
+    }
+  }, [currentFolder, currentFolderDetected, currentPostPollTargetDetected, currentPostPollTargetFolder, detectedFolders])
   useEffect(() => {
     if (!detectedFolders.length || currentFolder || !defaultDetectedFolder) {
       return
@@ -117,6 +128,17 @@ function EmailAccountDialog({
       folder: currentFolderDetected ? current.folder : defaultDetectedFolder
     }))
     setManualFolderEntry(false)
+  }
+
+  function useDetectedPostPollTargetOptions() {
+    if (!defaultDetectedFolder) {
+      return
+    }
+    onEmailAccountFormChange((current) => ({
+      ...current,
+      postPollTargetFolder: currentPostPollTargetDetected ? current.postPollTargetFolder : defaultDetectedFolder
+    }))
+    setManualPostPollTargetEntry(false)
   }
 
   return (
@@ -243,6 +265,50 @@ function EmailAccountDialog({
           <LabeledField helpText={t('emailAccounts.customLabelHelp')} label={t('emailAccounts.customLabel')}>
             <input value={emailAccountForm.customLabel} onChange={(event) => onEmailAccountFormChange((current) => ({ ...current, customLabel: event.target.value }))} />
           </LabeledField>
+        ) : null}
+        {supportsPostPollActions ? (
+          <>
+            <label className="checkbox-row">
+              <input type="checkbox" checked={Boolean(emailAccountForm.markReadAfterPoll)} onChange={(event) => onEmailAccountFormChange((current) => ({ ...current, markReadAfterPoll: event.target.checked }))} />
+              <span className="field-label-row">
+                <span>{t('emailAccounts.markReadAfterPoll')}</span>
+                <InfoHint text={t('emailAccounts.markReadAfterPollHelp')} />
+              </span>
+            </label>
+            <LabeledField helpText={t('emailAccounts.postPollActionHelp')} label={t('emailAccounts.postPollAction')}>
+              <select value={currentPostPollAction} onChange={(event) => onEmailAccountFormChange((current) => ({ ...current, postPollAction: event.target.value, postPollTargetFolder: event.target.value === 'MOVE' ? current.postPollTargetFolder : '' }))}>
+                <option value="NONE">{t('emailAccounts.postPollAction.none')}</option>
+                <option value="DELETE">{t('emailAccounts.postPollAction.delete')}</option>
+                <option value="MOVE">{t('emailAccounts.postPollAction.move')}</option>
+              </select>
+            </LabeledField>
+            {currentPostPollAction === 'MOVE' ? (
+              <div className="fetcher-folder-control full">
+                <label>
+                  <span className="field-label-row">
+                    <span>{t('emailAccounts.postPollTargetFolder')}</span>
+                    <InfoHint text={t('emailAccounts.postPollTargetFolderHelp')} />
+                  </span>
+                  {detectedFolders.length > 0 && !manualPostPollTargetEntry ? (
+                    <select value={currentPostPollTargetDetected ? currentPostPollTargetFolder : defaultDetectedFolder} onChange={(event) => onEmailAccountFormChange((current) => ({ ...current, postPollTargetFolder: event.target.value }))}>
+                      {detectedFolders.map((folder) => (
+                        <option key={folder} value={folder}>{folder}</option>
+                      ))}
+                    </select>
+                  ) : (
+                    <input value={emailAccountForm.postPollTargetFolder} onChange={(event) => onEmailAccountFormChange((current) => ({ ...current, postPollTargetFolder: event.target.value }))} />
+                  )}
+                </label>
+                <div className="fetcher-folder-actions">
+                  {detectedFolders.length > 0 ? (
+                    <button className="fetcher-folder-toggle" onClick={manualPostPollTargetEntry ? useDetectedPostPollTargetOptions : () => setManualPostPollTargetEntry(true)} type="button">
+                      {t(manualPostPollTargetEntry ? 'destination.folderUseDetected' : 'destination.folderUseManual')}
+                    </button>
+                  ) : null}
+                </div>
+              </div>
+            ) : null}
+          </>
         ) : null}
         <label className="checkbox-row">
           <input type="checkbox" checked={emailAccountForm.enabled} onChange={(event) => onEmailAccountFormChange((current) => ({ ...current, enabled: event.target.checked }))} />

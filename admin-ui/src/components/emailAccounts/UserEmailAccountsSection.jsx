@@ -16,7 +16,7 @@ function UserEmailAccountsSection({
   emailAccountFoldersLoading,
   fetchers,
   fetcherDialogOpen,
-  fetcherPollLoadingId,
+  fetcherPollLoadingIds = [],
   fetcherPollingDialog,
   fetcherPollingLoading,
   fetcherPollingForm,
@@ -89,7 +89,7 @@ function UserEmailAccountsSection({
                 onLoadCustomRange={onLoadFetcherCustomRange}
                 onRunPoll={onRunFetcherPoll}
                 onToggleExpand={onFetcherToggleExpand}
-                pollLoading={fetcherPollLoadingId === fetcher.emailAccountId}
+                pollLoading={fetcherPollLoadingIds.includes(fetcher.emailAccountId)}
                 refreshLoading={fetcherRefreshLoadingId === fetcher.emailAccountId}
                 stats={fetcherStatsById?.[fetcher.emailAccountId] || null}
                 statsLoading={fetcherStatsLoadingId === fetcher.emailAccountId}

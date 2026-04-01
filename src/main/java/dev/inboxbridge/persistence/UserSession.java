@@ -36,6 +36,9 @@ public class UserSession extends PanacheEntityBase {
     @Column(name = "token_hash", nullable = false, length = 128)
     public String tokenHash;
 
+    @Column(name = "csrf_token_hash", nullable = false, length = 128)
+    public String csrfTokenHash;
+
     @Column(name = "created_at", nullable = false)
     public Instant createdAt;
 

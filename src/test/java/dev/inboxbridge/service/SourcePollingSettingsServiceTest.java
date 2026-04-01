@@ -15,6 +15,7 @@ import dev.inboxbridge.dto.UpdateSourcePollingSettingsRequest;
 import dev.inboxbridge.persistence.AppUser;
 import dev.inboxbridge.persistence.SourcePollingSetting;
 import dev.inboxbridge.persistence.SourcePollingSettingRepository;
+import jakarta.transaction.Transactional;
 
 class SourcePollingSettingsServiceTest {
 
@@ -73,6 +74,15 @@ class SourcePollingSettingsServiceTest {
                 () -> service.updateForSource(actor(), "fetcher-1", new UpdateSourcePollingSettingsRequest(Boolean.TRUE, "2m", Integer.valueOf(0))));
 
         assertEquals("Fetch window override must be between 1 and 500 messages", error.getMessage());
+    }
+
+    @Test
+    void effectiveSettingsReadMethodRemainsTransactional() throws NoSuchMethodException {
+        assertEquals(
+                true,
+                SourcePollingSettingsService.class
+                        .getMethod("effectiveSettingsFor", RuntimeEmailAccount.class)
+                        .isAnnotationPresent(Transactional.class));
     }
 
     private SourcePollingSettingsService service() {

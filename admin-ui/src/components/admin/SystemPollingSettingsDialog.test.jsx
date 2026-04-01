@@ -161,6 +161,11 @@ describe('SystemPollingSettingsDialog', () => {
     expect(screen.getByLabelText(/Poll Interval Override/)).toBeDisabled()
   })
 
+  it('documents fetch window backfill behavior in the help copy', () => {
+    expect(translate('en', 'system.fetchWindowHelp')).toContain('does not page backward across older mail automatically')
+    expect(translate('en', 'system.fetchWindowHelp')).toContain('temporarily raise the window')
+  })
+
   it('renders clearer throttle format guidance with units and examples', () => {
     render(
       <SystemPollingSettingsDialog

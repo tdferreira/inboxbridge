@@ -136,4 +136,28 @@ describe('SystemDashboardSection', () => {
     expect(screen.getByText(/Polling efetivo:/)).toBeInTheDocument()
     expect(screen.getByRole('button', { name: 'Editar definições de verificação' })).toBeInTheDocument()
   })
+
+  it('shows pause and stop actions in the section header while a controllable live poll is running', () => {
+    const onPausePoll = vi.fn()
+    const onStopPoll = vi.fn()
+
+    renderSection({
+      livePoll: {
+        running: true,
+        state: 'RUNNING',
+        viewerCanControl: true,
+        activeSourceId: 'system-fetcher',
+        ownerUsername: 'admin',
+        sources: [{ sourceId: 'system-fetcher', label: 'System Fetcher', state: 'RUNNING', actionable: false }]
+      },
+      onPausePoll,
+      onStopPoll
+    })
+
+    fireEvent.click(screen.getAllByRole('button', { name: 'Pause' })[0])
+    fireEvent.click(screen.getAllByRole('button', { name: 'Stop' })[0])
+
+    expect(onPausePoll).toHaveBeenCalledTimes(1)
+    expect(onStopPoll).toHaveBeenCalledTimes(1)
+  })
 })

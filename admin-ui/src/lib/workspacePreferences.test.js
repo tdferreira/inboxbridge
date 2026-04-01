@@ -33,11 +33,54 @@ describe('workspacePreferences', () => {
     expect(normalized.userSectionOrder).toEqual([
       'quickSetup',
       'destination',
+      'sourceEmailAccounts',
       'userPolling',
       'remoteControl',
-      'userStats',
-      'sourceEmailAccounts'
+      'userStats'
     ])
+  })
+
+  it('defaults admin workspace order to the administration-specific sequence', () => {
+    const normalized = normalizeUiPreferences({})
+
+    expect(normalized.adminSectionOrder).toEqual([
+      'adminQuickSetup',
+      'systemDashboard',
+      'oauthApps',
+      'userManagement',
+      'authSecurity',
+      'globalStats'
+    ])
+  })
+
+  it('keeps admin quick setup visibility preferences separate from the user workspace guide', () => {
+    const normalized = normalizeUiPreferences({
+      persistLayout: true,
+      quickSetupDismissed: true,
+      quickSetupPinnedVisible: true,
+      adminQuickSetupDismissed: false,
+      adminQuickSetupPinnedVisible: true
+    })
+
+    expect(normalized.quickSetupDismissed).toBe(true)
+    expect(normalized.quickSetupPinnedVisible).toBe(true)
+    expect(normalized.adminQuickSetupDismissed).toBe(false)
+    expect(normalized.adminQuickSetupPinnedVisible).toBe(true)
+  })
+
+  it('drops transient quick setup visibility preferences when layout persistence is disabled', () => {
+    const normalized = normalizeUiPreferences({
+      persistLayout: false,
+      quickSetupDismissed: true,
+      quickSetupPinnedVisible: true,
+      adminQuickSetupDismissed: true,
+      adminQuickSetupPinnedVisible: true
+    })
+
+    expect(normalized.quickSetupDismissed).toBe(false)
+    expect(normalized.quickSetupPinnedVisible).toBe(false)
+    expect(normalized.adminQuickSetupDismissed).toBe(false)
+    expect(normalized.adminQuickSetupPinnedVisible).toBe(false)
   })
 
   it('captures and reapplies only layout-specific preferences', () => {

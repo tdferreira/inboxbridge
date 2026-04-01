@@ -1,4 +1,4 @@
-import { authMethodLabel, formatDate, formatPollError, oauthProviderLabel, protocolLabel, statusLabel, statusTone, tokenStorageLabel, triggerLabel } from '../../lib/formatters'
+import { authMethodLabel, effectiveEmailAccountStatus, formatDate, formatPollError, oauthProviderLabel, protocolLabel, statusLabel, statusTone, tokenStorageLabel, triggerLabel } from '../../lib/formatters'
 import CopyButton from '../common/CopyButton'
 import LoadingButton from '../common/LoadingButton'
 import './EmailAccountCard.css'
@@ -20,6 +20,7 @@ function EmailAccountCard({
   const emailAccountId = emailAccount.emailAccountId || emailAccount.id
   const resolvedConnectLabel = connectLabel || t('emailAccount.connectMicrosoft')
   const resolvedEditLabel = editLabel || t('emailAccount.edit')
+  const effectiveStatus = effectiveEmailAccountStatus(emailAccount)
 
   return (
     <article className="surface-card email-account-card">
@@ -34,7 +35,7 @@ function EmailAccountCard({
             })}
           </p>
         </div>
-        <span className={`status-pill ${statusTone(emailAccount.lastEvent?.status)}`}>{statusLabel(emailAccount.lastEvent?.status, locale)}</span>
+        <span className={`status-pill ${statusTone(effectiveStatus)}`}>{statusLabel(effectiveStatus, locale)}</span>
       </div>
 
       <dl className="email-account-card-config">

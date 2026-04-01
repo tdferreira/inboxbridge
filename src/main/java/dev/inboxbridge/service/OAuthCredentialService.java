@@ -34,10 +34,12 @@ public class OAuthCredentialService {
         return findGoogleCredential("gmail-destination");
     }
 
+    @Transactional
     public Optional<StoredOAuthCredential> findGoogleCredential(String subjectKey) {
         return findCredential(GOOGLE_PROVIDER, subjectKey);
     }
 
+    @Transactional
     public Optional<StoredOAuthCredential> findMicrosoftCredential(String sourceId) {
         return findCredential(MICROSOFT_PROVIDER, sourceId);
     }

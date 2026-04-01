@@ -437,6 +437,18 @@ h2 {
   font-size: 0.95rem;
 }
 
+.utility-prompt-list {
+  display: grid;
+  gap: 8px;
+  margin: 0;
+  padding-left: 1.2rem;
+  color: var(--ink);
+}
+
+.utility-prompt-list li {
+  line-height: 1.45;
+}
+
 .utility-prompt-success {
   border-color: rgba(23, 101, 75, 0.2);
   color: var(--accent-strong);

@@ -13,6 +13,19 @@ The preferred local callback origin is the HTTPS admin UI:
 
 If your deployment runs on another host, set `PUBLIC_BASE_URL` and InboxBridge will use that host for the default browser callback URLs unless you explicitly override `GOOGLE_REDIRECT_URI` or `MICROSOFT_REDIRECT_URI`.
 
+For self-hosted LAN or Tailscale deployments that still use the generated local certificates:
+
+- make sure the callback hostname is covered by the generated SAN list (`PUBLIC_BASE_URL` plus optional `TLS_FRONTEND_CERT_HOSTNAMES` / `TLS_BACKEND_CERT_HOSTNAMES`)
+- trust `certs/ca.crt` on the browser/device opening the callback page
+- prefer one canonical hostname if you also want passkeys/WebAuthn to work on the same deployment
+
+When you expose InboxBridge on a LAN, tailnet, or public host, make the callback origin a real hostname covered by your certificate whenever possible. OAuth callbacks can work on HTTPS IP origins more often than passkeys do, but InboxBridge's WebAuthn/passkey support intentionally assumes `localhost` or a real hostname configured through `SECURITY_PASSKEY_RP_ID` and `SECURITY_PASSKEY_ORIGINS`.
+
+Important runtime rule:
+
+- browser-based OAuth exchange now requires `SECURITY_TOKEN_ENCRYPTION_KEY`
+- if secure storage is missing, the callback page stops and tells the operator to configure the key and retry instead of offering a weaker fallback path
+
 ## Gmail OAuth
 
 InboxBridge can only use Gmail OAuth after this application has been registered in Google Cloud and issued OAuth client credentials.
@@ -25,6 +38,12 @@ Create OAuth credentials that let InboxBridge import mail into Gmail and manage 
 
 - `https://www.googleapis.com/auth/gmail.insert`
 - `https://www.googleapis.com/auth/gmail.labels`
+
+Those are the scopes used for the Gmail destination mailbox flow. If a source
+email account later adds Google OAuth as its authentication method, that source
+flow may require mailbox-read scopes separately because it is authenticating a
+different Google account for reading, not the destination Gmail account for
+importing.
 
 ### High-level steps
 
@@ -80,6 +99,11 @@ ${PUBLIC_BASE_URL}/api/google-oauth/callback
 8. Use `Return to InboxBridge` if you want to go back immediately instead of waiting for the countdown
 9. If you try to leave before exchanging, the callback page warns that you must handle the code or token manually later
 10. If secure storage is enabled, InboxBridge stores the token securely and renews access automatically
+11. After sign-in, the resulting session can be reviewed from `Security -> Sessions`, where InboxBridge now records session type, browser/device hints, Geo-IP, and optional browser-reported location separately
+
+The callback page is fully localized through the frontend translation catalog,
+shows a direct `Return to InboxBridge` action, and uses a 5-second automatic
+redirect countdown after a successful exchange.
 
 If the deployment already has a shared Google client configured, users can leave the per-user client ID and secret blank and still start the Gmail OAuth flow successfully.
 
@@ -222,6 +246,15 @@ MAIL_ACCOUNT_0__CUSTOM_LABEL=Imported/Outlook
 
 For Outlook destination mailboxes configured from `My Destination Mailbox` in the admin UI, the same Microsoft app registration is reused. The user chooses `Outlook` as the destination provider, can save folder-only edits without reconnecting, and uses the Microsoft OAuth action whenever the connected mailbox identity needs to change.
 
+For Outlook source email accounts configured from `My Source Email Accounts`,
+the current add/edit dialog can also keep the account in a `save and connect`
+flow so the operator finishes the mailbox definition and OAuth consent together.
+
+Regardless of provider, each OAuth-backed source remains bound to its owning
+InboxBridge user and destination mailbox. Polling coverage now includes
+multi-user integration tests that verify one user's Google/Microsoft-linked
+source messages are never imported into another user's destination mailbox.
+
 1. Sign in to `https://localhost:3000`
 2. Use the Microsoft OAuth button on the relevant source email account or destination mailbox
 3. Complete Microsoft consent
@@ -232,6 +265,11 @@ For Outlook destination mailboxes configured from `My Destination Mailbox` in th
 8. If secure storage is missing, the callback page stops the exchange and tells you to configure `SECURITY_TOKEN_ENCRYPTION_KEY`, restart InboxBridge, and retry the OAuth flow
 9. When the exchange succeeds, InboxBridge stores the token securely and renews access automatically
 10. If you later unlink or replace a Microsoft destination connection, InboxBridge removes its stored tokens but you may still need to remove `InboxBridge` manually from your Microsoft account permissions or My Apps page
+11. Session history for the browser sign-in remains visible from `Security -> Sessions`, including session type, browser/device hints, Geo-IP, and any browser-reported location sample the user explicitly shares
+
+The callback page is fully localized through the frontend translation catalog,
+shows a direct `Return to InboxBridge` action, and uses a 5-second automatic
+redirect countdown after a successful exchange.
 
 Example manual exchange:
 
@@ -260,6 +298,7 @@ With secure storage enabled:
 - Microsoft OAuth tokens are stored encrypted
 - user-managed Gmail client credentials are stored encrypted
 - user-managed source-email-account passwords and refresh tokens are stored encrypted
+- browser-exchanged OAuth flows fail closed if secure token storage is not configured, rather than offering a weaker manual fallback for UI-managed secrets
 
 Important nuance:
 

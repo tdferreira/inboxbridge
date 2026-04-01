@@ -28,15 +28,19 @@ public class UserSessionService {
     private final SecureRandom secureRandom = new SecureRandom();
 
     @Transactional
-    public String createSession(AppUser user, String clientIp, String locationLabel, String userAgent, UserSession.LoginMethod loginMethod) {
+    public CreatedUserSession createSession(AppUser user, String clientIp, String locationLabel, String userAgent, UserSession.LoginMethod loginMethod) {
         repository.deleteExpiredSessions();
         byte[] raw = new byte[32];
         secureRandom.nextBytes(raw);
         String token = Base64.getUrlEncoder().withoutPadding().encodeToString(raw);
+        byte[] csrfRaw = new byte[24];
+        secureRandom.nextBytes(csrfRaw);
+        String csrfToken = Base64.getUrlEncoder().withoutPadding().encodeToString(csrfRaw);
 
         UserSession session = new UserSession();
         session.userId = user.id;
         session.tokenHash = sha256(token);
+        session.csrfTokenHash = sha256(csrfToken);
         session.createdAt = Instant.now();
         session.lastSeenAt = session.createdAt;
         session.expiresAt = session.createdAt.plus(SESSION_TTL);
@@ -45,7 +49,7 @@ public class UserSessionService {
         session.userAgent = normalizeUserAgent(userAgent);
         session.loginMethod = loginMethod == null ? UserSession.LoginMethod.PASSWORD : loginMethod;
         repository.persist(session);
-        return token;
+        return new CreatedUserSession(token, csrfToken, session);
     }
 
     @Transactional
@@ -114,6 +118,14 @@ public class UserSessionService {
         session.deviceLocationCapturedAt = Instant.now();
     }
 
+    public boolean csrfMatches(UserSession session, String csrfToken) {
+        return session != null
+                && csrfToken != null
+                && !csrfToken.isBlank()
+                && session.csrfTokenHash != null
+                && session.csrfTokenHash.equals(sha256(csrfToken));
+    }
+
     private String normalize(String value) {
         if (value == null) {
             return null;
@@ -165,5 +177,8 @@ public class UserSessionService {
         } catch (NoSuchAlgorithmException e) {
             throw new IllegalStateException("Session hashing failed", e);
         }
+    }
+
+    public record CreatedUserSession(String sessionToken, String csrfToken, UserSession session) {
     }
 }

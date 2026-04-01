@@ -36,6 +36,9 @@ public class ImapAppendMailDestinationService implements MailDestinationService 
     @Inject
     MicrosoftOAuthService microsoftOAuthService;
 
+    @Inject
+    PollCancellationService pollCancellationService;
+
     @Override
     public boolean supports(MailDestinationTarget target) {
         return target instanceof ImapAppendDestinationTarget;
@@ -71,11 +74,11 @@ public class ImapAppendMailDestinationService implements MailDestinationService 
         Folder folder = null;
         try {
             store = session.getStore(imapTarget.tls() ? "imaps" : "imap");
+            registerStore(store);
             store.connect(imapTarget.host(), imapTarget.port(), imapTarget.username(), resolveSecret(imapTarget));
             folder = store.getFolder(imapTarget.folder());
-            if (!folder.exists() && !folder.create(Folder.HOLDS_MESSAGES)) {
-                throw new IllegalStateException("Unable to create destination mailbox folder " + imapTarget.folder());
-            }
+            registerFolder(folder);
+            ensureFolderExists(folder, imapTarget.folder());
             MimeMessage mimeMessage = new MimeMessage(session, new ByteArrayInputStream(message.rawMessage()));
             folder.appendMessages(new Message[] { mimeMessage });
             return new MailImportResponse(imapTarget.providerId() + ":" + UUID.randomUUID(), Instant.now().toString());
@@ -211,6 +214,16 @@ public class ImapAppendMailDestinationService implements MailDestinationService 
         }
     }
 
+    private void ensureFolderExists(Folder folder, String folderName) throws MessagingException {
+        if (folder.exists()) {
+            return;
+        }
+        if (folder.create(Folder.HOLDS_MESSAGES) || folder.exists()) {
+            return;
+        }
+        throw new IllegalStateException("Unable to create destination mailbox folder " + folderName);
+    }
+
     private String resolveSecret(ImapAppendDestinationTarget target) {
         if (target.authMethod() == InboxBridgeConfig.AuthMethod.PASSWORD) {
             return target.password();
@@ -239,5 +252,19 @@ public class ImapAppendMailDestinationService implements MailDestinationService 
             store.close();
         } catch (MessagingException ignored) {
         }
+    }
+
+    private void registerStore(Store store) {
+        if (store == null || pollCancellationService == null) {
+            return;
+        }
+        pollCancellationService.register(() -> closeQuietly(store));
+    }
+
+    private void registerFolder(Folder folder) {
+        if (folder == null || pollCancellationService == null) {
+            return;
+        }
+        pollCancellationService.register(() -> closeQuietly(folder));
     }
 }

@@ -65,4 +65,9 @@ describe('EmailAccountPollingDialog', () => {
 
     expect(onChange).toHaveBeenCalled()
   })
+
+  it('documents fetch window backfill behavior in the source help copy', () => {
+    expect(translate('en', 'sourcePolling.fetchWindowHelp')).toContain('does not page backward across older mail automatically')
+    expect(translate('en', 'sourcePolling.fetchWindowHelp')).toContain('temporarily raise the window')
+  })
 })

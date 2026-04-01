@@ -1,6 +1,34 @@
 import { act, fireEvent, render, screen, waitFor } from '@testing-library/react'
 import RemoteApp from './RemoteApp'
 
+class FakeEventSource {
+  static instances = []
+
+  constructor(url) {
+    this.url = url
+    this.listeners = new Map()
+    this.onmessage = null
+    this.onerror = null
+    FakeEventSource.instances.push(this)
+  }
+
+  addEventListener(type, listener) {
+    this.listeners.set(type, listener)
+  }
+
+  emit(type, payload) {
+    const event = { data: JSON.stringify(payload) }
+    const listener = this.listeners.get(type)
+    if (listener) {
+      listener(event)
+      return
+    }
+    this.onmessage?.(event)
+  }
+
+  close() {}
+}
+
 function jsonResponse(payload, status = 200) {
   return Promise.resolve({
     ok: status >= 200 && status < 300,
@@ -11,13 +39,121 @@ function jsonResponse(payload, status = 200) {
 }
 
 describe('RemoteApp', () => {
+  beforeEach(() => {
+    FakeEventSource.instances = []
+    window.localStorage.clear()
+  })
+
   it('shows the remote login screen when no remote session exists', async () => {
     vi.stubGlobal('fetch', vi.fn(() => jsonResponse({ code: 'unauthorized', message: 'Not authenticated' }, 401)))
 
     render(<RemoteApp />)
 
-    expect(await screen.findByRole('heading', { name: 'Quick polling control' })).toBeInTheDocument()
-    expect(screen.getByRole('button', { name: 'Open Remote Control' })).toBeInTheDocument()
+    expect(await screen.findByRole('button', { name: 'Open InboxBridge Go' })).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Open InboxBridge Go' })).toBeInTheDocument()
+  })
+
+  it('lets unauthenticated remote users choose the language on the login screen', async () => {
+    vi.stubGlobal('fetch', vi.fn(() => jsonResponse({ code: 'unauthorized', message: 'Not authenticated' }, 401)))
+
+    render(<RemoteApp />)
+
+    expect(await screen.findByLabelText('Language')).toBeInTheDocument()
+    fireEvent.change(screen.getByLabelText('Language'), { target: { value: 'pt-PT' } })
+
+    expect(await screen.findByLabelText('Utilizador')).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Abrir InboxBridge Go' })).toBeInTheDocument()
+  })
+
+  it('uses the password-aware login flow when the remote passkey button is clicked with a typed password', async () => {
+    Object.defineProperty(window, 'PublicKeyCredential', {
+      configurable: true,
+      value: function PublicKeyCredential() {}
+    })
+    Object.assign(navigator, {
+      credentials: {
+        get: vi.fn().mockResolvedValue({
+          id: 'cred-1',
+          rawId: new Uint8Array([1, 2, 3]).buffer,
+          type: 'public-key',
+          response: {
+            clientDataJSON: new Uint8Array([1, 2, 3]).buffer,
+            authenticatorData: new Uint8Array([4, 5, 6]).buffer,
+            signature: new Uint8Array([7, 8, 9]).buffer,
+            userHandle: null
+          },
+          getClientExtensionResults: () => ({})
+        })
+      }
+    })
+
+    const fetchMock = vi.fn((url) => {
+      if (url === '/api/remote/auth/me') {
+        return jsonResponse({ code: 'unauthorized', message: 'Not authenticated' }, 401)
+      }
+      if (url === '/api/remote/auth/login') {
+        return jsonResponse({
+          status: 'PASSKEY_REQUIRED',
+          passkeyChallenge: { ceremonyId: 'ceremony-1', publicKeyJson: '{"challenge":"AQID","allowCredentials":[]}' }
+        })
+      }
+      if (url === '/api/remote/auth/passkey/verify') {
+        return jsonResponse({
+          id: 7,
+          username: 'admin',
+          role: 'ADMIN',
+          canRunUserPoll: true,
+          canRunAllUsersPoll: true,
+          language: 'en'
+        })
+      }
+      if (url === '/api/remote/control') {
+        return jsonResponse({
+          session: {
+            id: 7,
+            username: 'admin',
+            role: 'ADMIN',
+            canRunUserPoll: true,
+            canRunAllUsersPoll: true,
+            language: 'en'
+          },
+          sources: [],
+          hasOwnSourceEmailAccounts: true,
+          hasReadyDestinationMailbox: true,
+          setupRequired: false,
+          remotePollRateLimitCount: 60,
+          remotePollRateLimitWindow: 'PT1M'
+        })
+      }
+      if (url === '/api/remote/poll/live') {
+        return jsonResponse({ running: false, sources: [] })
+      }
+      throw new Error(`Unexpected fetch: ${url}`)
+    })
+    vi.stubGlobal('fetch', fetchMock)
+
+    render(<RemoteApp />)
+
+    fireEvent.change(await screen.findByLabelText('Username'), { target: { value: 'alice' } })
+    fireEvent.click(screen.getByRole('button', { name: 'Open InboxBridge Go' }))
+    fireEvent.change(await screen.findByLabelText('Password'), { target: { value: 'Secret#123' } })
+    fireEvent.click(screen.getByRole('button', { name: 'Sign in with passkey' }))
+
+    await screen.findByRole('button', { name: 'Poll My Sources' })
+    expect(fetchMock).toHaveBeenCalledWith('/api/remote/auth/login', expect.any(Object))
+    expect(fetchMock).toHaveBeenCalledWith('/api/remote/auth/passkey/verify', expect.any(Object))
+    expect(fetchMock).not.toHaveBeenCalledWith('/api/remote/auth/passkey/options', expect.any(Object))
+  })
+
+  it('moves focus to the password field when InboxBridge Go opens the credential step', async () => {
+    vi.stubGlobal('fetch', vi.fn(() => jsonResponse({ code: 'unauthorized', message: 'Not authenticated' }, 401)))
+
+    render(<RemoteApp />)
+
+    fireEvent.change(await screen.findByLabelText('Username'), { target: { value: 'admin' } })
+    fireEvent.click(screen.getByRole('button', { name: 'Open InboxBridge Go' }))
+
+    expect(await screen.findByLabelText('Password')).toHaveFocus()
   })
 
   it('runs a source poll from the remote dashboard', async () => {
@@ -29,7 +165,8 @@ describe('RemoteApp', () => {
           role: 'ADMIN',
           canRunUserPoll: true,
           canRunAllUsersPoll: true,
-          deviceLocationCaptured: true
+          deviceLocationCaptured: true,
+          language: 'en'
         })
       }
       if (url === '/api/remote/control') {
@@ -39,7 +176,8 @@ describe('RemoteApp', () => {
             username: 'admin',
             role: 'ADMIN',
             canRunUserPoll: true,
-            canRunAllUsersPoll: true
+            canRunAllUsersPoll: true,
+            language: 'en'
           },
           sources: [
             {
@@ -62,6 +200,9 @@ describe('RemoteApp', () => {
           remotePollRateLimitCount: 60,
           remotePollRateLimitWindow: 'PT1M'
         })
+      }
+      if (url === '/api/remote/poll/live') {
+        return jsonResponse({ running: false, sources: [] })
       }
       if (url === '/api/remote/sources/source-1/poll/run') {
         return jsonResponse({
@@ -100,7 +241,8 @@ describe('RemoteApp', () => {
           username: 'admin',
           role: 'ADMIN',
           canRunUserPoll: true,
-          canRunAllUsersPoll: true
+          canRunAllUsersPoll: true,
+          language: 'en'
         })
       }
       if (url === '/api/remote/control') {
@@ -110,7 +252,8 @@ describe('RemoteApp', () => {
             username: 'admin',
             role: 'ADMIN',
             canRunUserPoll: true,
-            canRunAllUsersPoll: true
+            canRunAllUsersPoll: true,
+            language: 'en'
           },
           sources: [
             {
@@ -134,6 +277,9 @@ describe('RemoteApp', () => {
           remotePollRateLimitWindow: 'PT1M'
         })
       }
+      if (url === '/api/remote/poll/live') {
+        return jsonResponse({ running: false, sources: [] })
+      }
       throw new Error(`Unexpected fetch: ${url}`)
     }))
 
@@ -142,7 +288,146 @@ describe('RemoteApp', () => {
     expect(await screen.findByText('Archive Mail')).toBeInTheDocument()
     expect(screen.getByRole('button', { name: 'Poll This Source' })).toBeInTheDocument()
     expect(screen.getByRole('button', { name: 'Show details' })).toBeInTheDocument()
-    expect(screen.queryByText('10 minutes')).not.toBeInTheDocument()
+    expect(screen.getByText('10 minutes')).toBeInTheDocument()
+    expect(screen.getByText(/POP3/)).toBeInTheDocument()
+    expect(screen.queryByText('Source ID')).not.toBeInTheDocument()
+  })
+
+  it('does not render disabled sources on the remote dashboard', async () => {
+    vi.stubGlobal('fetch', vi.fn((url) => {
+      if (url === '/api/remote/auth/me') {
+        return jsonResponse({
+          id: 7,
+          username: 'admin',
+          role: 'ADMIN',
+          canRunUserPoll: true,
+          canRunAllUsersPoll: true,
+          language: 'en'
+        })
+      }
+      if (url === '/api/remote/control') {
+        return jsonResponse({
+          session: {
+            id: 7,
+            username: 'admin',
+            role: 'ADMIN',
+            canRunUserPoll: true,
+            canRunAllUsersPoll: true,
+            language: 'en'
+          },
+          sources: [
+            {
+              sourceId: 'source-1',
+              ownerLabel: 'System',
+              protocol: 'IMAP',
+              host: 'imap.example.com',
+              port: 993,
+              folder: 'INBOX',
+              enabled: true,
+              effectivePollEnabled: true,
+              effectivePollInterval: '5m',
+              lastImportedAt: null,
+              lastEvent: null,
+              customLabel: 'Main Inbox'
+            },
+            {
+              sourceId: 'source-2',
+              ownerLabel: 'System',
+              protocol: 'IMAP',
+              host: 'imap.example.com',
+              port: 993,
+              folder: 'INBOX',
+              enabled: false,
+              effectivePollEnabled: false,
+              effectivePollInterval: '5m',
+              lastImportedAt: null,
+              lastEvent: null,
+              customLabel: 'Disabled Inbox'
+            }
+          ],
+          hasOwnSourceEmailAccounts: true,
+          hasReadyDestinationMailbox: true,
+          setupRequired: false,
+          remotePollRateLimitCount: 60,
+          remotePollRateLimitWindow: 'PT1M'
+        })
+      }
+      if (url === '/api/remote/poll/live') {
+        return jsonResponse({ running: false, sources: [] })
+      }
+      throw new Error(`Unexpected fetch: ${url}`)
+    }))
+
+    render(<RemoteApp />)
+
+    expect(await screen.findByText('Main Inbox')).toBeInTheDocument()
+    expect(screen.queryByText('Disabled Inbox')).not.toBeInTheDocument()
+    expect(screen.getByText('Visible sources').nextElementSibling).toHaveTextContent('1')
+  })
+
+  it('shows source errors only after details are expanded and colors the last result pill', async () => {
+    vi.stubGlobal('fetch', vi.fn((url) => {
+      if (url === '/api/remote/auth/me') {
+        return jsonResponse({
+          id: 7,
+          username: 'admin',
+          role: 'ADMIN',
+          canRunUserPoll: true,
+          canRunAllUsersPoll: false,
+          language: 'en'
+        })
+      }
+      if (url === '/api/remote/control') {
+        return jsonResponse({
+          session: {
+            id: 7,
+            username: 'admin',
+            role: 'ADMIN',
+            canRunUserPoll: true,
+            canRunAllUsersPoll: false,
+            language: 'en'
+          },
+          sources: [
+            {
+              sourceId: 'source-err',
+              ownerLabel: 'Alice',
+              protocol: 'IMAP',
+              host: 'imap.example.com',
+              port: 993,
+              folder: 'INBOX',
+              enabled: true,
+              effectivePollEnabled: true,
+              effectivePollInterval: 'PT5M',
+              lastImportedAt: null,
+              lastEvent: {
+                status: 'ERROR',
+                error: 'Mailbox auth failed'
+              },
+              customLabel: 'Broken Inbox'
+            }
+          ],
+          hasOwnSourceEmailAccounts: true,
+          hasReadyDestinationMailbox: true,
+          setupRequired: false,
+          remotePollRateLimitCount: 60,
+          remotePollRateLimitWindow: 'PT1M'
+        })
+      }
+      if (url === '/api/remote/poll/live') {
+        return jsonResponse({ running: false, sources: [] })
+      }
+      throw new Error(`Unexpected fetch: ${url}`)
+    }))
+
+    render(<RemoteApp />)
+
+    const errorPill = await screen.findByText('ERROR')
+    expect(errorPill).toHaveClass('tone-error')
+    expect(screen.queryByText('Mailbox auth failed')).not.toBeInTheDocument()
+
+    fireEvent.click(screen.getByRole('button', { name: 'Show details' }))
+
+    expect(await screen.findByText('Mailbox auth failed')).toBeInTheDocument()
   })
 
   it('shows setup guidance when the signed-in user is not ready to poll', async () => {
@@ -153,7 +438,8 @@ describe('RemoteApp', () => {
           username: 'admin',
           role: 'ADMIN',
           canRunUserPoll: true,
-          canRunAllUsersPoll: true
+          canRunAllUsersPoll: true,
+          language: 'en'
         })
       }
       if (url === '/api/remote/control') {
@@ -163,7 +449,8 @@ describe('RemoteApp', () => {
             username: 'admin',
             role: 'ADMIN',
             canRunUserPoll: true,
-            canRunAllUsersPoll: true
+            canRunAllUsersPoll: true,
+            language: 'en'
           },
           sources: [],
           hasOwnSourceEmailAccounts: false,
@@ -172,6 +459,9 @@ describe('RemoteApp', () => {
           remotePollRateLimitCount: 60,
           remotePollRateLimitWindow: 'PT1M'
         })
+      }
+      if (url === '/api/remote/poll/live') {
+        return jsonResponse({ running: false, sources: [] })
       }
       throw new Error(`Unexpected fetch: ${url}`)
     }))
@@ -193,7 +483,8 @@ describe('RemoteApp', () => {
           username: 'admin',
           role: 'ADMIN',
           canRunUserPoll: true,
-          canRunAllUsersPoll: true
+          canRunAllUsersPoll: true,
+          language: 'en'
         })
       }
       if (url === '/api/remote/control') {
@@ -203,7 +494,8 @@ describe('RemoteApp', () => {
             username: 'admin',
             role: 'ADMIN',
             canRunUserPoll: true,
-            canRunAllUsersPoll: true
+            canRunAllUsersPoll: true,
+            language: 'en'
           },
           sources: [],
           hasOwnSourceEmailAccounts: true,
@@ -212,6 +504,9 @@ describe('RemoteApp', () => {
           remotePollRateLimitCount: 60,
           remotePollRateLimitWindow: 'PT1M'
         })
+      }
+      if (url === '/api/remote/poll/live') {
+        return jsonResponse({ running: false, sources: [] })
       }
       if (url === '/api/remote/poll/run') {
         return jsonResponse({ code: 'unauthorized', message: 'Not authenticated' }, 401)
@@ -225,7 +520,7 @@ describe('RemoteApp', () => {
     expect(await screen.findByRole('button', { name: 'Poll My Sources' })).toBeInTheDocument()
     fireEvent.click(screen.getByRole('button', { name: 'Poll My Sources' }))
 
-    expect(await screen.findByRole('heading', { name: 'Quick polling control' })).toBeInTheDocument()
+    expect(await screen.findByRole('button', { name: 'Open InboxBridge Go' })).toBeInTheDocument()
     expect(screen.getByText('Your remote session is no longer valid, so you were signed out. Please sign in again.')).toBeInTheDocument()
     expect(screen.queryByText('Remote request failed (401)')).not.toBeInTheDocument()
   })
@@ -254,7 +549,8 @@ describe('RemoteApp', () => {
           role: 'ADMIN',
           canRunUserPoll: true,
           canRunAllUsersPoll: true,
-          deviceLocationCaptured: false
+          deviceLocationCaptured: false,
+          language: 'en'
         })
       }
       if (url === '/api/remote/control') {
@@ -264,7 +560,8 @@ describe('RemoteApp', () => {
             username: 'admin',
             role: 'ADMIN',
             canRunUserPoll: true,
-            canRunAllUsersPoll: true
+            canRunAllUsersPoll: true,
+            language: 'en'
           },
           sources: [],
           hasOwnSourceEmailAccounts: true,
@@ -273,6 +570,9 @@ describe('RemoteApp', () => {
           remotePollRateLimitCount: 60,
           remotePollRateLimitWindow: 'PT1M'
         })
+      }
+      if (url === '/api/remote/poll/live') {
+        return jsonResponse({ running: false, sources: [] })
       }
       if (url === '/api/remote/auth/session/device-location') {
         return jsonResponse({}, 204)
@@ -310,7 +610,8 @@ describe('RemoteApp', () => {
           role: 'ADMIN',
           canRunUserPoll: true,
           canRunAllUsersPoll: true,
-          deviceLocationCaptured: false
+          deviceLocationCaptured: false,
+          language: 'en'
         })
       }
       if (url === '/api/remote/control') {
@@ -320,7 +621,8 @@ describe('RemoteApp', () => {
             username: 'admin',
             role: 'ADMIN',
             canRunUserPoll: true,
-            canRunAllUsersPoll: true
+            canRunAllUsersPoll: true,
+            language: 'en'
           },
           sources: [],
           hasOwnSourceEmailAccounts: true,
@@ -329,6 +631,9 @@ describe('RemoteApp', () => {
           remotePollRateLimitCount: 60,
           remotePollRateLimitWindow: 'PT1M'
         })
+      }
+      if (url === '/api/remote/poll/live') {
+        return jsonResponse({ running: false, sources: [] })
       }
       if (url === '/api/remote/auth/session/device-location') {
         return jsonResponse({})
@@ -363,7 +668,8 @@ describe('RemoteApp', () => {
           role: 'ADMIN',
           canRunUserPoll: true,
           canRunAllUsersPoll: true,
-          deviceLocationCaptured: false
+          deviceLocationCaptured: false,
+          language: 'en'
         })
       }
       if (url === '/api/remote/control') {
@@ -373,7 +679,8 @@ describe('RemoteApp', () => {
             username: 'admin',
             role: 'ADMIN',
             canRunUserPoll: true,
-            canRunAllUsersPoll: true
+            canRunAllUsersPoll: true,
+            language: 'en'
           },
           sources: [],
           hasOwnSourceEmailAccounts: true,
@@ -382,6 +689,9 @@ describe('RemoteApp', () => {
           remotePollRateLimitCount: 60,
           remotePollRateLimitWindow: 'PT1M'
         })
+      }
+      if (url === '/api/remote/poll/live') {
+        return jsonResponse({ running: false, sources: [] })
       }
       if (url === '/api/remote/auth/session/device-location') {
         return jsonResponse({}, 204)
@@ -407,7 +717,8 @@ describe('RemoteApp', () => {
           role: 'ADMIN',
           canRunUserPoll: true,
           canRunAllUsersPoll: true,
-          deviceLocationCaptured: true
+          deviceLocationCaptured: true,
+          language: 'en'
         })
       }
       if (url === '/api/remote/control') {
@@ -417,7 +728,8 @@ describe('RemoteApp', () => {
             username: 'admin',
             role: 'ADMIN',
             canRunUserPoll: true,
-            canRunAllUsersPoll: true
+            canRunAllUsersPoll: true,
+            language: 'en'
           },
           sources: [],
           hasOwnSourceEmailAccounts: true,
@@ -426,6 +738,9 @@ describe('RemoteApp', () => {
           remotePollRateLimitCount: 60,
           remotePollRateLimitWindow: 'PT1M'
         })
+      }
+      if (url === '/api/remote/poll/live') {
+        return jsonResponse({ running: false, sources: [] })
       }
       throw new Error(`Unexpected fetch: ${url}`)
     })
@@ -445,5 +760,456 @@ describe('RemoteApp', () => {
     fireEvent.click(await screen.findByRole('button', { name: 'Install App' }))
 
     await waitFor(() => expect(prompt).toHaveBeenCalled())
+  })
+
+  it('shows manual install guidance even when the browser does not expose an install prompt', async () => {
+    const fetchMock = vi.fn((url) => {
+      if (url === '/api/remote/auth/me') {
+        return jsonResponse({
+          id: 7,
+          username: 'admin',
+          role: 'ADMIN',
+          canRunUserPoll: true,
+          canRunAllUsersPoll: true,
+          deviceLocationCaptured: true,
+          language: 'en'
+        })
+      }
+      if (url === '/api/remote/control') {
+        return jsonResponse({
+          session: {
+            id: 7,
+            username: 'admin',
+            role: 'ADMIN',
+            canRunUserPoll: true,
+            canRunAllUsersPoll: true,
+            language: 'en'
+          },
+          sources: [],
+          hasOwnSourceEmailAccounts: true,
+          hasReadyDestinationMailbox: true,
+          setupRequired: false,
+          remotePollRateLimitCount: 60,
+          remotePollRateLimitWindow: 'PT1M'
+        })
+      }
+      if (url === '/api/remote/poll/live') {
+        return jsonResponse({ running: false, sources: [] })
+      }
+      throw new Error(`Unexpected fetch: ${url}`)
+    })
+    vi.stubGlobal('fetch', fetchMock)
+
+    render(<RemoteApp />)
+
+    expect(await screen.findByText('Install InboxBridge')).toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: 'Install App' })).not.toBeInTheDocument()
+    expect(screen.getByText('Chrome or Edge: use the Install App button here, or open the browser menu and choose Install app.')).toBeInTheDocument()
+    expect(screen.getByText('Safari on iPhone or iPad: open Share, then choose Add to Home Screen.')).toBeInTheDocument()
+    expect(screen.getByText('Firefox on desktop does not currently expose a full install flow for this app, so use Chrome/Edge or Safari on Apple devices instead.')).toBeInTheDocument()
+  })
+
+  it('shows live remote poll progress and control actions', async () => {
+    vi.stubGlobal('EventSource', FakeEventSource)
+    const fetchMock = vi.fn((url) => {
+      if (url === '/api/remote/auth/me') {
+        return jsonResponse({
+          id: 7,
+          username: 'admin',
+          role: 'ADMIN',
+          canRunUserPoll: true,
+          canRunAllUsersPoll: true,
+          deviceLocationCaptured: true,
+          language: 'en'
+        })
+      }
+      if (url === '/api/remote/control') {
+        return jsonResponse({
+          session: {
+            id: 7,
+            username: 'admin',
+            role: 'ADMIN',
+            canRunUserPoll: true,
+            canRunAllUsersPoll: true,
+            language: 'en'
+          },
+          sources: [
+            {
+              sourceId: 'source-1',
+              ownerLabel: 'System',
+              protocol: 'IMAP',
+              host: 'imap.example.com',
+              port: 993,
+              folder: 'INBOX',
+              effectivePollEnabled: true,
+              effectivePollInterval: '5m',
+              lastImportedAt: null,
+              lastEvent: null,
+              customLabel: 'Main Inbox'
+            },
+            {
+              sourceId: 'source-2',
+              ownerLabel: 'Alice',
+              protocol: 'IMAP',
+              host: 'imap.backup.example.com',
+              port: 993,
+              folder: 'Archive',
+              effectivePollEnabled: true,
+              effectivePollInterval: '5m',
+              lastImportedAt: null,
+              lastEvent: null,
+              customLabel: 'Archive Inbox'
+            }
+          ],
+          hasOwnSourceEmailAccounts: true,
+          hasReadyDestinationMailbox: true,
+          setupRequired: false,
+          remotePollRateLimitCount: 60,
+          remotePollRateLimitWindow: 'PT1M'
+        })
+      }
+      if (url === '/api/remote/poll/live') {
+        return jsonResponse({ running: false, sources: [] })
+      }
+      if (url === '/api/remote/poll/live/pause') {
+        return jsonResponse({
+          running: true,
+          state: 'PAUSING',
+          ownerUsername: 'admin',
+          viewerCanControl: true,
+          activeSourceId: 'source-1',
+          sources: [
+            { sourceId: 'source-1', label: 'Main Inbox', state: 'RUNNING', actionable: true, position: 1, fetched: 0, imported: 0, duplicates: 0 },
+            { sourceId: 'source-2', label: 'Archive Inbox', state: 'QUEUED', actionable: true, position: 2, fetched: 0, imported: 0, duplicates: 0 }
+          ]
+        })
+      }
+      if (url === '/api/remote/poll/live/stop') {
+        return jsonResponse({
+          running: true,
+          state: 'STOPPING',
+          ownerUsername: 'admin',
+          viewerCanControl: true,
+          activeSourceId: 'source-1',
+          sources: [
+            { sourceId: 'source-1', label: 'Main Inbox', state: 'RUNNING', actionable: true, position: 1, fetched: 0, imported: 0, duplicates: 0 },
+            { sourceId: 'source-2', label: 'Archive Inbox', state: 'QUEUED', actionable: true, position: 2, fetched: 0, imported: 0, duplicates: 0 }
+          ]
+        })
+      }
+      if (url === '/api/remote/poll/live/sources/source-2/move-next') {
+        return jsonResponse({
+          running: true,
+          state: 'RUNNING',
+          ownerUsername: 'admin',
+          viewerCanControl: true,
+          activeSourceId: 'source-1',
+          sources: [
+            { sourceId: 'source-1', label: 'Main Inbox', state: 'RUNNING', actionable: true, position: 1, fetched: 0, imported: 0, duplicates: 0 },
+            { sourceId: 'source-2', label: 'Archive Inbox', state: 'QUEUED', actionable: true, position: 1, fetched: 0, imported: 0, duplicates: 0 }
+          ]
+        })
+      }
+      if (url === '/api/remote/poll/live/sources/source-2/retry') {
+        return jsonResponse({
+          running: true,
+          state: 'RUNNING',
+          ownerUsername: 'admin',
+          viewerCanControl: true,
+          activeSourceId: 'source-1',
+          sources: [
+            { sourceId: 'source-1', label: 'Main Inbox', state: 'RUNNING', actionable: true, position: 1, fetched: 0, imported: 0, duplicates: 0 },
+            { sourceId: 'source-2', label: 'Archive Inbox', state: 'RETRY_QUEUED', actionable: true, position: 1, fetched: 0, imported: 0, duplicates: 0 }
+          ]
+        })
+      }
+      throw new Error(`Unexpected fetch: ${url}`)
+    })
+    vi.stubGlobal('fetch', fetchMock)
+
+    render(<RemoteApp />)
+
+    await screen.findByText('Main Inbox')
+
+    act(() => {
+      FakeEventSource.instances[0].emit('poll-source-started', {
+        poll: {
+          running: true,
+          runId: 'run-1',
+          state: 'RUNNING',
+          ownerUsername: 'admin',
+          viewerCanControl: true,
+          activeSourceId: 'source-1',
+          sources: [
+            { sourceId: 'source-1', label: 'Main Inbox', state: 'RUNNING', actionable: true, position: 1, fetched: 0, imported: 0, duplicates: 0 },
+            { sourceId: 'source-2', label: 'Archive Inbox', state: 'QUEUED', actionable: true, position: 2, fetched: 0, imported: 0, duplicates: 0 }
+          ]
+        }
+      })
+    })
+
+    expect(screen.getAllByText('RUNNING').length).toBeGreaterThan(0)
+    expect(screen.queryByText('Live Poll Progress')).not.toBeInTheDocument()
+    expect(await screen.findByRole('button', { name: 'Pause' })).toBeInTheDocument()
+    expect(screen.queryByText(/Queue 2147483647/)).not.toBeInTheDocument()
+
+    fireEvent.click(screen.getByRole('button', { name: 'Pause' }))
+    await waitFor(() => {
+      expect(fetchMock).toHaveBeenCalledWith('/api/remote/poll/live/pause', expect.any(Object))
+    })
+
+    act(() => {
+      FakeEventSource.instances[0].emit('poll-source-started', {
+        poll: {
+          running: true,
+          runId: 'run-1',
+          state: 'RUNNING',
+          ownerUsername: 'admin',
+          viewerCanControl: true,
+          activeSourceId: 'source-1',
+          sources: [
+            { sourceId: 'source-1', label: 'Main Inbox', state: 'RUNNING', actionable: true, position: 1, fetched: 0, imported: 0, duplicates: 0 },
+            { sourceId: 'source-2', label: 'Archive Inbox', state: 'QUEUED', actionable: true, position: 2, fetched: 0, imported: 0, duplicates: 0 }
+          ]
+        }
+      })
+    })
+
+    fireEvent.click(screen.getByRole('button', { name: 'Move Next' }))
+    await waitFor(() => {
+      expect(fetchMock).toHaveBeenCalledWith('/api/remote/poll/live/sources/source-2/move-next', expect.any(Object))
+    })
+
+    act(() => {
+      FakeEventSource.instances[0].emit('poll-source-finished', {
+        poll: {
+          running: true,
+          runId: 'run-1',
+          state: 'RUNNING',
+          ownerUsername: 'admin',
+          viewerCanControl: true,
+          activeSourceId: 'source-1',
+          sources: [
+            { sourceId: 'source-1', label: 'Main Inbox', state: 'RUNNING', actionable: true, position: 1, fetched: 0, imported: 0, duplicates: 0 },
+            { sourceId: 'source-2', label: 'Archive Inbox', state: 'FAILED', actionable: true, position: Number.MAX_SAFE_INTEGER, fetched: 5, imported: 0, duplicates: 0, error: 'Auth failed' }
+          ]
+        }
+      })
+    })
+
+    fireEvent.click(screen.getAllByRole('button', { name: 'Show details' })[1])
+    expect(await screen.findByText('Auth failed')).toBeInTheDocument()
+
+    fireEvent.click(await screen.findByRole('button', { name: 'Retry' }))
+    await waitFor(() => {
+      expect(fetchMock).toHaveBeenCalledWith('/api/remote/poll/live/sources/source-2/retry', expect.any(Object))
+    })
+
+    fireEvent.click(screen.getByRole('button', { name: 'Stop' }))
+    await waitFor(() => {
+      expect(fetchMock).toHaveBeenCalledWith('/api/remote/poll/live/stop', expect.any(Object))
+    })
+  })
+
+  it('only shows queue position for sources that are still queued', async () => {
+    const fetchMock = vi.fn(async (url) => {
+      if (url === '/api/remote/auth/me') {
+        return jsonResponse({
+          id: 1,
+          username: 'admin',
+          role: 'ADMIN',
+          canRunAllUsersPoll: true,
+          canRunUserPoll: true,
+          canRunOwnSourcePolls: true,
+          language: 'en'
+        })
+      }
+      if (url === '/api/remote/control') {
+        return jsonResponse({
+          session: {
+            id: 1,
+            username: 'admin',
+            role: 'ADMIN',
+            canRunAllUsersPoll: true,
+            canRunUserPoll: true,
+            canRunOwnSourcePolls: true,
+            language: 'en'
+          },
+          sources: [
+            {
+              sourceId: 'source-1',
+              ownerLabel: 'admin',
+              protocol: 'IMAP',
+              host: 'imap.example.com',
+              port: 993,
+              folder: 'INBOX',
+              effectivePollEnabled: true,
+              effectivePollInterval: '5m',
+              lastImportedAt: null,
+              lastEvent: null,
+              customLabel: 'Main Inbox'
+            },
+            {
+              sourceId: 'source-2',
+              ownerLabel: 'alice',
+              protocol: 'IMAP',
+              host: 'imap.backup.example.com',
+              port: 993,
+              folder: 'Archive',
+              effectivePollEnabled: true,
+              effectivePollInterval: '5m',
+              lastImportedAt: null,
+              lastEvent: null,
+              customLabel: 'Archive Inbox'
+            }
+          ],
+          hasOwnSourceEmailAccounts: true,
+          hasReadyDestinationMailbox: true,
+          setupRequired: false,
+          remotePollRateLimitCount: 60,
+          remotePollRateLimitWindow: 'PT1M'
+        })
+      }
+      if (url === '/api/remote/poll/live') {
+        return jsonResponse({
+          running: true,
+          runId: 'run-1',
+          state: 'RUNNING',
+          ownerUsername: 'admin',
+          viewerCanControl: true,
+          activeSourceId: 'source-1',
+          sources: [
+            { sourceId: 'source-1', ownerUsername: 'admin', label: 'Main Inbox', state: 'RUNNING', actionable: true, position: 2147483647, fetched: 0, imported: 0, duplicates: 0 },
+            { sourceId: 'source-2', ownerUsername: 'alice', label: 'Archive Inbox', state: 'QUEUED', actionable: true, position: 2, fetched: 0, imported: 0, duplicates: 0 }
+          ]
+        })
+      }
+      throw new Error(`Unexpected fetch: ${url}`)
+    })
+    vi.stubGlobal('fetch', fetchMock)
+
+    render(<RemoteApp />)
+
+    await screen.findByText('Main Inbox')
+
+    expect(screen.queryByText('Queue 2147483647')).not.toBeInTheDocument()
+    expect(screen.queryByText('Owner admin')).not.toBeInTheDocument()
+    expect(screen.getByText('Queue 2')).toBeInTheDocument()
+  })
+
+  it('hides owner labels on InboxBridge Go when single-user mode is active', async () => {
+    vi.stubGlobal('fetch', vi.fn(async (url) => {
+      if (url === '/api/remote/auth/me') {
+        return jsonResponse({
+          id: 1,
+          username: 'admin',
+          role: 'ADMIN',
+          canRunAllUsersPoll: true,
+          canRunUserPoll: true,
+          multiUserEnabled: false,
+          language: 'en'
+        })
+      }
+      if (url === '/api/remote/control') {
+        return jsonResponse({
+          session: {
+            id: 1,
+            username: 'admin',
+            role: 'ADMIN',
+            canRunAllUsersPoll: true,
+            canRunUserPoll: true,
+            multiUserEnabled: false,
+            language: 'en'
+          },
+          sources: [
+            {
+              sourceId: 'source-1',
+              ownerLabel: 'admin',
+              protocol: 'IMAP',
+              host: 'imap.example.com',
+              port: 993,
+              folder: 'INBOX',
+              effectivePollEnabled: true,
+              effectivePollInterval: '5m',
+              lastImportedAt: null,
+              lastEvent: null,
+              customLabel: 'Main Inbox'
+            }
+          ],
+          hasOwnSourceEmailAccounts: true,
+          hasReadyDestinationMailbox: true,
+          setupRequired: false,
+          remotePollRateLimitCount: 60,
+          remotePollRateLimitWindow: 'PT1M'
+        })
+      }
+      if (url === '/api/remote/poll/live') {
+        return jsonResponse({
+          running: true,
+          runId: 'run-1',
+          state: 'RUNNING',
+          ownerUsername: 'admin',
+          viewerCanControl: true,
+          activeSourceId: 'source-1',
+          sources: [
+            { sourceId: 'source-1', ownerUsername: 'admin', label: 'Main Inbox', state: 'RUNNING', actionable: true, position: 1, fetched: 0, imported: 0, duplicates: 0 }
+          ]
+        })
+      }
+      throw new Error(`Unexpected fetch: ${url}`)
+    }))
+
+    render(<RemoteApp />)
+
+    expect(await screen.findByText('Main Inbox')).toBeInTheDocument()
+    expect(screen.getByText('Signed in as admin.')).toBeInTheDocument()
+    expect(screen.queryByText('Owner admin')).not.toBeInTheDocument()
+    expect(screen.queryByText(/\(ADMIN\)/)).not.toBeInTheDocument()
+    fireEvent.click(screen.getByRole('button', { name: 'Show details' }))
+    expect(screen.queryByText('Owner')).not.toBeInTheDocument()
+  })
+
+  it('uses the saved user preference language after the remote session loads', async () => {
+    window.localStorage.setItem('inboxbridge.language', 'en')
+    vi.stubGlobal('fetch', vi.fn((url) => {
+      if (url === '/api/remote/auth/me') {
+        return jsonResponse({
+          id: 12,
+          username: 'alice',
+          role: 'USER',
+          canRunUserPoll: true,
+          canRunAllUsersPoll: false,
+          deviceLocationCaptured: true,
+          language: 'pt-PT'
+        })
+      }
+      if (url === '/api/remote/control') {
+        return jsonResponse({
+          session: {
+            id: 12,
+            username: 'alice',
+            role: 'USER',
+            canRunUserPoll: true,
+            canRunAllUsersPoll: false,
+            language: 'pt-PT'
+          },
+          sources: [],
+          hasOwnSourceEmailAccounts: true,
+          hasReadyDestinationMailbox: true,
+          setupRequired: false,
+          remotePollRateLimitCount: 60,
+          remotePollRateLimitWindow: 'PT1M'
+        })
+      }
+      if (url === '/api/remote/poll/live') {
+        return jsonResponse({ running: false, sources: [] })
+      }
+      throw new Error(`Unexpected fetch: ${url}`)
+    }))
+
+    render(<RemoteApp />)
+
+    expect(await screen.findByRole('heading', { name: 'InboxBridge Go' })).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Sair' })).toBeInTheDocument()
   })
 })

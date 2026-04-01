@@ -6,6 +6,7 @@ import java.util.List;
 import java.util.Map;
 
 import dev.inboxbridge.config.InboxBridgeConfig;
+import dev.inboxbridge.domain.SourcePostPollSettings;
 import dev.inboxbridge.dto.AdminEmailAccountSummary;
 import dev.inboxbridge.dto.AdminDashboardResponse;
 import dev.inboxbridge.dto.AdminDestinationSummary;
@@ -91,6 +92,7 @@ public class AdminDashboardService {
                                     source.folder(),
                                     source.unreadOnly(),
                                     source.customLabel(),
+                                    SourcePostPollSettings.none(),
                                     null));
                     return new AdminEmailAccountSummary(
                             source.id(),
@@ -107,6 +109,9 @@ public class AdminDashboardService {
                             source.folder().orElse("INBOX"),
                             source.unreadOnly(),
                             source.customLabel().orElse(""),
+                            false,
+                            "NONE",
+                            "",
                             passwordConfigured(source.password()),
                             tokenStorageMode(source, microsoftCredential),
                             importStats.totalImported(),

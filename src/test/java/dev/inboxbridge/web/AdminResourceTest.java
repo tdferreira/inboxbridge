@@ -9,6 +9,7 @@ import org.junit.jupiter.api.Test;
 
 import dev.inboxbridge.dto.AdminPollingSettingsView;
 import dev.inboxbridge.dto.AuthSecuritySettingsView;
+import dev.inboxbridge.dto.PollLiveView;
 import dev.inboxbridge.dto.PollRunResult;
 import dev.inboxbridge.dto.PollingTimelineBundleView;
 import dev.inboxbridge.dto.SourcePollingSettingsView;
@@ -19,6 +20,7 @@ import dev.inboxbridge.dto.UpdateSourcePollingSettingsRequest;
 import dev.inboxbridge.domain.RuntimeEmailAccount;
 import dev.inboxbridge.persistence.AppUser;
 import dev.inboxbridge.security.CurrentUserContext;
+import dev.inboxbridge.service.PollingLiveService;
 import dev.inboxbridge.service.PollingService;
 import dev.inboxbridge.service.PollingSettingsService;
 import dev.inboxbridge.service.PollingStatsService;
@@ -87,6 +89,24 @@ class AdminResourceTest {
 
         assertEquals(1, response.getFetched());
         assertEquals(1, response.getImported());
+    }
+
+    @Test
+    void adminLivePollControlsDelegateToLiveService() {
+        AdminResource resource = new AdminResource();
+        resource.currentUserContext = currentUserContext();
+        TrackingPollingLiveService liveService = new TrackingPollingLiveService();
+        resource.pollingLiveService = liveService;
+
+        assertEquals("run-1", resource.livePoll().runId());
+        assertEquals("RUNNING", resource.pauseLivePoll().state());
+        assertEquals("RUNNING", resource.resumeLivePoll().state());
+        assertEquals("RUNNING", resource.stopLivePoll().state());
+        assertEquals("RUNNING", resource.moveSourceNext("system-fetcher").state());
+        assertEquals("RUNNING", resource.retrySource("system-fetcher").state());
+        assertEquals(
+                java.util.List.of("pause:admin", "resume:admin", "stop:admin", "move:admin:system-fetcher", "retry:admin:system-fetcher"),
+                liveService.actions);
     }
 
     @Test
@@ -340,6 +360,45 @@ class AdminResourceTest {
                     java.util.Map.of("custom", java.util.List.of()),
                     java.util.Map.of("custom", java.util.List.of()),
                     java.util.Map.of("custom", java.util.List.of(new dev.inboxbridge.dto.ImportTimelinePointView("2026-03-26", 1L))));
+        }
+    }
+
+    private static final class TrackingPollingLiveService extends PollingLiveService {
+        private final java.util.List<String> actions = new java.util.ArrayList<>();
+
+        @Override
+        public PollLiveView snapshotFor(AppUser viewer) {
+            return new PollLiveView(true, "run-1", "RUNNING", "admin-ui", "admin", true, "system-fetcher", null, null, java.util.List.of());
+        }
+
+        @Override
+        public boolean requestPause(AppUser actor) {
+            actions.add("pause:" + actor.username);
+            return true;
+        }
+
+        @Override
+        public boolean requestResume(AppUser actor) {
+            actions.add("resume:" + actor.username);
+            return true;
+        }
+
+        @Override
+        public boolean requestStop(AppUser actor) {
+            actions.add("stop:" + actor.username);
+            return true;
+        }
+
+        @Override
+        public boolean moveSourceToFront(AppUser actor, String sourceId) {
+            actions.add("move:" + actor.username + ":" + sourceId);
+            return true;
+        }
+
+        @Override
+        public boolean retrySource(AppUser actor, String sourceId) {
+            actions.add("retry:" + actor.username + ":" + sourceId);
+            return true;
         }
     }
 }

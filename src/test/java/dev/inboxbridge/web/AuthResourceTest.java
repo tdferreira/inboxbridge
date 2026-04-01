@@ -60,6 +60,18 @@ class AuthResourceTest {
     }
 
     @Test
+    void startPasskeyLoginIgnoresUsernameHint() {
+        AuthResource resource = new AuthResource();
+        resource.passkeyService = new FakePasskeyService();
+        resource.applicationModeService = new FakeApplicationModeService(true);
+
+        StartPasskeyCeremonyResponse response = resource.startPasskeyLogin(new StartPasskeyLoginRequest("alice"));
+
+        assertEquals("ceremony-1", response.ceremonyId());
+        assertEquals("{\"challenge\":\"abc\"}", response.publicKeyJson());
+    }
+
+    @Test
     void finishPasskeyLoginReturnsSessionCookie() {
         AuthResource resource = new AuthResource();
         resource.authService = new FakeAuthService();
@@ -74,8 +86,17 @@ class AuthResourceTest {
 
         assertEquals(200, response.getStatus());
         NewCookie cookie = response.getCookies().get("inboxbridge_session");
+        NewCookie csrfCookie = response.getCookies().get("inboxbridge_csrf");
         assertNotNull(cookie);
+        assertNotNull(csrfCookie);
         assertEquals("session-1", cookie.getValue());
+        assertEquals("csrf-1", csrfCookie.getValue());
+        assertEquals(true, cookie.isHttpOnly());
+        assertEquals(true, cookie.isSecure());
+        assertEquals(NewCookie.SameSite.STRICT, cookie.getSameSite());
+        assertEquals(false, csrfCookie.isHttpOnly());
+        assertEquals(true, csrfCookie.isSecure());
+        assertEquals(NewCookie.SameSite.STRICT, csrfCookie.getSameSite());
         LoginResponse payload = (LoginResponse) response.getEntity();
         assertEquals("AUTHENTICATED", payload.status());
     }
@@ -284,7 +305,7 @@ class AuthResourceTest {
 
         @Override
         public AuthenticatedSession loginWithPasskey(PasskeyService.PasskeyAuthenticationResult result, String clientIp, String userAgent) {
-            return new AuthenticatedSession(result.user(), "session-1");
+            return new AuthenticatedSession(result.user(), "session-1", "csrf-1");
         }
     }
 

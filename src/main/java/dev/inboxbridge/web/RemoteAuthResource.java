@@ -19,6 +19,8 @@ import dev.inboxbridge.service.AuthService;
 import dev.inboxbridge.service.GeoIpLocationService;
 import dev.inboxbridge.service.PasskeyService;
 import dev.inboxbridge.service.RemoteSessionService;
+import dev.inboxbridge.service.SystemOAuthAppSettingsService;
+import dev.inboxbridge.service.UserUiPreferenceService;
 import io.vertx.core.http.HttpServerRequest;
 import jakarta.inject.Inject;
 import jakarta.ws.rs.BadRequestException;
@@ -37,6 +39,7 @@ import jakarta.ws.rs.core.Response;
 @Path("/api/remote/auth")
 @Produces(MediaType.APPLICATION_JSON)
 public class RemoteAuthResource {
+    private static final String DEFAULT_LANGUAGE = "en";
 
     @Inject
     AuthService authService;
@@ -63,7 +66,13 @@ public class RemoteAuthResource {
     GeoIpLocationService geoIpLocationService;
 
     @Inject
+    UserUiPreferenceService userUiPreferenceService;
+
+    @Inject
     InboxBridgeConfig inboxBridgeConfig;
+
+    @Inject
+    SystemOAuthAppSettingsService systemOAuthAppSettingsService;
 
     @Context
     HttpHeaders httpHeaders;
@@ -103,18 +112,6 @@ public class RemoteAuthResource {
     public dev.inboxbridge.dto.StartPasskeyCeremonyResponse startPasskeyLogin(dev.inboxbridge.dto.StartPasskeyLoginRequest request) {
         requireRemoteEnabled();
         try {
-            if (request != null && request.username() != null && !request.username().isBlank()) {
-                AppUser user = appUserService.findByUsername(request.username().trim())
-                        .filter(found -> found.active && found.approved)
-                        .orElseThrow(() -> new IllegalArgumentException("Unknown account for passkey sign-in"));
-                if (appUserService.hasPassword(user) && appUserService.requiresPasskey(user)) {
-                    throw new IllegalArgumentException("This account requires password verification before passkey sign-in.");
-                }
-                if (!appUserService.requiresPasskey(user)) {
-                    throw new IllegalArgumentException("This account does not have a passkey configured.");
-                }
-                return passkeyService.startAuthenticationForUser(user, false);
-            }
             return passkeyService.startAuthentication();
         } catch (IllegalArgumentException | IllegalStateException e) {
             throw new BadRequestException(e.getMessage(), e);
@@ -193,7 +190,9 @@ public class RemoteAuthResource {
                 user.role.name(),
                 true,
                 user.role == AppUser.Role.ADMIN,
-                currentUserContext.remoteSession() != null && currentUserContext.remoteSession().deviceLocationCapturedAt != null);
+                systemOAuthAppSettingsService.effectiveMultiUserEnabled(),
+                currentUserContext.remoteSession() != null && currentUserContext.remoteSession().deviceLocationCapturedAt != null,
+                userUiPreferenceService.viewForUser(user.id).map(dev.inboxbridge.dto.UserUiPreferenceView::language).orElse(DEFAULT_LANGUAGE));
     }
 
     private NewCookie remoteSessionCookie(String token) {

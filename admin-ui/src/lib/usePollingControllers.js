@@ -49,6 +49,7 @@ function notificationTargetForPollErrors(errorDetails = [], messages = [], fallb
 export function usePollingControllers({
   authOptions,
   errorText,
+  isAdmin = false,
   language,
   loadAppData,
   openConfirmation,
@@ -66,6 +67,7 @@ export function usePollingControllers({
   const [showSystemPollingDialog, setShowSystemPollingDialog] = useState(false)
   const [runningPoll, setRunningPoll] = useState(false)
   const [runningUserPoll, setRunningUserPoll] = useState(false)
+  const [livePoll, setLivePoll] = useState(null)
 
   function applyLoadedUserPolling(userPollingPayload) {
     setUserPollingSettings(userPollingPayload)
@@ -112,6 +114,7 @@ export function usePollingControllers({
     setShowSystemPollingDialog(false)
     setRunningPoll(false)
     setRunningUserPoll(false)
+    setLivePoll(null)
   }
 
   function handleUserPollingFormChange(updater) {
@@ -410,16 +413,132 @@ export function usePollingControllers({
     })
   }
 
+  function applyLivePoll(nextLivePoll) {
+    setLivePoll(nextLivePoll?.running ? nextLivePoll : null)
+  }
+
+  async function invokeLivePollAction(endpoint, fallbackErrorKey = 'runUserPoll') {
+    const response = await fetch(endpoint, { method: 'POST' })
+    if (!response.ok) {
+      throw new Error(await apiErrorText(response, errorText(fallbackErrorKey)))
+    }
+    const payload = await response.json()
+    applyLivePoll(payload)
+    return payload
+  }
+
+  async function pauseLivePoll() {
+    await withPending('pauseLivePoll', async () => {
+      const endpoint = isAdmin ? '/api/admin/poll/live/pause' : '/api/poll/live/pause'
+      try {
+        await invokeLivePollAction(endpoint)
+      } catch (err) {
+        pushNotification({
+          copyText: err.message ? pollErrorNotification(err.message) : translatedNotification('errors.runUserPoll'),
+          message: err.message ? pollErrorNotification(err.message) : translatedNotification('errors.runUserPoll'),
+          targetId: 'user-polling-section',
+          tone: 'error'
+        })
+      }
+    })
+  }
+
+  async function resumeLivePoll() {
+    await withPending('resumeLivePoll', async () => {
+      const endpoint = isAdmin ? '/api/admin/poll/live/resume' : '/api/poll/live/resume'
+      try {
+        await invokeLivePollAction(endpoint)
+      } catch (err) {
+        pushNotification({
+          copyText: err.message ? pollErrorNotification(err.message) : translatedNotification('errors.runUserPoll'),
+          message: err.message ? pollErrorNotification(err.message) : translatedNotification('errors.runUserPoll'),
+          targetId: 'user-polling-section',
+          tone: 'error'
+        })
+      }
+    })
+  }
+
+  async function stopLivePoll() {
+    await withPending('stopLivePoll', async () => {
+      const endpoint = isAdmin ? '/api/admin/poll/live/stop' : '/api/poll/live/stop'
+      try {
+        await invokeLivePollAction(endpoint, 'runPoll')
+      } catch (err) {
+        pushNotification({
+          copyText: err.message ? pollErrorNotification(err.message) : translatedNotification('errors.runPoll'),
+          message: err.message ? pollErrorNotification(err.message) : translatedNotification('errors.runPoll'),
+          targetId: isAdmin ? 'system-dashboard-section' : 'user-polling-section',
+          tone: 'error'
+        })
+      }
+    })
+  }
+
+  async function moveLivePollSourceNext(sourceId) {
+    if (!sourceId) return
+    await withPending(`moveLivePollSource:${sourceId}`, async () => {
+      const base = isAdmin ? '/api/admin/poll/live/sources' : '/api/poll/live/sources'
+      try {
+        await invokeLivePollAction(`${base}/${encodeURIComponent(sourceId)}/move-next`)
+      } catch (err) {
+        pushNotification({
+          copyText: err.message ? pollErrorNotification(err.message) : translatedNotification('errors.runPoll'),
+          message: err.message ? pollErrorNotification(err.message) : translatedNotification('errors.runPoll'),
+          targetId: 'source-email-accounts-section',
+          tone: 'error'
+        })
+      }
+    })
+  }
+
+  async function retryLivePollSource(sourceId) {
+    if (!sourceId) return
+    await withPending(`retryLivePollSource:${sourceId}`, async () => {
+      const base = isAdmin ? '/api/admin/poll/live/sources' : '/api/poll/live/sources'
+      try {
+        await invokeLivePollAction(`${base}/${encodeURIComponent(sourceId)}/retry`)
+      } catch (err) {
+        pushNotification({
+          copyText: err.message ? pollErrorNotification(err.message) : translatedNotification('errors.runPoll'),
+          message: err.message ? pollErrorNotification(err.message) : translatedNotification('errors.runPoll'),
+          targetId: 'source-email-accounts-section',
+          tone: 'error'
+        })
+      }
+    })
+  }
+
   return {
     applyLoadedSystemPolling,
     applyLoadedUserPolling,
+    applyLivePoll,
     handleSystemPollingFormChange,
     handleUserPollingFormChange,
+    livePoll,
+    moveLivePollSourceNext,
     openSystemPollingDialog: () => setShowSystemPollingDialog(true),
     openUserPollingDialog: () => setShowUserPollingDialog(true),
+    pauseLivePoll,
     resetPollingControllers,
     resetPollingSettings,
     resetUserPollingSettings,
+    resumeLivePoll,
+    retryLivePollSource,
+    runLivePollSnapshotLoad: async () => {
+      const endpoint = isAdmin ? '/api/admin/poll/live' : '/api/poll/live'
+      try {
+        const response = await fetch(endpoint)
+        if (!response.ok) {
+          return null
+        }
+        const payload = await response.json()
+        applyLivePoll(payload)
+        return payload
+      } catch {
+        return null
+      }
+    },
     runPoll,
     runUserPoll,
     runningPoll,
@@ -430,6 +549,7 @@ export function usePollingControllers({
     setShowUserPollingDialog,
     showSystemPollingDialog,
     showUserPollingDialog,
+    stopLivePoll,
     systemPollingForm,
     systemPollingFormDirty,
     userPollingForm,

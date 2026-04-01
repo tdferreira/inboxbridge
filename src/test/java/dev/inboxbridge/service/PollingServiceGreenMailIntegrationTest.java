@@ -26,6 +26,8 @@ import dev.inboxbridge.domain.FetchedMessage;
 import dev.inboxbridge.domain.ImapAppendDestinationTarget;
 import dev.inboxbridge.domain.MailDestinationTarget;
 import dev.inboxbridge.domain.RuntimeEmailAccount;
+import dev.inboxbridge.domain.SourcePostPollAction;
+import dev.inboxbridge.domain.SourcePostPollSettings;
 import dev.inboxbridge.dto.MailImportResponse;
 import dev.inboxbridge.dto.PollRunResult;
 import dev.inboxbridge.persistence.ImportedMessage;
@@ -217,7 +219,7 @@ class PollingServiceGreenMailIntegrationTest {
         assertTrue(aliceRun.getErrorDetails().isEmpty());
         assertEquals(
                 List.of("alice-one-1", "alice-two-1"),
-                listSubjects(destinationMail, aliceDestination, sharedDestinationPassword, DESTINATION_FOLDER));
+                sortedSubjects(listSubjects(destinationMail, aliceDestination, sharedDestinationPassword, DESTINATION_FOLDER)));
         assertEquals(
                 List.of(),
                 listSubjectsIfFolderExists(destinationMail, bobDestination, sharedDestinationPassword, DESTINATION_FOLDER));
@@ -230,16 +232,74 @@ class PollingServiceGreenMailIntegrationTest {
         assertTrue(allUsersRun.getErrorDetails().isEmpty());
         assertEquals(
                 List.of("alice-one-1", "alice-two-1"),
-                listSubjects(destinationMail, aliceDestination, sharedDestinationPassword, DESTINATION_FOLDER));
+                sortedSubjects(listSubjects(destinationMail, aliceDestination, sharedDestinationPassword, DESTINATION_FOLDER)));
         assertEquals(
                 List.of("bob-one-1", "bob-two-1"),
-                listSubjects(destinationMail, bobDestination, sharedDestinationPassword, DESTINATION_FOLDER));
+                sortedSubjects(listSubjects(destinationMail, bobDestination, sharedDestinationPassword, DESTINATION_FOLDER)));
         assertTrue(listSubjects(destinationMail, aliceDestination, sharedDestinationPassword, DESTINATION_FOLDER)
                 .stream()
                 .noneMatch((subject) -> subject.startsWith("bob-")));
         assertTrue(listSubjects(destinationMail, bobDestination, sharedDestinationPassword, DESTINATION_FOLDER)
                 .stream()
                 .noneMatch((subject) -> subject.startsWith("alice-")));
+    }
+
+    @Test
+    void runPollCanMarkSourceMessagesReadAndMoveThemAfterImport() throws Exception {
+        appendMessage(sourceMail, SOURCE_USERNAME, SOURCE_PASSWORD, "INBOX", "alpha", "First imported message", "<alpha@example.com>");
+        ensureFolderExists(sourceMail, SOURCE_USERNAME, SOURCE_PASSWORD, "Processed");
+
+        PollRunResult result = pollService(runtimeAccountWithPostPollSettings(new SourcePostPollSettings(
+                true,
+                SourcePostPollAction.MOVE,
+                Optional.of("Processed"))))
+                .runPoll("greenmail-integration:move-and-read");
+
+        assertEquals(1, result.getImported());
+        assertTrue(result.getErrorDetails().isEmpty());
+        assertEquals(List.of("alpha"), listSubjects(destinationMail, DESTINATION_USERNAME, DESTINATION_PASSWORD, DESTINATION_FOLDER));
+        assertEquals(List.of(), listSubjectsIfFolderExists(sourceMail, SOURCE_USERNAME, SOURCE_PASSWORD, "INBOX"));
+        assertEquals(List.of("alpha"), listSubjects(sourceMail, SOURCE_USERNAME, SOURCE_PASSWORD, "Processed"));
+        assertEquals(List.of(), listUnreadSubjects(sourceMail, SOURCE_USERNAME, SOURCE_PASSWORD, "Processed"));
+    }
+
+    @Test
+    void runPollCanDeleteSourceMessagesAfterImport() throws Exception {
+        appendMessage(sourceMail, SOURCE_USERNAME, SOURCE_PASSWORD, "INBOX", "beta", "Delete after import", "<beta@example.com>");
+
+        PollRunResult result = pollService(runtimeAccountWithPostPollSettings(new SourcePostPollSettings(
+                false,
+                SourcePostPollAction.DELETE,
+                Optional.empty())))
+                .runPoll("greenmail-integration:delete");
+
+        assertEquals(1, result.getImported());
+        assertTrue(result.getErrorDetails().isEmpty());
+        assertEquals(List.of("beta"), listSubjects(destinationMail, DESTINATION_USERNAME, DESTINATION_PASSWORD, DESTINATION_FOLDER));
+        assertEquals(List.of(), listSubjectsIfFolderExists(sourceMail, SOURCE_USERNAME, SOURCE_PASSWORD, "INBOX"));
+    }
+
+    private PollingService pollService(RuntimeEmailAccount runtimeAccount) {
+        PollingService service = new PollingService();
+        MailSourceClient mailSourceClient = new MailSourceClient();
+        mailSourceClient.mimeHashService = new MimeHashService();
+        ImapAppendMailDestinationService destinationService = new ImapAppendMailDestinationService();
+        RecordingImportedMessageRepository importedMessageRepository = new RecordingImportedMessageRepository();
+        ImportDeduplicationService deduplicationService = new ImportDeduplicationService();
+        deduplicationService.importedMessageRepository = importedMessageRepository;
+        deduplicationService.mimeHashService = new MimeHashService();
+
+        service.mailSourceClient = mailSourceClient;
+        service.importDeduplicationService = deduplicationService;
+        service.mailDestinationServices = new SingleMailDestinationServices(destinationService);
+        service.sourcePollEventService = new NoopSourcePollEventService();
+        service.runtimeEmailAccountService = new FixedRuntimeEmailAccountService(List.of(runtimeAccount));
+        service.pollingSettingsService = new FixedPollingSettingsService();
+        service.userPollingSettingsService = new FixedUserPollingSettingsService();
+        service.sourcePollingSettingsService = new FixedSourcePollingSettingsService();
+        service.sourcePollingStateService = new ReadySourcePollingStateService();
+        service.manualPollRateLimitService = new ManualPollRateLimitService();
+        return service;
     }
 
     private RuntimeEmailAccount runtimeAccount() {
@@ -321,6 +381,41 @@ class PollingServiceGreenMailIntegrationTest {
                         DESTINATION_FOLDER));
     }
 
+    private RuntimeEmailAccount runtimeAccountWithPostPollSettings(SourcePostPollSettings postPollSettings) {
+        return new RuntimeEmailAccount(
+                "greenmail-source",
+                "USER",
+                7L,
+                "alice",
+                true,
+                InboxBridgeConfig.Protocol.IMAP,
+                "127.0.0.1",
+                sourceMail.getImap().getPort(),
+                false,
+                InboxBridgeConfig.AuthMethod.PASSWORD,
+                InboxBridgeConfig.OAuthProvider.NONE,
+                SOURCE_USERNAME,
+                SOURCE_PASSWORD,
+                "",
+                Optional.of("INBOX"),
+                false,
+                Optional.of("Imported/Test"),
+                postPollSettings,
+                new ImapAppendDestinationTarget(
+                        "user-destination:7",
+                        7L,
+                        "alice",
+                        UserMailDestinationConfigService.PROVIDER_CUSTOM,
+                        "127.0.0.1",
+                        destinationMail.getImap().getPort(),
+                        false,
+                        InboxBridgeConfig.AuthMethod.PASSWORD,
+                        InboxBridgeConfig.OAuthProvider.NONE,
+                        DESTINATION_USERNAME,
+                        DESTINATION_PASSWORD,
+                        DESTINATION_FOLDER));
+    }
+
     private static void appendMessage(
             GreenMail greenMail,
             String username,
@@ -381,6 +476,24 @@ class PollingServiceGreenMailIntegrationTest {
         }
     }
 
+    private static void ensureFolderExists(GreenMail greenMail, String username, String password, String folderName) throws Exception {
+        Properties properties = new Properties();
+        properties.put("mail.store.protocol", "imap");
+        Session session = Session.getInstance(properties);
+        Store store = session.getStore("imap");
+        Folder folder = null;
+        try {
+            store.connect("127.0.0.1", greenMail.getImap().getPort(), username, password);
+            folder = store.getFolder(folderName);
+            if (!folder.exists()) {
+                folder.create(Folder.HOLDS_MESSAGES);
+            }
+        } finally {
+            closeQuietly(folder);
+            closeQuietly(store);
+        }
+    }
+
     private static List<String> listSubjectsIfFolderExists(GreenMail greenMail, String username, String password, String folderName) throws Exception {
         Properties properties = new Properties();
         properties.put("mail.store.protocol", "imap");
@@ -404,6 +517,35 @@ class PollingServiceGreenMailIntegrationTest {
             closeQuietly(folder);
             closeQuietly(store);
         }
+    }
+
+    private static List<String> listUnreadSubjects(GreenMail greenMail, String username, String password, String folderName) throws Exception {
+        Properties properties = new Properties();
+        properties.put("mail.store.protocol", "imap");
+        Session session = Session.getInstance(properties);
+        Store store = session.getStore("imap");
+        Folder folder = null;
+        try {
+            store.connect("127.0.0.1", greenMail.getImap().getPort(), username, password);
+            folder = store.getFolder(folderName);
+            if (!folder.exists()) {
+                return List.of();
+            }
+            folder.open(Folder.READ_ONLY);
+            Message[] messages = folder.search(new jakarta.mail.search.FlagTerm(new jakarta.mail.Flags(jakarta.mail.Flags.Flag.SEEN), false));
+            List<String> subjects = new ArrayList<>();
+            for (Message message : messages) {
+                subjects.add(message.getSubject());
+            }
+            return subjects;
+        } finally {
+            closeQuietly(folder);
+            closeQuietly(store);
+        }
+    }
+
+    private static List<String> sortedSubjects(List<String> subjects) {
+        return subjects.stream().sorted().toList();
     }
 
     private static void closeQuietly(Folder folder) {

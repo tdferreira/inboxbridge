@@ -2,16 +2,46 @@ import { act, fireEvent, render, screen, waitFor, within } from '@testing-librar
 import App from './App'
 import { clearLocalStorage, createWorkspaceRouteFetch, htmlError, jsonResponse, textError } from './test/appTestHelpers'
 
+class FakeEventSource {
+  static instances = []
+
+  constructor(url) {
+    this.url = url
+    this.listeners = new Map()
+    this.onmessage = null
+    this.onerror = null
+    FakeEventSource.instances.push(this)
+  }
+
+  addEventListener(type, listener) {
+    this.listeners.set(type, listener)
+  }
+
+  emit(type, payload) {
+    const event = { data: JSON.stringify(payload) }
+    const listener = this.listeners.get(type)
+    if (listener) {
+      listener(event)
+      return
+    }
+    this.onmessage?.(event)
+  }
+
+  close() {}
+}
+
 describe('App', () => {
   beforeEach(() => {
     clearLocalStorage()
     window.history.replaceState({}, '', '/')
+    FakeEventSource.instances = []
   })
 
   afterEach(() => {
     clearLocalStorage()
     window.history.replaceState({}, '', '/')
     vi.useRealTimers()
+    vi.unstubAllGlobals()
   })
 
   it('falls back to passkey login when password login is blocked by passkey policy', async () => {
@@ -88,11 +118,98 @@ describe('App', () => {
 
     render(<App />)
 
+    fireEvent.change(await screen.findByLabelText('Username'), { target: { value: 'alice' } })
+    fireEvent.click(await screen.findByRole('button', { name: 'Sign in' }))
     fireEvent.click(await screen.findByRole('button', { name: 'Sign in' }))
 
     await screen.findByText(/signed in as/i)
     expect(fetchMock).toHaveBeenCalledWith('/api/auth/passkey/verify', expect.any(Object))
     expect(screen.queryByText('Signed in with passkey.')).not.toBeInTheDocument()
+  })
+
+  it('uses the password-aware login flow when the passkey button is clicked with a typed password', async () => {
+    Object.defineProperty(window, 'PublicKeyCredential', {
+      configurable: true,
+      value: function PublicKeyCredential() {}
+    })
+    Object.assign(navigator, {
+      credentials: {
+        get: vi.fn().mockResolvedValue({
+          id: 'cred-1',
+          rawId: new Uint8Array([1, 2, 3]).buffer,
+          type: 'public-key',
+          response: {
+            clientDataJSON: new Uint8Array([1, 2, 3]).buffer,
+            authenticatorData: new Uint8Array([4, 5, 6]).buffer,
+            signature: new Uint8Array([7, 8, 9]).buffer,
+            userHandle: null
+          },
+          getClientExtensionResults: () => ({})
+        })
+      }
+    })
+
+    const fetchMock = vi.fn()
+      .mockResolvedValueOnce(jsonResponse({ multiUserEnabled: true }))
+      .mockResolvedValueOnce({ ok: false, status: 401, text: () => Promise.resolve(''), json: () => Promise.resolve({}) })
+      .mockResolvedValueOnce(jsonResponse({
+        status: 'PASSKEY_REQUIRED',
+        passkeyChallenge: { ceremonyId: 'ceremony-1', publicKeyJson: '{"challenge":"AQID","allowCredentials":[]}' }
+      }))
+      .mockResolvedValueOnce(jsonResponse({
+        status: 'AUTHENTICATED',
+        user: {
+          id: 1,
+          username: 'alice',
+          role: 'USER',
+          approved: true,
+          mustChangePassword: false,
+          passkeyCount: 1,
+          passwordConfigured: true
+        }
+      }))
+      .mockResolvedValueOnce(jsonResponse({
+        destinationUser: 'me',
+        redirectUri: '',
+        createMissingLabels: true,
+        neverMarkSpam: false,
+        processForCalendar: false
+      }))
+      .mockResolvedValueOnce(jsonResponse({
+        defaultPollEnabled: true,
+        pollEnabledOverride: null,
+        effectivePollEnabled: true,
+        defaultPollInterval: '5m',
+        pollIntervalOverride: null,
+        effectivePollInterval: '5m',
+        defaultFetchWindow: 50,
+        fetchWindowOverride: null,
+        effectiveFetchWindow: 50
+      }))
+      .mockResolvedValueOnce(jsonResponse({
+        totalImportedMessages: 0,
+        configuredMailFetchers: 0,
+        enabledMailFetchers: 0,
+        sourcesWithErrors: 0,
+        importsByDay: []
+      }))
+      .mockResolvedValueOnce(jsonResponse([]))
+      .mockResolvedValueOnce(jsonResponse({}))
+      .mockResolvedValueOnce(jsonResponse([]))
+
+    vi.stubGlobal('fetch', fetchMock)
+
+    render(<App />)
+
+    fireEvent.change(await screen.findByLabelText('Username'), { target: { value: 'alice' } })
+    fireEvent.click(screen.getByRole('button', { name: 'Sign in' }))
+    fireEvent.change(await screen.findByLabelText('Password'), { target: { value: 'Secret#123' } })
+    fireEvent.click(screen.getByRole('button', { name: 'Sign in with passkey' }))
+
+    await screen.findByText(/signed in as/i)
+    expect(fetchMock).toHaveBeenCalledWith('/api/auth/login', expect.any(Object))
+    expect(fetchMock).toHaveBeenCalledWith('/api/auth/passkey/verify', expect.any(Object))
+    expect(fetchMock).not.toHaveBeenCalledWith('/api/auth/passkey/options', expect.any(Object))
   })
 
   it('automatically captures browser-reported device location for the current admin session when permission is already granted', async () => {
@@ -260,6 +377,41 @@ describe('App', () => {
     })
   })
 
+  it('pushes authenticated notifications immediately from the live event stream', async () => {
+    vi.stubGlobal('EventSource', FakeEventSource)
+    vi.stubGlobal('fetch', createWorkspaceRouteFetch({
+      session: {
+        id: 40,
+        username: 'alice',
+        role: 'USER',
+        approved: true,
+        mustChangePassword: false,
+        passkeyCount: 0,
+        passwordConfigured: true,
+        deviceLocationCaptured: true
+      }
+    }))
+
+    render(<App />)
+
+    await screen.findByText(/signed in as/i)
+
+    act(() => {
+      FakeEventSource.instances[0].emit('notification-created', {
+        notification: {
+          message: { kind: 'translation', key: 'notifications.userPollingUpdated', params: {} },
+          copyText: { kind: 'translation', key: 'notifications.userPollingUpdated', params: {} },
+          targetId: 'user-polling-section',
+          tone: 'success',
+          replaceGroup: false,
+          supersedesGroupKeys: []
+        }
+      })
+    })
+
+    expect(await screen.findByText('Your polling settings were updated.')).toBeInTheDocument()
+  })
+
   it('moves the remote control section through the layout editor even for older saved layouts', async () => {
     const fetchMock = createWorkspaceRouteFetch({
       session: {
@@ -285,7 +437,7 @@ describe('App', () => {
     fireEvent.click(await screen.findByRole('button', { name: 'Preferences' }))
     fireEvent.click(screen.getByRole('button', { name: 'Edit Layout' }))
 
-    const remoteHeading = await screen.findByText('Remote control')
+    const remoteHeading = await screen.findByText('InboxBridge Go')
     const remoteWindow = await waitFor(() => {
       const node = remoteHeading.closest('[data-workspace-section-window="true"]')
       expect(node).toBeTruthy()
@@ -300,6 +452,72 @@ describe('App', () => {
       const order = windows.map((windowNode) => windowNode.getAttribute('data-section-id'))
       expect(order.indexOf('remoteControl')).toBeLessThan(order.indexOf('sourceEmailAccounts'))
     })
+  })
+
+  it('uses the requested default section order for the My InboxBridge workspace', async () => {
+    const fetchMock = createWorkspaceRouteFetch({
+      session: {
+        id: 32,
+        username: 'alice',
+        role: 'USER',
+        approved: true,
+        mustChangePassword: false,
+        passkeyCount: 0,
+        passwordConfigured: true,
+        deviceLocationCaptured: true
+      }
+    })
+
+    vi.stubGlobal('fetch', fetchMock)
+
+    render(<App />)
+
+    await screen.findByText(/signed in as/i)
+
+    const order = Array.from(document.querySelectorAll('[data-workspace-key="user"] [data-workspace-section-window="true"]'))
+      .map((node) => node.getAttribute('data-section-id'))
+
+    expect(order).toEqual([
+      'quickSetup',
+      'destination',
+      'sourceEmailAccounts',
+      'userPolling',
+      'remoteControl',
+      'userStats'
+    ])
+  })
+
+  it('uses the requested default section order for the Administration workspace', async () => {
+    const fetchMock = createWorkspaceRouteFetch({
+      session: {
+        id: 33,
+        username: 'admin',
+        role: 'ADMIN',
+        approved: true,
+        mustChangePassword: false,
+        passkeyCount: 0,
+        passwordConfigured: true,
+        deviceLocationCaptured: true
+      }
+    })
+
+    vi.stubGlobal('fetch', fetchMock)
+
+    render(<App />)
+
+    fireEvent.click(await screen.findByRole('tab', { name: 'Administration' }))
+
+    const order = await waitFor(() => Array.from(document.querySelectorAll('[data-workspace-key="admin"] [data-workspace-section-window="true"]'))
+      .map((node) => node.getAttribute('data-section-id')))
+
+    expect(order).toEqual([
+      'adminQuickSetup',
+      'systemDashboard',
+      'oauthApps',
+      'userManagement',
+      'authSecurity',
+      'globalStats'
+    ])
   })
 
   it('falls back to a lower-accuracy browser location lookup when the first attempt fails', async () => {
@@ -699,9 +917,9 @@ describe('App', () => {
 
     render(<App />)
 
-    expect(await screen.findByText('Remote control')).toBeInTheDocument()
-    expect(screen.getByText('Use the lightweight remote page to trigger polling quickly from phones, tablets, laptops, or shared devices without opening the full workspace.')).toBeInTheDocument()
-    expect(screen.getByRole('link', { name: 'Open Remote Control' })).toHaveAttribute('href', '/remote')
+    expect(await screen.findByText('InboxBridge Go')).toBeInTheDocument()
+    expect(screen.getByText('Use InboxBridge Go to trigger inbox fetches quickly from phones, tablets, laptops, or shared devices without opening the full workspace.')).toBeInTheDocument()
+    expect(screen.getByRole('link', { name: 'Open InboxBridge Go' })).toHaveAttribute('href', '/remote')
   })
 
   it('lets admins switch between user and administration workspaces', async () => {
@@ -1932,9 +2150,83 @@ describe('App', () => {
     render(<App />)
 
     await screen.findByText(/signed in as/i)
+    await waitFor(() => {
+      expect(fetchMock.mock.calls.filter(([url]) => String(url) === '/api/account/sessions').length).toBeGreaterThanOrEqual(1)
+    })
     fireEvent.click(screen.getByRole('button', { name: 'Refresh' }))
 
     expect(await screen.findByText('A new Remote control sign-in was detected for this account from approximately Lisbon, PT. Review the Sessions tab.')).toBeInTheDocument()
+  })
+
+  it('hydrates saved notifications from persisted ui preferences after loading the workspace', async () => {
+    const fetchMock = createWorkspaceRouteFetch({
+      session: {
+        id: 41,
+        username: 'alice',
+        role: 'USER',
+        approved: true,
+        mustChangePassword: false,
+        passkeyCount: 0,
+        passwordConfigured: true
+      },
+      uiPreferences: {
+        notificationHistory: [{
+          id: 'note-1',
+          message: { kind: 'translation', key: 'notifications.signedIn', params: {} },
+          copyText: { kind: 'translation', key: 'notifications.signedIn', params: {} },
+          tone: 'success',
+          createdAt: Date.parse('2026-03-31T09:00:00Z'),
+          floatingVisible: true,
+          autoCloseMs: null
+        }]
+      }
+    })
+
+    vi.stubGlobal('fetch', fetchMock)
+
+    render(<App />)
+
+    expect(await screen.findAllByText('Signed in.')).not.toHaveLength(0)
+    expect(screen.getByRole('button', { name: /notifications/i })).toHaveTextContent('1')
+  })
+
+  it('persists notification dismissals back to the ui preferences endpoint', async () => {
+    const fetchMock = createWorkspaceRouteFetch({
+      session: {
+        id: 42,
+        username: 'alice',
+        role: 'USER',
+        approved: true,
+        mustChangePassword: false,
+        passkeyCount: 0,
+        passwordConfigured: true
+      },
+      uiPreferences: {
+        notificationHistory: [{
+          id: 'note-1',
+          message: { kind: 'translation', key: 'notifications.signedIn', params: {} },
+          copyText: { kind: 'translation', key: 'notifications.signedIn', params: {} },
+          tone: 'success',
+          createdAt: Date.parse('2026-03-31T09:00:00Z'),
+          floatingVisible: true,
+          autoCloseMs: null
+        }]
+      }
+    })
+
+    vi.stubGlobal('fetch', fetchMock)
+
+    render(<App />)
+
+    await screen.findByText('Signed in.')
+    fireEvent.click(screen.getByRole('button', { name: 'Dismiss notification' }))
+
+    await waitFor(() => {
+      expect(fetchMock).toHaveBeenCalledWith('/api/app/ui-preferences', expect.objectContaining({
+        method: 'PUT',
+        body: expect.stringContaining('"notificationHistory":[]')
+      }))
+    })
   })
 
 })

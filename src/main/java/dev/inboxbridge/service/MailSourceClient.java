@@ -32,6 +32,7 @@ import jakarta.mail.Session;
 import jakarta.mail.Store;
 import jakarta.mail.UIDFolder;
 import jakarta.mail.search.FlagTerm;
+import jakarta.mail.search.HeaderTerm;
 
 @ApplicationScoped
 public class MailSourceClient {
@@ -52,6 +53,9 @@ public class MailSourceClient {
 
     @Inject
     GoogleOAuthService googleOAuthService;
+
+    @Inject
+    PollCancellationService pollCancellationService;
 
     public List<FetchedMessage> fetch(InboxBridgeConfig.Source source) {
         return fetch(source, pollingSettingsService.effectiveSettings().fetchWindow());
@@ -96,6 +100,77 @@ public class MailSourceClient {
         };
     }
 
+    public void applyPostPollSettings(RuntimeEmailAccount bridge, FetchedMessage message) {
+        if (!bridge.postPollSettings().hasAnyAction()) {
+            return;
+        }
+        if (bridge.protocol() != InboxBridgeConfig.Protocol.IMAP) {
+            throw new IllegalStateException("Source-side message actions are only supported for IMAP accounts");
+        }
+
+        Properties properties = new Properties();
+        properties.put("mail.store.protocol", bridge.tls() ? "imaps" : "imap");
+        properties.put("mail.imap.ssl.enable", bridge.tls());
+        properties.put("mail.imaps.ssl.enable", bridge.tls());
+        properties.put("mail.imap.ssl.checkserveridentity", "true");
+        properties.put("mail.imaps.ssl.checkserveridentity", "true");
+        properties.put("mail.imap.timeout", "20000");
+        properties.put("mail.imaps.timeout", "20000");
+        properties.put("mail.imap.connectiontimeout", "20000");
+        properties.put("mail.imaps.connectiontimeout", "20000");
+        if (usesOAuth(bridge)) {
+            configureImapOAuth(properties);
+        } else {
+            requireSupportedAuth(bridge);
+        }
+
+        Session session = Session.getInstance(properties);
+        Store store = null;
+        Folder sourceFolder = null;
+        Folder targetFolder = null;
+        boolean expunge = false;
+        try {
+            store = session.getStore(bridge.tls() ? "imaps" : "imap");
+            registerStore(store);
+            connectStore(store, bridge);
+            sourceFolder = store.getFolder(bridge.folder().orElse("INBOX"));
+            registerFolder(sourceFolder);
+            if (!sourceFolder.exists()) {
+                throw new IllegalStateException("The mailbox path " + sourceFolder.getFullName() + " does not exist on " + bridge.host() + ".");
+            }
+            sourceFolder.open(Folder.READ_WRITE);
+            Message sourceMessage = resolveSourceMessage(sourceFolder, message);
+            if (sourceMessage == null) {
+                throw new IllegalStateException("Unable to find the source message to apply post-poll actions for " + bridge.id());
+            }
+
+            if (bridge.postPollSettings().markAsRead()) {
+                sourceMessage.setFlag(Flags.Flag.SEEN, true);
+            }
+            if (bridge.postPollSettings().action() == dev.inboxbridge.domain.SourcePostPollAction.MOVE) {
+                String targetFolderName = bridge.postPollSettings().targetFolder()
+                        .orElseThrow(() -> new IllegalStateException("A target folder is required when moving source messages after polling"));
+                targetFolder = store.getFolder(targetFolderName);
+                registerFolder(targetFolder);
+                if (!targetFolder.exists()) {
+                    throw new IllegalStateException("The mailbox path " + targetFolderName + " does not exist on " + bridge.host() + ".");
+                }
+                sourceFolder.copyMessages(new Message[] { sourceMessage }, targetFolder);
+                sourceMessage.setFlag(Flags.Flag.DELETED, true);
+                expunge = true;
+            } else if (bridge.postPollSettings().action() == dev.inboxbridge.domain.SourcePostPollAction.DELETE) {
+                sourceMessage.setFlag(Flags.Flag.DELETED, true);
+                expunge = true;
+            }
+        } catch (MessagingException e) {
+            throw new IllegalStateException("Failed to apply post-poll actions for source " + bridge.id(), e);
+        } finally {
+            closeQuietly(sourceFolder, expunge);
+            closeQuietly(targetFolder);
+            closeQuietly(store);
+        }
+    }
+
     private EmailAccountConnectionTestResult testImapConnection(RuntimeEmailAccount bridge) {
         Properties properties = new Properties();
         properties.put("mail.store.protocol", bridge.tls() ? "imaps" : "imap");
@@ -118,9 +193,11 @@ public class MailSourceClient {
         Folder folder = null;
         try {
             store = session.getStore(bridge.tls() ? "imaps" : "imap");
+            registerStore(store);
             connectStore(store, bridge);
             String targetFolder = bridge.folder().orElse("INBOX");
             folder = store.getFolder(targetFolder);
+            registerFolder(folder);
             if (!folder.exists()) {
                 throw new IllegalStateException("The mailbox path " + targetFolder + " does not exist on " + bridge.host() + ".");
             }
@@ -177,11 +254,13 @@ public class MailSourceClient {
         Folder folder = null;
         try {
             store = session.getStore(bridge.tls() ? "imaps" : "imap");
+            registerStore(store);
             connectStore(store, bridge);
             folder = locateSpamOrJunkFolder(store);
             if (folder == null || !folder.exists()) {
                 return Optional.empty();
             }
+            registerFolder(folder);
             folder.open(Folder.READ_ONLY);
             return Optional.of(new MailboxCountProbe(folder.getFullName(), folder.getMessageCount()));
         } catch (MessagingException e) {
@@ -213,6 +292,7 @@ public class MailSourceClient {
         Store store = null;
         try {
             store = session.getStore(bridge.tls() ? "imaps" : "imap");
+            registerStore(store);
             connectStore(store, bridge);
 
             LinkedHashSet<String> folderNames = new LinkedHashSet<>();
@@ -260,8 +340,10 @@ public class MailSourceClient {
         Folder folder = null;
         try {
             store = session.getStore(source.tls() ? "imaps" : "imap");
+            registerStore(store);
             connectStore(store, source);
             folder = store.getFolder(source.folder().orElse("INBOX"));
+            registerFolder(folder);
             folder.open(Folder.READ_ONLY);
             Message[] candidateMessages = source.unreadOnly()
                     ? trimTailMessages(folder.search(new FlagTerm(new Flags(Flags.Flag.SEEN), false)), fetchWindow)
@@ -298,8 +380,10 @@ public class MailSourceClient {
         Folder folder = null;
         try {
             store = session.getStore(bridge.tls() ? "imaps" : "imap");
+            registerStore(store);
             connectStore(store, bridge);
             folder = store.getFolder(bridge.folder().orElse("INBOX"));
+            registerFolder(folder);
             folder.open(Folder.READ_ONLY);
             Message[] candidateMessages = bridge.unreadOnly()
                     ? trimTailMessages(folder.search(new FlagTerm(new Flags(Flags.Flag.SEEN), false)), fetchWindow)
@@ -336,8 +420,10 @@ public class MailSourceClient {
         Folder folder = null;
         try {
             store = session.getStore(source.tls() ? "pop3s" : "pop3");
+            registerStore(store);
             connectStore(store, source);
             folder = store.getFolder("INBOX");
+            registerFolder(folder);
             folder.open(Folder.READ_ONLY);
             Message[] candidateMessages = selectTailMessages(folder, fetchWindow);
             return toFetchedMessages(source, candidateMessages);
@@ -371,8 +457,10 @@ public class MailSourceClient {
         Folder folder = null;
         try {
             store = session.getStore(bridge.tls() ? "pop3s" : "pop3");
+            registerStore(store);
             connectStore(store, bridge);
             folder = store.getFolder("INBOX");
+            registerFolder(folder);
             folder.open(Folder.READ_ONLY);
             Message[] candidateMessages = selectTailMessages(folder, fetchWindow);
             return toFetchedMessages(bridge.id(), candidateMessages);
@@ -406,8 +494,10 @@ public class MailSourceClient {
         Folder folder = null;
         try {
             store = session.getStore(bridge.tls() ? "pop3s" : "pop3");
+            registerStore(store);
             connectStore(store, bridge);
             folder = store.getFolder("INBOX");
+            registerFolder(folder);
             folder.open(Folder.READ_ONLY);
             int visibleMessageCount = folder.getMessageCount();
             Message[] candidateMessages = selectTailMessages(folder, 1);
@@ -605,6 +695,36 @@ public class MailSourceClient {
         return values[0];
     }
 
+    private Message resolveSourceMessage(Folder folder, FetchedMessage message) throws MessagingException {
+        String sourceMessageKey = message.sourceMessageKey();
+        String uidPrefix = message.sourceAccountId() + ":uid:";
+        if (sourceMessageKey != null && sourceMessageKey.startsWith(uidPrefix) && folder instanceof UIDFolder uidFolder) {
+            long uid = Long.parseLong(sourceMessageKey.substring(uidPrefix.length()));
+            return uidFolder.getMessageByUID(uid);
+        }
+        Optional<String> messageId = message.messageIdHeader()
+                .filter(header -> !header.isBlank())
+                .or(() -> extractMessageIdFromSourceKey(message));
+        if (messageId.isEmpty()) {
+            return null;
+        }
+        Message[] matches = folder.search(new HeaderTerm("Message-ID", messageId.get()));
+        if (matches.length == 0) {
+            return null;
+        }
+        prefetchMessageMetadata(folder, matches);
+        return matches[matches.length - 1];
+    }
+
+    private Optional<String> extractMessageIdFromSourceKey(FetchedMessage message) {
+        String sourceMessageKey = message.sourceMessageKey();
+        String messageIdPrefix = message.sourceAccountId() + ":message-id:";
+        if (sourceMessageKey == null || !sourceMessageKey.startsWith(messageIdPrefix)) {
+            return Optional.empty();
+        }
+        return Optional.of(sourceMessageKey.substring(messageIdPrefix.length()));
+    }
+
     private byte[] toRawBytes(Message message) throws MessagingException, IOException {
         ByteArrayOutputStream outputStream = new ByteArrayOutputStream();
         try {
@@ -704,12 +824,16 @@ public class MailSourceClient {
     }
 
     private void closeQuietly(Folder folder) {
+        closeQuietly(folder, false);
+    }
+
+    private void closeQuietly(Folder folder, boolean expunge) {
         if (folder == null) {
             return;
         }
         try {
             if (folder.isOpen()) {
-                folder.close(false);
+                folder.close(expunge);
             }
         } catch (MessagingException ignored) {
             // ignored on shutdown
@@ -725,6 +849,20 @@ public class MailSourceClient {
         } catch (MessagingException ignored) {
             // ignored on shutdown
         }
+    }
+
+    private void registerStore(Store store) {
+        if (store == null || pollCancellationService == null) {
+            return;
+        }
+        pollCancellationService.register(() -> closeQuietly(store));
+    }
+
+    private void registerFolder(Folder folder) {
+        if (folder == null || pollCancellationService == null) {
+            return;
+        }
+        pollCancellationService.register(() -> closeQuietly(folder));
     }
 
     private void collectFolderNames(Folder[] folders, LinkedHashSet<String> names) throws MessagingException {

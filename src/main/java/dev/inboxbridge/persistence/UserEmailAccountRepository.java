@@ -14,6 +14,7 @@ public class UserEmailAccountRepository implements PanacheRepository<UserEmailAc
         return find("userId = ?1 order by emailAccountId", userId).list();
     }
 
+    @Transactional
     public Optional<UserEmailAccount> findByEmailAccountId(String emailAccountId) {
         return find("emailAccountId", emailAccountId).firstResultOptional();
     }

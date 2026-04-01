@@ -52,6 +52,7 @@ public class SourcePollingStateService {
         return eligibility(sourceId, settings, now, ignoreInterval, false);
     }
 
+    @Transactional
     public PollEligibility eligibility(
             String sourceId,
             PollingSettingsService.EffectivePollingSettings settings,

@@ -22,6 +22,7 @@ import dev.inboxbridge.service.AuthService;
 import dev.inboxbridge.service.GeoIpLocationService;
 import dev.inboxbridge.service.PasskeyService;
 import dev.inboxbridge.service.RemoteSessionService;
+import dev.inboxbridge.service.UserUiPreferenceService;
 import io.vertx.core.http.HttpServerRequest;
 import io.vertx.core.net.SocketAddress;
 import jakarta.ws.rs.core.HttpHeaders;
@@ -42,6 +43,7 @@ class RemoteAuthResourceTest {
         resource.authClientAddressService = new AuthClientAddressService();
         resource.authLoginProtectionService = new FakeAuthLoginProtectionService();
         resource.geoIpLocationService = new FakeGeoIpLocationService();
+        resource.userUiPreferenceService = new FakeUserUiPreferenceService();
         resource.inboxBridgeConfig = new FakeInboxBridgeConfig();
         resource.httpHeaders = new StaticHttpHeaders("203.0.113.7");
         resource.httpServerRequest = staticHttpServerRequest("172.18.0.2");
@@ -51,12 +53,19 @@ class RemoteAuthResourceTest {
         assertEquals(200, response.getStatus());
         RemoteSessionUserResponse payload = (RemoteSessionUserResponse) response.getEntity();
         assertEquals("admin", payload.username());
+        assertEquals("pt-PT", payload.language());
         NewCookie sessionCookie = response.getCookies().get("inboxbridge_remote_session");
         NewCookie csrfCookie = response.getCookies().get("inboxbridge_remote_csrf");
         assertNotNull(sessionCookie);
         assertNotNull(csrfCookie);
         assertEquals("remote-session-1", sessionCookie.getValue());
         assertEquals("remote-csrf-1", csrfCookie.getValue());
+        assertEquals(true, sessionCookie.isHttpOnly());
+        assertEquals(true, sessionCookie.isSecure());
+        assertEquals(NewCookie.SameSite.STRICT, sessionCookie.getSameSite());
+        assertEquals(false, csrfCookie.isHttpOnly());
+        assertEquals(true, csrfCookie.isSecure());
+        assertEquals(NewCookie.SameSite.STRICT, csrfCookie.getSameSite());
     }
 
     @Test
@@ -70,6 +79,7 @@ class RemoteAuthResourceTest {
         resource.authClientAddressService = new AuthClientAddressService();
         resource.authLoginProtectionService = new FakeAuthLoginProtectionService();
         resource.geoIpLocationService = new FakeGeoIpLocationService();
+        resource.userUiPreferenceService = new FakeUserUiPreferenceService();
         resource.inboxBridgeConfig = new FakeInboxBridgeConfig();
         resource.httpHeaders = new StaticHttpHeaders("203.0.113.7");
         resource.httpServerRequest = staticHttpServerRequest("172.18.0.2");
@@ -92,6 +102,7 @@ class RemoteAuthResourceTest {
         resource.authClientAddressService = new AuthClientAddressService();
         resource.authLoginProtectionService = new FakeAuthLoginProtectionService();
         resource.geoIpLocationService = new FakeGeoIpLocationService();
+        resource.userUiPreferenceService = new FakeUserUiPreferenceService();
         resource.inboxBridgeConfig = new FakeInboxBridgeConfig();
         resource.httpHeaders = new StaticHttpHeaders("203.0.113.7");
         resource.httpServerRequest = staticHttpServerRequest("172.18.0.2");
@@ -101,6 +112,19 @@ class RemoteAuthResourceTest {
         assertEquals(200, response.getStatus());
         RemoteSessionUserResponse payload = (RemoteSessionUserResponse) response.getEntity();
         assertEquals("ADMIN", payload.role());
+        assertEquals("pt-PT", payload.language());
+    }
+
+    @Test
+    void startPasskeyLoginIgnoresUsernameHint() {
+        RemoteAuthResource resource = new RemoteAuthResource();
+        resource.passkeyService = new FakePasskeyService();
+        resource.inboxBridgeConfig = new FakeInboxBridgeConfig();
+
+        StartPasskeyCeremonyResponse response = resource.startPasskeyLogin(new dev.inboxbridge.dto.StartPasskeyLoginRequest("alice"));
+
+        assertEquals("ceremony-1", response.ceremonyId());
+        assertEquals("{\"challenge\":\"abc\"}", response.publicKeyJson());
     }
 
     @Test
@@ -223,6 +247,18 @@ class RemoteAuthResourceTest {
         public void recordDeviceLocation(Long sessionId, Double latitude, Double longitude, Double accuracyMeters) {
             this.lastLocationSessionId = sessionId;
             this.lastLongitude = longitude;
+        }
+    }
+
+    private static final class FakeUserUiPreferenceService extends UserUiPreferenceService {
+        @Override
+        public java.util.Optional<dev.inboxbridge.dto.UserUiPreferenceView> viewForUser(Long userId) {
+            return java.util.Optional.of(new dev.inboxbridge.dto.UserUiPreferenceView(
+                    false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false,
+                    java.util.List.of("quickSetup", "destination", "sourceEmailAccounts", "userPolling", "remoteControl", "userStats"),
+                    java.util.List.of("adminQuickSetup", "systemDashboard", "oauthApps", "userManagement", "authSecurity", "globalStats"),
+                    "pt-PT",
+                    java.util.List.of()));
         }
     }
 

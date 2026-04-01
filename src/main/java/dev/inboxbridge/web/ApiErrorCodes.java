@@ -26,6 +26,9 @@ final class ApiErrorCodes {
         if (message.equals("Registration challenge is invalid or expired")) return "registration_challenge_invalid";
         if (message.equals("Registration challenge answer is incorrect")) return "registration_challenge_incorrect";
         if (message.equals("OAuth refresh token is required or connect provider OAuth first")) return "oauth_refresh_token_required";
+        if (message.equals("Source-side message actions are only supported for IMAP accounts")) return "source_post_poll_actions_imap_only";
+        if (message.equals("A target folder is required when moving source messages after polling")) return "source_post_poll_target_required";
+        if (message.equals("A target folder can only be set when the post-poll action is Move")) return "source_post_poll_target_move_only";
         if (message.equals("Fetch window override must be between 1 and 500 messages")) return "fetch_window_invalid";
         if (message.equals("Poll interval is required")) return "poll_interval_required";
         if (message.equals("Poll interval must be at least 5 seconds")) return "poll_interval_too_short";

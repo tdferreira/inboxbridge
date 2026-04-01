@@ -23,6 +23,7 @@ public class SystemOAuthAppSettingsService {
     @Inject
     SystemOAuthAppSettingsRepository repository;
 
+    @Transactional
     public SystemOAuthAppSettingsView view() {
         SystemOAuthAppSettings settings = repository.findSingleton().orElse(null);
         return new SystemOAuthAppSettingsView(
@@ -62,30 +63,37 @@ public class SystemOAuthAppSettingsService {
         return view();
     }
 
+    @Transactional
     public String googleClientId() {
         return effectiveGoogleClientId(repository.findSingleton().orElse(null));
     }
 
+    @Transactional
     public String googleClientSecret() {
         return effectiveGoogleClientSecret(repository.findSingleton().orElse(null));
     }
 
+    @Transactional
     public String googleDestinationUser() {
         return effectiveGoogleDestinationUser(repository.findSingleton().orElse(null));
     }
 
+    @Transactional
     public String googleRedirectUri() {
         return effectiveGoogleRedirectUri(repository.findSingleton().orElse(null));
     }
 
+    @Transactional
     public String googleRefreshToken() {
         return effectiveGoogleRefreshToken(repository.findSingleton().orElse(null));
     }
 
+    @Transactional
     public String microsoftClientId() {
         return effectiveMicrosoftClientId(repository.findSingleton().orElse(null));
     }
 
+    @Transactional
     public String microsoftClientSecret() {
         return effectiveMicrosoftClientSecret(repository.findSingleton().orElse(null));
     }
@@ -98,12 +106,14 @@ public class SystemOAuthAppSettingsService {
         return isConfiguredValue(microsoftClientId()) && isConfiguredValue(microsoftClientSecret());
     }
 
+    @Transactional
     public Boolean multiUserEnabledOverride() {
         return repository.findSingleton()
                 .map(settings -> settings.multiUserEnabledOverride)
                 .orElse(null);
     }
 
+    @Transactional
     public boolean effectiveMultiUserEnabled() {
         return effectiveMultiUserEnabled(repository.findSingleton().orElse(null));
     }

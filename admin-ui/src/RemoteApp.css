@@ -42,6 +42,12 @@
   padding: 24px;
 }
 
+.remote-source-card {
+  padding: 18px 20px;
+  border-radius: 20px;
+  box-shadow: 0 14px 36px rgba(20, 37, 63, 0.08);
+}
+
 .remote-eyebrow {
   margin: 0 0 8px;
   font-size: 0.78rem;
@@ -63,19 +69,32 @@
   gap: 12px;
   flex-wrap: wrap;
   justify-content: space-between;
-  align-items: center;
+  align-items: flex-start;
 }
 
 .remote-source-heading {
   min-width: 0;
 }
 
+.remote-source-heading h3 {
+  margin: 0;
+}
+
+.remote-source-heading .remote-source-meta {
+  margin: 4px 0 0;
+}
+
 .remote-source-actions {
   display: flex;
   flex-wrap: wrap;
-  gap: 10px;
+  gap: 8px;
   justify-content: flex-end;
   align-items: center;
+}
+
+.remote-source-actions > .primary,
+.remote-source-actions > .secondary {
+  padding: 10px 14px;
 }
 
 .remote-toggle-button {
@@ -98,6 +117,16 @@
   color: #4f617b;
 }
 
+.remote-section-header,
+.remote-live-actions,
+.remote-source-progress-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  align-items: center;
+  justify-content: space-between;
+}
+
 .remote-sources-section {
   display: grid;
   gap: 16px;
@@ -105,7 +134,7 @@
 
 .remote-source-list {
   display: grid;
-  gap: 16px;
+  gap: 12px;
 }
 
 .remote-setup-list {
@@ -118,11 +147,47 @@
   margin-top: 8px;
 }
 
+.remote-source-live-row {
+  display: flex;
+  justify-content: flex-end;
+  margin-bottom: 8px;
+}
+
+.remote-source-card-running {
+  border-color: rgba(29, 95, 191, 0.24);
+  box-shadow: 0 20px 60px rgba(29, 95, 191, 0.12);
+}
+
+.remote-source-summary {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 12px;
+}
+
+.remote-source-summary-pill {
+  letter-spacing: 0.08em;
+  padding: 6px 10px;
+}
+
+.remote-source-progress {
+  display: grid;
+  gap: 10px;
+  margin-top: 12px;
+  padding-top: 12px;
+  border-top: 1px solid rgba(20, 37, 63, 0.08);
+}
+
+.remote-source-progress-copy {
+  margin: 0;
+  color: #4f617b;
+}
+
 .remote-source-details {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
   gap: 14px 18px;
-  margin: 18px 0;
+  margin: 14px 0 0;
 }
 
 .remote-source-details dt {
@@ -163,8 +228,11 @@
 
   .remote-auth-actions,
   .remote-hero-actions,
+  .remote-section-header,
+  .remote-live-actions,
   .remote-source-header,
-  .remote-source-actions {
+  .remote-source-actions,
+  .remote-source-progress-actions {
     align-items: stretch;
     flex-direction: column;
   }

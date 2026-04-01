@@ -1,6 +1,7 @@
 import LoadingButton from '../common/LoadingButton'
 import CollapsibleSection from '../common/CollapsibleSection'
 import DurationValue from '../common/DurationValue'
+import LivePollPanel from '../polling/LivePollPanel'
 import './SystemDashboardSection.css'
 
 /**
@@ -11,18 +12,44 @@ function SystemDashboardSection({
   collapsed,
   collapseLoading,
   dashboard,
+  livePoll,
   onCollapseToggle,
+  onMovePollSourceNext,
   onOpenEditor,
+  onPausePoll,
+  onResumePoll,
+  onRetryPollSource,
   onRunPoll,
+  onStopPoll,
   runningPoll,
   sectionLoading = false,
   t,
   locale
 }) {
+  const livePollRunning = Boolean(livePoll?.running)
+  const canControlLivePoll = Boolean(livePollRunning && livePoll?.viewerCanControl)
+  const isPaused = livePoll?.state === 'PAUSED' || livePoll?.state === 'PAUSING'
+
   return (
     <CollapsibleSection
       actions={
         <>
+          {canControlLivePoll ? (
+            <>
+              {isPaused ? (
+                <LoadingButton className="secondary" onClick={onResumePoll} type="button">
+                  Resume
+                </LoadingButton>
+              ) : (
+                <LoadingButton className="secondary" onClick={onPausePoll} type="button">
+                  Pause
+                </LoadingButton>
+              )}
+              <LoadingButton className="danger" onClick={onStopPoll} type="button">
+                Stop
+              </LoadingButton>
+            </>
+          ) : null}
           <LoadingButton className="secondary" onClick={onOpenEditor} type="button">
             {t('system.edit')}
           </LoadingButton>
@@ -43,6 +70,15 @@ function SystemDashboardSection({
     >
       {dashboard ? (
         <>
+          <LivePollPanel
+            livePoll={livePoll}
+            onMoveNext={onMovePollSourceNext}
+            onPause={onPausePoll}
+            onResume={onResumePoll}
+            onRetry={onRetryPollSource}
+            onStop={onStopPoll}
+            showOwners
+          />
           <div className="muted-box full user-polling-summary">
             {t('system.effectivePolling', { value: dashboard.polling.effectivePollEnabled ? t('common.yes') : t('common.no') })}<br />
             {t('system.effectiveInterval', { value: dashboard.polling.effectivePollInterval })}<br />

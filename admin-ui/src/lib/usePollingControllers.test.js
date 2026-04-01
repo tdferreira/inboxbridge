@@ -146,4 +146,55 @@ describe('usePollingControllers', () => {
       tone: 'error'
     }))
   })
+
+  it('uses the authenticated live-poll endpoints for user pause and stop actions', async () => {
+    fetch.mockResolvedValue({
+      ok: true,
+      json: async () => ({ running: true, state: 'RUNNING', viewerCanControl: true, sources: [] })
+    })
+
+    const { result } = renderController()
+
+    await act(async () => {
+      await result.current.pauseLivePoll()
+      await result.current.stopLivePoll()
+    })
+
+    expect(fetch).toHaveBeenNthCalledWith(1, '/api/poll/live/pause', { method: 'POST' })
+    expect(fetch).toHaveBeenNthCalledWith(2, '/api/poll/live/stop', { method: 'POST' })
+  })
+
+  it('loads the live poll snapshot from the role-appropriate endpoint', async () => {
+    fetch.mockResolvedValue({
+      ok: true,
+      json: async () => ({ running: true, state: 'RUNNING', viewerCanControl: true, sources: [] })
+    })
+
+    const { result, rerender } = renderController()
+
+    await act(async () => {
+      await result.current.runLivePollSnapshotLoad()
+    })
+    expect(fetch).toHaveBeenLastCalledWith('/api/poll/live')
+    expect(result.current.livePoll).toEqual(expect.objectContaining({ running: true }))
+
+    rerender({
+      authOptions: { multiUserEnabled: true },
+      closeConfirmation: vi.fn(),
+      errorText: vi.fn((key) => key),
+      isAdmin: true,
+      language: 'en',
+      loadAppData: vi.fn(),
+      openConfirmation: vi.fn(),
+      pushNotification: vi.fn(),
+      t: vi.fn((key) => key),
+      withPending: vi.fn(async (_key, action) => action())
+    })
+
+    await act(async () => {
+      await result.current.runLivePollSnapshotLoad()
+    })
+
+    expect(fetch).toHaveBeenLastCalledWith('/api/admin/poll/live')
+  })
 })

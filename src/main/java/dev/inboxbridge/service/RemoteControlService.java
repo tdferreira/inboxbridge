@@ -9,6 +9,8 @@ import java.util.Optional;
 
 import dev.inboxbridge.config.InboxBridgeConfig;
 import dev.inboxbridge.domain.RuntimeEmailAccount;
+import dev.inboxbridge.domain.SourcePostPollAction;
+import dev.inboxbridge.domain.SourcePostPollSettings;
 import dev.inboxbridge.dto.AdminPollEventSummary;
 import dev.inboxbridge.dto.PollRunError;
 import dev.inboxbridge.dto.PollRunResult;
@@ -25,6 +27,7 @@ import jakarta.ws.rs.ForbiddenException;
 
 @ApplicationScoped
 public class RemoteControlService {
+    private static final String DEFAULT_LANGUAGE = "en";
 
     @Inject
     InboxBridgeConfig inboxBridgeConfig;
@@ -65,9 +68,16 @@ public class RemoteControlService {
     @Inject
     RemotePollRateLimitService remotePollRateLimitService;
 
+    @Inject
+    UserUiPreferenceService userUiPreferenceService;
+
+    @Inject
+    SystemOAuthAppSettingsService systemOAuthAppSettingsService;
+
     public RemoteControlView viewFor(AppUser actor) {
-        boolean hasOwnSourceEmailAccounts = userEmailAccountRepository.count("userId", actor.id) > 0;
+        boolean hasOwnSourceEmailAccounts = userEmailAccountRepository.count("userId = ?1 and enabled = true", actor.id) > 0;
         boolean hasReadyDestinationMailbox = userMailDestinationConfigService.resolveForUser(actor.id, actor.username).isPresent();
+        List<RemoteSourceView> sources = listSources(actor);
         return new RemoteControlView(
                 new RemoteSessionUserResponse(
                         actor.id,
@@ -75,8 +85,10 @@ public class RemoteControlService {
                         actor.role.name(),
                         true,
                         actor.role == AppUser.Role.ADMIN,
-                        false),
-                listSources(actor),
+                        systemOAuthAppSettingsService.effectiveMultiUserEnabled(),
+                        false,
+                        userUiPreferenceService.viewForUser(actor.id).map(dev.inboxbridge.dto.UserUiPreferenceView::language).orElse(DEFAULT_LANGUAGE)),
+                sources,
                 hasOwnSourceEmailAccounts,
                 hasReadyDestinationMailbox,
                 !hasOwnSourceEmailAccounts || !hasReadyDestinationMailbox,
@@ -120,6 +132,9 @@ public class RemoteControlService {
         if (actor.role == AppUser.Role.ADMIN) {
             for (EnvSourceService.IndexedSource indexedSource : envSourceService.configuredSources()) {
                 InboxBridgeConfig.Source source = indexedSource.source();
+                if (!source.enabled()) {
+                    continue;
+                }
                 PollingSettingsService.EffectivePollingSettings effectiveSettings = sourcePollingSettingsService.effectiveSettingsFor(
                         runtimeEmailAccountService.findSystemBridge(source.id()).orElseGet(() -> new RuntimeEmailAccount(
                                 source.id(),
@@ -139,6 +154,7 @@ public class RemoteControlService {
                                 source.folder(),
                                 source.unreadOnly(),
                                 source.customLabel(),
+                                SourcePostPollSettings.none(),
                                 null)));
                 ImportStats importStats = importStatsBySource.getOrDefault(source.id(), ImportStats.EMPTY);
                 sources.add(new RemoteSourceView(
@@ -155,7 +171,11 @@ public class RemoteControlService {
                         source.port(),
                         source.username(),
                         source.folder().orElse("INBOX"),
+                        source.unreadOnly(),
                         source.customLabel().orElse(""),
+                        false,
+                        "NONE",
+                        "",
                         importStats.totalImported(),
                         importStats.lastImportedAt(),
                         sourcePollEventService.latestForSource(source.id()).orElse(null),
@@ -167,6 +187,9 @@ public class RemoteControlService {
                 ? userEmailAccountRepository.list("order by userId asc, emailAccountId asc")
                 : userEmailAccountRepository.list("userId", actor.id);
         for (UserEmailAccount emailAccount : userAccounts) {
+            if (!emailAccount.enabled) {
+                continue;
+            }
             AppUser owner = appUserService.findById(emailAccount.userId).orElse(null);
             if (owner == null || !owner.active || !owner.approved) {
                 continue;
@@ -193,7 +216,11 @@ public class RemoteControlService {
                     emailAccount.port,
                     emailAccount.username,
                     emailAccount.folderName == null ? "INBOX" : emailAccount.folderName,
+                    emailAccount.unreadOnly,
                     emailAccount.customLabel == null ? "" : emailAccount.customLabel,
+                    emailAccount.markReadAfterPoll,
+                    (emailAccount.postPollAction == null ? SourcePostPollAction.NONE : emailAccount.postPollAction).name(),
+                    emailAccount.postPollTargetFolder == null ? "" : emailAccount.postPollTargetFolder,
                     importStats.totalImported(),
                     importStats.lastImportedAt(),
                     sourcePollEventService.latestForSource(emailAccount.emailAccountId).orElse(null),

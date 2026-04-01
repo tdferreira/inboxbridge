@@ -15,7 +15,10 @@ export const DEFAULT_EMAIL_ACCOUNT_FORM = {
   oauthRefreshToken: '',
   folder: 'INBOX',
   unreadOnly: false,
-  customLabel: ''
+  customLabel: '',
+  markReadAfterPoll: false,
+  postPollAction: 'NONE',
+  postPollTargetFolder: ''
 }
 
 export function normalizeEmailAccountForm(nextEmailAccountForm, authOptions = {}) {
@@ -47,6 +50,16 @@ export function normalizeEmailAccountForm(nextEmailAccountForm, authOptions = {}
     next.authMethod = 'PASSWORD'
     next.oauthProvider = 'NONE'
     next.oauthRefreshToken = ''
+  }
+
+  if (next.protocol !== 'IMAP') {
+    next.markReadAfterPoll = false
+    next.postPollAction = 'NONE'
+    next.postPollTargetFolder = ''
+  }
+
+  if (next.postPollAction !== 'MOVE') {
+    next.postPollTargetFolder = ''
   }
 
   return next

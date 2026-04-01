@@ -151,6 +151,7 @@ function RegistrationCaptchaField({
     }
     setSolving(true)
     try {
+      await new Promise((resolve) => window.setTimeout(resolve, 0))
       const solvedToken = await solveAltchaChallenge(registerChallenge.altcha)
       onRegisterChange((current) => ({ ...current, captchaToken: solvedToken }))
     } finally {

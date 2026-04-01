@@ -33,6 +33,7 @@ public class UserPollingSettingsService {
         return toView(null, effectiveSettingsForUser(userId));
     }
 
+    @Transactional
     public PollingSettingsService.EffectivePollingSettings effectiveSettingsForUser(Long userId) {
         PollingSettingsService.EffectivePollingSettings base = pollingSettingsService.effectiveSettings();
         UserPollingSetting setting = repository.findByUserId(userId).orElse(null);

@@ -4,6 +4,8 @@ export const DEFAULT_UI_PREFERENCES = {
   quickSetupCollapsed: false,
   quickSetupDismissed: false,
   quickSetupPinnedVisible: false,
+  adminQuickSetupDismissed: false,
+  adminQuickSetupPinnedVisible: false,
   destinationMailboxCollapsed: false,
   userPollingCollapsed: false,
   userStatsCollapsed: false,
@@ -14,9 +16,10 @@ export const DEFAULT_UI_PREFERENCES = {
   authSecurityCollapsed: false,
   globalStatsCollapsed: false,
   userManagementCollapsed: false,
-  userSectionOrder: ['quickSetup', 'destination', 'userPolling', 'remoteControl', 'userStats', 'sourceEmailAccounts'],
-  adminSectionOrder: ['adminQuickSetup', 'systemDashboard', 'oauthApps', 'authSecurity', 'globalStats', 'userManagement'],
-  language: 'en'
+  userSectionOrder: ['quickSetup', 'destination', 'sourceEmailAccounts', 'userPolling', 'remoteControl', 'userStats'],
+  adminSectionOrder: ['adminQuickSetup', 'systemDashboard', 'oauthApps', 'userManagement', 'authSecurity', 'globalStats'],
+  language: 'en',
+  notificationHistory: []
 }
 
 export const DEFAULT_ADMIN_WORKSPACE = 'user'
@@ -50,6 +53,8 @@ export function normalizeUiPreferences(payload) {
     ...(payload || {}),
     destinationMailboxCollapsed: payload?.destinationMailboxCollapsed ?? payload?.gmailDestinationCollapsed ?? false,
     sourceEmailAccountsCollapsed: payload?.sourceEmailAccountsCollapsed ?? payload?.sourceBridgesCollapsed ?? false,
+    adminQuickSetupDismissed: payload?.adminQuickSetupDismissed ?? false,
+    adminQuickSetupPinnedVisible: payload?.adminQuickSetupPinnedVisible ?? false,
     userSectionOrder: normalizedUserSectionOrder
   }
   return {
@@ -59,6 +64,8 @@ export function normalizeUiPreferences(payload) {
       quickSetupCollapsed: false,
       quickSetupDismissed: false,
       quickSetupPinnedVisible: false,
+      adminQuickSetupDismissed: false,
+      adminQuickSetupPinnedVisible: false,
       destinationMailboxCollapsed: false,
       userPollingCollapsed: false,
       userStatsCollapsed: false,

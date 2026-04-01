@@ -3,6 +3,7 @@ import AuthScreen from './AuthScreen'
 import { translate } from '../../lib/i18n'
 
 const t = (key, params) => translate('en', key, params)
+const languageOptions = ['en', 'pt-PT'].map((value) => ({ value, label: translate('en', `language.${value}`) }))
 
 function buildAltchaChallenge() {
   return {
@@ -32,6 +33,7 @@ describe('AuthScreen', () => {
     const { rerender } = render(
       <AuthScreen
         authError=""
+        loginStage="credentials"
         loginLoading={false}
         loginForm={loginForm}
         multiUserEnabled
@@ -71,6 +73,7 @@ describe('AuthScreen', () => {
       rerender(
         <AuthScreen
           authError=""
+          loginStage="credentials"
           loginLoading={false}
           loginForm={loginForm}
           multiUserEnabled
@@ -126,6 +129,7 @@ describe('AuthScreen', () => {
     render(
       <AuthScreen
         authError=""
+        loginStage="credentials"
         loginLoading
         loginForm={{ username: 'admin', password: 'nimda' }}
         multiUserEnabled
@@ -156,6 +160,7 @@ describe('AuthScreen', () => {
     render(
       <AuthScreen
         authError=""
+        loginStage="credentials"
         loginLoading={false}
         loginForm={{ username: 'admin', password: '' }}
         multiUserEnabled
@@ -186,6 +191,7 @@ describe('AuthScreen', () => {
     render(
       <AuthScreen
         authError=""
+        loginStage="credentials"
         loginLoading={false}
         loginForm={{ username: 'admin', password: '' }}
         multiUserEnabled
@@ -216,6 +222,7 @@ describe('AuthScreen', () => {
     render(
       <AuthScreen
         authError=""
+        loginStage="username"
         loginLoading={false}
         loginForm={{ username: 'admin', password: '' }}
         multiUserEnabled={false}
@@ -242,10 +249,122 @@ describe('AuthScreen', () => {
     expect(screen.getByText(/single-user mode/i)).toBeInTheDocument()
   })
 
+  it('asks for only the username before showing password and passkey controls', () => {
+    render(
+      <AuthScreen
+        authError=""
+        loginStage="username"
+        loginLoading={false}
+        loginForm={{ username: '', password: '' }}
+        multiUserEnabled
+        notice=""
+        onCloseRegisterDialog={vi.fn()}
+        onLanguageChange={vi.fn()}
+        onLogin={vi.fn()}
+        onLoginChange={vi.fn()}
+        onPasskeyLogin={vi.fn()}
+        onOpenRegisterDialog={vi.fn()}
+        onRegister={vi.fn()}
+        onRegisterChange={vi.fn()}
+        passkeyLoading={false}
+        passkeysSupported
+        registerChallenge={null}
+        registerChallengeLoading={false}
+        registerForm={{ username: '', password: '', confirmPassword: '', captchaToken: '' }}
+        registerLoading={false}
+        registerOpen={false}
+        t={t}
+      />
+    )
+
+    expect(screen.getByLabelText('Username')).toBeInTheDocument()
+    expect(screen.queryByLabelText('Password')).not.toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: 'Sign in with passkey' })).not.toBeInTheDocument()
+  })
+
+  it('moves focus to the password field when the credential step opens', () => {
+    const onLogin = vi.fn((event) => event.preventDefault())
+    let loginStage = 'username'
+    let loginForm = { username: 'admin', password: '' }
+
+    const { rerender } = render(
+      <AuthScreen
+        authError=""
+        loginStage={loginStage}
+        loginLoading={false}
+        loginForm={loginForm}
+        multiUserEnabled
+        notice=""
+        onCloseRegisterDialog={vi.fn()}
+        onLogin={(event) => {
+          onLogin(event)
+          loginStage = 'credentials'
+          rerenderUi()
+        }}
+        onLoginChange={(updater) => {
+          loginForm = typeof updater === 'function' ? updater(loginForm) : updater
+          rerenderUi()
+        }}
+        onPasskeyLogin={vi.fn()}
+        onOpenRegisterDialog={vi.fn()}
+        onRegister={vi.fn()}
+        onRegisterChange={vi.fn()}
+        passkeyLoading={false}
+        passkeysSupported={true}
+        registerChallenge={null}
+        registerChallengeLoading={false}
+        registerForm={{ username: '', password: '', confirmPassword: '', captchaToken: '' }}
+        registerLoading={false}
+        registerOpen={false}
+        t={t}
+      />
+    )
+
+    function rerenderUi() {
+      rerender(
+        <AuthScreen
+          authError=""
+          loginStage={loginStage}
+          loginLoading={false}
+          loginForm={loginForm}
+          multiUserEnabled
+          notice=""
+          onCloseRegisterDialog={vi.fn()}
+          onLogin={(event) => {
+            onLogin(event)
+            loginStage = 'credentials'
+            rerenderUi()
+          }}
+          onLoginChange={(updater) => {
+            loginForm = typeof updater === 'function' ? updater(loginForm) : updater
+            rerenderUi()
+          }}
+          onPasskeyLogin={vi.fn()}
+          onOpenRegisterDialog={vi.fn()}
+          onRegister={vi.fn()}
+          onRegisterChange={vi.fn()}
+          passkeyLoading={false}
+          passkeysSupported={true}
+          registerChallenge={null}
+          registerChallengeLoading={false}
+          registerForm={{ username: '', password: '', confirmPassword: '', captchaToken: '' }}
+          registerLoading={false}
+          registerOpen={false}
+          t={t}
+        />
+      )
+    }
+
+    fireEvent.click(screen.getByRole('button', { name: 'Sign in' }))
+
+    expect(screen.getByLabelText('Password')).toHaveFocus()
+  })
+
   it('renders translated login and registration copy in portuguese', () => {
     render(
       <AuthScreen
         authError=""
+        loginStage="credentials"
         loginLoading={false}
         loginForm={{ username: '', password: '' }}
         multiUserEnabled
@@ -275,5 +394,43 @@ describe('AuthScreen', () => {
     expect(screen.getByLabelText('Nome de utilizador pedido')).toBeInTheDocument()
     expect(screen.getByRole('button', { name: 'Registar para aprovação' })).toBeInTheDocument()
     expect(screen.getByRole('button', { name: 'Verificar CAPTCHA' })).toBeInTheDocument()
+  })
+
+  it('lets unauthenticated users change the language from both the login and registration views', () => {
+    const onLanguageChange = vi.fn()
+
+    render(
+      <AuthScreen
+        authError=""
+        language="en"
+        languageOptions={languageOptions}
+        loginLoading={false}
+        loginForm={{ username: '', password: '' }}
+        multiUserEnabled
+        notice=""
+        onCloseRegisterDialog={vi.fn()}
+        onLanguageChange={onLanguageChange}
+        onLogin={vi.fn()}
+        onLoginChange={vi.fn()}
+        onPasskeyLogin={vi.fn()}
+        onOpenRegisterDialog={vi.fn()}
+        onRegister={vi.fn()}
+        onRegisterChange={vi.fn()}
+        passkeyLoading={false}
+        passkeysSupported={true}
+        registerChallenge={buildAltchaChallenge()}
+        registerChallengeLoading={false}
+        registerForm={{ username: '', password: '', confirmPassword: '', captchaToken: '' }}
+        registerLoading={false}
+        registerOpen
+        t={t}
+      />
+    )
+
+    expect(screen.getAllByLabelText('Language')).toHaveLength(2)
+
+    fireEvent.change(screen.getAllByLabelText('Language')[0], { target: { value: 'pt-PT' } })
+
+    expect(onLanguageChange).toHaveBeenCalledWith('pt-PT')
   })
 })

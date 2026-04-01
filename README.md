@@ -38,10 +38,16 @@ Google help: https://support.google.com/accounts/answer/13533235
 7. Supports Google OAuth for Gmail destinations and Microsoft OAuth for Outlook source and destination accounts.
 8. Organizes the admin UI into reusable React components with component-scoped styles and frontend unit tests.
 9. Supports WebAuthn passkeys for browser sign-in after a user enrolls one from the security panel.
-10. Supports per-user poller overrides plus automatic per-source cooldown/backoff when providers start rejecting or throttling requests.
+10. Supports global, per-user, and per-source poller overrides plus automatic per-source cooldown/backoff when providers start rejecting or throttling requests.
 11. Can run either in single-user mode or multi-user mode, controlled by `.env`.
 12. Exposes a lightweight remote control surface at `/remote` so users can trigger polling from phones or other devices without opening the full admin workspace.
 13. Lets both the main app and `/remote` store an optional browser-reported device location for the current session, separate from Geo-IP, with a guessed place label and maps link in the Sessions view when coordinates are available.
+14. Shows richer session history in `Security -> Sessions`, including session type (`Admin UI` vs `Remote control`), sign-in method, best-effort browser/device labels from `User-Agent`, Geo-IP, and optional device-reported location.
+15. Persists each user's notification history in PostgreSQL-backed UI preferences, so recent notices survive refreshes and normal sign-out/sign-in cycles.
+16. Streams live poll progress through authenticated SSE, with pause/resume/stop controls plus per-source `Move Next` and `Retry` actions while a run is active.
+17. Polls eligible source mailboxes in bounded parallel virtual-thread workers, so unrelated mailboxes can progress concurrently instead of waiting for a fully serial run.
+18. Treats `Stop` as a real cancellation path for active live runs by closing registered mailbox sessions and interrupting worker threads instead of only waiting for the next outer loop checkpoint.
+19. Lets UI-managed IMAP source accounts apply optional post-poll source-side actions such as mark-as-read, delete, or move-to-folder after a handled message.
 
 ## What it still does not do
 
@@ -94,6 +100,7 @@ With only that configuration, you can:
 - change the bootstrap password
 - register passkeys from the `Security` panel if the browser supports them
 - register passkeys through a focused modal dialog so the security panel stays compact
+- review both normal browser sessions and `/remote` sessions from `Security -> Sessions`
 - create users
 - configure the destination mailbox and source email accounts from the admin UI
 - test source email account connectivity from the add/edit dialog before saving IMAP/POP3 settings, including protocol, TLS, authentication, and mailbox reachability details
@@ -130,6 +137,7 @@ Important values when you want a shared, env-managed deployment setup:
 - `GOOGLE_*` only if you want a deployment-level shared Gmail account configuration
 - `MICROSOFT_*` for Microsoft OAuth sources
 - `SECURITY_PASSKEY_*` if you need to override the default local WebAuthn relying-party settings
+- `TLS_FRONTEND_CERT_HOSTNAMES` / `TLS_BACKEND_CERT_HOSTNAMES` if you want the generated local certificates to cover LAN, Tailscale, or other non-`localhost` hostnames
 - `SECURITY_REMOTE_ENABLED=true` to keep the remote control surface available
 - `SECURITY_REMOTE_SESSION_TTL=PT12H` to control how long remote sessions remain valid
 - `SECURITY_REMOTE_POLL_RATE_LIMIT_COUNT=60` and `SECURITY_REMOTE_POLL_RATE_LIMIT_WINDOW=PT1M` to harden the remote trigger surface against hammering
@@ -158,6 +166,17 @@ Services:
 - PostgreSQL: `localhost:5432`
 
 The first compose run generates local certificates into `./certs`. You can later replace those files with your own certificates.
+`cert-init` now reads `PUBLIC_BASE_URL`, `TLS_FRONTEND_CERT_HOSTNAMES`, and `TLS_BACKEND_CERT_HOSTNAMES` from `.env`, reuses the existing certs when their SAN coverage already matches, and regenerates them automatically when the expected hostname set changes.
+
+If you want the generated local certs to cover extra LAN or Tailscale hostnames, set for example:
+
+```dotenv
+TLS_FRONTEND_CERT_HOSTNAMES=inboxbridge.local,inboxbridge.your-tailnet.ts.net
+TLS_BACKEND_CERT_HOSTNAMES=inboxbridge.local,inboxbridge.your-tailnet.ts.net
+```
+
+`localhost`, the Docker service names, and the hostname derived from `PUBLIC_BASE_URL` are always included automatically.
+
 For custom certificates, replace:
 
 - `./certs/backend.crt` and `./certs/backend.key` for the Quarkus backend
@@ -170,6 +189,8 @@ For Let's Encrypt, the usual mapping is:
 
 If you use your own certificate authority, also replace `./certs/ca.crt` so the frontend proxy still trusts the backend certificate.
 
+If you want to open InboxBridge from another device on your LAN or tailnet, prefer a real hostname covered by the certificate SANs instead of a bare IP address. Passkeys/WebAuthn do not work reliably on raw IP hosts such as `https://192.168.50.6:3000`, and browsers may treat self-signed or untrusted HTTPS differently for PWA installability and geolocation.
+
 After the stack is up:
 
 1. Open `https://localhost:3000`
@@ -180,6 +201,8 @@ After the stack is up:
 6. Add at least one source email account
 7. Run a poll and verify the dashboard counters
 
+Live batch polls now execute eligible sources through a bounded virtual-thread worker pool. Unrelated source mailboxes can therefore progress concurrently, while the existing provider-throttle safeguards still bound spacing and concurrency where needed. When an operator presses `Stop` during a live run, InboxBridge now fans that request out to registered cancellation actions so active mailbox sessions are closed and worker threads are interrupted instead of only waiting for the next source boundary.
+
 The `Quick Setup Guide` cards in the admin UI are clickable and jump to the section where each action is performed. They also reflect live state:
 
 - green when the step is complete
@@ -187,13 +210,20 @@ The `Quick Setup Guide` cards in the admin UI are clickable and jump to the sect
 - neutral when the step has not been completed yet
 - the provider OAuth step only appears when at least one configured source email account actually uses OAuth
 - the guide auto-collapses when all tracked steps are complete
+- `My InboxBridge` and `Administration` each keep their own `Quick Setup Guide` visibility preference, and the `Preferences` dialog now controls the guide for whichever workspace is currently selected
+- both workspace guides auto-hide once all of their steps are complete, but can still be shown again from `Preferences`
 - users can opt into persisting collapsed/expanded section state across sign-ins from the `Preferences` dialog
 - users can enable `layout editing` from `Preferences`, which reveals drag-and-drop and move controls for the movable workspace sections
 - users can now also reset the section layout back to the default arrangement from `Preferences`
 - the main page sections in each workspace can now be rearranged and that custom order can be remembered per account
+- layout editing now reorders against the actual visible section list for the active workspace, so sections can be moved cleanly into the last visible position and back out again
 - expanding any major section now refreshes its data immediately and shows a loading indicator while the refresh runs
 - the step numbering is assigned dynamically, so conditional steps never leave numbering gaps
 - the `Administration` workspace now uses its own admin-focused quick setup guide instead of repeating the user-area checklist
+- the notifications center is now persisted per account, so actionable notices survive browser refreshes and normal sign-out/sign-in cycles instead of disappearing with the in-memory session state
+- the polling sections now also surface authenticated live-run controls and a real-time progress panel, so an active batch run can be paused, resumed, stopped, reprioritized, or retried without waiting for the next periodic refresh
+- those live progress views now tolerate several concurrently running sources at once, and row-level running indicators follow the backend source-state snapshot instead of assuming only one active source exists
+- user-facing storage wording in the admin UI and OAuth callback pages now stays generic, so labels describe `Encrypted storage` without naming backend implementation details
 
 ## Remote control
 
@@ -206,9 +236,12 @@ Security model:
 - the remote page does not reuse the full admin-ui browser session
 - it uses the same InboxBridge identity and passkey/password flows, but mints a separate remote-scoped session cookie
 - remote session writes require a CSRF header that matches a remote-only CSRF cookie
+- the main authenticated admin-ui browser session now applies the same CSRF-header + same-origin enforcement for unsafe `/api/...` writes, so browser cookies alone are not enough to perform state-changing actions
 - remote actions are rate-limited independently of the normal admin UI
 - the existing polling hardening still applies underneath, including manual trigger limits, host/provider throttling, and busy-run protection
+- authenticated workspaces now also expose an SSE-backed live polling channel with real-time per-source progress, immediate poll notifications, and authenticated `POST` controls for pause/resume/stop/reorder/retry while a run is active
 - optional bearer service-token access is available for automation when `SECURITY_REMOTE_SERVICE_TOKEN` and `SECURITY_REMOTE_SERVICE_USERNAME` are configured
+- `/api/...` responses also emit stricter browser-facing headers including `nosniff`, `DENY` framing, `no-store` cache control, HTTPS-only HSTS, and unbuffered SSE hints for the live polling streams
 
 Remote capabilities:
 
@@ -217,12 +250,20 @@ Remote capabilities:
 - poll all users when the signed-in user is an admin
 - poll one specific source from the remote source list
 - install the `/remote` page as a PWA shortcut on supported devices
+- show browser-specific install guidance on `/remote` even when the browser uses a manual install path instead of Chromium's in-page install event, including Safari `Add to Home Screen` / `Add to Dock` and Firefox Android menu installs
 - when a remote session is revoked or expires, the page returns to the remote login screen with an explicit signed-out notice instead of silently dropping back to sign-in
 - when the signed-in account is missing a personal destination mailbox or has no personal source email accounts yet, the remote page pauses there and points the user back to `My InboxBridge` to finish setup first
 - source cards on `/remote` are collapsed by default so polling actions stay compact on phones and tablets, while each source still keeps its individual poll button visible without expanding the card
-- the main `My InboxBridge` workspace now includes a dedicated `Remote control` card that explains the lightweight page and links directly to `/remote`
+- collapsed source cards on `/remote` now keep a tighter layout with always-visible summary badges for owner, folder, polling cadence, and latest result, so the source list fits more comfortably on smaller screens
+- the `/remote` page now also mirrors the authenticated live polling model: it hydrates the active run snapshot on load, subscribes to the same SSE-backed per-source progress stream, and exposes pause/resume/stop plus per-source `Move Next` / `Retry` controls when the signed-in remote viewer is allowed to manage the current run
+- disabled source mail accounts are omitted from the `/remote` source list so the quick-access surface only shows sources that can actually be triggered there
+- `/remote` now folds live polling state into the existing source cards instead of rendering a duplicate live-progress source list, and pause/stop requests are honored during the current source run as well as between queued sources because the backend checks live-control state between fetched messages instead of only before the batch begins
+- the `/remote` login screen now includes its own language selector for unauthenticated use, but once the user signs in the remote page switches to the language saved in that account's Preferences so the quick-access surface stays aligned with the main workspace
+- the main `My InboxBridge` workspace now includes a dedicated `InboxBridge Go` card that explains the lightweight page and links directly to `/remote`
 - both the main app and `/remote` now expose an explicit opt-in browser location prompt so the current session can record a device-reported location beside the server-side Geo-IP result
 - when a session has browser-reported coordinates, the Sessions tab now tries to infer a human-readable place label from those coordinates and offers an `Open in Maps` link that can hand off to the device's preferred maps app/browser
+- the installable PWA behavior is intentionally limited to `/remote`; the main `My InboxBridge` workspace does not advertise itself as a PWA
+- `/remote` now injects its own manifest/theme metadata at runtime so Chromium browsers can treat that route as installable without making the main workspace advertise itself as a PWA
 - local PWA installation still depends on the browser trusting your HTTPS certificate; an untrusted self-signed certificate can suppress installability even when the manifest and service worker are present
 
 ## Admin UI login
@@ -235,6 +276,7 @@ Initial bootstrap credentials:
 The bootstrap admin is marked `mustChangePassword=true`, so change it immediately after first login.
 The running unauthenticated login screen does not expose whether those bootstrap credentials are still active, so setup operators should rely on this documentation rather than a public status endpoint.
 For convenience, the login form only prefills `admin` / `nimda` while the untouched bootstrap admin is still in its original first-login state. As soon as that admin changes the password, enrolls a passkey, is removed, or otherwise leaves the initial bootstrap state, the login form stops prefilling those credentials.
+The login and `/remote` sign-in screens now start with a username-only step, then move into a generic continue-sign-in step that does not reveal whether the account is password-only, passkey-only, or password-plus-passkey.
 After that, the user can enroll one or more passkeys from the `Security` panel and use `Sign in with passkey` on later visits.
 If `MULTI_USER_ENABLED=false`, the login screen hides self-registration entirely and the admin UI does not expose user-management features.
 Single-user mode still keeps the rest of the control plane visible for the bootstrap admin, including destination mailbox setup, source email accounts, poller settings, and dashboard views.
@@ -243,12 +285,13 @@ Current login rules:
 - password only: the normal `Sign in` flow uses only the password
 - passkey only: the normal `Sign in` flow ignores any typed password and starts passkey authentication
 - password + passkey: the normal `Sign in` flow validates the password first and then requires the passkey as a second factor
-- the dedicated `Sign in with passkey` button is mainly for passkey-only accounts or discoverable-credential sign-in
+- the dedicated `Sign in with passkey` button is shown on the generic continue-sign-in step; it starts a discoverable-credential ceremony without using the typed username as an account probe, and if a password is already filled in it follows the same password-then-passkey flow as `Sign in`
 - users can intentionally remove their password and stay passkey-only
 - self-registration is opened from a dedicated `Register for access` button and uses a focused modal instead of permanently rendering the request form on the login card
 - repeated failed sign-ins from the same client IP are rate-limited with an exponential lockout: after `SECURITY_AUTH_LOGIN_FAILURE_THRESHOLD` failures the address is blocked for `SECURITY_AUTH_LOGIN_INITIAL_BLOCK`, and each later block doubles until `SECURITY_AUTH_LOGIN_MAX_BLOCK`
 - when self-registration is enabled, the registration modal also requires a short anti-robot challenge before the request is accepted
 - admins can override those login and self-registration protection defaults live from `Administration -> Authentication Security` without editing `.env`
+- passkeys should be used only on `localhost` or a real hostname configured in `SECURITY_PASSKEY_RP_ID` / `SECURITY_PASSKEY_ORIGINS`; raw IP hosts are intentionally treated as non-passkey-capable in the UI
 
 The admin UI also supports these languages, with the user preference stored per account and reused across sessions:
 
@@ -311,6 +354,11 @@ Current features:
 - common provider presets for Outlook, Gmail, Yahoo Mail, and Proton Mail Bridge when creating a source email account
 - the source email account modal now uses `Add Email Account` / `Edit Source Email Account ...` headings, disables `Test Connection` until the required fields are present, hides the plain `Add` action for new Outlook accounts, and locks the provider preset while editing an existing account
 - after a successful IMAP source connection test, that dialog now also loads the remote folder list so the user can choose a detected mailbox folder or switch back to manual folder entry; editing an existing IMAP source reloads the folder list automatically too
+- IMAP source email accounts can now optionally mark handled messages as read, delete them, or move them to another source folder after polling; the default remains to leave the source mailbox unchanged
+- those post-poll source actions are stored per UI-managed source account and apply after either a successful import or a duplicate match; POP3 accounts keep those controls disabled because they do not support source-side flag or folder operations
+- when a user starts a broad manual poll, the source-email-account list now follows the backend's active source so the running spinner moves row-by-row as each mailbox is actually being processed instead of lighting every account at once
+- disabled source email accounts now keep their per-account `Run Poll Now` actions disabled and report `Disabled` rather than stale success/error status
+- polling coverage now explicitly includes multi-user mailbox-isolation tests so one user's source mailbox can never import into another user's destination mailbox without failing the test suite
 - auth-aware source-email-account forms that hide password-only or OAuth-only fields when they are not relevant
 - inline help tooltips for source-email-account and poller fields so each control explains what it does
 - env-managed source email accounts shown in the same operational list with a read-only `.env` badge, but only for the account named `admin`
@@ -368,6 +416,8 @@ Current features:
 - import totals and latest poll outcome per email account
 - reusable component-based frontend sections with local CSS files
 - frontend unit tests for key auth, Gmail, email-account card, and utility behavior
+- frontend coverage can now be generated with `cd admin-ui && npm run test:coverage`, while backend JaCoCo reports are generated by `mvn -q test` under `target/site/jacoco/`
+- backend polling coverage now includes inheritance/precedence checks for global, per-user, and per-source polling settings plus GreenMail-backed multi-user mailbox-isolation integration tests
 - frontend translation coverage tests for the major admin-ui surfaces plus a critical-key locale catalog check
 - viewport-aware contextual menus in both source email accounts and user management that stay attached while scrolling, plus translated password-policy / passkey-error copy in the admin UI
 - compact `...` action buttons now keep a fixed square size, and shared button labels stay on a single line to avoid accidental height expansion
@@ -511,6 +561,8 @@ Current limits:
 
 - minimum interval: `5s`
 - fetch window range: `1` to `500`
+- the fetch window only inspects the latest `N` messages on each run; it does not page backward across older mail automatically
+- for historical backfill, temporarily raise the fetch window, run imports, then lower it again
 - default source-host minimum spacing on one app instance: `PT1S`
 - default source-host max concurrency on one app instance: `2`
 - default destination-provider minimum spacing on one app instance: `PT0.25S`
@@ -676,6 +728,18 @@ Compose uses a `cert-init` container that generates:
 
 The frontend proxies to the backend over HTTPS and validates the backend certificate against `ca.crt`.
 
+By default, the generated certs always include:
+
+- frontend: `localhost`, `inboxbridge-admin`, plus the hostname from `PUBLIC_BASE_URL`
+- backend: `localhost`, `inboxbridge`, plus the hostname from `PUBLIC_BASE_URL`
+
+You can add more SAN hostnames or IPv4 addresses through `.env`:
+
+- `TLS_FRONTEND_CERT_HOSTNAMES=inboxbridge.local,inboxbridge.your-tailnet.ts.net`
+- `TLS_BACKEND_CERT_HOSTNAMES=inboxbridge.local,inboxbridge.your-tailnet.ts.net`
+
+The values are comma-separated. When those hostnames change, `cert-init` now automatically reissues the generated certs on the next `docker compose up --build`.
+
 To replace the generated certs with your own:
 
 1. stop the stack
@@ -683,6 +747,18 @@ To replace the generated certs with your own:
 3. if you are using Let's Encrypt or another public CA, copy the certificate chain file into `./certs/backend.crt` and `./certs/frontend.crt`, and copy the corresponding private key into `./certs/backend.key` and `./certs/frontend.key`
 4. if the backend certificate is signed by a private/internal CA, also replace `./certs/ca.crt` with that CA certificate so the frontend proxy trusts the backend
 5. start the stack again
+
+For Raspberry Pi / LAN / Tailscale access:
+
+- prefer one canonical hostname everywhere if you want passkeys to work reliably
+- set `PUBLIC_BASE_URL` to that hostname
+- set `SECURITY_PASSKEY_RP_ID` to that hostname
+- set `SECURITY_PASSKEY_ORIGINS` to the HTTPS origins you actually serve
+- trust `certs/ca.crt` on every device/browser that will open InboxBridge, otherwise self-signed TLS warnings will still block features such as WebAuthn/passkeys
+
+`SECURITY_PASSKEY_ORIGINS` supports comma-separated origins, but one `SECURITY_PASSKEY_RP_ID` cannot span unrelated domains such as `raspberrypi.local` and `something.ts.net`.
+
+Platform-specific CA trust steps are documented in `docs/TRUST_LOCAL_CA.md`.
 
 ## Important current limitations
 
@@ -694,10 +770,10 @@ To replace the generated certs with your own:
 
 The backend test suite now includes a GreenMail-backed mail-flow integration test that verifies InboxBridge can fetch messages from a real IMAP source mailbox, append them into a real IMAP destination mailbox, and suppress duplicate re-imports on the next poll.
 
-Verified on 2026-03-26:
+Verified on 2026-04-01:
 
 - `mvn test` passes
-- admin UI Docker build succeeds, with frontend Vitest intended to run separately unless `RUN_TESTS=true` is passed to the admin UI Docker build
+- admin UI Docker build succeeds and runs the frontend Vitest suite in-container during `docker compose up --build -d`
 - Docker Compose builds successfully
 - the HTTPS admin UI serves correctly in the container
 - unauthenticated `GET /api/auth/me` returns `401` through the HTTPS proxy

@@ -46,7 +46,7 @@ describe('EmailAccountCard', () => {
     )
 
     expect(screen.getByText('outlook-main')).toBeInTheDocument()
-    expect(screen.getByText('Encrypted DB')).toBeInTheDocument()
+    expect(screen.getByText('Encrypted storage')).toBeInTheDocument()
 
     fireEvent.click(screen.getByRole('button', { name: 'Edit' }))
     fireEvent.click(screen.getByRole('button', { name: 'Connect Microsoft OAuth' }))
@@ -126,10 +126,48 @@ describe('EmailAccountCard', () => {
 
     expect(screen.getByText('Anfitrião')).toBeInTheDocument()
     expect(screen.getByText('Armazenamento do token')).toBeInTheDocument()
-    expect(screen.getByText('BD encriptada')).toBeInTheDocument()
+    expect(screen.getByText('Armazenamento encriptado')).toBeInTheDocument()
     expect(screen.getByText('Ainda não existe atividade de polling registada.')).toBeInTheDocument()
     expect(screen.getByText('Pasta')).toBeInTheDocument()
     expect(screen.getByRole('button', { name: 'Editar' })).toBeInTheDocument()
     expect(screen.getByRole('button', { name: 'Apagar' })).toBeInTheDocument()
+  })
+
+  it('shows disabled status for disabled email accounts even when the last event failed', () => {
+    render(
+      <EmailAccountCard
+        emailAccount={{
+          emailAccountId: 'outlook-main',
+          enabled: false,
+          protocol: 'IMAP',
+          authMethod: 'PASSWORD',
+          oauthProvider: 'NONE',
+          host: 'outlook.office365.com',
+          port: 993,
+          tls: true,
+          tokenStorageMode: 'PASSWORD',
+          totalImportedMessages: 0,
+          lastImportedAt: null,
+          folder: 'INBOX',
+          lastEvent: {
+            status: 'ERROR',
+            finishedAt: '2026-03-26T12:00:00Z',
+            trigger: 'manual',
+            fetched: 0,
+            imported: 0,
+            duplicates: 0,
+            error: 'boom'
+          }
+        }}
+        locale="en"
+        onConnectMicrosoft={vi.fn()}
+        onDelete={vi.fn()}
+        onEdit={vi.fn()}
+        t={t}
+      />
+    )
+
+    expect(screen.getByText('Disabled')).toBeInTheDocument()
+    expect(screen.queryByText('Error')).not.toBeInTheDocument()
   })
 })

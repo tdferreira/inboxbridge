@@ -37,11 +37,11 @@ export function buildUserWorkspaceSections({
   return [
     {
       id: 'quickSetup',
-      render: () => userSetupGuideState.allStepsComplete && uiPreferences.quickSetupDismissed ? null : (
+      render: () => userSetupGuideState.allStepsComplete && uiPreferences.quickSetupDismissed && !uiPreferences.quickSetupPinnedVisible ? null : (
         <SetupGuidePanel
           collapsed={uiPreferences.quickSetupCollapsed}
           dismissable={userSetupGuideState.allStepsComplete}
-          onDismiss={dismissQuickSetupGuide}
+          onDismiss={() => dismissQuickSetupGuide('user')}
           onFocusSection={focusSection}
           onToggleCollapse={() => toggleWorkspaceSection('quickSetupCollapsed')}
           savingLayout={isPending('uiPreferences')}
@@ -85,12 +85,18 @@ export function buildUserWorkspaceSections({
         <UserPollingSettingsSection
           collapsed={uiPreferences.userPollingCollapsed}
           collapseLoading={isPending('uiPreferences') && uiPreferences.persistLayout}
-          hasFetchers={emailAccounts.userEmailAccounts.length > 0}
+          hasFetchers={emailAccounts.runnableUserEmailAccounts.length > 0}
           onCollapseToggle={() => toggleWorkspaceSection('userPollingCollapsed')}
+          onMovePollSourceNext={polling.moveLivePollSourceNext}
           onOpenEditor={polling.openUserPollingDialog}
+          onPausePoll={polling.pauseLivePoll}
+          onResumePoll={polling.resumeLivePoll}
+          onRetryPollSource={polling.retryLivePollSource}
           onRunPoll={polling.runUserPoll}
+          onStopPoll={polling.stopLivePoll}
           pollingSettings={polling.userPollingSettings}
           runningPoll={polling.runningUserPoll}
+          livePoll={polling.livePoll}
           sectionLoading={isSectionRefreshing('userPollingCollapsed')}
           t={t}
         />
@@ -133,7 +139,7 @@ export function buildUserWorkspaceSections({
           emailAccountFolders={emailAccounts.emailAccountFolders}
           emailAccountFoldersLoading={emailAccounts.emailAccountFoldersLoading}
           fetcherDialogOpen={emailAccounts.showFetcherDialog}
-          fetcherPollLoadingId={emailAccounts.fetcherPollLoadingId}
+          fetcherPollLoadingIds={emailAccounts.fetcherPollLoadingIds}
           fetcherPollingDialog={emailAccounts.fetcherPollingTarget}
           fetcherPollingForm={emailAccounts.fetcherPollingForm}
           fetcherPollingLoading={emailAccounts.fetcherPollingLoading}
@@ -177,6 +183,7 @@ export function buildAdminWorkspaceSections({
   adminSetupGuideState,
   authSecuritySettings,
   authOptions,
+  dismissQuickSetupGuide,
   isPending,
   isSectionRefreshing,
   language,
@@ -199,11 +206,11 @@ export function buildAdminWorkspaceSections({
   return [
     {
       id: 'adminQuickSetup',
-      render: () => adminSetupGuideState.allStepsComplete ? null : (
+      render: () => adminSetupGuideState.allStepsComplete && uiPreferences.adminQuickSetupDismissed && !uiPreferences.adminQuickSetupPinnedVisible ? null : (
         <SetupGuidePanel
           collapsed={uiPreferences.adminQuickSetupCollapsed}
-          dismissable={false}
-          onDismiss={() => {}}
+          dismissable={adminSetupGuideState.allStepsComplete}
+          onDismiss={() => dismissQuickSetupGuide('admin')}
           onFocusSection={focusSection}
           onToggleCollapse={() => toggleWorkspaceSection('adminQuickSetupCollapsed')}
           savingLayout={isPending('uiPreferences')}
@@ -220,10 +227,16 @@ export function buildAdminWorkspaceSections({
           collapsed={uiPreferences.systemDashboardCollapsed}
           collapseLoading={isPending('uiPreferences') && uiPreferences.persistLayout}
           dashboard={systemDashboard}
+          livePoll={polling.livePoll}
           locale={language}
           onCollapseToggle={() => toggleWorkspaceSection('systemDashboardCollapsed')}
+          onMovePollSourceNext={polling.moveLivePollSourceNext}
           onOpenEditor={polling.openSystemPollingDialog}
+          onPausePoll={polling.pauseLivePoll}
+          onResumePoll={polling.resumeLivePoll}
+          onRetryPollSource={polling.retryLivePollSource}
           onRunPoll={polling.runPoll}
+          onStopPoll={polling.stopLivePoll}
           runningPoll={polling.runningPoll}
           sectionLoading={isSectionRefreshing('systemDashboardCollapsed')}
           t={t}

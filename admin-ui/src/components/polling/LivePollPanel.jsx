@@ -1,0 +1,83 @@
+import './LivePollPanel.css'
+import SectionCard from '../common/SectionCard'
+
+function formatCounts(source) {
+  if (source.state === 'RUNNING' || source.state === 'QUEUED' || source.state === 'RETRY_QUEUED') {
+    return null
+  }
+  return `Fetched ${source.fetched}, imported ${source.imported}, duplicates ${source.duplicates}${source.error ? `, error: ${source.error}` : ''}`
+}
+
+function showQueuePosition(source) {
+  return (source.state === 'QUEUED' || source.state === 'RETRY_QUEUED') && Number.isInteger(source.position) && source.position > 0
+}
+
+function LivePollPanel({
+  livePoll,
+  onMoveNext,
+  onPause,
+  onResume,
+  onRetry,
+  onStop,
+  showOwners = false
+}) {
+  if (!livePoll?.running) {
+    return null
+  }
+
+  const canControl = livePoll.viewerCanControl
+  const state = livePoll.state || 'RUNNING'
+  const isPaused = state === 'PAUSED' || state === 'PAUSING'
+  const runningSources = (livePoll.sources || []).filter((source) => source.state === 'RUNNING')
+  const runningSourceCopy = runningSources.length === 0
+    ? ''
+    : runningSources.length === 1
+      ? ` · Active source: ${runningSources[0].label}`
+      : ` · Active sources: ${runningSources.map((source) => source.label).join(', ')}`
+  const copy = `State: ${state}${runningSourceCopy}${livePoll.ownerUsername ? ` · Triggered by ${livePoll.ownerUsername}` : ''}`
+  const actions = canControl ? (
+    <>
+      {isPaused ? (
+        <button className="secondary" onClick={onResume} type="button">Resume</button>
+      ) : (
+        <button className="secondary" onClick={onPause} type="button">Pause</button>
+      )}
+      <button className="danger" onClick={onStop} type="button">Stop</button>
+    </>
+  ) : null
+
+  return (
+    <SectionCard actions={actions ? <div className="live-poll-panel-actions">{actions}</div> : null} className="live-poll-panel" copy={copy} title="Live Poll Progress">
+      <div className="live-poll-source-list">
+        {(livePoll.sources || []).map((source) => (
+          <article key={source.sourceId} className={`live-poll-source live-poll-source-${String(source.state || '').toLowerCase()}`}>
+            <div className="live-poll-source-main">
+              <div className="live-poll-source-copy">
+                <strong>{source.label || source.sourceId}</strong>
+                <div className="section-copy">
+                  {source.sourceId}
+                  {showOwners && source.ownerUsername ? ` · Owner ${source.ownerUsername}` : ''}
+                  {showQueuePosition(source) ? ` · Queue ${source.position}` : ''}
+                </div>
+                {formatCounts(source) ? <div className="section-copy">{formatCounts(source)}</div> : null}
+              </div>
+              <span className="status-pill tone-neutral">{source.state}</span>
+            </div>
+            {canControl && source.actionable ? (
+              <div className="live-poll-source-actions">
+                {(source.state === 'QUEUED' || source.state === 'RETRY_QUEUED') && source.position > 1 ? (
+                  <button className="secondary" onClick={() => onMoveNext(source.sourceId)} type="button">Move Next</button>
+                ) : null}
+                {(source.state === 'FAILED' || source.state === 'COMPLETED' || source.state === 'STOPPED') ? (
+                  <button className="secondary" onClick={() => onRetry(source.sourceId)} type="button">Retry</button>
+                ) : null}
+              </div>
+            ) : null}
+          </article>
+        ))}
+      </div>
+    </SectionCard>
+  )
+}
+
+export default LivePollPanel

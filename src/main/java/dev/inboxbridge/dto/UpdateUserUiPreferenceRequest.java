@@ -11,6 +11,8 @@ public record UpdateUserUiPreferenceRequest(
         Boolean quickSetupCollapsed,
         Boolean quickSetupDismissed,
         Boolean quickSetupPinnedVisible,
+        Boolean adminQuickSetupDismissed,
+        Boolean adminQuickSetupPinnedVisible,
         Boolean destinationMailboxCollapsed,
         Boolean userPollingCollapsed,
         Boolean userStatsCollapsed,
@@ -22,5 +24,6 @@ public record UpdateUserUiPreferenceRequest(
         Boolean userManagementCollapsed,
         List<String> userSectionOrder,
         List<String> adminSectionOrder,
-        String language) {
+        String language,
+        List<UserUiNotificationView> notificationHistory) {
 }

@@ -198,5 +198,6 @@ describe('AuthSecuritySettingsDialog', () => {
     expect(screen.getAllByText(/Provider docs/i).length).toBeGreaterThan(0)
     expect(screen.getByText('PT20M')).toBeInTheDocument()
     expect(screen.getByTitle('PT20M = 20 minutes')).toBeInTheDocument()
+    expect(screen.queryByText(/PostgreSQL/i)).not.toBeInTheDocument()
   })
 })

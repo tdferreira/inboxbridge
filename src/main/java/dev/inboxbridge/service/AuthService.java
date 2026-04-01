@@ -49,13 +49,13 @@ public class AuthService {
         if (result.status() == AuthenticationStatus.PASSKEY_REQUIRED) {
             return LoginResult.passkeyRequired(result.passkeyChallenge());
         }
-        String token = userSessionService.createSession(
+        UserSessionService.CreatedUserSession session = userSessionService.createSession(
                 result.user(),
                 clientIp,
                 geoIpLocationService.resolveLocation(clientIp).orElse(null),
                 userAgent,
                 result.loginMethod());
-        return LoginResult.authenticated(result.user(), token);
+        return LoginResult.authenticated(result.user(), session.sessionToken(), session.csrfToken());
     }
 
     public AuthenticatedSession loginWithPasskey(PasskeyService.PasskeyAuthenticationResult result, String clientIp, String userAgent) {
@@ -63,13 +63,13 @@ public class AuthService {
                 .filter(found -> found.active && found.approved)
                 .orElseThrow(() -> new IllegalArgumentException("Invalid passkey sign-in"));
         UserSession.LoginMethod loginMethod = loginMethodForPasskey(result);
-        String token = userSessionService.createSession(
+        UserSessionService.CreatedUserSession session = userSessionService.createSession(
                 authenticatedUser,
                 clientIp,
                 geoIpLocationService.resolveLocation(clientIp).orElse(null),
                 userAgent,
                 loginMethod);
-        return new AuthenticatedSession(authenticatedUser, token);
+        return new AuthenticatedSession(authenticatedUser, session.sessionToken(), session.csrfToken());
     }
 
     public AuthenticationResult authenticateWithPasskey(PasskeyService.PasskeyAuthenticationResult result) {
@@ -101,7 +101,7 @@ public class AuthService {
         }
     }
 
-    public record AuthenticatedSession(AppUser user, String token) {
+    public record AuthenticatedSession(AppUser user, String token, String csrfToken) {
     }
 
     public record AuthenticatedRequest(AppUser user, UserSession session) {
@@ -110,8 +110,8 @@ public class AuthService {
     public record LoginResult(LoginStatus status, AuthenticatedSession session,
             dev.inboxbridge.dto.StartPasskeyCeremonyResponse passkeyChallenge) {
 
-        public static LoginResult authenticated(AppUser user, String token) {
-            return new LoginResult(LoginStatus.AUTHENTICATED, new AuthenticatedSession(user, token), null);
+        public static LoginResult authenticated(AppUser user, String token, String csrfToken) {
+            return new LoginResult(LoginStatus.AUTHENTICATED, new AuthenticatedSession(user, token, csrfToken), null);
         }
 
         public static LoginResult passkeyRequired(dev.inboxbridge.dto.StartPasskeyCeremonyResponse challenge) {

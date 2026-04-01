@@ -251,6 +251,69 @@ class UserEmailAccountServiceTest {
         assertEquals(MailboxConflictService.SOURCE_DESTINATION_CONFLICT_MESSAGE, error.getMessage());
     }
 
+    @Test
+    void upsertPersistsConfiguredPostPollActions() {
+        UserEmailAccountService service = service();
+        AppUser owner = user(1L);
+
+        UserEmailAccountView view = service.upsert(owner, new UpdateUserEmailAccountRequest(
+                null,
+                "fetcher-a",
+                true,
+                "IMAP",
+                "imap.example.com",
+                993,
+                true,
+                "PASSWORD",
+                "NONE",
+                "user@example.com",
+                "Secret#123",
+                "",
+                "INBOX",
+                false,
+                "Imported/Test",
+                true,
+                "MOVE",
+                "Archive"));
+
+        UserEmailAccount stored = service.repository.findByEmailAccountId("fetcher-a").orElseThrow();
+        assertTrue(stored.markReadAfterPoll);
+        assertEquals(dev.inboxbridge.domain.SourcePostPollAction.MOVE, stored.postPollAction);
+        assertEquals("Archive", stored.postPollTargetFolder);
+        assertTrue(view.markReadAfterPoll());
+        assertEquals("MOVE", view.postPollAction());
+        assertEquals("Archive", view.postPollTargetFolder());
+    }
+
+    @Test
+    void previewRejectsPostPollActionsForPop3Accounts() {
+        UserEmailAccountService service = service();
+
+        IllegalArgumentException error = assertThrows(
+                IllegalArgumentException.class,
+                () -> service.preview(user(1L), new UpdateUserEmailAccountRequest(
+                        null,
+                        "fetcher-a",
+                        true,
+                        "POP3",
+                        "pop.example.com",
+                        995,
+                        true,
+                        "PASSWORD",
+                        "NONE",
+                        "user@example.com",
+                        "Secret#123",
+                        "",
+                        "INBOX",
+                        false,
+                        "Imported/Test",
+                        true,
+                        "DELETE",
+                        "")));
+
+        assertEquals("Source-side message actions are only supported for IMAP accounts", error.getMessage());
+    }
+
     private UserEmailAccountService service() {
         UserEmailAccountService service = new UserEmailAccountService();
         service.repository = new InMemoryUserEmailAccountRepository();

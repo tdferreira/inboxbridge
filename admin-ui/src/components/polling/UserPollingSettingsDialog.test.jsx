@@ -100,4 +100,9 @@ describe('UserPollingSettingsDialog', () => {
     expect(screen.getByText('My Polling Defaults')).toBeInTheDocument()
     expect(screen.getByText('Effective Values')).toBeInTheDocument()
   })
+
+  it('documents fetch window backfill behavior in the help copy', () => {
+    expect(translate('en', 'userPolling.fetchWindowHelp')).toContain('does not page backward across older mail automatically')
+    expect(translate('en', 'userPolling.fetchWindowHelp')).toContain('temporarily raise the window')
+  })
 })

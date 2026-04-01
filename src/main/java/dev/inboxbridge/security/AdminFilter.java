@@ -23,18 +23,27 @@ public class AdminFilter implements ContainerRequestFilter {
     @Inject
     CurrentUserContext currentUserContext;
 
+    @Inject
+    BrowserSessionSecurity browserSessionSecurity;
+
     @Override
     public void filter(ContainerRequestContext requestContext) {
         Cookie sessionCookie = requestContext.getCookies().get(AuthenticatedFilter.SESSION_COOKIE);
-        AppUser user;
+        AuthService.AuthenticatedRequest authenticatedRequest;
         try {
-            user = authService.requireAuthenticatedUser(sessionCookie == null ? null : sessionCookie.getValue());
+            authenticatedRequest = authService.requireAuthenticatedRequest(sessionCookie == null ? null : sessionCookie.getValue());
         } catch (IllegalArgumentException e) {
             throw new NotAuthorizedException("Not authenticated", e);
         }
+        if (browserSessionSecurity.requiresCsrfValidation(requestContext)) {
+            browserSessionSecurity.validateOrigin(requestContext);
+            browserSessionSecurity.validateCsrf(requestContext, authenticatedRequest.session());
+        }
+        AppUser user = authenticatedRequest.user();
         if (user.role != AppUser.Role.ADMIN) {
             throw new ForbiddenException("Admin access required");
         }
         currentUserContext.setUser(user);
+        currentUserContext.setSession(authenticatedRequest.session());
     }
 }

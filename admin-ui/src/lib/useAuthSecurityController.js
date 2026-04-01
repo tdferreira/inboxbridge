@@ -6,6 +6,8 @@ import { buildRecentSessionTargetId } from './sectionTargets'
 
 const BOOTSTRAP_LOGIN_FORM = { username: 'admin', password: 'nimda' }
 const EMPTY_LOGIN_FORM = { username: '', password: '' }
+const LOGIN_STAGE_USERNAME = 'username'
+const LOGIN_STAGE_CREDENTIALS = 'credentials'
 const DEFAULT_REGISTER_FORM = { username: '', password: '', confirmPassword: '', captchaToken: '' }
 const DEFAULT_PASSWORD_FORM = { currentPassword: '', newPassword: '', confirmNewPassword: '' }
 const DEFAULT_SESSION_ACTIVITY = { recentLogins: [], activeSessions: [], geoIpConfigured: false }
@@ -29,6 +31,8 @@ export function useAuthSecurityController({
   const [authLoading, setAuthLoading] = useState(true)
   const [authError, setAuthError] = useState('')
   const [loginForm, setLoginForm] = useState(() => (bootstrapLoginPrefillEnabled ? BOOTSTRAP_LOGIN_FORM : EMPTY_LOGIN_FORM))
+  const [loginStage, setLoginStage] = useState(LOGIN_STAGE_USERNAME)
+  const [bootstrapPrefillDismissed, setBootstrapPrefillDismissed] = useState(false)
   const [registerForm, setRegisterForm] = useState(DEFAULT_REGISTER_FORM)
   const [registerOpen, setRegisterOpen] = useState(false)
   const [registerChallenge, setRegisterChallenge] = useState(null)
@@ -55,6 +59,9 @@ export function useAuthSecurityController({
 
   async function clearSessionState({ showExpiredMessage = false } = {}) {
     setSession(null)
+    setLoginStage(LOGIN_STAGE_USERNAME)
+    setLoginForm(EMPTY_LOGIN_FORM)
+    setBootstrapPrefillDismissed(true)
     setPasswordForm(DEFAULT_PASSWORD_FORM)
     setMyPasskeys([])
     setSessionActivity(DEFAULT_SESSION_ACTIVITY)
@@ -92,7 +99,7 @@ export function useAuthSecurityController({
     const usingEmptyForm = loginForm.username === ''
       && loginForm.password === ''
 
-    if (bootstrapLoginPrefillEnabled && (usingBootstrapPrefill || usingEmptyForm)) {
+    if (!bootstrapPrefillDismissed && bootstrapLoginPrefillEnabled && (usingBootstrapPrefill || usingEmptyForm)) {
       if (!usingBootstrapPrefill) {
         setLoginForm(BOOTSTRAP_LOGIN_FORM)
       }
@@ -144,36 +151,44 @@ export function useAuthSecurityController({
     setSession(payload.user)
   }
 
+  async function runLoginSubmission() {
+    const response = await fetch('/api/auth/login', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(loginForm)
+    })
+    if (!response.ok) {
+      throw new Error(await apiErrorText(response, errorText('loginFailed')))
+    }
+    const payload = await response.json()
+    if (payload.status === 'PASSKEY_REQUIRED' && payload.passkeyChallenge) {
+      if (!passkeysSupported()) {
+        throw new Error(t('errors.passkeyIpHostUnsupported', { host: window.location.hostname || 'this host' }))
+      }
+      await completePasskeyLogin(payload.passkeyChallenge)
+      return
+    }
+    setSession(payload.user)
+    if (!payload.user.mustChangePassword) {
+      pushNotification({
+        autoCloseMs: 10000,
+        message: translatedNotification('notifications.signedIn'),
+        targetId: null,
+        tone: 'success'
+      })
+    }
+  }
+
   async function handleLogin(event) {
     event.preventDefault()
     resetTransientMessages()
+    if (loginStage === LOGIN_STAGE_USERNAME) {
+      setLoginStage(LOGIN_STAGE_CREDENTIALS)
+      return
+    }
     await withPending('login', async () => {
       try {
-        const response = await fetch('/api/auth/login', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify(loginForm)
-        })
-        if (!response.ok) {
-          throw new Error(await apiErrorText(response, errorText('loginFailed')))
-        }
-        const payload = await response.json()
-        if (payload.status === 'PASSKEY_REQUIRED' && payload.passkeyChallenge) {
-          if (!passkeysSupported()) {
-            throw new Error(t('errors.passkeyIpHostUnsupported', { host: window.location.hostname || 'this host' }))
-          }
-          await completePasskeyLogin(payload.passkeyChallenge)
-          return
-        }
-        setSession(payload.user)
-        if (!payload.user.mustChangePassword) {
-          pushNotification({
-            autoCloseMs: 10000,
-            message: translatedNotification('notifications.signedIn'),
-            targetId: null,
-            tone: 'success'
-          })
-        }
+        await runLoginSubmission()
       } catch (err) {
         setAuthError(err.message || errorText('loginFailed'))
       }
@@ -309,15 +324,25 @@ export function useAuthSecurityController({
 
   async function handlePasskeyLogin() {
     resetTransientMessages()
-    await withPending('passkeyLogin', async () => {
+    if (loginStage === LOGIN_STAGE_USERNAME) {
+      setLoginStage(LOGIN_STAGE_CREDENTIALS)
+      return
+    }
+    const hasTypedPassword = loginForm.password.trim() !== ''
+    const pendingKey = hasTypedPassword ? 'login' : 'passkeyLogin'
+    await withPending(pendingKey, async () => {
       try {
+        if (hasTypedPassword) {
+          await runLoginSubmission()
+          return
+        }
         if (!passkeysSupported()) {
           throw new Error(t('errors.passkeyUnsupported'))
         }
         const startResponse = await fetch('/api/auth/passkey/options', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ username: loginForm.username.trim() || null })
+          body: JSON.stringify({})
         })
         if (!startResponse.ok) {
           throw new Error(await apiErrorText(startResponse, errorText('startPasskeySignIn')))
@@ -563,6 +588,20 @@ export function useAuthSecurityController({
     setMyPasskeys(Array.isArray(passkeysPayload) ? passkeysPayload : [])
   }
 
+  function updateLoginForm(updater) {
+    setBootstrapPrefillDismissed(true)
+    setLoginForm((current) => {
+      const next = typeof updater === 'function' ? updater(current) : updater
+      if (!next || typeof next !== 'object') {
+        return current
+      }
+      if (next.username !== current.username && next.username !== BOOTSTRAP_LOGIN_FORM.username && next.password === BOOTSTRAP_LOGIN_FORM.password) {
+        return { ...next, password: '' }
+      }
+      return next
+    })
+  }
+
   function sessionKindKey(sessionType) {
     return SESSION_KIND_KEYS[sessionType] || SESSION_KIND_KEYS.BROWSER
   }
@@ -600,6 +639,7 @@ export function useAuthSecurityController({
     handlePasswordChange,
     handlePasswordRemoval,
     handleRegister,
+    loginStage,
     loadSession,
     loginForm,
     myPasskeys,
@@ -624,7 +664,7 @@ export function useAuthSecurityController({
     sessionActivity,
     selectSecurityTab,
     session,
-    setLoginForm,
+    setLoginForm: updateLoginForm,
     setPasskeyLabel,
     setPasswordForm,
     setRegisterForm,

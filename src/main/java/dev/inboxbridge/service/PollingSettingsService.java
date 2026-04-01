@@ -30,6 +30,7 @@ public class PollingSettingsService {
     @Inject
     SystemPollingSettingRepository repository;
 
+    @Transactional
     public EffectivePollingSettings effectiveSettings() {
         SystemPollingSetting setting = repository.findSingleton().orElse(null);
         boolean effectivePollEnabled = setting != null && setting.pollEnabledOverride != null
@@ -48,6 +49,7 @@ public class PollingSettingsService {
                 effectiveFetchWindow);
     }
 
+    @Transactional
     public ManualPollRateLimit effectiveManualPollRateLimit() {
         SystemPollingSetting setting = repository.findSingleton().orElse(null);
         int effectiveCount = setting != null && setting.manualTriggerLimitCountOverride != null
@@ -62,6 +64,7 @@ public class PollingSettingsService {
                 effectiveWindowSeconds);
     }
 
+    @Transactional
     public EffectiveThrottleSettings effectiveThrottleSettings() {
         SystemPollingSetting setting = repository.findSingleton().orElse(null);
         Duration effectiveSourceHostMinSpacing = setting != null && setting.sourceHostMinSpacingOverride != null && !setting.sourceHostMinSpacingOverride.isBlank()

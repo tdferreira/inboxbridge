@@ -28,6 +28,9 @@ public class AuthenticatedFilter implements ContainerRequestFilter {
     @Inject
     ResourceInfo resourceInfo;
 
+    @Inject
+    BrowserSessionSecurity browserSessionSecurity;
+
     @Override
     public void filter(ContainerRequestContext requestContext) {
         Cookie sessionCookie = requestContext.getCookies().get(SESSION_COOKIE);
@@ -36,6 +39,10 @@ public class AuthenticatedFilter implements ContainerRequestFilter {
             authenticatedRequest = authService.requireAuthenticatedRequest(sessionCookie == null ? null : sessionCookie.getValue());
         } catch (IllegalArgumentException e) {
             throw new NotAuthorizedException("Not authenticated", e);
+        }
+        if (browserSessionSecurity.requiresCsrfValidation(requestContext)) {
+            browserSessionSecurity.validateOrigin(requestContext);
+            browserSessionSecurity.validateCsrf(requestContext, authenticatedRequest.session());
         }
         currentUserContext.setUser(authenticatedRequest.user());
         currentUserContext.setSession(authenticatedRequest.session());

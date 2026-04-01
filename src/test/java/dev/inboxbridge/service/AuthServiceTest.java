@@ -103,6 +103,7 @@ class AuthServiceTest {
                 "JUnit Browser");
 
         assertEquals("session-1", session.token());
+        assertEquals("csrf-1", session.csrfToken());
         assertEquals("Paris, France", sessionService.lastLocationLabel);
         assertEquals(UserSession.LoginMethod.PASSWORD_PLUS_PASSKEY, sessionService.lastLoginMethod);
         assertTrue(sessionService.lastUserAgent.contains("JUnit"));
@@ -159,12 +160,12 @@ class AuthServiceTest {
         private UserSession.LoginMethod lastLoginMethod;
 
         @Override
-        public String createSession(AppUser user, String clientIp, String locationLabel, String userAgent, UserSession.LoginMethod loginMethod) {
+        public CreatedUserSession createSession(AppUser user, String clientIp, String locationLabel, String userAgent, UserSession.LoginMethod loginMethod) {
             this.lastClientIp = clientIp;
             this.lastLocationLabel = locationLabel;
             this.lastUserAgent = userAgent;
             this.lastLoginMethod = loginMethod;
-            return "session-1";
+            return new CreatedUserSession("session-1", "csrf-1", new UserSession());
         }
 
         @Override

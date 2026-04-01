@@ -3,8 +3,14 @@ package dev.inboxbridge.service;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
+import java.nio.charset.StandardCharsets;
+import java.time.Instant;
 import java.util.List;
+import java.util.Optional;
 import java.util.Properties;
+import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.Executors;
+import java.util.concurrent.TimeUnit;
 
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
@@ -14,9 +20,11 @@ import com.icegreen.greenmail.util.GreenMail;
 import com.icegreen.greenmail.util.ServerSetupTest;
 
 import dev.inboxbridge.config.InboxBridgeConfig;
+import dev.inboxbridge.domain.FetchedMessage;
 import dev.inboxbridge.domain.ImapAppendDestinationTarget;
 import dev.inboxbridge.dto.EmailAccountConnectionTestResult;
 import jakarta.mail.Folder;
+import jakarta.mail.Message;
 import jakarta.mail.Session;
 import jakarta.mail.Store;
 
@@ -90,6 +98,51 @@ class ImapAppendMailDestinationServiceTest {
         assertTrue(result.folderAccessible());
     }
 
+    @Test
+    void importMessageAllowsConcurrentCreationOfTheDestinationFolder() throws Exception {
+        ImapAppendMailDestinationService service = new ImapAppendMailDestinationService();
+        ImapAppendDestinationTarget target = new ImapAppendDestinationTarget(
+                "user-destination:7",
+                7L,
+                "alice",
+                UserMailDestinationConfigService.PROVIDER_CUSTOM,
+                "127.0.0.1",
+                greenMail.getImap().getPort(),
+                false,
+                InboxBridgeConfig.AuthMethod.PASSWORD,
+                InboxBridgeConfig.OAuthProvider.NONE,
+                USERNAME,
+                PASSWORD,
+                "Imported");
+
+        CountDownLatch ready = new CountDownLatch(2);
+        CountDownLatch start = new CountDownLatch(1);
+        try (var executor = Executors.newVirtualThreadPerTaskExecutor()) {
+            var first = executor.submit(() -> {
+                try {
+                    importConcurrently(service, target, ready, start, messageBytes("alpha", "<alpha@example.com>"));
+                } catch (Exception e) {
+                    throw new RuntimeException(e);
+                }
+            });
+            var second = executor.submit(() -> {
+                try {
+                    importConcurrently(service, target, ready, start, messageBytes("beta", "<beta@example.com>"));
+                } catch (Exception e) {
+                    throw new RuntimeException(e);
+                }
+            });
+
+            assertTrue(ready.await(5, TimeUnit.SECONDS));
+            start.countDown();
+
+            first.get(5, TimeUnit.SECONDS);
+            second.get(5, TimeUnit.SECONDS);
+        }
+
+        assertEquals(List.of("alpha", "beta"), listSubjects("Imported"));
+    }
+
     private void createTestFolders() throws Exception {
         Properties properties = new Properties();
         properties.put("mail.store.protocol", "imap");
@@ -114,6 +167,56 @@ class ImapAppendMailDestinationServiceTest {
             if (!nested.exists()) {
                 nested.create(Folder.HOLDS_MESSAGES);
             }
+        } finally {
+            store.close();
+        }
+    }
+
+    private void importConcurrently(
+            ImapAppendMailDestinationService service,
+            ImapAppendDestinationTarget target,
+            CountDownLatch ready,
+            CountDownLatch start,
+            byte[] rawMessage)
+            throws Exception {
+        ready.countDown();
+        assertTrue(start.await(5, TimeUnit.SECONDS));
+        service.importMessage(
+                target,
+                null,
+                new FetchedMessage("source", "message-key", Optional.empty(), Instant.now(), rawMessage));
+    }
+
+    private byte[] messageBytes(String subject, String messageId) {
+        return ("Subject: " + subject + "\r\n"
+                + "Message-ID: " + messageId + "\r\n"
+                + "From: sender@example.com\r\n"
+                + "To: " + USERNAME + "\r\n"
+                + "Date: Tue, 01 Apr 2025 12:00:00 +0000\r\n"
+                + "\r\n"
+                + "Hello " + subject + "\r\n").getBytes(StandardCharsets.UTF_8);
+    }
+
+    private List<String> listSubjects(String folderName) throws Exception {
+        Properties properties = new Properties();
+        properties.put("mail.store.protocol", "imap");
+        Session session = Session.getInstance(properties);
+        Store store = session.getStore("imap");
+        try {
+            store.connect("127.0.0.1", greenMail.getImap().getPort(), USERNAME, PASSWORD);
+            Folder folder = store.getFolder(folderName);
+            folder.open(Folder.READ_ONLY);
+            Message[] messages = folder.getMessages();
+            return java.util.Arrays.stream(messages)
+                    .map((message) -> {
+                        try {
+                            return message.getSubject();
+                        } catch (Exception e) {
+                            throw new RuntimeException(e);
+                        }
+                    })
+                    .sorted()
+                    .toList();
         } finally {
             store.close();
         }

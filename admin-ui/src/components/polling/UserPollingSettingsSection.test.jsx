@@ -86,8 +86,36 @@ describe('UserPollingSettingsSection', () => {
     expect(actionButtons[1]).toHaveClass('primary')
   })
 
+  it('shows pause and stop actions in the section header while a controllable live poll is running', () => {
+    const onPausePoll = vi.fn()
+    const onStopPoll = vi.fn()
+
+    renderSection({
+      livePoll: {
+        running: true,
+        state: 'RUNNING',
+        viewerCanControl: true,
+        activeSourceId: 'source-1',
+        sources: [{ sourceId: 'source-1', label: 'Inbox', state: 'RUNNING', actionable: false }]
+      },
+      onPausePoll,
+      onStopPoll
+    })
+
+    fireEvent.click(screen.getAllByRole('button', { name: 'Pause' })[0])
+    fireEvent.click(screen.getAllByRole('button', { name: 'Stop' })[0])
+
+    expect(onPausePoll).toHaveBeenCalledTimes(1)
+    expect(onStopPoll).toHaveBeenCalledTimes(1)
+  })
+
   it('shows a refresh indicator while loading the latest polling values', () => {
     renderSection({ sectionLoading: true })
     expect(screen.getByText('Refreshing section…')).toBeInTheDocument()
+  })
+
+  it('disables the broad run action when there are no runnable fetchers', () => {
+    renderSection({ hasFetchers: false })
+    expect(screen.getByRole('button', { name: 'Run Poll Now' })).toBeDisabled()
   })
 })

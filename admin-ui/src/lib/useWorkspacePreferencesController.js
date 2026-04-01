@@ -98,11 +98,14 @@ export function useWorkspacePreferencesController({ language, pushNotification, 
     }
   }
 
-  async function moveSection(workspaceKey, sectionId, direction) {
+  async function moveSection(workspaceKey, sectionId, direction, availableSectionIds = null) {
     const currentPreferences = uiPreferencesRef.current
     const currentLayoutEditSnapshot = layoutEditSnapshotRef.current
     const preferenceKey = workspaceKey === 'admin' ? 'adminSectionOrder' : 'userSectionOrder'
-    const currentOrder = applyOrderedSectionIds(DEFAULT_UI_PREFERENCES[preferenceKey], currentPreferences[preferenceKey])
+    const baselineOrder = Array.isArray(availableSectionIds) && availableSectionIds.length
+      ? availableSectionIds
+      : DEFAULT_UI_PREFERENCES[preferenceKey]
+    const currentOrder = applyOrderedSectionIds(baselineOrder, currentPreferences[preferenceKey])
     const currentIndex = currentOrder.indexOf(sectionId)
     if (currentIndex < 0) {
       return
@@ -120,11 +123,14 @@ export function useWorkspacePreferencesController({ language, pushNotification, 
     })
   }
 
-  async function reorderSections(workspaceKey, draggedId, targetIndex) {
+  async function reorderSections(workspaceKey, draggedId, targetIndex, availableSectionIds = null) {
     const currentPreferences = uiPreferencesRef.current
     const currentLayoutEditSnapshot = layoutEditSnapshotRef.current
     const preferenceKey = workspaceKey === 'admin' ? 'adminSectionOrder' : 'userSectionOrder'
-    const currentOrder = applyOrderedSectionIds(DEFAULT_UI_PREFERENCES[preferenceKey], currentPreferences[preferenceKey])
+    const baselineOrder = Array.isArray(availableSectionIds) && availableSectionIds.length
+      ? availableSectionIds
+      : DEFAULT_UI_PREFERENCES[preferenceKey]
+    const currentOrder = applyOrderedSectionIds(baselineOrder, currentPreferences[preferenceKey])
     const currentIndex = currentOrder.indexOf(draggedId)
     if (currentIndex < 0) {
       return
@@ -236,13 +242,16 @@ export function useWorkspacePreferencesController({ language, pushNotification, 
     await persistUiPreferences(restoredPreferences)
   }
 
-  function handleQuickSetupVisibilityChange(visible, allStepsComplete) {
+  function handleQuickSetupVisibilityChange(workspaceKey, visible, allStepsComplete) {
     const currentPreferences = uiPreferencesRef.current
+    const dismissedKey = workspaceKey === 'admin' ? 'adminQuickSetupDismissed' : 'quickSetupDismissed'
+    const pinnedVisibleKey = workspaceKey === 'admin' ? 'adminQuickSetupPinnedVisible' : 'quickSetupPinnedVisible'
+    const collapsedKey = workspaceKey === 'admin' ? 'adminQuickSetupCollapsed' : 'quickSetupCollapsed'
     const nextPreferences = {
       ...currentPreferences,
-      quickSetupPinnedVisible: visible,
-      quickSetupDismissed: visible ? false : allStepsComplete,
-      quickSetupCollapsed: visible ? false : true
+      [pinnedVisibleKey]: visible,
+      [dismissedKey]: visible ? false : allStepsComplete,
+      [collapsedKey]: visible ? false : true
     }
     commitUiPreferences(nextPreferences)
     if (nextPreferences.persistLayout) {
@@ -269,6 +278,16 @@ export function useWorkspacePreferencesController({ language, pushNotification, 
     setShowNotificationsDialog(false)
     setDragState(null)
     commitLayoutEditSnapshot(null)
+  }
+
+  async function replaceNotificationHistory(notificationHistory) {
+    const currentPreferences = uiPreferencesRef.current
+    const nextPreferences = {
+      ...currentPreferences,
+      notificationHistory
+    }
+    commitUiPreferences(nextPreferences)
+    await persistUiPreferences(nextPreferences)
   }
 
   useEffect(() => {
@@ -308,6 +327,7 @@ export function useWorkspacePreferencesController({ language, pushNotification, 
     startLayoutEditingFromPreferences,
     toggleSection,
     uiPreferencesLoadedForUserId,
-    uiPreferences
+    uiPreferences,
+    replaceNotificationHistory
   }
 }

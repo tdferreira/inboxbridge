@@ -49,8 +49,14 @@ public class UserUiPreference extends PanacheEntityBase {
     @Column(name = "quick_setup_pinned_visible", nullable = false)
     public boolean quickSetupPinnedVisible;
 
-        @Column(name = "destination_mailbox_collapsed", nullable = false)
-        public boolean destinationMailboxCollapsed;
+    @Column(name = "admin_quick_setup_dismissed", nullable = false)
+    public boolean adminQuickSetupDismissed;
+
+    @Column(name = "admin_quick_setup_pinned_visible", nullable = false)
+    public boolean adminQuickSetupPinnedVisible;
+
+    @Column(name = "destination_mailbox_collapsed", nullable = false)
+    public boolean destinationMailboxCollapsed;
 
     @Column(name = "user_polling_collapsed", nullable = false)
     public boolean userPollingCollapsed;
@@ -58,8 +64,8 @@ public class UserUiPreference extends PanacheEntityBase {
     @Column(name = "user_stats_collapsed", nullable = false)
     public boolean userStatsCollapsed;
 
-        @Column(name = "source_email_accounts_collapsed", nullable = false)
-        public boolean sourceEmailAccountsCollapsed;
+    @Column(name = "source_email_accounts_collapsed", nullable = false)
+    public boolean sourceEmailAccountsCollapsed;
 
     @Column(name = "admin_quick_setup_collapsed", nullable = false)
     public boolean adminQuickSetupCollapsed;
@@ -84,6 +90,9 @@ public class UserUiPreference extends PanacheEntityBase {
 
     @Column(name = "language", nullable = false, length = 32)
     public String language;
+
+    @Column(name = "notification_history", nullable = false, columnDefinition = "TEXT")
+    public String notificationHistory;
 
     @Column(name = "updated_at", nullable = false)
     public Instant updatedAt;

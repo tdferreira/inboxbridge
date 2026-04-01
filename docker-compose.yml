@@ -5,6 +5,8 @@ services:
     volumes:
       - ./certs:/certs
       - ./docker:/opt/inboxbridge/docker:ro
+    env_file:
+      - .env
     command: ["sh", "/opt/inboxbridge/docker/cert-init.sh"]
     restart: "no"
 

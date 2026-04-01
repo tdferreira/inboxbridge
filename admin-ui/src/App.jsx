@@ -20,11 +20,12 @@ import SystemPollingSettingsDialog from './components/admin/SystemPollingSetting
 import UserPollingSettingsDialog from './components/polling/UserPollingSettingsDialog'
 import WorkspaceSectionList from './components/layout/WorkspaceSectionList'
 import { buildAdminWorkspaceSections, buildUserWorkspaceSections } from './components/layout/workspaceSectionBuilders'
-import { apiErrorText } from './lib/api'
+import { apiErrorText, installSecureApiFetch } from './lib/api'
 import { requestSessionDeviceLocation } from './lib/api'
 import { buildSetupGuideState } from './lib/setupGuide'
 import { normalizeDestinationProviderConfig } from './lib/emailProviderPresets'
 import { pollErrorNotification, resolveNotificationContent, translatedNotification } from './lib/notifications'
+import { normalizeNotificationHistory, notificationHistoriesEqual } from './lib/notificationHistory'
 import { isRecentSessionTargetId, isSourceEmailAccountTargetId } from './lib/sectionTargets'
 import { normalizeLocale, translate } from './lib/i18n'
 import { enforceHttpsIfNeeded } from './lib/httpsRedirect'
@@ -220,6 +221,7 @@ function AppContent() {
   const [loadingData, setLoadingData] = useState(false)
   const [sectionRefreshLoading, setSectionRefreshLoading] = useState({})
   const [pendingActions, setPendingActions] = useState({})
+  const [activeBatchPollSourceIds, setActiveBatchPollSourceIds] = useState([])
 
   const [destinationConfig, setDestinationConfig] = useState(DEFAULT_DESTINATION_CONFIG)
   const [destinationMeta, setDestinationMeta] = useState(null)
@@ -242,6 +244,10 @@ function AppContent() {
   const notificationTimersRef = useRef(new Map())
   const selectedUserLoaderRef = useRef(null)
   const sessionActivityPollerRef = useRef(null)
+  const liveEventsRef = useRef(null)
+  const livePollApplyRef = useRef(null)
+  const pushNotificationRef = useRef(null)
+  const [liveEventsConnected, setLiveEventsConnected] = useState(false)
   const t = useMemo(() => (key, params) => translate(language, key, params), [language])
   const notificationTimestampFormatter = useMemo(
     () => new Intl.DateTimeFormat(language, { dateStyle: 'medium', timeStyle: 'medium' }),
@@ -313,7 +319,8 @@ function AppContent() {
     startLayoutEditingFromPreferences,
     toggleSection,
     uiPreferencesLoadedForUserId,
-    uiPreferences
+    uiPreferences,
+    replaceNotificationHistory
   } = layout
 
   function setAdminWorkspace(nextWorkspace, options = {}) {
@@ -325,7 +332,20 @@ function AppContent() {
   }
 
   const apiErrorMessage = async (key, response) => apiErrorText(response, errorText(key))
+  const polling = usePollingControllers({
+    authOptions,
+    closeConfirmation: () => setConfirmationDialog(null),
+    errorText,
+    isAdmin,
+    language,
+    loadAppData,
+    openConfirmation,
+    pushNotification,
+    t,
+    withPending
+  })
   const emailAccounts = useEmailAccountsController({
+    activeBatchPollSourceIds,
     authOptions,
     errorText,
     isPending,
@@ -350,17 +370,6 @@ function AppContent() {
     t,
     withPending
   })
-  const polling = usePollingControllers({
-    authOptions,
-    closeConfirmation: () => setConfirmationDialog(null),
-    errorText,
-    language,
-    loadAppData,
-    openConfirmation,
-    pushNotification,
-    t,
-    withPending
-  })
   const userManagement = useUserManagementController({
     authOptions,
     closeConfirmation: () => setConfirmationDialog(null),
@@ -373,6 +382,11 @@ function AppContent() {
     t,
     withPending
   })
+
+  useEffect(() => {
+    livePollApplyRef.current = polling.applyLivePoll
+    pushNotificationRef.current = pushNotification
+  }, [polling.applyLivePoll, pushNotification])
 
   function isPending(actionKey) {
     return Boolean(pendingActions[actionKey])
@@ -427,7 +441,9 @@ function AppContent() {
       window.clearTimeout(timer)
       notificationTimersRef.current.delete(id)
     }
-    setNotifications((current) => current.filter((notification) => notification.id !== id))
+    setNotifications((current) => normalizeNotificationHistory(
+      current.filter((notification) => notification.id !== id)
+    ))
   }
 
   function hideFloatingNotification(id) {
@@ -436,11 +452,13 @@ function AppContent() {
       window.clearTimeout(timer)
       notificationTimersRef.current.delete(id)
     }
-    setNotifications((current) => current.map((notification) => (
-      notification.id === id
-        ? { ...notification, floatingVisible: false }
-        : notification
-    )))
+    setNotifications((current) => normalizeNotificationHistory(
+      current.map((notification) => (
+        notification.id === id
+          ? { ...notification, floatingVisible: false }
+          : notification
+      ))
+    ))
   }
 
   function clearAllNotifications() {
@@ -463,25 +481,28 @@ function AppContent() {
     const resolvedAutoCloseMs = typeof autoCloseMs === 'number'
       ? autoCloseMs
       : (NOTIFICATION_AUTO_CLOSE_MS[tone] || NOTIFICATION_AUTO_CLOSE_MS.success)
-    setNotifications((current) => [...current.filter((notification) => {
-      if (replaceGroup && groupKey && notification.groupKey === groupKey) {
-        return false
+    setNotifications((current) => normalizeNotificationHistory([
+      ...current.filter((notification) => {
+        if (replaceGroup && groupKey && notification.groupKey === groupKey) {
+          return false
+        }
+        if (notification.groupKey && supersedesGroupKeys.includes(notification.groupKey)) {
+          return false
+        }
+        return true
+      }),
+      {
+        autoCloseMs: resolvedAutoCloseMs,
+        copyText: copyText ?? message,
+        createdAt: Date.now(),
+        floatingVisible: true,
+        groupKey,
+        id,
+        message,
+        targetId,
+        tone
       }
-      if (notification.groupKey && supersedesGroupKeys.includes(notification.groupKey)) {
-        return false
-      }
-      return true
-    }), {
-      autoCloseMs: resolvedAutoCloseMs,
-      copyText: copyText ?? message,
-      createdAt: Date.now(),
-      floatingVisible: true,
-      groupKey,
-      id,
-      message,
-      targetId,
-      tone
-    }])
+    ]))
   }
 
   function resolveNotificationText(notification) {
@@ -623,7 +644,11 @@ function AppContent() {
       polling.applyLoadedUserPolling(userPollingPayload)
       emailAccounts.applyLoadedEmailAccounts(emailAccountsPayload, normalizedAdminPayload?.emailAccounts || [])
       auth.applyLoadedPasskeys(passkeysPayload)
+      const shouldHydrateNotificationHistory = uiPreferencesLoadedForUserId !== session.id
       applyLoadedUiPreferences(uiPreferencesPayload, session.id)
+      if (shouldHydrateNotificationHistory) {
+        setNotifications(normalizeNotificationHistory(uiPreferencesPayload?.notificationHistory))
+      }
 
       if (normalizedAdminPayload) {
         setSystemDashboard(normalizedAdminPayload)
@@ -700,6 +725,7 @@ function AppContent() {
   }
 
   useEffect(() => {
+    installSecureApiFetch()
     enforceHttpsIfNeeded(window.location)
     loadAuthOptions()
     auth.loadSession()
@@ -712,11 +738,125 @@ function AppContent() {
   useEffect(() => {
     if (!session) return
     void refreshRuntimeState({ announceNewSessions: true, suppressSessionErrors: true })
+    void polling.runLivePollSnapshotLoad()
     const timer = window.setInterval(() => {
       void refreshRuntimeState({ announceNewSessions: true, suppressSessionErrors: true })
     }, REFRESH_MS)
     return () => window.clearInterval(timer)
-  }, [authOptions.multiUserEnabled, session])
+  }, [authOptions.multiUserEnabled, isAdmin, session])
+
+  useEffect(() => {
+    if (!session || (!polling.runningPoll && !polling.runningUserPoll)) {
+      setActiveBatchPollSourceIds([])
+      return
+    }
+    if (liveEventsConnected) {
+      return
+    }
+
+    let cancelled = false
+
+    async function refreshPollStatus() {
+      try {
+        const response = await fetch(isAdmin ? '/api/admin/poll/live' : '/api/poll/live')
+        if (!response.ok) {
+          return
+        }
+        const payload = await response.json()
+        if (!cancelled) {
+          setActiveBatchPollSourceIds(payload?.running
+            ? (payload.sources || []).filter((source) => source.state === 'RUNNING').map((source) => source.sourceId)
+            : [])
+        }
+      } catch {
+        if (!cancelled) {
+          setActiveBatchPollSourceIds([])
+        }
+      }
+    }
+
+    void refreshPollStatus()
+    const timer = window.setInterval(() => {
+      void refreshPollStatus()
+    }, 1000)
+
+    return () => {
+      cancelled = true
+      window.clearInterval(timer)
+    }
+  }, [isAdmin, liveEventsConnected, polling.livePoll?.running, polling.runningPoll, polling.runningUserPoll, session])
+
+  useEffect(() => {
+    setActiveBatchPollSourceIds(polling.livePoll?.running
+      ? (polling.livePoll.sources || []).filter((source) => source.state === 'RUNNING').map((source) => source.sourceId)
+      : [])
+  }, [polling.livePoll?.running, polling.livePoll?.sources])
+
+  useEffect(() => {
+    if (!session) {
+      polling.applyLivePoll(null)
+      setLiveEventsConnected(false)
+      if (liveEventsRef.current) {
+        liveEventsRef.current.close()
+        liveEventsRef.current = null
+      }
+      return
+    }
+    if (typeof window.EventSource !== 'function') {
+      setLiveEventsConnected(false)
+      return
+    }
+
+    const endpoint = isAdmin ? '/api/admin/poll/events' : '/api/poll/events'
+    const eventSource = new window.EventSource(endpoint)
+    liveEventsRef.current = eventSource
+
+    const handleLiveEvent = (event) => {
+      try {
+        const payload = JSON.parse(event.data)
+        if (payload?.poll && livePollApplyRef.current) {
+          livePollApplyRef.current(payload.poll)
+        }
+        if (payload?.notification && pushNotificationRef.current) {
+          pushNotificationRef.current(payload.notification)
+        }
+        setLiveEventsConnected(true)
+      } catch {
+        setLiveEventsConnected(false)
+      }
+    }
+
+    eventSource.onmessage = handleLiveEvent
+    ;[
+      'poll-snapshot',
+      'poll-run-started',
+      'poll-run-pausing',
+      'poll-run-paused',
+      'poll-run-resumed',
+      'poll-run-stopping',
+      'poll-run-finished',
+      'poll-source-started',
+      'poll-source-finished',
+      'poll-source-reprioritized',
+      'poll-source-retry-queued',
+      'notification-created'
+    ].forEach((eventName) => eventSource.addEventListener(eventName, handleLiveEvent))
+
+    eventSource.onerror = () => {
+      setLiveEventsConnected(false)
+      eventSource.close()
+      if (liveEventsRef.current === eventSource) {
+        liveEventsRef.current = null
+      }
+    }
+
+    return () => {
+      eventSource.close()
+      if (liveEventsRef.current === eventSource) {
+        liveEventsRef.current = null
+      }
+    }
+  }, [isAdmin, session])
 
   useEffect(() => {
     if (!session) {
@@ -801,6 +941,16 @@ function AppContent() {
       notificationTimersRef.current.set(notification.id, timer)
     })
   }, [notifications])
+
+  useEffect(() => {
+    if (!session?.id || uiPreferencesLoadedForUserId !== session.id) {
+      return
+    }
+    if (notificationHistoriesEqual(notifications, uiPreferences.notificationHistory)) {
+      return
+    }
+    void replaceNotificationHistory(normalizeNotificationHistory(notifications))
+  }, [notifications, replaceNotificationHistory, session?.id, uiPreferences.notificationHistory, uiPreferencesLoadedForUserId])
 
   useEffect(() => () => {
     notificationTimersRef.current.forEach((timer) => window.clearTimeout(timer))
@@ -968,8 +1118,11 @@ function AppContent() {
     })
   }
 
-  async function dismissQuickSetupGuide() {
-    handleQuickSetupVisibilityChange(false, userSetupGuideState.allStepsComplete)
+  async function dismissQuickSetupGuide(workspaceKey) {
+    const allStepsComplete = workspaceKey === 'admin'
+      ? adminSetupGuideState.allStepsComplete
+      : userSetupGuideState.allStepsComplete
+    handleQuickSetupVisibilityChange(workspaceKey, false, allStepsComplete)
   }
 
   function focusSection(event, step) {
@@ -1061,13 +1214,26 @@ function AppContent() {
       return
     }
     if (!userSetupGuideState.allStepsComplete && uiPreferences.quickSetupDismissed) {
-      handleQuickSetupVisibilityChange(true, userSetupGuideState.allStepsComplete)
+      handleQuickSetupVisibilityChange('user', true, userSetupGuideState.allStepsComplete)
       return
     }
     if (userSetupGuideState.allStepsComplete && !uiPreferences.quickSetupPinnedVisible && !uiPreferences.quickSetupDismissed) {
-      handleQuickSetupVisibilityChange(false, userSetupGuideState.allStepsComplete)
+      handleQuickSetupVisibilityChange('user', false, userSetupGuideState.allStepsComplete)
     }
   }, [handleQuickSetupVisibilityChange, session, uiPreferences, userSetupGuideState.allStepsComplete])
+
+  useEffect(() => {
+    if (!session || !isAdmin) {
+      return
+    }
+    if (!adminSetupGuideState.allStepsComplete && uiPreferences.adminQuickSetupDismissed) {
+      handleQuickSetupVisibilityChange('admin', true, adminSetupGuideState.allStepsComplete)
+      return
+    }
+    if (adminSetupGuideState.allStepsComplete && !uiPreferences.adminQuickSetupPinnedVisible && !uiPreferences.adminQuickSetupDismissed) {
+      handleQuickSetupVisibilityChange('admin', false, adminSetupGuideState.allStepsComplete)
+    }
+  }, [adminSetupGuideState.allStepsComplete, handleQuickSetupVisibilityChange, isAdmin, session, uiPreferences])
 
   function toggleWorkspaceSection(sectionKey) {
     return toggleSection(sectionKey, async () => {
@@ -1107,7 +1273,8 @@ function AppContent() {
       await reorderSections(
         current.workspaceKey,
         current.draggedId,
-        resolveDropTargetIndex(current, pointerEvent?.clientY)
+        resolveDropTargetIndex(current, pointerEvent?.clientY),
+        current.visibleSectionIds
       )
     }
 
@@ -1201,6 +1368,7 @@ function AppContent() {
     adminSetupGuideState,
     authSecuritySettings,
     authOptions,
+    dismissQuickSetupGuide,
     focusSection,
     isPending,
     isSectionRefreshing,
@@ -1229,6 +1397,13 @@ function AppContent() {
     adminWorkspaceSections.map((section) => section.id),
     uiPreferences.adminSectionOrder
   )
+  const activeWorkspaceKey = !isAdmin || adminWorkspace === 'user' ? 'user' : 'admin'
+  const activeQuickSetupVisible = activeWorkspaceKey === 'admin'
+    ? uiPreferences.adminQuickSetupPinnedVisible || !adminSetupGuideState.allStepsComplete
+    : uiPreferences.quickSetupPinnedVisible || !userSetupGuideState.allStepsComplete
+  const activeCanHideQuickSetup = activeWorkspaceKey === 'admin'
+    ? adminSetupGuideState.allStepsComplete
+    : userSetupGuideState.allStepsComplete
 
   if (auth.authLoading) {
     return <LoadingScreen label={t('app.loading')} />
@@ -1238,10 +1413,14 @@ function AppContent() {
     return (
         <AuthScreen
           authError={auth.authError}
+          language={language}
+          languageOptions={selectableLanguages}
+          loginStage={auth.loginStage}
           loginLoading={isPending('login')}
           loginForm={auth.loginForm}
           multiUserEnabled={authOptions.multiUserEnabled}
           notice=""
+          onLanguageChange={handleLanguageChange}
           onCloseRegisterDialog={auth.closeRegisterDialog}
           onLogin={auth.handleLogin}
           onLoginChange={auth.setLoginForm}
@@ -1295,7 +1474,7 @@ function AppContent() {
 
         {showPreferencesDialog ? (
           <PreferencesDialog
-            canHideQuickSetup={userSetupGuideState.allStepsComplete}
+            canHideQuickSetup={activeCanHideQuickSetup}
             layoutEditEnabled={uiPreferences.layoutEditEnabled}
             language={language}
             languageOptions={selectableLanguages}
@@ -1303,11 +1482,11 @@ function AppContent() {
             onExitLayoutEditing={commitLayoutEditingChanges}
             onLanguageChange={handleLanguageChange}
             onPersistLayoutChange={handlePersistLayoutChange}
-            onQuickSetupVisibilityChange={(visible) => handleQuickSetupVisibilityChange(visible, userSetupGuideState.allStepsComplete)}
+            onQuickSetupVisibilityChange={(visible) => handleQuickSetupVisibilityChange(activeWorkspaceKey, visible, activeCanHideQuickSetup)}
             onResetLayout={resetLayoutPreferences}
             onStartLayoutEditing={startLayoutEditingFromPreferences}
             persistLayout={uiPreferences.persistLayout}
-            quickSetupVisible={uiPreferences.quickSetupPinnedVisible || !userSetupGuideState.allStepsComplete}
+            quickSetupVisible={activeQuickSetupVisible}
             savingLayout={isPending('uiPreferences')}
             t={t}
           />

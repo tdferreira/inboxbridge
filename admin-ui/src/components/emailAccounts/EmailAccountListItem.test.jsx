@@ -22,6 +22,9 @@ describe('EmailAccountListItem', () => {
             folder: 'INBOX',
             tokenStorageMode: 'PASSWORD',
             oauthConnected: false,
+            markReadAfterPoll: false,
+            postPollAction: 'NONE',
+            postPollTargetFolder: '',
             totalImportedMessages: 0,
             lastImportedAt: null,
             effectivePollEnabled: true,
@@ -73,6 +76,9 @@ describe('EmailAccountListItem', () => {
           folder: 'INBOX',
           tokenStorageMode: 'PASSWORD',
           oauthConnected: false,
+          markReadAfterPoll: false,
+          postPollAction: 'NONE',
+          postPollTargetFolder: '',
           totalImportedMessages: 0,
           lastImportedAt: null,
           effectivePollEnabled: true,
@@ -116,6 +122,9 @@ describe('EmailAccountListItem', () => {
           folder: 'INBOX',
           tokenStorageMode: 'DATABASE',
           oauthConnected: false,
+          markReadAfterPoll: false,
+          postPollAction: 'NONE',
+          postPollTargetFolder: '',
           totalImportedMessages: 0,
           lastImportedAt: null,
           effectivePollEnabled: true,
@@ -161,7 +170,7 @@ describe('EmailAccountListItem', () => {
 
     expect(screen.getAllByText('.env').length).toBeGreaterThan(0)
     expect(screen.getByText('Armazenamento do token')).toBeInTheDocument()
-    expect(screen.getByText('BD encriptada')).toBeInTheDocument()
+    expect(screen.getByText('Armazenamento encriptado')).toBeInTheDocument()
     expect(screen.getByText('Ainda não existe atividade de polling registada.')).toBeInTheDocument()
   })
 
@@ -181,6 +190,9 @@ describe('EmailAccountListItem', () => {
           folder: 'INBOX',
           tokenStorageMode: 'DATABASE',
           oauthConnected: true,
+          markReadAfterPoll: false,
+          postPollAction: 'NONE',
+          postPollTargetFolder: '',
           totalImportedMessages: 0,
           lastImportedAt: null,
           effectivePollEnabled: true,
@@ -214,6 +226,63 @@ describe('EmailAccountListItem', () => {
 
     fireEvent.click(screen.getByRole('button', { name: 'Source email account actions' }))
     expect(screen.getByRole('button', { name: 'Reconnect Microsoft OAuth' })).toBeInTheDocument()
+  })
+
+  it('shows disabled status for disabled fetchers even when the last event failed', () => {
+    render(
+      <EmailAccountListItem
+        fetcher={{
+          emailAccountId: 'disabled-fetcher',
+          enabled: false,
+          customLabel: '',
+          managementSource: 'DATABASE',
+          protocol: 'IMAP',
+          host: 'imap.example.com',
+          port: 993,
+          authMethod: 'PASSWORD',
+          oauthProvider: 'NONE',
+          tls: true,
+          folder: 'INBOX',
+          tokenStorageMode: 'PASSWORD',
+          oauthConnected: false,
+          markReadAfterPoll: false,
+          postPollAction: 'NONE',
+          postPollTargetFolder: '',
+          totalImportedMessages: 0,
+          lastImportedAt: null,
+          effectivePollEnabled: true,
+          effectivePollInterval: '5m',
+          effectiveFetchWindow: 50,
+          pollingState: null,
+          lastEvent: {
+            status: 'ERROR',
+            finishedAt: '2026-03-26T12:00:00Z',
+            trigger: 'manual',
+            fetched: 0,
+            imported: 0,
+            duplicates: 0,
+            error: 'boom'
+          },
+          canEdit: true,
+          canDelete: true,
+          canConnectMicrosoft: false
+        }}
+        locale="en"
+        onConfigurePolling={vi.fn()}
+        onConnectMicrosoft={vi.fn()}
+        onDelete={vi.fn()}
+        onEdit={vi.fn()}
+        onRunPoll={vi.fn()}
+        t={t}
+      />
+    )
+
+    expect(screen.getByText('Disabled')).toBeInTheDocument()
+    expect(screen.queryByText('Error')).not.toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Run Poll Now' })).toBeDisabled()
+
+    fireEvent.click(screen.getByRole('button', { name: 'Source email account actions' }))
+    expect(screen.getAllByRole('button', { name: 'Run Poll Now' })[0]).toBeDisabled()
   })
 
   it('passes the clicked fetcher object when running a manual poll', () => {
