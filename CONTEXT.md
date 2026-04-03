@@ -35,6 +35,9 @@ Because those workers no longer inherit a request context from the original REST
 
 Deployment-wide browser callback defaults can now be anchored on `PUBLIC_BASE_URL`, which feeds the default Google and Microsoft OAuth redirect URIs shown in the UI and docs.
 The local `cert-init` flow now derives frontend/backend SAN coverage from `PUBLIC_BASE_URL` plus optional `TLS_FRONTEND_CERT_HOSTNAMES` / `TLS_BACKEND_CERT_HOSTNAMES`, and it automatically reissues the generated leaf certs when the expected hostname set changes.
+The repository now also includes a GitHub Actions `Build` workflow at `.github/workflows/build.yml` that runs backend tests plus frontend install/test/build, so the README can show a real GitHub build-status badge instead of a placeholder.
+The repository now declares Apache License 2.0 in `LICENSE`, and the root README also includes an explicit `use at your own risk` disclaimer plus a note that the project was built with AI-assisted tooling under human direction and review.
+The repository now also includes standard open-source community files: `CONTRIBUTING.md`, `SECURITY.md`, `CODE_OF_CONDUCT.md`, `.github/PULL_REQUEST_TEMPLATE.md`, `.github/CODEOWNERS`, and issue templates for bug reports and feature requests, with blank public issues disabled in favor of structured templates and private security reporting.
 
 ## Technical stack
 

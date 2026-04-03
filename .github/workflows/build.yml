@@ -1,0 +1,65 @@
+name: Build
+
+on:
+  push:
+    branches:
+      - main
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_DB: inboxbridge
+          POSTGRES_USER: inboxbridge
+          POSTGRES_PASSWORD: inboxbridge
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd="pg_isready -U inboxbridge -d inboxbridge"
+          --health-interval=10s
+          --health-timeout=5s
+          --health-retries=10
+
+    env:
+      JDBC_URL: jdbc:postgresql://localhost:5432/inboxbridge
+      JDBC_USERNAME: inboxbridge
+      JDBC_PASSWORD: inboxbridge
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Set up Java
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '25'
+          cache: maven
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+          cache-dependency-path: admin-ui/package-lock.json
+
+      - name: Run backend tests
+        run: mvn -q test
+
+      - name: Install frontend dependencies
+        working-directory: admin-ui
+        run: npm ci
+
+      - name: Run frontend tests
+        working-directory: admin-ui
+        run: npm run test:run
+
+      - name: Build frontend
+        working-directory: admin-ui
+        run: npm run build

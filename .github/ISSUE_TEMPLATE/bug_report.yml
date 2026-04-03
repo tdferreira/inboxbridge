@@ -1,0 +1,86 @@
+name: Bug report
+description: Report a reproducible problem in InboxBridge
+title: "[Bug]: "
+labels:
+  - bug
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for taking the time to report a problem.
+
+        Please include enough detail to help reproduce the issue. If you are reporting a security vulnerability, do not use this form. Follow the private reporting guidance in `SECURITY.md` instead.
+
+  - type: textarea
+    id: summary
+    attributes:
+      label: Summary
+      description: What happened?
+      placeholder: A short description of the problem.
+    validations:
+      required: true
+
+  - type: textarea
+    id: steps
+    attributes:
+      label: Steps to reproduce
+      description: List the exact steps needed to reproduce the problem.
+      placeholder: |
+        1. Go to ...
+        2. Configure ...
+        3. Click ...
+        4. Observe ...
+    validations:
+      required: true
+
+  - type: textarea
+    id: expected
+    attributes:
+      label: Expected behavior
+      description: What did you expect to happen?
+    validations:
+      required: true
+
+  - type: textarea
+    id: actual
+    attributes:
+      label: Actual behavior
+      description: What happened instead?
+    validations:
+      required: true
+
+  - type: dropdown
+    id: area
+    attributes:
+      label: Affected area
+      options:
+        - Backend
+        - Admin UI
+        - Remote control
+        - OAuth
+        - Source mailbox handling
+        - Destination mailbox handling
+        - Docker / deployment
+        - Documentation
+        - Other
+    validations:
+      required: true
+
+  - type: textarea
+    id: environment
+    attributes:
+      label: Environment
+      description: Share the environment details that matter for reproducing the issue.
+      placeholder: |
+        - OS:
+        - Browser:
+        - Deployment style:
+        - Provider(s):
+        - Version / commit:
+
+  - type: textarea
+    id: logs
+    attributes:
+      label: Relevant logs or screenshots
+      description: Paste logs or add screenshots if they help explain the issue.
+      render: shell

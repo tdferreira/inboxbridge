@@ -1,0 +1,58 @@
+name: Feature request
+description: Suggest an improvement or new capability
+title: "[Feature]: "
+labels:
+  - enhancement
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for suggesting an improvement.
+
+        Please explain the problem you are trying to solve and why the change would be useful for InboxBridge users or operators.
+
+  - type: textarea
+    id: problem
+    attributes:
+      label: Problem or need
+      description: What problem are you trying to solve?
+      placeholder: I want InboxBridge to ...
+    validations:
+      required: true
+
+  - type: textarea
+    id: proposal
+    attributes:
+      label: Proposed solution
+      description: What would you like to happen?
+    validations:
+      required: true
+
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: Alternatives considered
+      description: Are there workarounds or alternative approaches?
+
+  - type: dropdown
+    id: area
+    attributes:
+      label: Related area
+      options:
+        - Backend
+        - Admin UI
+        - Remote control
+        - OAuth
+        - Source mailbox handling
+        - Destination mailbox handling
+        - Docker / deployment
+        - Documentation
+        - Other
+    validations:
+      required: true
+
+  - type: textarea
+    id: context
+    attributes:
+      label: Additional context
+      description: Share examples, screenshots, provider constraints, or deployment context if useful.
