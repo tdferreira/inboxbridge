@@ -32,6 +32,6 @@ The proposed commit message must include:
 
 ## Supporting docs
 
-- Contributor expectations: [`CONTRIBUTING.md`](/Users/tdferreira/Developer/inboxbridge/CONTRIBUTING.md)
-- Repo memory and validation notes: [`CONTEXT.md`](/Users/tdferreira/Developer/inboxbridge/CONTEXT.md)
-- Workflow rules: [`AGENTS.md`](/Users/tdferreira/Developer/inboxbridge/AGENTS.md)
+- Contributor expectations: [`CONTRIBUTING.md`](../../../CONTRIBUTING.md)
+- Repo memory and validation notes: [`CONTEXT.md`](../../../CONTEXT.md)
+- Workflow rules: [`AGENTS.md`](../../../AGENTS.md)

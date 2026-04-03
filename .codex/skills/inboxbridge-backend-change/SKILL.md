@@ -5,7 +5,7 @@ description: Use when changing the Quarkus backend, Flyway schema, mailbox impor
 
 # InboxBridge Backend Change
 
-Start with [`docs/ARCHITECTURE.md`](/Users/tdferreira/Developer/inboxbridge/docs/ARCHITECTURE.md), [`CONTEXT.md`](/Users/tdferreira/Developer/inboxbridge/CONTEXT.md), and the affected packages under `src/main/java`.
+Start with [`docs/ARCHITECTURE.md`](../../../docs/ARCHITECTURE.md), [`CONTEXT.md`](../../../CONTEXT.md), and the affected packages under `src/main/java`.
 
 ## Backend invariants
 
@@ -30,6 +30,6 @@ Start with [`docs/ARCHITECTURE.md`](/Users/tdferreira/Developer/inboxbridge/docs
 
 ## Docs to update when relevant
 
-- Architecture or runtime model: [`docs/ARCHITECTURE.md`](/Users/tdferreira/Developer/inboxbridge/docs/ARCHITECTURE.md)
-- Product/runtime memory: [`CONTEXT.md`](/Users/tdferreira/Developer/inboxbridge/CONTEXT.md)
-- Operator-facing behavior/setup: [`README.md`](/Users/tdferreira/Developer/inboxbridge/README.md), [`docs/SETUP.md`](/Users/tdferreira/Developer/inboxbridge/docs/SETUP.md), [`docs/OAUTH_SETUP.md`](/Users/tdferreira/Developer/inboxbridge/docs/OAUTH_SETUP.md)
+- Architecture or runtime model: [`docs/ARCHITECTURE.md`](../../../docs/ARCHITECTURE.md)
+- Product/runtime memory: [`CONTEXT.md`](../../../CONTEXT.md)
+- Operator-facing behavior/setup: [`README.md`](../../../README.md), [`docs/SETUP.md`](../../../docs/SETUP.md), [`docs/OAUTH_SETUP.md`](../../../docs/OAUTH_SETUP.md)

@@ -5,12 +5,12 @@ description: Use when working anywhere in the InboxBridge repository or when a r
 
 # InboxBridge Worktree Guardrails
 
-Read [`AGENTS.md`](/Users/tdferreira/Developer/inboxbridge/AGENTS.md) first, then load only the repo docs needed for the task.
+Read [`AGENTS.md`](../../../AGENTS.md) first, then load only the repo docs needed for the task.
 
 ## Always follow
 
 - Do not read `.env` unless the user explicitly asks.
-- Treat [`CONTEXT.md`](/Users/tdferreira/Developer/inboxbridge/CONTEXT.md) as the cross-chat source of truth.
+- Treat [`CONTEXT.md`](../../../CONTEXT.md) as the cross-chat source of truth.
 - Update docs whenever behavior, UI copy, setup flow, or architecture changes.
 - Add or update tests for every behavior change.
 - Prefer minimal changes that preserve the current architecture and style.
@@ -21,11 +21,11 @@ Read [`AGENTS.md`](/Users/tdferreira/Developer/inboxbridge/AGENTS.md) first, the
 
 ## Doc routing
 
-- Product and current behavior: [`README.md`](/Users/tdferreira/Developer/inboxbridge/README.md), [`CONTEXT.md`](/Users/tdferreira/Developer/inboxbridge/CONTEXT.md)
-- Architecture and runtime boundaries: [`docs/ARCHITECTURE.md`](/Users/tdferreira/Developer/inboxbridge/docs/ARCHITECTURE.md)
-- Local bootstrap and validation path: [`docs/SETUP.md`](/Users/tdferreira/Developer/inboxbridge/docs/SETUP.md)
-- OAuth and TLS specifics: [`docs/OAUTH_SETUP.md`](/Users/tdferreira/Developer/inboxbridge/docs/OAUTH_SETUP.md), [`docs/TRUST_LOCAL_CA.md`](/Users/tdferreira/Developer/inboxbridge/docs/TRUST_LOCAL_CA.md)
-- Frontend structure and UX rules: [`admin-ui/README.md`](/Users/tdferreira/Developer/inboxbridge/admin-ui/README.md)
+- Product and current behavior: [`README.md`](../../../README.md), [`CONTEXT.md`](../../../CONTEXT.md)
+- Architecture and runtime boundaries: [`docs/ARCHITECTURE.md`](../../../docs/ARCHITECTURE.md)
+- Local bootstrap and validation path: [`docs/SETUP.md`](../../../docs/SETUP.md)
+- OAuth and TLS specifics: [`docs/OAUTH_SETUP.md`](../../../docs/OAUTH_SETUP.md), [`docs/TRUST_LOCAL_CA.md`](../../../docs/TRUST_LOCAL_CA.md)
+- Frontend structure and UX rules: [`admin-ui/README.md`](../../../admin-ui/README.md)
 
 ## Finish checklist
 

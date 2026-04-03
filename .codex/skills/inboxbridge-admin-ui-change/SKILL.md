@@ -5,7 +5,7 @@ description: Use when changing the React admin UI, the /remote surface, translat
 
 # InboxBridge Admin UI Change
 
-Start with [`admin-ui/README.md`](/Users/tdferreira/Developer/inboxbridge/admin-ui/README.md), [`CONTEXT.md`](/Users/tdferreira/Developer/inboxbridge/CONTEXT.md), and the affected files under `admin-ui/src`.
+Start with [`admin-ui/README.md`](../../../admin-ui/README.md), [`CONTEXT.md`](../../../CONTEXT.md), and the affected files under `admin-ui/src`.
 
 ## Frontend conventions
 
@@ -29,6 +29,6 @@ Start with [`admin-ui/README.md`](/Users/tdferreira/Developer/inboxbridge/admin-
 
 ## Docs to update when relevant
 
-- Frontend behavior or UX guidance: [`admin-ui/README.md`](/Users/tdferreira/Developer/inboxbridge/admin-ui/README.md)
-- Cross-chat product/runtime memory: [`CONTEXT.md`](/Users/tdferreira/Developer/inboxbridge/CONTEXT.md)
-- Operator-facing setup or screenshots/copy-sensitive docs: [`README.md`](/Users/tdferreira/Developer/inboxbridge/README.md)
+- Frontend behavior or UX guidance: [`admin-ui/README.md`](../../../admin-ui/README.md)
+- Cross-chat product/runtime memory: [`CONTEXT.md`](../../../CONTEXT.md)
+- Operator-facing setup or screenshots/copy-sensitive docs: [`README.md`](../../../README.md)

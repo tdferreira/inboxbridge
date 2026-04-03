@@ -5,7 +5,7 @@ description: Use when changing polling, IMAP/POP3 handling, destination imports,
 
 # InboxBridge Mailflow Safety
 
-Load [`docs/ARCHITECTURE.md`](/Users/tdferreira/Developer/inboxbridge/docs/ARCHITECTURE.md) and the relevant mail/polling sections of [`CONTEXT.md`](/Users/tdferreira/Developer/inboxbridge/CONTEXT.md) before editing.
+Load [`docs/ARCHITECTURE.md`](../../../docs/ARCHITECTURE.md) and the relevant mail/polling sections of [`CONTEXT.md`](../../../CONTEXT.md) before editing.
 
 ## High-risk invariants
 
@@ -31,6 +31,6 @@ Load [`docs/ARCHITECTURE.md`](/Users/tdferreira/Developer/inboxbridge/docs/ARCHI
 
 ## Useful anchors
 
-- Architecture: [`docs/ARCHITECTURE.md`](/Users/tdferreira/Developer/inboxbridge/docs/ARCHITECTURE.md)
-- Product/runtime memory: [`CONTEXT.md`](/Users/tdferreira/Developer/inboxbridge/CONTEXT.md)
-- Operator setup: [`docs/SETUP.md`](/Users/tdferreira/Developer/inboxbridge/docs/SETUP.md), [`docs/OAUTH_SETUP.md`](/Users/tdferreira/Developer/inboxbridge/docs/OAUTH_SETUP.md)
+- Architecture: [`docs/ARCHITECTURE.md`](../../../docs/ARCHITECTURE.md)
+- Product/runtime memory: [`CONTEXT.md`](../../../CONTEXT.md)
+- Operator setup: [`docs/SETUP.md`](../../../docs/SETUP.md), [`docs/OAUTH_SETUP.md`](../../../docs/OAUTH_SETUP.md)
