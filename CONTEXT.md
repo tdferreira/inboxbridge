@@ -38,6 +38,7 @@ The local `cert-init` flow now derives frontend/backend SAN coverage from `PUBLI
 The repository now also includes a GitHub Actions `Build` workflow at `.github/workflows/build.yml` that runs backend tests plus frontend install/test/build, so the README can show a real GitHub build-status badge instead of a placeholder.
 The repository now declares Apache License 2.0 in `LICENSE`, and the root README also includes an explicit `use at your own risk` disclaimer plus a note that the project was built with AI-assisted tooling under human direction and review.
 The repository now also includes standard open-source community files: `CONTRIBUTING.md`, `SECURITY.md`, `CODE_OF_CONDUCT.md`, `.github/PULL_REQUEST_TEMPLATE.md`, `.github/CODEOWNERS`, and issue templates for bug reports and feature requests, with blank public issues disabled in favor of structured templates and private security reporting.
+The repository now also includes `.github/dependabot.yml` for weekly dependency update PRs across GitHub Actions, Maven, npm, and Dockerfiles, plus a `.github/workflows/release.yml` workflow that builds release assets and publishes GitHub Releases from tags matching `v*` or from a manual dispatch with a provided tag name.
 
 ## Technical stack
 

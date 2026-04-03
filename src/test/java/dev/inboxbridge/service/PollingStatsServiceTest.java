@@ -4,6 +4,8 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 
 import java.sql.Timestamp;
 import java.time.Instant;
+import java.time.LocalDate;
+import java.time.ZoneOffset;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
@@ -24,6 +26,7 @@ class PollingStatsServiceTest {
 
     @Test
     void userStatsStayScopedToOneUserDestinationKey() {
+        Instant importDay = LocalDate.now(ZoneOffset.UTC).minusDays(1).atStartOfDay().toInstant(ZoneOffset.UTC);
         PollingStatsService service = new PollingStatsService();
         service.importedMessageRepository = new ImportedMessageRepository() {
             @Override
@@ -34,15 +37,15 @@ class PollingStatsServiceTest {
             @Override
             public List<Object[]> summarizeByImportedDayForDestinationKey(String destinationKey) {
                 return java.util.Collections.singletonList(
-                        new Object[] { Timestamp.from(Instant.parse("2026-03-26T00:00:00Z")), Long.valueOf(3) });
+                        new Object[] { Timestamp.from(importDay), Long.valueOf(3) });
             }
 
             @Override
             public List<Instant> listImportedAtSinceForDestinationKey(String destinationKey, Instant since) {
                 return List.of(
-                        Instant.parse("2026-03-26T10:15:00Z"),
-                        Instant.parse("2026-03-26T11:15:00Z"),
-                        Instant.parse("2026-03-26T12:15:00Z"));
+                        importDay.plusSeconds(10 * 3600L + 15 * 60L),
+                        importDay.plusSeconds(11 * 3600L + 15 * 60L),
+                        importDay.plusSeconds(12 * 3600L + 15 * 60L));
             }
         };
         service.userEmailAccountRepository = new UserEmailAccountRepository() {
@@ -93,6 +96,7 @@ class PollingStatsServiceTest {
 
     @Test
     void sourceStatsStayScopedToOneMailFetcher() {
+        Instant importDay = LocalDate.now(ZoneOffset.UTC).minusDays(1).atStartOfDay().toInstant(ZoneOffset.UTC);
         PollingStatsService service = new PollingStatsService();
         service.importedMessageRepository = new ImportedMessageRepository() {
             @Override
@@ -103,16 +107,16 @@ class PollingStatsServiceTest {
             @Override
             public List<Object[]> summarizeByImportedDayForDestinationKeyAndSourceAccountId(String destinationKey, String sourceAccountId) {
                 return java.util.Collections.singletonList(
-                        new Object[] { Timestamp.from(Instant.parse("2026-03-26T00:00:00Z")), Long.valueOf(4) });
+                        new Object[] { Timestamp.from(importDay), Long.valueOf(4) });
             }
 
             @Override
             public List<Instant> listImportedAtSinceForDestinationKeyAndSourceAccountId(String destinationKey, String sourceAccountId, Instant since) {
                 return List.of(
-                        Instant.parse("2026-03-26T10:15:00Z"),
-                        Instant.parse("2026-03-26T11:15:00Z"),
-                        Instant.parse("2026-03-26T12:15:00Z"),
-                        Instant.parse("2026-03-26T13:15:00Z"));
+                        importDay.plusSeconds(10 * 3600L + 15 * 60L),
+                        importDay.plusSeconds(11 * 3600L + 15 * 60L),
+                        importDay.plusSeconds(12 * 3600L + 15 * 60L),
+                        importDay.plusSeconds(13 * 3600L + 15 * 60L));
             }
         };
         service.sourcePollEventService = new SourcePollEventService() {

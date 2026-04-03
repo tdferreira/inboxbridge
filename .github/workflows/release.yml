@@ -1,0 +1,79 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - 'v*'
+  workflow_dispatch:
+    inputs:
+      tag_name:
+        description: "Tag name to release, for example v0.1.0"
+        required: true
+        type: string
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v5
+
+      - name: Set up Java
+        uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: '25'
+          cache: maven
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v5
+        with:
+          node-version: '22'
+          cache: npm
+          cache-dependency-path: admin-ui/package-lock.json
+
+      - name: Build backend
+        run: mvn -q -DskipTests package
+
+      - name: Install frontend dependencies
+        working-directory: admin-ui
+        run: npm ci
+
+      - name: Build frontend
+        working-directory: admin-ui
+        run: npm run build
+
+      - name: Prepare release assets
+        run: |
+          TAG_NAME="${{ github.event_name == 'workflow_dispatch' && inputs.tag_name || github.ref_name }}"
+          mkdir -p release-assets
+          cp README.md LICENSE docker-compose.yml .env.example release-assets/
+          cp -R docs release-assets/docs
+          cp -R target/quarkus-app "release-assets/inboxbridge-backend"
+          cp -R admin-ui/dist "release-assets/inboxbridge-admin-ui"
+          cd release-assets
+          zip -rq "../inboxbridge-${TAG_NAME}.zip" .
+          cd ..
+          sha256sum "inboxbridge-${TAG_NAME}.zip" > "inboxbridge-${TAG_NAME}.sha256"
+
+      - name: Publish GitHub release
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+        run: |
+          TAG_NAME="${{ github.event_name == 'workflow_dispatch' && inputs.tag_name || github.ref_name }}"
+          if gh release view "${TAG_NAME}" >/dev/null 2>&1; then
+            gh release upload "${TAG_NAME}" \
+              "inboxbridge-${TAG_NAME}.zip" \
+              "inboxbridge-${TAG_NAME}.sha256" \
+              --clobber
+          else
+            gh release create "${TAG_NAME}" \
+              "inboxbridge-${TAG_NAME}.zip" \
+              "inboxbridge-${TAG_NAME}.sha256" \
+              --generate-notes \
+              --title "${TAG_NAME}"
+          fi

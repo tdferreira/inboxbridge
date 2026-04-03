@@ -1170,6 +1170,7 @@ describe('RemoteApp', () => {
     render(<RemoteApp />)
 
     await screen.findByRole('button', { name: 'Poll My Sources' })
+    await waitFor(() => expect(FakeEventSource.instances).toHaveLength(1))
 
     act(() => {
       FakeEventSource.instances[0].emit('keepalive', {

@@ -273,6 +273,12 @@ AI assistance was used to help design, implement, refactor, test, and document p
 - Security policy: [SECURITY.md](SECURITY.md)
 - Code of conduct: [CODE_OF_CONDUCT.md](CODE_OF_CONDUCT.md)
 
+## Maintenance Automation
+
+- Dependabot is configured in [.github/dependabot.yml](.github/dependabot.yml) for GitHub Actions, Maven, npm, and Docker base-image updates.
+- GitHub Releases can be created automatically from tags matching `v*` through [.github/workflows/release.yml](.github/workflows/release.yml).
+- The release workflow can also be started manually from the GitHub Actions UI by providing a tag name such as `v0.1.0`.
+
 ## Current Version
 
 The repository currently declares version `0.1.0-SNAPSHOT` in [`pom.xml`](pom.xml) and `0.1.0` in [`admin-ui/package.json`](admin-ui/package.json).
