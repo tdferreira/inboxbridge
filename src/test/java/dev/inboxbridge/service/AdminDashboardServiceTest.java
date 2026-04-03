@@ -122,6 +122,9 @@ class AdminDashboardServiceTest {
                         0,
                         0,
                         0,
+                        0,
+                        null,
+                        null,
                         "Source outlook-main-imap failed: Source outlook-main-imap is configured for OAuth2 but has no refresh token"));
             }
 
@@ -350,6 +353,9 @@ class AdminDashboardServiceTest {
                 0,
                 0,
                 0,
+                0,
+                null,
+                null,
                 "Source outlook-main-imap failed: AUTHENTICATE failed");
 
         @Override

@@ -30,6 +30,38 @@
   padding: 32px;
 }
 
+.remote-auth-language-picker {
+  justify-self: end;
+  margin-bottom: 4px;
+}
+
+.remote-auth-language-picker .language-menu-button {
+  border-color: rgba(20, 37, 63, 0.08);
+  background: #ffffff;
+  box-shadow: 0 14px 30px rgba(20, 37, 63, 0.08);
+}
+
+.remote-auth-language-picker .language-menu-button:hover,
+.remote-auth-language-picker .language-menu-button:focus-visible {
+  border-color: rgba(29, 95, 191, 0.24);
+  background: #ffffff;
+}
+
+.remote-auth-language-picker .language-menu-panel {
+  border-color: rgba(20, 37, 63, 0.08);
+  background: #ffffff;
+  box-shadow: 0 20px 40px rgba(20, 37, 63, 0.12);
+}
+
+.remote-auth-language-picker .language-menu-option:hover,
+.remote-auth-language-picker .language-menu-option:focus-visible {
+  background: rgba(29, 95, 191, 0.08);
+}
+
+.remote-auth-language-picker .language-menu-option-selected {
+  background: rgba(29, 95, 191, 0.12);
+}
+
 .remote-panel {
   display: grid;
   gap: 20px;
@@ -92,6 +124,35 @@
   align-items: center;
 }
 
+.remote-hero-menu {
+  position: relative;
+  margin-left: auto;
+}
+
+.remote-hero-menu-panel {
+  min-width: 220px;
+}
+
+.remote-hero-menu-panel button {
+  width: 100%;
+  padding: 10px 12px;
+  border: 0;
+  border-radius: 12px;
+  background: transparent;
+  text-align: left;
+  font: inherit;
+  color: #13233a;
+}
+
+.remote-hero-menu-panel button:hover,
+.remote-hero-menu-panel button:focus-visible {
+  background: rgba(29, 95, 191, 0.08);
+}
+
+.remote-hero-menu-panel button:disabled {
+  opacity: 0.6;
+}
+
 .remote-source-actions > .primary,
 .remote-source-actions > .secondary {
   padding: 10px 14px;
@@ -147,12 +208,6 @@
   margin-top: 8px;
 }
 
-.remote-source-live-row {
-  display: flex;
-  justify-content: flex-end;
-  margin-bottom: 8px;
-}
-
 .remote-source-card-running {
   border-color: rgba(29, 95, 191, 0.24);
   box-shadow: 0 20px 60px rgba(29, 95, 191, 0.12);
@@ -174,8 +229,6 @@
   display: grid;
   gap: 10px;
   margin-top: 12px;
-  padding-top: 12px;
-  border-top: 1px solid rgba(20, 37, 63, 0.08);
 }
 
 .remote-source-progress-copy {
@@ -188,6 +241,8 @@
   grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
   gap: 14px 18px;
   margin: 14px 0 0;
+  padding-top: 12px;
+  border-top: 1px solid rgba(20, 37, 63, 0.08);
 }
 
 .remote-source-details dt {
@@ -280,6 +335,18 @@
   .remote-source-details {
     grid-template-columns: 1fr;
     gap: 12px;
+  }
+
+  .remote-hero-menu {
+    width: 100%;
+  }
+
+  .remote-hero-menu .fetcher-menu-button {
+    margin-left: auto;
+  }
+
+  .remote-auth-language-picker {
+    margin-bottom: 0;
   }
 }
 

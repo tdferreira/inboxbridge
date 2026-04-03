@@ -458,9 +458,11 @@ describe('AuthScreen', () => {
       />
     )
 
+    expect(screen.getByRole('button', { name: 'Language' })).toHaveTextContent('🇬🇧')
     expect(screen.getAllByLabelText('Language')).toHaveLength(2)
 
-    fireEvent.change(screen.getAllByLabelText('Language')[0], { target: { value: 'pt-PT' } })
+    fireEvent.click(screen.getByRole('button', { name: 'Language' }))
+    fireEvent.click(screen.getByRole('menuitemradio', { name: 'Português (Portugal)' }))
 
     expect(onLanguageChange).toHaveBeenCalledWith('pt-PT')
   })

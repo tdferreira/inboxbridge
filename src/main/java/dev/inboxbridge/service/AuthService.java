@@ -55,7 +55,7 @@ public class AuthService {
                 geoIpLocationService.resolveLocation(clientIp).orElse(null),
                 userAgent,
                 result.loginMethod());
-        return LoginResult.authenticated(result.user(), session.sessionToken(), session.csrfToken());
+        return LoginResult.authenticated(result.user(), session.session().id, session.sessionToken(), session.csrfToken());
     }
 
     public AuthenticatedSession loginWithPasskey(PasskeyService.PasskeyAuthenticationResult result, String clientIp, String userAgent) {
@@ -69,7 +69,7 @@ public class AuthService {
                 geoIpLocationService.resolveLocation(clientIp).orElse(null),
                 userAgent,
                 loginMethod);
-        return new AuthenticatedSession(authenticatedUser, session.sessionToken(), session.csrfToken());
+        return new AuthenticatedSession(authenticatedUser, session.session().id, session.sessionToken(), session.csrfToken());
     }
 
     public AuthenticationResult authenticateWithPasskey(PasskeyService.PasskeyAuthenticationResult result) {
@@ -101,7 +101,7 @@ public class AuthService {
         }
     }
 
-    public record AuthenticatedSession(AppUser user, String token, String csrfToken) {
+    public record AuthenticatedSession(AppUser user, Long sessionId, String token, String csrfToken) {
     }
 
     public record AuthenticatedRequest(AppUser user, UserSession session) {
@@ -110,8 +110,8 @@ public class AuthService {
     public record LoginResult(LoginStatus status, AuthenticatedSession session,
             dev.inboxbridge.dto.StartPasskeyCeremonyResponse passkeyChallenge) {
 
-        public static LoginResult authenticated(AppUser user, String token, String csrfToken) {
-            return new LoginResult(LoginStatus.AUTHENTICATED, new AuthenticatedSession(user, token, csrfToken), null);
+        public static LoginResult authenticated(AppUser user, Long sessionId, String token, String csrfToken) {
+            return new LoginResult(LoginStatus.AUTHENTICATED, new AuthenticatedSession(user, sessionId, token, csrfToken), null);
         }
 
         public static LoginResult passkeyRequired(dev.inboxbridge.dto.StartPasskeyCeremonyResponse challenge) {

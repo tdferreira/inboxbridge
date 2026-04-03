@@ -33,21 +33,24 @@ function UserEmailAccountsSection({
   onConfigureFetcherPolling,
   onConnectOAuth,
     onDeleteEmailAccount,
-    onEditEmailAccount,
+  onEditEmailAccount,
   onFetcherPollingFormChange,
   onFetcherToggleExpand,
   onResetFetcherPollingSettings,
   onRunFetcherPoll,
-    onSaveEmailAccount,
-    onSaveEmailAccountAndConnectOAuth,
+  onToggleEmailAccountEnabled,
+  onSaveEmailAccount,
+  onSaveEmailAccountAndConnectOAuth,
   onSaveFetcherPollingSettings,
-    onTestEmailAccountConnection,
+  onTestEmailAccountConnection,
   saveLoading,
   saveAndConnectLoading = false,
   sectionLoading = false,
   t,
   testConnectionLoading = false,
   testResult = null,
+  togglingEmailAccountId = null,
+  viewerUsername = null,
   locale,
   availableOAuthProviders = [],
   microsoftOAuthAvailable = true
@@ -88,12 +91,15 @@ function UserEmailAccountsSection({
                 onEdit={onEditEmailAccount}
                 onLoadCustomRange={onLoadFetcherCustomRange}
                 onRunPoll={onRunFetcherPoll}
+                onToggleEnabled={onToggleEmailAccountEnabled}
                 onToggleExpand={onFetcherToggleExpand}
                 pollLoading={fetcherPollLoadingIds.includes(fetcher.emailAccountId)}
                 refreshLoading={fetcherRefreshLoadingId === fetcher.emailAccountId}
                 stats={fetcherStatsById?.[fetcher.emailAccountId] || null}
                 statsLoading={fetcherStatsLoadingId === fetcher.emailAccountId}
                 t={t}
+                toggleEnabledLoading={togglingEmailAccountId === fetcher.emailAccountId}
+                viewerUsername={viewerUsername}
               />
             ))}
           </div>

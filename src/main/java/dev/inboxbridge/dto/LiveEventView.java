@@ -6,5 +6,6 @@ public record LiveEventView(
         String type,
         Instant timestamp,
         PollLiveView poll,
-        LiveNotificationView notification) {
+        LiveNotificationView notification,
+        Long revokedSessionId) {
 }

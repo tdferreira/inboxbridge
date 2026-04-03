@@ -55,7 +55,14 @@ public class PollThrottleService {
         if (lease == null || lease.noop() || lease.leaseToken() == null) {
             return;
         }
-        releaseByToken(lease.leaseToken());
+        try {
+            releaseByToken(lease.leaseToken());
+        } catch (RuntimeException releaseError) {
+            LOG.warnf(releaseError,
+                    "Unable to release poll throttle lease %s for %s; the lease will expire automatically",
+                    lease.leaseToken(),
+                    lease.key());
+        }
     }
 
     public void recordSourceSuccess(RuntimeEmailAccount emailAccount) {

@@ -254,7 +254,7 @@ class AdminResourceTest {
 
     private static final class FakeRunPollingService extends PollingService {
         @Override
-        public PollRunResult runPollForSource(RuntimeEmailAccount bridge, String trigger, String actorKey) {
+        public PollRunResult runPollForSource(RuntimeEmailAccount bridge, String trigger, AppUser actor, String actorKey) {
             PollRunResult result = new PollRunResult();
             result.incrementFetched();
             result.incrementImported();

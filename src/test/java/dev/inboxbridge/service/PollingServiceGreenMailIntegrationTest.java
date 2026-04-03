@@ -672,7 +672,7 @@ class PollingServiceGreenMailIntegrationTest {
 
     private static final class NoopSourcePollEventService extends SourcePollEventService {
         @Override
-        public void record(String sourceId, String trigger, Instant startedAt, Instant finishedAt, int fetched, int imported, int duplicates, String error) {
+        public void record(String sourceId, String trigger, Instant startedAt, Instant finishedAt, int fetched, int imported, int duplicates, int spamJunkMessageCount, String actorUsername, String executionSurface, String error) {
         }
     }
 

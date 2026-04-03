@@ -18,6 +18,7 @@ import dev.inboxbridge.service.AuthLoginProtectionService;
 import dev.inboxbridge.service.AuthService;
 import dev.inboxbridge.service.GeoIpLocationService;
 import dev.inboxbridge.service.PasskeyService;
+import dev.inboxbridge.service.PollingLiveService;
 import dev.inboxbridge.service.RemoteSessionService;
 import dev.inboxbridge.service.SystemOAuthAppSettingsService;
 import dev.inboxbridge.service.UserUiPreferenceService;
@@ -73,6 +74,9 @@ public class RemoteAuthResource {
 
     @Inject
     SystemOAuthAppSettingsService systemOAuthAppSettingsService;
+
+    @Inject
+    PollingLiveService pollingLiveService;
 
     @Context
     HttpHeaders httpHeaders;
@@ -177,15 +181,24 @@ public class RemoteAuthResource {
                 location,
                 userAgent,
                 loginMethod);
-        return Response.ok(toResponse(user))
+        pollingLiveService.publishNewSignInDetected(
+                user.id,
+                PollingLiveService.SessionStreamKind.REMOTE,
+                session.session().id);
+        return Response.ok(toResponse(user, session.session().id))
                 .cookie(remoteSessionCookie(session.sessionToken()))
                 .cookie(remoteCsrfCookie(session.csrfToken()))
                 .build();
     }
 
     private RemoteSessionUserResponse toResponse(AppUser user) {
+        return toResponse(user, currentUserContext.remoteSession() == null ? null : currentUserContext.remoteSession().id);
+    }
+
+    private RemoteSessionUserResponse toResponse(AppUser user, Long currentSessionId) {
         return new RemoteSessionUserResponse(
                 user.id,
+                currentSessionId,
                 user.username,
                 user.role.name(),
                 true,

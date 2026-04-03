@@ -88,7 +88,7 @@ public class PollingService {
     }
 
     public PollRunResult runPoll(String trigger) {
-        return runPollInternal(trigger, runtimeEmailAccountService.listEnabledForPolling(), null, null, false, false, false, null);
+        return runPollInternal(trigger, runtimeEmailAccountService.listEnabledForPolling(), null, null, false, false, false, null, executionSurfaceForTrigger(trigger));
     }
 
     public PollRunResult runPollForAllUsers(AppUser actor, String trigger) {
@@ -100,7 +100,8 @@ public class PollingService {
                 true,
                 true,
                 false,
-                null);
+                null,
+                executionSurfaceForTrigger(trigger));
     }
 
     public PollRunResult runPollForUser(AppUser actor, String trigger) {
@@ -112,15 +113,20 @@ public class PollingService {
                 true,
                 true,
                 false,
-                null);
+                null,
+                executionSurfaceForTrigger(trigger));
     }
 
     public PollRunResult runPollForSource(RuntimeEmailAccount emailAccount, String trigger) {
-        return runPollForSource(emailAccount, trigger, null);
+        return runPollForSource(emailAccount, trigger, null, null);
     }
 
     public PollRunResult runPollForSource(RuntimeEmailAccount emailAccount, String trigger, String actorKey) {
-        return runPollInternal(trigger, List.of(emailAccount), null, actorKey, true, true, true, emailAccount.id());
+        return runPollForSource(emailAccount, trigger, null, actorKey);
+    }
+
+    public PollRunResult runPollForSource(RuntimeEmailAccount emailAccount, String trigger, AppUser actor, String actorKey) {
+        return runPollInternal(trigger, List.of(emailAccount), actor, actorKey, true, true, true, emailAccount.id(), executionSurfaceForTrigger(trigger));
     }
 
     public PollStatusView status() {
@@ -139,7 +145,8 @@ public class PollingService {
             boolean ignoreInterval,
             boolean ignoreCooldown,
             boolean singleSource,
-            String singleSourceId) {
+            String singleSourceId,
+            String executionSurface) {
         if (!running.compareAndSet(false, true)) {
             PollRunResult busy = new PollRunResult();
             busy.addError(new PollRunError("poll_busy", singleSourceId, currentBusyMessage(), null));
@@ -179,9 +186,9 @@ public class PollingService {
             }
             Instant now = Instant.now();
             if (liveRun != null) {
-                runParallelLivePoll(trigger, now, result, liveRun.runId(), emailAccounts, ignoreInterval, ignoreCooldown);
+                runParallelLivePoll(trigger, now, result, liveRun.runId(), emailAccounts, ignoreInterval, ignoreCooldown, actorUsername(actor), executionSurface);
             } else {
-                runParallelLocalPoll(trigger, now, result, emailAccounts, ignoreInterval, ignoreCooldown);
+                runParallelLocalPoll(trigger, now, result, emailAccounts, ignoreInterval, ignoreCooldown, actorUsername(actor), executionSurface);
             }
             return result;
         } catch (RuntimeException e) {
@@ -191,9 +198,13 @@ public class PollingService {
         } finally {
             result.finish();
             if (liveRun != null && pollingLiveService != null) {
+                boolean stopped = pollingLiveService.stopRequested(liveRun.runId());
+                if (stopped) {
+                    result.markStopped(pollingLiveService.stopRequestedByUsername(liveRun.runId()));
+                }
                 pollingLiveService.finishRun(
                         liveRun.runId(),
-                        pollingLiveService.stopRequested(liveRun.runId()) ? "STOPPED" : result.getErrors().isEmpty() ? "COMPLETED" : "FAILED");
+                        stopped ? "STOPPED" : result.getErrors().isEmpty() ? "COMPLETED" : "FAILED");
             }
             if (liveRun != null && pollCancellationService != null) {
                 pollCancellationService.clearRun(liveRun.runId());
@@ -218,7 +229,9 @@ public class PollingService {
             String liveRunId,
             RuntimeEmailAccount emailAccount,
             boolean ignoreInterval,
-            boolean ignoreCooldown) {
+            boolean ignoreCooldown,
+            String actorUsername,
+            String executionSurface) {
         if (!emailAccount.enabled()) {
             if (!"scheduler".equals(trigger)) {
                 tally.addError(new PollRunError(
@@ -249,7 +262,7 @@ public class PollingService {
             return;
         }
         activePoll.set(new ActivePoll(trigger, emailAccount.id(), now));
-        pollSource(emailAccount, trigger, settings, tally, liveRunId);
+        pollSource(emailAccount, trigger, settings, tally, liveRunId, actorUsername, executionSurface);
     }
 
     private void pollSource(
@@ -257,11 +270,14 @@ public class PollingService {
             String trigger,
             PollingSettingsService.EffectivePollingSettings settings,
             SourcePollTally tally,
-            String liveRunId) {
+            String liveRunId,
+            String actorUsername,
+            String executionSurface) {
         Instant startedAt = Instant.now();
         int fetched = 0;
         int imported = 0;
         int duplicates = 0;
+        int spamJunkMessageCount = 0;
         String error = null;
         boolean shouldRecordFailure = false;
         boolean stoppedByUser = false;
@@ -281,9 +297,12 @@ public class PollingService {
                 return;
             }
             try {
-                mailSourceClient.probeSpamOrJunkFolder(emailAccount)
-                        .filter(probe -> probe.messageCount() > 0)
-                        .ifPresent(probe -> tally.addSpamJunkFolderSummary(emailAccount.id(), probe.folderName(), probe.messageCount()));
+                Optional<MailSourceClient.MailboxCountProbe> spamProbe = mailSourceClient.probeSpamOrJunkFolder(emailAccount)
+                        .filter(probe -> probe.messageCount() > 0);
+                if (spamProbe.isPresent()) {
+                    spamJunkMessageCount = spamProbe.get().messageCount();
+                    tally.addSpamJunkFolderSummary(emailAccount.id(), spamProbe.get().folderName(), spamProbe.get().messageCount());
+                }
             } catch (RuntimeException spamProbeError) {
                 LOG.debugf(spamProbeError, "Unable to inspect spam/junk mailbox for source %s", emailAccount.id());
             }
@@ -330,7 +349,7 @@ public class PollingService {
             releaseThrottle(sourceLease);
             Instant finishedAt = Instant.now();
             if (stoppedByUser) {
-                sourcePollEventService.record(
+                recordSourcePollEvent(
                         emailAccount.id(),
                         trigger,
                         startedAt,
@@ -338,6 +357,9 @@ public class PollingService {
                         fetched,
                         imported,
                         duplicates,
+                        spamJunkMessageCount,
+                        actorUsername,
+                        executionSurface,
                         STOPPED_BY_USER_MESSAGE);
                 if (liveRunId != null && pollingLiveService != null) {
                     pollingLiveService.markSourceStopped(liveRunId, emailAccount.id(), fetched, imported, duplicates);
@@ -350,7 +372,7 @@ public class PollingService {
             } else if (shouldRecordFailure) {
                 sourcePollingStateService.recordFailure(emailAccount.id(), finishedAt, error);
             }
-            sourcePollEventService.record(
+            recordSourcePollEvent(
                     emailAccount.id(),
                     trigger,
                     startedAt,
@@ -358,6 +380,9 @@ public class PollingService {
                     fetched,
                     imported,
                     duplicates,
+                    spamJunkMessageCount,
+                    actorUsername,
+                    executionSurface,
                     error);
             if (liveRunId != null && pollingLiveService != null) {
                 pollingLiveService.markSourceFinished(liveRunId, emailAccount.id(), fetched, imported, duplicates, error);
@@ -376,7 +401,9 @@ public class PollingService {
             String liveRunId,
             List<RuntimeEmailAccount> emailAccounts,
             boolean ignoreInterval,
-            boolean ignoreCooldown) {
+            boolean ignoreCooldown,
+            String actorUsername,
+            String executionSurface) {
         java.util.Map<String, RuntimeEmailAccount> emailAccountsById = emailAccounts.stream()
                 .collect(java.util.stream.Collectors.toMap(RuntimeEmailAccount::id, emailAccount -> emailAccount));
         runParallelPoll(trigger, now, result, workerParallelism(emailAccounts.size()), liveRunId, () -> {
@@ -385,7 +412,7 @@ public class PollingService {
                 return null;
             }
             return emailAccountsById.get(nextSourceId);
-        }, ignoreInterval, ignoreCooldown);
+        }, ignoreInterval, ignoreCooldown, actorUsername, executionSurface);
     }
 
     private void runParallelLocalPoll(
@@ -394,9 +421,11 @@ public class PollingService {
             PollRunResult result,
             List<RuntimeEmailAccount> emailAccounts,
             boolean ignoreInterval,
-            boolean ignoreCooldown) {
+            boolean ignoreCooldown,
+            String actorUsername,
+            String executionSurface) {
         ConcurrentLinkedQueue<RuntimeEmailAccount> queue = new ConcurrentLinkedQueue<>(emailAccounts);
-        runParallelPoll(trigger, now, result, workerParallelism(emailAccounts.size()), null, queue::poll, ignoreInterval, ignoreCooldown);
+        runParallelPoll(trigger, now, result, workerParallelism(emailAccounts.size()), null, queue::poll, ignoreInterval, ignoreCooldown, actorUsername, executionSurface);
     }
 
     private void runParallelPoll(
@@ -407,7 +436,9 @@ public class PollingService {
             String liveRunId,
             SourceSupplier sourceSupplier,
             boolean ignoreInterval,
-            boolean ignoreCooldown) {
+            boolean ignoreCooldown,
+            String actorUsername,
+            String executionSurface) {
         if (parallelism <= 1) {
             SourcePollTally tally = new SourcePollTally();
             while (true) {
@@ -415,7 +446,7 @@ public class PollingService {
                 if (emailAccount == null) {
                     break;
                 }
-                pollSingleSource(trigger, now, tally, liveRunId, emailAccount, ignoreInterval, ignoreCooldown);
+                pollSingleSource(trigger, now, tally, liveRunId, emailAccount, ignoreInterval, ignoreCooldown, actorUsername, executionSurface);
             }
             tally.mergeInto(result);
             return;
@@ -427,7 +458,7 @@ public class PollingService {
                 pollingLiveService.registerCancellationAction(liveRunId, executor::shutdownNow);
             }
             for (int workerIndex = 0; workerIndex < parallelism; workerIndex++) {
-                futures.add(executor.submit(() -> pollWorker(trigger, now, liveRunId, sourceSupplier, ignoreInterval, ignoreCooldown)));
+                futures.add(executor.submit(() -> pollWorker(trigger, now, liveRunId, sourceSupplier, ignoreInterval, ignoreCooldown, actorUsername, executionSurface)));
             }
             for (Future<SourcePollTally> future : futures) {
                 future.get().mergeInto(result);
@@ -452,14 +483,16 @@ public class PollingService {
             String liveRunId,
             SourceSupplier sourceSupplier,
             boolean ignoreInterval,
-            boolean ignoreCooldown) {
+            boolean ignoreCooldown,
+            String actorUsername,
+            String executionSurface) {
         SourcePollTally tally = new SourcePollTally();
         while (!Thread.currentThread().isInterrupted()) {
             RuntimeEmailAccount emailAccount = sourceSupplier.next();
             if (emailAccount == null) {
                 break;
             }
-            pollSingleSource(trigger, now, tally, liveRunId, emailAccount, ignoreInterval, ignoreCooldown);
+            pollSingleSource(trigger, now, tally, liveRunId, emailAccount, ignoreInterval, ignoreCooldown, actorUsername, executionSurface);
         }
         return tally;
     }
@@ -517,6 +550,23 @@ public class PollingService {
         return system;
     }
 
+    private String actorUsername(AppUser actor) {
+        if (actor == null || actor.username == null || actor.username.isBlank()) {
+            return null;
+        }
+        return actor.username;
+    }
+
+    private String executionSurfaceForTrigger(String trigger) {
+        return switch (String.valueOf(trigger)) {
+            case "scheduler" -> "AUTOMATIC";
+            case "user-ui", "app-fetcher" -> "MY_INBOXBRIDGE";
+            case "admin-ui", "admin-fetcher" -> "ADMINISTRATION";
+            case "remote-ui", "remote-admin", "remote-source" -> "INBOXBRIDGE_GO";
+            default -> null;
+        };
+    }
+
     private PollThrottleService.ThrottleLease acquireSourceThrottle(RuntimeEmailAccount emailAccount) {
         if (pollThrottleService == null) {
             return PollThrottleService.ThrottleLease.noopLease();
@@ -536,6 +586,41 @@ public class PollingService {
             return;
         }
         pollThrottleService.release(lease);
+    }
+
+    private void recordSourcePollEvent(
+            String sourceId,
+            String trigger,
+            Instant startedAt,
+            Instant finishedAt,
+            int fetched,
+            int imported,
+            int duplicates,
+            int spamJunkMessageCount,
+            String actorUsername,
+            String executionSurface,
+            String error) {
+        if (sourcePollEventService == null) {
+            return;
+        }
+        try {
+            sourcePollEventService.record(
+                    sourceId,
+                    trigger,
+                    startedAt,
+                    finishedAt,
+                    fetched,
+                    imported,
+                    duplicates,
+                    spamJunkMessageCount,
+                    actorUsername,
+                    executionSurface,
+                    error);
+        } catch (RuntimeException recordError) {
+            LOG.warnf(recordError,
+                    "Unable to record source poll event for %s; continuing without persisted last-run history",
+                    sourceId);
+        }
     }
 
     private void recordSourceThrottleSuccess(RuntimeEmailAccount emailAccount) {

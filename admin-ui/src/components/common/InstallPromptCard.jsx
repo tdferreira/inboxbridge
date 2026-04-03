@@ -4,16 +4,26 @@ import LoadingButton from './LoadingButton'
 function InstallPromptCard({
   canPromptInstall = false,
   installLoading = false,
+  onDismiss,
   onInstall,
   t
 }) {
   return (
     <SectionCard
-      actions={canPromptInstall ? (
-        <LoadingButton className="primary" isLoading={installLoading} loadingLabel={t('pwa.installLoading')} onClick={onInstall} type="button">
-          {t('pwa.install')}
-        </LoadingButton>
-      ) : null}
+      actions={(
+        <>
+          {onDismiss ? (
+            <button className="secondary" onClick={onDismiss} type="button">
+              {t('pwa.notNow')}
+            </button>
+          ) : null}
+          {canPromptInstall ? (
+            <LoadingButton className="primary" isLoading={installLoading} loadingLabel={t('pwa.installLoading')} onClick={onInstall} type="button">
+              {t('pwa.install')}
+            </LoadingButton>
+          ) : null}
+        </>
+      )}
       className="utility-prompt-card"
       copy={t('pwa.copy')}
       title={t('pwa.title')}

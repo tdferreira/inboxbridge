@@ -57,9 +57,22 @@ Key design choices:
 - the main `My InboxBridge` workspace now includes a dedicated `InboxBridge Go` launch card so the lightweight `/remote` page is discoverable from the normal dashboard
 - the `/remote` surface can now expose an in-app install prompt when the browser considers that remote page installable as a PWA
 - the `/remote` surface now also keeps a visible install-help card even when the browser uses a manual install path, with guidance for Chrome/Edge, Safari `Add to Home Screen` / `Add to Dock`, Firefox Android install, and a note that Firefox desktop does not currently expose a full install flow
+- the `/remote` install-help card now also includes a `Not now` action that hides the section until the user reopens it from the hero hamburger menu, so the PWA guidance can be postponed without disappearing entirely
+- InboxBridge Go now groups install guidance, device-location sharing, and sign-out inside a top-right hero hamburger menu instead of exposing those utility actions as separate inline banner buttons
+- the unauthenticated InboxBridge Go login screen now shows a single `InboxBridge Go` heading, instead of repeating the same label in a blue eyebrow directly under the language picker
+- the unauthenticated InboxBridge Go login screen also keeps explicit spacing between the language picker and the main title so the top of the card does not feel cramped after removing the old blue eyebrow
+- the InboxBridge Go login card now uses the standard `Sign in` button label, and any session-expired or other login notice is rendered below the sign-in actions instead of above the form copy
+- the InboxBridge Go login language control is now a mobile-friendly flag button in the top-right corner of the login card that opens a floating menu of languages showing both the language label and its flag, instead of rendering as a plain labeled select dropdown
+- the main My InboxBridge login screen now uses that same top-right flag language menu on the login card, while the registration dialog keeps its labeled selector
+- the Preferences dialog language control now also uses the shared flag-based menu, so language selection is visually consistent across login flows and in-app preferences
+- the Preferences dialog language menu now opens to the right of its trigger instead of growing left over the field label, and the InboxBridge Go login picker uses remote-specific menu surfaces so its button and dropdown visually match the remote page
+- the InboxBridge Go language picker button and dropdown now use fully opaque white surfaces, which keeps the control legible against the remote gradient background without the washed-out transparency
 - the `/remote` bootstrap path now injects the route-scoped manifest and related mobile-web-app metadata into the document head so Chromium can evaluate `/remote` for installation without making the main workspace advertise itself as a PWA
 - browser/device geolocation prompts are now mobile-safe: InboxBridge only auto-captures when the browser already reports permission as granted, while phones and other gesture-gated browsers should rely on the explicit `Share Device Location` action
 - the Security `Sessions` tab now also shows a best-effort browser label and device type for each session, derived from the stored `User-Agent`, so users can quickly tell desktop/admin-ui sessions from mobile/remote-control sign-ins
+- when one session signs out another from the shared `Sessions` tab, both the main admin UI and InboxBridge Go now react immediately through a targeted authenticated SSE `session-revoked` event instead of waiting for the next fetch to return `401`
+- both UIs also verify their session immediately if that authenticated SSE stream drops unexpectedly, which covers browsers that terminate the revoked stream before exposing the final revoke event to client-side JavaScript
+- the main app also uses that authenticated SSE channel for immediate new-sign-in warnings, and when one of those session-activity notifications arrives it refreshes the Sessions data in the background so the notification and the Security tab stay aligned
 - both the main app and `/remote` now offer an explicit opt-in browser location prompt for the current session so device-reported location can be stored separately from Geo-IP
 - both the main app and `/remote` now auto-capture device location only when geolocation permission is already granted, while still leaving an explicit share action and a retry path in the Sessions UI when no sample was saved
 - when a session includes device coordinates, the Sessions view now tries to turn them into a friendlier place label in the browser and exposes an `Open in Maps` action for that device-reported location
@@ -155,17 +168,31 @@ Key design choices:
 - the admin Gmail account form now shows inline help hints for each configurable field
 - connected Gmail accounts can now also be unlinked from the admin UI, which clears InboxBridge's stored Gmail OAuth tokens and attempts a Google-side token revocation when possible
 - in the normal operating model, that shared Google OAuth client comes from one deployment-wide Google Cloud project reused across many users, and the `Administration -> OAuth Apps` area only stores that client registration while each user still connects their own Gmail mailbox from `My Destination Mailbox`
+- each source mail account row in `My Source Email Accounts` now includes a quick `Enable` or `Disable` action in its contextual menu so users can pause a fetcher without opening the full edit dialog
+- the expanded `Last result` details for each source email account now also keep the persisted Spam/Junk mailbox count from that run, matching the completion notification instead of dropping that detail once the toast disappears
+- InboxBridge Go now mirrors that Spam/Junk mailbox count in both the expanded source `Last result` pills and the top-level latest remote run summary, so the lightweight remote UI exposes the same mailbox-health signal as the main dashboard
+- InboxBridge Go keeps each source card's live state minimal: queued sources may still show queue position and `Move Next`, but the per-card `Fetched/Imported/Duplicates` live summary text and separate `Retry` action were removed so recovery stays on the normal `Poll This Source` button
+- that remote source-card separator now belongs to the expanded details block instead of the live-progress area, so a running poll no longer draws an extra horizontal divider unless the user explicitly opens `Show details`
+- remote source cards no longer mount an empty live-progress container for active sources, so a `RUNNING` source without queue details or `Move Next` actions no longer grows slightly just because live state exists
+- backend poll-throttle lease cleanup is now best-effort, so a transient PostgreSQL disconnect while deleting a `poll_throttle_lease` row logs a warning and lets the lease TTL expire naturally instead of failing the poll just because the cleanup delete could not complete immediately
+- persisted source poll history writes are now best-effort too, so a transient PostgreSQL disconnect during the final `source_poll_event` insert logs a warning and preserves the poll outcome rather than turning the run into a database-write error
+- InboxBridge Go latest-run banners now distinguish an intentional stop from a clean success, showing `The polling request was stopped.` when the signed-in user stopped it and `The polling request was stopped by an administrator.` when another admin user ended that run
+- persisted source stop events now keep a `STOPPED` status instead of being downgraded to `ERROR` just because the stop marker uses the message `Stopped by user.`, which keeps InboxBridge Go source status pills consistent with an intentional stop
+- that same `Last result` block now uses a richer execution summary such as `Executed at ... via My InboxBridge` or `Executed at ... by admin via Administration`, while automatic scheduler runs omit the actor and render as automatic execution
+- backend Spam/Junk mailbox probing now prefers IMAP special-use folder flags like `\\Junk` / `\\Spam` when the server advertises them, and only falls back to localized folder-name matching otherwise
 - the polling area is now framed as `Poller Settings` and focuses on runtime scheduler controls plus polling-health metrics
 - `My Polling Settings` now also includes a `Run Poll Now` action for the signed-in user’s own mail accounts
+- `My Polling Settings` keeps the broad run and Pause/Resume/Stop controls plus the effective summary, while the detailed `Live Poll Progress` panel now lives only in `My Source Email Accounts` so the same run state is not duplicated across two user sections
 - `Global Polling Settings` now asks for confirmation before starting an all-users manual run, and the dialog also exposes the manual-run rate limit configuration used to prevent repeated hammering
 - the `Edit Global Polling Settings` modal is now grouped into scheduler, manual-run, source pacing, destination pacing, adaptive recovery, and effective-value subsections so the deployment-wide controls are easier to scan
 - broad manual polling runs still respect per-source cooldown and next-window checks, while the single mail-account `Run Poll Now` action remains the explicit force-run path
 - effective polling behavior now follows a three-layer precedence chain: deployment-wide defaults, optional per-user overrides for DB-managed sources, and optional per-source overrides on top
 - those broad manual polling runs now follow the backend's active source and move the per-row spinner/status pill one mailbox at a time, so the user can see which source is actually being processed right now
-- the user and admin polling sections now also show a live poll-progress panel driven by authenticated SSE, including pause/resume/stop controls plus per-source `Move Next` and `Retry` actions during the active run
+- the admin polling section shows a live poll-progress panel driven by authenticated SSE, including pause/resume/stop controls plus per-source `Move Next` and `Retry` actions during the active run; the user workspace keeps those detailed per-source live updates in `My Source Email Accounts` instead
 - live pause/stop controls are now honored during the currently active source as well as between queued sources because the backend advances the live queue one source at a time and checks for pause/stop between fetched messages instead of only when the run first starts
 - admins see the live panel across user-owned sources with owner labels, while non-admin users only receive the subset of live progress and notifications that belongs to their own mail sources
 - if the live SSE stream disconnects, the UI falls back to the live snapshot refresh path so row-level running indicators continue to work until the stream reconnects, including runs where multiple sources are active at once
+- that live snapshot fallback now also keeps running during single-source `Run Poll Now` actions and during already-active runs discovered from the first snapshot, so a missed final SSE event does not leave the last source row stuck in `Running`
 - disabled source email accounts keep their row-level `Run Poll Now` actions disabled and never show the batch spinner while another source is being processed
 - the user poller settings card now uses the same padded section shell as the main dashboard cards, so the form content stays fully inside the card boundaries
 - the hero/header now includes a `Preferences` button that opens a modal for language selection, the persisted `Remember layout on this account` toggle, the `Show Quick Setup Guide` toggle, layout-edit controls, and a reset-layout action
@@ -193,7 +220,7 @@ Key design choices:
 - shared button styles now include clearer hover, focus, and pressed states so actions feel more obviously interactive across the UI
 - Each component imports its own CSS file for local structure and appearance.
 - Shared visual tokens and generic form/layout helpers live in `src/styles.css`.
-- shared layout/action primitives now also include reusable `SectionCard`, `CollapsibleSection`, and `ButtonLink` components so new dashboard sections and navigational CTA actions do not need one-off structure or button-link styling
+- shared layout/action primitives now also include reusable `SectionCard`, `CollapsibleSection`, `ButtonLink`, `FormField`, and `FloatingActionMenu` components so new dashboard sections, labeled form rows, contextual menus, and navigational CTA actions do not need one-off structure or button-link styling
 - Formatting and API helpers live in `src/lib/...`.
 
 ## UI primitives
@@ -205,6 +232,8 @@ Current design-system foundation includes:
 - `SectionCard` for non-collapsible section shells with standard header, copy, actions, and body spacing
 - `CollapsibleSection` for top-level workspace/admin panels that need the same section shell plus the standard corner collapse button and section-loading treatment
 - `ButtonLink` for navigational CTA links that should look and behave like the existing button system
+- `FormField` for standard labeled inputs with optional inline help
+- `FloatingActionMenu` for anchored hamburger-menu actions that close on outside click, escape, and scroll-out
 - `LoadingButton` for async button states
 - `PasswordField` for reusable password entry with show/hide behavior
 - `ModalDialog` and `ConfirmationDialog` for modal workflows

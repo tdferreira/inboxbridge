@@ -75,6 +75,47 @@ describe('UserPollingSettingsSection', () => {
     expect(screen.getByRole('button', { name: 'Editar definições de verificação' })).toBeInTheDocument()
   })
 
+  it('translates the live control buttons in portuguese', () => {
+    const onPausePoll = vi.fn()
+    const onStopPoll = vi.fn()
+
+    render(
+      <UserPollingSettingsSection
+        collapsed={false}
+        collapseLoading={false}
+        hasFetchers
+        livePoll={{
+          running: true,
+          state: 'RUNNING',
+          viewerCanControl: true,
+          activeSourceId: 'source-1',
+          sources: [{ sourceId: 'source-1', label: 'Inbox', state: 'RUNNING', actionable: false }]
+        }}
+        onCollapseToggle={vi.fn()}
+        onOpenEditor={vi.fn()}
+        onPausePoll={onPausePoll}
+        onRunPoll={vi.fn()}
+        onStopPoll={onStopPoll}
+        pollingSettings={{
+          defaultPollEnabled: true,
+          pollEnabledOverride: null,
+          effectivePollEnabled: true,
+          defaultPollInterval: '5m',
+          pollIntervalOverride: null,
+          effectivePollInterval: '2m',
+          defaultFetchWindow: 50,
+          fetchWindowOverride: null,
+          effectiveFetchWindow: 50
+        }}
+        sectionLoading={false}
+        t={(key, params) => translate('pt-PT', key, params)}
+      />
+    )
+
+    expect(screen.getByRole('button', { name: 'Pausar' })).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Parar' })).toBeInTheDocument()
+  })
+
   it('keeps the edit action first and the run action as the primary button', () => {
     const { container } = renderSection()
     const actionButtons = container.querySelectorAll('.panel-header-actions button')
@@ -102,8 +143,10 @@ describe('UserPollingSettingsSection', () => {
       onStopPoll
     })
 
-    fireEvent.click(screen.getAllByRole('button', { name: 'Pause' })[0])
-    fireEvent.click(screen.getAllByRole('button', { name: 'Stop' })[0])
+    expect(screen.queryByText('Live Poll Progress')).not.toBeInTheDocument()
+
+    fireEvent.click(screen.getByRole('button', { name: 'Pause' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Stop' }))
 
     expect(onPausePoll).toHaveBeenCalledTimes(1)
     expect(onStopPoll).toHaveBeenCalledTimes(1)

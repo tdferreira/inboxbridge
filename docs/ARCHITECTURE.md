@@ -42,7 +42,7 @@ InboxBridge now exposes authenticated live polling state for both the main app a
 1. `PollingService` starts a run through `PollingLiveService`
 2. `PollingLiveService` snapshots the queued, running, completed, failed, paused, and stopped source state for the active run
 3. `GET /api/poll/live` and `GET /api/admin/poll/live` return an immediate snapshot so a browser can hydrate mid-run without waiting for the next event
-4. `GET /api/poll/events` and `GET /api/admin/poll/events` stream SSE updates plus live notifications as the run changes
+4. `GET /api/poll/events` and `GET /api/admin/poll/events` stream SSE updates plus live notifications as the run changes, and they can also push targeted `session-revoked` events so a browser session signed out elsewhere leaves immediately
 5. authenticated `POST` controls call the live service to pause, resume, stop, move one queued source to the front, or retry a completed/failed source
 6. `PollingService` now asks `PollingLiveService` for the next source just in time instead of precomputing the full queue, so reprioritize controls affect the remaining queue order while a run is active
 7. several workers may therefore dequeue and run different sources concurrently, and the live snapshot's per-source `state` is the authoritative UI signal for row-level running indicators
@@ -51,7 +51,7 @@ InboxBridge now exposes authenticated live polling state for both the main app a
 
 That keeps the poll engine authoritative in the backend while letting the UI show real-time progress without hammering every row with its own polling loop.
 
-The lightweight `/remote` surface now reuses that same live model through its own remote-scoped `/api/remote/poll/live`, `/api/remote/poll/events`, and `/api/remote/poll/live/...` endpoints, so phones and quick-access devices can follow the active source and issue live pause/resume/stop/reprioritize/retry commands without opening the full workspace. The remote UI now folds that live state back into the existing source cards instead of maintaining a second live-progress source list.
+The lightweight `/remote` surface now reuses that same live model through its own remote-scoped `/api/remote/poll/live`, `/api/remote/poll/events`, and `/api/remote/poll/live/...` endpoints, so phones and quick-access devices can follow the active source and issue live pause/resume/stop/reprioritize/retry commands without opening the full workspace. Those remote SSE streams can also push targeted `session-revoked` events for remote-session sign-outs. The remote UI now folds that live state back into the existing source cards instead of maintaining a second live-progress source list.
 
 For compatibility, the live DTO still exposes a single `activeSourceId`, but
 that field is now only the primary active source. Any client that needs the

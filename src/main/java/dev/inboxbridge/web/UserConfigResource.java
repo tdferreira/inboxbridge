@@ -281,6 +281,7 @@ public class UserConfigResource {
                     runtimeEmailAccountService.findAccessibleForUser(currentUserContext.user(), emailAccountId)
                             .orElseThrow(() -> new IllegalArgumentException("Unknown mail fetcher id")),
                     "app-fetcher",
+                    currentUserContext.user(),
                     currentUserContext.user().role + ":" + currentUserContext.user().id);
         } catch (IllegalArgumentException e) {
             throw new BadRequestException(e.getMessage(), e);

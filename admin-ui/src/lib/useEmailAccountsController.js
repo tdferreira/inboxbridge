@@ -701,6 +701,61 @@ export function useEmailAccountsController({
     })
   }
 
+  async function toggleEmailAccountEnabled(fetcher) {
+    if (!fetcher?.emailAccountId || fetcher.managementSource === 'ENVIRONMENT' || fetcher.canEdit === false) {
+      return
+    }
+    const nextEnabled = fetcher.enabled === false
+    await withPending(`bridgeToggleEnabled:${fetcher.emailAccountId}`, async () => {
+      try {
+        const response = await fetch('/api/app/email-accounts', {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            originalEmailAccountId: fetcher.emailAccountId,
+            emailAccountId: fetcher.emailAccountId,
+            enabled: nextEnabled,
+            protocol: fetcher.protocol,
+            host: fetcher.host,
+            port: fetcher.port,
+            tls: fetcher.tls,
+            authMethod: fetcher.authMethod,
+            oauthProvider: fetcher.oauthProvider,
+            username: fetcher.username,
+            password: '',
+            oauthRefreshToken: '',
+            folder: fetcher.folder,
+            unreadOnly: fetcher.unreadOnly,
+            customLabel: fetcher.customLabel,
+            markReadAfterPoll: fetcher.markReadAfterPoll,
+            postPollAction: fetcher.postPollAction,
+            postPollTargetFolder: fetcher.postPollTargetFolder
+          })
+        })
+        if (!response.ok) {
+          throw new Error(await apiErrorText(response, errorText('saveMailFetcher')))
+        }
+        pushNotification({
+          message: translatedNotification(
+            nextEnabled ? 'notifications.bridgeEnabled' : 'notifications.bridgeDisabled',
+            { emailAccountId: fetcher.emailAccountId }
+          ),
+          targetId: 'source-email-accounts-section',
+          tone: 'success'
+        })
+        await loadAppData()
+      } catch (err) {
+        pushNotification({
+          autoCloseMs: null,
+          copyText: err.message ? pollErrorNotification(err.message) : translatedNotification('errors.saveMailFetcher'),
+          message: err.message ? pollErrorNotification(err.message) : translatedNotification('errors.saveMailFetcher'),
+          targetId: 'source-email-accounts-section',
+          tone: 'error'
+        })
+      }
+    })
+  }
+
   async function refreshFetcherState(fetcher, expanded) {
     if (!expanded) {
       return
@@ -764,6 +819,8 @@ export function useEmailAccountsController({
     showFetcherDialog,
     startSourceOAuth,
     testEmailAccountConnection,
+    togglingEmailAccountId: visibleFetchers.find((emailAccount) => isPending(`bridgeToggleEnabled:${emailAccount.emailAccountId}`))?.emailAccountId || null,
+    toggleEmailAccountEnabled,
     runnableUserEmailAccounts: userEmailAccounts.filter((emailAccount) => emailAccount.enabled !== false),
     userEmailAccounts,
     visibleFetchers

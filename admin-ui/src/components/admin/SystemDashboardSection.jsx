@@ -38,15 +38,15 @@ function SystemDashboardSection({
             <>
               {isPaused ? (
                 <LoadingButton className="secondary" onClick={onResumePoll} type="button">
-                  Resume
+                  {t('remote.resume')}
                 </LoadingButton>
               ) : (
                 <LoadingButton className="secondary" onClick={onPausePoll} type="button">
-                  Pause
+                  {t('remote.pause')}
                 </LoadingButton>
               )}
               <LoadingButton className="danger" onClick={onStopPoll} type="button">
-                Stop
+                {t('remote.stop')}
               </LoadingButton>
             </>
           ) : null}
@@ -78,6 +78,7 @@ function SystemDashboardSection({
             onRetry={onRetryPollSource}
             onStop={onStopPoll}
             showOwners
+            t={t}
           />
           <div className="muted-box full user-polling-summary">
             {t('system.effectivePolling', { value: dashboard.polling.effectivePollEnabled ? t('common.yes') : t('common.no') })}<br />

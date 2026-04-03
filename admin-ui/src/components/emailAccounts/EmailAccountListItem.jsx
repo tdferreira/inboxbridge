@@ -1,8 +1,8 @@
-import { Suspense, lazy, useEffect, useLayoutEffect, useRef, useState } from 'react'
-import { authMethodLabel, effectiveEmailAccountStatus, formatDate, formatPollError, oauthProviderLabel, protocolLabel, statusLabel, statusTone, tokenStorageLabel, triggerLabel } from '../../lib/formatters'
-import { resolveFloatingMenuPosition } from '../../lib/floatingMenu'
+import { Suspense, lazy, useEffect, useState } from 'react'
+import { authMethodLabel, effectiveEmailAccountStatus, formatDate, formatPollError, formatPollExecutionSummary, oauthProviderLabel, protocolLabel, statusLabel, statusTone, tokenStorageLabel } from '../../lib/formatters'
 import { buildSourceEmailAccountTargetId } from '../../lib/sectionTargets'
 import CopyButton from '../common/CopyButton'
+import FloatingActionMenu from '../common/FloatingActionMenu'
 import './EmailAccountCard.css'
 import './EmailAccountListItem.css'
 
@@ -55,20 +55,17 @@ function EmailAccountListItem({
   onEdit,
   onLoadCustomRange,
   onRunPoll,
+  onToggleEnabled,
   onToggleExpand,
   pollLoading = false,
   refreshLoading = false,
   stats = null,
   statsLoading = false,
+  toggleEnabledLoading = false,
+  viewerUsername = null,
   t
 }) {
   const [expanded, setExpanded] = useState(false)
-  const [menuOpen, setMenuOpen] = useState(false)
-  const [menuStyle, setMenuStyle] = useState(null)
-  const [menuPlacement, setMenuPlacement] = useState('bottom')
-  const menuContainerRef = useRef(null)
-  const menuPanelRef = useRef(null)
-  const menuButtonRef = useRef(null)
   const isEnvManaged = fetcher.managementSource === 'ENVIRONMENT'
   const oauthConnected = fetcher.authMethod === 'OAUTH2' && fetcher.oauthConnected === true
   const canConnectOAuth = fetcher.canConnectOAuth ?? fetcher.canConnectMicrosoft ?? false
@@ -89,69 +86,6 @@ function EmailAccountListItem({
       return next
     })
   }
-
-  useEffect(() => {
-    if (!menuOpen) {
-      return undefined
-    }
-    function handlePointerDown(event) {
-      if (!menuContainerRef.current || menuContainerRef.current.contains(event.target)) {
-        return
-      }
-      setMenuOpen(false)
-    }
-    function handleKeyDown(event) {
-      if (event.key === 'Escape') {
-        setMenuOpen(false)
-      }
-    }
-    document.addEventListener('mousedown', handlePointerDown)
-    document.addEventListener('keydown', handleKeyDown)
-    return () => {
-      document.removeEventListener('mousedown', handlePointerDown)
-      document.removeEventListener('keydown', handleKeyDown)
-    }
-  }, [menuOpen])
-
-  useLayoutEffect(() => {
-    if (!menuOpen || !menuPanelRef.current || !menuButtonRef.current) {
-      return undefined
-    }
-
-    function updatePosition() {
-      const anchorRect = menuButtonRef.current.getBoundingClientRect()
-      const margin = 12
-      const hasMeasuredAnchor = anchorRect.width > 0 || anchorRect.height > 0
-      if (hasMeasuredAnchor && (
-        anchorRect.bottom < margin ||
-        anchorRect.top > window.innerHeight - margin ||
-        anchorRect.right < margin ||
-        anchorRect.left > window.innerWidth - margin
-      )) {
-        setMenuOpen(false)
-        return
-      }
-      const next = resolveFloatingMenuPosition(
-        anchorRect,
-        menuPanelRef.current.getBoundingClientRect(),
-        window.innerWidth,
-        window.innerHeight
-      )
-      setMenuPlacement(next.placement)
-      setMenuStyle({
-        left: `${next.left}px`,
-        top: `${next.top}px`
-      })
-    }
-
-    updatePosition()
-    window.addEventListener('resize', updatePosition)
-    window.addEventListener('scroll', updatePosition, true)
-    return () => {
-      window.removeEventListener('resize', updatePosition)
-      window.removeEventListener('scroll', updatePosition, true)
-    }
-  }, [menuOpen])
 
   return (
     <article className="surface-card fetcher-list-item" id={buildSourceEmailAccountTargetId(fetcher.emailAccountId)} tabIndex="-1">
@@ -181,7 +115,7 @@ function EmailAccountListItem({
             <span className={`status-pill ${statusTone(effectiveStatus)}`}>{statusLabel(effectiveStatus, locale)}</span>
           )}
         </button>
-        <div ref={menuContainerRef} className="fetcher-list-item-menu">
+        <div className="fetcher-list-item-menu">
           <div className="fetcher-list-item-actions">
             <button
               aria-label={t('emailAccount.runPollNow')}
@@ -199,34 +133,40 @@ function EmailAccountListItem({
                 </svg>
               )}
             </button>
-            <button aria-label={t('emailAccounts.actions')} className="icon-button fetcher-menu-button" onClick={() => setMenuOpen((current) => !current)} ref={menuButtonRef} title={t('emailAccounts.actions')} type="button">
-              <span aria-hidden="true" className="menu-icon-hamburger">
-                <span />
-                <span />
-                <span />
-              </span>
-            </button>
+            <FloatingActionMenu
+              buttonLabel={t('emailAccounts.actions')}
+              menuContent={({ closeMenu }) => (
+                <>
+                  <button className="secondary" disabled={pollActionDisabled} onClick={() => { onRunPoll(fetcher); closeMenu() }} type="button">{t('emailAccount.runPollNow')}</button>
+                  <button className="secondary" onClick={() => { onConfigurePolling(fetcher); closeMenu() }} type="button">{t('emailAccount.pollerSettings')}</button>
+                  {fetcher.canEdit ? <button className="secondary" onClick={() => { onEdit(fetcher); closeMenu() }} type="button">{t('emailAccount.edit')}</button> : null}
+                  {fetcher.canEdit ? (
+                    <button
+                      className="secondary"
+                      disabled={toggleEnabledLoading}
+                      onClick={() => { onToggleEnabled?.(fetcher); closeMenu() }}
+                      type="button"
+                    >
+                      {fetcher.enabled === false ? t('emailAccount.enableAction') : t('emailAccount.disableAction')}
+                    </button>
+                  ) : null}
+                  {canConnectOAuth ? (
+                    <button
+                      className="secondary"
+                      disabled={connectLoading}
+                      onClick={() => { handleConnectOAuth(fetcher.emailAccountId, fetcher.oauthProvider); closeMenu() }}
+                      type="button"
+                    >
+                      {oauthConnected
+                        ? t(fetcher.oauthProvider === 'GOOGLE' ? 'emailAccount.reconnectGoogle' : 'emailAccount.reconnectMicrosoft')
+                        : t(fetcher.oauthProvider === 'GOOGLE' ? 'emailAccount.connectGoogle' : 'emailAccount.connectMicrosoft')}
+                    </button>
+                  ) : null}
+                  {fetcher.canDelete ? <button className="danger" disabled={deleteLoading} onClick={() => { onDelete(fetcher.emailAccountId); closeMenu() }} type="button">{t('emailAccount.delete')}</button> : null}
+                </>
+              )}
+            />
           </div>
-          {menuOpen ? (
-            <div className="fetcher-menu" data-placement={menuPlacement} ref={menuPanelRef} style={menuStyle}>
-              <button className="secondary" disabled={pollActionDisabled} onClick={() => { onRunPoll(fetcher); setMenuOpen(false) }} type="button">{t('emailAccount.runPollNow')}</button>
-              <button className="secondary" onClick={() => { onConfigurePolling(fetcher); setMenuOpen(false) }} type="button">{t('emailAccount.pollerSettings')}</button>
-              {fetcher.canEdit ? <button className="secondary" onClick={() => { onEdit(fetcher); setMenuOpen(false) }} type="button">{t('emailAccount.edit')}</button> : null}
-              {canConnectOAuth ? (
-                <button
-                  className="secondary"
-                  disabled={connectLoading}
-                  onClick={() => { handleConnectOAuth(fetcher.emailAccountId, fetcher.oauthProvider); setMenuOpen(false) }}
-                  type="button"
-                >
-                  {oauthConnected
-                    ? t(fetcher.oauthProvider === 'GOOGLE' ? 'emailAccount.reconnectGoogle' : 'emailAccount.reconnectMicrosoft')
-                    : t(fetcher.oauthProvider === 'GOOGLE' ? 'emailAccount.connectGoogle' : 'emailAccount.connectMicrosoft')}
-                </button>
-              ) : null}
-              {fetcher.canDelete ? <button className="danger" disabled={deleteLoading} onClick={() => { onDelete(fetcher.emailAccountId); setMenuOpen(false) }} type="button">{t('emailAccount.delete')}</button> : null}
-            </div>
-          ) : null}
         </div>
       </div>
 
@@ -268,8 +208,11 @@ function EmailAccountListItem({
           ) : null}
           {fetcher.lastEvent ? (
             <div className="event-box">
-              <div className="section-copy">{t('emailAccount.viaTrigger', { time: formatDate(fetcher.lastEvent.finishedAt, locale), trigger: triggerLabel(fetcher.lastEvent.trigger, locale) })}</div>
+              <div className="section-copy">{formatPollExecutionSummary(fetcher.lastEvent, locale, viewerUsername)}</div>
               <div className="section-copy">{t('emailAccount.results', { fetched: fetcher.lastEvent.fetched, imported: fetcher.lastEvent.imported, duplicates: fetcher.lastEvent.duplicates, spamJunkSuffix: '' })}</div>
+              {fetcher.lastEvent.spamJunkMessageCount > 0 ? (
+                <div className="section-copy">{t('bridge.spamJunkSummary', { spamJunkCount: fetcher.lastEvent.spamJunkMessageCount })}</div>
+              ) : null}
               {fetcher.lastEvent.error ? (
                 <div className="email-account-card-error-block">
                   <div className="email-account-card-error">{formatPollError(fetcher.lastEvent.error, locale)}</div>

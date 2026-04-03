@@ -2,7 +2,9 @@ import { useEffect, useMemo, useRef, useState } from 'react'
 import Banner from './components/common/Banner'
 import ButtonLink from './components/common/ButtonLink'
 import DeviceLocationPrompt from './components/common/DeviceLocationPrompt'
+import FloatingActionMenu from './components/common/FloatingActionMenu'
 import InstallPromptCard from './components/common/InstallPromptCard'
+import LanguageMenuButton from './components/common/LanguageMenuButton'
 import LoadingButton from './components/common/LoadingButton'
 import LoadingScreen from './components/common/LoadingScreen'
 import PasswordField from './components/common/PasswordField'
@@ -17,7 +19,6 @@ import {
   remoteMoveSourceNext,
   remotePauseLivePoll,
   remoteResumeLivePoll,
-  remoteRetrySource,
   remoteRunAllUsersPoll,
   recordRemoteDeviceLocation,
   remoteRunSourcePoll,
@@ -41,7 +42,7 @@ const LOGIN_STAGE_CREDENTIALS = 'credentials'
 const AUTH_ACTION_NONE = ''
 const AUTH_ACTION_SIGN_IN = 'sign-in'
 const AUTH_ACTION_PASSKEY = 'passkey'
-
+const REMOTE_INSTALL_PROMPT_DISMISSED_KEY = 'inboxbridge.remote.installPromptDismissed'
 function RemoteApp() {
   const [language, setLanguage] = useState(() => normalizeLocale(window.localStorage.getItem('inboxbridge.language') || navigator.language))
   const t = useMemo(() => (key, params) => translate(language, key, params), [language])
@@ -62,6 +63,7 @@ function RemoteApp() {
   const [liveEventsConnected, setLiveEventsConnected] = useState(false)
   const [expandedSources, setExpandedSources] = useState(() => new Set())
   const [installLoading, setInstallLoading] = useState(false)
+  const [installPromptDismissed, setInstallPromptDismissed] = useState(() => window.localStorage.getItem(REMOTE_INSTALL_PROMPT_DISMISSED_KEY) === 'true')
   const liveEventsRef = useRef(null)
   const passwordInputRef = useRef(null)
   const installPrompt = usePwaInstallPrompt()
@@ -100,6 +102,15 @@ function RemoteApp() {
   }, [language])
 
   useEffect(() => {
+    if (installPrompt.installed) {
+      setInstallPromptDismissed(false)
+      window.localStorage.removeItem(REMOTE_INSTALL_PROMPT_DISMISSED_KEY)
+      return
+    }
+    window.localStorage.setItem(REMOTE_INSTALL_PROMPT_DISMISSED_KEY, installPromptDismissed ? 'true' : 'false')
+  }, [installPrompt.installed, installPromptDismissed])
+
+  useEffect(() => {
     if (loginStage === LOGIN_STAGE_CREDENTIALS) {
       passwordInputRef.current?.focus()
       passwordInputRef.current?.select?.()
@@ -111,12 +122,30 @@ function RemoteApp() {
     label: translate(language, `language.${value}`)
   })), [language])
 
+  const shouldShowInstallPromptCard = !installPrompt.installed && !installPromptDismissed
+
   function applySessionLanguage(nextLanguage) {
     setLanguage(normalizeLocale(nextLanguage || language))
   }
 
   function applyLivePoll(nextLivePoll) {
     setLivePoll(nextLivePoll?.running ? nextLivePoll : null)
+  }
+
+  function dismissInstallPrompt() {
+    setInstallPromptDismissed(true)
+  }
+
+  function showInstallPrompt() {
+    setInstallPromptDismissed(false)
+  }
+
+  function focusInstallPrompt() {
+    showInstallPrompt()
+    window.requestAnimationFrame(() => {
+      const promptHeading = document.querySelector('.utility-prompt-card h2')
+      promptHeading?.scrollIntoView?.({ behavior: 'smooth', block: 'start' })
+    })
   }
 
   async function loadRemoteState() {
@@ -322,10 +351,25 @@ function RemoteApp() {
 
     const eventSource = new window.EventSource('/api/remote/poll/events')
     liveEventsRef.current = eventSource
+    let closingStream = false
+
+    const verifyRemoteSessionAfterStreamError = async () => {
+      try {
+        await remoteSession()
+      } catch (error) {
+        if (error instanceof RemoteUnauthorizedError) {
+          clearRemoteSessionState(t('remote.sessionExpiredNotice'))
+        }
+      }
+    }
 
     const handleLiveEvent = (event) => {
       try {
         const payload = JSON.parse(event.data)
+        if (payload?.type === 'session-revoked' && (!payload?.revokedSessionId || payload.revokedSessionId === session?.currentSessionId)) {
+          clearRemoteSessionState(t('remote.sessionExpiredNotice'))
+          return
+        }
         if (payload?.poll) {
           applyLivePoll(payload.poll)
         }
@@ -347,18 +391,21 @@ function RemoteApp() {
       'poll-source-started',
       'poll-source-finished',
       'poll-source-reprioritized',
-      'poll-source-retry-queued'
+      'poll-source-retry-queued',
+      'keepalive',
+      'session-revoked'
     ].forEach((eventName) => eventSource.addEventListener(eventName, handleLiveEvent))
 
     eventSource.onerror = () => {
-      setLiveEventsConnected(false)
-      eventSource.close()
-      if (liveEventsRef.current === eventSource) {
-        liveEventsRef.current = null
+      if (closingStream) {
+        return
       }
+      setLiveEventsConnected(false)
+      void verifyRemoteSessionAfterStreamError()
     }
 
     return () => {
+      closingStream = true
       eventSource.close()
       if (liveEventsRef.current === eventSource) {
         liveEventsRef.current = null
@@ -417,18 +464,15 @@ function RemoteApp() {
     return (
       <div className="remote-shell">
         <main className="remote-auth-card">
-          <label className="auth-language-picker">
-            <span>{t('preferences.language')}</span>
-            <select value={language} onChange={(event) => setLanguage(normalizeLocale(event.target.value))}>
-              {selectableLanguages.map((option) => (
-                <option key={option.value} value={option.value}>{option.label}</option>
-              ))}
-            </select>
-          </label>
-          <p className="remote-eyebrow">{t('remote.eyebrow')}</p>
+          <LanguageMenuButton
+            ariaLabel={t('preferences.language')}
+            className="auth-language-picker remote-auth-language-picker"
+            currentLanguage={language}
+            onChange={(value) => setLanguage(normalizeLocale(value))}
+            options={selectableLanguages}
+          />
           <h1>{t('remote.heading')}</h1>
           <p className="remote-copy">{t('remote.authCopy')}</p>
-          {authNotice ? <Banner tone="warning">{authNotice}</Banner> : null}
           <form className="stack-form" onSubmit={handleLogin}>
             <label>
               <span>{t('auth.username')}</span>
@@ -471,6 +515,7 @@ function RemoteApp() {
                 </LoadingButton>
               ) : null}
             </div>
+            {authNotice ? <Banner tone="warning">{authNotice}</Banner> : null}
           </form>
           {!passkeysSupported() ? <div className="muted-box remote-note">{t('auth.passkeySupport')}</div> : null}
           {authError ? <Banner copyLabel={t('common.copyError')} copyText={authError} tone="error">{authError}</Banner> : null}
@@ -488,8 +533,14 @@ function RemoteApp() {
     return (
       <div className="remote-shell">
         <main className="remote-panel">
-          {!installPrompt.installed ? (
-            <InstallPromptCard canPromptInstall={installPrompt.canPromptInstall} installLoading={installLoading} onInstall={handleInstallApp} t={t} />
+          {shouldShowInstallPromptCard ? (
+            <InstallPromptCard
+              canPromptInstall={installPrompt.canPromptInstall}
+              installLoading={installLoading}
+              onDismiss={dismissInstallPrompt}
+              onInstall={handleInstallApp}
+              t={t}
+            />
           ) : null}
           {deviceLocation.shouldPrompt ? (
             <DeviceLocationPrompt
@@ -508,9 +559,14 @@ function RemoteApp() {
               <p className="remote-copy">{formatRemoteSessionLine(session, t)}</p>
             </div>
             <div className="remote-hero-actions">
-              <LoadingButton className="secondary" isLoading={pollingKey === 'logout'} loadingLabel={t('hero.signOutLoading')} onClick={handleLogout}>
-                {t('hero.signOut')}
-              </LoadingButton>
+              <RemoteHeroMenu
+                deviceLocation={deviceLocation}
+                installPromptVisible={!installPrompt.installed}
+                onLogout={handleLogout}
+                onShowInstallPrompt={focusInstallPrompt}
+                pollingKey={pollingKey}
+                t={t}
+              />
             </div>
           </section>
 
@@ -533,8 +589,14 @@ function RemoteApp() {
   return (
     <div className="remote-shell">
       <main className="remote-panel">
-        {!installPrompt.installed ? (
-          <InstallPromptCard canPromptInstall={installPrompt.canPromptInstall} installLoading={installLoading} onInstall={handleInstallApp} t={t} />
+        {shouldShowInstallPromptCard ? (
+          <InstallPromptCard
+            canPromptInstall={installPrompt.canPromptInstall}
+            installLoading={installLoading}
+            onDismiss={dismissInstallPrompt}
+            onInstall={handleInstallApp}
+            t={t}
+          />
         ) : null}
         {deviceLocation.shouldPrompt ? (
           <DeviceLocationPrompt
@@ -567,13 +629,18 @@ function RemoteApp() {
                 isLoading={pollingKey === 'all-users-poll'}
                 loadingLabel={t('remote.runAllUsersLoading')}
                 onClick={() => runPoll('all-users-poll', remoteRunAllUsersPoll)}
-              >
-                {t('remote.runAllUsers')}
-              </LoadingButton>
-            ) : null}
-            <LoadingButton className="secondary" isLoading={pollingKey === 'logout'} loadingLabel={t('hero.signOutLoading')} onClick={handleLogout}>
-              {t('hero.signOut')}
+            >
+              {t('remote.runAllUsers')}
             </LoadingButton>
+            ) : null}
+            <RemoteHeroMenu
+              deviceLocation={deviceLocation}
+              installPromptVisible={!installPrompt.installed}
+              onLogout={handleLogout}
+              onShowInstallPrompt={focusInstallPrompt}
+              pollingKey={pollingKey}
+              t={t}
+            />
           </div>
         </section>
 
@@ -592,7 +659,7 @@ function RemoteApp() {
         </section>
 
         {actionError ? <Banner copyLabel={t('common.copyError')} copyText={actionError} tone="error">{actionError}</Banner> : null}
-        {lastResult ? <PollResultCard language={language} result={lastResult} t={t} /> : null}
+        {lastResult ? <PollResultCard language={language} result={lastResult} session={session} t={t} /> : null}
 
         <section className="remote-sources-section">
           <div className="remote-section-header">
@@ -635,17 +702,21 @@ function RemoteApp() {
           <div className="remote-source-list">
             {visibleSources.map((source) => {
               const liveSource = liveSourcesById.get(source.sourceId) || null
-              const liveStatusTone = statusToneForRemoteState(liveSource?.state)
+              const summaryStatus = liveSource?.state || source.lastEvent?.status || null
+              const summaryStatusTone = statusToneForRemoteState(summaryStatus)
               const resultStatusTone = statusToneForRemoteState(source.lastEvent?.status)
               const showOwnerInfo = session?.multiUserEnabled !== false
+              const liveProgressCopy = liveSource ? formatRemoteLiveCopy(liveSource, t) : ''
+              const showMoveNextAction = Boolean(
+                livePoll?.viewerCanControl
+                && liveSource?.actionable
+                && (liveSource.state === 'QUEUED' || liveSource.state === 'RETRY_QUEUED')
+                && liveSource.position > 1
+              )
+              const showLiveProgress = Boolean(liveProgressCopy || showMoveNextAction)
 
               return (
                 <article className={`remote-source-card${liveSource?.state === 'RUNNING' ? ' remote-source-card-running' : ''}`} key={source.sourceId}>
-                  {liveSource?.state ? (
-                    <div className="remote-source-live-row">
-                      <span className={`status-pill ${liveStatusTone}`}>{formatRemoteStateLabel(liveSource.state, t)}</span>
-                    </div>
-                  ) : null}
                   <div className="remote-source-header">
                     <div className="remote-source-heading">
                       <h3>{source.customLabel || source.sourceId}</h3>
@@ -677,37 +748,27 @@ function RemoteApp() {
                     <span className="status-pill tone-neutral remote-source-summary-pill">
                       {source.effectivePollEnabled ? formatDurationDisplay(source.effectivePollInterval, language) : t('common.disabled')}
                     </span>
-                    {source.lastEvent?.status ? (
-                      <span className={`status-pill remote-source-summary-pill ${resultStatusTone}`}>{formatRemoteStateLabel(source.lastEvent.status, t)}</span>
+                    {summaryStatus ? (
+                      <span className={`status-pill remote-source-summary-pill ${summaryStatusTone}`}>{formatRemoteStateLabel(summaryStatus, t)}</span>
                     ) : null}
                   </div>
-                  {liveSource ? (
+                  {showLiveProgress ? (
                     <div className="remote-source-progress">
-                      <p className="remote-source-progress-copy">
-                        {formatRemoteLiveCopy(liveSource, t)}
-                      </p>
-                      {livePoll?.viewerCanControl && liveSource.actionable ? (
+                      {liveProgressCopy ? (
+                        <p className="remote-source-progress-copy">
+                          {liveProgressCopy}
+                        </p>
+                      ) : null}
+                      {showMoveNextAction ? (
                         <div className="remote-source-progress-actions">
-                          {(liveSource.state === 'QUEUED' || liveSource.state === 'RETRY_QUEUED') && liveSource.position > 1 ? (
-                            <LoadingButton
-                              className="secondary"
-                              isLoading={pollingKey === `move-next:${source.sourceId}`}
-                              loadingLabel={t('remote.moveNextLoading')}
-                              onClick={() => runLivePollAction(`move-next:${source.sourceId}`, () => remoteMoveSourceNext(source.sourceId))}
-                            >
-                              {t('remote.moveNext')}
-                            </LoadingButton>
-                          ) : null}
-                          {(liveSource.state === 'FAILED' || liveSource.state === 'COMPLETED' || liveSource.state === 'STOPPED') ? (
-                            <LoadingButton
-                              className="secondary"
-                              isLoading={pollingKey === `retry-live-source:${source.sourceId}`}
-                              loadingLabel={t('remote.retryLoading')}
-                              onClick={() => runLivePollAction(`retry-live-source:${source.sourceId}`, () => remoteRetrySource(source.sourceId))}
-                            >
-                              {t('remote.retry')}
-                            </LoadingButton>
-                          ) : null}
+                          <LoadingButton
+                            className="secondary"
+                            isLoading={pollingKey === `move-next:${source.sourceId}`}
+                            loadingLabel={t('remote.moveNextLoading')}
+                            onClick={() => runLivePollAction(`move-next:${source.sourceId}`, () => remoteMoveSourceNext(source.sourceId))}
+                          >
+                            {t('remote.moveNext')}
+                          </LoadingButton>
                         </div>
                       ) : null}
                     </div>
@@ -753,13 +814,16 @@ function RemoteApp() {
                                 <span className="status-pill tone-neutral remote-source-summary-pill remote-source-last-result-pill">{t('remote.fetched')}: {source.lastEvent.fetched}</span>
                                 <span className="status-pill tone-neutral remote-source-summary-pill remote-source-last-result-pill">{t('remote.imported')}: {source.lastEvent.imported}</span>
                                 <span className="status-pill tone-neutral remote-source-summary-pill remote-source-last-result-pill">{t('remote.duplicates')}: {source.lastEvent.duplicates}</span>
+                                {source.lastEvent.spamJunkMessageCount > 0 ? (
+                                  <span className="status-pill tone-neutral remote-source-summary-pill remote-source-last-result-pill">{t('remote.spamJunk')}: {source.lastEvent.spamJunkMessageCount}</span>
+                                ) : null}
                               </div>
                             ) : t('common.never')}
                           </dd>
                         </div>
                       </dl>
-                      {liveSource?.error ? <Banner tone="warning">{formatRemoteMessage(liveSource.error, language)}</Banner> : null}
-                      {source.lastEvent?.error ? <Banner tone="warning">{formatRemoteMessage(source.lastEvent.error, language)}</Banner> : null}
+                      {liveSource?.error && !isStoppedByUserMessage(liveSource.error) ? <Banner tone="warning">{formatRemoteMessage(liveSource.error, language)}</Banner> : null}
+                      {source.lastEvent?.error && !isStoppedByUserMessage(source.lastEvent.error) ? <Banner tone="warning">{formatRemoteMessage(source.lastEvent.error, language)}</Banner> : null}
                     </>
                   ) : null}
                 </article>
@@ -771,13 +835,19 @@ function RemoteApp() {
   )
 }
 
-function PollResultCard({ language, result, t }) {
+function PollResultCard({ language, result, session, t }) {
   const summary = [
     `${t('remote.fetched')}: ${result.fetched}`,
     `${t('remote.imported')}: ${result.imported}`,
-    `${t('remote.duplicates')}: ${result.duplicates}`
+    `${t('remote.duplicates')}: ${result.duplicates}`,
+    ...(result.spamJunkMessageCount > 0 ? [`${t('remote.spamJunk')}: ${result.spamJunkMessageCount}`] : [])
   ].join(' · ')
   const formattedErrors = formatRemoteErrors(result, language)
+  const normalizedState = String(result.state || '').toUpperCase()
+  const stoppedByOtherUser = normalizedState === 'STOPPED'
+    && result.stoppedByUsername
+    && session?.username
+    && result.stoppedByUsername !== session.username
 
   return (
     <section className="remote-result-card">
@@ -791,10 +861,61 @@ function PollResultCard({ language, result, t }) {
         <Banner copyLabel={t('common.copyError')} copyText={formattedErrors.join('\n')} tone="warning">
           {formattedErrors.join(' ')}
         </Banner>
+      ) : normalizedState === 'STOPPED' ? (
+        <Banner tone="warning">{stoppedByOtherUser ? t('remote.lastRunStoppedByAdmin') : t('remote.lastRunStopped')}</Banner>
       ) : (
         <Banner tone="success">{t('remote.lastRunSuccess')}</Banner>
       )}
     </section>
+  )
+}
+
+function RemoteHeroMenu({ deviceLocation, installPromptVisible, onLogout, onShowInstallPrompt, pollingKey, t }) {
+  return (
+    <FloatingActionMenu
+      buttonClassName="icon-button fetcher-menu-button remote-hero-menu-button"
+      buttonLabel={t('remote.moreActions')}
+      className="remote-hero-menu"
+      menuClassName="fetcher-menu remote-hero-menu-panel"
+      menuContent={({ closeMenu }) => (
+        <>
+          {installPromptVisible ? (
+            <button
+              onClick={() => {
+                closeMenu()
+                onShowInstallPrompt()
+              }}
+              type="button"
+            >
+              {t('pwa.title')}
+            </button>
+          ) : null}
+          {deviceLocation.shouldPrompt ? (
+            <button
+              disabled={deviceLocation.saving}
+              onClick={() => {
+                closeMenu()
+                void deviceLocation.requestLocation()
+              }}
+              type="button"
+            >
+              {deviceLocation.saving ? t('deviceLocation.requestLoading') : t('deviceLocation.request')}
+            </button>
+          ) : null}
+          <button
+            disabled={pollingKey === 'logout'}
+            onClick={() => {
+              closeMenu()
+              void onLogout()
+            }}
+            type="button"
+          >
+            {pollingKey === 'logout' ? t('hero.signOutLoading') : t('hero.signOut')}
+          </button>
+        </>
+      )}
+      title={t('remote.moreActions')}
+    />
   )
 }
 
@@ -853,13 +974,6 @@ function formatRemoteLiveCopy(source, t) {
   if ((source.state === 'QUEUED' || source.state === 'RETRY_QUEUED') && Number.isInteger(source.position) && source.position > 0) {
     details.push(t('remote.queuePosition', { position: source.position }))
   }
-  if (source.state !== 'RUNNING' && source.state !== 'QUEUED' && source.state !== 'RETRY_QUEUED') {
-    details.push(t('remote.progressSummary', {
-      fetched: source.fetched,
-      imported: source.imported,
-      duplicates: source.duplicates
-    }))
-  }
   return details.join(' · ')
 }
 
@@ -876,6 +990,10 @@ function formatRemoteSessionLine(session, t) {
 function formatRemoteMessage(message, locale) {
   if (!message) return ''
   return formatPollError(message, locale)
+}
+
+function isStoppedByUserMessage(message) {
+  return String(message || '').trim() === 'Stopped by user.'
 }
 
 function formatRemoteErrors(result, locale) {

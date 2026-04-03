@@ -10,6 +10,7 @@ class FakeEventSource {
     this.listeners = new Map()
     this.onmessage = null
     this.onerror = null
+    this.closed = false
     FakeEventSource.instances.push(this)
   }
 
@@ -18,6 +19,9 @@ class FakeEventSource {
   }
 
   emit(type, payload) {
+    if (this.closed) {
+      return
+    }
     const event = { data: JSON.stringify(payload) }
     const listener = this.listeners.get(type)
     if (listener) {
@@ -27,7 +31,9 @@ class FakeEventSource {
     this.onmessage?.(event)
   }
 
-  close() {}
+  close() {
+    this.closed = true
+  }
 }
 
 describe('App', () => {
@@ -410,6 +416,142 @@ describe('App', () => {
     })
 
     expect(await screen.findByText('Your polling settings were updated.')).toBeInTheDocument()
+  })
+
+  it('returns to login immediately when the live event stream reports session revocation', async () => {
+    vi.stubGlobal('EventSource', FakeEventSource)
+    vi.stubGlobal('fetch', createWorkspaceRouteFetch({
+      session: {
+        id: 41,
+        username: 'alice',
+        role: 'USER',
+        approved: true,
+        mustChangePassword: false,
+        passkeyCount: 0,
+        passwordConfigured: true,
+        deviceLocationCaptured: true
+      }
+    }))
+
+    render(<App />)
+
+    await screen.findByText(/signed in as/i)
+
+    act(() => {
+      FakeEventSource.instances[0].emit('session-revoked', {
+        type: 'session-revoked'
+      })
+    })
+
+    expect(await screen.findByRole('button', { name: 'Sign in' })).toBeInTheDocument()
+    expect(screen.getByText('This session is no longer valid. Please sign in again.')).toBeInTheDocument()
+  })
+
+  it('returns to login when the live event stream drops and the session check comes back unauthorized', async () => {
+    vi.stubGlobal('EventSource', FakeEventSource)
+    let authMeCount = 0
+    const baseFetch = createWorkspaceRouteFetch({
+      session: {
+        id: 41,
+        username: 'alice',
+        role: 'USER',
+        approved: true,
+        mustChangePassword: false,
+        passkeyCount: 0,
+        passwordConfigured: true,
+        deviceLocationCaptured: true
+      }
+    })
+    vi.stubGlobal('fetch', vi.fn((input, init = {}) => {
+      if (String(input) === '/api/auth/me') {
+        authMeCount += 1
+        if (authMeCount > 1) {
+          return Promise.resolve({
+            ok: false,
+            status: 401,
+            text: () => Promise.resolve(JSON.stringify({ code: 'unauthorized', message: 'Not authenticated' })),
+            json: () => Promise.resolve({ code: 'unauthorized', message: 'Not authenticated' })
+          })
+        }
+      }
+      return baseFetch(input, init)
+    }))
+
+    render(<App />)
+
+    await screen.findByText(/signed in as/i)
+
+    await act(async () => {
+      await FakeEventSource.instances[0].onerror?.()
+    })
+
+    expect(await screen.findByRole('button', { name: 'Sign in' })).toBeInTheDocument()
+    expect(screen.getByText('This session is no longer valid. Please sign in again.')).toBeInTheDocument()
+  })
+
+  it('keeps the live event stream open across transient errors so later revocation events still work', async () => {
+    vi.stubGlobal('EventSource', FakeEventSource)
+    vi.stubGlobal('fetch', createWorkspaceRouteFetch({
+      session: {
+        id: 41,
+        currentSessionId: 141,
+        username: 'alice',
+        role: 'USER',
+        approved: true,
+        mustChangePassword: false,
+        passkeyCount: 0,
+        passwordConfigured: true,
+        deviceLocationCaptured: true
+      }
+    }))
+
+    render(<App />)
+
+    await screen.findByText(/signed in as/i)
+
+    await act(async () => {
+      await FakeEventSource.instances[0].onerror?.()
+    })
+
+    expect(FakeEventSource.instances[0].closed).toBe(false)
+
+    act(() => {
+      FakeEventSource.instances[0].emit('session-revoked', {
+        type: 'session-revoked',
+        revokedSessionId: 141
+      })
+    })
+
+    expect(await screen.findByRole('button', { name: 'Sign in' })).toBeInTheDocument()
+  })
+
+  it('accepts keepalive live events without disrupting the authenticated app', async () => {
+    vi.stubGlobal('EventSource', FakeEventSource)
+    vi.stubGlobal('fetch', createWorkspaceRouteFetch({
+      session: {
+        id: 41,
+        currentSessionId: 141,
+        username: 'alice',
+        role: 'USER',
+        approved: true,
+        mustChangePassword: false,
+        passkeyCount: 0,
+        passwordConfigured: true,
+        deviceLocationCaptured: true
+      }
+    }))
+
+    render(<App />)
+
+    await screen.findByText(/signed in as/i)
+
+    act(() => {
+      FakeEventSource.instances[0].emit('keepalive', {
+        type: 'keepalive'
+      })
+    })
+
+    expect(screen.getByText(/signed in as/i)).toBeInTheDocument()
   })
 
   it('moves the remote control section through the layout editor even for older saved layouts', async () => {
@@ -921,6 +1063,92 @@ describe('App', () => {
     expect(screen.getByText('Use InboxBridge Go to trigger inbox fetches quickly from phones, tablets, laptops, or shared devices without opening the full workspace.')).toBeInTheDocument()
     expect(screen.getByRole('link', { name: 'Open InboxBridge Go' })).toHaveAttribute('href', '/remote')
   })
+
+  it('clears stale running source state from snapshot fallback when event streaming is unavailable', async () => {
+    vi.stubGlobal('EventSource', undefined)
+
+    const baseFetch = createWorkspaceRouteFetch({
+      session: {
+        id: 1,
+        username: 'alice',
+        role: 'USER',
+        approved: true,
+        mustChangePassword: false,
+        passkeyCount: 0,
+        passwordConfigured: true
+      }
+    })
+    let liveSnapshotCalls = 0
+
+    const fetchMock = vi.fn((input, init = {}) => {
+      const url = String(input)
+
+      if (url === '/api/app/email-accounts') {
+        return Promise.resolve(jsonResponse([{
+          emailAccountId: 'source-1',
+          customLabel: 'Inbox',
+          managementSource: 'DATABASE',
+          protocol: 'IMAP',
+          host: 'imap.example.com',
+          port: 993,
+          authMethod: 'PASSWORD',
+          oauthProvider: 'NONE',
+          tls: true,
+          folder: 'INBOX',
+          tokenStorageMode: 'DATABASE',
+          enabled: true,
+          canRunPoll: true,
+          canEdit: true,
+          canDelete: true,
+          effectivePollEnabled: true,
+          effectivePollInterval: '5m',
+          effectiveFetchWindow: 50
+        }]))
+      }
+      if (url === '/api/poll/live') {
+        liveSnapshotCalls += 1
+        return Promise.resolve(jsonResponse(liveSnapshotCalls === 1
+          ? {
+              running: true,
+              state: 'RUNNING',
+              viewerCanControl: true,
+              activeSourceId: 'source-1',
+              sources: [
+                {
+                  sourceId: 'source-1',
+                  label: 'Inbox',
+                  state: 'RUNNING',
+                  actionable: false,
+                  position: 1,
+                  fetched: 0,
+                  imported: 0,
+                  duplicates: 0
+                }
+              ]
+            }
+          : {
+              running: false,
+              state: 'IDLE',
+              viewerCanControl: false,
+              activeSourceId: null,
+              sources: []
+            }))
+      }
+
+      return baseFetch(input, init)
+    })
+
+    vi.stubGlobal('fetch', fetchMock)
+
+    render(<App />)
+
+    await screen.findByText(/signed in as alice/i)
+    expect(await screen.findByText('Running…')).toBeInTheDocument()
+
+    await waitFor(() => {
+      expect(screen.queryByText('Running…')).not.toBeInTheDocument()
+    }, { timeout: 8000 })
+  }, 10000)
 
   it('lets admins switch between user and administration workspaces', async () => {
     const fetchMock = vi.fn(async (input) => {
@@ -2093,7 +2321,8 @@ describe('App', () => {
 
     await screen.findByText(/signed in as/i)
     fireEvent.click(screen.getByRole('button', { name: 'Preferences' }))
-    fireEvent.change(screen.getByLabelText('Language'), { target: { value: 'pt-PT' } })
+    fireEvent.click(screen.getByRole('button', { name: 'Language' }))
+    fireEvent.click(screen.getByRole('menuitemradio', { name: 'Português (Portugal)' }))
 
     await waitFor(() => {
       expect(window.location.pathname).toBe('/administracao')
@@ -2156,6 +2385,82 @@ describe('App', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Refresh' }))
 
     expect(await screen.findByText('A new Remote control sign-in was detected for this account from approximately Lisbon, PT. Review the Sessions tab.')).toBeInTheDocument()
+  })
+
+  it('announces new sign-ins from the live event stream and refreshes session activity', async () => {
+    vi.stubGlobal('EventSource', FakeEventSource)
+    const fetchMock = createWorkspaceRouteFetch({
+      session: {
+        id: 1,
+        currentSessionId: 101,
+        username: 'alice',
+        role: 'USER',
+        approved: true,
+        mustChangePassword: false,
+        passkeyCount: 1,
+        passwordConfigured: true
+      },
+      sessionActivityResponses: [
+        {
+          recentLogins: [
+            {
+              id: 'session-current',
+              sessionType: 'BROWSER',
+              current: true,
+              createdAt: '2026-03-31T09:00:00Z',
+              loginMethod: 'PASSWORD',
+              ipAddress: '127.0.0.1'
+            }
+          ],
+          activeSessions: [],
+          geoIpConfigured: false
+        },
+        {
+          recentLogins: [
+            {
+              id: 'session-other',
+              sessionType: 'REMOTE',
+              current: false,
+              createdAt: '2026-03-31T09:05:00Z',
+              loginMethod: 'PASSWORD',
+              ipAddress: '192.168.1.20',
+              locationLabel: 'Lisbon, PT'
+            }
+          ],
+          activeSessions: [],
+          geoIpConfigured: false
+        }
+      ]
+    })
+
+    vi.stubGlobal('fetch', fetchMock)
+
+    render(<App />)
+
+    await screen.findByText(/signed in as/i)
+    await waitFor(() => {
+      expect(fetchMock.mock.calls.filter(([url]) => String(url) === '/api/account/sessions').length).toBeGreaterThanOrEqual(1)
+    })
+
+    act(() => {
+      FakeEventSource.instances[0].emit('notification-created', {
+        type: 'notification-created',
+        notification: {
+          message: { kind: 'translation', key: 'notifications.newSessionDetected', params: {} },
+          copyText: { kind: 'translation', key: 'notifications.newSessionDetected', params: {} },
+          groupKey: 'session-activity',
+          replaceGroup: false,
+          supersedesGroupKeys: [],
+          targetId: 'recent-session-REMOTE-session-other',
+          tone: 'warning'
+        }
+      })
+    })
+
+    expect(await screen.findByText('A new sign-in was detected for this account. Review the Sessions tab.')).toBeInTheDocument()
+    await waitFor(() => {
+      expect(fetchMock.mock.calls.filter(([url]) => String(url) === '/api/account/sessions').length).toBeGreaterThanOrEqual(2)
+    })
   })
 
   it('hydrates saved notifications from persisted ui preferences after loading the workspace', async () => {

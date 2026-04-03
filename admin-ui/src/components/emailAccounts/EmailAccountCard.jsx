@@ -1,4 +1,4 @@
-import { authMethodLabel, effectiveEmailAccountStatus, formatDate, formatPollError, oauthProviderLabel, protocolLabel, statusLabel, statusTone, tokenStorageLabel, triggerLabel } from '../../lib/formatters'
+import { authMethodLabel, effectiveEmailAccountStatus, formatDate, formatPollError, formatPollExecutionSummary, oauthProviderLabel, protocolLabel, statusLabel, statusTone, tokenStorageLabel } from '../../lib/formatters'
 import CopyButton from '../common/CopyButton'
 import LoadingButton from '../common/LoadingButton'
 import './EmailAccountCard.css'
@@ -15,6 +15,7 @@ function EmailAccountCard({
   onEdit,
   showDelete = false,
   showEdit = false,
+  viewerUsername = null,
   t
 }) {
   const emailAccountId = emailAccount.emailAccountId || emailAccount.id
@@ -49,8 +50,11 @@ function EmailAccountCard({
 
       {emailAccount.lastEvent ? (
         <div className="event-box">
-          <div className="section-copy">{t('emailAccount.viaTrigger', { time: formatDate(emailAccount.lastEvent.finishedAt, locale), trigger: triggerLabel(emailAccount.lastEvent.trigger, locale) })}</div>
+          <div className="section-copy">{formatPollExecutionSummary(emailAccount.lastEvent, locale, viewerUsername)}</div>
           <div className="section-copy">{t('emailAccount.results', { fetched: emailAccount.lastEvent.fetched, imported: emailAccount.lastEvent.imported, duplicates: emailAccount.lastEvent.duplicates, spamJunkSuffix: '' })}</div>
+          {emailAccount.lastEvent.spamJunkMessageCount > 0 ? (
+            <div className="section-copy">{t('bridge.spamJunkSummary', { spamJunkCount: emailAccount.lastEvent.spamJunkMessageCount })}</div>
+          ) : null}
           {emailAccount.lastEvent.error ? (
             <div className="email-account-card-error-block">
               <div className="email-account-card-error">{formatPollError(emailAccount.lastEvent.error, locale)}</div>

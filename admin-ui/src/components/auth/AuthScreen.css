@@ -19,6 +19,11 @@
   gap: 6px;
 }
 
+.auth-login-language-picker {
+  justify-self: end;
+  margin-bottom: 4px;
+}
+
 .auth-language-picker select {
   min-width: 220px;
 }

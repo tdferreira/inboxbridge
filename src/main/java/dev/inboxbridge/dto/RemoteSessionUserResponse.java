@@ -2,6 +2,7 @@ package dev.inboxbridge.dto;
 
 public record RemoteSessionUserResponse(
         Long id,
+        Long currentSessionId,
         String username,
         String role,
         boolean canRunUserPoll,

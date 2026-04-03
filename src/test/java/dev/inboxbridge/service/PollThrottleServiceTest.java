@@ -1,5 +1,6 @@
 package dev.inboxbridge.service;
 
+import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
@@ -61,6 +62,17 @@ class PollThrottleServiceTest {
     }
 
     @Test
+    void releaseIgnoresLeaseCleanupDatabaseErrors() {
+        RecordingPollThrottleService service = service();
+        service.inMemoryLeaseRepository.failDelete = true;
+
+        PollThrottleService.ThrottleLease lease = service.acquireSourceMailboxPermit(source("imap.example.com"));
+
+        assertDoesNotThrow(() -> service.release(lease));
+        assertFalse(service.inMemoryLeaseRepository.leases.isEmpty());
+    }
+
+    @Test
     void adaptiveStatePersistsRateLimitPenalty() {
         RecordingPollThrottleService service = service();
         RuntimeEmailAccount emailAccount = source("imap.example.com");
@@ -88,7 +100,8 @@ class PollThrottleServiceTest {
         RecordingPollThrottleService service = new RecordingPollThrottleService();
         service.pollingSettingsService = new FakePollingSettingsService();
         service.stateRepository = new InMemoryPollThrottleStateRepository();
-        service.leaseRepository = new InMemoryPollThrottleLeaseRepository();
+        service.inMemoryLeaseRepository = new InMemoryPollThrottleLeaseRepository();
+        service.leaseRepository = service.inMemoryLeaseRepository;
         return service;
     }
 
@@ -133,6 +146,7 @@ class PollThrottleServiceTest {
     private static final class RecordingPollThrottleService extends PollThrottleService {
         private Instant currentTime = Instant.parse("2026-03-30T10:00:00Z");
         private final List<Duration> pauses = new ArrayList<>();
+        private InMemoryPollThrottleLeaseRepository inMemoryLeaseRepository;
 
         @Override
         protected Instant now() {
@@ -178,6 +192,7 @@ class PollThrottleServiceTest {
     private static final class InMemoryPollThrottleLeaseRepository extends PollThrottleLeaseRepository {
         private final List<PollThrottleLease> leases = new ArrayList<>();
         private long sequence = 1L;
+        private boolean failDelete = false;
 
         @Override
         public long deleteExpired(String throttleKey, Instant now) {
@@ -203,6 +218,9 @@ class PollThrottleServiceTest {
 
         @Override
         public long deleteByLeaseToken(String leaseToken) {
+            if (failDelete) {
+                throw new IllegalStateException("simulated delete failure");
+            }
             int before = leases.size();
             leases.removeIf(lease -> leaseToken.equals(lease.leaseToken));
             return before - leases.size();

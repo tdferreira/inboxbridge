@@ -323,6 +323,44 @@ export function triggerLabel(trigger, locale = 'en') {
   }
 }
 
+export function executionSurfaceLabel(surface, locale = 'en') {
+  switch (String(surface || '').toUpperCase()) {
+    case 'MY_INBOXBRIDGE':
+      return translate(locale, 'bridge.surface.myInboxBridge')
+    case 'ADMINISTRATION':
+      return translate(locale, 'bridge.surface.administration')
+    case 'INBOXBRIDGE_GO':
+      return translate(locale, 'bridge.surface.inboxBridgeGo')
+    case 'API':
+      return translate(locale, 'bridge.surface.api')
+    default:
+      return ''
+  }
+}
+
+export function formatPollExecutionSummary(event, locale = 'en', viewerUsername = null) {
+  if (!event) return ''
+
+  const time = formatDate(event.finishedAt || event.startedAt, locale)
+  const surface = executionSurfaceLabel(event.executionSurface, locale)
+  const actorUsername = event.actorUsername || null
+  const shouldShowActor = actorUsername && viewerUsername && actorUsername !== viewerUsername
+
+  if (String(event.executionSurface || '').toUpperCase() === 'AUTOMATIC' || String(event.trigger || '').toLowerCase() === 'scheduler') {
+    return translate(locale, 'bridge.executedAutomaticallyAt', { time })
+  }
+  if (shouldShowActor && surface) {
+    return translate(locale, 'bridge.executedAtByVia', { time, username: actorUsername, surface })
+  }
+  if (surface) {
+    return translate(locale, 'bridge.executedAtVia', { time, surface })
+  }
+  if (shouldShowActor) {
+    return translate(locale, 'bridge.executedAtBy', { time, username: actorUsername })
+  }
+  return translate(locale, 'bridge.executedAt', { time })
+}
+
 export function tokenStorageLabel(mode, locale = 'en') {
   switch (mode) {
     case 'DATABASE':

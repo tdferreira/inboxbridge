@@ -97,6 +97,45 @@ describe('EmailAccountCard', () => {
     await waitFor(() => expect(screen.getByRole('button', { name: 'Copied' })).toBeInTheDocument())
   })
 
+  it('shows the stored spam or junk count in the last run summary', () => {
+    render(
+      <EmailAccountCard
+        emailAccount={{
+          emailAccountId: 'outlook-main',
+          protocol: 'IMAP',
+          authMethod: 'PASSWORD',
+          oauthProvider: 'NONE',
+          host: 'outlook.office365.com',
+          port: 993,
+          tls: true,
+          tokenStorageMode: 'PASSWORD',
+          totalImportedMessages: 0,
+          lastImportedAt: null,
+          folder: 'INBOX',
+          lastEvent: {
+            status: 'SUCCESS',
+            finishedAt: '2026-03-26T12:00:00Z',
+            trigger: 'remote-source',
+            fetched: 5,
+            imported: 2,
+            duplicates: 3,
+            spamJunkMessageCount: 4,
+            actorUsername: 'bob',
+            executionSurface: 'INBOXBRIDGE_GO',
+            error: ''
+          }
+        }}
+        onConnectMicrosoft={vi.fn()}
+        locale="en"
+        viewerUsername="alice"
+        t={t}
+      />
+    )
+
+    expect(screen.getByText(/Executed at .* by bob via InboxBridge Go/)).toBeInTheDocument()
+    expect(screen.getByText('Spam/Junk folders currently contain 4 messages.')).toBeInTheDocument()
+  })
+
   it('renders translated bridge labels in portuguese', () => {
     render(
       <EmailAccountCard

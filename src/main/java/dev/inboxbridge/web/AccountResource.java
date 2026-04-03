@@ -14,6 +14,7 @@ import dev.inboxbridge.security.RequireAuth;
 import dev.inboxbridge.service.AppUserService;
 import dev.inboxbridge.service.GeoIpLocationService;
 import dev.inboxbridge.service.PasskeyService;
+import dev.inboxbridge.service.PollingLiveService;
 import dev.inboxbridge.service.RemoteSessionService;
 import dev.inboxbridge.service.SessionClientInfoService;
 import dev.inboxbridge.service.UserSessionService;
@@ -67,6 +68,9 @@ public class AccountResource {
 
     @Inject
     SessionClientInfoService sessionClientInfoService;
+
+    @Inject
+    PollingLiveService pollingLiveService;
 
     @POST
     @Path("/password")
@@ -176,8 +180,10 @@ public class AccountResource {
         try {
             if ("REMOTE".equalsIgnoreCase(type)) {
                 remoteSessionService.invalidateSessionForUser(currentUserContext.user().id, sessionId);
+                pollingLiveService.publishSessionRevoked(currentUserContext.user().id, PollingLiveService.SessionStreamKind.REMOTE, sessionId);
             } else {
                 userSessionService.invalidateSessionForUser(currentUserContext.user().id, sessionId);
+                pollingLiveService.publishSessionRevoked(currentUserContext.user().id, PollingLiveService.SessionStreamKind.BROWSER, sessionId);
             }
         } catch (IllegalArgumentException e) {
             throw new BadRequestException(e.getMessage(), e);
@@ -187,10 +193,20 @@ public class AccountResource {
     @POST
     @Path("/sessions/revoke-others")
     public void revokeOtherSessions() {
+        Long currentSessionId = currentUserContext.session() == null ? null : currentUserContext.session().id;
+        List<Long> browserSessionIds = userSessionService.listActiveSessions(currentUserContext.user().id).stream()
+                .map(session -> session.id)
+                .filter(sessionId -> currentSessionId == null || !currentSessionId.equals(sessionId))
+                .toList();
+        List<Long> remoteSessionIds = remoteSessionService.listActiveSessions(currentUserContext.user().id).stream()
+                .map(session -> session.id)
+                .toList();
         userSessionService.invalidateOtherSessions(
                 currentUserContext.user().id,
-                currentUserContext.session() == null ? null : currentUserContext.session().id);
+                currentSessionId);
         remoteSessionService.invalidateOtherSessions(currentUserContext.user().id);
+        browserSessionIds.forEach((sessionId) -> pollingLiveService.publishSessionRevoked(currentUserContext.user().id, PollingLiveService.SessionStreamKind.BROWSER, sessionId));
+        remoteSessionIds.forEach((sessionId) -> pollingLiveService.publishSessionRevoked(currentUserContext.user().id, PollingLiveService.SessionStreamKind.REMOTE, sessionId));
     }
 
     private AccountSessionView toSessionView(dev.inboxbridge.persistence.UserSession session, Long currentSessionId, Instant now) {

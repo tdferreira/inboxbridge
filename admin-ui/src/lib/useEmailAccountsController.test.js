@@ -305,4 +305,49 @@ describe('useEmailAccountsController', () => {
 
     expect(result.current.fetcherPollLoadingIds).toEqual([])
   })
+
+  it('toggles a database-backed fetcher enabled state through the save endpoint', async () => {
+    const originalFetch = global.fetch
+    global.fetch = vi.fn().mockResolvedValue({
+      ok: true,
+      json: async () => ({ emailAccountId: 'account-1', enabled: false })
+    })
+
+    const { result, loadAppData, pushNotification } = renderController()
+    const fetcher = createEmailAccount({
+      emailAccountId: 'account-1',
+      enabled: true,
+      protocol: 'IMAP',
+      host: 'imap.example.com',
+      port: 993,
+      tls: true,
+      username: 'owner@example.com',
+      folder: 'INBOX',
+      unreadOnly: false,
+      customLabel: 'Inbox'
+    })
+
+    await act(async () => {
+      await result.current.toggleEmailAccountEnabled(fetcher)
+    })
+
+    const [, request] = global.fetch.mock.calls[0]
+    expect(request.method).toBe('PUT')
+    expect(JSON.parse(request.body)).toEqual(expect.objectContaining({
+      emailAccountId: 'account-1',
+      originalEmailAccountId: 'account-1',
+      enabled: false
+    }))
+    expect(loadAppData).toHaveBeenCalled()
+    expect(pushNotification).toHaveBeenCalledWith(expect.objectContaining({
+      message: expect.objectContaining({
+        key: 'notifications.bridgeDisabled',
+        kind: 'translation',
+        params: { emailAccountId: 'account-1' }
+      }),
+      tone: 'success'
+    }))
+
+    global.fetch = originalFetch
+  })
 })

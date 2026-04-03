@@ -11,5 +11,8 @@ public record AdminPollEventSummary(
         int fetched,
         int imported,
         int duplicates,
+        int spamJunkMessageCount,
+        String actorUsername,
+        String executionSurface,
         String error) {
 }

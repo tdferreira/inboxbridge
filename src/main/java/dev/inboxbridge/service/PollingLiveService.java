@@ -10,6 +10,9 @@ import java.util.List;
 import java.util.Map;
 import java.util.UUID;
 import java.util.concurrent.CopyOnWriteArrayList;
+import java.util.concurrent.Executors;
+import java.util.concurrent.ScheduledExecutorService;
+import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicReference;
 
 import dev.inboxbridge.domain.RuntimeEmailAccount;
@@ -22,13 +25,16 @@ import dev.inboxbridge.persistence.AppUser;
 import io.smallrye.mutiny.Multi;
 import io.smallrye.mutiny.subscription.MultiEmitter;
 import jakarta.enterprise.context.ApplicationScoped;
+import jakarta.annotation.PreDestroy;
 
 @ApplicationScoped
 public class PollingLiveService {
+    private static final long HEARTBEAT_INTERVAL_SECONDS = 15L;
 
     private final Object lock = new Object();
     private final CopyOnWriteArrayList<Subscriber> subscribers = new CopyOnWriteArrayList<>();
     private final AtomicReference<RunState> activeRun = new AtomicReference<>();
+    private final ScheduledExecutorService heartbeatExecutor = Executors.newSingleThreadScheduledExecutor();
 
     public PollRunHandle startRun(String trigger, List<RuntimeEmailAccount> emailAccounts, AppUser actor) {
         synchronized (lock) {
@@ -63,16 +69,47 @@ public class PollingLiveService {
         }
     }
 
-    public Multi<LiveEventView> subscribe(AppUser viewer) {
+    public Multi<LiveEventView> subscribe(AppUser viewer, SessionStreamKind streamKind, Long streamSessionId) {
         return Multi.createFrom().emitter((MultiEmitter<? super LiveEventView> emitter) -> {
-            Subscriber subscriber = new Subscriber(viewer.id, viewer.role == AppUser.Role.ADMIN, emitter);
+            Subscriber subscriber = new Subscriber(viewer.id, viewer.role == AppUser.Role.ADMIN, streamKind, streamSessionId, emitter);
             subscribers.add(subscriber);
-            emitter.onTermination(() -> subscribers.remove(subscriber));
+            var heartbeat = heartbeatExecutor.scheduleAtFixedRate(
+                    () -> {
+                        if (subscribers.contains(subscriber)) {
+                            subscriber.emit(new LiveEventView("keepalive", Instant.now(), null, null, null));
+                        }
+                    },
+                    HEARTBEAT_INTERVAL_SECONDS,
+                    HEARTBEAT_INTERVAL_SECONDS,
+                    TimeUnit.SECONDS);
+            emitter.onTermination(() -> {
+                subscribers.remove(subscriber);
+                heartbeat.cancel(true);
+            });
             PollLiveView snapshot = snapshotFor(viewer);
             if (snapshot.running() || !snapshot.sources().isEmpty()) {
-                emitter.emit(new LiveEventView("poll-snapshot", Instant.now(), snapshot, null));
+                emitter.emit(new LiveEventView("poll-snapshot", Instant.now(), snapshot, null, null));
             }
         });
+    }
+
+    @PreDestroy
+    void shutdownHeartbeatExecutor() {
+        heartbeatExecutor.shutdownNow();
+    }
+
+    public void publishSessionRevoked(Long viewerId, SessionStreamKind streamKind, Long streamSessionId) {
+        if (viewerId == null || streamKind == null || streamSessionId == null) {
+            return;
+        }
+        Instant timestamp = Instant.now();
+        for (Subscriber subscriber : subscribers) {
+            if (subscriber.streamKind != streamKind || !viewerId.equals(subscriber.viewerId)) {
+                continue;
+            }
+            subscriber.emit(new LiveEventView("session-revoked", timestamp, null, null, streamSessionId));
+            subscriber.close();
+        }
     }
 
     public boolean requestPause(AppUser actor) {
@@ -114,6 +151,7 @@ public class PollingLiveService {
                 return false;
             }
             state.stopRequested = true;
+            state.stopRequestedByUsername = actor == null ? null : actor.username;
             state.updatedAt = Instant.now();
             state.state = "STOPPING";
             lock.notifyAll();
@@ -251,6 +289,13 @@ public class PollingLiveService {
         }
     }
 
+    public String stopRequestedByUsername(String runId) {
+        synchronized (lock) {
+            RunState state = requireRun(runId);
+            return state == null ? null : state.stopRequestedByUsername;
+        }
+    }
+
     public void markSourceFinished(String runId, String sourceId, int fetched, int imported, int duplicates, String error) {
         synchronized (lock) {
             RunState state = requireRun(runId);
@@ -349,7 +394,7 @@ public class PollingLiveService {
             if (view == null) {
                 continue;
             }
-            subscriber.emit(new LiveEventView(type, timestamp, view, null));
+            subscriber.emit(new LiveEventView(type, timestamp, view, null, null));
         }
     }
 
@@ -364,8 +409,34 @@ public class PollingLiveService {
             if (state != null && view == null && !subscriber.admin) {
                 continue;
             }
-            subscriber.emit(new LiveEventView("notification-created", timestamp, view, notification));
+            subscriber.emit(new LiveEventView("notification-created", timestamp, view, notification, null));
         }
+    }
+
+    public void publishNotificationToUser(Long viewerId, LiveNotificationView notification) {
+        if (viewerId == null || notification == null) {
+            return;
+        }
+        Instant timestamp = Instant.now();
+        RunState state = activeRun.get();
+        for (Subscriber subscriber : subscribers) {
+            if (!viewerId.equals(subscriber.viewerId)) {
+                continue;
+            }
+            PollLiveView view = state == null ? null : buildView(state, subscriber.viewerId, subscriber.admin);
+            subscriber.emit(new LiveEventView("notification-created", timestamp, view, notification, null));
+        }
+    }
+
+    public void publishNewSignInDetected(Long viewerId, SessionStreamKind streamKind, Long sessionId) {
+        if (viewerId == null || streamKind == null || sessionId == null) {
+            return;
+        }
+        publishNotificationToUser(viewerId, notification(
+                "notifications.newSessionDetected",
+                "warning",
+                "session-activity",
+                buildRecentSessionTargetId(streamKind, sessionId)));
     }
 
     private PollLiveView buildView(RunState state, AppUser viewer) {
@@ -515,12 +586,30 @@ public class PollingLiveService {
         return new LiveNotificationView(null, content, groupKey, content, replaceGroup, List.of(), targetId, tone);
     }
 
+    private String buildRecentSessionTargetId(SessionStreamKind streamKind, Long sessionId) {
+        return "recent-session-" + streamKind.name() + "-" + sessionId;
+    }
+
     public record PollRunHandle(String runId) {
     }
 
-    private record Subscriber(Long viewerId, boolean admin, MultiEmitter<? super LiveEventView> emitter) {
+    public enum SessionStreamKind {
+        BROWSER,
+        REMOTE
+    }
+
+    private record Subscriber(
+            Long viewerId,
+            boolean admin,
+            SessionStreamKind streamKind,
+            Long streamSessionId,
+            MultiEmitter<? super LiveEventView> emitter) {
         void emit(LiveEventView event) {
             emitter.emit(event);
+        }
+
+        void close() {
+            emitter.complete();
         }
     }
 
@@ -538,6 +627,7 @@ public class PollingLiveService {
         private String state = "RUNNING";
         private boolean pauseRequested;
         private boolean stopRequested;
+        private String stopRequestedByUsername;
         private Instant updatedAt = startedAt;
 
         private RunState(String trigger, AppUser actor, List<RuntimeEmailAccount> emailAccounts) {

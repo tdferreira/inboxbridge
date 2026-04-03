@@ -1,5 +1,6 @@
 import { useEffect, useRef } from 'react'
 import Banner from '../common/Banner'
+import LanguageMenuButton from '../common/LanguageMenuButton'
 import LoadingButton from '../common/LoadingButton'
 import ModalDialog from '../common/ModalDialog'
 import PasswordField from '../common/PasswordField'
@@ -54,6 +55,18 @@ function AuthScreen({
   function renderLanguageSelector(keySuffix) {
     if (!showLanguageSelector) {
       return null
+    }
+    if (keySuffix === 'login') {
+      return (
+        <LanguageMenuButton
+          ariaLabel={t('preferences.language')}
+          className="auth-language-picker auth-login-language-picker"
+          currentLanguage={language}
+          key={keySuffix}
+          onChange={onLanguageChange}
+          options={languageOptions}
+        />
+      )
     }
     return (
       <label className="auth-language-picker" key={keySuffix}>

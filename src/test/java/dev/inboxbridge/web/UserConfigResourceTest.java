@@ -347,7 +347,7 @@ class UserConfigResourceTest {
 
     private static final class FakePollingService extends PollingService {
         @Override
-        public PollRunResult runPollForSource(dev.inboxbridge.domain.RuntimeEmailAccount bridge, String trigger, String actorKey) {
+        public PollRunResult runPollForSource(dev.inboxbridge.domain.RuntimeEmailAccount bridge, String trigger, AppUser actor, String actorKey) {
             PollRunResult result = new PollRunResult();
             result.incrementFetched();
             result.incrementImported();

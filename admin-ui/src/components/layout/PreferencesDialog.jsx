@@ -1,4 +1,5 @@
 import InfoHint from '../common/InfoHint'
+import LanguageMenuButton from '../common/LanguageMenuButton'
 import ModalDialog from '../common/ModalDialog'
 import './PreferencesDialog.css'
 
@@ -32,11 +33,14 @@ function PreferencesDialog({
       <div className="preferences-dialog">
         <label>
           <span>{t('preferences.language')}</span>
-          <select disabled={savingLayout} value={language} onChange={(event) => onLanguageChange(event.target.value)}>
-            {languageOptions.map((option) => (
-              <option key={option.value} value={option.value}>{option.label}</option>
-            ))}
-          </select>
+          <LanguageMenuButton
+            ariaLabel={t('preferences.language')}
+            currentLanguage={language}
+            disabled={savingLayout}
+            menuAlign="start"
+            onChange={onLanguageChange}
+            options={languageOptions}
+          />
         </label>
         <label className="checkbox-row">
           <input

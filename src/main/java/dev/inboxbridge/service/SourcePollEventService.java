@@ -13,6 +13,7 @@ import jakarta.transaction.Transactional;
 
 @ApplicationScoped
 public class SourcePollEventService {
+    private static final String STOPPED_BY_USER_MESSAGE = "Stopped by user.";
 
     @Inject
     SourcePollEventRepository repository;
@@ -26,18 +27,34 @@ public class SourcePollEventService {
             int fetched,
             int imported,
             int duplicates,
+            int spamJunkMessageCount,
+            String actorUsername,
+            String executionSurface,
             String error) {
         SourcePollEvent event = new SourcePollEvent();
         event.sourceId = sourceId;
         event.triggerName = trigger;
-        event.status = error == null ? "SUCCESS" : "ERROR";
+        event.status = statusFor(error);
         event.startedAt = startedAt;
         event.finishedAt = finishedAt;
         event.fetchedCount = fetched;
         event.importedCount = imported;
         event.duplicateCount = duplicates;
+        event.spamJunkMessageCount = Math.max(0, spamJunkMessageCount);
+        event.actorUsername = actorUsername == null || actorUsername.isBlank() ? null : actorUsername;
+        event.executionSurface = executionSurface == null || executionSurface.isBlank() ? null : executionSurface;
         event.errorMessage = error;
         repository.persist(event);
+    }
+
+    private String statusFor(String error) {
+        if (error == null || error.isBlank()) {
+            return "SUCCESS";
+        }
+        if (STOPPED_BY_USER_MESSAGE.equals(error.trim())) {
+            return "STOPPED";
+        }
+        return "ERROR";
     }
 
     public Optional<AdminPollEventSummary> latestForSource(String sourceId) {
@@ -68,6 +85,9 @@ public class SourcePollEventService {
                 event.fetchedCount,
                 event.importedCount,
                 event.duplicateCount,
+                event.spamJunkMessageCount,
+                event.actorUsername,
+                event.executionSurface,
                 event.errorMessage);
     }
 }

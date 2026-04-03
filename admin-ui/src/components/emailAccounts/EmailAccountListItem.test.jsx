@@ -331,6 +331,130 @@ describe('EmailAccountListItem', () => {
     expect(onRunPoll).toHaveBeenCalledWith(fetcher)
   })
 
+  it('shows a disable action for enabled fetchers and an enable action for disabled fetchers', () => {
+    const onToggleEnabled = vi.fn()
+    const enabledFetcher = {
+      emailAccountId: 'enabled-fetcher',
+      enabled: true,
+      customLabel: '',
+      managementSource: 'DATABASE',
+      protocol: 'IMAP',
+      host: 'imap.example.com',
+      port: 993,
+      authMethod: 'PASSWORD',
+      oauthProvider: 'NONE',
+      tls: true,
+      folder: 'INBOX',
+      tokenStorageMode: 'PASSWORD',
+      oauthConnected: false,
+      totalImportedMessages: 0,
+      lastImportedAt: null,
+      effectivePollEnabled: true,
+      effectivePollInterval: '5m',
+      effectiveFetchWindow: 50,
+      pollingState: null,
+      lastEvent: null,
+      canEdit: true,
+      canDelete: true,
+      canConnectOAuth: false
+    }
+    const disabledFetcher = {
+      ...enabledFetcher,
+      emailAccountId: 'disabled-fetcher',
+      enabled: false
+    }
+
+    const { rerender } = render(
+      <EmailAccountListItem
+        fetcher={enabledFetcher}
+        locale="en"
+        onConfigurePolling={vi.fn()}
+        onConnectOAuth={vi.fn()}
+        onDelete={vi.fn()}
+        onEdit={vi.fn()}
+        onRunPoll={vi.fn()}
+        onToggleEnabled={onToggleEnabled}
+        t={t}
+      />
+    )
+
+    fireEvent.click(screen.getByRole('button', { name: 'Source email account actions' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Disable' }))
+    expect(onToggleEnabled).toHaveBeenCalledWith(enabledFetcher)
+
+    rerender(
+      <EmailAccountListItem
+        fetcher={disabledFetcher}
+        locale="en"
+        onConfigurePolling={vi.fn()}
+        onConnectOAuth={vi.fn()}
+        onDelete={vi.fn()}
+        onEdit={vi.fn()}
+        onRunPoll={vi.fn()}
+        onToggleEnabled={onToggleEnabled}
+        t={t}
+      />
+    )
+
+    fireEvent.click(screen.getByRole('button', { name: 'Source email account actions' }))
+    expect(screen.getByRole('button', { name: 'Enable' })).toBeInTheDocument()
+  })
+
+  it('shows the stored spam or junk message count in the expanded last run summary', () => {
+    render(
+      <EmailAccountListItem
+        fetcher={{
+          emailAccountId: 'spam-aware-fetcher',
+          customLabel: '',
+          managementSource: 'DATABASE',
+          protocol: 'IMAP',
+          host: 'imap.example.com',
+          port: 993,
+          authMethod: 'PASSWORD',
+          oauthProvider: 'NONE',
+          tls: true,
+          folder: 'INBOX',
+          tokenStorageMode: 'PASSWORD',
+          oauthConnected: false,
+          totalImportedMessages: 0,
+          lastImportedAt: null,
+          effectivePollEnabled: true,
+          effectivePollInterval: '5m',
+          effectiveFetchWindow: 50,
+          pollingState: null,
+          lastEvent: {
+            status: 'SUCCESS',
+            finishedAt: '2026-03-26T12:00:00Z',
+            trigger: 'admin-fetcher',
+            fetched: 10,
+            imported: 4,
+            duplicates: 6,
+            spamJunkMessageCount: 6,
+            actorUsername: 'admin',
+            executionSurface: 'ADMINISTRATION',
+            error: ''
+          },
+          canEdit: true,
+          canDelete: true,
+          canConnectMicrosoft: false
+        }}
+        locale="en"
+        onConfigurePolling={vi.fn()}
+        onConnectMicrosoft={vi.fn()}
+        onDelete={vi.fn()}
+        onEdit={vi.fn()}
+        onRunPoll={vi.fn()}
+        t={t}
+        viewerUsername="alice"
+      />
+    )
+
+    fireEvent.click(screen.getByRole('button', { name: /spam-aware-fetcher/i }))
+
+    expect(screen.getByText(/Executed at .* by admin via Administration/)).toBeInTheDocument()
+    expect(screen.getByText('Spam/Junk folders currently contain 6 messages.')).toBeInTheDocument()
+  })
+
   it('shows a quick-run icon button in the fetcher row', () => {
     const onRunPoll = vi.fn()
     const fetcher = {

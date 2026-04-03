@@ -25,6 +25,7 @@ import dev.inboxbridge.service.AuthSecuritySettingsService;
 import dev.inboxbridge.service.MicrosoftOAuthService;
 import dev.inboxbridge.service.OAuthProviderRegistryService;
 import dev.inboxbridge.service.PasskeyService;
+import dev.inboxbridge.service.PollingLiveService;
 import dev.inboxbridge.service.RegistrationChallengeService;
 import dev.inboxbridge.service.SystemOAuthAppSettingsService;
 import dev.inboxbridge.service.UserSessionService;
@@ -90,6 +91,9 @@ public class AuthResource {
     @Inject
     UserSessionService userSessionService;
 
+    @Inject
+    PollingLiveService pollingLiveService;
+
     @Context
     HttpHeaders httpHeaders;
 
@@ -132,7 +136,11 @@ public class AuthResource {
                 return Response.ok(LoginResponse.passkeyRequired(result.passkeyChallenge())).build();
             }
             AuthService.AuthenticatedSession session = result.session();
-            return Response.ok(LoginResponse.authenticated(toResponse(session.user())))
+            pollingLiveService.publishNewSignInDetected(
+                    session.user().id,
+                    PollingLiveService.SessionStreamKind.BROWSER,
+                    session.sessionId());
+            return Response.ok(LoginResponse.authenticated(toResponse(session.user(), session.sessionId())))
                     .cookie(sessionCookie(session.token()))
                     .cookie(csrfCookie(session.csrfToken()))
                     .build();
@@ -187,7 +195,11 @@ public class AuthResource {
             String userAgent = httpHeaders == null ? null : httpHeaders.getHeaderString("User-Agent");
             PasskeyService.PasskeyAuthenticationResult authResult = passkeyService.finishAuthentication(request);
             AuthService.AuthenticatedSession session = authService.loginWithPasskey(authResult, clientKey, userAgent);
-            return Response.ok(LoginResponse.authenticated(toResponse(session.user())))
+            pollingLiveService.publishNewSignInDetected(
+                    session.user().id,
+                    PollingLiveService.SessionStreamKind.BROWSER,
+                    session.sessionId());
+            return Response.ok(LoginResponse.authenticated(toResponse(session.user(), session.sessionId())))
                     .cookie(sessionCookie(session.token()))
                     .cookie(csrfCookie(session.csrfToken()))
                     .build();
@@ -229,8 +241,13 @@ public class AuthResource {
     }
 
     private SessionUserResponse toResponse(AppUser user) {
+        return toResponse(user, currentUserContext.session() == null ? null : currentUserContext.session().id);
+    }
+
+    private SessionUserResponse toResponse(AppUser user, Long currentSessionId) {
         return new SessionUserResponse(
                 user.id,
+                currentSessionId,
                 user.username,
                 user.role.name(),
                 user.approved,

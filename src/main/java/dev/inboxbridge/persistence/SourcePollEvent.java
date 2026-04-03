@@ -50,6 +50,15 @@ public class SourcePollEvent extends PanacheEntityBase {
     @Column(name = "duplicate_count", nullable = false)
     public int duplicateCount;
 
+    @Column(name = "spam_junk_message_count", nullable = false)
+    public int spamJunkMessageCount;
+
+    @Column(name = "actor_username", length = 120)
+    public String actorUsername;
+
+    @Column(name = "execution_surface", length = 40)
+    public String executionSurface;
+
     @Column(name = "error_message", length = 4000)
     public String errorMessage;
 }

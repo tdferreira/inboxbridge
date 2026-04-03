@@ -15,6 +15,8 @@ public class PollRunResult {
     private final List<String> errors = new ArrayList<>();
     private final List<PollRunError> errorDetails = new ArrayList<>();
     private final List<String> spamJunkFolderSummaries = new ArrayList<>();
+    private String state = "COMPLETED";
+    private String stoppedByUsername;
 
     public void incrementFetched() {
         fetched++;
@@ -72,6 +74,11 @@ public class PollRunResult {
         finishedAt = Instant.now();
     }
 
+    public void markStopped(String username) {
+        state = "STOPPED";
+        stoppedByUsername = username;
+    }
+
     public Instant getStartedAt() {
         return startedAt;
     }
@@ -106,5 +113,13 @@ public class PollRunResult {
 
     public List<String> getSpamJunkFolderSummaries() {
         return spamJunkFolderSummaries;
+    }
+
+    public String getState() {
+        return state;
+    }
+
+    public String getStoppedByUsername() {
+        return stoppedByUsername;
     }
 }

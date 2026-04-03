@@ -55,7 +55,10 @@ public class PollingResource {
     @Produces(MediaType.SERVER_SENT_EVENTS)
     @RestStreamElementType(MediaType.APPLICATION_JSON)
     public Multi<LiveEventView> events() {
-        return pollingLiveService.subscribe(currentUserContext.user());
+        return pollingLiveService.subscribe(
+                currentUserContext.user(),
+                PollingLiveService.SessionStreamKind.BROWSER,
+                currentUserContext.session() == null ? null : currentUserContext.session().id);
     }
 
     @POST

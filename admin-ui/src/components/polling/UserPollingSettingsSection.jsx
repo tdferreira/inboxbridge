@@ -1,6 +1,5 @@
 import LoadingButton from '../common/LoadingButton'
 import CollapsibleSection from '../common/CollapsibleSection'
-import LivePollPanel from './LivePollPanel'
 import './UserPollingSettingsSection.css'
 
 /**
@@ -14,9 +13,7 @@ function UserPollingSettingsSection({
   onCollapseToggle,
   onOpenEditor,
   onPausePoll,
-  onMovePollSourceNext,
   onResumePoll,
-  onRetryPollSource,
   onRunPoll,
   onStopPoll,
   pollingSettings,
@@ -37,15 +34,15 @@ function UserPollingSettingsSection({
             <>
               {isPaused ? (
                 <LoadingButton className="secondary" onClick={onResumePoll} type="button">
-                  Resume
+                  {t('remote.resume')}
                 </LoadingButton>
               ) : (
                 <LoadingButton className="secondary" onClick={onPausePoll} type="button">
-                  Pause
+                  {t('remote.pause')}
                 </LoadingButton>
               )}
               <LoadingButton className="danger" onClick={onStopPoll} type="button">
-                Stop
+                {t('remote.stop')}
               </LoadingButton>
             </>
           ) : null}
@@ -76,14 +73,6 @@ function UserPollingSettingsSection({
     >
       {pollingSettings ? (
         <>
-          <LivePollPanel
-            livePoll={livePoll}
-            onMoveNext={onMovePollSourceNext}
-            onPause={onPausePoll}
-            onResume={onResumePoll}
-            onRetry={onRetryPollSource}
-            onStop={onStopPoll}
-          />
           {!hasFetchers ? (
             <div className="muted-box user-polling-empty-state">{t('userPolling.noFetchers')}</div>
           ) : null}

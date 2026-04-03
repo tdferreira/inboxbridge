@@ -1,22 +1,11 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 
+import FormField from '../common/FormField'
 import InfoHint from '../common/InfoHint'
 import LoadingButton from '../common/LoadingButton'
 import ModalDialog from '../common/ModalDialog'
 import PasswordField from '../common/PasswordField'
 import { DESTINATION_PROVIDER_PRESETS, findDestinationProviderPreset, normalizeDestinationProviderConfig } from '../../lib/emailProviderPresets'
-
-function LabeledField({ children, helpText, label }) {
-  return (
-    <label>
-      <span className="field-label-row">
-        <span>{label}</span>
-        <InfoHint text={helpText} />
-      </span>
-      {children}
-    </label>
-  )
-}
 
 function DestinationMailboxDialog({
   destinationConfig,
@@ -167,13 +156,13 @@ function DestinationMailboxDialog({
     >
       <p className="section-copy">{t('destination.dialogCopy')}</p>
       <form className="settings-grid destination-dialog-form" onSubmit={handleSave}>
-        <LabeledField helpText={t('destination.providerHelp')} label={t('destination.provider')}>
+        <FormField helpText={t('destination.providerHelp')} label={t('destination.provider')}>
           <select aria-label={t('destination.provider')} value={provider} onChange={(event) => updateProvider(event.target.value)}>
             {DESTINATION_PROVIDER_PRESETS.map((preset) => (
               <option key={preset.id} value={preset.id}>{t(preset.labelKey)}</option>
             ))}
           </select>
-        </LabeledField>
+        </FormField>
         <div className="full muted-box">{t(providerPreset.descriptionKey)}</div>
 
         {isGmailProvider ? (
@@ -183,15 +172,15 @@ function DestinationMailboxDialog({
           </div>
         ) : (
           <>
-            <LabeledField helpText={t('destination.hostHelp')} label={t('destination.host')}>
+            <FormField helpText={t('destination.hostHelp')} label={t('destination.host')}>
               <input aria-label={t('destination.host')} value={resolvedDestinationConfig.host} onChange={(event) => setDestinationConfig((current) => ({ ...current, host: event.target.value }))} />
-            </LabeledField>
-            <LabeledField helpText={t('destination.portHelp')} label={t('destination.port')}>
+            </FormField>
+            <FormField helpText={t('destination.portHelp')} label={t('destination.port')}>
               <input aria-label={t('destination.port')} type="number" value={resolvedDestinationConfig.port} onChange={(event) => setDestinationConfig((current) => ({ ...current, port: Number(event.target.value) || '' }))} />
-            </LabeledField>
-            <LabeledField helpText={t('emailAccounts.usernameHelp')} label={t('emailAccounts.username')}>
+            </FormField>
+            <FormField helpText={t('emailAccounts.usernameHelp')} label={t('emailAccounts.username')}>
               <input aria-label={t('emailAccounts.username')} value={resolvedDestinationConfig.username} onChange={(event) => setDestinationConfig((current) => ({ ...current, username: event.target.value }))} />
-            </LabeledField>
+            </FormField>
             {usesPassword ? (
               <PasswordField
                 helpText={t('emailAccounts.passwordHelp')}

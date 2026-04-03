@@ -32,6 +32,7 @@ export function buildUserWorkspaceSections({
   toggleWorkspaceSection,
   uiPreferences,
   userPollingStats,
+  session,
   userSetupGuideState
 }) {
   return [
@@ -87,11 +88,9 @@ export function buildUserWorkspaceSections({
           collapseLoading={isPending('uiPreferences') && uiPreferences.persistLayout}
           hasFetchers={emailAccounts.runnableUserEmailAccounts.length > 0}
           onCollapseToggle={() => toggleWorkspaceSection('userPollingCollapsed')}
-          onMovePollSourceNext={polling.moveLivePollSourceNext}
           onOpenEditor={polling.openUserPollingDialog}
           onPausePoll={polling.pauseLivePoll}
           onResumePoll={polling.resumeLivePoll}
-          onRetryPollSource={polling.retryLivePollSource}
           onRunPoll={polling.runUserPoll}
           onStopPoll={polling.stopLivePoll}
           pollingSettings={polling.userPollingSettings}
@@ -163,6 +162,7 @@ export function buildUserWorkspaceSections({
           onLoadFetcherCustomRange={emailAccounts.loadFetcherCustomRange}
           onResetFetcherPollingSettings={emailAccounts.resetFetcherPollingSettings}
           onRunFetcherPoll={emailAccounts.runFetcherPoll}
+          onToggleEmailAccountEnabled={emailAccounts.toggleEmailAccountEnabled}
           onSaveEmailAccount={emailAccounts.saveEmailAccount}
           onSaveEmailAccountAndConnectOAuth={emailAccounts.saveEmailAccountAndConnectOAuth}
           onSaveFetcherPollingSettings={emailAccounts.saveFetcherPollingSettings}
@@ -173,6 +173,8 @@ export function buildUserWorkspaceSections({
           t={t}
           testConnectionLoading={isPending('bridgeConnectionTest')}
           testResult={emailAccounts.emailAccountTestResult}
+          togglingEmailAccountId={emailAccounts.togglingEmailAccountId}
+          viewerUsername={session?.username || null}
         />
       )
     }

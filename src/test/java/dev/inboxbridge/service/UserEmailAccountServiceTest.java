@@ -107,6 +107,9 @@ class UserEmailAccountServiceTest {
                         0,
                         0,
                         0,
+                        0,
+                        null,
+                        null,
                         "Source outlook-main failed: Source outlook-main is configured for OAuth2 but has no refresh token"));
 
         UserEmailAccountView view = service.listForUser(owner.id).getFirst();
@@ -131,6 +134,9 @@ class UserEmailAccountServiceTest {
                         0,
                         0,
                         0,
+                        0,
+                        null,
+                        null,
                         "Source sprc-john failed: Failed to list Gmail labels: 401 - {\"error\":{\"message\":\"Invalid authentication credentials\"}}"));
         service.sourcePollingStateService = new StaticSourcePollingStateService(
                 new dev.inboxbridge.dto.SourcePollingStateView(
@@ -151,6 +157,32 @@ class UserEmailAccountServiceTest {
         assertEquals(
                 "Source sprc-john failed: The linked Gmail account no longer grants InboxBridge access. The saved Gmail OAuth link was cleared. Reconnect it from My Destination Mailbox.",
                 view.pollingState().lastFailureReason());
+    }
+
+    @Test
+    void listExposesSpamJunkMessageCountInLastEvent() {
+        UserEmailAccountService service = service();
+        AppUser owner = user(1L);
+        service.upsert(owner, request(null, "fetcher-a"));
+        service.sourcePollEventService = new StaticSourcePollEventService(
+                new AdminPollEventSummary(
+                        "fetcher-a",
+                        "manual",
+                        "SUCCESS",
+                        Instant.parse("2026-03-28T10:00:00Z"),
+                        Instant.parse("2026-03-28T10:00:05Z"),
+                        12,
+                        3,
+                        9,
+                        6,
+                        "admin",
+                        "ADMINISTRATION",
+                        null));
+
+        UserEmailAccountView view = service.listForUser(owner.id).getFirst();
+
+        assertNotNull(view.lastEvent());
+        assertEquals(6, view.lastEvent().spamJunkMessageCount());
     }
 
     @Test

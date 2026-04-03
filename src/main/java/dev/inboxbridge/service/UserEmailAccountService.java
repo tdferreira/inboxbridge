@@ -404,6 +404,9 @@ public class UserEmailAccountService {
                     lastEvent.fetched(),
                     lastEvent.imported(),
                     lastEvent.duplicates(),
+                    lastEvent.spamJunkMessageCount(),
+                    lastEvent.actorUsername(),
+                    lastEvent.executionSurface(),
                     sourcePrefixedRevokedGmailAccessMessage(emailAccount.emailAccountId));
         }
         return lastEvent;

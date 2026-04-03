@@ -86,7 +86,10 @@ public class RemoteControlResource {
     @Produces(MediaType.SERVER_SENT_EVENTS)
     @RestStreamElementType(MediaType.APPLICATION_JSON)
     public Multi<LiveEventView> pollEvents() {
-        return pollingLiveService.subscribe(currentUserContext.user());
+        return pollingLiveService.subscribe(
+                currentUserContext.user(),
+                PollingLiveService.SessionStreamKind.REMOTE,
+                currentUserContext.remoteSession() == null ? null : currentUserContext.remoteSession().id);
     }
 
     @POST

@@ -19,7 +19,8 @@ function LivePollPanel({
   onResume,
   onRetry,
   onStop,
-  showOwners = false
+  showOwners = false,
+  t = (key) => key
 }) {
   if (!livePoll?.running) {
     return null
@@ -38,11 +39,11 @@ function LivePollPanel({
   const actions = canControl ? (
     <>
       {isPaused ? (
-        <button className="secondary" onClick={onResume} type="button">Resume</button>
+        <button className="secondary" onClick={onResume} type="button">{t('remote.resume')}</button>
       ) : (
-        <button className="secondary" onClick={onPause} type="button">Pause</button>
+        <button className="secondary" onClick={onPause} type="button">{t('remote.pause')}</button>
       )}
-      <button className="danger" onClick={onStop} type="button">Stop</button>
+      <button className="danger" onClick={onStop} type="button">{t('remote.stop')}</button>
     </>
   ) : null
 
@@ -66,10 +67,10 @@ function LivePollPanel({
             {canControl && source.actionable ? (
               <div className="live-poll-source-actions">
                 {(source.state === 'QUEUED' || source.state === 'RETRY_QUEUED') && source.position > 1 ? (
-                  <button className="secondary" onClick={() => onMoveNext(source.sourceId)} type="button">Move Next</button>
+                  <button className="secondary" onClick={() => onMoveNext(source.sourceId)} type="button">{t('remote.moveNext')}</button>
                 ) : null}
                 {(source.state === 'FAILED' || source.state === 'COMPLETED' || source.state === 'STOPPED') ? (
-                  <button className="secondary" onClick={() => onRetry(source.sourceId)} type="button">Retry</button>
+                  <button className="secondary" onClick={() => onRetry(source.sourceId)} type="button">{t('remote.retry')}</button>
                 ) : null}
               </div>
             ) : null}

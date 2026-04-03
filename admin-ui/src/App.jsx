@@ -20,7 +20,7 @@ import SystemPollingSettingsDialog from './components/admin/SystemPollingSetting
 import UserPollingSettingsDialog from './components/polling/UserPollingSettingsDialog'
 import WorkspaceSectionList from './components/layout/WorkspaceSectionList'
 import { buildAdminWorkspaceSections, buildUserWorkspaceSections } from './components/layout/workspaceSectionBuilders'
-import { apiErrorText, installSecureApiFetch } from './lib/api'
+import { AUTH_EXPIRED_EVENT, apiErrorText, installSecureApiFetch } from './lib/api'
 import { requestSessionDeviceLocation } from './lib/api'
 import { buildSetupGuideState } from './lib/setupGuide'
 import { normalizeDestinationProviderConfig } from './lib/emailProviderPresets'
@@ -396,6 +396,8 @@ function AppContent() {
     return Boolean(sectionRefreshLoading[sectionKey])
   }
 
+  const hasSourcePollInFlight = Object.keys(pendingActions).some((actionKey) => actionKey.startsWith('bridgePoll:'))
+
   async function withPending(actionKey, action) {
     setPendingActions((current) => ({ ...current, [actionKey]: true }))
     try {
@@ -746,7 +748,7 @@ function AppContent() {
   }, [authOptions.multiUserEnabled, isAdmin, session])
 
   useEffect(() => {
-    if (!session || (!polling.runningPoll && !polling.runningUserPoll)) {
+    if (!session || (!polling.livePoll?.running && !polling.runningPoll && !polling.runningUserPoll && !hasSourcePollInFlight)) {
       setActiveBatchPollSourceIds([])
       return
     }
@@ -764,6 +766,9 @@ function AppContent() {
         }
         const payload = await response.json()
         if (!cancelled) {
+          if (livePollApplyRef.current) {
+            livePollApplyRef.current(payload)
+          }
           setActiveBatchPollSourceIds(payload?.running
             ? (payload.sources || []).filter((source) => source.state === 'RUNNING').map((source) => source.sourceId)
             : [])
@@ -784,7 +789,7 @@ function AppContent() {
       cancelled = true
       window.clearInterval(timer)
     }
-  }, [isAdmin, liveEventsConnected, polling.livePoll?.running, polling.runningPoll, polling.runningUserPoll, session])
+  }, [hasSourcePollInFlight, isAdmin, liveEventsConnected, polling.livePoll?.running, polling.runningPoll, polling.runningUserPoll, session])
 
   useEffect(() => {
     setActiveBatchPollSourceIds(polling.livePoll?.running
@@ -810,15 +815,37 @@ function AppContent() {
     const endpoint = isAdmin ? '/api/admin/poll/events' : '/api/poll/events'
     const eventSource = new window.EventSource(endpoint)
     liveEventsRef.current = eventSource
+    let closingStream = false
+
+    const verifyBrowserSessionAfterStreamError = async () => {
+      try {
+        const response = await fetch('/api/auth/me')
+        if (response.status === 401) {
+          window.dispatchEvent(new CustomEvent(AUTH_EXPIRED_EVENT))
+        }
+      } catch {
+        // Network failures should not sign the user out spuriously.
+      }
+    }
 
     const handleLiveEvent = (event) => {
       try {
         const payload = JSON.parse(event.data)
+        if (payload?.type === 'session-revoked' && (!payload?.revokedSessionId || payload.revokedSessionId === session?.currentSessionId)) {
+          window.dispatchEvent(new CustomEvent(AUTH_EXPIRED_EVENT))
+          return
+        }
         if (payload?.poll && livePollApplyRef.current) {
           livePollApplyRef.current(payload.poll)
         }
         if (payload?.notification && pushNotificationRef.current) {
           pushNotificationRef.current(payload.notification)
+          if (payload.notification.groupKey === 'session-activity' && sessionActivityPollerRef.current) {
+            void sessionActivityPollerRef.current({
+              announceNewSessions: false,
+              suppressErrors: true
+            })
+          }
         }
         setLiveEventsConnected(true)
       } catch {
@@ -839,18 +866,21 @@ function AppContent() {
       'poll-source-finished',
       'poll-source-reprioritized',
       'poll-source-retry-queued',
-      'notification-created'
+      'notification-created',
+      'keepalive',
+      'session-revoked'
     ].forEach((eventName) => eventSource.addEventListener(eventName, handleLiveEvent))
 
     eventSource.onerror = () => {
-      setLiveEventsConnected(false)
-      eventSource.close()
-      if (liveEventsRef.current === eventSource) {
-        liveEventsRef.current = null
+      if (closingStream) {
+        return
       }
+      setLiveEventsConnected(false)
+      void verifyBrowserSessionAfterStreamError()
     }
 
     return () => {
+      closingStream = true
       eventSource.close()
       if (liveEventsRef.current === eventSource) {
         liveEventsRef.current = null
@@ -1356,6 +1386,7 @@ function AppContent() {
     loadUserCustomRange,
     openConfirmation,
     polling,
+    session,
     setDestinationConfig,
     t,
     toggleWorkspaceSection,

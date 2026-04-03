@@ -11,6 +11,7 @@ import dev.inboxbridge.persistence.AppUser;
 import dev.inboxbridge.persistence.RemoteSession;
 import dev.inboxbridge.security.CurrentUserContext;
 import dev.inboxbridge.service.AppUserService;
+import dev.inboxbridge.service.PollingLiveService;
 import dev.inboxbridge.service.SessionClientInfoService;
 import dev.inboxbridge.service.RemoteSessionService;
 import dev.inboxbridge.service.UserGmailConfigService;
@@ -115,6 +116,86 @@ class AccountResourceTest {
         assertEquals(-9.1393, response.activeSessions().get(0).deviceLongitude());
     }
 
+    @Test
+    void revokeSessionPublishesRevocationToMatchingStream() {
+        AccountResource resource = new AccountResource();
+        resource.currentUserContext = new CurrentUserContext();
+        AppUser user = new AppUser();
+        user.id = 6L;
+        user.username = "frank";
+        resource.currentUserContext.setUser(user);
+        FakePollingLiveService pollingLiveService = new FakePollingLiveService();
+        resource.pollingLiveService = pollingLiveService;
+        resource.userSessionService = new FakeAppUserSessionService() {
+            @Override
+            public void invalidateSessionForUser(Long userId, Long sessionId) {
+                assertEquals(6L, userId);
+                assertEquals(44L, sessionId);
+            }
+        };
+
+        resource.revokeSession(44L, "BROWSER");
+
+        assertEquals(PollingLiveService.SessionStreamKind.BROWSER, pollingLiveService.lastStreamKind);
+        assertEquals(44L, pollingLiveService.lastSessionId);
+    }
+
+    @Test
+    void revokeOtherSessionsPublishesRevocationForEachOtherSession() {
+        AccountResource resource = new AccountResource();
+        resource.currentUserContext = new CurrentUserContext();
+        AppUser user = new AppUser();
+        user.id = 7L;
+        user.username = "grace";
+        resource.currentUserContext.setUser(user);
+        dev.inboxbridge.persistence.UserSession currentSession = new dev.inboxbridge.persistence.UserSession();
+        currentSession.id = 100L;
+        resource.currentUserContext.setSession(currentSession);
+        FakePollingLiveService pollingLiveService = new FakePollingLiveService();
+        resource.pollingLiveService = pollingLiveService;
+        resource.userSessionService = new FakeAppUserSessionService() {
+            @Override
+            public java.util.List<dev.inboxbridge.persistence.UserSession> listActiveSessions(Long userId) {
+                dev.inboxbridge.persistence.UserSession current = new dev.inboxbridge.persistence.UserSession();
+                current.id = 100L;
+                current.userId = userId;
+                current.expiresAt = java.time.Instant.now().plusSeconds(3600);
+                dev.inboxbridge.persistence.UserSession other = new dev.inboxbridge.persistence.UserSession();
+                other.id = 101L;
+                other.userId = userId;
+                other.expiresAt = java.time.Instant.now().plusSeconds(3600);
+                return java.util.List.of(current, other);
+            }
+
+            @Override
+            public void invalidateOtherSessions(Long userId, Long currentSessionId) {
+                assertEquals(7L, userId);
+                assertEquals(100L, currentSessionId);
+            }
+        };
+        resource.remoteSessionService = new FakeRemoteSessionService() {
+            @Override
+            public java.util.List<RemoteSession> listActiveSessions(Long userId) {
+                RemoteSession remote = new RemoteSession();
+                remote.id = 202L;
+                remote.userId = userId;
+                remote.expiresAt = java.time.Instant.now().plusSeconds(3600);
+                return java.util.List.of(remote);
+            }
+
+            @Override
+            public void invalidateOtherSessions(Long userId) {
+                assertEquals(7L, userId);
+            }
+        };
+
+        resource.revokeOtherSessions();
+
+        assertEquals(java.util.List.of(
+                "BROWSER:101",
+                "REMOTE:202"), pollingLiveService.publishedRevocations);
+    }
+
     private static final class FakeAppUserService extends AppUserService {
         private final String errorMessage;
 
@@ -144,7 +225,7 @@ class AccountResourceTest {
         }
     }
 
-    private static final class FakeAppUserSessionService extends dev.inboxbridge.service.UserSessionService {
+    private static class FakeAppUserSessionService extends dev.inboxbridge.service.UserSessionService {
         @Override
         public java.util.List<dev.inboxbridge.persistence.UserSession> listRecentSessions(Long userId, int limit) {
             dev.inboxbridge.persistence.UserSession session = new dev.inboxbridge.persistence.UserSession();
@@ -167,7 +248,7 @@ class AccountResourceTest {
         }
     }
 
-    private static final class FakeRemoteSessionService extends RemoteSessionService {
+    private static class FakeRemoteSessionService extends RemoteSessionService {
         @Override
         public java.util.List<RemoteSession> listRecentSessions(Long userId, int limit) {
             RemoteSession session = new RemoteSession();
@@ -200,6 +281,21 @@ class AccountResourceTest {
         @Override
         public boolean isConfigured() {
             return configured;
+        }
+    }
+
+    private static final class FakePollingLiveService extends PollingLiveService {
+        private Long lastViewerId;
+        private PollingLiveService.SessionStreamKind lastStreamKind;
+        private Long lastSessionId;
+        private final java.util.List<String> publishedRevocations = new java.util.ArrayList<>();
+
+        @Override
+        public void publishSessionRevoked(Long viewerId, SessionStreamKind streamKind, Long streamSessionId) {
+            this.lastViewerId = viewerId;
+            this.lastStreamKind = streamKind;
+            this.lastSessionId = streamSessionId;
+            this.publishedRevocations.add(streamKind.name() + ":" + streamSessionId);
         }
     }
 }

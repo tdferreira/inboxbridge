@@ -38,6 +38,39 @@ describe('PreferencesDialog', () => {
     expect(checkboxForText('Show Quick Setup Guide')).toBeInTheDocument()
     expect(screen.getByText('Show Quick Setup Guide').closest('label')).toHaveClass('checkbox-row')
     expect(screen.getByText('Remember layout on this account').closest('label')).toHaveClass('checkbox-row')
+    expect(screen.getByRole('button', { name: 'Language' })).toHaveTextContent('🇬🇧')
+  })
+
+  it('changes the preferences language through the flag menu', () => {
+    const onLanguageChange = vi.fn()
+
+    render(
+      <PreferencesDialog
+        canHideQuickSetup={true}
+        language="en"
+        languageOptions={[
+          { value: 'en', label: 'English' },
+          { value: 'pt-PT', label: 'Português (Portugal)' }
+        ]}
+        layoutEditEnabled={false}
+        onClose={vi.fn()}
+        onExitLayoutEditing={vi.fn()}
+        onLanguageChange={onLanguageChange}
+        onPersistLayoutChange={vi.fn()}
+        onQuickSetupVisibilityChange={vi.fn()}
+        onResetLayout={vi.fn()}
+        onStartLayoutEditing={vi.fn()}
+        persistLayout={false}
+        quickSetupVisible={false}
+        savingLayout={false}
+        t={t}
+      />
+    )
+
+    fireEvent.click(screen.getByRole('button', { name: 'Language' }))
+    fireEvent.click(screen.getByRole('menuitemradio', { name: 'Português (Portugal)' }))
+
+    expect(onLanguageChange).toHaveBeenCalledWith('pt-PT')
   })
 
   it('starts layout editing from the action button', () => {

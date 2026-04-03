@@ -1,22 +1,11 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
+import FormField from '../common/FormField'
 import InfoHint from '../common/InfoHint'
 import LoadingButton from '../common/LoadingButton'
 import ModalDialog from '../common/ModalDialog'
 import PasswordField from '../common/PasswordField'
 import { EMAIL_PROVIDER_PRESETS, findEmailProviderPreset, inferEmailProviderPresetId, isOutlookSourceConfig } from '../../lib/emailProviderPresets'
 import './EmailAccountDialog.css'
-
-function LabeledField({ children, helpText, label }) {
-  return (
-    <label>
-      <span className="field-label-row">
-        <span>{label}</span>
-        <InfoHint text={helpText} />
-      </span>
-      {children}
-    </label>
-  )
-}
 
 function EmailAccountDialog({
   availableOAuthProviders = [],
@@ -151,32 +140,32 @@ function EmailAccountDialog({
     >
       <p className="section-copy">{t('emailAccounts.dialogCopy')}</p>
       <form className="settings-grid fetcher-dialog-form" onSubmit={onSave}>
-        <LabeledField helpText={t('emailAccounts.providerPresetHelp')} label={t('emailAccounts.providerPreset')}>
+        <FormField helpText={t('emailAccounts.providerPresetHelp')} label={t('emailAccounts.providerPreset')}>
           <select disabled={editingExistingAccount} value={selectedPreset} onChange={(event) => applyPreset(event.target.value)}>
             {availablePresets.map((option) => (
               <option key={option.id} value={option.id}>{t(`preset.${option.id}.label`)}</option>
             ))}
           </select>
-        </LabeledField>
+        </FormField>
         <div className="muted-box full">{t(`preset.${preset.id}.description`)}</div>
 
-        <LabeledField helpText={t('emailAccounts.emailAccountIdHelp')} label={t('emailAccounts.emailAccountId')}>
+        <FormField helpText={t('emailAccounts.emailAccountIdHelp')} label={t('emailAccounts.emailAccountId')}>
           <input value={emailAccountForm.emailAccountId} onChange={(event) => onEmailAccountFormChange((current) => ({ ...current, emailAccountId: event.target.value }))} />
-        </LabeledField>
+        </FormField>
         {duplicateIdError ? <div className="banner-error full">{duplicateIdError}</div> : null}
-        <LabeledField helpText={t('emailAccounts.hostHelp')} label={t('emailAccounts.host')}>
+        <FormField helpText={t('emailAccounts.hostHelp')} label={t('emailAccounts.host')}>
           <input value={emailAccountForm.host} onChange={(event) => onEmailAccountFormChange((current) => ({ ...current, host: event.target.value }))} />
-        </LabeledField>
-        <LabeledField helpText={t('emailAccounts.protocolHelp')} label={t('emailAccounts.protocol')}>
+        </FormField>
+        <FormField helpText={t('emailAccounts.protocolHelp')} label={t('emailAccounts.protocol')}>
           <select value={emailAccountForm.protocol} onChange={(event) => onEmailAccountFormChange((current) => ({ ...current, protocol: event.target.value, port: event.target.value === 'IMAP' ? 993 : 995 }))}>
             <option value="IMAP">{t('protocol.imap')}</option>
             <option value="POP3">{t('protocol.pop3')}</option>
           </select>
-        </LabeledField>
-        <LabeledField helpText={t('emailAccounts.portHelp')} label={t('emailAccounts.port')}>
+        </FormField>
+        <FormField helpText={t('emailAccounts.portHelp')} label={t('emailAccounts.port')}>
           <input type="number" value={emailAccountForm.port} onChange={(event) => onEmailAccountFormChange((current) => ({ ...current, port: Number(event.target.value) }))} />
-        </LabeledField>
-        <LabeledField helpText={t('emailAccounts.authMethodHelp')} label={t('emailAccounts.authMethod')}>
+        </FormField>
+        <FormField helpText={t('emailAccounts.authMethodHelp')} label={t('emailAccounts.authMethod')}>
           {requiresMicrosoftOAuth ? (
             <input disabled value={t('authMethod.oauth2')} />
           ) : (
@@ -187,9 +176,9 @@ function EmailAccountDialog({
               ) : null}
             </select>
           )}
-        </LabeledField>
+        </FormField>
         {!usingPassword ? (
-          <LabeledField helpText={t('emailAccounts.oauthProviderHelp')} label={t('emailAccounts.oauthProvider')}>
+          <FormField helpText={t('emailAccounts.oauthProviderHelp')} label={t('emailAccounts.oauthProvider')}>
             {requiresMicrosoftOAuth ? (
               <input disabled value={t('oauthProvider.microsoft')} />
             ) : (
@@ -198,12 +187,12 @@ function EmailAccountDialog({
                 {resolvedOAuthProviders.includes('MICROSOFT') || emailAccountForm.oauthProvider === 'MICROSOFT' ? <option value="MICROSOFT">{t('oauthProvider.microsoft')}</option> : null}
               </select>
             )}
-          </LabeledField>
+          </FormField>
         ) : null}
         <div className="form-field-pair full">
-          <LabeledField helpText={t('emailAccounts.usernameHelp')} label={t('emailAccounts.username')}>
+          <FormField helpText={t('emailAccounts.usernameHelp')} label={t('emailAccounts.username')}>
             <input value={emailAccountForm.username} onChange={(event) => onEmailAccountFormChange((current) => ({ ...current, username: event.target.value }))} />
-          </LabeledField>
+          </FormField>
           {usingPassword ? (
             <PasswordField
               helpText={t('emailAccounts.passwordHelp')}
@@ -262,9 +251,9 @@ function EmailAccountDialog({
           </div>
         ) : null}
         {supportsCustomLabel ? (
-          <LabeledField helpText={t('emailAccounts.customLabelHelp')} label={t('emailAccounts.customLabel')}>
+          <FormField helpText={t('emailAccounts.customLabelHelp')} label={t('emailAccounts.customLabel')}>
             <input value={emailAccountForm.customLabel} onChange={(event) => onEmailAccountFormChange((current) => ({ ...current, customLabel: event.target.value }))} />
-          </LabeledField>
+          </FormField>
         ) : null}
         {supportsPostPollActions ? (
           <>
@@ -275,13 +264,13 @@ function EmailAccountDialog({
                 <InfoHint text={t('emailAccounts.markReadAfterPollHelp')} />
               </span>
             </label>
-            <LabeledField helpText={t('emailAccounts.postPollActionHelp')} label={t('emailAccounts.postPollAction')}>
+            <FormField helpText={t('emailAccounts.postPollActionHelp')} label={t('emailAccounts.postPollAction')}>
               <select value={currentPostPollAction} onChange={(event) => onEmailAccountFormChange((current) => ({ ...current, postPollAction: event.target.value, postPollTargetFolder: event.target.value === 'MOVE' ? current.postPollTargetFolder : '' }))}>
                 <option value="NONE">{t('emailAccounts.postPollAction.none')}</option>
                 <option value="DELETE">{t('emailAccounts.postPollAction.delete')}</option>
                 <option value="MOVE">{t('emailAccounts.postPollAction.move')}</option>
               </select>
-            </LabeledField>
+            </FormField>
             {currentPostPollAction === 'MOVE' ? (
               <div className="fetcher-folder-control full">
                 <label>

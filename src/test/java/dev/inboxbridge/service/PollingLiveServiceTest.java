@@ -8,6 +8,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 import java.util.List;
 import java.util.Optional;
 import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.concurrent.atomic.AtomicReference;
 
 import org.junit.jupiter.api.Test;
 
@@ -122,6 +123,43 @@ class PollingLiveServiceTest {
 
         assertTrue(service.requestStop(alice));
         assertFalse(service.awaitIfPausedOrStopped(handle.runId()));
+    }
+
+    @Test
+    void publishSessionRevokedCompletesMatchingSubscriber() {
+        PollingLiveService service = new PollingLiveService();
+        AppUser alice = actor(7L, "alice", AppUser.Role.USER);
+        AtomicReference<String> eventType = new AtomicReference<>();
+        AtomicBoolean completed = new AtomicBoolean(false);
+
+        service.subscribe(alice, PollingLiveService.SessionStreamKind.REMOTE, 55L)
+                .subscribe().with(
+                        event -> eventType.set(event.type()),
+                        failure -> {
+                            throw new AssertionError(failure);
+                        },
+                        () -> completed.set(true));
+
+        service.publishSessionRevoked(alice.id, PollingLiveService.SessionStreamKind.REMOTE, 55L);
+
+        assertEquals("session-revoked", eventType.get());
+        assertTrue(completed.get());
+    }
+
+    @Test
+    void publishNewSignInDetectedNotifiesMatchingUserSubscribers() {
+        PollingLiveService service = new PollingLiveService();
+        AppUser alice = actor(7L, "alice", AppUser.Role.USER);
+        AtomicReference<dev.inboxbridge.dto.LiveEventView> eventRef = new AtomicReference<>();
+
+        service.subscribe(alice, PollingLiveService.SessionStreamKind.BROWSER, 11L)
+                .subscribe().with(eventRef::set);
+
+        service.publishNewSignInDetected(alice.id, PollingLiveService.SessionStreamKind.REMOTE, 55L);
+
+        assertEquals("notification-created", eventRef.get().type());
+        assertEquals("notifications.newSessionDetected", eventRef.get().notification().message().key());
+        assertEquals("recent-session-REMOTE-55", eventRef.get().notification().targetId());
     }
 
     private static void waitFor(java.util.concurrent.Callable<Boolean> condition) throws Exception {

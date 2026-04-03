@@ -132,7 +132,10 @@ public class AdminResource {
     @Produces(MediaType.SERVER_SENT_EVENTS)
     @RestStreamElementType(MediaType.APPLICATION_JSON)
     public Multi<LiveEventView> pollEvents() {
-        return pollingLiveService.subscribe(currentUserContext.user());
+        return pollingLiveService.subscribe(
+                currentUserContext.user(),
+                PollingLiveService.SessionStreamKind.BROWSER,
+                currentUserContext.session() == null ? null : currentUserContext.session().id);
     }
 
     @POST
@@ -262,6 +265,7 @@ public class AdminResource {
                     runtimeEmailAccountService.findSystemBridge(emailAccountId)
                             .orElseThrow(() -> new IllegalArgumentException("Unknown mail fetcher id")),
                     "admin-fetcher",
+                    currentUserContext.user(),
                     currentUserContext.user().role + ":" + currentUserContext.user().id);
         } catch (IllegalArgumentException e) {
             throw new BadRequestException(e.getMessage(), e);

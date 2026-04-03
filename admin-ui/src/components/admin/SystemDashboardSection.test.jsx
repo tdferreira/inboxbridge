@@ -160,4 +160,22 @@ describe('SystemDashboardSection', () => {
     expect(onPausePoll).toHaveBeenCalledTimes(1)
     expect(onStopPoll).toHaveBeenCalledTimes(1)
   })
+
+  it('translates the live poll control buttons in portuguese', () => {
+    renderSection({
+      locale: 'pt-PT',
+      livePoll: {
+        running: true,
+        state: 'RUNNING',
+        viewerCanControl: true,
+        activeSourceId: 'system-fetcher',
+        ownerUsername: 'admin',
+        sources: [{ sourceId: 'system-fetcher', label: 'System Fetcher', state: 'RUNNING', actionable: false }]
+      },
+      t: (key, params) => translate('pt-PT', key, params)
+    })
+
+    expect(screen.getAllByRole('button', { name: 'Pausar' }).length).toBeGreaterThan(0)
+    expect(screen.getAllByRole('button', { name: 'Parar' }).length).toBeGreaterThan(0)
+  })
 })

@@ -240,6 +240,9 @@ Security model:
 - remote actions are rate-limited independently of the normal admin UI
 - the existing polling hardening still applies underneath, including manual trigger limits, host/provider throttling, and busy-run protection
 - authenticated workspaces now also expose an SSE-backed live polling channel with real-time per-source progress, immediate poll notifications, and authenticated `POST` controls for pause/resume/stop/reorder/retry while a run is active
+- those same authenticated SSE channels now also push a targeted `session-revoked` event to the specific browser or `/remote` session that was signed out elsewhere, so revoked clients return to login immediately instead of waiting for the next authenticated `401`
+- if a browser closes the authenticated SSE stream before surfacing that final revoke event, the main UI and `/remote` now immediately re-check their session endpoint on stream failure and still sign out revoked sessions without waiting for the next user action
+- authenticated SSE is now also used as the fast notification path for new sign-ins: existing open sessions receive an immediate sign-in warning for the same account, while the UI quietly refreshes the Sessions activity list in the background so the Security view stays current
 - optional bearer service-token access is available for automation when `SECURITY_REMOTE_SERVICE_TOKEN` and `SECURITY_REMOTE_SERVICE_USERNAME` are configured
 - `/api/...` responses also emit stricter browser-facing headers including `nosniff`, `DENY` framing, `no-store` cache control, HTTPS-only HSTS, and unbuffered SSE hints for the live polling streams
 
@@ -251,6 +254,8 @@ Remote capabilities:
 - poll one specific source from the remote source list
 - install the `/remote` page as a PWA shortcut on supported devices
 - show browser-specific install guidance on `/remote` even when the browser uses a manual install path instead of Chromium's in-page install event, including Safari `Add to Home Screen` / `Add to Dock` and Firefox Android menu installs
+- let users postpone that `/remote` install guidance with `Not now`, then reopen it later from the remote hero hamburger menu instead of forcing the full install section to stay visible
+- keep utility actions on `/remote` behind a top-right hamburger menu so install guidance, device location sharing, and sign-out stay available without crowding the main poll controls
 - when a remote session is revoked or expires, the page returns to the remote login screen with an explicit signed-out notice instead of silently dropping back to sign-in
 - when the signed-in account is missing a personal destination mailbox or has no personal source email accounts yet, the remote page pauses there and points the user back to `My InboxBridge` to finish setup first
 - source cards on `/remote` are collapsed by default so polling actions stay compact on phones and tablets, while each source still keeps its individual poll button visible without expanding the card

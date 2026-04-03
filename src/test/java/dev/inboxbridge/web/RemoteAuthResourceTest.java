@@ -21,7 +21,9 @@ import dev.inboxbridge.service.AuthLoginProtectionService;
 import dev.inboxbridge.service.AuthService;
 import dev.inboxbridge.service.GeoIpLocationService;
 import dev.inboxbridge.service.PasskeyService;
+import dev.inboxbridge.service.PollingLiveService;
 import dev.inboxbridge.service.RemoteSessionService;
+import dev.inboxbridge.service.SystemOAuthAppSettingsService;
 import dev.inboxbridge.service.UserUiPreferenceService;
 import io.vertx.core.http.HttpServerRequest;
 import io.vertx.core.net.SocketAddress;
@@ -44,7 +46,10 @@ class RemoteAuthResourceTest {
         resource.authLoginProtectionService = new FakeAuthLoginProtectionService();
         resource.geoIpLocationService = new FakeGeoIpLocationService();
         resource.userUiPreferenceService = new FakeUserUiPreferenceService();
+        resource.systemOAuthAppSettingsService = new FakeSystemOAuthAppSettingsService();
         resource.inboxBridgeConfig = new FakeInboxBridgeConfig();
+        TrackingPollingLiveService pollingLiveService = new TrackingPollingLiveService();
+        resource.pollingLiveService = pollingLiveService;
         resource.httpHeaders = new StaticHttpHeaders("203.0.113.7");
         resource.httpServerRequest = staticHttpServerRequest("172.18.0.2");
 
@@ -66,6 +71,10 @@ class RemoteAuthResourceTest {
         assertEquals(false, csrfCookie.isHttpOnly());
         assertEquals(true, csrfCookie.isSecure());
         assertEquals(NewCookie.SameSite.STRICT, csrfCookie.getSameSite());
+        assertEquals(1L, payload.currentSessionId());
+        assertEquals(7L, pollingLiveService.lastViewerId);
+        assertEquals(PollingLiveService.SessionStreamKind.REMOTE, pollingLiveService.lastStreamKind);
+        assertEquals(1L, pollingLiveService.lastSessionId);
     }
 
     @Test
@@ -80,7 +89,10 @@ class RemoteAuthResourceTest {
         resource.authLoginProtectionService = new FakeAuthLoginProtectionService();
         resource.geoIpLocationService = new FakeGeoIpLocationService();
         resource.userUiPreferenceService = new FakeUserUiPreferenceService();
+        resource.systemOAuthAppSettingsService = new FakeSystemOAuthAppSettingsService();
         resource.inboxBridgeConfig = new FakeInboxBridgeConfig();
+        TrackingPollingLiveService pollingLiveService = new TrackingPollingLiveService();
+        resource.pollingLiveService = pollingLiveService;
         resource.httpHeaders = new StaticHttpHeaders("203.0.113.7");
         resource.httpServerRequest = staticHttpServerRequest("172.18.0.2");
 
@@ -103,7 +115,10 @@ class RemoteAuthResourceTest {
         resource.authLoginProtectionService = new FakeAuthLoginProtectionService();
         resource.geoIpLocationService = new FakeGeoIpLocationService();
         resource.userUiPreferenceService = new FakeUserUiPreferenceService();
+        resource.systemOAuthAppSettingsService = new FakeSystemOAuthAppSettingsService();
         resource.inboxBridgeConfig = new FakeInboxBridgeConfig();
+        TrackingPollingLiveService pollingLiveService = new TrackingPollingLiveService();
+        resource.pollingLiveService = pollingLiveService;
         resource.httpHeaders = new StaticHttpHeaders("203.0.113.7");
         resource.httpServerRequest = staticHttpServerRequest("172.18.0.2");
 
@@ -113,6 +128,10 @@ class RemoteAuthResourceTest {
         RemoteSessionUserResponse payload = (RemoteSessionUserResponse) response.getEntity();
         assertEquals("ADMIN", payload.role());
         assertEquals("pt-PT", payload.language());
+        assertEquals(1L, payload.currentSessionId());
+        assertEquals(7L, pollingLiveService.lastViewerId);
+        assertEquals(PollingLiveService.SessionStreamKind.REMOTE, pollingLiveService.lastStreamKind);
+        assertEquals(1L, pollingLiveService.lastSessionId);
     }
 
     @Test
@@ -281,6 +300,26 @@ class RemoteAuthResourceTest {
         @Override
         public java.util.Optional<String> resolveLocation(String clientIp) {
             return java.util.Optional.of("Lisbon, Portugal");
+        }
+    }
+
+    private static final class FakeSystemOAuthAppSettingsService extends SystemOAuthAppSettingsService {
+        @Override
+        public boolean effectiveMultiUserEnabled() {
+            return true;
+        }
+    }
+
+    private static final class TrackingPollingLiveService extends PollingLiveService {
+        private Long lastViewerId;
+        private SessionStreamKind lastStreamKind;
+        private Long lastSessionId;
+
+        @Override
+        public void publishNewSignInDetected(Long viewerId, SessionStreamKind streamKind, Long sessionId) {
+            this.lastViewerId = viewerId;
+            this.lastStreamKind = streamKind;
+            this.lastSessionId = sessionId;
         }
     }
 

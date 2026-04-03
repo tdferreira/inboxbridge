@@ -1,7 +1,7 @@
-import { Suspense, lazy, useEffect, useLayoutEffect, useRef, useState } from 'react'
+import { Suspense, lazy, useEffect, useState } from 'react'
 import { authMethodLabel, formatDate, formatPollError, oauthProviderLabel, protocolLabel, roleLabel, tokenStorageLabel } from '../../lib/formatters'
-import { resolveFloatingMenuPosition } from '../../lib/floatingMenu'
 import { translatedNotification } from '../../lib/notifications'
+import FloatingActionMenu from '../common/FloatingActionMenu'
 import LoadingButton from '../common/LoadingButton'
 
 const PollingStatisticsSection = lazy(() => import('../stats/PollingStatisticsSection'))
@@ -40,12 +40,6 @@ function UserListItem({
   updatingPasskeysReset,
   updatingUser
 }) {
-  const [menuOpen, setMenuOpen] = useState(false)
-  const [menuStyle, setMenuStyle] = useState(null)
-  const [menuPlacement, setMenuPlacement] = useState('bottom')
-  const menuContainerRef = useRef(null)
-  const menuPanelRef = useRef(null)
-  const menuButtonRef = useRef(null)
   const user = {
     id: null,
     username: '',
@@ -96,69 +90,6 @@ function UserListItem({
     setStatsCollapsed(!statsAvailable)
   }, [statsAvailable, user.id])
 
-  useEffect(() => {
-    if (!menuOpen) {
-      return undefined
-    }
-    function handlePointerDown(event) {
-      if (!menuContainerRef.current || menuContainerRef.current.contains(event.target)) {
-        return
-      }
-      setMenuOpen(false)
-    }
-    function handleKeyDown(event) {
-      if (event.key === 'Escape') {
-        setMenuOpen(false)
-      }
-    }
-    document.addEventListener('mousedown', handlePointerDown)
-    document.addEventListener('keydown', handleKeyDown)
-    return () => {
-      document.removeEventListener('mousedown', handlePointerDown)
-      document.removeEventListener('keydown', handleKeyDown)
-    }
-  }, [menuOpen])
-
-  useLayoutEffect(() => {
-    if (!menuOpen || !menuPanelRef.current || !menuButtonRef.current) {
-      return undefined
-    }
-
-    function updatePosition() {
-      const anchorRect = menuButtonRef.current.getBoundingClientRect()
-      const margin = 12
-      const hasMeasuredAnchor = anchorRect.width > 0 || anchorRect.height > 0
-      if (hasMeasuredAnchor && (
-        anchorRect.bottom < margin ||
-        anchorRect.top > window.innerHeight - margin ||
-        anchorRect.right < margin ||
-        anchorRect.left > window.innerWidth - margin
-      )) {
-        setMenuOpen(false)
-        return
-      }
-      const next = resolveFloatingMenuPosition(
-        anchorRect,
-        menuPanelRef.current.getBoundingClientRect(),
-        window.innerWidth,
-        window.innerHeight
-      )
-      setMenuPlacement(next.placement)
-      setMenuStyle({
-        left: `${next.left}px`,
-        top: `${next.top}px`
-      })
-    }
-
-    updatePosition()
-    window.addEventListener('resize', updatePosition)
-    window.addEventListener('scroll', updatePosition, true)
-    return () => {
-      window.removeEventListener('resize', updatePosition)
-      window.removeEventListener('scroll', updatePosition, true)
-    }
-  }, [menuOpen])
-
   return (
     <article className={`surface-card user-list-entry ${isExpanded ? 'expanded' : ''}`}>
       <div className="user-list-entry-summary">
@@ -178,44 +109,39 @@ function UserListItem({
             </div>
           </div>
         </button>
-        <div ref={menuContainerRef} className="user-list-entry-menu">
-          <button aria-label={t('users.actions')} className="icon-button fetcher-menu-button" onClick={() => setMenuOpen((current) => !current)} ref={menuButtonRef} title={t('users.actions')} type="button">
-            <span aria-hidden="true" className="menu-icon-hamburger">
-              <span />
-              <span />
-              <span />
-            </span>
-          </button>
-          {menuOpen ? (
-            <div className="fetcher-menu" data-placement={menuPlacement} ref={menuPanelRef} style={menuStyle}>
+        <FloatingActionMenu
+          buttonLabel={t('users.actions')}
+          className="user-list-entry-menu"
+          menuContent={({ closeMenu }) => (
+            <>
               {!user.approved ? (
-                <button className="secondary" onClick={() => { onUpdateUser(user.id, { approved: true, active: true }, translatedNotification('notifications.userApproved', { username: user.username })); setMenuOpen(false) }} type="button">
+                <button className="secondary" onClick={() => { onUpdateUser(user.id, { approved: true, active: true }, translatedNotification('notifications.userApproved', { username: user.username })); closeMenu() }} type="button">
                   {t('users.approve')}
                 </button>
               ) : null}
-              <button className="secondary" onClick={() => { onToggleUserActive(user); setMenuOpen(false) }} type="button">
+              <button className="secondary" onClick={() => { onToggleUserActive(user); closeMenu() }} type="button">
                 {user.active ? t('users.suspend') : t('users.reactivate')}
               </button>
               {user.role === 'ADMIN' ? (
-                <button className="secondary" disabled={viewingSelfAdmin} onClick={() => { onUpdateUser(user.id, { role: 'USER' }, roleUpdateNotification(user)); setMenuOpen(false) }} type="button">
+                <button className="secondary" disabled={viewingSelfAdmin} onClick={() => { onUpdateUser(user.id, { role: 'USER' }, roleUpdateNotification(user)); closeMenu() }} type="button">
                   {t('users.makeRegular')}
                 </button>
               ) : null}
-              <button className="secondary" onClick={() => { onForcePasswordChange(user); setMenuOpen(false) }} type="button">
+              <button className="secondary" onClick={() => { onForcePasswordChange(user); closeMenu() }} type="button">
                 {t('users.forcePasswordChange')}
               </button>
-              <button className="secondary" onClick={() => { onOpenResetPasswordDialog(user); setMenuOpen(false) }} type="button">
+              <button className="secondary" onClick={() => { onOpenResetPasswordDialog(user); closeMenu() }} type="button">
                 {t('users.resetPassword')}
               </button>
-              <button className="danger" disabled={!userHasPasskeys} onClick={() => { onResetUserPasskeys(user); setMenuOpen(false) }} type="button">
+              <button className="danger" disabled={!userHasPasskeys} onClick={() => { onResetUserPasskeys(user); closeMenu() }} type="button">
                 {t('users.resetPasskeys')}
               </button>
-              <button className="danger" disabled={viewingSelfAdmin} onClick={() => { onDeleteUser(user); setMenuOpen(false) }} type="button">
+              <button className="danger" disabled={viewingSelfAdmin} onClick={() => { onDeleteUser(user); closeMenu() }} type="button">
                 {t('users.delete')}
               </button>
-            </div>
-          ) : null}
-        </div>
+            </>
+          )}
+        />
       </div>
 
       {isExpanded ? (

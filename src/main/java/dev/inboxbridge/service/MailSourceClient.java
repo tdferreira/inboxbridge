@@ -1047,6 +1047,11 @@ public class MailSourceClient {
         List<Folder> folders = new ArrayList<>();
         collectFolders(defaultFolder, folders, new HashSet<>());
         for (Folder folder : folders) {
+            if (hasSpamOrJunkSpecialUse(folder)) {
+                return folder;
+            }
+        }
+        for (Folder folder : folders) {
             if (isLikelySpamOrJunkFolder(folder)) {
                 return folder;
             }
@@ -1089,6 +1094,25 @@ public class MailSourceClient {
                 .anyMatch(SPAM_OR_JUNK_FOLDER_NAMES::contains);
     }
 
+    private boolean hasSpamOrJunkSpecialUse(Folder folder) {
+        try {
+            java.lang.reflect.Method method = folder.getClass().getMethod("getAttributes");
+            Object result = method.invoke(folder);
+            if (!(result instanceof String[] attributes)) {
+                return false;
+            }
+            for (String attribute : attributes) {
+                String normalized = String.valueOf(attribute).trim().toLowerCase(Locale.ROOT);
+                if (SPAM_OR_JUNK_SPECIAL_USE_ATTRIBUTES.contains(normalized)) {
+                    return true;
+                }
+            }
+        } catch (ReflectiveOperationException | RuntimeException ignored) {
+            return false;
+        }
+        return false;
+    }
+
     private String normalizeFolderToken(String value) {
         return value == null
                 ? ""
@@ -1116,5 +1140,9 @@ public class MailSourceClient {
             "correonodeseado",
             "correoindeseado",
             "indesejados");
+
+    private static final Set<String> SPAM_OR_JUNK_SPECIAL_USE_ATTRIBUTES = Set.of(
+            "\\junk",
+            "\\spam");
 
 }

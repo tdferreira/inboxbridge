@@ -42,10 +42,11 @@ class PollingServiceTest {
         PollingService service = new PollingService();
         RecordingMailSourceClient mailSourceClient = new RecordingMailSourceClient();
         RecordingSourcePollingStateService sourcePollingStateService = new RecordingSourcePollingStateService();
+        RecordingSourcePollEventService sourcePollEventService = new RecordingSourcePollEventService();
         service.mailSourceClient = mailSourceClient;
         service.importDeduplicationService = new ImportDeduplicationService();
         service.mailDestinationServices = new FakeMailDestinationServices(new FakeMailDestinationService(true));
-        service.sourcePollEventService = new NoopSourcePollEventService();
+        service.sourcePollEventService = sourcePollEventService;
         service.runtimeEmailAccountService = new FakeRuntimeEmailAccountService(List.of(userBridge(7L)));
         service.pollingSettingsService = new FakePollingSettingsService(true, Duration.ofMinutes(5), "5m", 10);
         service.userPollingSettingsService = new FakeUserPollingSettingsService(false, Duration.ofMinutes(2), "2m", 33);
@@ -59,6 +60,29 @@ class PollingServiceTest {
         assertEquals("user-fetcher", sourcePollingStateService.lastRecordedSuccessSourceId);
         assertEquals(0, result.getErrors().size());
         assertEquals(4, result.getSpamJunkMessageCount());
+        assertEquals(4, sourcePollEventService.lastSpamJunkMessageCount);
+    }
+
+    @Test
+    void runPollIgnoresSourcePollEventPersistenceFailures() {
+        PollingService service = new PollingService();
+        RecordingMailSourceClient mailSourceClient = new RecordingMailSourceClient();
+        RecordingSourcePollingStateService sourcePollingStateService = new RecordingSourcePollingStateService();
+        service.mailSourceClient = mailSourceClient;
+        service.importDeduplicationService = new ImportDeduplicationService();
+        service.mailDestinationServices = new FakeMailDestinationServices(new FakeMailDestinationService(true));
+        service.sourcePollEventService = new ThrowingSourcePollEventService();
+        service.runtimeEmailAccountService = new FakeRuntimeEmailAccountService(List.of(userBridge(7L)));
+        service.pollingSettingsService = new FakePollingSettingsService(true, Duration.ofMinutes(5), "5m", 10);
+        service.userPollingSettingsService = new FakeUserPollingSettingsService(false, Duration.ofMinutes(2), "2m", 33);
+        service.sourcePollingSettingsService = new FakeSourcePollingSettingsService();
+        service.sourcePollingStateService = sourcePollingStateService;
+        service.manualPollRateLimitService = new ManualPollRateLimitService();
+
+        PollRunResult result = service.runPoll("manual-api");
+
+        assertEquals(0, result.getErrors().size());
+        assertEquals("user-fetcher", sourcePollingStateService.lastRecordedSuccessSourceId);
     }
 
     @Test
@@ -686,6 +710,7 @@ class PollingServiceTest {
 
         assertEquals(1, destinationService.importCount.get());
         assertEquals("Stopped by user.", sourcePollEventService.lastError);
+        assertEquals("STOPPED", sourcePollEventService.lastStatus);
         assertEquals(0, resultRef.get().getErrorDetails().size());
     }
 
@@ -720,6 +745,7 @@ class PollingServiceTest {
 
         assertTrue(mailSourceClient.cancelled.get());
         assertEquals("Stopped by user.", sourcePollEventService.lastError);
+        assertEquals("STOPPED", sourcePollEventService.lastStatus);
         assertEquals(0, resultRef.get().getErrorDetails().size());
     }
 
@@ -1305,16 +1331,27 @@ class PollingServiceTest {
 
     private static final class NoopSourcePollEventService extends SourcePollEventService {
         @Override
-        public void record(String sourceId, String trigger, Instant startedAt, Instant finishedAt, int fetched, int imported, int duplicates, String error) {
+        public void record(String sourceId, String trigger, Instant startedAt, Instant finishedAt, int fetched, int imported, int duplicates, int spamJunkMessageCount, String actorUsername, String executionSurface, String error) {
         }
     }
 
     private static final class RecordingSourcePollEventService extends SourcePollEventService {
         private String lastError;
+        private int lastSpamJunkMessageCount;
+        private String lastStatus;
 
         @Override
-        public void record(String sourceId, String trigger, Instant startedAt, Instant finishedAt, int fetched, int imported, int duplicates, String error) {
+        public void record(String sourceId, String trigger, Instant startedAt, Instant finishedAt, int fetched, int imported, int duplicates, int spamJunkMessageCount, String actorUsername, String executionSurface, String error) {
             lastError = error;
+            lastSpamJunkMessageCount = spamJunkMessageCount;
+            lastStatus = error == null ? "SUCCESS" : "Stopped by user.".equals(error) ? "STOPPED" : "ERROR";
+        }
+    }
+
+    private static final class ThrowingSourcePollEventService extends SourcePollEventService {
+        @Override
+        public void record(String sourceId, String trigger, Instant startedAt, Instant finishedAt, int fetched, int imported, int duplicates, int spamJunkMessageCount, String actorUsername, String executionSurface, String error) {
+            throw new IllegalStateException("simulated source poll event persistence failure");
         }
     }
 }

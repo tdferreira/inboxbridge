@@ -1,4 +1,4 @@
-import { authMethodLabel, effectiveEmailAccountStatus, formatDate, formatDurationHint, formatDurationMeaning, formatPollError, isOauthRevokedError, oauthProviderLabel, protocolLabel, roleLabel, statusLabel, statusTone, tokenStorageLabel, triggerLabel } from './formatters'
+import { authMethodLabel, effectiveEmailAccountStatus, formatDate, formatDurationHint, formatDurationMeaning, formatPollError, formatPollExecutionSummary, isOauthRevokedError, oauthProviderLabel, protocolLabel, roleLabel, statusLabel, statusTone, tokenStorageLabel, triggerLabel } from './formatters'
 
 describe('formatters', () => {
   it('formats missing dates as Never', () => {
@@ -103,5 +103,25 @@ describe('formatters', () => {
     expect(isOauthRevokedError('Source x failed: The linked Microsoft account no longer grants InboxBridge access.')).toBe(true)
     expect(isOauthRevokedError({ code: 'gmail_access_revoked' })).toBe(true)
     expect(isOauthRevokedError('Source x is cooling down until 2026-03-28T06:22:31.605711Z.')).toBe(false)
+  })
+
+  it('formats richer poll execution summaries from persisted event context', () => {
+    expect(formatPollExecutionSummary({
+      finishedAt: '2026-04-02T08:24:28Z',
+      trigger: 'app-fetcher',
+      actorUsername: 'alice',
+      executionSurface: 'MY_INBOXBRIDGE'
+    }, 'en', 'alice')).toContain('Executed at')
+    expect(formatPollExecutionSummary({
+      finishedAt: '2026-04-02T08:24:28Z',
+      trigger: 'admin-fetcher',
+      actorUsername: 'admin',
+      executionSurface: 'ADMINISTRATION'
+    }, 'en', 'alice')).toContain('by admin via Administration')
+    expect(formatPollExecutionSummary({
+      finishedAt: '2026-04-02T08:24:28Z',
+      trigger: 'scheduler',
+      executionSurface: 'AUTOMATIC'
+    }, 'en', 'alice')).toContain('Executed automatically')
   })
 })

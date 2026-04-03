@@ -81,6 +81,7 @@ public class RemoteControlService {
         return new RemoteControlView(
                 new RemoteSessionUserResponse(
                         actor.id,
+                        null,
                         actor.username,
                         actor.role.name(),
                         true,
@@ -122,7 +123,7 @@ public class RemoteControlService {
         if (limited != null) {
             return limited;
         }
-        return pollingService.runPollForSource(emailAccount, "remote-source", actor.role + ":" + actor.id);
+        return pollingService.runPollForSource(emailAccount, "remote-source", actor, actor.role + ":" + actor.id);
     }
 
     public List<RemoteSourceView> listSources(AppUser actor) {

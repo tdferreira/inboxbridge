@@ -32,6 +32,7 @@ import dev.inboxbridge.service.GeoIpLocationService;
 import dev.inboxbridge.service.MicrosoftOAuthService;
 import dev.inboxbridge.service.OAuthProviderRegistryService;
 import dev.inboxbridge.service.PasskeyService;
+import dev.inboxbridge.service.PollingLiveService;
 import dev.inboxbridge.service.RemoteSessionService;
 import dev.inboxbridge.service.RegistrationChallengeService;
 import dev.inboxbridge.service.SessionClientInfoService;
@@ -80,6 +81,8 @@ class AuthResourceTest {
         resource.appUserService = new AppUserService();
         resource.currentUserContext = new CurrentUserContext();
         resource.applicationModeService = new FakeApplicationModeService(true);
+        TrackingPollingLiveService pollingLiveService = new TrackingPollingLiveService();
+        resource.pollingLiveService = pollingLiveService;
         resource.httpServerRequest = staticHttpServerRequest("172.18.0.2");
 
         Response response = resource.finishPasskeyLogin(new FinishPasskeyCeremonyRequest("ceremony-1", "{\"id\":\"cred\"}"));
@@ -99,6 +102,9 @@ class AuthResourceTest {
         assertEquals(NewCookie.SameSite.STRICT, csrfCookie.getSameSite());
         LoginResponse payload = (LoginResponse) response.getEntity();
         assertEquals("AUTHENTICATED", payload.status());
+        assertEquals(7L, pollingLiveService.lastViewerId);
+        assertEquals(PollingLiveService.SessionStreamKind.BROWSER, pollingLiveService.lastStreamKind);
+        assertEquals(41L, pollingLiveService.lastSessionId);
     }
 
     @Test
@@ -220,6 +226,7 @@ class AuthResourceTest {
         current.id = 91L;
         context.setSession(current);
         FakeUserSessionService sessionService = new FakeUserSessionService();
+        resource.pollingLiveService = new TrackingPollingLiveService();
         resource.currentUserContext = context;
         resource.userSessionService = sessionService;
         resource.remoteSessionService = new FakeRemoteSessionService();
@@ -241,6 +248,7 @@ class AuthResourceTest {
         resource.currentUserContext = context;
         resource.userSessionService = sessionService;
         resource.remoteSessionService = new FakeRemoteSessionService();
+        resource.pollingLiveService = new TrackingPollingLiveService();
 
         resource.revokeSession(42L, null);
 
@@ -305,7 +313,7 @@ class AuthResourceTest {
 
         @Override
         public AuthenticatedSession loginWithPasskey(PasskeyService.PasskeyAuthenticationResult result, String clientIp, String userAgent) {
-            return new AuthenticatedSession(result.user(), "session-1", "csrf-1");
+            return new AuthenticatedSession(result.user(), 41L, "session-1", "csrf-1");
         }
     }
 
@@ -467,6 +475,19 @@ class AuthResourceTest {
         @Override
         public boolean multiUserEnabled() {
             return enabled;
+        }
+    }
+
+    private static final class TrackingPollingLiveService extends PollingLiveService {
+        private Long lastViewerId;
+        private SessionStreamKind lastStreamKind;
+        private Long lastSessionId;
+
+        @Override
+        public void publishNewSignInDetected(Long viewerId, SessionStreamKind streamKind, Long sessionId) {
+            this.lastViewerId = viewerId;
+            this.lastStreamKind = streamKind;
+            this.lastSessionId = sessionId;
         }
     }
 
