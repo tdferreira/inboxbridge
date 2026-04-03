@@ -1,4 +1,10 @@
 version: 2
+# Policy note:
+# Dependabot cannot express "track the latest LTS line" for ecosystems like
+# Node or Quarkus. This repository therefore uses Dependabot for broad update
+# visibility, while Node and Quarkus major-line decisions are reviewed
+# manually and should usually stay on approved LTS baselines unless the
+# repository is intentionally upgraded.
 updates:
   - package-ecosystem: "github-actions"
     directory: "/"

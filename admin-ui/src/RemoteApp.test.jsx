@@ -36,6 +36,20 @@ class FakeEventSource {
   }
 }
 
+const originalGeolocation = navigator.geolocation
+const originalPermissions = navigator.permissions
+
+function restoreNavigatorProperty(name, value) {
+  if (typeof value === 'undefined') {
+    delete navigator[name]
+    return
+  }
+  Object.defineProperty(navigator, name, {
+    configurable: true,
+    value
+  })
+}
+
 function jsonResponse(payload, status = 200) {
   return Promise.resolve({
     ok: status >= 200 && status < 300,
@@ -59,6 +73,11 @@ describe('RemoteApp', () => {
   beforeEach(() => {
     FakeEventSource.instances = []
     window.localStorage.clear()
+  })
+
+  afterEach(() => {
+    restoreNavigatorProperty('geolocation', originalGeolocation)
+    restoreNavigatorProperty('permissions', originalPermissions)
   })
 
   it('shows the remote login screen when no remote session exists', async () => {

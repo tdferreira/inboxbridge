@@ -2,7 +2,7 @@
 
 The admin UI is a separate React + Vite application served by Nginx in its own container. It talks to the Quarkus backend through proxied REST endpoints under `/api/...`.
 
-The frontend dependency set is intentionally kept on current stable major versions, and now targets React 19, Vite 7, Vitest 3, and Recharts 3.x.
+The frontend dependency set is intentionally kept on current stable major versions, and now targets React 19, Vite 8, Vitest 4, jsdom 29, and Recharts 3.x.
 
 ## Structure
 

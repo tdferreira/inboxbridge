@@ -17,6 +17,21 @@ Standing instructions for future agents working in this repository.
 - A detailed commit body summarizing the relevant changes introduced across all current uncommitted changes.
 - Enough detail that a teammate can understand the overall scope of the pending commit without re-reading the diff.
 
+## AI agent routing
+
+If you are an AI agent working in this repository, start by reading this file, then load only the additional Markdown docs needed for the task.
+
+Use these task routes:
+
+- Broad or unclear repo work: apply the general guardrails in this file first, then read [README.md](README.md), [CONTEXT.md](CONTEXT.md), and any relevant docs.
+- Quarkus backend, persistence, auth, OAuth, polling engine, or REST changes: also read [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md).
+- React admin UI, `/remote`, translation, or layout changes: also read [admin-ui/README.md](admin-ui/README.md).
+- Polling, mailbox import, dedupe, live controls, or source/destination isolation changes: treat mailbox-to-destination isolation and encrypted secret handling as hard invariants and re-read the relevant polling/mailflow sections in [CONTEXT.md](CONTEXT.md) and [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md).
+- Setup, OAuth callback, TLS, hostname, passkey, or operator bootstrap changes: also read [docs/SETUP.md](docs/SETUP.md), [docs/OAUTH_SETUP.md](docs/OAUTH_SETUP.md), and [docs/TRUST_LOCAL_CA.md](docs/TRUST_LOCAL_CA.md).
+- End-of-task validation, PR, or handoff work: follow the validation and commit-message requirements in this file and check [CONTRIBUTING.md](CONTRIBUTING.md) if needed.
+
+This repository also includes Codex-native helper skills under [`.codex/skills`](.codex/skills). Those files are primarily for Codex and are not portable to every AI tool, so any agent that does not understand Codex skills should treat this `AGENTS.md` file as the portable source of workflow instructions and use the `.codex/skills` files only as optional extra references.
+
 ## Security rules
 
 - Treat secure encrypted token storage as the default path for UI-managed secrets.

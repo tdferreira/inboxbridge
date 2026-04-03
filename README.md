@@ -1,9 +1,11 @@
 # InboxBridge
 
 ![Build](https://github.com/tdferreira/inboxbridge/actions/workflows/build.yml/badge.svg?branch=main)
-![Version](https://img.shields.io/badge/version-0.1.0--SNAPSHOT-blue)
-![Platform](https://img.shields.io/badge/platform-self--hosted-2ea44f)
+![License](https://img.shields.io/github/license/tdferreira/inboxbridge)
+![Release](https://img.shields.io/github/v/release/tdferreira/inboxbridge)
+![Self-hosted](https://img.shields.io/badge/deployment-self--hosted-2ea44f)
 ![Stack](https://img.shields.io/badge/stack-Quarkus%20%2B%20React%20%2B%20PostgreSQL-1f6feb)
+![AI-assisted](https://img.shields.io/badge/built%20with-AI--assisted-8A2BE2)
 
 InboxBridge is a self-hosted mail importer. It connects to one or more source mailboxes, reads their messages, and imports those messages into one destination mailbox so you can keep a "one inbox, many accounts" workflow without relying on email forwarding.
 
@@ -254,7 +256,7 @@ AI assistance was used to help design, implement, refactor, test, and document p
 - Java 25
 - Quarkus 3.33.1
 - React 19
-- Vite 7
+- Vite 8
 - PostgreSQL 16
 - Flyway
 - Docker Compose

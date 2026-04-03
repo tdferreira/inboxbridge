@@ -89,7 +89,7 @@ describe('HeroPanel', () => {
       />
     )
 
-    fireEvent.click(screen.getByRole('button', { name: 'Notifications 3' }))
+    fireEvent.click(screen.getByRole('button', { name: /Notifications\s*3/i }))
     expect(onOpenNotifications).toHaveBeenCalledTimes(1)
     expect(screen.getByText('3')).toBeInTheDocument()
   })

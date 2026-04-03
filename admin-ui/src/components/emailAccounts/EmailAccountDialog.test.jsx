@@ -433,12 +433,12 @@ describe('EmailAccountDialog', () => {
       />
     )
 
-    expect(screen.getByRole('combobox', { name: /^Folder\b/i })).toHaveValue('INBOX')
+    expect(screen.getByRole('combobox', { name: /^Folder/i })).toHaveValue('INBOX')
     fireEvent.click(screen.getByRole('button', { name: 'Enter folder manually' }))
-    fireEvent.change(screen.getByRole('textbox', { name: /^Folder\b/i }), { target: { value: 'Projects' } })
-    expect(screen.getByRole('textbox', { name: /^Folder\b/i })).toHaveValue('Projects')
+    fireEvent.change(screen.getByRole('textbox', { name: /^Folder/i }), { target: { value: 'Projects' } })
+    expect(screen.getByRole('textbox', { name: /^Folder/i })).toHaveValue('Projects')
     fireEvent.click(screen.getByRole('button', { name: 'Use detected folders' }))
-    expect(screen.getByRole('combobox', { name: /^Folder\b/i })).toHaveValue('INBOX')
+    expect(screen.getByRole('combobox', { name: /^Folder/i })).toHaveValue('INBOX')
 
     function rerenderUi() {
       rerender(

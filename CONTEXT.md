@@ -39,12 +39,13 @@ The repository now also includes a GitHub Actions `Build` workflow at `.github/w
 The repository now declares Apache License 2.0 in `LICENSE`, and the root README also includes an explicit `use at your own risk` disclaimer plus a note that the project was built with AI-assisted tooling under human direction and review.
 The repository now also includes standard open-source community files: `CONTRIBUTING.md`, `SECURITY.md`, `CODE_OF_CONDUCT.md`, `.github/PULL_REQUEST_TEMPLATE.md`, `.github/CODEOWNERS`, and issue templates for bug reports and feature requests, with blank public issues disabled in favor of structured templates and private security reporting.
 The repository now also includes `.github/dependabot.yml` for weekly dependency update PRs across GitHub Actions, Maven, npm, and Dockerfiles, plus a `.github/workflows/release.yml` workflow that builds release assets and publishes GitHub Releases from tags matching `v*` or from a manual dispatch with a provided tag name.
+The repository now also includes project-local Codex skills under `.codex/skills/` for common InboxBridge work: repo guardrails, backend changes, admin-ui changes, mailflow-safety work, and validation/release handoff. Those skills intentionally point back to `AGENTS.md`, `CONTEXT.md`, the repo docs, and the admin-ui README instead of duplicating long project references inside the skill bodies. `AGENTS.md` now also includes a portable AI-agent routing section so non-Codex agents can still follow the same repo workflow just by reading that file.
 
 ## Technical stack
 
 - Java 25
 - Quarkus 3.33.1 (LTS)
-- React 19 + Vite 7
+- React 19 + Vite 8
 - PostgreSQL 16
 - Flyway
 - Hibernate ORM Panache
@@ -159,7 +160,10 @@ System polling behavior:
 - when Gmail API access is manually revoked outside InboxBridge, a confirmed repeated Gmail `401` now clears the saved Gmail OAuth link for that user and should cause the UI to show the Gmail account as no longer linked
 - the preferences model now also stores dismissible quick-setup state, a persisted layout-edit toggle, and separate user/admin workspace section order
 - statistics rendering now uses `Recharts 3.x`, giving the polling dashboards shared hover tooltips and more maintainable chart behavior than the previous custom SVG chart
-- the frontend package set is intentionally kept on current stable major versions, including React 19, Vite 7, Vitest 3, and Recharts 3.x
+- the frontend package set is intentionally kept on current stable major versions, including React 19, Vite 8, Vitest 4, jsdom 29, and Recharts 3.x
+- the frontend Docker build and GitHub Actions workflows now use Node 24 LTS as the baseline instead of Node 22 or local Node 25 Current, so local test/runtime quirks from Node 25 should not define the supported admin-ui environment
+- admin-ui test commands now run through `admin-ui/scripts/run-vitest.mjs`, which adds `--no-webstorage` only when the local runtime is Node 25+ so Node's built-in Web Storage does not override jsdom's browser-like storage during Vitest runs; Docker and CI stay on Node 24 LTS without that flag, and the workaround should be revisited when the Node 25 + Vitest/jsdom interaction is resolved upstream
+- `.github/dependabot.yml` now documents the repository policy of usually staying on approved LTS baselines for Node and Quarkus, but Dependabot itself cannot automatically follow "latest LTS" semantics for future releases; Node and Quarkus line changes should therefore be reviewed manually and only adopted intentionally
 - the frontend now also ships a dedicated `/remote` remote-control route with a tiny mobile-first polling UI, its own manifest/service-worker assets, and source-level poll actions without opening the full admin workspace
 - the `/remote` route now also hydrates the current live poll snapshot on load, subscribes to a remote-scoped SSE stream for per-source progress, and surfaces pause/resume/stop plus per-source `Move Next` / `Retry` controls whenever the remote viewer is allowed to manage the active run
 - disabled source accounts are excluded from the `/remote` source list entirely so that quick-access surface only shows mailboxes that can actually be triggered there

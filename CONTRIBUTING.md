@@ -36,6 +36,18 @@ The main local entry points are:
 
 For deeper setup help, see [docs/SETUP.md](docs/SETUP.md).
 
+## Project-Local Codex Skills
+
+This repository now includes project-local Codex skills under [`.codex/skills`](.codex/skills) for common InboxBridge work:
+
+- `inboxbridge-worktree-guardrails`
+- `inboxbridge-backend-change`
+- `inboxbridge-admin-ui-change`
+- `inboxbridge-mailflow-safety`
+- `inboxbridge-validation-release`
+
+These skills are meant to help future agents stay aligned with the repo's architecture, security model, docs expectations, and validation flow.
+
 ## Development Expectations
 
 Please follow these rules when contributing:
