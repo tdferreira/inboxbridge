@@ -101,46 +101,50 @@ class ImapAppendMailDestinationServiceTest {
     @Test
     void importMessageAllowsConcurrentCreationOfTheDestinationFolder() throws Exception {
         ImapAppendMailDestinationService service = new ImapAppendMailDestinationService();
-        ImapAppendDestinationTarget target = new ImapAppendDestinationTarget(
-                "user-destination:7",
-                7L,
-                "alice",
-                UserMailDestinationConfigService.PROVIDER_CUSTOM,
-                "127.0.0.1",
-                greenMail.getImap().getPort(),
-                false,
-                InboxBridgeConfig.AuthMethod.PASSWORD,
-                InboxBridgeConfig.OAuthProvider.NONE,
-                USERNAME,
-                PASSWORD,
-                "Imported");
+        for (int attempt = 0; attempt < 10; attempt++) {
+            String folderName = "Imported-" + attempt;
+            ImapAppendDestinationTarget target = new ImapAppendDestinationTarget(
+                    "user-destination:7",
+                    7L,
+                    "alice",
+                    UserMailDestinationConfigService.PROVIDER_CUSTOM,
+                    "127.0.0.1",
+                    greenMail.getImap().getPort(),
+                    false,
+                    InboxBridgeConfig.AuthMethod.PASSWORD,
+                    InboxBridgeConfig.OAuthProvider.NONE,
+                    USERNAME,
+                    PASSWORD,
+                    folderName);
 
-        CountDownLatch ready = new CountDownLatch(2);
-        CountDownLatch start = new CountDownLatch(1);
-        try (var executor = Executors.newVirtualThreadPerTaskExecutor()) {
-            var first = executor.submit(() -> {
-                try {
-                    importConcurrently(service, target, ready, start, messageBytes("alpha", "<alpha@example.com>"));
-                } catch (Exception e) {
-                    throw new RuntimeException(e);
-                }
-            });
-            var second = executor.submit(() -> {
-                try {
-                    importConcurrently(service, target, ready, start, messageBytes("beta", "<beta@example.com>"));
-                } catch (Exception e) {
-                    throw new RuntimeException(e);
-                }
-            });
+            CountDownLatch ready = new CountDownLatch(2);
+            CountDownLatch start = new CountDownLatch(1);
+            try (var executor = Executors.newVirtualThreadPerTaskExecutor()) {
+                int runNumber = attempt;
+                var first = executor.submit(() -> {
+                    try {
+                        importConcurrently(service, target, ready, start, messageBytes("alpha-" + runNumber, "<alpha-" + runNumber + "@example.com>"));
+                    } catch (Exception e) {
+                        throw new RuntimeException(e);
+                    }
+                });
+                var second = executor.submit(() -> {
+                    try {
+                        importConcurrently(service, target, ready, start, messageBytes("beta-" + runNumber, "<beta-" + runNumber + "@example.com>"));
+                    } catch (Exception e) {
+                        throw new RuntimeException(e);
+                    }
+                });
 
-            assertTrue(ready.await(5, TimeUnit.SECONDS));
-            start.countDown();
+                assertTrue(ready.await(5, TimeUnit.SECONDS));
+                start.countDown();
 
-            first.get(5, TimeUnit.SECONDS);
-            second.get(5, TimeUnit.SECONDS);
+                first.get(5, TimeUnit.SECONDS);
+                second.get(5, TimeUnit.SECONDS);
+            }
+
+            assertEquals(List.of("alpha-" + attempt, "beta-" + attempt), listSubjects(folderName));
         }
-
-        assertEquals(List.of("alpha", "beta"), listSubjects("Imported"));
     }
 
     private void createTestFolders() throws Exception {

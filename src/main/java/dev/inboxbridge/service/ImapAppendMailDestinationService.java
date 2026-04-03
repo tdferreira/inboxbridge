@@ -8,6 +8,8 @@ import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Properties;
 import java.util.UUID;
+import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.ConcurrentMap;
 
 import dev.inboxbridge.config.InboxBridgeConfig;
 import dev.inboxbridge.domain.FetchedMessage;
@@ -32,6 +34,7 @@ public class ImapAppendMailDestinationService implements MailDestinationService 
             "The linked Microsoft destination account no longer grants InboxBridge access. Reconnect it from My Destination Mailbox.";
     public static final String IMAP_DESTINATION_NOT_LINKED_MESSAGE =
             "The destination mailbox is not fully configured yet. Save My Destination Mailbox and connect its provider OAuth if required before polling this source.";
+    private final ConcurrentMap<String, Object> destinationFolderLocks = new ConcurrentHashMap<>();
 
     @Inject
     MicrosoftOAuthService microsoftOAuthService;
@@ -78,7 +81,7 @@ public class ImapAppendMailDestinationService implements MailDestinationService 
             store.connect(imapTarget.host(), imapTarget.port(), imapTarget.username(), resolveSecret(imapTarget));
             folder = store.getFolder(imapTarget.folder());
             registerFolder(folder);
-            ensureFolderExists(folder, imapTarget.folder());
+            ensureFolderExists(folder, imapTarget);
             MimeMessage mimeMessage = new MimeMessage(session, new ByteArrayInputStream(message.rawMessage()));
             folder.appendMessages(new Message[] { mimeMessage });
             return new MailImportResponse(imapTarget.providerId() + ":" + UUID.randomUUID(), Instant.now().toString());
@@ -214,14 +217,37 @@ public class ImapAppendMailDestinationService implements MailDestinationService 
         }
     }
 
-    private void ensureFolderExists(Folder folder, String folderName) throws MessagingException {
+    private void ensureFolderExists(Folder folder, ImapAppendDestinationTarget target) throws MessagingException {
+        String folderName = target.folder();
         if (folder.exists()) {
             return;
         }
-        if (folder.create(Folder.HOLDS_MESSAGES) || folder.exists()) {
-            return;
+        Object folderLock = destinationFolderLocks.computeIfAbsent(destinationFolderKey(target), ignored -> new Object());
+        synchronized (folderLock) {
+            if (folder.exists()) {
+                return;
+            }
+            try {
+                if (folder.create(Folder.HOLDS_MESSAGES) || folder.exists()) {
+                    return;
+                }
+            } catch (MessagingException createError) {
+                if (folder.exists()) {
+                    return;
+                }
+                throw createError;
+            }
         }
         throw new IllegalStateException("Unable to create destination mailbox folder " + folderName);
+    }
+
+    private String destinationFolderKey(ImapAppendDestinationTarget target) {
+        return String.join("|",
+                String.valueOf(target.tls()),
+                String.valueOf(target.host()),
+                String.valueOf(target.port()),
+                String.valueOf(target.username()),
+                String.valueOf(target.folder()));
     }
 
     private String resolveSecret(ImapAppendDestinationTarget target) {
