@@ -1,7 +1,7 @@
 # InboxBridge
 
-![Build](https://github.com/tdferreira/inboxbridge/actions/workflows/build.yml/badge.svg?branch=main)
-![License](https://img.shields.io/badge/license-Apache%202.0-2ea44f)
+[![Build](https://github.com/tdferreira/inboxbridge/actions/workflows/build.yml/badge.svg?branch=main)](https://github.com/tdferreira/inboxbridge/actions/workflows/build.yml)
+[![License](https://img.shields.io/badge/license-Apache%202.0-2ea44f)](LICENSE)
 [![Release](https://img.shields.io/badge/release-see%20tags-1f6feb)](https://github.com/tdferreira/inboxbridge/tags)
 ![Self-hosted](https://img.shields.io/badge/deployment-self--hosted-2ea44f)
 ![Stack](https://img.shields.io/badge/stack-Quarkus%20%2B%20React%20%2B%20PostgreSQL-1f6feb)
