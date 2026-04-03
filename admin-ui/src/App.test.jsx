@@ -480,6 +480,7 @@ describe('App', () => {
     render(<App />)
 
     await screen.findByText(/signed in as/i)
+    await waitFor(() => expect(FakeEventSource.instances).toHaveLength(1))
 
     await act(async () => {
       await FakeEventSource.instances[0].onerror?.()
@@ -508,6 +509,7 @@ describe('App', () => {
     render(<App />)
 
     await screen.findByText(/signed in as/i)
+    await waitFor(() => expect(FakeEventSource.instances).toHaveLength(1))
 
     await act(async () => {
       await FakeEventSource.instances[0].onerror?.()
@@ -1875,7 +1877,8 @@ describe('App', () => {
 
     await screen.findByText(/signed in as/i)
     fireEvent.click(screen.getByRole('tab', { name: /Administration|Administração/ }))
-    fireEvent.click(await screen.findByRole('button', { name: /Edit Google App|Editar aplicação Google|Editar aplicativo Google/ }))
+    fireEvent.click(await screen.findByTitle(/Show or hide Google OAuth details|Mostrar ou esconder os detalhes de Google OAuth/))
+    fireEvent.click(await screen.findByRole('button', { name: /Edit Google App|Edit Google OAuth|Editar aplicação Google|Editar aplicação Google OAuth|Editar aplicativo Google|Editar aplicativo Google OAuth/ }))
 
     expect((await screen.findAllByText(/Administration only stores the shared Google OAuth client registration|A administração guarda apenas o registo do cliente OAuth Google partilhado|A administração armazena apenas o cadastro compartilhado do cliente OAuth Google/)).length).toBeGreaterThan(0)
     expect(screen.queryByRole('button', { name: /Connect Shared Gmail OAuth|Ligar OAuth Gmail partilhado|Conectar OAuth Gmail compartilhado/ })).not.toBeInTheDocument()
