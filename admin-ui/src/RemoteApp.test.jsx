@@ -1286,7 +1286,7 @@ describe('RemoteApp', () => {
     render(<RemoteApp />)
 
     expect(await screen.findByText('Main Inbox')).toBeInTheDocument()
-    expect((await screen.findAllByText('Processing 1 / 5 emails (1 MB / 5 MB)')).length).toBeGreaterThanOrEqual(2)
+    expect(await screen.findByText('Processing 1 / 5 emails (1 MB / 5 MB)')).toBeInTheDocument()
   })
 
   it('reconciles stale remote running state from snapshots while SSE is still connected', async () => {
@@ -1859,8 +1859,9 @@ describe('RemoteApp', () => {
     expect(await screen.findByRole('button', { name: 'Pause' })).toBeInTheDocument()
     expect(screen.queryByText(/Queue 2147483647/)).not.toBeInTheDocument()
     expect(screen.queryByText(/Fetched 0, imported 0, duplicates 0/)).not.toBeInTheDocument()
-    expect(screen.getAllByText('Processing 3 / 50 emails (1.5 MB / 6 MB)').length).toBeGreaterThanOrEqual(2)
-    expect(screen.getAllByRole('progressbar', { name: 'Processing 3 / 50 emails' }).length).toBeGreaterThanOrEqual(2)
+    expect(screen.getByText('Processing 3 / 50 emails (1.5 MB / 6 MB)')).toBeInTheDocument()
+    expect(screen.getByRole('progressbar', { name: 'Processing 3 / 50 emails' })).toBeInTheDocument()
+    expect(screen.queryByText('Fetched 3, imported 2, duplicates 1')).not.toBeInTheDocument()
     expect(screen.queryByText('Running…')).not.toBeInTheDocument()
     expect(screen.getByRole('button', { name: 'Poll My Sources' })).toBeDisabled()
 

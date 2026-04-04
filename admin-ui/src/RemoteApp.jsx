@@ -762,7 +762,8 @@ function RemoteApp() {
                 && liveSource.position > 1
               )
               const showLiveMeter = hasDeterminateLiveProgress(liveSource)
-              const showLiveProgress = Boolean(liveProgressCopy || showMoveNextAction || showLiveMeter)
+              const showSupplementaryLiveCopy = Boolean(liveProgressCopy && !showLiveMeter)
+              const showLiveProgress = Boolean(showSupplementaryLiveCopy || showMoveNextAction)
 
               return (
                 <article className={`remote-source-card${liveSource?.state === 'RUNNING' ? ' remote-source-card-running' : ''}`} key={source.sourceId}>
@@ -817,24 +818,7 @@ function RemoteApp() {
                   </div>
                   {showLiveProgress ? (
                     <div className="remote-source-progress">
-                      {showLiveMeter ? (
-                        <div
-                          aria-label={formatLiveProgressLabel(liveSource, t)}
-                          aria-valuemax={liveSource.totalMessages}
-                          aria-valuemin={0}
-                          aria-valuenow={liveSource.processedMessages}
-                          className="remote-source-progress-meter"
-                          role="progressbar"
-                        >
-                          <p className="remote-source-progress-copy">
-                            {formatLiveProgressSummary(liveSource, language, t)}
-                          </p>
-                          <div className="remote-source-progress-bar">
-                            <span style={{ width: `${liveProgressPercent(liveSource)}%` }} />
-                          </div>
-                        </div>
-                      ) : null}
-                      {liveProgressCopy ? (
+                      {showSupplementaryLiveCopy ? (
                         <p className="remote-source-progress-copy">
                           {liveProgressCopy}
                         </p>

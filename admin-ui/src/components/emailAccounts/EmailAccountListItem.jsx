@@ -237,10 +237,10 @@ function EmailAccountListItem({
                 {formatImportedSizeSummary(fetcher.lastEvent, locale) ? (
                   <span className="status-pill tone-neutral">{formatImportedSizeSummary(fetcher.lastEvent, locale)}</span>
                 ) : null}
+                {fetcher.lastEvent.spamJunkMessageCount > 0 ? (
+                  <span className="status-pill tone-neutral">{t('remote.spamJunk')}: {fetcher.lastEvent.spamJunkMessageCount}</span>
+                ) : null}
               </div>
-              {fetcher.lastEvent.spamJunkMessageCount > 0 ? (
-                <div className="section-copy">{t('bridge.spamJunkSummary', { spamJunkCount: fetcher.lastEvent.spamJunkMessageCount })}</div>
-              ) : null}
               {fetcher.lastEvent.error ? (
                 <div className="email-account-card-error-block">
                   <div className="email-account-card-error">{formatPollError(fetcher.lastEvent.error, locale)}</div>

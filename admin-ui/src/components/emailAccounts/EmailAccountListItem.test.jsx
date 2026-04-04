@@ -512,7 +512,8 @@ describe('EmailAccountListItem', () => {
 
     expect(screen.getByText(/Executed at .* by admin via Administration/)).toBeInTheDocument()
     expect(screen.getByText('Imported size: 3 MB')).toBeInTheDocument()
-    expect(screen.getByText('Spam/Junk folders currently contain 6 messages.')).toBeInTheDocument()
+    expect(screen.getByText('Spam / Junk: 6')).toBeInTheDocument()
+    expect(screen.queryByText('Spam/Junk folders currently contain 6 messages.')).not.toBeInTheDocument()
   })
 
   it('shows a quick-run icon button in the fetcher row', () => {
