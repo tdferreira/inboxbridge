@@ -1,4 +1,4 @@
-import { authMethodLabel, effectiveEmailAccountStatus, formatDate, formatPollError, formatPollExecutionSummary, oauthProviderLabel, protocolLabel, statusLabel, statusTone, tokenStorageLabel } from '../../lib/formatters'
+import { authMethodLabel, effectiveEmailAccountStatus, formatDate, formatImportedSizeSummary, formatPollError, formatPollExecutionSummary, oauthProviderLabel, protocolLabel, statusLabel, statusTone, tokenStorageLabel } from '../../lib/formatters'
 import CopyButton from '../common/CopyButton'
 import LoadingButton from '../common/LoadingButton'
 import './EmailAccountCard.css'
@@ -51,7 +51,14 @@ function EmailAccountCard({
       {emailAccount.lastEvent ? (
         <div className="event-box">
           <div className="section-copy">{formatPollExecutionSummary(emailAccount.lastEvent, locale, viewerUsername)}</div>
-          <div className="section-copy">{t('emailAccount.results', { fetched: emailAccount.lastEvent.fetched, imported: emailAccount.lastEvent.imported, duplicates: emailAccount.lastEvent.duplicates, spamJunkSuffix: '' })}</div>
+          <div className="email-account-last-result-pills">
+            <span className="status-pill tone-neutral">{t('remote.fetched')}: {emailAccount.lastEvent.fetched}</span>
+            <span className="status-pill tone-neutral">{t('remote.imported')}: {emailAccount.lastEvent.imported}</span>
+            <span className="status-pill tone-neutral">{t('remote.duplicates')}: {emailAccount.lastEvent.duplicates}</span>
+            {formatImportedSizeSummary(emailAccount.lastEvent, locale) ? (
+              <span className="status-pill tone-neutral">{formatImportedSizeSummary(emailAccount.lastEvent, locale)}</span>
+            ) : null}
+          </div>
           {emailAccount.lastEvent.spamJunkMessageCount > 0 ? (
             <div className="section-copy">{t('bridge.spamJunkSummary', { spamJunkCount: emailAccount.lastEvent.spamJunkMessageCount })}</div>
           ) : null}

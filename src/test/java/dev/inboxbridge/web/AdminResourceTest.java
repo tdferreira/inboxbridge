@@ -2,6 +2,7 @@ package dev.inboxbridge.web;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.util.Optional;
 
@@ -27,6 +28,7 @@ import dev.inboxbridge.service.PollingStatsService;
 import dev.inboxbridge.service.RuntimeEmailAccountService;
 import dev.inboxbridge.service.SourcePollingSettingsService;
 import dev.inboxbridge.service.AuthSecuritySettingsService;
+import io.smallrye.common.annotation.Blocking;
 import jakarta.ws.rs.BadRequestException;
 
 class AdminResourceTest {
@@ -107,6 +109,11 @@ class AdminResourceTest {
         assertEquals(
                 java.util.List.of("pause:admin", "resume:admin", "stop:admin", "move:admin:system-fetcher", "retry:admin:system-fetcher"),
                 liveService.actions);
+    }
+
+    @Test
+    void pollEventsIsBlocking() throws NoSuchMethodException {
+        assertTrue(AdminResource.class.getMethod("pollEvents").isAnnotationPresent(Blocking.class));
     }
 
     @Test

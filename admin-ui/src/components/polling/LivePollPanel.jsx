@@ -1,8 +1,9 @@
 import './LivePollPanel.css'
 import SectionCard from '../common/SectionCard'
+import { formatLiveProgressLabel, formatLiveProgressSummary, hasDeterminateLiveProgress, liveProgressPercent } from '../../lib/livePollProgress'
 
 function formatCounts(source) {
-  if (source.state === 'RUNNING' || source.state === 'QUEUED' || source.state === 'RETRY_QUEUED') {
+  if (source.state === 'QUEUED' || source.state === 'RETRY_QUEUED') {
     return null
   }
   return `Fetched ${source.fetched}, imported ${source.imported}, duplicates ${source.duplicates}${source.error ? `, error: ${source.error}` : ''}`
@@ -14,6 +15,7 @@ function showQueuePosition(source) {
 
 function LivePollPanel({
   livePoll,
+  locale = 'en',
   onMoveNext,
   onPause,
   onResume,
@@ -60,6 +62,16 @@ function LivePollPanel({
                   {showOwners && source.ownerUsername ? ` · Owner ${source.ownerUsername}` : ''}
                   {showQueuePosition(source) ? ` · Queue ${source.position}` : ''}
                 </div>
+                {hasDeterminateLiveProgress(source) ? (
+                  <div className="live-poll-source-progress" role="progressbar" aria-label={formatLiveProgressLabel(source, t)} aria-valuemin={0} aria-valuemax={source.totalMessages} aria-valuenow={source.processedMessages}>
+                    <div className="section-copy live-poll-source-progress-copy">
+                      {formatLiveProgressSummary(source, locale, t)}
+                    </div>
+                    <div className="live-poll-source-progress-bar">
+                      <span style={{ width: `${liveProgressPercent(source)}%` }} />
+                    </div>
+                  </div>
+                ) : null}
                 {formatCounts(source) ? <div className="section-copy">{formatCounts(source)}</div> : null}
               </div>
               <span className="status-pill tone-neutral">{source.state}</span>

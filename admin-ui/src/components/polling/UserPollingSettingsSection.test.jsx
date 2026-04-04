@@ -152,6 +152,20 @@ describe('UserPollingSettingsSection', () => {
     expect(onStopPoll).toHaveBeenCalledTimes(1)
   })
 
+  it('disables the broad run action while a live poll is already running', () => {
+    renderSection({
+      livePoll: {
+        running: true,
+        state: 'RUNNING',
+        viewerCanControl: true,
+        activeSourceId: 'source-1',
+        sources: [{ sourceId: 'source-1', label: 'Inbox', state: 'RUNNING', actionable: false }]
+      }
+    })
+
+    expect(screen.getByRole('button', { name: 'Run Poll Now' })).toBeDisabled()
+  })
+
   it('shows a refresh indicator while loading the latest polling values', () => {
     renderSection({ sectionLoading: true })
     expect(screen.getByText('Refreshing section…')).toBeInTheDocument()

@@ -27,6 +27,7 @@ describe('EmailAccountCard', () => {
         trigger: 'manual',
         fetched: 10,
         imported: 9,
+        importedBytes: Math.round(2.9 * 1024 * 1024),
         duplicates: 1,
         error: ''
       }
@@ -47,6 +48,7 @@ describe('EmailAccountCard', () => {
 
     expect(screen.getByText('outlook-main')).toBeInTheDocument()
     expect(screen.getByText('Encrypted storage')).toBeInTheDocument()
+    expect(screen.getByText('Imported size: 2.9 MB')).toBeInTheDocument()
 
     fireEvent.click(screen.getByRole('button', { name: 'Edit' }))
     fireEvent.click(screen.getByRole('button', { name: 'Connect Microsoft OAuth' }))
@@ -118,6 +120,7 @@ describe('EmailAccountCard', () => {
             trigger: 'remote-source',
             fetched: 5,
             imported: 2,
+            importedBytes: 2048,
             duplicates: 3,
             spamJunkMessageCount: 4,
             actorUsername: 'bob',

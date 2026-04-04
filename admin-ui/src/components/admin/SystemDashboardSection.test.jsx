@@ -178,4 +178,19 @@ describe('SystemDashboardSection', () => {
     expect(screen.getAllByRole('button', { name: 'Pausar' }).length).toBeGreaterThan(0)
     expect(screen.getAllByRole('button', { name: 'Parar' }).length).toBeGreaterThan(0)
   })
+
+  it('disables the global run action while a live poll is already running', () => {
+    renderSection({
+      livePoll: {
+        running: true,
+        state: 'RUNNING',
+        viewerCanControl: true,
+        activeSourceId: 'system-fetcher',
+        ownerUsername: 'admin',
+        sources: [{ sourceId: 'system-fetcher', label: 'System Fetcher', state: 'RUNNING', actionable: false }]
+      }
+    })
+
+    expect(screen.getAllByRole('button', { name: 'Run Poll Now' })[0]).toBeDisabled()
+  })
 })

@@ -46,6 +46,42 @@
   margin-top: 8px;
 }
 
+.email-account-last-result-pills {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  margin-top: 0.5rem;
+}
+
+.fetcher-live-progress {
+  display: grid;
+  gap: 0.3rem;
+  margin-top: 0.45rem;
+}
+
+.fetcher-live-progress-copy {
+  color: var(--muted);
+}
+
+.fetcher-live-progress-bar {
+  background: rgba(148, 163, 184, 0.18);
+  border-radius: 999px;
+  height: 0.36rem;
+  overflow: hidden;
+  width: min(16rem, 100%);
+}
+
+.fetcher-live-progress-bar span {
+  background: linear-gradient(90deg, var(--accent, #2563eb), color-mix(in srgb, var(--accent, #2563eb) 55%, white));
+  display: block;
+  height: 100%;
+  transition: width 160ms ease;
+}
+
+.fetcher-running-status {
+  max-width: min(26rem, 100%);
+}
+
 @media (max-width: 760px) {
   .email-account-card-config {
     grid-template-columns: 1fr;

@@ -78,7 +78,7 @@ public class SourcePollingStateService {
         if (state.id == null) {
             state.sourceId = sourceId;
         }
-        state.nextPollAt = finishedAt.plus(settings.pollInterval()).plus(successJitterFor(sourceId, settings.pollInterval()));
+        state.nextPollAt = nextAlignedPollAt(finishedAt, settings.pollInterval());
         state.cooldownUntil = null;
         state.consecutiveFailures = 0;
         state.lastFailureReason = null;
@@ -86,6 +86,16 @@ public class SourcePollingStateService {
         state.lastSuccessAt = finishedAt;
         state.updatedAt = finishedAt;
         repository.persist(state);
+    }
+
+    Instant nextAlignedPollAt(Instant finishedAt, Duration pollInterval) {
+        if (finishedAt == null || pollInterval == null || pollInterval.isZero() || pollInterval.isNegative()) {
+            return finishedAt;
+        }
+        long intervalMillis = Math.max(1L, pollInterval.toMillis());
+        long finishedAtMillis = finishedAt.toEpochMilli();
+        long nextBoundary = Math.multiplyExact(Math.floorDiv(finishedAtMillis, intervalMillis) + 1L, intervalMillis);
+        return Instant.ofEpochMilli(nextBoundary);
     }
 
     Duration successJitterFor(String sourceId, Duration pollInterval) {

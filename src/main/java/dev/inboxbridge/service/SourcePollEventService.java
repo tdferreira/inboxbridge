@@ -26,6 +26,7 @@ public class SourcePollEventService {
             Instant finishedAt,
             int fetched,
             int imported,
+            long importedBytes,
             int duplicates,
             int spamJunkMessageCount,
             String actorUsername,
@@ -39,6 +40,7 @@ public class SourcePollEventService {
         event.finishedAt = finishedAt;
         event.fetchedCount = fetched;
         event.importedCount = imported;
+        event.importedBytes = Math.max(0L, importedBytes);
         event.duplicateCount = duplicates;
         event.spamJunkMessageCount = Math.max(0, spamJunkMessageCount);
         event.actorUsername = actorUsername == null || actorUsername.isBlank() ? null : actorUsername;
@@ -84,6 +86,7 @@ public class SourcePollEventService {
                 event.finishedAt,
                 event.fetchedCount,
                 event.importedCount,
+                event.importedBytes,
                 event.duplicateCount,
                 event.spamJunkMessageCount,
                 event.actorUsername,

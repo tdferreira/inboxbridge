@@ -9,6 +9,7 @@ import java.util.List;
 import java.util.Optional;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicReference;
+import java.util.concurrent.CopyOnWriteArrayList;
 
 import org.junit.jupiter.api.Test;
 
@@ -77,6 +78,29 @@ class PollingLiveServiceTest {
                 .filter((source) -> "QUEUED".equals(source.state()))
                 .map((source) -> source.sourceId())
                 .toList());
+    }
+
+    @Test
+    void snapshotIncludesPerSourceProgressTotals() {
+        PollingLiveService service = new PollingLiveService();
+        AppUser alice = actor(7L, "alice", AppUser.Role.USER);
+        PollingLiveService.PollRunHandle handle = service.startRun(
+                "user-ui",
+                List.of(source("alpha", 7L, "alice")),
+                alice);
+
+        assertNotNull(handle);
+        assertEquals("alpha", service.nextSourceId(handle.runId()));
+        service.updateSourceProgress(handle.runId(), "alpha", 50, 10_000L, 6_000L, 3, 2, 1);
+
+        var snapshot = service.snapshotFor(alice);
+        assertEquals(50, snapshot.sources().getFirst().totalMessages());
+        assertEquals(3, snapshot.sources().getFirst().processedMessages());
+        assertEquals(10_000L, snapshot.sources().getFirst().totalBytes());
+        assertEquals(6_000L, snapshot.sources().getFirst().processedBytes());
+        assertEquals(3, snapshot.sources().getFirst().fetched());
+        assertEquals(2, snapshot.sources().getFirst().imported());
+        assertEquals(1, snapshot.sources().getFirst().duplicates());
     }
 
     @Test
@@ -160,6 +184,71 @@ class PollingLiveServiceTest {
         assertEquals("notification-created", eventRef.get().type());
         assertEquals("notifications.newSessionDetected", eventRef.get().notification().message().key());
         assertEquals("recent-session-REMOTE-55", eventRef.get().notification().targetId());
+    }
+
+    @Test
+    void skipReasonsDoNotEmitLiveFailureNotifications() {
+        PollingLiveService service = new PollingLiveService();
+        AppUser alice = actor(7L, "alice", AppUser.Role.USER);
+        PollingLiveService.PollRunHandle handle = service.startRun(
+                "user-ui",
+                List.of(source("alpha", 7L, "alice")),
+                alice);
+        List<String> eventTypes = new CopyOnWriteArrayList<>();
+
+        assertNotNull(handle);
+        service.subscribe(alice, PollingLiveService.SessionStreamKind.BROWSER, 11L)
+                .subscribe().with(event -> eventTypes.add(event.type()));
+
+        service.markSourceFinished(handle.runId(), "alpha", 0, 0, 0, "COOLDOWN");
+
+        assertTrue(eventTypes.contains("poll-snapshot"));
+        assertTrue(eventTypes.contains("poll-source-finished"));
+        assertFalse(eventTypes.contains("notification-created"));
+    }
+
+    @Test
+    void realSourceFailuresStillEmitLiveFailureNotifications() {
+        PollingLiveService service = new PollingLiveService();
+        AppUser alice = actor(7L, "alice", AppUser.Role.USER);
+        PollingLiveService.PollRunHandle handle = service.startRun(
+                "user-ui",
+                List.of(source("alpha", 7L, "alice")),
+                alice);
+        List<String> eventTypes = new CopyOnWriteArrayList<>();
+
+        assertNotNull(handle);
+        service.subscribe(alice, PollingLiveService.SessionStreamKind.BROWSER, 11L)
+                .subscribe().with(event -> eventTypes.add(event.type()));
+
+        service.markSourceFinished(handle.runId(), "alpha", 0, 0, 0, "boom");
+
+        assertTrue(eventTypes.contains("poll-source-finished"));
+        assertTrue(eventTypes.contains("notification-created"));
+    }
+
+    @Test
+    void schedulerRunsDoNotEmitUserFacingPollNotifications() {
+        PollingLiveService service = new PollingLiveService();
+        AppUser system = actor(-1L, "system", AppUser.Role.ADMIN);
+        PollingLiveService.PollRunHandle handle = service.startRun(
+                "scheduler",
+                List.of(source("alpha", 7L, "alice")),
+                system);
+        List<String> eventTypes = new CopyOnWriteArrayList<>();
+
+        assertNotNull(handle);
+        service.subscribe(system, PollingLiveService.SessionStreamKind.BROWSER, 11L)
+                .subscribe().with(event -> eventTypes.add(event.type()));
+
+        assertEquals("alpha", service.nextSourceId(handle.runId()));
+        service.markSourceFinished(handle.runId(), "alpha", 1, 1, 0, null);
+        service.finishRun(handle.runId(), "COMPLETED");
+
+        assertTrue(eventTypes.contains("poll-snapshot"));
+        assertTrue(eventTypes.contains("poll-source-started"));
+        assertTrue(eventTypes.contains("poll-source-finished"));
+        assertFalse(eventTypes.contains("notification-created"));
     }
 
     private static void waitFor(java.util.concurrent.Callable<Boolean> condition) throws Exception {

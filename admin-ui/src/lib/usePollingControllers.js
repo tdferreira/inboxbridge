@@ -128,6 +128,9 @@ export function usePollingControllers({
   }
 
   async function runPoll() {
+    if (livePoll?.running) {
+      return
+    }
     const singleUserMode = authOptions.multiUserEnabled === false
     openConfirmation({
       actionKey: 'runPoll',
@@ -197,6 +200,9 @@ export function usePollingControllers({
   }
 
   async function runUserPoll() {
+    if (livePoll?.running) {
+      return
+    }
     setRunningUserPoll(true)
     await withPending('runUserPoll', async () => {
       try {

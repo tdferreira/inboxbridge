@@ -47,6 +47,9 @@ public class SourcePollEvent extends PanacheEntityBase {
     @Column(name = "imported_count", nullable = false)
     public int importedCount;
 
+    @Column(name = "imported_bytes", nullable = false)
+    public long importedBytes;
+
     @Column(name = "duplicate_count", nullable = false)
     public int duplicateCount;
 

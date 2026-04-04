@@ -11,6 +11,7 @@ import dev.inboxbridge.security.RequireRemoteControl;
 import dev.inboxbridge.service.AuthClientAddressService;
 import dev.inboxbridge.service.PollingLiveService;
 import dev.inboxbridge.service.RemoteControlService;
+import io.smallrye.common.annotation.Blocking;
 import io.smallrye.mutiny.Multi;
 import io.vertx.core.http.HttpServerRequest;
 import jakarta.inject.Inject;
@@ -83,6 +84,7 @@ public class RemoteControlResource {
 
     @GET
     @Path("/poll/events")
+    @Blocking
     @Produces(MediaType.SERVER_SENT_EVENTS)
     @RestStreamElementType(MediaType.APPLICATION_JSON)
     public Multi<LiveEventView> pollEvents() {

@@ -403,6 +403,7 @@ public class UserEmailAccountService {
                     lastEvent.finishedAt(),
                     lastEvent.fetched(),
                     lastEvent.imported(),
+                    lastEvent.importedBytes(),
                     lastEvent.duplicates(),
                     lastEvent.spamJunkMessageCount(),
                     lastEvent.actorUsername(),

@@ -1,5 +1,6 @@
 import CollapsibleSection from '../common/CollapsibleSection'
 import ImportTimelineChart from '../common/ImportTimelineChart'
+import { detectScheduledRunAnomaly } from '../../lib/pollingStatsAlerts'
 import './PollingStatisticsSection.css'
 
 function formatDuration(milliseconds, t) {
@@ -28,10 +29,13 @@ function translateProviderLabel(entry, t) {
 }
 
 function PollingStatisticsSection({
+  attentionActive = false,
   collapsed = false,
   collapseLoading = false,
   customRangeLoader = null,
   id,
+  scheduledRunAlertInterval = null,
+  scheduledRunAlertSourceCount = 0,
   title,
   copy,
   onCollapseToggle,
@@ -51,10 +55,12 @@ function PollingStatisticsSection({
     { key: 'scheduledRuns', label: t('pollingStats.scheduledRuns'), timelines: stats?.scheduledRunTimelines || {} }
   ]
   const isSourceVariant = variant === 'source'
+  const scheduledRunAnomaly = detectScheduledRunAnomaly(stats, scheduledRunAlertInterval, scheduledRunAlertSourceCount)
+  const sectionClassName = `polling-statistics-section${scheduledRunAnomaly ? ' polling-statistics-section-alerting' : ''}${attentionActive ? ' polling-statistics-section-attention' : ''}`
 
   return (
     <CollapsibleSection
-      className="polling-statistics-section"
+      className={sectionClassName}
       collapsed={collapsed}
       collapseLoading={collapseLoading}
       copy={copy}
@@ -67,6 +73,20 @@ function PollingStatisticsSection({
     >
       {stats ? (
         <>
+          {scheduledRunAnomaly ? (
+            <div className="polling-statistics-alert" role="alert">
+              <strong>{t('pollingStats.runAnomalyTitle')}</strong>
+              <div>
+                {t('pollingStats.runAnomalyCopy', {
+                  bucket: scheduledRunAnomaly.bucketLabel,
+                  observed: scheduledRunAnomaly.observedRuns,
+                  expected: scheduledRunAnomaly.expectedRunsPerHour,
+                  interval: scheduledRunAlertInterval,
+                  sourceCount: scheduledRunAnomaly.sourceCount
+                })}
+              </div>
+            </div>
+          ) : null}
           {isSourceVariant ? (
             <div className="system-dashboard-summary">
               <article className="surface-card metric-card"><span className="metric-label">{t('pollingStats.totalImportedMessages')}</span><strong>{stats.totalImportedMessages}</strong></article>

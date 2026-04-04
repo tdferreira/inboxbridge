@@ -14,7 +14,14 @@ import ModalDialog from './ModalDialog'
 import './ImportTimelineChart.css'
 
 const PRESET_ORDER = ['today', 'yesterday', 'pastWeek', 'pastMonth', 'pastTrimester', 'pastSemester', 'pastYear']
-const SERIES_COLORS = ['#b45309', '#2563eb', '#dc2626']
+const SERIES_COLORS_BY_KEY = {
+  imports: '#16a34a',
+  duplicates: '#2563eb',
+  errors: '#dc2626',
+  manualRuns: '#b45309',
+  scheduledRuns: '#4f46e5'
+}
+const FALLBACK_SERIES_COLORS = ['#16a34a', '#2563eb', '#dc2626', '#b45309', '#4f46e5']
 
 function formatBucketLabel(rangeKey, bucketLabel) {
   if (rangeKey === 'today' || rangeKey === 'yesterday') return bucketLabel
@@ -35,6 +42,10 @@ function buildChartRows(entries, rangeKey) {
     ...row,
     label: formatBucketLabel(rangeKey, row.bucketLabel)
   }))
+}
+
+export function colorForSeries(entryKey, index) {
+  return SERIES_COLORS_BY_KEY[entryKey] || FALLBACK_SERIES_COLORS[index % FALLBACK_SERIES_COLORS.length]
 }
 
 function TimelineTooltip({ active, label, payload, t }) {
@@ -256,7 +267,7 @@ function ImportTimelineChart({ customRangeLoader = null, points = [], timelines 
                       dot={false}
                       key={entry.key}
                       name={entry.label}
-                      stroke={SERIES_COLORS[index % SERIES_COLORS.length]}
+                      stroke={colorForSeries(entry.key, index)}
                       strokeWidth={2.5}
                       type="monotone"
                     />

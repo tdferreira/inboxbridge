@@ -33,6 +33,25 @@ describe('notifications helpers', () => {
     })
   })
 
+  it('resolves live polling notification aliases in every locale', () => {
+    languageOptions.forEach((locale) => {
+      expect(resolveNotificationContent(
+        translatedNotification('notifications.livePollFinished'),
+        locale
+      ), `${locale} is missing notifications.livePollFinished`).toBeTruthy()
+
+      expect(resolveNotificationContent(
+        translatedNotification('notifications.livePollSourceFailed', {
+          emailAccountId: 'outlook-main',
+          fetched: 7,
+          imported: 4,
+          duplicates: 1
+        }),
+        locale
+      ), `${locale} is missing notifications.livePollSourceFailed`).toBeTruthy()
+    })
+  })
+
   it('defines every literal translated notification key used in the frontend for every locale', () => {
     const srcRoot = path.resolve(import.meta.dirname, '..')
     const files = []

@@ -2,6 +2,7 @@ import { fireEvent, render, screen } from '@testing-library/react'
 import { vi } from 'vitest'
 import PollingStatisticsSection from './PollingStatisticsSection'
 import { translate } from '../../lib/i18n'
+import { colorForSeries } from '../common/ImportTimelineChart'
 
 vi.mock('recharts', async () => {
   const actual = await vi.importActual('recharts')
@@ -101,6 +102,7 @@ describe('PollingStatisticsSection', () => {
     expect(screen.getByText('Generic IMAP')).toBeInTheDocument()
     expect(screen.getByText('Scheduled runs')).toBeInTheDocument()
     expect(screen.getByText('Poll activity over time')).toBeInTheDocument()
+    expect(colorForSeries('imports', 0)).toBe('#16a34a')
   })
 
   it('renders translated statistics labels in portuguese', () => {
@@ -150,5 +152,43 @@ describe('PollingStatisticsSection', () => {
     expect(screen.queryByRole('dialog', { name: 'Custom date-time range' })).not.toBeInTheDocument()
 
     confirmSpy.mockRestore()
+  })
+
+  it('shows a persistent warning when scheduled run activity is far above the configured interval capacity', () => {
+    renderSection({
+      scheduledRunAlertInterval: '5m',
+      scheduledRunAlertSourceCount: 1,
+      stats: {
+        totalImportedMessages: 14,
+        configuredMailFetchers: 1,
+        enabledMailFetchers: 1,
+        sourcesWithErrors: 1,
+        errorPolls: 2,
+        importsByDay: [{ bucketLabel: '2026-03-26', importedMessages: 5 }],
+        importTimelines: {},
+        duplicateTimelines: {},
+        errorTimelines: {},
+        manualRunTimelines: {},
+        scheduledRunTimelines: {
+          today: [
+            { bucketLabel: '03:00', importedMessages: 720 }
+          ]
+        },
+        health: {
+          activeMailFetchers: 1,
+          coolingDownMailFetchers: 0,
+          failingMailFetchers: 1,
+          disabledMailFetchers: 0
+        },
+        providerBreakdown: [],
+        manualRuns: 0,
+        scheduledRuns: 720,
+        averagePollDurationMillis: 2100
+      }
+    })
+
+    expect(screen.getByText('Scheduled polling activity looks unusually high.')).toBeInTheDocument()
+    expect(screen.getByText(/At 03:00, InboxBridge recorded 720 scheduled runs/)).toBeInTheDocument()
+    expect(document.querySelector('.polling-statistics-section-alerting')).toBeInTheDocument()
   })
 })

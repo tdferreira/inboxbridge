@@ -225,6 +225,10 @@
   padding: 6px 10px;
 }
 
+.remote-source-summary-progress-pill {
+  max-width: min(100%, 30rem);
+}
+
 .remote-source-progress {
   display: grid;
   gap: 10px;
@@ -234,6 +238,25 @@
 .remote-source-progress-copy {
   margin: 0;
   color: #4f617b;
+}
+
+.remote-source-progress-meter {
+  display: grid;
+  gap: 8px;
+}
+
+.remote-source-progress-bar {
+  background: rgba(72, 102, 140, 0.16);
+  border-radius: 999px;
+  height: 0.42rem;
+  overflow: hidden;
+}
+
+.remote-source-progress-bar span {
+  background: linear-gradient(90deg, #1f7ae0, #4fb3ff);
+  display: block;
+  height: 100%;
+  transition: width 160ms ease;
 }
 
 .remote-source-details {

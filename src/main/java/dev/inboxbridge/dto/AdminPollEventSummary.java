@@ -10,6 +10,7 @@ public record AdminPollEventSummary(
         Instant finishedAt,
         int fetched,
         int imported,
+        long importedBytes,
         int duplicates,
         int spamJunkMessageCount,
         String actorUsername,

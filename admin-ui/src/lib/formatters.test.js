@@ -1,4 +1,4 @@
-import { authMethodLabel, effectiveEmailAccountStatus, formatDate, formatDurationHint, formatDurationMeaning, formatPollError, formatPollExecutionSummary, isOauthRevokedError, oauthProviderLabel, protocolLabel, roleLabel, statusLabel, statusTone, tokenStorageLabel, triggerLabel } from './formatters'
+import { authMethodLabel, effectiveEmailAccountStatus, formatBytes, formatDate, formatDurationHint, formatDurationMeaning, formatImportedSizeSummary, formatPollError, formatPollExecutionSummary, formatRemoteImportedSizeSummary, isOauthRevokedError, oauthProviderLabel, protocolLabel, roleLabel, statusLabel, statusTone, tokenStorageLabel, triggerLabel } from './formatters'
 
 describe('formatters', () => {
   it('formats missing dates as Never', () => {
@@ -38,6 +38,16 @@ describe('formatters', () => {
     expect(formatDurationMeaning('PT0.25S', 'en')).toBe('250 milliseconds')
     expect(formatDurationMeaning('PT1H30M', 'en')).toBe('1 hour and 30 minutes')
     expect(formatDurationHint('PT5M', 'en')).toBe('PT5M = 5 minutes')
+  })
+
+  it('formats byte counts into human-readable sizes', () => {
+    expect(formatBytes(999, 'en')).toBe('999 B')
+    expect(formatBytes(1536 * 1024, 'en')).toBe('1.5 MB')
+  })
+
+  it('formats imported size summaries for bridge and remote views', () => {
+    expect(formatImportedSizeSummary({ importedBytes: 2048 }, 'en')).toBe('Imported size: 2 KB')
+    expect(formatRemoteImportedSizeSummary(3 * 1024 * 1024, 'pt-PT')).toBe('Tamanho importado: 3 MB')
   })
 
   it('renders token storage labels for known modes', () => {

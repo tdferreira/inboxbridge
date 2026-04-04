@@ -129,6 +129,10 @@ Each source now has its own persisted polling state:
 
 The scheduler checks that state on every run so one blocked or throttled mailbox does not stall unrelated source email accounts.
 
+Scheduler-triggered runs now also filter out sources whose current eligibility says `INTERVAL`, `COOLDOWN`, or `DISABLED` before creating any live run state, so the user-facing live coordinator only tracks real runnable work instead of every scheduler tick.
+
+Successful scheduled polls now persist the next eligible time on aligned interval boundaries rather than `last success + interval`, so the single scheduler loop still wakes up every few seconds but each source's actual cadence follows predictable slots such as `:00`, `:05`, and `:10` according to that source's effective polling settings.
+
 UI-managed IMAP sources now also persist optional post-poll source-side actions:
 
 - mark handled mail as read

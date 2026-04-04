@@ -36,25 +36,29 @@ class SourcePollingStateServiceTest {
     @Test
     void successSchedulesNextPollFromEffectiveInterval() {
         SourcePollingStateService service = service();
-        Instant finishedAt = Instant.parse("2026-03-26T12:00:00Z");
-        Duration interval = Duration.ofMinutes(3);
+        Instant finishedAt = Instant.parse("2026-03-26T12:01:17Z");
 
         service.recordSuccess("fetcher-1", finishedAt, settings(true, "3m", 25));
 
         var state = service.viewForSource("fetcher-1").orElseThrow();
-        assertEquals(finishedAt.plus(interval).plus(service.successJitterFor("fetcher-1", interval)), state.nextPollAt());
+        assertEquals(Instant.parse("2026-03-26T12:03:00Z"), state.nextPollAt());
         assertEquals(0, state.consecutiveFailures());
         assertEquals(finishedAt, state.lastSuccessAt());
     }
 
     @Test
-    void successJitterStaysWithinConfiguredCap() {
+    void successSchedulesOnClockAlignedBoundaries() {
         SourcePollingStateService service = service();
 
-        Duration jitter = service.successJitterFor("fetcher-1", Duration.ofMinutes(10));
-
-        assertTrue(!jitter.isNegative());
-        assertTrue(jitter.compareTo(Duration.ofSeconds(30)) <= 0);
+        assertEquals(
+                Instant.parse("2026-03-26T01:02:00Z"),
+                service.nextAlignedPollAt(Instant.parse("2026-03-26T01:00:31Z"), Duration.ofMinutes(2)));
+        assertEquals(
+                Instant.parse("2026-03-26T04:05:00Z"),
+                service.nextAlignedPollAt(Instant.parse("2026-03-26T04:03:12Z"), Duration.ofMinutes(5)));
+        assertEquals(
+                Instant.parse("2026-03-26T03:10:00Z"),
+                service.nextAlignedPollAt(Instant.parse("2026-03-26T03:04:55Z"), Duration.ofMinutes(10)));
     }
 
     @Test

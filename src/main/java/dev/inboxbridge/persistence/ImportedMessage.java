@@ -15,10 +15,11 @@ import jakarta.persistence.UniqueConstraint;
 @Entity
 @Table(name = "imported_message",
         uniqueConstraints = {
-                @UniqueConstraint(name = "uk_imported_message_source_key", columnNames = { "source_account_id", "source_message_key" }),
-                @UniqueConstraint(name = "uk_imported_message_sha", columnNames = { "raw_sha256" })
+                @UniqueConstraint(name = "uk_imported_message_destination_source_key", columnNames = { "destination_key", "source_account_id", "source_message_key" }),
+                @UniqueConstraint(name = "uk_imported_message_destination_sha", columnNames = { "destination_key", "raw_sha256" })
         },
         indexes = {
+                @Index(name = "idx_imported_message_destination", columnList = "destination_key"),
                 @Index(name = "idx_imported_message_account", columnList = "source_account_id"),
                 @Index(name = "idx_imported_message_gmail", columnList = "gmail_message_id")
         })

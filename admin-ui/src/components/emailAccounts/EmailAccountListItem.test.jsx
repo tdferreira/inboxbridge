@@ -228,6 +228,64 @@ describe('EmailAccountListItem', () => {
     expect(screen.getByRole('button', { name: 'Reconnect Microsoft OAuth' })).toBeInTheDocument()
   })
 
+  it('shows determinate live progress for a running source', () => {
+    render(
+      <EmailAccountListItem
+        fetcher={{
+          emailAccountId: 'inbox-main',
+          customLabel: 'Primary Inbox',
+          managementSource: 'DATABASE',
+          protocol: 'IMAP',
+          host: 'imap.example.com',
+          port: 993,
+          authMethod: 'PASSWORD',
+          oauthProvider: 'NONE',
+          tls: true,
+          folder: 'INBOX',
+          tokenStorageMode: 'PASSWORD',
+          oauthConnected: false,
+          markReadAfterPoll: false,
+          postPollAction: 'NONE',
+          postPollTargetFolder: '',
+          totalImportedMessages: 0,
+          lastImportedAt: null,
+          effectivePollEnabled: true,
+          effectivePollInterval: '5m',
+          effectiveFetchWindow: 50,
+          pollingState: null,
+          lastEvent: null,
+          canEdit: true,
+          canDelete: true,
+          canConnectMicrosoft: false
+        }}
+        liveSource={{
+          sourceId: 'inbox-main',
+          label: 'Primary Inbox',
+          state: 'RUNNING',
+          actionable: true,
+          position: 1,
+          totalMessages: 50,
+          processedMessages: 3,
+          totalBytes: 6 * 1024 * 1024,
+          processedBytes: 1536 * 1024,
+          fetched: 3,
+          imported: 2,
+          duplicates: 1
+        }}
+        locale="en"
+        onConfigurePolling={vi.fn()}
+        onConnectMicrosoft={vi.fn()}
+        onDelete={vi.fn()}
+        onEdit={vi.fn()}
+        onRunPoll={vi.fn()}
+        t={t}
+      />
+    )
+
+    expect(screen.getByText('Processing 3 / 50 emails (1.5 MB / 6 MB)')).toBeInTheDocument()
+    expect(screen.getByRole('progressbar', { name: 'Processing 3 / 50 emails' })).toHaveClass('status-pill-progress')
+  })
+
   it('shows disabled status for disabled fetchers even when the last event failed', () => {
     render(
       <EmailAccountListItem
@@ -428,6 +486,7 @@ describe('EmailAccountListItem', () => {
             trigger: 'admin-fetcher',
             fetched: 10,
             imported: 4,
+            importedBytes: 3 * 1024 * 1024,
             duplicates: 6,
             spamJunkMessageCount: 6,
             actorUsername: 'admin',
@@ -452,6 +511,7 @@ describe('EmailAccountListItem', () => {
     fireEvent.click(screen.getByRole('button', { name: /spam-aware-fetcher/i }))
 
     expect(screen.getByText(/Executed at .* by admin via Administration/)).toBeInTheDocument()
+    expect(screen.getByText('Imported size: 3 MB')).toBeInTheDocument()
     expect(screen.getByText('Spam/Junk folders currently contain 6 messages.')).toBeInTheDocument()
   })
 

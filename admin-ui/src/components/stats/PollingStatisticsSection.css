@@ -4,6 +4,41 @@
   padding: 1.25rem;
 }
 
+.polling-statistics-section-alerting {
+  border: 2px solid color-mix(in srgb, var(--danger, #dc2626) 72%, white 12%);
+  box-shadow:
+    0 0 0 1px color-mix(in srgb, var(--danger, #dc2626) 24%, transparent),
+    0 0 0 0 color-mix(in srgb, var(--danger, #dc2626) 18%, transparent);
+}
+
+.polling-statistics-section-attention {
+  animation: polling-statistics-alert-pulse 1.35s ease-in-out 6;
+}
+
+.polling-statistics-alert {
+  background: color-mix(in srgb, var(--danger, #dc2626) 10%, white);
+  border: 1px solid color-mix(in srgb, var(--danger, #dc2626) 26%, white);
+  border-radius: 16px;
+  color: color-mix(in srgb, var(--danger, #dc2626) 84%, black 8%);
+  display: grid;
+  gap: 0.35rem;
+  padding: 0.9rem 1rem;
+}
+
+@keyframes polling-statistics-alert-pulse {
+  0%,
+  100% {
+    box-shadow:
+      0 0 0 1px color-mix(in srgb, var(--danger, #dc2626) 24%, transparent),
+      0 0 0 0 color-mix(in srgb, var(--danger, #dc2626) 18%, transparent);
+  }
+  50% {
+    box-shadow:
+      0 0 0 1px color-mix(in srgb, var(--danger, #dc2626) 34%, transparent),
+      0 0 0 6px color-mix(in srgb, var(--danger, #dc2626) 12%, transparent);
+  }
+}
+
 .polling-statistics-grid {
   display: grid;
   gap: 1rem;

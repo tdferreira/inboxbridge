@@ -1,6 +1,7 @@
 import { Suspense, lazy, useEffect, useState } from 'react'
-import { authMethodLabel, effectiveEmailAccountStatus, formatDate, formatPollError, formatPollExecutionSummary, oauthProviderLabel, protocolLabel, statusLabel, statusTone, tokenStorageLabel } from '../../lib/formatters'
+import { authMethodLabel, effectiveEmailAccountStatus, formatDate, formatImportedSizeSummary, formatPollError, formatPollExecutionSummary, oauthProviderLabel, protocolLabel, statusLabel, statusTone, tokenStorageLabel } from '../../lib/formatters'
 import { buildSourceEmailAccountTargetId } from '../../lib/sectionTargets'
+import { formatLiveProgressLabel, formatLiveProgressSummary, hasDeterminateLiveProgress, liveProgressPercent } from '../../lib/livePollProgress'
 import CopyButton from '../common/CopyButton'
 import FloatingActionMenu from '../common/FloatingActionMenu'
 import './EmailAccountCard.css'
@@ -47,6 +48,8 @@ function EmailAccountListItem({
   connectLoading = false,
   deleteLoading = false,
   fetcher,
+  liveSource = null,
+  livePollRunning = false,
   locale,
   onConfigurePolling,
   onConnectOAuth,
@@ -72,7 +75,10 @@ function EmailAccountListItem({
   const handleConnectOAuth = onConnectOAuth || ((emailAccountId) => onConnectMicrosoft?.(emailAccountId))
   const statsAvailable = hasMeaningfulStats(stats)
   const effectiveStatus = effectiveEmailAccountStatus(fetcher)
-  const pollActionDisabled = pollLoading || fetcher.enabled === false || fetcher.canRunPoll === false
+  const pollActionDisabled = pollLoading || livePollRunning || fetcher.enabled === false || fetcher.canRunPoll === false
+  const liveProgressLabel = formatLiveProgressLabel(liveSource, t)
+  const liveProgressSummary = formatLiveProgressSummary(liveSource, locale, t)
+  const showInlineRunningProgress = hasDeterminateLiveProgress(liveSource)
   const [statsCollapsed, setStatsCollapsed] = useState(!statsAvailable)
 
   useEffect(() => {
@@ -106,10 +112,25 @@ function EmailAccountListItem({
               ) : null}
             </div>
           </div>
-          {pollLoading ? (
-            <span className="status-pill tone-neutral">
+          {showInlineRunningProgress ? (
+            <span
+              aria-label={liveProgressLabel}
+              aria-valuemax={liveSource.totalMessages}
+              aria-valuemin={0}
+              aria-valuenow={liveSource.processedMessages}
+              className="status-pill tone-neutral status-pill-progress fetcher-running-status"
+              role="progressbar"
+            >
+              <span className="status-pill-progress-fill" style={{ width: `${liveProgressPercent(liveSource)}%` }} />
+              <span className="status-pill-progress-copy">{liveProgressSummary}</span>
+            </span>
+          ) : pollLoading ? (
+            <span className="status-pill tone-neutral status-pill-progress status-pill-progress-indeterminate fetcher-running-status">
+              <span className="status-pill-progress-fill" />
+              <span className="status-pill-progress-copy">
               <span aria-hidden="true" className="section-refresh-spinner" />
               {t('status.running')}
+              </span>
             </span>
           ) : (
             <span className={`status-pill ${statusTone(effectiveStatus)}`}>{statusLabel(effectiveStatus, locale)}</span>
@@ -209,7 +230,14 @@ function EmailAccountListItem({
           {fetcher.lastEvent ? (
             <div className="event-box">
               <div className="section-copy">{formatPollExecutionSummary(fetcher.lastEvent, locale, viewerUsername)}</div>
-              <div className="section-copy">{t('emailAccount.results', { fetched: fetcher.lastEvent.fetched, imported: fetcher.lastEvent.imported, duplicates: fetcher.lastEvent.duplicates, spamJunkSuffix: '' })}</div>
+              <div className="email-account-last-result-pills">
+                <span className="status-pill tone-neutral">{t('remote.fetched')}: {fetcher.lastEvent.fetched}</span>
+                <span className="status-pill tone-neutral">{t('remote.imported')}: {fetcher.lastEvent.imported}</span>
+                <span className="status-pill tone-neutral">{t('remote.duplicates')}: {fetcher.lastEvent.duplicates}</span>
+                {formatImportedSizeSummary(fetcher.lastEvent, locale) ? (
+                  <span className="status-pill tone-neutral">{formatImportedSizeSummary(fetcher.lastEvent, locale)}</span>
+                ) : null}
+              </div>
               {fetcher.lastEvent.spamJunkMessageCount > 0 ? (
                 <div className="section-copy">{t('bridge.spamJunkSummary', { spamJunkCount: fetcher.lastEvent.spamJunkMessageCount })}</div>
               ) : null}

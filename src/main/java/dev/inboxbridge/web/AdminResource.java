@@ -38,6 +38,7 @@ import jakarta.ws.rs.Produces;
 import jakarta.ws.rs.QueryParam;
 import jakarta.ws.rs.core.MediaType;
 import io.smallrye.mutiny.Multi;
+import io.smallrye.common.annotation.Blocking;
 import java.time.Instant;
 
 @Path("/api/admin")
@@ -129,6 +130,7 @@ public class AdminResource {
 
     @GET
     @Path("/poll/events")
+    @Blocking
     @Produces(MediaType.SERVER_SENT_EVENTS)
     @RestStreamElementType(MediaType.APPLICATION_JSON)
     public Multi<LiveEventView> pollEvents() {

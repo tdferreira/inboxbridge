@@ -843,6 +843,7 @@ describe('RemoteApp', () => {
                 finishedAt: '2026-03-31T10:00:10Z',
                 fetched: 7,
                 imported: 4,
+                importedBytes: 3 * 1024 * 1024,
                 duplicates: 3,
                 spamJunkMessageCount: 6,
                 error: null
@@ -1199,6 +1200,195 @@ describe('RemoteApp', () => {
 
     expect(screen.getByRole('button', { name: 'Poll My Sources' })).toBeInTheDocument()
   })
+
+  it('discovers a poll started from another surface when the remote SSE stream is unavailable', async () => {
+    vi.stubGlobal('EventSource', undefined)
+    let liveSnapshotCalls = 0
+    const fetchMock = vi.fn((url) => {
+      if (url === '/api/remote/auth/me') {
+        return jsonResponse({
+          id: 12,
+          username: 'alice',
+          role: 'USER',
+          canRunUserPoll: true,
+          canRunAllUsersPoll: false,
+          deviceLocationCaptured: true,
+          language: 'en'
+        })
+      }
+      if (url === '/api/remote/control') {
+        return jsonResponse({
+          session: {
+            id: 12,
+            username: 'alice',
+            role: 'USER',
+            canRunUserPoll: true,
+            canRunAllUsersPoll: false,
+            language: 'en'
+          },
+          sources: [
+            {
+              sourceId: 'source-1',
+              ownerLabel: 'alice',
+              protocol: 'IMAP',
+              host: 'imap.example.com',
+              port: 993,
+              folder: 'INBOX',
+              effectivePollEnabled: true,
+              effectivePollInterval: '5m',
+              lastImportedAt: null,
+              lastEvent: null,
+              customLabel: 'Main Inbox'
+            }
+          ],
+          hasOwnSourceEmailAccounts: true,
+          hasReadyDestinationMailbox: true,
+          setupRequired: false,
+          remotePollRateLimitCount: 60,
+          remotePollRateLimitWindow: 'PT1M'
+        })
+      }
+      if (url === '/api/remote/poll/live') {
+        liveSnapshotCalls += 1
+        if (liveSnapshotCalls === 1) {
+          return jsonResponse({ running: false, sources: [] })
+        }
+        return jsonResponse({
+          running: true,
+          runId: 'run-1',
+          state: 'RUNNING',
+          ownerUsername: 'alice',
+          viewerCanControl: true,
+          activeSourceId: 'source-1',
+          sources: [
+            {
+              sourceId: 'source-1',
+              ownerUsername: 'alice',
+              label: 'Main Inbox',
+              state: 'RUNNING',
+              actionable: true,
+              position: 1,
+              totalMessages: 5,
+              processedMessages: 1,
+              totalBytes: 5 * 1024 * 1024,
+              processedBytes: 1024 * 1024,
+              fetched: 1,
+              imported: 1,
+              duplicates: 0
+            }
+          ]
+        })
+      }
+      throw new Error(`Unexpected fetch: ${url}`)
+    })
+    vi.stubGlobal('fetch', fetchMock)
+
+    render(<RemoteApp />)
+
+    expect(await screen.findByText('Main Inbox')).toBeInTheDocument()
+    expect((await screen.findAllByText('Processing 1 / 5 emails (1 MB / 5 MB)')).length).toBeGreaterThanOrEqual(2)
+  })
+
+  it('reconciles stale remote running state from snapshots while SSE is still connected', async () => {
+    vi.stubGlobal('EventSource', FakeEventSource)
+    let liveSnapshotCalls = 0
+
+    const fetchMock = vi.fn((url) => {
+      if (url === '/api/remote/auth/me') {
+        return jsonResponse({
+          id: 12,
+          username: 'alice',
+          role: 'USER',
+          canRunUserPoll: true,
+          canRunAllUsersPoll: false,
+          deviceLocationCaptured: true,
+          language: 'en'
+        })
+      }
+      if (url === '/api/remote/control') {
+        return jsonResponse({
+          session: {
+            id: 12,
+            username: 'alice',
+            role: 'USER',
+            canRunUserPoll: true,
+            canRunAllUsersPoll: false,
+            language: 'en'
+          },
+          sources: [
+            {
+              sourceId: 'source-1',
+              ownerLabel: 'alice',
+              protocol: 'IMAP',
+              host: 'imap.example.com',
+              port: 993,
+              folder: 'INBOX',
+              effectivePollEnabled: true,
+              effectivePollInterval: '5m',
+              lastImportedAt: null,
+              lastEvent: null,
+              customLabel: 'Main Inbox'
+            }
+          ],
+          hasOwnSourceEmailAccounts: true,
+          hasReadyDestinationMailbox: true,
+          setupRequired: false,
+          remotePollRateLimitCount: 60,
+          remotePollRateLimitWindow: 'PT1M'
+        })
+      }
+      if (url === '/api/remote/poll/live') {
+        liveSnapshotCalls += 1
+        return jsonResponse(liveSnapshotCalls <= 2
+          ? {
+              running: true,
+              runId: 'run-1',
+              state: 'RUNNING',
+              ownerUsername: 'alice',
+              viewerCanControl: true,
+              activeSourceId: 'source-1',
+              sources: [
+                {
+                  sourceId: 'source-1',
+                  ownerUsername: 'alice',
+                  label: 'Main Inbox',
+                  state: 'RUNNING',
+                  actionable: true,
+                  position: 1,
+                  fetched: 0,
+                  imported: 0,
+                  duplicates: 0
+                }
+              ]
+            }
+          : { running: false, sources: [] })
+      }
+      throw new Error(`Unexpected fetch: ${url}`)
+    })
+    vi.stubGlobal('fetch', fetchMock)
+
+    render(<RemoteApp />)
+
+    expect(await screen.findByText('Main Inbox')).toBeInTheDocument()
+    await waitFor(() => expect(FakeEventSource.instances).toHaveLength(1))
+
+    act(() => {
+      FakeEventSource.instances[0].emit('keepalive', { type: 'keepalive' })
+    })
+
+    await waitFor(() => {
+      expect(screen.getByRole('button', { name: 'Poll My Sources' })).toBeDisabled()
+    })
+
+    await act(async () => {
+      await new Promise((resolve) => window.setTimeout(resolve, 5200))
+    })
+
+    await waitFor(() => {
+      expect(liveSnapshotCalls).toBeGreaterThanOrEqual(3)
+      expect(screen.queryByText('Running…')).not.toBeInTheDocument()
+    })
+  }, 10000)
 
   it('automatically captures browser-reported device location for the current remote session when permission is already granted', async () => {
     Object.assign(navigator, {
@@ -1609,7 +1799,7 @@ describe('RemoteApp', () => {
           viewerCanControl: true,
           activeSourceId: 'source-1',
           sources: [
-            { sourceId: 'source-1', label: 'Main Inbox', state: 'RUNNING', actionable: true, position: 1, fetched: 0, imported: 0, duplicates: 0 },
+            { sourceId: 'source-1', label: 'Main Inbox', state: 'RUNNING', actionable: true, position: 1, totalMessages: 50, processedMessages: 0, fetched: 0, imported: 0, duplicates: 0 },
             { sourceId: 'source-2', label: 'Archive Inbox', state: 'QUEUED', actionable: true, position: 2, fetched: 0, imported: 0, duplicates: 0 }
           ]
         })
@@ -1622,7 +1812,7 @@ describe('RemoteApp', () => {
           viewerCanControl: true,
           activeSourceId: 'source-1',
           sources: [
-            { sourceId: 'source-1', label: 'Main Inbox', state: 'RUNNING', actionable: true, position: 1, fetched: 0, imported: 0, duplicates: 0 },
+            { sourceId: 'source-1', label: 'Main Inbox', state: 'RUNNING', actionable: true, position: 1, totalMessages: 50, processedMessages: 0, fetched: 0, imported: 0, duplicates: 0 },
             { sourceId: 'source-2', label: 'Archive Inbox', state: 'QUEUED', actionable: true, position: 2, fetched: 0, imported: 0, duplicates: 0 }
           ]
         })
@@ -1635,7 +1825,7 @@ describe('RemoteApp', () => {
           viewerCanControl: true,
           activeSourceId: 'source-1',
           sources: [
-            { sourceId: 'source-1', label: 'Main Inbox', state: 'RUNNING', actionable: true, position: 1, fetched: 0, imported: 0, duplicates: 0 },
+            { sourceId: 'source-1', label: 'Main Inbox', state: 'RUNNING', actionable: true, position: 1, totalMessages: 50, processedMessages: 0, fetched: 0, imported: 0, duplicates: 0 },
             { sourceId: 'source-2', label: 'Archive Inbox', state: 'QUEUED', actionable: true, position: 1, fetched: 0, imported: 0, duplicates: 0 }
           ]
         })
@@ -1658,7 +1848,7 @@ describe('RemoteApp', () => {
           viewerCanControl: true,
           activeSourceId: 'source-1',
           sources: [
-            { sourceId: 'source-1', label: 'Main Inbox', state: 'RUNNING', actionable: true, position: 1, fetched: 0, imported: 0, duplicates: 0 },
+            { sourceId: 'source-1', label: 'Main Inbox', state: 'RUNNING', actionable: true, position: 1, totalMessages: 50, processedMessages: 3, totalBytes: 6 * 1024 * 1024, processedBytes: 1536 * 1024, fetched: 3, imported: 2, duplicates: 1 },
             { sourceId: 'source-2', label: 'Archive Inbox', state: 'QUEUED', actionable: true, position: 2, fetched: 0, imported: 0, duplicates: 0 }
           ]
         }
@@ -1669,7 +1859,10 @@ describe('RemoteApp', () => {
     expect(await screen.findByRole('button', { name: 'Pause' })).toBeInTheDocument()
     expect(screen.queryByText(/Queue 2147483647/)).not.toBeInTheDocument()
     expect(screen.queryByText(/Fetched 0, imported 0, duplicates 0/)).not.toBeInTheDocument()
-    expect(screen.getAllByText('Running…').length).toBe(1)
+    expect(screen.getAllByText('Processing 3 / 50 emails (1.5 MB / 6 MB)').length).toBeGreaterThanOrEqual(2)
+    expect(screen.getAllByRole('progressbar', { name: 'Processing 3 / 50 emails' }).length).toBeGreaterThanOrEqual(2)
+    expect(screen.queryByText('Running…')).not.toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Poll My Sources' })).toBeDisabled()
 
     fireEvent.click(screen.getByRole('button', { name: 'Pause' }))
     await waitFor(() => {
@@ -1971,6 +2164,7 @@ describe('RemoteApp', () => {
                 finishedAt: '2026-03-31T10:00:10Z',
                 fetched: 7,
                 imported: 4,
+                importedBytes: 3 * 1024 * 1024,
                 duplicates: 3,
                 spamJunkMessageCount: 6,
                 error: null
@@ -2007,6 +2201,7 @@ describe('RemoteApp', () => {
     expect(screen.getByText('Último resultado')).toBeInTheDocument()
     expect(screen.getByText('Obtidas: 7')).toBeInTheDocument()
     expect(screen.getByText('Importadas: 4')).toBeInTheDocument()
+    expect(screen.getByText('Tamanho importado: 3 MB')).toBeInTheDocument()
     expect(screen.getByText('Duplicadas: 3')).toBeInTheDocument()
     expect(screen.getByText('Spam / Lixo: 6')).toBeInTheDocument()
   })

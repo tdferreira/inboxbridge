@@ -39,8 +39,10 @@ import { applyOrderedSectionIds } from './lib/workspacePreferences'
 import { computeWorkspaceDropTargetIndex } from './lib/workspaceDrag'
 import { buildWorkspacePath, canonicalWorkspacePath, resolveWorkspaceRoute } from './lib/workspaceRoutes'
 import { useSessionDeviceLocation } from './lib/useSessionDeviceLocation'
+import { detectScheduledRunAnomaly } from './lib/pollingStatsAlerts'
 
 const REFRESH_MS = 30000
+const LIVE_EVENTS_STALE_MS = 45000
 const DEFAULT_AUTH_SECURITY_FORM = {
   loginFailureThresholdOverride: '',
   loginInitialBlockOverride: '',
@@ -177,10 +179,24 @@ const DEFAULT_AUTH_OPTIONS = {
   sourceOAuthProviders: ['MICROSOFT', 'GOOGLE']
 }
 const SECTION_HIGHLIGHT_MS = 2600
+const STATS_ANOMALY_ATTENTION_MS = 9000
 const NOTIFICATION_AUTO_CLOSE_MS = {
   success: 8000,
   warning: 12000,
   error: 16000
+}
+const FLOATING_NOTIFICATION_SLOT_HEIGHT = 120
+const FLOATING_NOTIFICATION_VIEWPORT_PADDING = 56
+const MAX_FLOATING_NOTIFICATION_STACK = 6
+const MIN_FLOATING_NOTIFICATION_STACK = 1
+
+function floatingNotificationLimitForViewport(viewportHeight = window?.innerHeight ?? 720) {
+  const availableHeight = Math.max(FLOATING_NOTIFICATION_SLOT_HEIGHT, viewportHeight - FLOATING_NOTIFICATION_VIEWPORT_PADDING)
+  const visibleSlots = Math.floor(availableHeight / FLOATING_NOTIFICATION_SLOT_HEIGHT)
+  return Math.max(
+    MIN_FLOATING_NOTIFICATION_STACK,
+    Math.min(MAX_FLOATING_NOTIFICATION_STACK, visibleSlots)
+  )
 }
 
 function authSecurityFormFromSettings(settings) {
@@ -218,6 +234,7 @@ function AppContent() {
   const navigate = useNavigate()
   const [authOptions, setAuthOptions] = useState(DEFAULT_AUTH_OPTIONS)
   const [notifications, setNotifications] = useState([])
+  const [floatingNotificationLimit, setFloatingNotificationLimit] = useState(() => floatingNotificationLimitForViewport())
   const [loadingData, setLoadingData] = useState(false)
   const [sectionRefreshLoading, setSectionRefreshLoading] = useState({})
   const [pendingActions, setPendingActions] = useState({})
@@ -241,10 +258,13 @@ function AppContent() {
   const [language, setLanguage] = useState(() => normalizeLocale(window.localStorage.getItem('inboxbridge.language') || navigator.language))
   const [showSystemOAuthAppsDialog, setShowSystemOAuthAppsDialog] = useState(false)
   const [showAuthSecurityDialog, setShowAuthSecurityDialog] = useState(false)
+  const [globalStatsNeedsAttention, setGlobalStatsNeedsAttention] = useState(false)
   const notificationTimersRef = useRef(new Map())
   const selectedUserLoaderRef = useRef(null)
   const sessionActivityPollerRef = useRef(null)
   const liveEventsRef = useRef(null)
+  const lastLiveEventAtRef = useRef(0)
+  const globalStatsAnomalyKeyRef = useRef('')
   const livePollApplyRef = useRef(null)
   const pushNotificationRef = useRef(null)
   const [liveEventsConnected, setLiveEventsConnected] = useState(false)
@@ -387,6 +407,15 @@ function AppContent() {
     livePollApplyRef.current = polling.applyLivePoll
     pushNotificationRef.current = pushNotification
   }, [polling.applyLivePoll, pushNotification])
+
+  useEffect(() => {
+    function handleResize() {
+      setFloatingNotificationLimit(floatingNotificationLimitForViewport())
+    }
+
+    window.addEventListener('resize', handleResize)
+    return () => window.removeEventListener('resize', handleResize)
+  }, [])
 
   function isPending(actionKey) {
     return Boolean(pendingActions[actionKey])
@@ -748,7 +777,7 @@ function AppContent() {
   }, [authOptions.multiUserEnabled, isAdmin, session])
 
   useEffect(() => {
-    if (!session || (!polling.livePoll?.running && !polling.runningPoll && !polling.runningUserPoll && !hasSourcePollInFlight)) {
+    if (!session) {
       setActiveBatchPollSourceIds([])
       return
     }
@@ -769,6 +798,7 @@ function AppContent() {
           if (livePollApplyRef.current) {
             livePollApplyRef.current(payload)
           }
+          lastLiveEventAtRef.current = Date.now()
           setActiveBatchPollSourceIds(payload?.running
             ? (payload.sources || []).filter((source) => source.state === 'RUNNING').map((source) => source.sourceId)
             : [])
@@ -783,7 +813,7 @@ function AppContent() {
     void refreshPollStatus()
     const timer = window.setInterval(() => {
       void refreshPollStatus()
-    }, 1000)
+    }, (polling.livePoll?.running || polling.runningPoll || polling.runningUserPoll || hasSourcePollInFlight) ? 1000 : 5000)
 
     return () => {
       cancelled = true
@@ -847,6 +877,7 @@ function AppContent() {
             })
           }
         }
+        lastLiveEventAtRef.current = Date.now()
         setLiveEventsConnected(true)
       } catch {
         setLiveEventsConnected(false)
@@ -887,6 +918,53 @@ function AppContent() {
       }
     }
   }, [isAdmin, session])
+
+  useEffect(() => {
+    if (!session || !polling.livePoll?.running || !liveEventsConnected) {
+      return
+    }
+    const timer = window.setInterval(() => {
+      if (lastLiveEventAtRef.current && Date.now() - lastLiveEventAtRef.current > LIVE_EVENTS_STALE_MS) {
+        setLiveEventsConnected(false)
+      }
+    }, 5000)
+    return () => window.clearInterval(timer)
+  }, [liveEventsConnected, polling.livePoll?.running, session])
+
+  useEffect(() => {
+    if (!session || !polling.livePoll?.running || !liveEventsConnected) {
+      return
+    }
+
+    let cancelled = false
+
+    async function reconcileLivePollSnapshot() {
+      try {
+        const response = await fetch(isAdmin ? '/api/admin/poll/live' : '/api/poll/live')
+        if (!response.ok) {
+          return
+        }
+        const payload = await response.json()
+        if (!cancelled && livePollApplyRef.current) {
+          livePollApplyRef.current(payload)
+          setActiveBatchPollSourceIds(payload?.running
+            ? (payload.sources || []).filter((source) => source.state === 'RUNNING').map((source) => source.sourceId)
+            : [])
+        }
+      } catch {
+        // Keep the SSE stream authoritative unless the watchdog/fallback path takes over.
+      }
+    }
+
+    const timer = window.setInterval(() => {
+      void reconcileLivePollSnapshot()
+    }, 5000)
+
+    return () => {
+      cancelled = true
+      window.clearInterval(timer)
+    }
+  }, [isAdmin, liveEventsConnected, polling.livePoll?.running, session])
 
   useEffect(() => {
     if (!session) {
@@ -1239,6 +1317,48 @@ function AppContent() {
     t
   })
 
+  const globalStatsAnomaly = useMemo(
+    () => detectScheduledRunAnomaly(
+      systemDashboard?.stats || null,
+      systemDashboard?.polling?.effectivePollInterval || null,
+      systemDashboard?.stats?.enabledMailFetchers ?? 0
+    ),
+    [systemDashboard]
+  )
+
+  useEffect(() => {
+    if (!session || !isAdmin || !globalStatsAnomaly) {
+      return
+    }
+
+    const anomalyKey = [
+      globalStatsAnomaly.bucketLabel,
+      globalStatsAnomaly.observedRuns,
+      globalStatsAnomaly.expectedRunsPerHour,
+      globalStatsAnomaly.sourceCount
+    ].join(':')
+
+    if (globalStatsAnomalyKeyRef.current === anomalyKey) {
+      return
+    }
+    globalStatsAnomalyKeyRef.current = anomalyKey
+    setGlobalStatsNeedsAttention(true)
+    const timer = window.setTimeout(() => {
+      setGlobalStatsNeedsAttention(false)
+    }, STATS_ANOMALY_ATTENTION_MS)
+
+    pushNotification({
+      autoCloseMs: null,
+      groupKey: 'global-stats-anomaly',
+      message: translatedNotification('notifications.globalStatsAnomalyDetected'),
+      replaceGroup: true,
+      targetId: 'global-polling-stats-section',
+      tone: 'warning'
+    })
+
+    return () => window.clearTimeout(timer)
+  }, [globalStatsAnomaly, isAdmin, session, t])
+
   useEffect(() => {
     if (!session) {
       return
@@ -1345,8 +1465,12 @@ function AppContent() {
   }, [dismissedPersistentNotifications.mustChangePassword, session?.mustChangePassword, t])
 
   const visibleNotifications = useMemo(
-    () => notifications.filter((notification) => notification.floatingVisible !== false),
-    [notifications]
+    () => {
+      const visible = notifications.filter((notification) => notification.floatingVisible !== false)
+      const availableSlots = Math.max(0, floatingNotificationLimit - persistentNotifications.length)
+      return availableSlots > 0 ? visible.slice(-availableSlots) : []
+    },
+    [floatingNotificationLimit, notifications, persistentNotifications.length]
   )
 
   const notificationHistory = useMemo(
@@ -1396,6 +1520,7 @@ function AppContent() {
   })
 
   const adminWorkspaceSections = buildAdminWorkspaceSections({
+    globalStatsNeedsAttention,
     adminSetupGuideState,
     authSecuritySettings,
     authOptions,

@@ -28,7 +28,8 @@ import {
   remoteStartPasskey
 } from './lib/remoteApi'
 import { languageOptions, normalizeLocale, translate } from './lib/i18n'
-import { formatDate, formatDurationMeaning, formatPollError } from './lib/formatters'
+import { formatDate, formatDurationMeaning, formatPollError, formatRemoteImportedSizeSummary } from './lib/formatters'
+import { formatLiveProgressLabel, formatLiveProgressSummary, hasDeterminateLiveProgress, liveProgressPercent } from './lib/livePollProgress'
 import { usePwaInstallPrompt } from './lib/usePwaInstallPrompt'
 import { useSessionDeviceLocation } from './lib/useSessionDeviceLocation'
 import './RemoteApp.css'
@@ -43,6 +44,7 @@ const AUTH_ACTION_NONE = ''
 const AUTH_ACTION_SIGN_IN = 'sign-in'
 const AUTH_ACTION_PASSKEY = 'passkey'
 const REMOTE_INSTALL_PROMPT_DISMISSED_KEY = 'inboxbridge.remote.installPromptDismissed'
+const LIVE_EVENTS_STALE_MS = 45000
 function RemoteApp() {
   const [language, setLanguage] = useState(() => normalizeLocale(window.localStorage.getItem('inboxbridge.language') || navigator.language))
   const t = useMemo(() => (key, params) => translate(language, key, params), [language])
@@ -65,6 +67,7 @@ function RemoteApp() {
   const [installLoading, setInstallLoading] = useState(false)
   const [installPromptDismissed, setInstallPromptDismissed] = useState(() => window.localStorage.getItem(REMOTE_INSTALL_PROMPT_DISMISSED_KEY) === 'true')
   const liveEventsRef = useRef(null)
+  const lastLiveEventAtRef = useRef(0)
   const passwordInputRef = useRef(null)
   const installPrompt = usePwaInstallPrompt()
   const deviceLocation = useSessionDeviceLocation({
@@ -161,6 +164,7 @@ function RemoteApp() {
       applySessionLanguage(sessionPayload?.language)
       setControl(controlPayload)
       applyLivePoll(livePollPayload)
+      lastLiveEventAtRef.current = Date.now()
     } catch {
       clearRemoteSessionState()
     } finally {
@@ -373,6 +377,7 @@ function RemoteApp() {
         if (payload?.poll) {
           applyLivePoll(payload.poll)
         }
+        lastLiveEventAtRef.current = Date.now()
         setLiveEventsConnected(true)
       } catch {
         setLiveEventsConnected(false)
@@ -414,8 +419,48 @@ function RemoteApp() {
   }, [session])
 
   useEffect(() => {
+    if (!session || !livePoll?.running || !liveEventsConnected) {
+      return
+    }
+    const timer = window.setInterval(() => {
+      if (lastLiveEventAtRef.current && Date.now() - lastLiveEventAtRef.current > LIVE_EVENTS_STALE_MS) {
+        setLiveEventsConnected(false)
+      }
+    }, 5000)
+    return () => window.clearInterval(timer)
+  }, [liveEventsConnected, livePoll?.running, session])
+
+  useEffect(() => {
+    if (!session || !livePoll?.running || !liveEventsConnected) {
+      return
+    }
+
+    let cancelled = false
+
+    async function reconcileRemoteLivePoll() {
+      try {
+        const payload = await remoteLivePoll()
+        if (!cancelled) {
+          applyLivePoll(payload)
+        }
+      } catch {
+        // Keep the event stream authoritative unless the stale-stream fallback takes over.
+      }
+    }
+
+    const timer = window.setInterval(() => {
+      void reconcileRemoteLivePoll()
+    }, 5000)
+
+    return () => {
+      cancelled = true
+      window.clearInterval(timer)
+    }
+  }, [liveEventsConnected, livePoll?.running, session])
+
+  useEffect(() => {
     const hasPollRequestInFlight = Boolean(pollingKey && pollingKey !== 'logout')
-    if (!session || (!livePoll?.running && !hasPollRequestInFlight) || liveEventsConnected) {
+    if (!session || liveEventsConnected) {
       return
     }
 
@@ -437,7 +482,7 @@ function RemoteApp() {
     void refreshRemoteLivePoll()
     const timer = window.setInterval(() => {
       void refreshRemoteLivePoll()
-    }, 1000)
+    }, (livePoll?.running || hasPollRequestInFlight) ? 1000 : 5000)
 
     return () => {
       cancelled = true
@@ -449,6 +494,7 @@ function RemoteApp() {
     () => new Map((livePoll?.sources || []).map((source) => [source.sourceId, source])),
     [livePoll]
   )
+  const livePollRunning = Boolean(livePoll?.running)
   const visibleSources = useMemo(
     () => (control?.sources || []).filter((source) => source.enabled !== false),
     [control]
@@ -617,6 +663,7 @@ function RemoteApp() {
           <div className="remote-hero-actions">
             <LoadingButton
               className="primary"
+              disabled={livePollRunning}
               isLoading={pollingKey === 'user-poll'}
               loadingLabel={t('remote.runMyPollLoading')}
               onClick={() => runPoll('user-poll', remoteRunUserPoll)}
@@ -626,6 +673,7 @@ function RemoteApp() {
             {session.canRunAllUsersPoll ? (
               <LoadingButton
                 className="secondary"
+                disabled={livePollRunning}
                 isLoading={pollingKey === 'all-users-poll'}
                 loadingLabel={t('remote.runAllUsersLoading')}
                 onClick={() => runPoll('all-users-poll', remoteRunAllUsersPoll)}
@@ -713,7 +761,8 @@ function RemoteApp() {
                 && (liveSource.state === 'QUEUED' || liveSource.state === 'RETRY_QUEUED')
                 && liveSource.position > 1
               )
-              const showLiveProgress = Boolean(liveProgressCopy || showMoveNextAction)
+              const showLiveMeter = hasDeterminateLiveProgress(liveSource)
+              const showLiveProgress = Boolean(liveProgressCopy || showMoveNextAction || showLiveMeter)
 
               return (
                 <article className={`remote-source-card${liveSource?.state === 'RUNNING' ? ' remote-source-card-running' : ''}`} key={source.sourceId}>
@@ -734,7 +783,7 @@ function RemoteApp() {
                       <LoadingButton
                         className="primary"
                         isLoading={pollingKey === `source:${source.sourceId}` || liveSource?.state === 'RUNNING'}
-                        disabled={Boolean(livePoll?.running && liveSource?.state !== 'RUNNING')}
+                        disabled={livePollRunning}
                         loadingLabel={t('remote.runSourceLoading')}
                         onClick={() => runPoll(`source:${source.sourceId}`, () => remoteRunSourcePoll(source.sourceId))}
                       >
@@ -749,11 +798,42 @@ function RemoteApp() {
                       {source.effectivePollEnabled ? formatDurationDisplay(source.effectivePollInterval, language) : t('common.disabled')}
                     </span>
                     {summaryStatus ? (
-                      <span className={`status-pill remote-source-summary-pill ${summaryStatusTone}`}>{formatRemoteStateLabel(summaryStatus, t)}</span>
+                      showLiveMeter ? (
+                        <span
+                          aria-label={formatLiveProgressLabel(liveSource, t)}
+                          aria-valuemax={liveSource.totalMessages}
+                          aria-valuemin={0}
+                          aria-valuenow={liveSource.processedMessages}
+                          className="status-pill tone-neutral remote-source-summary-pill status-pill-progress remote-source-summary-progress-pill"
+                          role="progressbar"
+                        >
+                          <span className="status-pill-progress-fill" style={{ width: `${liveProgressPercent(liveSource)}%` }} />
+                          <span className="status-pill-progress-copy">{formatLiveProgressSummary(liveSource, language, t)}</span>
+                        </span>
+                      ) : (
+                        <span className={`status-pill remote-source-summary-pill ${summaryStatusTone}`}>{formatRemoteStateLabel(summaryStatus, t)}</span>
+                      )
                     ) : null}
                   </div>
                   {showLiveProgress ? (
                     <div className="remote-source-progress">
+                      {showLiveMeter ? (
+                        <div
+                          aria-label={formatLiveProgressLabel(liveSource, t)}
+                          aria-valuemax={liveSource.totalMessages}
+                          aria-valuemin={0}
+                          aria-valuenow={liveSource.processedMessages}
+                          className="remote-source-progress-meter"
+                          role="progressbar"
+                        >
+                          <p className="remote-source-progress-copy">
+                            {formatLiveProgressSummary(liveSource, language, t)}
+                          </p>
+                          <div className="remote-source-progress-bar">
+                            <span style={{ width: `${liveProgressPercent(liveSource)}%` }} />
+                          </div>
+                        </div>
+                      ) : null}
                       {liveProgressCopy ? (
                         <p className="remote-source-progress-copy">
                           {liveProgressCopy}
@@ -814,6 +894,9 @@ function RemoteApp() {
                                 <span className="status-pill tone-neutral remote-source-summary-pill remote-source-last-result-pill">{t('remote.fetched')}: {source.lastEvent.fetched}</span>
                                 <span className="status-pill tone-neutral remote-source-summary-pill remote-source-last-result-pill">{t('remote.imported')}: {source.lastEvent.imported}</span>
                                 <span className="status-pill tone-neutral remote-source-summary-pill remote-source-last-result-pill">{t('remote.duplicates')}: {source.lastEvent.duplicates}</span>
+                                {formatRemoteImportedSizeSummary(source.lastEvent.importedBytes, language) ? (
+                                  <span className="status-pill tone-neutral remote-source-summary-pill remote-source-last-result-pill">{formatRemoteImportedSizeSummary(source.lastEvent.importedBytes, language)}</span>
+                                ) : null}
                                 {source.lastEvent.spamJunkMessageCount > 0 ? (
                                   <span className="status-pill tone-neutral remote-source-summary-pill remote-source-last-result-pill">{t('remote.spamJunk')}: {source.lastEvent.spamJunkMessageCount}</span>
                                 ) : null}
@@ -840,6 +923,7 @@ function PollResultCard({ language, result, session, t }) {
     `${t('remote.fetched')}: ${result.fetched}`,
     `${t('remote.imported')}: ${result.imported}`,
     `${t('remote.duplicates')}: ${result.duplicates}`,
+    ...(formatRemoteImportedSizeSummary(result.importedBytes, language) ? [formatRemoteImportedSizeSummary(result.importedBytes, language)] : []),
     ...(result.spamJunkMessageCount > 0 ? [`${t('remote.spamJunk')}: ${result.spamJunkMessageCount}`] : [])
   ].join(' · ')
   const formattedErrors = formatRemoteErrors(result, language)
@@ -971,6 +1055,13 @@ function statusToneForRemoteState(value) {
 
 function formatRemoteLiveCopy(source, t) {
   const details = []
+  if (hasDeterminateLiveProgress(source)) {
+    details.push(t('remote.progressSummary', {
+      fetched: source.fetched,
+      imported: source.imported,
+      duplicates: source.duplicates
+    }))
+  }
   if ((source.state === 'QUEUED' || source.state === 'RETRY_QUEUED') && Number.isInteger(source.position) && source.position > 0) {
     details.push(t('remote.queuePosition', { position: source.position }))
   }

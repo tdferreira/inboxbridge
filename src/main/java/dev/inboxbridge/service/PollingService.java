@@ -9,6 +9,7 @@ import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Future;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicReference;
+import java.util.function.Predicate;
 
 import org.jboss.logging.Logger;
 
@@ -173,6 +174,12 @@ public class PollingService {
                     return result;
                 }
             }
+            if ("scheduler".equals(trigger)) {
+                emailAccounts = schedulerEligibleEmailAccounts(emailAccounts, Instant.now());
+                if (emailAccounts.isEmpty()) {
+                    return result;
+                }
+            }
             if (pollingLiveService != null) {
                 liveRun = pollingLiveService.startRun(trigger, emailAccounts, actorOrSystem(actor));
                 if (liveRun != null && pollCancellationService != null) {
@@ -276,6 +283,7 @@ public class PollingService {
         Instant startedAt = Instant.now();
         int fetched = 0;
         int imported = 0;
+        long importedBytes = 0L;
         int duplicates = 0;
         int spamJunkMessageCount = 0;
         String error = null;
@@ -307,6 +315,9 @@ public class PollingService {
                 LOG.debugf(spamProbeError, "Unable to inspect spam/junk mailbox for source %s", emailAccount.id());
             }
             List<FetchedMessage> messages = mailSourceClient.fetch(emailAccount, settings.fetchWindow());
+            long totalBytes = totalBytes(messages);
+            long processedBytes = 0L;
+            publishLiveProgress(liveRunId, emailAccount.id(), messages.size(), totalBytes, processedBytes, fetched, imported, duplicates);
             for (FetchedMessage message : messages) {
                 if (!awaitLiveCheckpoint(liveRunId)) {
                     stoppedByUser = true;
@@ -314,10 +325,12 @@ public class PollingService {
                 }
                 tally.incrementFetched();
                 fetched++;
+                processedBytes += message.rawMessage().length;
                 if (importDeduplicationService.alreadyImported(message, emailAccount.destination())) {
                     mailSourceClient.applyPostPollSettings(emailAccount, message);
                     tally.incrementDuplicate();
                     duplicates++;
+                    publishLiveProgress(liveRunId, emailAccount.id(), messages.size(), totalBytes, processedBytes, fetched, imported, duplicates);
                     continue;
                 }
                 PollThrottleService.ThrottleLease destinationLease = acquireDestinationThrottle(emailAccount.destination());
@@ -327,7 +340,10 @@ public class PollingService {
                     mailSourceClient.applyPostPollSettings(emailAccount, message);
                     recordDestinationThrottleSuccess(emailAccount.destination());
                     tally.incrementImported();
+                    tally.addImportedBytes(message.rawMessage().length);
                     imported++;
+                    importedBytes += message.rawMessage().length;
+                    publishLiveProgress(liveRunId, emailAccount.id(), messages.size(), totalBytes, processedBytes, fetched, imported, duplicates);
                 } catch (RuntimeException destinationError) {
                     recordDestinationThrottleFailure(emailAccount.destination(), destinationError);
                     throw destinationError;
@@ -356,6 +372,7 @@ public class PollingService {
                         finishedAt,
                         fetched,
                         imported,
+                        importedBytes,
                         duplicates,
                         spamJunkMessageCount,
                         actorUsername,
@@ -379,6 +396,7 @@ public class PollingService {
                     finishedAt,
                     fetched,
                     imported,
+                    importedBytes,
                     duplicates,
                     spamJunkMessageCount,
                     actorUsername,
@@ -392,6 +410,39 @@ public class PollingService {
 
     private boolean awaitLiveCheckpoint(String liveRunId) {
         return liveRunId == null || pollingLiveService == null || pollingLiveService.awaitIfPausedOrStopped(liveRunId);
+    }
+
+    private void publishLiveProgress(String liveRunId, String sourceId, int totalMessages, long totalBytes, long processedBytes, int fetched, int imported, int duplicates) {
+        if (liveRunId == null || pollingLiveService == null) {
+            return;
+        }
+        pollingLiveService.updateSourceProgress(liveRunId, sourceId, totalMessages, totalBytes, processedBytes, fetched, imported, duplicates);
+    }
+
+    private List<RuntimeEmailAccount> schedulerEligibleEmailAccounts(List<RuntimeEmailAccount> emailAccounts, Instant now) {
+        return emailAccounts.stream()
+                .filter(RuntimeEmailAccount::enabled)
+                .filter(isSchedulerEligible(now))
+                .toList();
+    }
+
+    private Predicate<RuntimeEmailAccount> isSchedulerEligible(Instant now) {
+        return (emailAccount) -> sourcePollingStateService.eligibility(
+                emailAccount.id(),
+                effectiveSettingsFor(emailAccount),
+                now,
+                false,
+                false).shouldPoll();
+    }
+
+    private long totalBytes(List<FetchedMessage> messages) {
+        long total = 0L;
+        for (FetchedMessage message : messages) {
+            if (message != null && message.rawMessage() != null) {
+                total += message.rawMessage().length;
+            }
+        }
+        return total;
     }
 
     private void runParallelLivePoll(
@@ -595,6 +646,7 @@ public class PollingService {
             Instant finishedAt,
             int fetched,
             int imported,
+            long importedBytes,
             int duplicates,
             int spamJunkMessageCount,
             String actorUsername,
@@ -611,6 +663,7 @@ public class PollingService {
                     finishedAt,
                     fetched,
                     imported,
+                    importedBytes,
                     duplicates,
                     spamJunkMessageCount,
                     actorUsername,
@@ -730,6 +783,7 @@ public class PollingService {
     private static final class SourcePollTally {
         private int fetched;
         private int imported;
+        private long importedBytes;
         private int duplicates;
         private int spamJunkMessageCount;
         private final List<String> spamJunkFolderSummaries = new ArrayList<>();
@@ -747,6 +801,10 @@ public class PollingService {
             duplicates++;
         }
 
+        private void addImportedBytes(long bytes) {
+            importedBytes += Math.max(0L, bytes);
+        }
+
         private void addError(PollRunError error) {
             if (error != null) {
                 errors.add(error);
@@ -761,6 +819,7 @@ public class PollingService {
         private void mergeInto(PollRunResult result) {
             result.addFetched(fetched);
             result.addImported(imported);
+            result.addImportedBytes(importedBytes);
             result.addDuplicates(duplicates);
             result.addSpamJunkMessageCount(spamJunkMessageCount);
             spamJunkFolderSummaries.forEach(result::addSpamJunkFolderSummary);

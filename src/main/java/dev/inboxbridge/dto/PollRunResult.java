@@ -10,6 +10,7 @@ public class PollRunResult {
     private Instant finishedAt;
     private int fetched;
     private int imported;
+    private long importedBytes;
     private int duplicates;
     private int spamJunkMessageCount;
     private final List<String> errors = new ArrayList<>();
@@ -24,6 +25,10 @@ public class PollRunResult {
 
     public void incrementImported() {
         imported++;
+    }
+
+    public void addImportedBytes(long bytes) {
+        importedBytes += Math.max(0L, bytes);
     }
 
     public void incrementDuplicate() {
@@ -97,6 +102,10 @@ public class PollRunResult {
 
     public int getDuplicates() {
         return duplicates;
+    }
+
+    public long getImportedBytes() {
+        return importedBytes;
     }
 
     public List<String> getErrors() {

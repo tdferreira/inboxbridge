@@ -196,6 +196,9 @@ public class PollingLiveService {
             source.error = null;
             source.startedAt = null;
             source.finishedAt = null;
+            source.totalMessages = 0;
+            source.totalBytes = 0L;
+            source.processedBytes = 0L;
             source.fetched = 0;
             source.imported = 0;
             source.duplicates = 0;
@@ -316,6 +319,29 @@ public class PollingLiveService {
             state.updatedAt = source.finishedAt;
             publishPollEvent("poll-source-finished", state);
             publishNotification(notificationForSourceFinished(state, source));
+        }
+    }
+
+    public void updateSourceProgress(String runId, String sourceId, int totalMessages, long totalBytes, long processedBytes, int fetched, int imported, int duplicates) {
+        synchronized (lock) {
+            RunState state = requireRun(runId);
+            if (state == null) {
+                return;
+            }
+            SourceState source = state.sourcesById.get(sourceId);
+            if (source == null) {
+                return;
+            }
+            source.totalMessages = Math.max(0, totalMessages);
+            source.totalBytes = Math.max(0L, totalBytes);
+            source.processedBytes = Math.max(0L, processedBytes);
+            source.fetched = Math.max(0, fetched);
+            source.imported = Math.max(0, imported);
+            source.duplicates = Math.max(0, duplicates);
+            source.error = null;
+            source.finishedAt = null;
+            state.updatedAt = Instant.now();
+            publishPollEvent("poll-source-progress", state);
         }
     }
 
@@ -457,6 +483,10 @@ public class PollingLiveService {
                         source.actionable(admin, viewerId, state.actorUserId),
                         source.position(state.queue, state.activeSourceIds),
                         source.attempt,
+                        source.totalMessages,
+                        source.processedMessages(),
+                        source.totalBytes,
+                        source.processedBytes,
                         source.fetched,
                         source.imported,
                         source.duplicates,
@@ -524,12 +554,18 @@ public class PollingLiveService {
     }
 
     private LiveNotificationView notificationForRunStarted(RunState state) {
+        if (!shouldNotifyForRun(state)) {
+            return null;
+        }
         String key = state.actorAdmin ? "notifications.pollStarted" : "notifications.userPollStarted";
         String targetId = state.actorAdmin ? "system-dashboard-section" : "user-polling-section";
         return notification(key, "warning", state.actorAdmin ? "global-poll" : "user-poll", targetId);
     }
 
     private LiveNotificationView notificationForRunFinished(RunState state) {
+        if (!shouldNotifyForRun(state)) {
+            return null;
+        }
         if ("STOPPED".equals(state.state)) {
             return null;
         }
@@ -539,6 +575,9 @@ public class PollingLiveService {
     }
 
     private LiveNotificationView notificationForSourceStarted(RunState state, SourceState source) {
+        if (!shouldNotifyForRun(state)) {
+            return null;
+        }
         return notification(
                 "notifications.fetcherPollStarted",
                 "warning",
@@ -549,6 +588,12 @@ public class PollingLiveService {
     }
 
     private LiveNotificationView notificationForSourceFinished(RunState state, SourceState source) {
+        if (!shouldNotifyForRun(state)) {
+            return null;
+        }
+        if (isSkipReason(source.error)) {
+            return null;
+        }
         String key = source.error == null ? "notifications.livePollSourceFinished" : "notifications.livePollSourceFailed";
         return notification(
                 key,
@@ -561,6 +606,17 @@ public class PollingLiveService {
                         "fetched", String.valueOf(source.fetched),
                         "imported", String.valueOf(source.imported),
                         "duplicates", String.valueOf(source.duplicates)));
+    }
+
+    private boolean shouldNotifyForRun(RunState state) {
+        return state != null && !"scheduler".equals(state.trigger);
+    }
+
+    private boolean isSkipReason(String error) {
+        return "disabled".equals(error)
+                || "DISABLED".equals(error)
+                || "COOLDOWN".equals(error)
+                || "INTERVAL".equals(error);
     }
 
     private LiveNotificationView notification(String key, String tone, String groupKey) {
@@ -654,6 +710,9 @@ public class PollingLiveService {
         private final String label;
         private String state = "QUEUED";
         private int attempt = 1;
+        private int totalMessages;
+        private long totalBytes;
+        private long processedBytes;
         private int fetched;
         private int imported;
         private int duplicates;
@@ -688,6 +747,10 @@ public class PollingLiveService {
 
         private boolean actionable(boolean admin, Long viewerId, Long actorUserId) {
             return admin || (actorUserId != null && actorUserId.equals(viewerId));
+        }
+
+        private int processedMessages() {
+            return Math.max(0, fetched);
         }
     }
 }

@@ -34,6 +34,30 @@
   overflow-wrap: anywhere;
 }
 
+.live-poll-source-progress {
+  display: grid;
+  gap: 0.35rem;
+  margin-top: 0.45rem;
+}
+
+.live-poll-source-progress-copy {
+  color: var(--muted);
+}
+
+.live-poll-source-progress-bar {
+  background: rgba(148, 163, 184, 0.18);
+  border-radius: 999px;
+  height: 0.4rem;
+  overflow: hidden;
+}
+
+.live-poll-source-progress-bar span {
+  background: linear-gradient(90deg, var(--accent, #2563eb), color-mix(in srgb, var(--accent, #2563eb) 55%, white));
+  display: block;
+  height: 100%;
+  transition: width 160ms ease;
+}
+
 .live-poll-source-main .status-pill {
   flex-shrink: 0;
 }

@@ -401,6 +401,7 @@ describe('App', () => {
     render(<App />)
 
     await screen.findByText(/signed in as/i)
+    await waitFor(() => expect(FakeEventSource.instances).toHaveLength(1))
 
     act(() => {
       FakeEventSource.instances[0].emit('notification-created', {
@@ -1109,6 +1110,91 @@ describe('App', () => {
       }
       if (url === '/api/poll/live') {
         liveSnapshotCalls += 1
+        return Promise.resolve(jsonResponse(liveSnapshotCalls <= 2
+          ? {
+              running: true,
+              state: 'RUNNING',
+              viewerCanControl: true,
+              activeSourceId: 'source-1',
+              sources: [
+                {
+                  sourceId: 'source-1',
+                  label: 'Inbox',
+                  state: 'RUNNING',
+                  actionable: false,
+                  position: 1,
+                  fetched: 0,
+                  imported: 0,
+                  duplicates: 0
+                }
+              ]
+            }
+          : {
+              running: false,
+              state: 'IDLE',
+              viewerCanControl: false,
+              activeSourceId: null,
+              sources: []
+            }))
+      }
+
+      return baseFetch(input, init)
+    })
+
+    vi.stubGlobal('fetch', fetchMock)
+
+    render(<App />)
+
+    await screen.findByText(/signed in as alice/i)
+    await waitFor(() => {
+      expect(liveSnapshotCalls).toBeGreaterThanOrEqual(2)
+      expect(screen.queryByText('Running…')).not.toBeInTheDocument()
+    }, { timeout: 8000 })
+  }, 10000)
+
+  it('reconciles stale running source state from snapshots while SSE is still connected', async () => {
+    vi.stubGlobal('EventSource', FakeEventSource)
+
+    const baseFetch = createWorkspaceRouteFetch({
+      session: {
+        id: 1,
+        username: 'alice',
+        role: 'USER',
+        approved: true,
+        mustChangePassword: false,
+        passkeyCount: 0,
+        passwordConfigured: true
+      }
+    })
+    let liveSnapshotCalls = 0
+
+    const fetchMock = vi.fn((input, init = {}) => {
+      const url = String(input)
+
+      if (url === '/api/app/email-accounts') {
+        return Promise.resolve(jsonResponse([{
+          emailAccountId: 'source-1',
+          customLabel: 'Inbox',
+          managementSource: 'DATABASE',
+          protocol: 'IMAP',
+          host: 'imap.example.com',
+          port: 993,
+          authMethod: 'PASSWORD',
+          oauthProvider: 'NONE',
+          tls: true,
+          folder: 'INBOX',
+          tokenStorageMode: 'DATABASE',
+          enabled: true,
+          canRunPoll: true,
+          canEdit: true,
+          canDelete: true,
+          effectivePollEnabled: true,
+          effectivePollInterval: '5m',
+          effectiveFetchWindow: 50
+        }]))
+      }
+      if (url === '/api/poll/live') {
+        liveSnapshotCalls += 1
         return Promise.resolve(jsonResponse(liveSnapshotCalls === 1
           ? {
               running: true,
@@ -1145,11 +1231,21 @@ describe('App', () => {
     render(<App />)
 
     await screen.findByText(/signed in as alice/i)
-    expect(await screen.findByText('Running…')).toBeInTheDocument()
+    await waitFor(() => expect(FakeEventSource.instances).toHaveLength(1))
+    await waitFor(() => expect(liveSnapshotCalls).toBeGreaterThanOrEqual(1))
+
+    act(() => {
+      FakeEventSource.instances[0].emit('keepalive', { type: 'keepalive' })
+    })
+
+    await act(async () => {
+      await new Promise((resolve) => window.setTimeout(resolve, 5200))
+    })
 
     await waitFor(() => {
-      expect(screen.queryByText('Running…')).not.toBeInTheDocument()
-    }, { timeout: 8000 })
+      expect(liveSnapshotCalls).toBeGreaterThanOrEqual(2)
+      expect(screen.getAllByRole('button', { name: 'Run Poll Now' }).every((button) => !button.disabled)).toBe(true)
+    })
   }, 10000)
 
   it('lets admins switch between user and administration workspaces', async () => {
@@ -1302,6 +1398,91 @@ describe('App', () => {
     expect(await screen.findByText(/Global Polling Settings|Definições globais de verificação/)).toBeInTheDocument()
     expect(screen.queryByText(/My Destination Mailbox/, { selector: '.section-title' })).not.toBeInTheDocument()
   })
+
+  it('notifies admins about global statistics anomalies and only pulses that section temporarily', async () => {
+    const fetchMock = createWorkspaceRouteFetch({
+      session: {
+        id: 1,
+        username: 'admin',
+        role: 'ADMIN',
+        approved: true,
+        mustChangePassword: false,
+        passkeyCount: 0,
+        passwordConfigured: true,
+        deviceLocationCaptured: true
+      }
+    })
+
+    vi.stubGlobal('fetch', vi.fn(async (input, init) => {
+      const url = String(input)
+      if (url === '/api/admin/dashboard') {
+        return jsonResponse({
+          overall: {
+            configuredSources: 1,
+            enabledSources: 1,
+            totalImportedMessages: 10,
+            sourcesWithErrors: 0,
+            pollInterval: '5m',
+            fetchWindow: 50
+          },
+          stats: {
+            totalImportedMessages: 10,
+            configuredMailFetchers: 1,
+            enabledMailFetchers: 1,
+            sourcesWithErrors: 0,
+            importsByDay: [],
+            importTimelines: {},
+            duplicateTimelines: {},
+            errorTimelines: {},
+            manualRunTimelines: {},
+            scheduledRunTimelines: {
+              today: [
+                { bucketLabel: '03:00', importedMessages: 720 }
+              ]
+            },
+            health: { activeMailFetchers: 1, coolingDownMailFetchers: 0, failingMailFetchers: 0, disabledMailFetchers: 0 },
+            providerBreakdown: [],
+            manualRuns: 0,
+            scheduledRuns: 720,
+            averagePollDurationMillis: 1200
+          },
+          polling: {
+            defaultPollEnabled: true,
+            pollEnabledOverride: null,
+            effectivePollEnabled: true,
+            defaultPollInterval: '5m',
+            pollIntervalOverride: null,
+            effectivePollInterval: '5m',
+            defaultFetchWindow: 50,
+            fetchWindowOverride: null,
+            effectiveFetchWindow: 50
+          },
+          emailAccounts: [],
+          recentEvents: []
+        })
+      }
+      return fetchMock(input, init)
+    }))
+
+    render(<App />)
+
+    await screen.findByText(/signed in as admin/i)
+    expect(await screen.findByText('Global Statistics detected scheduled polling activity that looks unusually high. Review that section.')).toBeInTheDocument()
+
+    fireEvent.click(screen.getByRole('tab', { name: /Administration|Administração/ }))
+
+    const statsSection = await screen.findByText('Global Statistics')
+    const statsCard = statsSection.closest('section')
+    expect(statsCard).toHaveClass('polling-statistics-section-alerting')
+    expect(statsCard).toHaveClass('polling-statistics-section-attention')
+
+    await act(async () => {
+      await new Promise((resolve) => window.setTimeout(resolve, 9500))
+    })
+
+    expect(statsCard).toHaveClass('polling-statistics-section-alerting')
+    expect(statsCard).not.toHaveClass('polling-statistics-section-attention')
+  }, 10000)
 
   it('keeps admin user rows collapsed until one is explicitly opened', async () => {
     const fetchMock = vi.fn(async (input) => {
@@ -2496,6 +2677,66 @@ describe('App', () => {
 
     expect(await screen.findAllByText('Signed in.')).not.toHaveLength(0)
     expect(screen.getByRole('button', { name: /notifications/i })).toHaveTextContent('1')
+  })
+
+  it('keeps only the viewport-safe number of floating notifications visible while preserving the full notification history', async () => {
+    const originalInnerHeight = window.innerHeight
+    Object.defineProperty(window, 'innerHeight', { configurable: true, value: 160 })
+
+    const fetchMock = createWorkspaceRouteFetch({
+      session: {
+        id: 43,
+        username: 'alice',
+        role: 'USER',
+        approved: true,
+        mustChangePassword: false,
+        passkeyCount: 0,
+        passwordConfigured: true
+      },
+      uiPreferences: {
+        notificationHistory: [
+          {
+            id: 'note-1',
+            message: 'Oldest hidden notification',
+            copyText: 'Oldest hidden notification',
+            tone: 'success',
+            createdAt: Date.parse('2026-03-31T09:00:00Z'),
+            floatingVisible: true,
+            autoCloseMs: null
+          },
+          {
+            id: 'note-2',
+            message: 'Middle hidden notification',
+            copyText: 'Middle hidden notification',
+            tone: 'warning',
+            createdAt: Date.parse('2026-03-31T09:01:00Z'),
+            floatingVisible: true,
+            autoCloseMs: null
+          },
+          {
+            id: 'note-3',
+            message: 'Newest visible notification',
+            copyText: 'Newest visible notification',
+            tone: 'error',
+            createdAt: Date.parse('2026-03-31T09:02:00Z'),
+            floatingVisible: true,
+            autoCloseMs: null
+          }
+        ]
+      }
+    })
+
+    vi.stubGlobal('fetch', fetchMock)
+
+    render(<App />)
+
+    expect(await screen.findByText('Newest visible notification')).toBeInTheDocument()
+    expect(screen.queryByText('Oldest hidden notification')).not.toBeInTheDocument()
+    expect(screen.queryByText('Middle hidden notification')).not.toBeInTheDocument()
+    expect(screen.getByRole('button', { name: /notifications/i })).toHaveTextContent('3')
+    expect(screen.getAllByRole('button', { name: 'Dismiss notification' })).toHaveLength(1)
+
+    Object.defineProperty(window, 'innerHeight', { configurable: true, value: originalInnerHeight })
   })
 
   it('persists notification dismissals back to the ui preferences endpoint', async () => {

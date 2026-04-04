@@ -65,6 +65,8 @@ describe('i18n catalog', () => {
       'remote.remoteRateLimit',
       'remote.sourcesTitle',
       'remote.lastResult',
+      'remote.processingProgress',
+      'remote.processingBytesProgress',
       'remote.fetched',
       'remote.imported',
       'remote.duplicates',

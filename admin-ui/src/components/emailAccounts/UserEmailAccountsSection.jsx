@@ -23,6 +23,7 @@ function UserEmailAccountsSection({
   fetcherRefreshLoadingId,
   fetcherStatsById,
   fetcherStatsLoadingId,
+  livePoll = null,
   onLoadFetcherCustomRange,
   onAddFetcher,
   onApplyPreset,
@@ -58,6 +59,8 @@ function UserEmailAccountsSection({
   const resolvedOAuthProviders = availableOAuthProviders.length
     ? availableOAuthProviders
     : (microsoftOAuthAvailable ? ['MICROSOFT'] : [])
+  const liveSourcesById = new Map((livePoll?.sources || []).map((source) => [source.sourceId, source]))
+  const livePollRunning = Boolean(livePoll?.running)
   return (
     <CollapsibleSection
       actions={!collapsed ? (
@@ -84,7 +87,9 @@ function UserEmailAccountsSection({
                 connectLoading={connectingEmailAccountId === fetcher.emailAccountId}
                 deleteLoading={deletingEmailAccountId === fetcher.emailAccountId}
                 fetcher={fetcher}
+                liveSource={liveSourcesById.get(fetcher.emailAccountId) || null}
                 locale={locale}
+                livePollRunning={livePollRunning}
                 onConfigurePolling={onConfigureFetcherPolling}
                 onConnectOAuth={onConnectOAuth}
                 onDelete={onDeleteEmailAccount}

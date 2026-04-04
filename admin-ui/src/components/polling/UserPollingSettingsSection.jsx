@@ -51,7 +51,7 @@ function UserPollingSettingsSection({
           </LoadingButton>
           <LoadingButton
             className="primary"
-            disabled={!hasFetchers}
+            disabled={!hasFetchers || livePollRunning}
             isLoading={runningPoll}
             loadingLabel={t('userPolling.runPollLoading')}
             onClick={onRunPoll}

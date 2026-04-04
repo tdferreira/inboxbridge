@@ -53,7 +53,7 @@ function SystemDashboardSection({
           <LoadingButton className="secondary" onClick={onOpenEditor} type="button">
             {t('system.edit')}
           </LoadingButton>
-          <LoadingButton className="primary" isLoading={runningPoll} loadingLabel={t('system.runPollLoading')} onClick={onRunPoll}>
+          <LoadingButton className="primary" disabled={livePollRunning} isLoading={runningPoll} loadingLabel={t('system.runPollLoading')} onClick={onRunPoll}>
             {t('system.runPoll')}
           </LoadingButton>
         </>
@@ -72,6 +72,7 @@ function SystemDashboardSection({
         <>
           <LivePollPanel
             livePoll={livePoll}
+            locale={locale}
             onMoveNext={onMovePollSourceNext}
             onPause={onPausePoll}
             onResume={onResumePoll}

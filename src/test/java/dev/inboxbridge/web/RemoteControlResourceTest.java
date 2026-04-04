@@ -1,6 +1,7 @@
 package dev.inboxbridge.web;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import org.junit.jupiter.api.Test;
 
@@ -13,6 +14,7 @@ import dev.inboxbridge.security.CurrentUserContext;
 import dev.inboxbridge.service.AuthClientAddressService;
 import dev.inboxbridge.service.PollingLiveService;
 import dev.inboxbridge.service.RemoteControlService;
+import io.smallrye.common.annotation.Blocking;
 
 class RemoteControlResourceTest {
 
@@ -85,6 +87,11 @@ class RemoteControlResourceTest {
                         "move:carol:source-1",
                         "retry:carol:source-1"),
                 liveService.actions);
+    }
+
+    @Test
+    void pollEventsIsBlocking() throws NoSuchMethodException {
+        assertTrue(RemoteControlResource.class.getMethod("pollEvents").isAnnotationPresent(Blocking.class));
     }
 
     private static final class FakeRemoteControlService extends RemoteControlService {

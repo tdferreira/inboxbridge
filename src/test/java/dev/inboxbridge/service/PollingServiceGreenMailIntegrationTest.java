@@ -13,6 +13,7 @@ import java.util.Iterator;
 import java.util.List;
 import java.util.Optional;
 import java.util.Properties;
+import java.util.Random;
 
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
@@ -245,6 +246,129 @@ class PollingServiceGreenMailIntegrationTest {
     }
 
     @Test
+    void switchingDestinationMailboxReimportsExistingSourceMailOnlyForTheNewDestination() throws Exception {
+        Random random = new Random(20260404L);
+        String sharedSourcePassword = "Source#789";
+        String sharedDestinationPassword = "Destination#789";
+        String firstDestinationUsername = "primary-destination@example.com";
+        String secondDestinationUsername = "secondary-destination@example.com";
+        List<String> sourceUsernames = List.of(
+                "switch-source-one@example.com",
+                "switch-source-two@example.com",
+                "switch-source-three@example.com");
+        List<RuntimeEmailAccount> primaryDestinationAccounts = new ArrayList<>();
+        List<RuntimeEmailAccount> secondaryDestinationAccounts = new ArrayList<>();
+        List<String> expectedSubjects = new ArrayList<>();
+        int expectedTotalMessages = 0;
+
+        destinationMail.setUser(firstDestinationUsername, sharedDestinationPassword);
+        destinationMail.setUser(secondDestinationUsername, sharedDestinationPassword);
+
+        for (int sourceIndex = 0; sourceIndex < sourceUsernames.size(); sourceIndex += 1) {
+            String sourceUsername = sourceUsernames.get(sourceIndex);
+            sourceMail.setUser(sourceUsername, sharedSourcePassword);
+            String sourceId = "switch-source-" + (sourceIndex + 1);
+            int sourceMessageCount = 1 + random.nextInt(4);
+            expectedTotalMessages += sourceMessageCount;
+
+            for (int messageIndex = 1; messageIndex <= sourceMessageCount; messageIndex += 1) {
+                String subject = sourceId + "-message-" + messageIndex;
+                appendMessage(
+                        sourceMail,
+                        sourceUsername,
+                        sharedSourcePassword,
+                        "INBOX",
+                        subject,
+                        "Mailbox switch regression message " + messageIndex,
+                        "<" + subject + "@example.com>");
+                expectedSubjects.add(subject);
+            }
+
+            primaryDestinationAccounts.add(runtimeAccount(
+                    sourceId,
+                    ALICE_USER_ID,
+                    "alice",
+                    sourceUsername,
+                    sharedSourcePassword,
+                    "user-destination:7:primary",
+                    firstDestinationUsername,
+                    sharedDestinationPassword));
+            secondaryDestinationAccounts.add(runtimeAccount(
+                    sourceId,
+                    ALICE_USER_ID,
+                    "alice",
+                    sourceUsername,
+                    sharedSourcePassword,
+                    "user-destination:7:secondary",
+                    secondDestinationUsername,
+                    sharedDestinationPassword));
+        }
+
+        RecordingImportedMessageRepository importedMessageRepository = new RecordingImportedMessageRepository();
+
+        PollRunResult firstRun = pollService(primaryDestinationAccounts, importedMessageRepository)
+                .runPoll("greenmail-integration:destination-switch:first");
+
+        assertEquals(expectedTotalMessages, firstRun.getFetched());
+        assertEquals(expectedTotalMessages, firstRun.getImported());
+        assertEquals(0, firstRun.getDuplicates());
+        assertTrue(firstRun.getErrorDetails().isEmpty());
+        assertEquals(sortedSubjects(expectedSubjects), sortedSubjects(listSubjects(
+                destinationMail,
+                firstDestinationUsername,
+                sharedDestinationPassword,
+                DESTINATION_FOLDER)));
+        assertEquals(expectedTotalMessages, importedMessageRepository.importedMessages.size());
+
+        PollRunResult secondRun = pollService(primaryDestinationAccounts, importedMessageRepository)
+                .runPoll("greenmail-integration:destination-switch:second");
+
+        assertEquals(expectedTotalMessages, secondRun.getFetched());
+        assertEquals(0, secondRun.getImported());
+        assertEquals(expectedTotalMessages, secondRun.getDuplicates());
+        assertTrue(secondRun.getErrorDetails().isEmpty());
+        assertEquals(sortedSubjects(expectedSubjects), sortedSubjects(listSubjects(
+                destinationMail,
+                firstDestinationUsername,
+                sharedDestinationPassword,
+                DESTINATION_FOLDER)));
+        assertEquals(expectedTotalMessages, importedMessageRepository.importedMessages.size());
+
+        PollRunResult thirdRun = pollService(secondaryDestinationAccounts, importedMessageRepository)
+                .runPoll("greenmail-integration:destination-switch:third");
+
+        assertEquals(expectedTotalMessages, thirdRun.getFetched());
+        assertEquals(expectedTotalMessages, thirdRun.getImported());
+        assertEquals(0, thirdRun.getDuplicates());
+        assertTrue(thirdRun.getErrorDetails().isEmpty());
+        assertEquals(sortedSubjects(expectedSubjects), sortedSubjects(listSubjects(
+                destinationMail,
+                secondDestinationUsername,
+                sharedDestinationPassword,
+                DESTINATION_FOLDER)));
+        assertEquals(expectedTotalMessages * 2, importedMessageRepository.importedMessages.size());
+
+        PollRunResult fourthRun = pollService(primaryDestinationAccounts, importedMessageRepository)
+                .runPoll("greenmail-integration:destination-switch:fourth");
+
+        assertEquals(expectedTotalMessages, fourthRun.getFetched());
+        assertEquals(0, fourthRun.getImported());
+        assertEquals(expectedTotalMessages, fourthRun.getDuplicates());
+        assertTrue(fourthRun.getErrorDetails().isEmpty());
+        assertEquals(sortedSubjects(expectedSubjects), sortedSubjects(listSubjects(
+                destinationMail,
+                firstDestinationUsername,
+                sharedDestinationPassword,
+                DESTINATION_FOLDER)));
+        assertEquals(sortedSubjects(expectedSubjects), sortedSubjects(listSubjects(
+                destinationMail,
+                secondDestinationUsername,
+                sharedDestinationPassword,
+                DESTINATION_FOLDER)));
+        assertEquals(expectedTotalMessages * 2, importedMessageRepository.importedMessages.size());
+    }
+
+    @Test
     void runPollCanMarkSourceMessagesReadAndMoveThemAfterImport() throws Exception {
         appendMessage(sourceMail, SOURCE_USERNAME, SOURCE_PASSWORD, "INBOX", "alpha", "First imported message", "<alpha@example.com>");
         ensureFolderExists(sourceMail, SOURCE_USERNAME, SOURCE_PASSWORD, "Processed");
@@ -280,11 +404,14 @@ class PollingServiceGreenMailIntegrationTest {
     }
 
     private PollingService pollService(RuntimeEmailAccount runtimeAccount) {
+        return pollService(List.of(runtimeAccount), new RecordingImportedMessageRepository());
+    }
+
+    private PollingService pollService(List<RuntimeEmailAccount> runtimeAccounts, RecordingImportedMessageRepository importedMessageRepository) {
         PollingService service = new PollingService();
         MailSourceClient mailSourceClient = new MailSourceClient();
         mailSourceClient.mimeHashService = new MimeHashService();
         ImapAppendMailDestinationService destinationService = new ImapAppendMailDestinationService();
-        RecordingImportedMessageRepository importedMessageRepository = new RecordingImportedMessageRepository();
         ImportDeduplicationService deduplicationService = new ImportDeduplicationService();
         deduplicationService.importedMessageRepository = importedMessageRepository;
         deduplicationService.mimeHashService = new MimeHashService();
@@ -293,7 +420,7 @@ class PollingServiceGreenMailIntegrationTest {
         service.importDeduplicationService = deduplicationService;
         service.mailDestinationServices = new SingleMailDestinationServices(destinationService);
         service.sourcePollEventService = new NoopSourcePollEventService();
-        service.runtimeEmailAccountService = new FixedRuntimeEmailAccountService(List.of(runtimeAccount));
+        service.runtimeEmailAccountService = new FixedRuntimeEmailAccountService(runtimeAccounts);
         service.pollingSettingsService = new FixedPollingSettingsService();
         service.userPollingSettingsService = new FixedUserPollingSettingsService();
         service.sourcePollingSettingsService = new FixedSourcePollingSettingsService();
@@ -348,6 +475,26 @@ class PollingServiceGreenMailIntegrationTest {
             String sourcePassword,
             String destinationUsername,
             String destinationPassword) {
+        return runtimeAccount(
+                sourceId,
+                userId,
+                ownerUsername,
+                sourceUsername,
+                sourcePassword,
+                "user-destination:" + userId,
+                destinationUsername,
+                destinationPassword);
+    }
+
+    private RuntimeEmailAccount runtimeAccount(
+            String sourceId,
+            Long userId,
+            String ownerUsername,
+            String sourceUsername,
+            String sourcePassword,
+            String destinationKey,
+            String destinationUsername,
+            String destinationPassword) {
         return new RuntimeEmailAccount(
                 sourceId,
                 "USER",
@@ -367,7 +514,7 @@ class PollingServiceGreenMailIntegrationTest {
                 false,
                 Optional.of("Imported/Test"),
                 new ImapAppendDestinationTarget(
-                        "user-destination:" + userId,
+                        destinationKey,
                         userId,
                         ownerUsername,
                         UserMailDestinationConfigService.PROVIDER_CUSTOM,
@@ -672,7 +819,7 @@ class PollingServiceGreenMailIntegrationTest {
 
     private static final class NoopSourcePollEventService extends SourcePollEventService {
         @Override
-        public void record(String sourceId, String trigger, Instant startedAt, Instant finishedAt, int fetched, int imported, int duplicates, int spamJunkMessageCount, String actorUsername, String executionSurface, String error) {
+        public void record(String sourceId, String trigger, Instant startedAt, Instant finishedAt, int fetched, int imported, long importedBytes, int duplicates, int spamJunkMessageCount, String actorUsername, String executionSurface, String error) {
         }
     }
 

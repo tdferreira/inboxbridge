@@ -146,6 +146,7 @@ export function buildUserWorkspaceSections({
           fetcherStatsById={emailAccounts.fetcherStatsById}
           fetcherStatsLoadingId={emailAccounts.fetcherStatsLoadingId}
           fetchers={emailAccounts.visibleFetchers}
+          livePoll={polling.livePoll}
           locale={language}
           onAddFetcher={emailAccounts.openAddFetcherDialog}
           onApplyPreset={emailAccounts.applyEmailAccountPreset}
@@ -182,6 +183,7 @@ export function buildUserWorkspaceSections({
 }
 
 export function buildAdminWorkspaceSections({
+  globalStatsNeedsAttention = false,
   adminSetupGuideState,
   authSecuritySettings,
   authOptions,
@@ -288,12 +290,15 @@ export function buildAdminWorkspaceSections({
       render: () => (
         <Suspense fallback={<div className="muted-box">{t('common.refreshingSection')}</div>}>
           <PollingStatisticsSection
+            attentionActive={globalStatsNeedsAttention}
             collapsed={uiPreferences.globalStatsCollapsed}
             collapseLoading={isPending('uiPreferences') && uiPreferences.persistLayout}
             copy={t('pollingStats.globalCopy')}
             customRangeLoader={loadGlobalCustomRange}
             id="global-polling-stats-section"
             onCollapseToggle={() => toggleWorkspaceSection('globalStatsCollapsed')}
+            scheduledRunAlertInterval={systemDashboard?.polling?.effectivePollInterval || null}
+            scheduledRunAlertSourceCount={systemDashboard?.stats?.enabledMailFetchers ?? 0}
             sectionLoading={isSectionRefreshing('systemDashboardCollapsed')}
             stats={systemDashboard?.stats || null}
             t={t}

@@ -103,6 +103,34 @@ export function formatDurationHint(value, locale = 'en') {
   return `${value} = ${meaning}`
 }
 
+export function formatBytes(value, locale = 'en') {
+  if (!Number.isFinite(value) || value < 0) return translate(locale, 'common.unavailable')
+  if (value < 1024) return `${Math.round(value)} B`
+  const units = ['KB', 'MB', 'GB', 'TB']
+  let scaled = value / 1024
+  let unitIndex = 0
+  while (scaled >= 1024 && unitIndex < units.length - 1) {
+    scaled /= 1024
+    unitIndex += 1
+  }
+  const maximumFractionDigits = scaled >= 10 ? 1 : 2
+  return `${new Intl.NumberFormat(locale, { maximumFractionDigits }).format(scaled)} ${units[unitIndex]}`
+}
+
+export function formatImportedSizeSummary(event, locale = 'en') {
+  if (!event || !Number.isFinite(event.importedBytes) || event.importedBytes <= 0) return ''
+  return translate(locale, 'bridge.importedSize', {
+    size: formatBytes(event.importedBytes, locale)
+  })
+}
+
+export function formatRemoteImportedSizeSummary(value, locale = 'en') {
+  if (!Number.isFinite(value) || value <= 0) return ''
+  return translate(locale, 'remote.importedSize', {
+    size: formatBytes(value, locale)
+  })
+}
+
 export function formatPollError(message, locale = 'en') {
   if (message && typeof message === 'object') {
     const code = String(message.code || '').trim()

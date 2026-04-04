@@ -10,6 +10,7 @@ import dev.inboxbridge.security.CurrentUserContext;
 import dev.inboxbridge.security.RequireAuth;
 import dev.inboxbridge.service.PollingLiveService;
 import dev.inboxbridge.service.PollingService;
+import io.smallrye.common.annotation.Blocking;
 import io.smallrye.mutiny.Multi;
 import jakarta.inject.Inject;
 import jakarta.ws.rs.GET;
@@ -52,6 +53,7 @@ public class PollingResource {
 
     @GET
     @Path("/events")
+    @Blocking
     @Produces(MediaType.SERVER_SENT_EVENTS)
     @RestStreamElementType(MediaType.APPLICATION_JSON)
     public Multi<LiveEventView> events() {

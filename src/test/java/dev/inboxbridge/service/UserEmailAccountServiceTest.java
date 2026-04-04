@@ -106,6 +106,7 @@ class UserEmailAccountServiceTest {
                         Instant.parse("2026-03-26T17:45:07Z"),
                         0,
                         0,
+                        0L,
                         0,
                         0,
                         null,
@@ -121,29 +122,30 @@ class UserEmailAccountServiceTest {
     void listReplacesStaleGmail401ErrorAfterLinkedAccountWasCleared() {
         UserEmailAccountService service = service();
         AppUser owner = user(1L);
-        service.upsert(owner, request(null, "sprc-john"));
+        service.upsert(owner, request(null, "gmail-source"));
         service.userGmailConfigRepository = new FakeUserGmailConfigRepository(
                 gmailConfig(owner.id, Instant.parse("2026-03-28T08:00:00Z"), false));
         service.sourcePollEventService = new StaticSourcePollEventService(
                 new AdminPollEventSummary(
-                        "sprc-john",
+                        "gmail-source",
                         "scheduler",
                         "ERROR",
                         Instant.parse("2026-03-28T07:00:00Z"),
                         Instant.parse("2026-03-28T07:00:05Z"),
                         0,
                         0,
+                        0L,
                         0,
                         0,
                         null,
                         null,
-                        "Source sprc-john failed: Failed to list Gmail labels: 401 - {\"error\":{\"message\":\"Invalid authentication credentials\"}}"));
+                        "Source gmail-source failed: Failed to list Gmail labels: 401 - {\"error\":{\"message\":\"Invalid authentication credentials\"}}"));
         service.sourcePollingStateService = new StaticSourcePollingStateService(
                 new dev.inboxbridge.dto.SourcePollingStateView(
                         Instant.parse("2026-03-28T08:30:00Z"),
                         Instant.parse("2026-03-28T08:30:00Z"),
                         1,
-                        "Source sprc-john failed: Failed to list Gmail labels: 401 - {\"error\":{\"message\":\"Invalid authentication credentials\"}}",
+                        "Source gmail-source failed: Failed to list Gmail labels: 401 - {\"error\":{\"message\":\"Invalid authentication credentials\"}}",
                         Instant.parse("2026-03-28T07:00:05Z"),
                         null));
 
@@ -151,11 +153,11 @@ class UserEmailAccountServiceTest {
 
         assertNotNull(view.lastEvent());
         assertEquals(
-                "Source sprc-john failed: The linked Gmail account no longer grants InboxBridge access. The saved Gmail OAuth link was cleared. Reconnect it from My Destination Mailbox.",
+                "Source gmail-source failed: The linked Gmail account no longer grants InboxBridge access. The saved Gmail OAuth link was cleared. Reconnect it from My Destination Mailbox.",
                 view.lastEvent().error());
         assertNotNull(view.pollingState());
         assertEquals(
-                "Source sprc-john failed: The linked Gmail account no longer grants InboxBridge access. The saved Gmail OAuth link was cleared. Reconnect it from My Destination Mailbox.",
+                "Source gmail-source failed: The linked Gmail account no longer grants InboxBridge access. The saved Gmail OAuth link was cleared. Reconnect it from My Destination Mailbox.",
                 view.pollingState().lastFailureReason());
     }
 
@@ -173,6 +175,7 @@ class UserEmailAccountServiceTest {
                         Instant.parse("2026-03-28T10:00:05Z"),
                         12,
                         3,
+                        2048L,
                         9,
                         6,
                         "admin",
