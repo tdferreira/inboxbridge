@@ -75,6 +75,7 @@ public class RemoteControlService {
     SystemOAuthAppSettingsService systemOAuthAppSettingsService;
 
     public RemoteControlView viewFor(AppUser actor) {
+        dev.inboxbridge.dto.UserUiPreferenceView uiPreference = userUiPreferenceService.viewForUser(actor.id).orElse(userUiPreferenceService.defaultView());
         boolean hasOwnSourceEmailAccounts = userEmailAccountRepository.count("userId = ?1 and enabled = true", actor.id) > 0;
         boolean hasReadyDestinationMailbox = userMailDestinationConfigService.resolveForUser(actor.id, actor.username).isPresent();
         List<RemoteSourceView> sources = listSources(actor);
@@ -88,7 +89,9 @@ public class RemoteControlService {
                         actor.role == AppUser.Role.ADMIN,
                         systemOAuthAppSettingsService.effectiveMultiUserEnabled(),
                         false,
-                        userUiPreferenceService.viewForUser(actor.id).map(dev.inboxbridge.dto.UserUiPreferenceView::language).orElse(DEFAULT_LANGUAGE)),
+                        uiPreference.language(),
+                        uiPreference.timezoneMode(),
+                        uiPreference.timezone()),
                 sources,
                 hasOwnSourceEmailAccounts,
                 hasReadyDestinationMailbox,

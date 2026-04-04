@@ -93,7 +93,7 @@ class WebInfrastructureTest {
         AppUser admin = user(11L, "admin", AppUser.Role.ADMIN);
         PollRunResult pollResult = finishedResult(1, 1);
         RemoteControlView view = new RemoteControlView(
-                new RemoteSessionUserResponse(admin.id, 501L, admin.username, admin.role.name(), true, true, true, false, "en"),
+                new RemoteSessionUserResponse(admin.id, 501L, admin.username, admin.role.name(), true, true, true, false, "en", "AUTO", ""),
                 List.of(),
                 false,
                 true,

@@ -91,6 +91,12 @@ public class UserUiPreference extends PanacheEntityBase {
     @Column(name = "language", nullable = false, length = 32)
     public String language;
 
+    @Column(name = "timezone_mode", nullable = false, length = 16)
+    public String timezoneMode;
+
+    @Column(name = "timezone", nullable = false, length = 128)
+    public String timezone;
+
     @Column(name = "notification_history", nullable = false, columnDefinition = "TEXT")
     public String notificationHistory;
 

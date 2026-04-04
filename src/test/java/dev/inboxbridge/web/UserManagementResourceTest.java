@@ -80,7 +80,7 @@ class UserManagementResourceTest {
         UserManagementResource resource = resource();
         resource.pollingStatsService = new FakePollingStatsService();
 
-        var response = resource.configuration(7L);
+        var response = resource.configuration(7L, null);
 
         assertEquals(9L, response.pollingStats().totalImportedMessages());
         assertEquals(1, response.pollingStats().configuredMailFetchers());
@@ -91,7 +91,7 @@ class UserManagementResourceTest {
         UserManagementResource resource = resource();
         resource.pollingStatsService = new FakePollingStatsService();
 
-        PollingTimelineBundleView response = resource.pollingStatsRange(7L, "2026-03-26T00:00:00Z", "2026-03-27T00:00:00Z");
+        PollingTimelineBundleView response = resource.pollingStatsRange(7L, null, "2026-03-26T00:00:00Z", "2026-03-27T00:00:00Z");
 
         assertEquals(1, response.importTimelines().get("custom").size());
     }
@@ -302,7 +302,7 @@ class UserManagementResourceTest {
 
     private static final class FakePollingStatsService extends PollingStatsService {
         @Override
-        public UserPollingStatsView userStats(Long userId) {
+        public UserPollingStatsView userStats(Long userId, java.time.ZoneId zoneId) {
             return new UserPollingStatsView(
                     9L,
                     1,
@@ -323,7 +323,7 @@ class UserManagementResourceTest {
         }
 
         @Override
-        public PollingTimelineBundleView userTimelineBundle(Long userId, java.time.Instant fromInclusive, java.time.Instant toExclusive) {
+        public PollingTimelineBundleView userTimelineBundle(Long userId, java.time.Instant fromInclusive, java.time.Instant toExclusive, java.time.ZoneId zoneId) {
           return new PollingTimelineBundleView(
                   java.util.Map.of("custom", java.util.List.of(new dev.inboxbridge.dto.ImportTimelinePointView("2026-03-26", 1L))),
                   java.util.Map.of("custom", java.util.List.of()),

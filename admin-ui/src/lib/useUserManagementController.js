@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { apiErrorText } from './api'
 import { pollErrorNotification, translatedNotification } from './notifications'
+import { statsTimezoneHeader } from './statsTimezone'
 
 const DEFAULT_ADMIN_RESET_PASSWORD_FORM = { newPassword: '', confirmNewPassword: '' }
 const DEFAULT_CREATE_USER_FORM = { username: '', password: '', confirmPassword: '', role: 'USER' }
@@ -130,7 +131,9 @@ export function useUserManagementController({
     }
     setSelectedUserLoading(true)
     try {
-      const response = await fetch(`/api/admin/users/${userId}/configuration`)
+      const response = await fetch(`/api/admin/users/${userId}/configuration`, {
+        headers: statsTimezoneHeader()
+      })
       if (!response.ok) {
         throw new Error(await apiErrorText(response, errorText('loadUserConfiguration')))
       }

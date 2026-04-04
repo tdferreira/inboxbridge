@@ -136,6 +136,26 @@ describe('useWorkspacePreferencesController', () => {
     }))
   })
 
+  it('switches to a manual timezone and persists it', async () => {
+    fetch.mockResolvedValue(createFetchResponse({ timezoneMode: 'MANUAL', timezone: 'Europe/Lisbon' }))
+
+    const { result } = renderController()
+
+    await act(async () => {
+      await result.current.handleTimeZoneModeChange('MANUAL')
+    })
+
+    await act(async () => {
+      await result.current.handleTimeZoneChange('Europe/Lisbon')
+    })
+
+    expect(result.current.uiPreferences.timezoneMode).toBe('MANUAL')
+    expect(result.current.uiPreferences.timezone).toBe('Europe/Lisbon')
+    expect(fetch).toHaveBeenCalledWith('/api/app/ui-preferences', expect.objectContaining({
+      method: 'PUT'
+    }))
+  })
+
   it('tracks layout edits against a snapshot and can discard them', async () => {
     fetch.mockImplementation(async (_url, options = {}) => createFetchResponse({
       ...(options.body ? JSON.parse(options.body) : {}),

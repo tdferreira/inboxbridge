@@ -133,6 +133,8 @@ Scheduler-triggered runs now also filter out sources whose current eligibility s
 
 Successful scheduled polls now persist the next eligible time on aligned interval boundaries rather than `last success + interval`, so the single scheduler loop still wakes up every few seconds but each source's actual cadence follows predictable slots such as `:00`, `:05`, and `:10` according to that source's effective polling settings.
 
+Polling statistics are intentionally timezone-aware at the request boundary: the browser sends the signed-in user's effective IANA timezone in `X-InboxBridge-Timezone`, and `PollingStatsService` uses that zone when building hourly, daily, monthly, and custom buckets. The persisted timestamps stay in UTC, but chart labels such as `09:00` or `2026-04-04` are computed relative to that user's effective timezone. The effective zone itself comes from the persisted user UI-preferences model: `AUTO` follows the current browser timezone, while `MANUAL` pins the account to one chosen timezone so the same user can keep consistent charts and date-time rendering across different devices or travel scenarios. The admin-side scheduled-run anomaly signal is layered on top of those viewer-local buckets in the browser: it warns only admins, keeps the floating notification for at most 24 hours after the suspicious bucket, and lets the static section warning age out after one week.
+
 UI-managed IMAP sources now also persist optional post-poll source-side actions:
 
 - mark handled mail as read
@@ -206,6 +208,7 @@ Authentication and registration hardening now follows this model:
 - provider-based registration CAPTCHA, defaulting to self-hosted `ALTCHA`
 - per-account session history with revoke support
 - optional Geo-IP lookup only when a new session is created, never on every request
+- best-effort unusual-location warnings for new sessions, based on comparing the new session's Geo-IP country token with recent stored session locations for that same account
 
 ## Local TLS bootstrap
 

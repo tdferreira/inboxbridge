@@ -122,7 +122,7 @@ class AdminResourceTest {
         resource.runtimeEmailAccountService = new FakeRuntimeEmailAccountService();
         resource.pollingStatsService = new FakePollingStatsService();
 
-        SourcePollingStatsView response = resource.emailAccountPollingStats("system-fetcher");
+        SourcePollingStatsView response = resource.emailAccountPollingStats("system-fetcher", null);
 
         assertEquals(4L, response.totalImportedMessages());
         assertEquals(1, response.configuredMailFetchers());
@@ -135,7 +135,7 @@ class AdminResourceTest {
         resource.runtimeEmailAccountService = new FakeRuntimeEmailAccountService();
         resource.pollingStatsService = new FakePollingStatsService();
 
-        PollingTimelineBundleView response = resource.emailAccountPollingStatsRange("system-fetcher", "2026-03-26T00:00:00Z", "2026-03-27T00:00:00Z");
+        PollingTimelineBundleView response = resource.emailAccountPollingStatsRange("system-fetcher", null, "2026-03-26T00:00:00Z", "2026-03-27T00:00:00Z");
 
         assertEquals(1, response.importTimelines().get("custom").size());
     }
@@ -339,7 +339,7 @@ class AdminResourceTest {
 
     private static final class FakePollingStatsService extends PollingStatsService {
         @Override
-        public SourcePollingStatsView sourceStats(RuntimeEmailAccount bridge) {
+        public SourcePollingStatsView sourceStats(RuntimeEmailAccount bridge, java.time.ZoneId zoneId) {
             return new SourcePollingStatsView(
                     4L,
                     1,
@@ -360,7 +360,7 @@ class AdminResourceTest {
         }
 
         @Override
-        public PollingTimelineBundleView sourceTimelineBundle(RuntimeEmailAccount bridge, java.time.Instant fromInclusive, java.time.Instant toExclusive) {
+        public PollingTimelineBundleView sourceTimelineBundle(RuntimeEmailAccount bridge, java.time.Instant fromInclusive, java.time.Instant toExclusive, java.time.ZoneId zoneId) {
             return new PollingTimelineBundleView(
                     java.util.Map.of("custom", java.util.List.of(new dev.inboxbridge.dto.ImportTimelinePointView("2026-03-26", 4L))),
                     java.util.Map.of("custom", java.util.List.of()),

@@ -5,7 +5,11 @@ import java.time.Instant;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.time.Month;
+import java.time.ZoneId;
+import java.time.DayOfWeek;
 import java.time.temporal.ChronoUnit;
+import java.time.temporal.IsoFields;
+import java.time.temporal.TemporalAdjusters;
 import java.time.ZoneOffset;
 import java.util.ArrayList;
 import java.util.Comparator;
@@ -45,9 +49,10 @@ public class PollingStatsService {
     private static final int HOURLY_BUCKETS = 24;
     private static final int DAILY_BUCKETS = 30;
     private static final int MONTHLY_BUCKETS = 12;
-    private static final int TRIMESTER_BUCKETS = 4;
-    private static final int SEMESTER_BUCKETS = 2;
-    private static final int YEARLY_BUCKETS = 5;
+    private static final int PAST_WEEK_HOURS = 7 * 24;
+    private static final int TRIMESTER_WEEKS = 13;
+    private static final int SEMESTER_WEEKS = 26;
+    private static final int YEAR_WEEKS = 52;
 
     @Inject
     ImportedMessageRepository importedMessageRepository;
@@ -68,6 +73,11 @@ public class PollingStatsService {
     SourcePollingStateService sourcePollingStateService;
 
     public GlobalPollingStatsView globalStats(int sourcesWithErrors) {
+        return globalStats(sourcesWithErrors, ZoneOffset.UTC);
+    }
+
+    public GlobalPollingStatsView globalStats(int sourcesWithErrors, ZoneId zoneId) {
+        ZoneId effectiveZoneId = effectiveZoneId(zoneId);
         List<ConfiguredSourceSnapshot> sources = new ArrayList<>();
         for (EnvSourceService.IndexedSource indexedSource : envSourceService.configuredSources()) {
             dev.inboxbridge.config.InboxBridgeConfig.Source source = indexedSource.source();
@@ -89,8 +99,8 @@ public class PollingStatsService {
                 emailAccount.host));
         }
         Instant earliest = earliestTimelineInstant();
-        Map<String, List<ImportTimelinePointView>> timelines = buildTimelinesFromInstants(
-                importedMessageRepository.listImportedAtSince(earliest));
+        List<Instant> imports = importedMessageRepository.listImportedAtSince(earliest);
+        Map<String, List<ImportTimelinePointView>> timelines = buildTimelinesFromInstants(imports, effectiveZoneId);
         List<SourcePollEvent> events = sourcePollEventService.listSince(earliest);
         PollingStatsComputation computation = computeEventStats(sources, events, sourcesWithErrors);
         return new GlobalPollingStatsView(
@@ -99,12 +109,12 @@ public class PollingStatsService {
                 (int) sources.stream().filter(ConfiguredSourceSnapshot::enabled).count(),
                 computation.sourcesWithErrors(),
                 computation.errorPolls(),
-                buildTimeline(importedMessageRepository.summarizeByImportedDay(), DEFAULT_TIMELINE_DAYS),
+                buildRecentDailyTimeline(toTimedCounts(imports), DEFAULT_TIMELINE_DAYS, effectiveZoneId),
                 timelines,
-                buildTimelinesFromTimedCounts(computation.duplicatePoints()),
-                buildTimelinesFromTimedCounts(computation.errorPoints()),
-                buildTimelinesFromTimedCounts(computation.manualRunPoints()),
-                buildTimelinesFromTimedCounts(computation.scheduledRunPoints()),
+                buildTimelinesFromTimedCounts(computation.duplicatePoints(), effectiveZoneId),
+                buildTimelinesFromTimedCounts(computation.errorPoints(), effectiveZoneId),
+                buildTimelinesFromTimedCounts(computation.manualRunPoints(), effectiveZoneId),
+                buildTimelinesFromTimedCounts(computation.scheduledRunPoints(), effectiveZoneId),
                 computation.health(),
                 computation.providerBreakdown(),
                 computation.manualRuns(),
@@ -113,6 +123,11 @@ public class PollingStatsService {
     }
 
     public UserPollingStatsView userStats(Long userId) {
+        return userStats(userId, ZoneOffset.UTC);
+    }
+
+    public UserPollingStatsView userStats(Long userId, ZoneId zoneId) {
+        ZoneId effectiveZoneId = effectiveZoneId(zoneId);
         List<UserEmailAccount> emailAccounts = userEmailAccountRepository.listByUserId(userId);
         List<ConfiguredSourceSnapshot> sources = emailAccounts.stream()
             .map(emailAccount -> new ConfiguredSourceSnapshot(
@@ -125,18 +140,19 @@ public class PollingStatsService {
                 .toList();
         String destinationKey = "user-gmail:" + userId;
         Instant earliest = earliestTimelineInstant();
-        Map<String, List<ImportTimelinePointView>> timelines = buildTimelinesFromInstants(
-                importedMessageRepository.listImportedAtSinceForDestinationKey(destinationKey, earliest));
+        List<Instant> imports = importedMessageRepository.listImportedAtSinceForDestinationKey(destinationKey, earliest);
+        Map<String, List<ImportTimelinePointView>> timelines = buildTimelinesFromInstants(imports, effectiveZoneId);
         List<SourcePollEvent> events = sourcePollEventService.listBySourceIdsSince(
                 sources.stream().map(ConfiguredSourceSnapshot::sourceId).toList(),
                 earliest);
         ScopedStatsData scopedStats = buildScopedStats(
                 sources,
                 importedMessageRepository.countByDestinationKey(destinationKey),
-                buildTimeline(importedMessageRepository.summarizeByImportedDayForDestinationKey(destinationKey), DEFAULT_TIMELINE_DAYS),
+                buildRecentDailyTimeline(toTimedCounts(imports), DEFAULT_TIMELINE_DAYS, effectiveZoneId),
                 timelines,
                 events,
-                -1);
+                -1,
+                effectiveZoneId);
         return new UserPollingStatsView(
                 scopedStats.totalImportedMessages(),
                 scopedStats.configuredMailFetchers(),
@@ -156,7 +172,12 @@ public class PollingStatsService {
                 scopedStats.averagePollDurationMillis());
     }
 
-        public SourcePollingStatsView sourceStats(RuntimeEmailAccount emailAccount) {
+    public SourcePollingStatsView sourceStats(RuntimeEmailAccount emailAccount) {
+        return sourceStats(emailAccount, ZoneOffset.UTC);
+    }
+
+    public SourcePollingStatsView sourceStats(RuntimeEmailAccount emailAccount, ZoneId zoneId) {
+        ZoneId effectiveZoneId = effectiveZoneId(zoneId);
         Instant earliest = earliestTimelineInstant();
         ConfiguredSourceSnapshot source = new ConfiguredSourceSnapshot(
             emailAccount.id(),
@@ -169,15 +190,13 @@ public class PollingStatsService {
         long totalImportedMessages = destinationKey == null
                 ? 0L
             : importedMessageRepository.countByDestinationKeyAndSourceAccountId(destinationKey, emailAccount.id());
-        List<ImportTimelinePointView> importsByDay = destinationKey == null
-                ? buildTimeline(List.of(), DEFAULT_TIMELINE_DAYS)
-                : buildTimeline(
-                importedMessageRepository.summarizeByImportedDayForDestinationKeyAndSourceAccountId(destinationKey, emailAccount.id()),
-                        DEFAULT_TIMELINE_DAYS);
+        List<Instant> imports = destinationKey == null
+                ? List.of()
+                : importedMessageRepository.listImportedAtSinceForDestinationKeyAndSourceAccountId(destinationKey, emailAccount.id(), earliest);
+        List<ImportTimelinePointView> importsByDay = buildRecentDailyTimeline(toTimedCounts(imports), DEFAULT_TIMELINE_DAYS, effectiveZoneId);
         Map<String, List<ImportTimelinePointView>> timelines = destinationKey == null
-                ? buildTimelinesFromInstants(List.of())
-                : buildTimelinesFromInstants(
-                importedMessageRepository.listImportedAtSinceForDestinationKeyAndSourceAccountId(destinationKey, emailAccount.id(), earliest));
+                ? buildTimelinesFromInstants(List.of(), effectiveZoneId)
+                : buildTimelinesFromInstants(imports, effectiveZoneId);
         List<SourcePollEvent> events = sourcePollEventService.listBySourceIdsSince(List.of(emailAccount.id()), earliest);
         ScopedStatsData scopedStats = buildScopedStats(
                 List.of(source),
@@ -185,7 +204,8 @@ public class PollingStatsService {
                 importsByDay,
                 timelines,
                 events,
-                -1);
+                -1,
+                effectiveZoneId);
         return new SourcePollingStatsView(
                 scopedStats.totalImportedMessages(),
                 scopedStats.configuredMailFetchers(),
@@ -206,6 +226,10 @@ public class PollingStatsService {
     }
 
     public PollingTimelineBundleView globalTimelineBundle(Instant fromInclusive, Instant toExclusive) {
+        return globalTimelineBundle(fromInclusive, toExclusive, ZoneOffset.UTC);
+    }
+
+    public PollingTimelineBundleView globalTimelineBundle(Instant fromInclusive, Instant toExclusive, ZoneId zoneId) {
         Instant normalizedTo = normalizeUpperBound(toExclusive);
         List<Instant> imports = importedMessageRepository.listImportedAtSince(fromInclusive).stream()
                 .filter(value -> value.isBefore(normalizedTo))
@@ -213,10 +237,14 @@ public class PollingStatsService {
         List<SourcePollEvent> events = sourcePollEventService.listSince(fromInclusive).stream()
                 .filter(event -> event.finishedAt.isBefore(normalizedTo))
                 .toList();
-        return buildTimelineBundle(imports, events, fromInclusive, normalizedTo);
+        return buildTimelineBundle(imports, events, fromInclusive, normalizedTo, effectiveZoneId(zoneId));
     }
 
     public PollingTimelineBundleView userTimelineBundle(Long userId, Instant fromInclusive, Instant toExclusive) {
+        return userTimelineBundle(userId, fromInclusive, toExclusive, ZoneOffset.UTC);
+    }
+
+    public PollingTimelineBundleView userTimelineBundle(Long userId, Instant fromInclusive, Instant toExclusive, ZoneId zoneId) {
         Instant normalizedTo = normalizeUpperBound(toExclusive);
         String destinationKey = userMailDestinationConfigRepository.findByUserId(userId)
             .map(config -> UserMailDestinationConfigService.PROVIDER_GMAIL.equals(config.provider) ? "user-gmail:" + userId : "user-destination:" + userId)
@@ -230,10 +258,14 @@ public class PollingStatsService {
         List<SourcePollEvent> events = sourcePollEventService.listBySourceIdsSince(sourceIds, fromInclusive).stream()
                 .filter(event -> event.finishedAt.isBefore(normalizedTo))
                 .toList();
-        return buildTimelineBundle(imports, events, fromInclusive, normalizedTo);
+        return buildTimelineBundle(imports, events, fromInclusive, normalizedTo, effectiveZoneId(zoneId));
     }
 
-        public PollingTimelineBundleView sourceTimelineBundle(RuntimeEmailAccount emailAccount, Instant fromInclusive, Instant toExclusive) {
+    public PollingTimelineBundleView sourceTimelineBundle(RuntimeEmailAccount emailAccount, Instant fromInclusive, Instant toExclusive) {
+        return sourceTimelineBundle(emailAccount, fromInclusive, toExclusive, ZoneOffset.UTC);
+    }
+
+    public PollingTimelineBundleView sourceTimelineBundle(RuntimeEmailAccount emailAccount, Instant fromInclusive, Instant toExclusive, ZoneId zoneId) {
         Instant normalizedTo = normalizeUpperBound(toExclusive);
         String destinationKey = emailAccount.destination() != null ? emailAccount.destination().subjectKey() : null;
         List<Instant> imports = destinationKey == null
@@ -244,7 +276,7 @@ public class PollingStatsService {
         List<SourcePollEvent> events = sourcePollEventService.listBySourceIdsSince(List.of(emailAccount.id()), fromInclusive).stream()
                 .filter(event -> event.finishedAt.isBefore(normalizedTo))
                 .toList();
-        return buildTimelineBundle(imports, events, fromInclusive, normalizedTo);
+        return buildTimelineBundle(imports, events, fromInclusive, normalizedTo, effectiveZoneId(zoneId));
     }
 
     private ScopedStatsData buildScopedStats(
@@ -253,7 +285,8 @@ public class PollingStatsService {
             List<ImportTimelinePointView> importsByDay,
             Map<String, List<ImportTimelinePointView>> importTimelines,
             List<SourcePollEvent> events,
-            int fallbackSourcesWithErrors) {
+            int fallbackSourcesWithErrors,
+            ZoneId zoneId) {
         PollingStatsComputation computation = computeEventStats(sources, events, fallbackSourcesWithErrors);
         return new ScopedStatsData(
                 totalImportedMessages,
@@ -263,10 +296,10 @@ public class PollingStatsService {
                 computation.errorPolls(),
                 importsByDay,
                 importTimelines,
-                buildTimelinesFromTimedCounts(computation.duplicatePoints()),
-                buildTimelinesFromTimedCounts(computation.errorPoints()),
-                buildTimelinesFromTimedCounts(computation.manualRunPoints()),
-                buildTimelinesFromTimedCounts(computation.scheduledRunPoints()),
+                buildTimelinesFromTimedCounts(computation.duplicatePoints(), zoneId),
+                buildTimelinesFromTimedCounts(computation.errorPoints(), zoneId),
+                buildTimelinesFromTimedCounts(computation.manualRunPoints(), zoneId),
+                buildTimelinesFromTimedCounts(computation.scheduledRunPoints(), zoneId),
                 computation.health(),
                 computation.providerBreakdown(),
                 computation.manualRuns(),
@@ -278,40 +311,46 @@ public class PollingStatsService {
             List<Instant> imports,
             List<SourcePollEvent> events,
             Instant fromInclusive,
-            Instant toExclusive) {
+            Instant toExclusive,
+            ZoneId zoneId) {
         return new PollingTimelineBundleView(
                 Map.of("custom", buildCustomTimeline(
-                        imports.stream().map(value -> new TimedCount(value, 1L)).toList(),
+                        toTimedCounts(imports),
                         fromInclusive,
-                        toExclusive)),
+                        toExclusive,
+                        zoneId)),
                 Map.of("custom", buildCustomTimeline(
                         events.stream()
                                 .filter(event -> event.duplicateCount > 0)
                                 .map(event -> new TimedCount(event.finishedAt, event.duplicateCount))
                                 .toList(),
                         fromInclusive,
-                        toExclusive)),
+                        toExclusive,
+                        zoneId)),
                 Map.of("custom", buildCustomTimeline(
                         events.stream()
                                 .filter(event -> "ERROR".equals(event.status))
                                 .map(event -> new TimedCount(event.finishedAt, 1L))
                                 .toList(),
                         fromInclusive,
-                        toExclusive)),
+                        toExclusive,
+                        zoneId)),
                 Map.of("custom", buildCustomTimeline(
                         events.stream()
                                 .filter(event -> !"scheduler".equals(event.triggerName))
                                 .map(event -> new TimedCount(event.finishedAt, 1L))
                                 .toList(),
                         fromInclusive,
-                        toExclusive)),
+                        toExclusive,
+                        zoneId)),
                 Map.of("custom", buildCustomTimeline(
                         events.stream()
                                 .filter(event -> "scheduler".equals(event.triggerName))
                                 .map(event -> new TimedCount(event.finishedAt, 1L))
                                 .toList(),
                         fromInclusive,
-                        toExclusive)));
+                        toExclusive,
+                        zoneId)));
     }
 
     private Instant normalizeUpperBound(Instant value) {
@@ -322,41 +361,48 @@ public class PollingStatsService {
         return LocalDateTime.now(ZoneOffset.UTC)
                 .withMonth(Month.JANUARY.getValue())
                 .withDayOfMonth(1)
-                .minusYears(YEARLY_BUCKETS - 1L)
+                .minusYears(1L)
                 .toInstant(ZoneOffset.UTC);
     }
 
-    private Map<String, List<ImportTimelinePointView>> buildTimelinesFromInstants(List<Instant> importedAtValues) {
-        List<TimedCount> timedCounts = importedAtValues.stream()
-                .map(value -> new TimedCount(value, 1L))
-                .toList();
-        return buildTimelinesFromTimedCounts(timedCounts);
+    private ZoneId effectiveZoneId(ZoneId zoneId) {
+        return zoneId == null ? ZoneOffset.UTC : zoneId;
     }
 
-    private Map<String, List<ImportTimelinePointView>> buildTimelinesFromTimedCounts(List<TimedCount> values) {
+    private Map<String, List<ImportTimelinePointView>> buildTimelinesFromInstants(List<Instant> importedAtValues, ZoneId zoneId) {
+        return buildTimelinesFromTimedCounts(toTimedCounts(importedAtValues), zoneId);
+    }
+
+    private Map<String, List<ImportTimelinePointView>> buildTimelinesFromTimedCounts(List<TimedCount> values, ZoneId zoneId) {
         Map<String, List<ImportTimelinePointView>> timelines = new LinkedHashMap<>();
-        timelines.put("today", buildTodayTimeline(values));
-        timelines.put("yesterday", buildYesterdayTimeline(values));
-        timelines.put("pastWeek", buildPastWeekTimeline(values));
-        timelines.put("pastMonth", buildPastMonthTimeline(values));
-        timelines.put("pastTrimester", buildPastTrimesterTimeline(values));
-        timelines.put("pastSemester", buildPastSemesterTimeline(values));
-        timelines.put("pastYear", buildPastYearTimeline(values));
+        timelines.put("today", buildTodayTimeline(values, zoneId));
+        timelines.put("yesterday", buildYesterdayTimeline(values, zoneId));
+        timelines.put("pastWeek", buildPastWeekTimeline(values, zoneId));
+        timelines.put("pastMonth", buildPastMonthTimeline(values, zoneId));
+        timelines.put("pastTrimester", buildPastTrimesterTimeline(values, zoneId));
+        timelines.put("pastSemester", buildPastSemesterTimeline(values, zoneId));
+        timelines.put("pastYear", buildPastYearTimeline(values, zoneId));
         return timelines;
     }
 
-    private List<ImportTimelinePointView> buildTodayTimeline(List<TimedCount> values) {
-        return buildHourlyRangeTimeline(values, LocalDate.now(ZoneOffset.UTC));
+    private List<TimedCount> toTimedCounts(List<Instant> instants) {
+        return instants.stream()
+                .map(value -> new TimedCount(value, 1L))
+                .toList();
     }
 
-    private List<ImportTimelinePointView> buildYesterdayTimeline(List<TimedCount> values) {
-        return buildHourlyRangeTimeline(values, LocalDate.now(ZoneOffset.UTC).minusDays(1));
+    private List<ImportTimelinePointView> buildTodayTimeline(List<TimedCount> values, ZoneId zoneId) {
+        return buildHourlyRangeTimeline(values, LocalDate.now(zoneId), zoneId);
     }
 
-    private List<ImportTimelinePointView> buildHourlyRangeTimeline(List<TimedCount> values, LocalDate day) {
+    private List<ImportTimelinePointView> buildYesterdayTimeline(List<TimedCount> values, ZoneId zoneId) {
+        return buildHourlyRangeTimeline(values, LocalDate.now(zoneId).minusDays(1), zoneId);
+    }
+
+    private List<ImportTimelinePointView> buildHourlyRangeTimeline(List<TimedCount> values, LocalDate day, ZoneId zoneId) {
         Map<Integer, Long> counts = new HashMap<>();
         for (TimedCount value : values) {
-            LocalDateTime timestamp = value.at().atZone(ZoneOffset.UTC).toLocalDateTime();
+            LocalDateTime timestamp = value.at().atZone(zoneId).toLocalDateTime();
             if (timestamp.toLocalDate().equals(day)) {
                 counts.merge(timestamp.getHour(), value.count(), Long::sum);
             }
@@ -368,20 +414,20 @@ public class PollingStatsService {
         return points;
     }
 
-    private List<ImportTimelinePointView> buildPastWeekTimeline(List<TimedCount> values) {
-        return buildRecentDailyTimeline(values, 7);
+    private List<ImportTimelinePointView> buildPastWeekTimeline(List<TimedCount> values, ZoneId zoneId) {
+        return buildRecentHourlyTimeline(values, PAST_WEEK_HOURS, zoneId);
     }
 
-    private List<ImportTimelinePointView> buildPastMonthTimeline(List<TimedCount> values) {
-        return buildRecentDailyTimeline(values, 30);
+    private List<ImportTimelinePointView> buildPastMonthTimeline(List<TimedCount> values, ZoneId zoneId) {
+        return buildRecentDailyTimeline(values, 30, zoneId);
     }
 
-    private List<ImportTimelinePointView> buildRecentDailyTimeline(List<TimedCount> values, int days) {
-        LocalDate today = LocalDate.now(ZoneOffset.UTC);
+    private List<ImportTimelinePointView> buildRecentDailyTimeline(List<TimedCount> values, int days, ZoneId zoneId) {
+        LocalDate today = LocalDate.now(zoneId);
         LocalDate start = today.minusDays(days - 1L);
         Map<LocalDate, Long> counts = new HashMap<>();
         for (TimedCount value : values) {
-            LocalDate bucket = value.at().atZone(ZoneOffset.UTC).toLocalDate();
+            LocalDate bucket = value.at().atZone(zoneId).toLocalDate();
             if (!bucket.isBefore(start) && !bucket.isAfter(today)) {
                 counts.merge(bucket, value.count(), Long::sum);
             }
@@ -394,44 +440,92 @@ public class PollingStatsService {
         return points;
     }
 
-    private List<ImportTimelinePointView> buildPastTrimesterTimeline(List<TimedCount> values) {
-        return buildRecentMonthlyTimeline(values, 3);
+    private List<ImportTimelinePointView> buildPastTrimesterTimeline(List<TimedCount> values, ZoneId zoneId) {
+        return buildRecentWeeklyTimeline(values, TRIMESTER_WEEKS, zoneId);
     }
 
-    private List<ImportTimelinePointView> buildPastSemesterTimeline(List<TimedCount> values) {
-        return buildRecentMonthlyTimeline(values, 6);
+    private List<ImportTimelinePointView> buildPastSemesterTimeline(List<TimedCount> values, ZoneId zoneId) {
+        return buildRecentWeeklyTimeline(values, SEMESTER_WEEKS, zoneId);
     }
 
-    private List<ImportTimelinePointView> buildPastYearTimeline(List<TimedCount> values) {
-        return buildRecentMonthlyTimeline(values, 12);
+    private List<ImportTimelinePointView> buildPastYearTimeline(List<TimedCount> values, ZoneId zoneId) {
+        return buildRecentWeeklyTimeline(values, YEAR_WEEKS, zoneId);
+    }
+
+    private List<ImportTimelinePointView> buildRecentHourlyTimeline(List<TimedCount> values, int hours, ZoneId zoneId) {
+        LocalDateTime end = LocalDateTime.now(zoneId).truncatedTo(ChronoUnit.HOURS);
+        LocalDateTime start = end.minusHours(hours - 1L);
+        Map<LocalDateTime, Long> counts = new HashMap<>();
+        for (TimedCount value : values) {
+            LocalDateTime bucket = value.at().atZone(zoneId).toLocalDateTime().truncatedTo(ChronoUnit.HOURS);
+            if (!bucket.isBefore(start) && !bucket.isAfter(end)) {
+                counts.merge(bucket, value.count(), Long::sum);
+            }
+        }
+        List<ImportTimelinePointView> points = new ArrayList<>();
+        for (LocalDateTime bucket = start; !bucket.isAfter(end); bucket = bucket.plusHours(1)) {
+            points.add(new ImportTimelinePointView(
+                    String.format("%sT%02d:00", bucket.toLocalDate(), bucket.getHour()),
+                    counts.getOrDefault(bucket, 0L)));
+        }
+        return points;
+    }
+
+    private List<ImportTimelinePointView> buildRecentWeeklyTimeline(List<TimedCount> values, int weeks, ZoneId zoneId) {
+        LocalDate currentWeekStart = LocalDate.now(zoneId).with(TemporalAdjusters.previousOrSame(DayOfWeek.MONDAY));
+        LocalDate start = currentWeekStart.minusWeeks(weeks - 1L);
+        Map<LocalDate, Long> counts = new HashMap<>();
+        for (TimedCount value : values) {
+            LocalDate bucket = value.at().atZone(zoneId).toLocalDate().with(TemporalAdjusters.previousOrSame(DayOfWeek.MONDAY));
+            if (!bucket.isBefore(start) && !bucket.isAfter(currentWeekStart)) {
+                counts.merge(bucket, value.count(), Long::sum);
+            }
+        }
+        List<ImportTimelinePointView> points = new ArrayList<>();
+        for (int offset = 0; offset < weeks; offset++) {
+            LocalDate bucket = start.plusWeeks(offset);
+            points.add(new ImportTimelinePointView(
+                    weekBucketLabel(bucket),
+                    counts.getOrDefault(bucket, 0L)));
+        }
+        return points;
+    }
+
+    private String weekBucketLabel(LocalDate bucket) {
+        return String.format(
+                "%d-W%02d",
+                bucket.get(IsoFields.WEEK_BASED_YEAR),
+                bucket.get(IsoFields.WEEK_OF_WEEK_BASED_YEAR));
     }
 
     private List<ImportTimelinePointView> buildCustomTimeline(
             List<TimedCount> values,
             Instant fromInclusive,
-            Instant toExclusive) {
+            Instant toExclusive,
+            ZoneId zoneId) {
         long hours = Math.max(1L, ChronoUnit.HOURS.between(fromInclusive, toExclusive));
         long days = Math.max(1L, ChronoUnit.DAYS.between(fromInclusive, toExclusive));
-        if (hours <= 72L) {
-            return buildHourlyCustomTimeline(values, fromInclusive, toExclusive);
+        if (hours <= 168L) {
+            return buildHourlyCustomTimeline(values, fromInclusive, toExclusive, zoneId);
         }
         if (days <= 180L) {
-            return buildDailyCustomTimeline(values, fromInclusive, toExclusive);
+            return buildDailyCustomTimeline(values, fromInclusive, toExclusive, zoneId);
         }
-        return buildMonthlyCustomTimeline(values, fromInclusive, toExclusive);
+        return buildMonthlyCustomTimeline(values, fromInclusive, toExclusive, zoneId);
     }
 
     private List<ImportTimelinePointView> buildHourlyCustomTimeline(
             List<TimedCount> values,
             Instant fromInclusive,
-            Instant toExclusive) {
-        LocalDateTime start = fromInclusive.atZone(ZoneOffset.UTC).toLocalDateTime()
+            Instant toExclusive,
+            ZoneId zoneId) {
+        LocalDateTime start = fromInclusive.atZone(zoneId).toLocalDateTime()
                 .truncatedTo(ChronoUnit.HOURS);
-        LocalDateTime end = toExclusive.atZone(ZoneOffset.UTC).toLocalDateTime()
+        LocalDateTime end = toExclusive.atZone(zoneId).toLocalDateTime()
                 .truncatedTo(ChronoUnit.HOURS);
         Map<LocalDateTime, Long> counts = new HashMap<>();
         for (TimedCount value : values) {
-            LocalDateTime bucket = value.at().atZone(ZoneOffset.UTC).toLocalDateTime().truncatedTo(ChronoUnit.HOURS);
+            LocalDateTime bucket = value.at().atZone(zoneId).toLocalDateTime().truncatedTo(ChronoUnit.HOURS);
             if (!bucket.isBefore(start) && !bucket.isAfter(end)) {
                 counts.merge(bucket, value.count(), Long::sum);
             }
@@ -448,12 +542,13 @@ public class PollingStatsService {
     private List<ImportTimelinePointView> buildDailyCustomTimeline(
             List<TimedCount> values,
             Instant fromInclusive,
-            Instant toExclusive) {
-        LocalDate start = fromInclusive.atZone(ZoneOffset.UTC).toLocalDate();
-        LocalDate end = toExclusive.minusMillis(1).atZone(ZoneOffset.UTC).toLocalDate();
+            Instant toExclusive,
+            ZoneId zoneId) {
+        LocalDate start = fromInclusive.atZone(zoneId).toLocalDate();
+        LocalDate end = toExclusive.minusMillis(1).atZone(zoneId).toLocalDate();
         Map<LocalDate, Long> counts = new HashMap<>();
         for (TimedCount value : values) {
-            LocalDate bucket = value.at().atZone(ZoneOffset.UTC).toLocalDate();
+            LocalDate bucket = value.at().atZone(zoneId).toLocalDate();
             if (!bucket.isBefore(start) && !bucket.isAfter(end)) {
                 counts.merge(bucket, value.count(), Long::sum);
             }
@@ -468,12 +563,13 @@ public class PollingStatsService {
     private List<ImportTimelinePointView> buildMonthlyCustomTimeline(
             List<TimedCount> values,
             Instant fromInclusive,
-            Instant toExclusive) {
-        LocalDate start = fromInclusive.atZone(ZoneOffset.UTC).toLocalDate().withDayOfMonth(1);
-        LocalDate end = toExclusive.minusMillis(1).atZone(ZoneOffset.UTC).toLocalDate().withDayOfMonth(1);
+            Instant toExclusive,
+            ZoneId zoneId) {
+        LocalDate start = fromInclusive.atZone(zoneId).toLocalDate().withDayOfMonth(1);
+        LocalDate end = toExclusive.minusMillis(1).atZone(zoneId).toLocalDate().withDayOfMonth(1);
         Map<LocalDate, Long> counts = new HashMap<>();
         for (TimedCount value : values) {
-            LocalDate bucket = value.at().atZone(ZoneOffset.UTC).toLocalDate().withDayOfMonth(1);
+            LocalDate bucket = value.at().atZone(zoneId).toLocalDate().withDayOfMonth(1);
             if (!bucket.isBefore(start) && !bucket.isAfter(end)) {
                 counts.merge(bucket, value.count(), Long::sum);
             }
@@ -487,12 +583,12 @@ public class PollingStatsService {
         return points;
     }
 
-    private List<ImportTimelinePointView> buildRecentMonthlyTimeline(List<TimedCount> values, int months) {
-        LocalDate currentMonth = LocalDate.now(ZoneOffset.UTC).withDayOfMonth(1);
+    private List<ImportTimelinePointView> buildRecentMonthlyTimeline(List<TimedCount> values, int months, ZoneId zoneId) {
+        LocalDate currentMonth = LocalDate.now(zoneId).withDayOfMonth(1);
         LocalDate start = currentMonth.minusMonths(months - 1L);
         Map<LocalDate, Long> counts = new HashMap<>();
         for (TimedCount value : values) {
-            LocalDate bucket = value.at().atZone(ZoneOffset.UTC).toLocalDate().withDayOfMonth(1);
+            LocalDate bucket = value.at().atZone(zoneId).toLocalDate().withDayOfMonth(1);
             if (!bucket.isBefore(start) && !bucket.isAfter(currentMonth)) {
                 counts.merge(bucket, value.count(), Long::sum);
             }
@@ -505,156 +601,6 @@ public class PollingStatsService {
                     counts.getOrDefault(bucket, 0L)));
         }
         return points;
-    }
-
-    private List<ImportTimelinePointView> buildHourlyTimeline(List<TimedCount> values) {
-        LocalDateTime now = LocalDateTime.now(ZoneOffset.UTC).withMinute(0).withSecond(0).withNano(0);
-        Map<LocalDateTime, Long> counts = new HashMap<>();
-        LocalDateTime start = now.minusHours(HOURLY_BUCKETS - 1L);
-        for (TimedCount value : values) {
-            LocalDateTime bucket = value.at().atZone(ZoneOffset.UTC).toLocalDateTime()
-                    .withMinute(0)
-                    .withSecond(0)
-                    .withNano(0);
-            if (!bucket.isBefore(start)) {
-                counts.merge(bucket, value.count(), Long::sum);
-            }
-        }
-        List<ImportTimelinePointView> points = new ArrayList<>();
-        for (int offset = 0; offset < HOURLY_BUCKETS; offset++) {
-            LocalDateTime bucket = start.plusHours(offset);
-            points.add(new ImportTimelinePointView(
-                    String.format("%02d:00", bucket.getHour()),
-                    counts.getOrDefault(bucket, 0L)));
-        }
-        return points;
-    }
-
-    private List<ImportTimelinePointView> buildDailyTimeline(List<TimedCount> values) {
-        LocalDate today = LocalDate.now(ZoneOffset.UTC);
-        LocalDate start = today.minusDays(DAILY_BUCKETS - 1L);
-        Map<LocalDate, Long> counts = new HashMap<>();
-        for (TimedCount value : values) {
-            LocalDate bucket = value.at().atZone(ZoneOffset.UTC).toLocalDate();
-            if (!bucket.isBefore(start)) {
-                counts.merge(bucket, value.count(), Long::sum);
-            }
-        }
-        List<ImportTimelinePointView> points = new ArrayList<>();
-        for (int offset = 0; offset < DAILY_BUCKETS; offset++) {
-            LocalDate bucket = start.plusDays(offset);
-            points.add(new ImportTimelinePointView(bucket.toString(), counts.getOrDefault(bucket, 0L)));
-        }
-        return points;
-    }
-
-    private List<ImportTimelinePointView> buildMonthlyTimeline(List<TimedCount> values) {
-        LocalDate monthStart = LocalDate.now(ZoneOffset.UTC).withDayOfMonth(1);
-        Map<LocalDate, Long> counts = new HashMap<>();
-        LocalDate start = monthStart.minusMonths(MONTHLY_BUCKETS - 1L);
-        for (TimedCount value : values) {
-            LocalDate bucket = value.at().atZone(ZoneOffset.UTC).toLocalDate().withDayOfMonth(1);
-            if (!bucket.isBefore(start)) {
-                counts.merge(bucket, value.count(), Long::sum);
-            }
-        }
-        List<ImportTimelinePointView> points = new ArrayList<>();
-        for (int offset = 0; offset < MONTHLY_BUCKETS; offset++) {
-            LocalDate bucket = start.plusMonths(offset);
-            points.add(new ImportTimelinePointView(
-                    String.format("%d-%02d", bucket.getYear(), bucket.getMonthValue()),
-                    counts.getOrDefault(bucket, 0L)));
-        }
-        return points;
-    }
-
-    private List<ImportTimelinePointView> buildQuarterTimeline(List<TimedCount> values) {
-        QuarterBucket current = QuarterBucket.from(LocalDate.now(ZoneOffset.UTC));
-        QuarterBucket start = current.minusQuarters(TRIMESTER_BUCKETS - 1);
-        Map<QuarterBucket, Long> counts = new HashMap<>();
-        for (TimedCount value : values) {
-            QuarterBucket bucket = QuarterBucket.from(value.at().atZone(ZoneOffset.UTC).toLocalDate());
-            if (!bucket.isBefore(start)) {
-                counts.merge(bucket, value.count(), Long::sum);
-            }
-        }
-        List<ImportTimelinePointView> points = new ArrayList<>();
-        QuarterBucket bucket = start;
-        for (int index = 0; index < TRIMESTER_BUCKETS; index++) {
-            points.add(new ImportTimelinePointView(bucket.label(), counts.getOrDefault(bucket, 0L)));
-            bucket = bucket.plusQuarters(1);
-        }
-        return points;
-    }
-
-    private List<ImportTimelinePointView> buildSemesterTimeline(List<TimedCount> values) {
-        SemesterBucket current = SemesterBucket.from(LocalDate.now(ZoneOffset.UTC));
-        SemesterBucket start = current.minusSemesters(SEMESTER_BUCKETS - 1);
-        Map<SemesterBucket, Long> counts = new HashMap<>();
-        for (TimedCount value : values) {
-            SemesterBucket bucket = SemesterBucket.from(value.at().atZone(ZoneOffset.UTC).toLocalDate());
-            if (!bucket.isBefore(start)) {
-                counts.merge(bucket, value.count(), Long::sum);
-            }
-        }
-        List<ImportTimelinePointView> points = new ArrayList<>();
-        SemesterBucket bucket = start;
-        for (int index = 0; index < SEMESTER_BUCKETS; index++) {
-            points.add(new ImportTimelinePointView(bucket.label(), counts.getOrDefault(bucket, 0L)));
-            bucket = bucket.plusSemesters(1);
-        }
-        return points;
-    }
-
-    private List<ImportTimelinePointView> buildYearTimeline(List<TimedCount> values) {
-        int currentYear = LocalDate.now(ZoneOffset.UTC).getYear();
-        int startYear = currentYear - YEARLY_BUCKETS + 1;
-        Map<Integer, Long> counts = new HashMap<>();
-        for (TimedCount value : values) {
-            int bucket = value.at().atZone(ZoneOffset.UTC).getYear();
-            if (bucket >= startYear) {
-                counts.merge(bucket, value.count(), Long::sum);
-            }
-        }
-        List<ImportTimelinePointView> points = new ArrayList<>();
-        for (int year = startYear; year <= currentYear; year++) {
-            points.add(new ImportTimelinePointView(Integer.toString(year), counts.getOrDefault(year, 0L)));
-        }
-        return points;
-    }
-
-    private List<ImportTimelinePointView> buildTimeline(List<Object[]> rows, int days) {
-        LocalDate today = LocalDate.now(ZoneOffset.UTC);
-        LocalDate start = today.minusDays(days - 1L);
-        Map<LocalDate, Long> countsByDay = new HashMap<>();
-        for (Object[] row : rows) {
-            LocalDate day = toUtcDate(row[0]);
-            Number count = (Number) row[1];
-            if (day != null && !day.isBefore(start)) {
-                countsByDay.put(day, count.longValue());
-            }
-        }
-        List<ImportTimelinePointView> points = new ArrayList<>();
-        for (int offset = 0; offset < days; offset++) {
-            LocalDate day = start.plusDays(offset);
-            points.add(new ImportTimelinePointView(
-                    day.toString(),
-                    countsByDay.getOrDefault(day, 0L)));
-        }
-        return points;
-    }
-
-    private LocalDate toUtcDate(Object value) {
-        if (value instanceof Timestamp timestamp) {
-            return timestamp.toInstant().atZone(ZoneOffset.UTC).toLocalDate();
-        }
-        if (value instanceof java.time.OffsetDateTime offsetDateTime) {
-            return offsetDateTime.toInstant().atZone(ZoneOffset.UTC).toLocalDate();
-        }
-        if (value instanceof java.util.Date date) {
-            return date.toInstant().atZone(ZoneOffset.UTC).toLocalDate();
-        }
-        return null;
     }
 
     private PollingStatsComputation computeEventStats(
@@ -814,49 +760,4 @@ public class PollingStatsService {
             long averagePollDurationMillis) {
     }
 
-    private record QuarterBucket(int year, int quarter) {
-        private static QuarterBucket from(LocalDate date) {
-            return new QuarterBucket(date.getYear(), ((date.getMonthValue() - 1) / 3) + 1);
-        }
-
-        private QuarterBucket plusQuarters(int amount) {
-            int zeroBased = (year * 4) + (quarter - 1) + amount;
-            return new QuarterBucket(Math.floorDiv(zeroBased, 4), Math.floorMod(zeroBased, 4) + 1);
-        }
-
-        private QuarterBucket minusQuarters(int amount) {
-            return plusQuarters(-amount);
-        }
-
-        private boolean isBefore(QuarterBucket other) {
-            return year < other.year || (year == other.year && quarter < other.quarter);
-        }
-
-        private String label() {
-            return year + "-Q" + quarter;
-        }
-    }
-
-    private record SemesterBucket(int year, int semester) {
-        private static SemesterBucket from(LocalDate date) {
-            return new SemesterBucket(date.getYear(), date.getMonthValue() <= 6 ? 1 : 2);
-        }
-
-        private SemesterBucket plusSemesters(int amount) {
-            int zeroBased = (year * 2) + (semester - 1) + amount;
-            return new SemesterBucket(Math.floorDiv(zeroBased, 2), Math.floorMod(zeroBased, 2) + 1);
-        }
-
-        private SemesterBucket minusSemesters(int amount) {
-            return plusSemesters(-amount);
-        }
-
-        private boolean isBefore(SemesterBucket other) {
-            return year < other.year || (year == other.year && semester < other.semester);
-        }
-
-        private String label() {
-            return year + "-S" + semester;
-        }
-    }
 }

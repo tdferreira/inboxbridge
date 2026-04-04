@@ -14,6 +14,7 @@ describe('PreferencesDialog', () => {
     render(
       <PreferencesDialog
         canHideQuickSetup={true}
+        detectedTimeZone="Europe/Lisbon"
         language="en"
         languageOptions={[
           { value: 'en', label: 'English' },
@@ -27,10 +28,15 @@ describe('PreferencesDialog', () => {
         onQuickSetupVisibilityChange={vi.fn()}
         onResetLayout={vi.fn()}
         onStartLayoutEditing={vi.fn()}
+        onTimeZoneChange={vi.fn()}
+        onTimeZoneModeChange={vi.fn()}
         persistLayout={false}
         quickSetupVisible={false}
         savingLayout={false}
+        selectableTimeZones={[{ value: 'Europe/Lisbon', label: 'Europe/Lisbon' }]}
         t={t}
+        timezone=""
+        timezoneMode="AUTO"
       />
     )
 
@@ -47,6 +53,7 @@ describe('PreferencesDialog', () => {
     render(
       <PreferencesDialog
         canHideQuickSetup={true}
+        detectedTimeZone="Europe/Lisbon"
         language="en"
         languageOptions={[
           { value: 'en', label: 'English' },
@@ -60,10 +67,15 @@ describe('PreferencesDialog', () => {
         onQuickSetupVisibilityChange={vi.fn()}
         onResetLayout={vi.fn()}
         onStartLayoutEditing={vi.fn()}
+        onTimeZoneChange={vi.fn()}
+        onTimeZoneModeChange={vi.fn()}
         persistLayout={false}
         quickSetupVisible={false}
         savingLayout={false}
+        selectableTimeZones={[{ value: 'Europe/Lisbon', label: 'Europe/Lisbon' }]}
         t={t}
+        timezone=""
+        timezoneMode="AUTO"
       />
     )
 
@@ -73,12 +85,53 @@ describe('PreferencesDialog', () => {
     expect(onLanguageChange).toHaveBeenCalledWith('pt-PT')
   })
 
+  it('lets the user switch to a manual timezone and pick a specific zone', () => {
+    const onTimeZoneModeChange = vi.fn()
+    const onTimeZoneChange = vi.fn()
+
+    render(
+      <PreferencesDialog
+        canHideQuickSetup={true}
+        detectedTimeZone="Europe/Lisbon"
+        language="en"
+        languageOptions={[{ value: 'en', label: 'English' }]}
+        layoutEditEnabled={false}
+        onClose={vi.fn()}
+        onExitLayoutEditing={vi.fn()}
+        onLanguageChange={vi.fn()}
+        onPersistLayoutChange={vi.fn()}
+        onQuickSetupVisibilityChange={vi.fn()}
+        onResetLayout={vi.fn()}
+        onStartLayoutEditing={vi.fn()}
+        onTimeZoneChange={onTimeZoneChange}
+        onTimeZoneModeChange={onTimeZoneModeChange}
+        persistLayout={false}
+        quickSetupVisible={false}
+        savingLayout={false}
+        selectableTimeZones={[
+          { value: 'Europe/Lisbon', label: 'Europe/Lisbon' },
+          { value: 'America/New_York', label: 'America/New_York' }
+        ]}
+        t={t}
+        timezone="Europe/Lisbon"
+        timezoneMode="MANUAL"
+      />
+    )
+
+    fireEvent.change(screen.getByDisplayValue('Set manually'), { target: { value: 'MANUAL' } })
+    fireEvent.change(screen.getByDisplayValue('Europe/Lisbon'), { target: { value: 'America/New_York' } })
+
+    expect(onTimeZoneModeChange).toHaveBeenCalledWith('MANUAL')
+    expect(onTimeZoneChange).toHaveBeenCalledWith('America/New_York')
+  })
+
   it('starts layout editing from the action button', () => {
     const onStartLayoutEditing = vi.fn()
 
     render(
       <PreferencesDialog
         canHideQuickSetup={true}
+        detectedTimeZone="Europe/Lisbon"
         language="en"
         languageOptions={[{ value: 'en', label: 'English' }]}
         layoutEditEnabled={false}
@@ -89,10 +142,15 @@ describe('PreferencesDialog', () => {
         onQuickSetupVisibilityChange={vi.fn()}
         onResetLayout={vi.fn()}
         onStartLayoutEditing={onStartLayoutEditing}
+        onTimeZoneChange={vi.fn()}
+        onTimeZoneModeChange={vi.fn()}
         persistLayout={true}
         quickSetupVisible={true}
         savingLayout={false}
+        selectableTimeZones={[{ value: 'Europe/Lisbon', label: 'Europe/Lisbon' }]}
         t={t}
+        timezone=""
+        timezoneMode="AUTO"
       />
     )
 
@@ -106,6 +164,7 @@ describe('PreferencesDialog', () => {
     render(
       <PreferencesDialog
         canHideQuickSetup={false}
+        detectedTimeZone="Europe/Lisbon"
         language="en"
         languageOptions={[{ value: 'en', label: 'English' }]}
         layoutEditEnabled={true}
@@ -116,10 +175,15 @@ describe('PreferencesDialog', () => {
         onQuickSetupVisibilityChange={onQuickSetupVisibilityChange}
         onResetLayout={vi.fn()}
         onStartLayoutEditing={vi.fn()}
+        onTimeZoneChange={vi.fn()}
+        onTimeZoneModeChange={vi.fn()}
         persistLayout={true}
         quickSetupVisible={true}
         savingLayout={false}
+        selectableTimeZones={[{ value: 'Europe/Lisbon', label: 'Europe/Lisbon' }]}
         t={t}
+        timezone=""
+        timezoneMode="AUTO"
       />
     )
 
@@ -134,6 +198,7 @@ describe('PreferencesDialog', () => {
     render(
       <PreferencesDialog
         canHideQuickSetup={true}
+        detectedTimeZone="Europe/Lisbon"
         language="en"
         languageOptions={[{ value: 'en', label: 'English' }]}
         layoutEditEnabled={true}
@@ -144,10 +209,15 @@ describe('PreferencesDialog', () => {
         onQuickSetupVisibilityChange={vi.fn()}
         onResetLayout={vi.fn()}
         onStartLayoutEditing={vi.fn()}
+        onTimeZoneChange={vi.fn()}
+        onTimeZoneModeChange={vi.fn()}
         persistLayout={true}
         quickSetupVisible={true}
         savingLayout={false}
+        selectableTimeZones={[{ value: 'Europe/Lisbon', label: 'Europe/Lisbon' }]}
         t={t}
+        timezone=""
+        timezoneMode="AUTO"
       />
     )
 

@@ -74,7 +74,7 @@ class UserConfigResourceTest {
         UserConfigResource resource = resource();
         resource.pollingStatsService = new FakePollingStatsService();
 
-        UserPollingStatsView response = resource.pollingStats();
+        UserPollingStatsView response = resource.pollingStats(null);
 
         assertEquals(2L, response.totalImportedMessages());
         assertEquals(1, response.configuredMailFetchers());
@@ -88,7 +88,7 @@ class UserConfigResourceTest {
         resource.runtimeEmailAccountService = new FakeRuntimeEmailAccountService();
         resource.pollingStatsService = new FakePollingStatsService();
 
-        SourcePollingStatsView response = resource.emailAccountPollingStats("fetcher-1");
+        SourcePollingStatsView response = resource.emailAccountPollingStats("fetcher-1", null);
 
         assertEquals(5L, response.totalImportedMessages());
         assertEquals(1, response.configuredMailFetchers());
@@ -100,7 +100,7 @@ class UserConfigResourceTest {
         UserConfigResource resource = resource();
         resource.pollingStatsService = new FakePollingStatsService();
 
-        PollingTimelineBundleView response = resource.pollingStatsRange("2026-03-26T00:00:00Z", "2026-03-27T00:00:00Z");
+        PollingTimelineBundleView response = resource.pollingStatsRange(null, "2026-03-26T00:00:00Z", "2026-03-27T00:00:00Z");
 
         assertEquals(1, response.importTimelines().get("custom").size());
     }
@@ -291,7 +291,7 @@ class UserConfigResourceTest {
 
     private static final class FakePollingStatsService extends PollingStatsService {
         @Override
-        public UserPollingStatsView userStats(Long userId) {
+        public UserPollingStatsView userStats(Long userId, java.time.ZoneId zoneId) {
             return new UserPollingStatsView(
                     2L,
                     1,
@@ -314,7 +314,7 @@ class UserConfigResourceTest {
         }
 
         @Override
-        public SourcePollingStatsView sourceStats(dev.inboxbridge.domain.RuntimeEmailAccount bridge) {
+        public SourcePollingStatsView sourceStats(dev.inboxbridge.domain.RuntimeEmailAccount bridge, java.time.ZoneId zoneId) {
             return new SourcePollingStatsView(
                     5L,
                     1,
@@ -335,7 +335,7 @@ class UserConfigResourceTest {
         }
 
         @Override
-        public PollingTimelineBundleView userTimelineBundle(Long userId, java.time.Instant fromInclusive, java.time.Instant toExclusive) {
+        public PollingTimelineBundleView userTimelineBundle(Long userId, java.time.Instant fromInclusive, java.time.Instant toExclusive, java.time.ZoneId zoneId) {
             return new PollingTimelineBundleView(
                     java.util.Map.of("custom", java.util.List.of(new dev.inboxbridge.dto.ImportTimelinePointView("2026-03-26", 2L))),
                     java.util.Map.of("custom", java.util.List.of()),

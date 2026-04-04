@@ -4,6 +4,7 @@ import { isOauthRevokedError } from './formatters'
 import { pollErrorNotification, translatedNotification } from './notifications'
 import { buildSourceEmailAccountTargetId, extractSourceEmailAccountId } from './sectionTargets'
 import { applyEmailAccountPreset, DEFAULT_EMAIL_ACCOUNT_FORM, normalizeEmailAccountForm } from './sourceEmailAccountForm'
+import { statsTimezoneHeader } from './statsTimezone'
 
 const DEFAULT_SOURCE_POLLING_FORM = {
   pollEnabledMode: 'DEFAULT',
@@ -349,7 +350,9 @@ export function useEmailAccountsController({
     setFetcherStatsLoadingId(fetcher.emailAccountId)
     try {
       const endpointPrefix = fetcher.managementSource === 'ENVIRONMENT' ? '/api/admin/email-accounts' : '/api/app/email-accounts'
-      const response = await fetch(`${endpointPrefix}/${encodeURIComponent(fetcher.emailAccountId)}/polling-stats`)
+      const response = await fetch(`${endpointPrefix}/${encodeURIComponent(fetcher.emailAccountId)}/polling-stats`, {
+        headers: statsTimezoneHeader()
+      })
       if (!response.ok) {
         throw new Error(await apiErrorText(response, errorText('loadMailAccountStatistics')))
       }
@@ -371,7 +374,9 @@ export function useEmailAccountsController({
   }
 
   async function loadScopedTimelineBundle(endpoint, fallbackMessage) {
-    const response = await fetch(endpoint)
+    const response = await fetch(endpoint, {
+      headers: statsTimezoneHeader()
+    })
     if (!response.ok) {
       throw new Error(await apiErrorText(response, fallbackMessage))
     }

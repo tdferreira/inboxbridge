@@ -242,6 +242,7 @@ function UserListItem({
               copy={t('pollingStats.userDetailCopy')}
               customRangeLoader={onLoadCustomRange ? (range) => onLoadCustomRange(user.id, range) : null}
               id={null}
+              locale={locale}
               onCollapseToggle={() => setStatsCollapsed((current) => !current)}
               sectionLoading={isLoading}
               showCollapseToggle={true}

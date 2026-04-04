@@ -258,6 +258,7 @@ function EmailAccountListItem({
               customRangeLoader={onLoadCustomRange ? (range) => onLoadCustomRange(fetcher, range) : null}
               onCollapseToggle={() => setStatsCollapsed((current) => !current)}
               id={null}
+              locale={locale}
               sectionLoading={statsLoading}
               showCollapseToggle={true}
               stats={stats}

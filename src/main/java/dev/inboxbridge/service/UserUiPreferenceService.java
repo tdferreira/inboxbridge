@@ -1,6 +1,7 @@
 package dev.inboxbridge.service;
 
 import java.time.Instant;
+import java.time.ZoneId;
 import java.util.Arrays;
 import java.util.List;
 import java.util.Optional;
@@ -28,6 +29,7 @@ import jakarta.transaction.Transactional;
 public class UserUiPreferenceService {
 
     static final String DEFAULT_LANGUAGE = "en";
+    static final String DEFAULT_TIMEZONE_MODE = "AUTO";
     static final List<String> DEFAULT_USER_SECTION_ORDER = List.of("quickSetup", "destination", "sourceEmailAccounts", "userPolling", "remoteControl", "userStats");
     static final List<String> DEFAULT_ADMIN_SECTION_ORDER = List.of("adminQuickSetup", "systemDashboard", "oauthApps", "userManagement", "authSecurity", "globalStats");
     static final int MAX_NOTIFICATION_HISTORY = 50;
@@ -65,6 +67,8 @@ public class UserUiPreferenceService {
                 DEFAULT_USER_SECTION_ORDER,
                 DEFAULT_ADMIN_SECTION_ORDER,
                 DEFAULT_LANGUAGE,
+                DEFAULT_TIMEZONE_MODE,
+                "",
                 List.of());
     }
 
@@ -93,6 +97,8 @@ public class UserUiPreferenceService {
         preference.userSectionOrder = joinSectionOrder(normalizeSectionOrder(request.userSectionOrder(), DEFAULT_USER_SECTION_ORDER));
         preference.adminSectionOrder = joinSectionOrder(normalizeSectionOrder(request.adminSectionOrder(), DEFAULT_ADMIN_SECTION_ORDER));
         preference.language = normalizeLanguage(request.language());
+        preference.timezoneMode = normalizeTimezoneMode(request.timezoneMode());
+        preference.timezone = normalizeTimezone(preference.timezoneMode, request.timezone());
         preference.notificationHistory = serializeNotificationHistory(normalizeNotificationHistory(request.notificationHistory()));
         preference.updatedAt = Instant.now();
         repository.persist(preference);
@@ -120,6 +126,8 @@ public class UserUiPreferenceService {
                 normalizeSectionOrder(splitSectionOrder(preference.userSectionOrder), DEFAULT_USER_SECTION_ORDER),
                 normalizeSectionOrder(splitSectionOrder(preference.adminSectionOrder), DEFAULT_ADMIN_SECTION_ORDER),
                 normalizeLanguage(preference.language),
+                normalizeTimezoneMode(preference.timezoneMode),
+                normalizeTimezone(preference.timezoneMode, preference.timezone),
                 normalizeNotificationHistory(deserializeNotificationHistory(preference.notificationHistory)));
     }
 
@@ -128,6 +136,27 @@ public class UserUiPreferenceService {
             return DEFAULT_LANGUAGE;
         }
         return language.trim();
+    }
+
+    private String normalizeTimezoneMode(String timezoneMode) {
+        if ("MANUAL".equalsIgnoreCase(String.valueOf(timezoneMode).trim())) {
+            return "MANUAL";
+        }
+        return DEFAULT_TIMEZONE_MODE;
+    }
+
+    private String normalizeTimezone(String timezoneMode, String timezone) {
+        if (!"MANUAL".equals(normalizeTimezoneMode(timezoneMode))) {
+            return "";
+        }
+        if (timezone == null || timezone.isBlank()) {
+            return "";
+        }
+        try {
+            return ZoneId.of(timezone.trim()).getId();
+        } catch (Exception ignored) {
+            return "";
+        }
     }
 
     private List<String> splitSectionOrder(String storedValue) {

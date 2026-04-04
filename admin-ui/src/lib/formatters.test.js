@@ -67,6 +67,11 @@ describe('formatters', () => {
     expect(formatDate('2026-03-28T06:22:31.605711Z', 'en')).not.toBe('Unavailable')
   })
 
+  it('formats dates in the requested timezone', () => {
+    expect(formatDate('2026-04-04T09:15:00Z', 'en', 'Europe/Lisbon')).toContain('10:')
+    expect(formatDate('2026-04-04T09:15:00Z', 'en', 'UTC')).toContain('9:')
+  })
+
   it('renders cooldown errors in portuguese', () => {
     expect(formatPollError('Source outlook-main is cooling down until 2026-03-28T06:22:31.605711Z.', 'pt-PT'))
       .toContain('A fonte outlook-main está em pausa até')

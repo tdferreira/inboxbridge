@@ -9,6 +9,7 @@ public record AccountSessionView(
         String deviceLabel,
         String ipAddress,
         String locationLabel,
+        boolean unusualLocation,
         String deviceLocationLabel,
         Double deviceLatitude,
         Double deviceLongitude,

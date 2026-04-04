@@ -34,6 +34,7 @@ function PollingStatisticsSection({
   collapseLoading = false,
   customRangeLoader = null,
   id,
+  locale = 'en',
   scheduledRunAlertInterval = null,
   scheduledRunAlertSourceCount = 0,
   title,
@@ -56,7 +57,20 @@ function PollingStatisticsSection({
   ]
   const isSourceVariant = variant === 'source'
   const scheduledRunAnomaly = detectScheduledRunAnomaly(stats, scheduledRunAlertInterval, scheduledRunAlertSourceCount)
-  const sectionClassName = `polling-statistics-section${scheduledRunAnomaly ? ' polling-statistics-section-alerting' : ''}${attentionActive ? ' polling-statistics-section-attention' : ''}`
+  const runAnomalyMarkers = scheduledRunAnomaly
+    ? [{
+        bucketLabel: scheduledRunAnomaly.bucketLabel,
+        message: t('pollingStats.runAnomalyCopy', {
+          bucket: scheduledRunAnomaly.bucketLabel,
+          observed: scheduledRunAnomaly.observedRuns,
+          expected: scheduledRunAnomaly.expectedRunsPerHour,
+          interval: scheduledRunAlertInterval,
+          sourceCount: scheduledRunAnomaly.sourceCount
+        }),
+        seriesKey: 'scheduledRuns'
+      }]
+    : []
+  const sectionClassName = `polling-statistics-section${scheduledRunAnomaly?.warningVisible ? ' polling-statistics-section-alerting' : ''}${attentionActive && scheduledRunAnomaly?.warningVisible ? ' polling-statistics-section-attention' : ''}`
 
   return (
     <CollapsibleSection
@@ -73,7 +87,7 @@ function PollingStatisticsSection({
     >
       {stats ? (
         <>
-          {scheduledRunAnomaly ? (
+          {scheduledRunAnomaly?.warningVisible ? (
             <div className="polling-statistics-alert" role="alert">
               <strong>{t('pollingStats.runAnomalyTitle')}</strong>
               <div>
@@ -114,13 +128,18 @@ function PollingStatisticsSection({
 
           <ImportTimelineChart
             customRangeLoader={customRangeLoader}
+            chartStateKey={id ? `${id}:activity` : `${title}:activity`}
+            locale={locale}
             series={importSeries}
             t={t}
             title={t('pollingStats.activityTitle')}
           />
 
           <ImportTimelineChart
+            anomalyMarkers={runAnomalyMarkers}
             customRangeLoader={customRangeLoader}
+            chartStateKey={id ? `${id}:runs` : `${title}:runs`}
+            locale={locale}
             series={runSeries}
             t={t}
             title={t('pollingStats.runActivityTitle')}

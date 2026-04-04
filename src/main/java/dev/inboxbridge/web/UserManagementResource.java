@@ -1,6 +1,8 @@
 package dev.inboxbridge.web;
 
 import java.time.Instant;
+import java.time.ZoneId;
+import java.time.ZoneOffset;
 import java.util.List;
 
 import dev.inboxbridge.dto.AdminUserConfigurationResponse;
@@ -44,6 +46,8 @@ import jakarta.ws.rs.core.MediaType;
  * non-sensitive summaries of user-owned InboxBridge configuration.
  */
 public class UserManagementResource {
+
+    private static final String TIMEZONE_HEADER = "X-InboxBridge-Timezone";
 
     @Inject
     AppUserService appUserService;
@@ -158,7 +162,9 @@ public class UserManagementResource {
 
     @GET
     @Path("/{userId}/configuration")
-    public AdminUserConfigurationResponse configuration(@PathParam("userId") Long userId) {
+    public AdminUserConfigurationResponse configuration(
+            @PathParam("userId") Long userId,
+            @jakarta.ws.rs.HeaderParam(TIMEZONE_HEADER) String timezone) {
         try {
             applicationModeService.requireMultiUserMode();
             return appUserService.findById(userId)
@@ -167,7 +173,7 @@ public class UserManagementResource {
                             userMailDestinationConfigService.viewForUser(user.id),
                             userPollingSettingsService.viewForUser(user.id)
                                     .orElse(userPollingSettingsService.defaultView(user.id)),
-                            pollingStatsService.userStats(user.id),
+                            pollingStatsService.userStats(user.id, resolveZoneId(timezone)),
                             userEmailAccountService.listForUser(user.id),
                             passkeyService.listForUser(user.id)))
                     .orElseThrow(() -> new BadRequestException("Unknown user id"));
@@ -180,6 +186,7 @@ public class UserManagementResource {
     @Path("/{userId}/polling-stats/range")
     public PollingTimelineBundleView pollingStatsRange(
             @PathParam("userId") Long userId,
+            @jakarta.ws.rs.HeaderParam(TIMEZONE_HEADER) String timezone,
             @QueryParam("from") String from,
             @QueryParam("to") String to) {
         try {
@@ -188,7 +195,8 @@ public class UserManagementResource {
             return pollingStatsService.userTimelineBundle(
                     userId,
                     parseInstant(from, true),
-                    parseInstant(to, false));
+                    parseInstant(to, false),
+                    resolveZoneId(timezone));
         } catch (IllegalArgumentException e) {
             throw new BadRequestException(e.getMessage(), e);
         }
@@ -205,6 +213,17 @@ public class UserManagementResource {
             return Instant.parse(value);
         } catch (Exception e) {
             throw new IllegalArgumentException("Invalid ISO-8601 date-time: " + value, e);
+        }
+    }
+
+    private ZoneId resolveZoneId(String value) {
+        if (value == null || value.isBlank()) {
+            return ZoneOffset.UTC;
+        }
+        try {
+            return ZoneId.of(value);
+        } catch (Exception ignored) {
+            return ZoneOffset.UTC;
         }
     }
 }

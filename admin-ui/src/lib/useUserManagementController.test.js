@@ -1,5 +1,6 @@
 import { act, renderHook } from '@testing-library/react'
 import { useUserManagementController } from './useUserManagementController'
+import { resetCurrentFormattingTimeZone, setCurrentFormattingTimeZone } from './timeZonePreferences'
 
 function jsonResponse(payload, ok = true) {
   return {
@@ -15,6 +16,7 @@ describe('useUserManagementController', () => {
   })
 
   afterEach(() => {
+    resetCurrentFormattingTimeZone()
     vi.unstubAllGlobals()
   })
 
@@ -163,5 +165,41 @@ describe('useUserManagementController', () => {
     })
 
     expect(result.current.loadSelectedUserConfiguration).toBe(initialLoader)
+  })
+
+  it('uses the current effective formatting timezone for each selected-user stats request', async () => {
+    fetch.mockResolvedValue(jsonResponse({
+      pollingSettings: {
+        effectivePollEnabled: true,
+        effectivePollInterval: '5m',
+        effectiveFetchWindow: 25
+      }
+    }))
+
+    const { result } = renderController()
+
+    act(() => {
+      result.current.applyLoadedUsers([{ id: 7, username: 'admin', role: 'ADMIN', approved: true, active: true }])
+      setCurrentFormattingTimeZone('Europe/Lisbon')
+    })
+
+    await act(async () => {
+      await result.current.loadSelectedUserConfiguration(7)
+    })
+
+    act(() => {
+      setCurrentFormattingTimeZone('America/New_York')
+    })
+
+    await act(async () => {
+      await result.current.loadSelectedUserConfiguration(7)
+    })
+
+    expect(fetch).toHaveBeenNthCalledWith(1, '/api/admin/users/7/configuration', expect.objectContaining({
+      headers: { 'X-InboxBridge-Timezone': 'Europe/Lisbon' }
+    }))
+    expect(fetch).toHaveBeenNthCalledWith(2, '/api/admin/users/7/configuration', expect.objectContaining({
+      headers: { 'X-InboxBridge-Timezone': 'America/New_York' }
+    }))
   })
 })

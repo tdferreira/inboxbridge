@@ -9,6 +9,7 @@ import './PreferencesDialog.css'
  */
 function PreferencesDialog({
   canHideQuickSetup,
+  detectedTimeZone,
   layoutEditEnabled,
   language,
   languageOptions,
@@ -19,10 +20,15 @@ function PreferencesDialog({
   onPersistLayoutChange,
   onQuickSetupVisibilityChange,
   onResetLayout,
+  onTimeZoneChange,
+  onTimeZoneModeChange,
   persistLayout,
   quickSetupVisible,
   savingLayout,
-  t
+  selectableTimeZones,
+  t,
+  timezone,
+  timezoneMode
 }) {
   return (
     <ModalDialog
@@ -42,6 +48,36 @@ function PreferencesDialog({
             options={languageOptions}
           />
         </label>
+        <label>
+          <span>{t('preferences.timezoneMode')}</span>
+          <select
+            disabled={savingLayout}
+            onChange={(event) => onTimeZoneModeChange(event.target.value)}
+            value={timezoneMode}
+          >
+            <option value="AUTO">{t('preferences.timezoneAuto')}</option>
+            <option value="MANUAL">{t('preferences.timezoneManual')}</option>
+          </select>
+        </label>
+        {timezoneMode === 'AUTO' ? (
+          <div className="section-copy">{t('preferences.timezoneDetected', { value: detectedTimeZone })}</div>
+        ) : (
+          <label>
+            <span className="field-label-row">
+              <span>{t('preferences.timezone')}</span>
+              <InfoHint text={t('preferences.timezoneHelp')} />
+            </span>
+            <select
+              disabled={savingLayout}
+              onChange={(event) => onTimeZoneChange(event.target.value)}
+              value={timezone || detectedTimeZone}
+            >
+              {selectableTimeZones.map((option) => (
+                <option key={option.value} value={option.value}>{option.label}</option>
+              ))}
+            </select>
+          </label>
+        )}
         <label className="checkbox-row">
           <input
             checked={quickSetupVisible}

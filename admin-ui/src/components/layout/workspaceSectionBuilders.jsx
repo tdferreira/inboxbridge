@@ -115,6 +115,7 @@ export function buildUserWorkspaceSections({
             copy={t('pollingStats.userCopy')}
             customRangeLoader={loadUserCustomRange}
             id="user-polling-stats-section"
+            locale={language}
             onCollapseToggle={() => toggleWorkspaceSection('userStatsCollapsed')}
             sectionLoading={isSectionRefreshing('userPollingCollapsed')}
             stats={userPollingStats}
@@ -296,6 +297,7 @@ export function buildAdminWorkspaceSections({
             copy={t('pollingStats.globalCopy')}
             customRangeLoader={loadGlobalCustomRange}
             id="global-polling-stats-section"
+            locale={language}
             onCollapseToggle={() => toggleWorkspaceSection('globalStatsCollapsed')}
             scheduledRunAlertInterval={systemDashboard?.polling?.effectivePollInterval || null}
             scheduledRunAlertSourceCount={systemDashboard?.stats?.enabledMailFetchers ?? 0}

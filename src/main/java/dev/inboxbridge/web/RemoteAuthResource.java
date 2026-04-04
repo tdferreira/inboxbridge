@@ -196,6 +196,7 @@ public class RemoteAuthResource {
     }
 
     private RemoteSessionUserResponse toResponse(AppUser user, Long currentSessionId) {
+        dev.inboxbridge.dto.UserUiPreferenceView uiPreference = userUiPreferenceService.viewForUser(user.id).orElse(userUiPreferenceService.defaultView());
         return new RemoteSessionUserResponse(
                 user.id,
                 currentSessionId,
@@ -205,7 +206,9 @@ public class RemoteAuthResource {
                 user.role == AppUser.Role.ADMIN,
                 systemOAuthAppSettingsService.effectiveMultiUserEnabled(),
                 currentUserContext.remoteSession() != null && currentUserContext.remoteSession().deviceLocationCapturedAt != null,
-                userUiPreferenceService.viewForUser(user.id).map(dev.inboxbridge.dto.UserUiPreferenceView::language).orElse(DEFAULT_LANGUAGE));
+                uiPreference.language(),
+                uiPreference.timezoneMode(),
+                uiPreference.timezone());
     }
 
     private NewCookie remoteSessionCookie(String token) {

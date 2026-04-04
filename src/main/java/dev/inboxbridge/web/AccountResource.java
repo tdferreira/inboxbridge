@@ -16,6 +16,7 @@ import dev.inboxbridge.service.GeoIpLocationService;
 import dev.inboxbridge.service.PasskeyService;
 import dev.inboxbridge.service.PollingLiveService;
 import dev.inboxbridge.service.RemoteSessionService;
+import dev.inboxbridge.service.SessionLocationAlertService;
 import dev.inboxbridge.service.SessionClientInfoService;
 import dev.inboxbridge.service.UserSessionService;
 import dev.inboxbridge.service.UserGmailConfigService;
@@ -68,6 +69,9 @@ public class AccountResource {
 
     @Inject
     SessionClientInfoService sessionClientInfoService;
+
+    @Inject
+    SessionLocationAlertService sessionLocationAlertService;
 
     @Inject
     PollingLiveService pollingLiveService;
@@ -161,6 +165,7 @@ public class AccountResource {
                 .sorted(Comparator.comparing(AccountSessionView::createdAt, Comparator.nullsLast(Comparator.reverseOrder())))
                 .limit(5)
                 .toList();
+        recentLogins = applyUnusualLocationFlags(recentLogins);
         List<AccountSessionView> activeSessions = java.util.stream.Stream.concat(
                         userSessionService.listActiveSessions(currentUserContext.user().id).stream()
                                 .map(session -> toSessionView(session, currentSessionId, now)),
@@ -218,6 +223,7 @@ public class AccountResource {
                 clientInfo.deviceLabel(),
                 session.clientIp,
                 session.locationLabel,
+                false,
                 session.deviceLocationLabel,
                 session.deviceLatitude,
                 session.deviceLongitude,
@@ -239,6 +245,7 @@ public class AccountResource {
                 clientInfo.deviceLabel(),
                 session.clientIp,
                 session.locationLabel,
+                false,
                 session.deviceLocationLabel,
                 session.deviceLatitude,
                 session.deviceLongitude,
@@ -249,5 +256,39 @@ public class AccountResource {
                 session.expiresAt,
                 false,
                 session.revokedAt == null && now.isBefore(session.expiresAt));
+    }
+
+    private List<AccountSessionView> applyUnusualLocationFlags(List<AccountSessionView> sessions) {
+        if (sessionLocationAlertService == null || sessions == null || sessions.isEmpty()) {
+            return sessions;
+        }
+        java.util.Map<String, Boolean> unusualBySession = sessionLocationAlertService.assessSnapshots(
+                sessions.stream()
+                        .map(session -> new SessionLocationAlertService.SessionLocationSnapshot(
+                                session.sessionType(),
+                                session.id(),
+                                session.createdAt(),
+                                session.locationLabel()))
+                        .toList());
+        return sessions.stream()
+                .map(session -> new AccountSessionView(
+                        session.id(),
+                        session.sessionType(),
+                        session.browserLabel(),
+                        session.deviceLabel(),
+                        session.ipAddress(),
+                        session.locationLabel(),
+                        Boolean.TRUE.equals(unusualBySession.get(session.sessionType() + ":" + session.id())),
+                        session.deviceLocationLabel(),
+                        session.deviceLatitude(),
+                        session.deviceLongitude(),
+                        session.deviceLocationCapturedAt(),
+                        session.loginMethod(),
+                        session.createdAt(),
+                        session.lastSeenAt(),
+                        session.expiresAt(),
+                        session.current(),
+                        session.active()))
+                .toList();
     }
 }

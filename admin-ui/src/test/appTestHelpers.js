@@ -37,7 +37,7 @@ export function clearLocalStorage() {
   })
 }
 
-export function createWorkspaceRouteFetch({ session, uiPreferences = {}, sessionActivityResponses = null }) {
+export function createWorkspaceRouteFetch({ session, uiPreferences = {}, sessionActivityResponses = null, adminDashboard = null }) {
   let storedUiPreferences = { ...uiPreferences }
   let sessionActivityIndex = 0
 
@@ -187,7 +187,7 @@ export function createWorkspaceRouteFetch({ session, uiPreferences = {}, session
         })
       }
       if (url === '/api/admin/dashboard') {
-        return jsonResponse({
+        return jsonResponse(adminDashboard || {
           overall: {
             configuredSources: 0,
             enabledSources: 0,

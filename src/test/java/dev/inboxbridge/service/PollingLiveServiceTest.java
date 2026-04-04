@@ -187,6 +187,27 @@ class PollingLiveServiceTest {
     }
 
     @Test
+    void publishNewSignInDetectedHighlightsUnusualLocationsWhenAvailable() {
+        PollingLiveService service = new PollingLiveService();
+        service.sessionLocationAlertService = new SessionLocationAlertService() {
+            @Override
+            public SessionLocationAssessment assessNewSession(Long userId, String sessionType, Long sessionId, String locationLabel) {
+                return new SessionLocationAssessment("Berlin, DE", true);
+            }
+        };
+        AppUser alice = actor(7L, "alice", AppUser.Role.USER);
+        AtomicReference<dev.inboxbridge.dto.LiveEventView> eventRef = new AtomicReference<>();
+
+        service.subscribe(alice, PollingLiveService.SessionStreamKind.BROWSER, 11L)
+                .subscribe().with(eventRef::set);
+
+        service.publishNewSignInDetected(alice.id, PollingLiveService.SessionStreamKind.REMOTE, 55L);
+
+        assertEquals("notifications.newSessionDetectedFromUnusualLocation", eventRef.get().notification().message().key());
+        assertEquals("Berlin, DE", eventRef.get().notification().message().params().get("location"));
+    }
+
+    @Test
     void skipReasonsDoNotEmitLiveFailureNotifications() {
         PollingLiveService service = new PollingLiveService();
         AppUser alice = actor(7L, "alice", AppUser.Role.USER);

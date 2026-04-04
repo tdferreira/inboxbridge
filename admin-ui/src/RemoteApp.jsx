@@ -30,6 +30,7 @@ import {
 import { languageOptions, normalizeLocale, translate } from './lib/i18n'
 import { formatDate, formatDurationMeaning, formatPollError, formatRemoteImportedSizeSummary } from './lib/formatters'
 import { formatLiveProgressLabel, formatLiveProgressSummary, hasDeterminateLiveProgress, liveProgressPercent } from './lib/livePollProgress'
+import { normalizeManualTimeZone, normalizeTimeZoneMode, resetCurrentFormattingTimeZone, resolveEffectiveTimeZone, setCurrentFormattingTimeZone, TIMEZONE_MODE_AUTO } from './lib/timeZonePreferences'
 import { usePwaInstallPrompt } from './lib/usePwaInstallPrompt'
 import { useSessionDeviceLocation } from './lib/useSessionDeviceLocation'
 import './RemoteApp.css'
@@ -47,7 +48,13 @@ const REMOTE_INSTALL_PROMPT_DISMISSED_KEY = 'inboxbridge.remote.installPromptDis
 const LIVE_EVENTS_STALE_MS = 45000
 function RemoteApp() {
   const [language, setLanguage] = useState(() => normalizeLocale(window.localStorage.getItem('inboxbridge.language') || navigator.language))
+  const [timezonePreference, setTimezonePreference] = useState({ timezoneMode: TIMEZONE_MODE_AUTO, timezone: '' })
   const t = useMemo(() => (key, params) => translate(language, key, params), [language])
+  const effectiveTimeZone = useMemo(
+    () => resolveEffectiveTimeZone(timezonePreference.timezoneMode, timezonePreference.timezone),
+    [timezonePreference.timezone, timezonePreference.timezoneMode]
+  )
+  setCurrentFormattingTimeZone(effectiveTimeZone)
   const [session, setSession] = useState(null)
   const [control, setControl] = useState(null)
   const [loading, setLoading] = useState(true)
@@ -105,6 +112,12 @@ function RemoteApp() {
   }, [language])
 
   useEffect(() => {
+    return () => {
+      resetCurrentFormattingTimeZone()
+    }
+  }, [])
+
+  useEffect(() => {
     if (installPrompt.installed) {
       setInstallPromptDismissed(false)
       window.localStorage.removeItem(REMOTE_INSTALL_PROMPT_DISMISSED_KEY)
@@ -127,8 +140,12 @@ function RemoteApp() {
 
   const shouldShowInstallPromptCard = !installPrompt.installed && !installPromptDismissed
 
-  function applySessionLanguage(nextLanguage) {
+  function applySessionPreferences(nextLanguage, timezoneMode, timezone) {
     setLanguage(normalizeLocale(nextLanguage || language))
+    setTimezonePreference({
+      timezoneMode: normalizeTimeZoneMode(timezoneMode),
+      timezone: normalizeManualTimeZone(timezone)
+    })
   }
 
   function applyLivePoll(nextLivePoll) {
@@ -161,7 +178,7 @@ function RemoteApp() {
         remoteLivePoll().catch(() => null)
       ])
       setSession(sessionPayload)
-      applySessionLanguage(sessionPayload?.language)
+      applySessionPreferences(sessionPayload?.language, sessionPayload?.timezoneMode, sessionPayload?.timezone)
       setControl(controlPayload)
       applyLivePoll(livePollPayload)
       lastLiveEventAtRef.current = Date.now()
@@ -198,6 +215,7 @@ function RemoteApp() {
     setPasskeyLoading(false)
     setActiveAuthAction(AUTH_ACTION_NONE)
     setExpandedSources(new Set())
+    setTimezonePreference({ timezoneMode: TIMEZONE_MODE_AUTO, timezone: '' })
   }
 
   async function handleLogin(event) {
@@ -224,7 +242,7 @@ function RemoteApp() {
         return
       }
       setSession(payload)
-      applySessionLanguage(payload?.language)
+      applySessionPreferences(payload?.language, payload?.timezoneMode, payload?.timezone)
       setLoginForm(DEFAULT_LOGIN_FORM)
       const [controlPayload, livePollPayload] = await Promise.all([
         remoteControl(),
@@ -258,7 +276,7 @@ function RemoteApp() {
         credentialJson: serializeCredential(credential)
       })
       setSession(payload)
-      applySessionLanguage(payload?.language)
+      applySessionPreferences(payload?.language, payload?.timezoneMode, payload?.timezone)
       setLoginForm(DEFAULT_LOGIN_FORM)
       const [controlPayload, livePollPayload] = await Promise.all([
         remoteControl(),

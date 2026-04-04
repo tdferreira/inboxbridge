@@ -608,8 +608,15 @@ export function useAuthSecurityController({
 
   function buildNewSessionNotification(sessionLike) {
     const locationLabel = String(sessionLike?.locationLabel || '').trim()
+    const unusualLocation = Boolean(sessionLike?.unusualLocation)
     const params = {
       sessionType: translatedNotification(sessionKindKey(sessionLike?.sessionType))
+    }
+    if (locationLabel && unusualLocation) {
+      return translatedNotification('notifications.newSessionDetectedWithUnusualLocation', {
+        ...params,
+        location: locationLabel
+      })
     }
     if (locationLabel) {
       return translatedNotification('notifications.newSessionDetectedWithLocation', {

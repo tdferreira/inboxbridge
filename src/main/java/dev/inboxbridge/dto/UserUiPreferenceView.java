@@ -25,5 +25,7 @@ public record UserUiPreferenceView(
         List<String> userSectionOrder,
         List<String> adminSectionOrder,
         String language,
+        String timezoneMode,
+        String timezone,
         List<UserUiNotificationView> notificationHistory) {
 }

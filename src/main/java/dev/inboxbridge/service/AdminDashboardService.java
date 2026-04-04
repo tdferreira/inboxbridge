@@ -1,6 +1,8 @@
 package dev.inboxbridge.service;
 
 import java.time.Instant;
+import java.time.ZoneId;
+import java.time.ZoneOffset;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -51,6 +53,10 @@ public class AdminDashboardService {
     SystemOAuthAppSettingsService systemOAuthAppSettingsService;
 
     public AdminDashboardResponse dashboard() {
+        return dashboard(ZoneOffset.UTC);
+    }
+
+    public AdminDashboardResponse dashboard(ZoneId zoneId) {
         PollingSettingsService.EffectivePollingSettings effectivePolling = pollingSettingsService.effectiveSettings();
         Map<String, ImportStats> importStatsBySource = new HashMap<>();
         for (Object[] row : importedMessageRepository.summarizeBySource()) {
@@ -125,7 +131,7 @@ public class AdminDashboardService {
                 .filter(emailAccount -> emailAccount.lastEvent() != null && "ERROR".equals(emailAccount.lastEvent().status()))
                 .count();
 
-        GlobalPollingStatsView stats = pollingStatsService.globalStats(sourcesWithErrors);
+        GlobalPollingStatsView stats = pollingStatsService.globalStats(sourcesWithErrors, zoneId);
 
         return new AdminDashboardResponse(
                 new AdminOverallSummary(

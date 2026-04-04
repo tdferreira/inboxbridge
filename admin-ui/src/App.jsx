@@ -40,6 +40,8 @@ import { computeWorkspaceDropTargetIndex } from './lib/workspaceDrag'
 import { buildWorkspacePath, canonicalWorkspacePath, resolveWorkspaceRoute } from './lib/workspaceRoutes'
 import { useSessionDeviceLocation } from './lib/useSessionDeviceLocation'
 import { detectScheduledRunAnomaly } from './lib/pollingStatsAlerts'
+import { statsTimezoneHeader } from './lib/statsTimezone'
+import { readStoredTimeZonePreference, resolveEffectiveTimeZone, resetCurrentFormattingTimeZone, setCurrentFormattingTimeZone } from './lib/timeZonePreferences'
 
 const REFRESH_MS = 30000
 const LIVE_EVENTS_STALE_MS = 45000
@@ -262,6 +264,7 @@ function AppContent() {
   const notificationTimersRef = useRef(new Map())
   const selectedUserLoaderRef = useRef(null)
   const sessionActivityPollerRef = useRef(null)
+  const lastAppliedStatsTimeZoneRef = useRef(null)
   const liveEventsRef = useRef(null)
   const lastLiveEventAtRef = useRef(0)
   const globalStatsAnomalyKeyRef = useRef('')
@@ -269,10 +272,6 @@ function AppContent() {
   const pushNotificationRef = useRef(null)
   const [liveEventsConnected, setLiveEventsConnected] = useState(false)
   const t = useMemo(() => (key, params) => translate(language, key, params), [language])
-  const notificationTimestampFormatter = useMemo(
-    () => new Intl.DateTimeFormat(language, { dateStyle: 'medium', timeStyle: 'medium' }),
-    [language]
-  )
   const errorText = (key) => t(`errors.${key}`)
   const auth = useAuthSecurityController({
     bootstrapLoginPrefillEnabled: authOptions.bootstrapLoginPrefillEnabled,
@@ -325,7 +324,10 @@ function AppContent() {
     handleLayoutEditChange,
     handlePersistLayoutChange,
     handleQuickSetupVisibilityChange,
+    handleTimeZoneChange,
+    handleTimeZoneModeChange,
     hasUnsavedLayoutEdits,
+    detectedTimeZone,
     moveSection,
     openNotificationsDialog,
     openPreferencesDialog,
@@ -333,6 +335,7 @@ function AppContent() {
     resetLayoutPreferences,
     resetLayoutState,
     selectableLanguages,
+    selectableTimeZones,
     setDragState,
     showNotificationsDialog,
     showPreferencesDialog,
@@ -342,6 +345,30 @@ function AppContent() {
     uiPreferences,
     replaceNotificationHistory
   } = layout
+  const storedTimeZonePreference = useMemo(
+    () => readStoredTimeZonePreference(session?.id),
+    [session?.id]
+  )
+  const effectiveTimeZone = useMemo(() => {
+    const timezoneMode = uiPreferencesLoadedForUserId === session?.id
+      ? uiPreferences.timezoneMode
+      : storedTimeZonePreference?.timezoneMode
+    const timezone = uiPreferencesLoadedForUserId === session?.id
+      ? uiPreferences.timezone
+      : storedTimeZonePreference?.timezone
+    return resolveEffectiveTimeZone(timezoneMode, timezone)
+  }, [session?.id, storedTimeZonePreference?.timezone, storedTimeZonePreference?.timezoneMode, uiPreferences.timezone, uiPreferences.timezoneMode, uiPreferencesLoadedForUserId])
+  const notificationTimestampFormatter = useMemo(
+    () => new Intl.DateTimeFormat(language, { dateStyle: 'medium', timeStyle: 'medium', timeZone: effectiveTimeZone }),
+    [effectiveTimeZone, language]
+  )
+  setCurrentFormattingTimeZone(effectiveTimeZone)
+
+  useEffect(() => {
+    return () => {
+      resetCurrentFormattingTimeZone()
+    }
+  }, [])
 
   function setAdminWorkspace(nextWorkspace, options = {}) {
     const nextPath = buildWorkspacePath(language, nextWorkspace)
@@ -498,6 +525,15 @@ function AppContent() {
     setNotifications([])
   }
 
+  function dismissNotificationsByGroupKey(groupKey) {
+    if (!groupKey) {
+      return
+    }
+    setNotifications((current) => normalizeNotificationHistory(
+      current.filter((notification) => notification.groupKey !== groupKey)
+    ))
+  }
+
   function pushNotification({
     autoCloseMs,
     copyText,
@@ -561,7 +597,9 @@ function AppContent() {
   }
 
   async function loadScopedTimelineBundle(endpoint, fallbackMessage) {
-    const response = await fetch(endpoint)
+    const response = await fetch(endpoint, {
+      headers: statsTimezoneHeader()
+    })
     if (!response.ok) {
       throw new Error(await apiErrorText(response, fallbackMessage))
     }
@@ -613,14 +651,14 @@ function AppContent() {
       const requests = [
         fetchDestinationConfig(),
         fetch('/api/app/polling-settings'),
-        fetch('/api/app/polling-stats'),
+        fetch('/api/app/polling-stats', { headers: statsTimezoneHeader() }),
         fetch('/api/app/email-accounts'),
         fetch('/api/app/ui-preferences'),
         fetch('/api/account/passkeys')
       ]
 
       if (session.role === 'ADMIN') {
-        requests.push(fetch('/api/admin/dashboard'))
+        requests.push(fetch('/api/admin/dashboard', { headers: statsTimezoneHeader() }))
         requests.push(fetch('/api/admin/oauth-app-settings'))
         requests.push(fetch('/api/admin/auth-security-settings'))
       }
@@ -774,7 +812,26 @@ function AppContent() {
       void refreshRuntimeState({ announceNewSessions: true, suppressSessionErrors: true })
     }, REFRESH_MS)
     return () => window.clearInterval(timer)
-  }, [authOptions.multiUserEnabled, isAdmin, session])
+  }, [authOptions.multiUserEnabled, effectiveTimeZone, isAdmin, session])
+
+  useEffect(() => {
+    if (!session || uiPreferencesLoadedForUserId !== session.id) {
+      lastAppliedStatsTimeZoneRef.current = null
+      return
+    }
+    if (!lastAppliedStatsTimeZoneRef.current) {
+      lastAppliedStatsTimeZoneRef.current = effectiveTimeZone
+      return
+    }
+    if (lastAppliedStatsTimeZoneRef.current === effectiveTimeZone) {
+      return
+    }
+    lastAppliedStatsTimeZoneRef.current = effectiveTimeZone
+    void loadAppData({ suppressErrors: true })
+    if (selectedUserLoaderRef.current && userManagement.selectedUserId) {
+      void selectedUserLoaderRef.current(userManagement.selectedUserId)
+    }
+  }, [effectiveTimeZone, loadAppData, session, uiPreferencesLoadedForUserId, userManagement.selectedUserId])
 
   useEffect(() => {
     if (!session) {
@@ -1327,12 +1384,27 @@ function AppContent() {
   )
 
   useEffect(() => {
-    if (!session || !isAdmin || !globalStatsAnomaly) {
+    if (!session || !isAdmin) {
+      dismissNotificationsByGroupKey('global-stats-anomaly')
+      return
+    }
+    if (!globalStatsAnomaly) {
+      dismissNotificationsByGroupKey('global-stats-anomaly')
+      globalStatsAnomalyKeyRef.current = ''
+      setGlobalStatsNeedsAttention(false)
+      return
+    }
+    if (!globalStatsAnomaly.warningVisible) {
+      setGlobalStatsNeedsAttention(false)
+    }
+    if (!globalStatsAnomaly.notificationVisible) {
+      dismissNotificationsByGroupKey('global-stats-anomaly')
       return
     }
 
     const anomalyKey = [
       globalStatsAnomaly.bucketLabel,
+      globalStatsAnomaly.occurredAt,
       globalStatsAnomaly.observedRuns,
       globalStatsAnomaly.expectedRunsPerHour,
       globalStatsAnomaly.sourceCount
@@ -1631,6 +1703,7 @@ function AppContent() {
         {showPreferencesDialog ? (
           <PreferencesDialog
             canHideQuickSetup={activeCanHideQuickSetup}
+            detectedTimeZone={detectedTimeZone}
             layoutEditEnabled={uiPreferences.layoutEditEnabled}
             language={language}
             languageOptions={selectableLanguages}
@@ -1641,10 +1714,15 @@ function AppContent() {
             onQuickSetupVisibilityChange={(visible) => handleQuickSetupVisibilityChange(activeWorkspaceKey, visible, activeCanHideQuickSetup)}
             onResetLayout={resetLayoutPreferences}
             onStartLayoutEditing={startLayoutEditingFromPreferences}
+            onTimeZoneChange={handleTimeZoneChange}
+            onTimeZoneModeChange={handleTimeZoneModeChange}
             persistLayout={uiPreferences.persistLayout}
             quickSetupVisible={activeQuickSetupVisible}
+            selectableTimeZones={selectableTimeZones}
             savingLayout={isPending('uiPreferences')}
             t={t}
+            timezone={uiPreferences.timezone}
+            timezoneMode={uiPreferences.timezoneMode}
           />
         ) : null}
 

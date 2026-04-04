@@ -49,9 +49,58 @@
   padding: 0.75rem 0.9rem 0.4rem;
 }
 
+.timeline-chart-toolbar {
+  align-items: center;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.75rem;
+  justify-content: space-between;
+  margin-bottom: 0.75rem;
+}
+
+.timeline-chart-toolbar-meta {
+  align-items: center;
+  display: flex;
+  gap: 0.5rem;
+}
+
+.timeline-chart-meta-pill {
+  background: rgba(79, 70, 229, 0.08);
+  border: 1px solid rgba(79, 70, 229, 0.14);
+  border-radius: 999px;
+  color: var(--muted-text);
+  display: inline-flex;
+  font-size: 0.78rem;
+  font-weight: 600;
+  padding: 0.28rem 0.7rem;
+}
+
+.timeline-chart-toolbar-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.45rem;
+  justify-content: flex-end;
+}
+
 .timeline-chart-frame {
   height: 18rem;
+  position: relative;
+  touch-action: none;
   width: 100%;
+}
+
+.timeline-chart-anomaly-callout {
+  background: rgba(185, 28, 28, 0.96);
+  border-radius: 0.85rem;
+  box-shadow: 0 12px 28px rgba(15, 23, 42, 0.18);
+  color: #fff;
+  left: 0.75rem;
+  max-width: min(28rem, calc(100% - 1.5rem));
+  padding: 0.55rem 0.75rem;
+  pointer-events: none;
+  position: absolute;
+  top: 0.5rem;
+  z-index: 2;
 }
 
 .timeline-chart-legend-text {
@@ -100,6 +149,15 @@
 
   .timeline-chart-select-label {
     justify-content: space-between;
+  }
+
+  .timeline-chart-toolbar {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .timeline-chart-toolbar-actions {
+    justify-content: stretch;
   }
 
   .timeline-chart-frame {

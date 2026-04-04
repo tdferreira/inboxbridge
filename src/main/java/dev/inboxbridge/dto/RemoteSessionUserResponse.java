@@ -9,5 +9,7 @@ public record RemoteSessionUserResponse(
         boolean canRunAllUsersPoll,
         boolean multiUserEnabled,
         boolean deviceLocationCaptured,
-        String language) {
+        String language,
+        String timezoneMode,
+        String timezone) {
 }

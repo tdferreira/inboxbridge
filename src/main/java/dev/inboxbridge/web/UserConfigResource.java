@@ -1,6 +1,8 @@
 package dev.inboxbridge.web;
 
 import java.time.Instant;
+import java.time.ZoneId;
+import java.time.ZoneOffset;
 import java.util.List;
 
 import dev.inboxbridge.dto.UpdateUserEmailAccountRequest;
@@ -46,6 +48,8 @@ import jakarta.ws.rs.core.MediaType;
 @Produces(MediaType.APPLICATION_JSON)
 @RequireAuth
 public class UserConfigResource {
+
+    private static final String TIMEZONE_HEADER = "X-InboxBridge-Timezone";
 
     @Inject
     CurrentUserContext currentUserContext;
@@ -127,20 +131,22 @@ public class UserConfigResource {
 
     @GET
     @Path("/polling-stats")
-    public UserPollingStatsView pollingStats() {
-        return pollingStatsService.userStats(currentUserContext.user().id);
+    public UserPollingStatsView pollingStats(@jakarta.ws.rs.HeaderParam(TIMEZONE_HEADER) String timezone) {
+        return pollingStatsService.userStats(currentUserContext.user().id, resolveZoneId(timezone));
     }
 
     @GET
     @Path("/polling-stats/range")
     public PollingTimelineBundleView pollingStatsRange(
+            @jakarta.ws.rs.HeaderParam(TIMEZONE_HEADER) String timezone,
             @QueryParam("from") String from,
             @QueryParam("to") String to) {
         try {
             return pollingStatsService.userTimelineBundle(
                     currentUserContext.user().id,
                     parseInstant(from, true),
-                    parseInstant(to, false));
+                    parseInstant(to, false),
+                    resolveZoneId(timezone));
         } catch (IllegalArgumentException e) {
             throw new BadRequestException(e.getMessage(), e);
         }
@@ -148,11 +154,14 @@ public class UserConfigResource {
 
     @GET
     @Path("/email-accounts/{emailAccountId}/polling-stats")
-    public SourcePollingStatsView emailAccountPollingStats(@PathParam("emailAccountId") String emailAccountId) {
+    public SourcePollingStatsView emailAccountPollingStats(
+            @PathParam("emailAccountId") String emailAccountId,
+            @jakarta.ws.rs.HeaderParam(TIMEZONE_HEADER) String timezone) {
         try {
             return pollingStatsService.sourceStats(
                     runtimeEmailAccountService.findAccessibleForUser(currentUserContext.user(), emailAccountId)
-                            .orElseThrow(() -> new IllegalArgumentException("Unknown mail fetcher id")));
+                            .orElseThrow(() -> new IllegalArgumentException("Unknown mail fetcher id")),
+                    resolveZoneId(timezone));
         } catch (IllegalArgumentException e) {
             throw new BadRequestException(e.getMessage(), e);
         }
@@ -162,6 +171,7 @@ public class UserConfigResource {
         @Path("/email-accounts/{emailAccountId}/polling-stats/range")
         public PollingTimelineBundleView emailAccountPollingStatsRange(
             @PathParam("emailAccountId") String emailAccountId,
+            @jakarta.ws.rs.HeaderParam(TIMEZONE_HEADER) String timezone,
             @QueryParam("from") String from,
             @QueryParam("to") String to) {
         try {
@@ -169,7 +179,8 @@ public class UserConfigResource {
                 runtimeEmailAccountService.findAccessibleForUser(currentUserContext.user(), emailAccountId)
                             .orElseThrow(() -> new IllegalArgumentException("Unknown mail fetcher id")),
                     parseInstant(from, true),
-                    parseInstant(to, false));
+                    parseInstant(to, false),
+                    resolveZoneId(timezone));
         } catch (IllegalArgumentException e) {
             throw new BadRequestException(e.getMessage(), e);
         }
@@ -299,6 +310,17 @@ public class UserConfigResource {
             return Instant.parse(value);
         } catch (Exception e) {
             throw new IllegalArgumentException("Invalid ISO-8601 date-time: " + value, e);
+        }
+    }
+
+    private ZoneId resolveZoneId(String value) {
+        if (value == null || value.isBlank()) {
+            return ZoneOffset.UTC;
+        }
+        try {
+            return ZoneId.of(value);
+        } catch (Exception ignored) {
+            return ZoneOffset.UTC;
         }
     }
 }

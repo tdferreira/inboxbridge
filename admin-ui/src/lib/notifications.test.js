@@ -52,6 +52,32 @@ describe('notifications helpers', () => {
     })
   })
 
+  it('resolves new-session notification aliases in every locale', () => {
+    languageOptions.forEach((locale) => {
+      expect(resolveNotificationContent(
+        translatedNotification('notifications.newSessionDetectedFromLocation', {
+          location: 'Lisbon, PT'
+        }),
+        locale
+      ), `${locale} is missing notifications.newSessionDetectedFromLocation`).toBeTruthy()
+
+      expect(resolveNotificationContent(
+        translatedNotification('notifications.newSessionDetectedFromUnusualLocation', {
+          location: 'Berlin, DE'
+        }),
+        locale
+      ), `${locale} is missing notifications.newSessionDetectedFromUnusualLocation`).toBeTruthy()
+
+      expect(resolveNotificationContent(
+        translatedNotification('notifications.newSessionDetectedWithUnusualLocation', {
+          sessionType: translatedNotification('sessions.kindRemote'),
+          location: 'Berlin, DE'
+        }),
+        locale
+      ), `${locale} is missing notifications.newSessionDetectedWithUnusualLocation`).toBeTruthy()
+    })
+  })
+
   it('defines every literal translated notification key used in the frontend for every locale', () => {
     const srcRoot = path.resolve(import.meta.dirname, '..')
     const files = []

@@ -100,7 +100,7 @@ class RemoteControlResourceTest {
         @Override
         public RemoteControlView viewFor(AppUser actor) {
             return new RemoteControlView(
-                    new RemoteSessionUserResponse(actor.id, 701L, actor.username, actor.role.name(), true, false, true, false, "pt-PT"),
+                    new RemoteSessionUserResponse(actor.id, 701L, actor.username, actor.role.name(), true, false, true, false, "pt-PT", "MANUAL", "Europe/Lisbon"),
                     java.util.List.of(new dev.inboxbridge.dto.RemoteSourceView(
                             "source-1", "USER", actor.id, actor.username, true, true, "5m", 50,
                             "IMAP", "imap.example.com", 993, "carol@example.com", "INBOX", "", 0, null, null, null)),

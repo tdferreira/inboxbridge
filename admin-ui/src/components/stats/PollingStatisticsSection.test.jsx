@@ -92,6 +92,10 @@ function renderSection(props = {}) {
 }
 
 describe('PollingStatisticsSection', () => {
+  afterEach(() => {
+    vi.restoreAllMocks()
+  })
+
   it('renders the richer statistics cards and breakdowns', () => {
     renderSection()
 
@@ -155,6 +159,8 @@ describe('PollingStatisticsSection', () => {
   })
 
   it('shows a persistent warning when scheduled run activity is far above the configured interval capacity', () => {
+    vi.spyOn(Date, 'now').mockReturnValue(Date.parse('2026-03-26T03:30:00Z'))
+
     renderSection({
       scheduledRunAlertInterval: '5m',
       scheduledRunAlertSourceCount: 1,
@@ -190,5 +196,44 @@ describe('PollingStatisticsSection', () => {
     expect(screen.getByText('Scheduled polling activity looks unusually high.')).toBeInTheDocument()
     expect(screen.getByText(/At 03:00, InboxBridge recorded 720 scheduled runs/)).toBeInTheDocument()
     expect(document.querySelector('.polling-statistics-section-alerting')).toBeInTheDocument()
+  })
+
+  it('hides stale scheduled-run anomaly warnings after one week', () => {
+    vi.spyOn(Date, 'now').mockReturnValue(Date.parse('2026-04-12T12:00:00Z'))
+
+    renderSection({
+      scheduledRunAlertInterval: '5m',
+      scheduledRunAlertSourceCount: 1,
+      stats: {
+        totalImportedMessages: 14,
+        configuredMailFetchers: 1,
+        enabledMailFetchers: 1,
+        sourcesWithErrors: 0,
+        errorPolls: 0,
+        importsByDay: [],
+        importTimelines: {},
+        duplicateTimelines: {},
+        errorTimelines: {},
+        manualRunTimelines: {},
+        scheduledRunTimelines: {
+          custom: [
+            { bucketLabel: '2026-04-04T09:00:00Z', importedMessages: 720 }
+          ]
+        },
+        health: {
+          activeMailFetchers: 1,
+          coolingDownMailFetchers: 0,
+          failingMailFetchers: 0,
+          disabledMailFetchers: 0
+        },
+        providerBreakdown: [],
+        manualRuns: 0,
+        scheduledRuns: 720,
+        averagePollDurationMillis: 2100
+      }
+    })
+
+    expect(screen.queryByText('Scheduled polling activity looks unusually high.')).not.toBeInTheDocument()
+    expect(document.querySelector('.polling-statistics-section-alerting')).not.toBeInTheDocument()
   })
 })

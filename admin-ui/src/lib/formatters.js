@@ -1,4 +1,5 @@
 import { translate } from './i18n'
+import { getCurrentFormattingTimeZone } from './timeZonePreferences'
 
 function normalizeDateValue(value) {
   if (!value) return value
@@ -16,11 +17,15 @@ function normalizeDateValue(value) {
   return null
 }
 
-export function formatDate(value, locale = 'en') {
+export function formatDate(value, locale = 'en', timeZone = getCurrentFormattingTimeZone()) {
   if (!value) return translate(locale, 'common.never')
   const date = normalizeDateValue(value)
   if (!date) return translate(locale, 'common.unavailable')
-  return date.toLocaleString(locale)
+  try {
+    return date.toLocaleString(locale, timeZone ? { timeZone } : undefined)
+  } catch {
+    return date.toLocaleString(locale)
+  }
 }
 
 function parseDurationToMilliseconds(value) {
@@ -131,7 +136,7 @@ export function formatRemoteImportedSizeSummary(value, locale = 'en') {
   })
 }
 
-export function formatPollError(message, locale = 'en') {
+export function formatPollError(message, locale = 'en', timeZone = getCurrentFormattingTimeZone()) {
   if (message && typeof message === 'object') {
     const code = String(message.code || '').trim()
     const emailAccountId = message.sourceId || ''
@@ -139,12 +144,12 @@ export function formatPollError(message, locale = 'en') {
       case 'source_cooling_down':
         return translate(locale, 'common.cooldownError', {
           emailAccountId,
-          value: formatDate(message.value, locale)
+          value: formatDate(message.value, locale, timeZone)
         })
       case 'source_waiting_next_window':
         return translate(locale, 'common.nextPollWindowError', {
           emailAccountId,
-          value: formatDate(message.value, locale)
+          value: formatDate(message.value, locale, timeZone)
         })
       case 'source_disabled':
         return translate(locale, 'common.sourceDisabledError', { emailAccountId })
@@ -162,10 +167,10 @@ export function formatPollError(message, locale = 'en') {
         return translate(locale, 'common.pollBusyError')
       case 'manual_poll_rate_limited':
         return translate(locale, 'common.manualPollRateLimitedError', {
-          value: formatDate(message.value, locale)
+          value: formatDate(message.value, locale, timeZone)
         })
       default:
-        return formatPollError(message.message, locale)
+        return formatPollError(message.message, locale, timeZone)
     }
   }
 
@@ -176,7 +181,7 @@ export function formatPollError(message, locale = 'en') {
     const [, emailAccountId, until] = cooldownMatch
     return translate(locale, 'common.cooldownError', {
       emailAccountId,
-      value: formatDate(until, locale)
+      value: formatDate(until, locale, timeZone)
     })
   }
 
@@ -185,7 +190,7 @@ export function formatPollError(message, locale = 'en') {
     const [, emailAccountId, at] = nextWindowMatch
     return translate(locale, 'common.nextPollWindowError', {
       emailAccountId,
-      value: formatDate(at, locale)
+      value: formatDate(at, locale, timeZone)
     })
   }
 
@@ -238,7 +243,7 @@ export function formatPollError(message, locale = 'en') {
   const manualRateLimitMatch = text.match(/^Manual polling is temporarily rate limited until (.+)\.$/)
   if (manualRateLimitMatch) {
     return translate(locale, 'common.manualPollRateLimitedError', {
-      value: formatDate(manualRateLimitMatch[1], locale)
+      value: formatDate(manualRateLimitMatch[1], locale, timeZone)
     })
   }
 

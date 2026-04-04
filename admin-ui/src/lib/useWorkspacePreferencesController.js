@@ -3,7 +3,15 @@ import { apiErrorText } from './api'
 import { languageOptions, normalizeLocale, translate } from './i18n'
 import { pollErrorNotification, translatedNotification } from './notifications'
 import {
-    applyLayoutPreferences,
+  detectBrowserTimeZone,
+  listSupportedTimeZones,
+  normalizeManualTimeZone,
+  normalizeTimeZoneMode,
+  TIMEZONE_MODE_MANUAL,
+  writeStoredTimeZonePreference
+} from './timeZonePreferences'
+import {
+  applyLayoutPreferences,
   applyOrderedSectionIds,
   captureLayoutPreferences,
   DEFAULT_UI_PREFERENCES,
@@ -20,10 +28,12 @@ export function useWorkspacePreferencesController({ language, pushNotification, 
   const [layoutEditSnapshot, setLayoutEditSnapshot] = useState(null)
   const uiPreferencesRef = useRef(DEFAULT_UI_PREFERENCES)
   const layoutEditSnapshotRef = useRef(null)
+  const detectedTimeZone = useMemo(() => detectBrowserTimeZone(), [])
 
   function commitUiPreferences(nextPreferences) {
     uiPreferencesRef.current = nextPreferences
     setUiPreferences(nextPreferences)
+    writeStoredTimeZonePreference(session?.id, nextPreferences)
   }
 
   function commitLayoutEditSnapshot(nextSnapshot) {
@@ -43,6 +53,10 @@ export function useWorkspacePreferencesController({ language, pushNotification, 
     value,
     label: translate(language, `language.${value}`)
   })), [language])
+  const selectableTimeZones = useMemo(() => listSupportedTimeZones().map((value) => ({
+    value,
+    label: value
+  })), [])
 
   async function persistUiPreferences(nextPreferences) {
     if (!session) {
@@ -152,7 +166,9 @@ export function useWorkspacePreferencesController({ language, pushNotification, 
       ...currentPreferences,
       ...DEFAULT_UI_PREFERENCES,
       persistLayout: currentPreferences.persistLayout,
-      language
+      language,
+      timezoneMode: currentPreferences.timezoneMode,
+      timezone: currentPreferences.timezone
     })
     pushNotification({ message: translatedNotification('notifications.layoutReset'), tone: 'success' })
   }
@@ -271,6 +287,32 @@ export function useWorkspacePreferencesController({ language, pushNotification, 
     void persistUiPreferences(nextPreferences)
   }
 
+  function handleTimeZoneModeChange(nextMode) {
+    const normalizedMode = normalizeTimeZoneMode(nextMode)
+    const currentPreferences = uiPreferencesRef.current
+    const nextPreferences = {
+      ...currentPreferences,
+      timezoneMode: normalizedMode,
+      timezone: normalizedMode === TIMEZONE_MODE_MANUAL
+        ? (normalizeManualTimeZone(currentPreferences.timezone) || detectedTimeZone)
+        : normalizeManualTimeZone(currentPreferences.timezone)
+    }
+    commitUiPreferences(nextPreferences)
+    void persistUiPreferences(nextPreferences)
+  }
+
+  function handleTimeZoneChange(nextTimeZone) {
+    const normalizedTimeZone = normalizeManualTimeZone(nextTimeZone) || detectedTimeZone
+    const currentPreferences = uiPreferencesRef.current
+    const nextPreferences = {
+      ...currentPreferences,
+      timezoneMode: TIMEZONE_MODE_MANUAL,
+      timezone: normalizedTimeZone
+    }
+    commitUiPreferences(nextPreferences)
+    void persistUiPreferences(nextPreferences)
+  }
+
   function resetLayoutState() {
     commitUiPreferences(DEFAULT_UI_PREFERENCES)
     setUiPreferencesLoadedForUserId(null)
@@ -312,7 +354,10 @@ export function useWorkspacePreferencesController({ language, pushNotification, 
     handleLayoutEditChange,
     handlePersistLayoutChange,
     handleQuickSetupVisibilityChange,
+    handleTimeZoneChange,
+    handleTimeZoneModeChange,
     hasUnsavedLayoutEdits: hasLayoutPreferenceChanges(uiPreferences, layoutEditSnapshot),
+    detectedTimeZone,
     language,
     moveSection,
     openNotificationsDialog: () => setShowNotificationsDialog(true),
@@ -321,6 +366,7 @@ export function useWorkspacePreferencesController({ language, pushNotification, 
     resetLayoutPreferences,
     resetLayoutState,
     selectableLanguages,
+    selectableTimeZones,
     setDragState,
     showNotificationsDialog,
     showPreferencesDialog,

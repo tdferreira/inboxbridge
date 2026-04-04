@@ -48,6 +48,8 @@ class UserUiPreferenceServiceTest {
         assertEquals(UserUiPreferenceService.DEFAULT_USER_SECTION_ORDER, view.userSectionOrder());
         assertEquals(UserUiPreferenceService.DEFAULT_ADMIN_SECTION_ORDER, view.adminSectionOrder());
         assertEquals("en", view.language());
+        assertEquals("AUTO", view.timezoneMode());
+        assertEquals("", view.timezone());
         assertEquals(List.of(), view.notificationHistory());
     }
 
@@ -80,6 +82,8 @@ class UserUiPreferenceServiceTest {
                 java.util.List.of("sourceEmailAccounts", "destination"),
                 java.util.List.of("userManagement", "authSecurity"),
                 "pt-PT",
+                "MANUAL",
+                "Europe/Lisbon",
                 List.of(new UserUiNotificationView(
                         "note-1",
                         Map.of("kind", "translation", "key", "notifications.signedIn", "params", Map.of()),
@@ -110,6 +114,8 @@ class UserUiPreferenceServiceTest {
         assertEquals(java.util.List.of("sourceEmailAccounts", "destination", "quickSetup", "userPolling", "remoteControl", "userStats"), updated.userSectionOrder());
         assertEquals(java.util.List.of("userManagement", "authSecurity", "adminQuickSetup", "systemDashboard", "oauthApps", "globalStats"), updated.adminSectionOrder());
         assertEquals("pt-PT", updated.language());
+        assertEquals("MANUAL", updated.timezoneMode());
+        assertEquals("Europe/Lisbon", updated.timezone());
         assertEquals(1, updated.notificationHistory().size());
         assertEquals("note-1", updated.notificationHistory().getFirst().id());
         assertEquals(Optional.of(updated), service.viewForUser(user.id));

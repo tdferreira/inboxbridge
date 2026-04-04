@@ -26,6 +26,7 @@ import io.smallrye.mutiny.Multi;
 import io.smallrye.mutiny.subscription.MultiEmitter;
 import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.annotation.PreDestroy;
+import jakarta.inject.Inject;
 
 @ApplicationScoped
 public class PollingLiveService {
@@ -35,6 +36,9 @@ public class PollingLiveService {
     private final CopyOnWriteArrayList<Subscriber> subscribers = new CopyOnWriteArrayList<>();
     private final AtomicReference<RunState> activeRun = new AtomicReference<>();
     private final ScheduledExecutorService heartbeatExecutor = Executors.newSingleThreadScheduledExecutor();
+
+    @Inject
+    SessionLocationAlertService sessionLocationAlertService;
 
     public PollRunHandle startRun(String trigger, List<RuntimeEmailAccount> emailAccounts, AppUser actor) {
         synchronized (lock) {
@@ -458,11 +462,24 @@ public class PollingLiveService {
         if (viewerId == null || streamKind == null || sessionId == null) {
             return;
         }
+        SessionLocationAlertService.SessionLocationAssessment assessment = sessionLocationAlertService == null
+                ? new SessionLocationAlertService.SessionLocationAssessment(null, false)
+                : sessionLocationAlertService.assessNewSession(viewerId, streamKind.name(), sessionId, null);
+        String notificationKey = "notifications.newSessionDetected";
+        if (assessment.locationLabel() != null && assessment.unusualLocation()) {
+            notificationKey = "notifications.newSessionDetectedFromUnusualLocation";
+        } else if (assessment.locationLabel() != null) {
+            notificationKey = "notifications.newSessionDetectedFromLocation";
+        }
         publishNotificationToUser(viewerId, notification(
-                "notifications.newSessionDetected",
+                notificationKey,
                 "warning",
                 "session-activity",
-                buildRecentSessionTargetId(streamKind, sessionId)));
+                buildRecentSessionTargetId(streamKind, sessionId),
+                false,
+                assessment.locationLabel() == null
+                        ? Map.of()
+                        : Map.of("location", assessment.locationLabel())));
     }
 
     private PollLiveView buildView(RunState state, AppUser viewer) {

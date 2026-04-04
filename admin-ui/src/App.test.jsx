@@ -46,6 +46,7 @@ describe('App', () => {
   afterEach(() => {
     clearLocalStorage()
     window.history.replaceState({}, '', '/')
+    vi.restoreAllMocks()
     vi.useRealTimers()
     vi.unstubAllGlobals()
   })
@@ -2514,6 +2515,259 @@ describe('App', () => {
     expect(await screen.findByRole('tab', { name: 'Administração', selected: true })).toBeInTheDocument()
   })
 
+  it('reloads polling statistics in the newly selected timezone and keeps using it on refresh', async () => {
+    const fetchMock = createWorkspaceRouteFetch({
+      session: {
+        id: 1,
+        username: 'admin',
+        role: 'ADMIN',
+        approved: true,
+        mustChangePassword: false,
+        passkeyCount: 0,
+        passwordConfigured: true
+      }
+    })
+
+    vi.stubGlobal('fetch', fetchMock)
+
+    render(<App />)
+
+    await screen.findByText(/signed in as/i)
+
+    fireEvent.click(screen.getByRole('button', { name: 'Preferences' }))
+    fireEvent.change(screen.getByDisplayValue('Detect automatically'), { target: { value: 'MANUAL' } })
+    fireEvent.change(screen.getAllByRole('combobox')[1], { target: { value: 'America/New_York' } })
+
+    await waitFor(() => {
+      const statsCalls = fetchMock.mock.calls.filter(([url]) => String(url) === '/api/app/polling-stats')
+      const dashboardCalls = fetchMock.mock.calls.filter(([url]) => String(url) === '/api/admin/dashboard')
+      expect(statsCalls.at(-1)?.[1]?.headers).toEqual({ 'X-InboxBridge-Timezone': 'America/New_York' })
+      expect(dashboardCalls.at(-1)?.[1]?.headers).toEqual({ 'X-InboxBridge-Timezone': 'America/New_York' })
+    })
+
+    const statsCallCountBeforeRefresh = fetchMock.mock.calls.filter(([url]) => String(url) === '/api/app/polling-stats').length
+    fireEvent.click(screen.getByRole('button', { name: 'Refresh' }))
+
+    await waitFor(() => {
+      const statsCalls = fetchMock.mock.calls.filter(([url]) => String(url) === '/api/app/polling-stats')
+      const dashboardCalls = fetchMock.mock.calls.filter(([url]) => String(url) === '/api/admin/dashboard')
+      expect(statsCalls.length).toBeGreaterThan(statsCallCountBeforeRefresh)
+      expect(statsCalls.at(-1)?.[1]?.headers).toEqual({ 'X-InboxBridge-Timezone': 'America/New_York' })
+      expect(dashboardCalls.at(-1)?.[1]?.headers).toEqual({ 'X-InboxBridge-Timezone': 'America/New_York' })
+    })
+  })
+
+  it('keeps the selected statistics range across app refreshes even if the refreshed payload is sparser', async () => {
+    const baseFetch = createWorkspaceRouteFetch({
+      session: {
+        id: 7,
+        username: 'alice',
+        role: 'USER',
+        approved: true,
+        mustChangePassword: false,
+        passkeyCount: 0,
+        passwordConfigured: true,
+        deviceLocationCaptured: true
+      }
+    })
+
+    let statsRequestCount = 0
+    const fetchMock = vi.fn((input, init = {}) => {
+      const url = String(input)
+      if (url === '/api/app/polling-stats') {
+        statsRequestCount += 1
+        return jsonResponse({
+          totalImportedMessages: 10,
+          configuredMailFetchers: 1,
+          enabledMailFetchers: 1,
+          sourcesWithErrors: 0,
+          importsByDay: [],
+          importTimelines: statsRequestCount === 1
+            ? {
+                today: [
+                  { bucketLabel: '08:00', importedMessages: 1 },
+                  { bucketLabel: '09:00', importedMessages: 2 }
+                ],
+                pastMonth: [
+                  { bucketLabel: '2026-03-01', importedMessages: 1 },
+                  { bucketLabel: '2026-03-02', importedMessages: 2 }
+                ]
+              }
+            : {
+                today: [
+                  { bucketLabel: '08:00', importedMessages: 1 },
+                  { bucketLabel: '09:00', importedMessages: 2 }
+                ]
+              },
+          duplicateTimelines: {},
+          errorTimelines: {},
+          manualRunTimelines: {},
+          scheduledRunTimelines: {},
+          health: {
+            activeMailFetchers: 1,
+            coolingDownMailFetchers: 0,
+            failingMailFetchers: 0,
+            disabledMailFetchers: 0
+          },
+          providerBreakdown: [],
+          manualRuns: 0,
+          scheduledRuns: 0,
+          averagePollDurationMillis: 0
+        })
+      }
+      return baseFetch(input, init)
+    })
+
+    vi.stubGlobal('fetch', fetchMock)
+
+    render(<App />)
+
+    await screen.findByText(/signed in as/i)
+
+    const rangeSelect = await screen.findByRole('combobox', { name: 'Range' })
+    fireEvent.change(rangeSelect, { target: { value: 'pastMonth' } })
+    expect(screen.getByRole('combobox', { name: 'Range' })).toHaveValue('pastMonth')
+
+    fireEvent.click(screen.getByRole('button', { name: 'Refresh' }))
+
+    await waitFor(() => {
+      expect(statsRequestCount).toBeGreaterThan(1)
+    })
+    expect(screen.getByRole('combobox', { name: 'Range' })).toHaveValue('pastMonth')
+  })
+
+  it('shows the global statistics anomaly notification only for recent admin anomalies', async () => {
+    vi.spyOn(Date, 'now').mockReturnValue(Date.parse('2026-04-04T12:00:00Z'))
+    const fetchMock = createWorkspaceRouteFetch({
+      session: {
+        id: 1,
+        username: 'admin',
+        role: 'ADMIN',
+        approved: true,
+        mustChangePassword: false,
+        passkeyCount: 0,
+        passwordConfigured: true
+      },
+      adminDashboard: {
+        overall: {
+          configuredSources: 1,
+          enabledSources: 1,
+          totalImportedMessages: 0,
+          sourcesWithErrors: 0,
+          pollInterval: '5m',
+          fetchWindow: 50
+        },
+        stats: {
+          totalImportedMessages: 0,
+          configuredMailFetchers: 1,
+          enabledMailFetchers: 1,
+          sourcesWithErrors: 0,
+          importsByDay: [],
+          importTimelines: {},
+          duplicateTimelines: {},
+          errorTimelines: {},
+          manualRunTimelines: {},
+          scheduledRunTimelines: {
+            custom: [
+              { bucketLabel: '2026-04-04T10:00:00Z', importedMessages: 720 }
+            ]
+          },
+          health: { activeMailFetchers: 1, coolingDownMailFetchers: 0, failingMailFetchers: 0, disabledMailFetchers: 0 },
+          providerBreakdown: [],
+          manualRuns: 0,
+          scheduledRuns: 720,
+          averagePollDurationMillis: 0
+        },
+        polling: {
+          defaultPollEnabled: true,
+          pollEnabledOverride: null,
+          effectivePollEnabled: true,
+          defaultPollInterval: '5m',
+          pollIntervalOverride: null,
+          effectivePollInterval: '5m',
+          defaultFetchWindow: 50,
+          fetchWindowOverride: null,
+          effectiveFetchWindow: 50
+        },
+        emailAccounts: [],
+        recentEvents: []
+      }
+    })
+
+    vi.stubGlobal('fetch', fetchMock)
+
+    render(<App />)
+
+    expect(await screen.findByText(/signed in as/i)).toBeInTheDocument()
+    expect(await screen.findByText('Global Statistics detected scheduled polling activity that looks unusually high. Review that section.')).toBeInTheDocument()
+  })
+
+  it('hides stale global statistics anomaly notifications for old admin anomalies', async () => {
+    vi.spyOn(Date, 'now').mockReturnValue(Date.parse('2026-04-12T12:00:00Z'))
+    const fetchMock = createWorkspaceRouteFetch({
+      session: {
+        id: 1,
+        username: 'admin',
+        role: 'ADMIN',
+        approved: true,
+        mustChangePassword: false,
+        passkeyCount: 0,
+        passwordConfigured: true
+      },
+      adminDashboard: {
+        overall: {
+          configuredSources: 1,
+          enabledSources: 1,
+          totalImportedMessages: 0,
+          sourcesWithErrors: 0,
+          pollInterval: '5m',
+          fetchWindow: 50
+        },
+        stats: {
+          totalImportedMessages: 0,
+          configuredMailFetchers: 1,
+          enabledMailFetchers: 1,
+          sourcesWithErrors: 0,
+          importsByDay: [],
+          importTimelines: {},
+          duplicateTimelines: {},
+          errorTimelines: {},
+          manualRunTimelines: {},
+          scheduledRunTimelines: {
+            custom: [
+              { bucketLabel: '2026-04-04T09:00:00Z', importedMessages: 720 }
+            ]
+          },
+          health: { activeMailFetchers: 1, coolingDownMailFetchers: 0, failingMailFetchers: 0, disabledMailFetchers: 0 },
+          providerBreakdown: [],
+          manualRuns: 0,
+          scheduledRuns: 720,
+          averagePollDurationMillis: 0
+        },
+        polling: {
+          defaultPollEnabled: true,
+          pollEnabledOverride: null,
+          effectivePollEnabled: true,
+          defaultPollInterval: '5m',
+          pollIntervalOverride: null,
+          effectivePollInterval: '5m',
+          defaultFetchWindow: 50,
+          fetchWindowOverride: null,
+          effectiveFetchWindow: 50
+        },
+        emailAccounts: [],
+        recentEvents: []
+      }
+    })
+
+    vi.stubGlobal('fetch', fetchMock)
+
+    render(<App />)
+
+    expect(await screen.findByText(/signed in as/i)).toBeInTheDocument()
+    expect(screen.queryByText('Global Statistics detected scheduled polling activity that looks unusually high. Review that section.')).not.toBeInTheDocument()
+  })
+
   it('announces new sign-ins when the header refresh button is used', async () => {
     const fetchMock = createWorkspaceRouteFetch({
       session: {
@@ -2549,7 +2803,8 @@ describe('App', () => {
               createdAt: '2026-03-31T09:05:00Z',
               loginMethod: 'PASSWORD',
               ipAddress: '192.168.1.20',
-              locationLabel: 'Lisbon, PT'
+              locationLabel: 'Lisbon, PT',
+              unusualLocation: true
             }
           ],
           activeSessions: [],
@@ -2568,7 +2823,7 @@ describe('App', () => {
     })
     fireEvent.click(screen.getByRole('button', { name: 'Refresh' }))
 
-    expect(await screen.findByText('A new Remote control sign-in was detected for this account from approximately Lisbon, PT. Review the Sessions tab.')).toBeInTheDocument()
+    expect(await screen.findByText('A new Remote control sign-in was detected for this account from approximately Lisbon, PT, which looks unusual compared with your recent activity. Review the Sessions tab.')).toBeInTheDocument()
   })
 
   it('announces new sign-ins from the live event stream and refreshes session activity', async () => {
