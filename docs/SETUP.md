@@ -29,15 +29,17 @@ docker compose up --build
 
 The Docker Compose build path now runs the frontend Vitest suite during the admin UI image build again, so `docker compose up --build` is the reliable end-to-end validation path before manual testing. If you need to skip that suite for a constrained standalone image build, pass `--build-arg RUN_TESTS=false` to `docker build -f admin-ui/Dockerfile ...`.
 
-At minimum, set these values in `.env`:
+`.env.example` contains the minimum local bootstrap values uncommented, so
+for a first run you normally only need to paste the generated encryption key
+into `SECURITY_TOKEN_ENCRYPTION_KEY`.
+
+The minimum local bootstrap values are:
 
 ```dotenv
 JDBC_URL=jdbc:postgresql://postgres:5432/inboxbridge
 JDBC_USERNAME=inboxbridge
 JDBC_PASSWORD=inboxbridge
 PUBLIC_BASE_URL=https://localhost:3000
-TLS_FRONTEND_CERT_HOSTNAMES=
-TLS_BACKEND_CERT_HOSTNAMES=
 SECURITY_TOKEN_ENCRYPTION_KEY=<base64-32-byte-key>
 SECURITY_TOKEN_ENCRYPTION_KEY_ID=v1
 SECURITY_PASSKEY_RP_ID=localhost

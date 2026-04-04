@@ -92,6 +92,9 @@ Copy the example configuration file:
 cp .env.example .env
 ```
 
+The example file has the minimum local bootstrap values uncommented, so
+for a first run you usually only need to generate and fill the encryption key.
+
 Generate an encryption key:
 
 ```bash
@@ -104,7 +107,8 @@ Put that generated value into:
 SECURITY_TOKEN_ENCRYPTION_KEY=<base64-32-byte-key>
 ```
 
-At minimum, set these values in `.env`:
+For a normal first run, these minimum values are already present in
+`.env.example`:
 
 ```dotenv
 JDBC_URL=jdbc:postgresql://postgres:5432/inboxbridge
@@ -151,7 +155,8 @@ After signing in:
 
 ### Minimum configuration to explore the app
 
-You do not need Google or Microsoft OAuth credentials just to start the stack, sign in, and explore the UI.
+You do not need Google or Microsoft OAuth credentials just to start the stack,
+sign in, and explore the UI.
 
 With only the minimum bootstrap values, you can:
 
@@ -170,6 +175,9 @@ To actually import messages, you need:
 - one configured destination mailbox
 - at least one configured source mailbox
 - OAuth app credentials for any OAuth-based provider flow you choose to use
+
+For example, if you want Gmail as the destination provider, you must first
+create a Google Cloud project and OAuth client for InboxBridge.
 
 ### Important `.env` values
 
