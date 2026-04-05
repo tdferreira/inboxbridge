@@ -442,8 +442,20 @@
             <section class="generator-panel">
               <form class="form-grid" data-env-generator>
                 <div class="field full">
-                  <label for="publicBaseUrl"><span class="label-copy">Public base URL</span><button class="info-hint" type="button" aria-label="Public base URL help" data-hint="The HTTPS address browsers and OAuth providers should use when linking back to InboxBridge.">i</button></label>
-                  <input id="publicBaseUrl" name="publicBaseUrl" type="url" value="https://localhost:3000" />
+                  <div class="dual-input-row">
+                    <div class="nested-field">
+                      <label for="publicHostname"><span class="label-copy">Public hostname</span><button class="info-hint" type="button" aria-label="Public hostname help" data-hint="The browser-facing hostname InboxBridge should use for links, OAuth callbacks, and passkey defaults.">i</button></label>
+                      <input id="publicHostname" name="publicHostname" value="localhost" />
+                    </div>
+                    <div class="nested-field">
+                      <label for="publicPort"><span class="label-copy">Public port</span><button class="info-hint" type="button" aria-label="Public port help" data-hint="The published HTTPS port for the admin UI. Docker Compose maps this host port to the frontend container.">i</button></label>
+                      <input id="publicPort" name="publicPort" inputmode="numeric" pattern="[0-9]*" value="3000" />
+                    </div>
+                  </div>
+                </div>
+                <div class="field full">
+                  <label for="publicBaseUrl"><span class="label-copy">Computed public base URL</span><button class="info-hint" type="button" aria-label="Computed public base URL help" data-hint="InboxBridge derives this HTTPS URL from the hostname and port above unless you explicitly override PUBLIC_BASE_URL by hand in .env.">i</button></label>
+                  <input id="publicBaseUrl" name="publicBaseUrl" type="url" value="https://localhost:3000" readonly />
                 </div>
 
                 <div class="field full">

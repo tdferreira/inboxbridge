@@ -13,7 +13,8 @@ let language = normalizeLocale(window.localStorage.getItem('inboxbridge.language
 
 function formState(formElement) {
   return {
-    publicBaseUrl: formElement.publicBaseUrl.value,
+    publicHostname: formElement.publicHostname.value,
+    publicPort: formElement.publicPort.value,
     jdbcUrl: formElement.jdbcUrl.value,
     jdbcUsername: formElement.jdbcUsername.value,
     jdbcPassword: formElement.jdbcPassword.value,
@@ -257,7 +258,9 @@ function applyTranslations() {
     }
   })
 
-  setFieldText('publicBaseUrl', 'env.field.publicBaseUrl', 'env.hint.publicBaseUrl')
+  setFieldText('publicHostname', 'env.field.publicHostname', 'env.hint.publicHostname')
+  setFieldText('publicPort', 'env.field.publicPort', 'env.hint.publicPort')
+  setFieldText('publicBaseUrl', 'env.field.publicBaseUrlComputed', 'env.hint.publicBaseUrlComputed')
   setFieldText('jdbcUrl', 'env.field.jdbcUrl', 'env.hint.jdbcUrl')
   setFieldText('jdbcUsername', 'env.field.jdbcUsername', 'env.hint.jdbcUsername')
   setFieldText('jdbcPassword', 'env.field.jdbcPassword', 'env.hint.jdbcPassword')
@@ -317,6 +320,7 @@ function syncConditionalFields(formElement) {
 function render() {
   const state = formState(form)
   const config = buildEnvConfig(state)
+  form.publicBaseUrl.value = config.publicBaseUrl
   output.value = generateEnvText(state)
   summary.textContent = config.sourceId
     ? translate(language, 'env.summary.readySource', { protocol: config.sourceProtocol, sourceId: config.sourceId, publicBaseUrl: config.publicBaseUrl })

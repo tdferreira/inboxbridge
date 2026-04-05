@@ -3,8 +3,9 @@ import fs from 'node:fs'
 import { buildEnvConfig, generateEncryptionKey, generateEnvText } from './config-generator.mjs'
 import { languageOptions, normalizeLocale, translate, translationCatalog } from './i18n.mjs'
 
-const config = buildEnvConfig({
-  publicBaseUrl: 'https://inboxbridge.example.com',
+const configuredInput = {
+  publicHostname: 'inboxbridge.example.com',
+  publicPort: '9443',
   encryptionKey: 'base64-demo-key',
   multiUserEnabled: false,
   sourceId: 'outlook-main',
@@ -17,14 +18,21 @@ const config = buildEnvConfig({
   sourceUsername: 'owner@example.com',
   sourceOauthRefreshToken: 'refresh-token',
   sourceUnreadOnly: true
-})
+}
+
+const config = buildEnvConfig(configuredInput)
 
 assert.equal(config.hostname, 'inboxbridge.example.com')
+assert.equal(config.publicHostname, 'inboxbridge.example.com')
+assert.equal(config.publicPort, '9443')
+assert.equal(config.publicBaseUrl, 'https://inboxbridge.example.com:9443')
 assert.equal(config.sourceFetchMode, 'IDLE')
 assert.equal(config.multiUserEnabled, false)
 
-const envText = generateEnvText(config)
-assert.match(envText, /PUBLIC_BASE_URL=https:\/\/inboxbridge\.example\.com/)
+const envText = generateEnvText(configuredInput)
+assert.match(envText, /PUBLIC_HOSTNAME=inboxbridge\.example\.com/)
+assert.match(envText, /PUBLIC_PORT=9443/)
+assert.doesNotMatch(envText, /PUBLIC_BASE_URL=/)
 assert.match(envText, /SECURITY_PASSKEY_RP_ID=inboxbridge\.example\.com/)
 assert.match(envText, /MULTI_USER_ENABLED=false/)
 assert.match(envText, /MAIL_ACCOUNT_0__ID=outlook-main/)
@@ -34,7 +42,8 @@ assert.match(envText, /MAIL_ACCOUNT_0__FETCH_MODE=IDLE/)
 assert.doesNotMatch(envText, /MAIL_ACCOUNT_0__PASSWORD=/)
 
 const popEnv = generateEnvText({
-  publicBaseUrl: 'https://localhost:3000',
+  publicHostname: 'localhost',
+  publicPort: '3000',
   sourceId: 'legacy-pop',
   sourceProtocol: 'POP3',
   sourceHost: 'pop.example.com',
@@ -48,6 +57,21 @@ assert.match(popEnv, /MAIL_ACCOUNT_0__PROTOCOL=POP3/)
 assert.match(popEnv, /MAIL_ACCOUNT_0__PASSWORD=app-pass/)
 assert.doesNotMatch(popEnv, /MAIL_ACCOUNT_0__FETCH_MODE=/)
 assert.doesNotMatch(popEnv, /MAIL_ACCOUNT_0__FOLDER=/)
+
+const explicitBaseUrlConfig = buildEnvConfig({
+  publicBaseUrl: 'https://demo.example.com:7443'
+})
+
+assert.equal(explicitBaseUrlConfig.publicHostname, 'demo.example.com')
+assert.equal(explicitBaseUrlConfig.publicPort, '7443')
+assert.equal(explicitBaseUrlConfig.publicBaseUrl, 'https://demo.example.com:7443')
+
+const explicitBaseUrlEnv = generateEnvText({
+  publicBaseUrl: 'https://demo.example.com:7443'
+})
+
+assert.match(explicitBaseUrlEnv, /PUBLIC_BASE_URL=https:\/\/demo\.example\.com:7443/)
+assert.match(explicitBaseUrlEnv, /SECURITY_PASSKEY_ORIGINS=https:\/\/demo\.example\.com:7443/)
 
 const generatedKey = generateEncryptionKey(Uint8Array.from({ length: 32 }, (_, index) => index))
 assert.equal(Buffer.from(generatedKey, 'base64').length, 32)
@@ -139,6 +163,10 @@ assert.match(siteHtml, /id="generateKeyButton"/)
 assert.match(siteHtml, /id="jdbcUsername"/)
 assert.match(siteHtml, /id="jdbcPassword"/)
 assert.match(siteHtml, /id="jdbcUrl"/)
+assert.match(siteHtml, /id="publicHostname"/)
+assert.match(siteHtml, /id="publicPort"/)
+assert.match(siteHtml, /id="publicBaseUrl"/)
+assert.match(siteHtml, /readonly/)
 assert.match(siteHtml, /id="pollInterval"/)
 assert.match(siteHtml, /id="fetchWindow"/)
 assert.match(siteHtml, /id="microsoftClientId"/)
@@ -152,7 +180,9 @@ assert.match(siteHtml, /id="sourceFetchMode"/)
 assert.match(siteHtml, /data-password-only/)
 assert.match(siteHtml, /syncStaticConditionalFields/)
 assert.match(siteHtml, /class="info-hint"/)
-assert.match(siteHtml, /Public base URL help/)
+assert.match(siteHtml, /Public hostname help/)
+assert.match(siteHtml, /Public port help/)
+assert.match(siteHtml, /Computed public base URL help/)
 assert.match(siteHtml, /Fetch mode help/)
 
 console.log('site config generator ok')

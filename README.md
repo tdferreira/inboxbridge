@@ -121,12 +121,16 @@ For a normal first run, these minimum values are already present in
 JDBC_URL=jdbc:postgresql://postgres:5432/inboxbridge
 JDBC_USERNAME=inboxbridge
 JDBC_PASSWORD=inboxbridge
-PUBLIC_BASE_URL=https://localhost:3000
+PUBLIC_HOSTNAME=localhost
+PUBLIC_PORT=3000
 SECURITY_TOKEN_ENCRYPTION_KEY=<base64-32-byte-key>
 SECURITY_TOKEN_ENCRYPTION_KEY_ID=v1
-SECURITY_PASSKEY_RP_ID=localhost
-SECURITY_PASSKEY_ORIGINS=https://localhost:3000
 ```
+
+InboxBridge now derives the browser-facing HTTPS URL as
+`https://${PUBLIC_HOSTNAME}:${PUBLIC_PORT}` by default. If you need a custom
+scheme or a more unusual public URL shape, you can still override it with
+`PUBLIC_BASE_URL`.
 
 ### 2. Start the stack
 
@@ -224,7 +228,9 @@ create a Google Cloud project and OAuth client for InboxBridge.
 
 These are the settings most operators care about first:
 
-- `PUBLIC_BASE_URL`: public HTTPS URL used for browser links and default OAuth callbacks
+- `PUBLIC_HOSTNAME`: browser-facing hostname used for local TLS SAN generation and derived HTTPS defaults
+- `PUBLIC_PORT`: published HTTPS port for the admin UI and remote page; Docker Compose maps this host port to the frontend container
+- `PUBLIC_BASE_URL`: optional override for the canonical public HTTPS URL when it should differ from `https://${PUBLIC_HOSTNAME}:${PUBLIC_PORT}`
 - `MULTI_USER_ENABLED`: choose single-user or multi-user mode
 - `SECURITY_TOKEN_ENCRYPTION_KEY`: required for encrypted UI-managed secrets and browser OAuth exchange
 - `SECURITY_TOKEN_ENCRYPTION_KEY_ID`: key label stored with encrypted data
@@ -248,7 +254,9 @@ Quick callback defaults:
 - Google: `https://localhost:3000/api/google-oauth/callback`
 - Microsoft: `https://localhost:3000/api/microsoft-oauth/callback`
 
-If you deploy on another hostname, set `PUBLIC_BASE_URL` and use a certificate that matches that host.
+If you deploy on another hostname or port, set `PUBLIC_HOSTNAME` / `PUBLIC_PORT`
+and use a certificate that matches that host. Keep `PUBLIC_BASE_URL` for cases
+where you need to override the derived URL explicitly.
 
 ## Remote Control
 

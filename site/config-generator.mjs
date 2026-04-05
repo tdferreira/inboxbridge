@@ -1,5 +1,6 @@
 const DEFAULTS = {
-  publicBaseUrl: 'https://localhost:3000',
+  publicHostname: 'localhost',
+  publicPort: '3000',
   jdbcUrl: 'jdbc:postgresql://postgres:5432/inboxbridge',
   jdbcUsername: 'inboxbridge',
   jdbcPassword: 'inboxbridge',
@@ -44,6 +45,24 @@ function resolveHostname(publicBaseUrl) {
   }
 }
 
+function resolvePort(publicBaseUrl) {
+  try {
+    const url = new URL(publicBaseUrl)
+    if (url.port) {
+      return url.port
+    }
+    return url.protocol === 'https:' ? '443' : '80'
+  } catch {
+    return DEFAULTS.publicPort
+  }
+}
+
+function resolvePublicBaseUrl(hostname, port) {
+  const normalizedHostname = withDefault(hostname, DEFAULTS.publicHostname)
+  const normalizedPort = withDefault(port, DEFAULTS.publicPort)
+  return `https://${normalizedHostname}:${normalizedPort}`
+}
+
 function withDefault(value, fallback) {
   const normalized = normalizeString(value)
   return normalized || fallback
@@ -69,8 +88,10 @@ export function generateEncryptionKey(randomBytes) {
 }
 
 export function buildEnvConfig(input = {}) {
-  const publicBaseUrl = withDefault(input.publicBaseUrl, DEFAULTS.publicBaseUrl)
-  const hostname = resolveHostname(publicBaseUrl)
+  const explicitPublicBaseUrl = normalizeString(input.publicBaseUrl)
+  const publicBaseUrl = explicitPublicBaseUrl || resolvePublicBaseUrl(input.publicHostname, input.publicPort)
+  const hostname = explicitPublicBaseUrl ? resolveHostname(publicBaseUrl) : withDefault(input.publicHostname, DEFAULTS.publicHostname)
+  const publicPort = explicitPublicBaseUrl ? resolvePort(publicBaseUrl) : withDefault(input.publicPort, DEFAULTS.publicPort)
   const sourceProtocol = withDefault(input.sourceProtocol, DEFAULTS.sourceProtocol).toUpperCase()
   const sourceAuthMethod = withDefault(input.sourceAuthMethod, DEFAULTS.sourceAuthMethod).toUpperCase()
   const sourceOauthProvider = withDefault(input.sourceOauthProvider, DEFAULTS.sourceOauthProvider).toUpperCase()
@@ -84,6 +105,8 @@ export function buildEnvConfig(input = {}) {
   return {
     publicBaseUrl,
     hostname,
+    publicHostname: hostname,
+    publicPort,
     jdbcUrl: withDefault(input.jdbcUrl, DEFAULTS.jdbcUrl),
     jdbcUsername: withDefault(input.jdbcUsername, DEFAULTS.jdbcUsername),
     jdbcPassword: withDefault(input.jdbcPassword, DEFAULTS.jdbcPassword),
@@ -126,15 +149,23 @@ export function generateEnvText(rawInput = {}) {
     `JDBC_URL=${config.jdbcUrl}`,
     `JDBC_USERNAME=${config.jdbcUsername}`,
     `JDBC_PASSWORD=${config.jdbcPassword}`,
-    `PUBLIC_BASE_URL=${config.publicBaseUrl}`,
+    `PUBLIC_HOSTNAME=${config.publicHostname}`,
+    `PUBLIC_PORT=${config.publicPort}`,
     `SECURITY_TOKEN_ENCRYPTION_KEY=${config.encryptionKey}`,
     `SECURITY_TOKEN_ENCRYPTION_KEY_ID=${config.encryptionKeyId}`,
-    `SECURITY_PASSKEY_RP_ID=${config.hostname}`,
-    `SECURITY_PASSKEY_ORIGINS=${config.publicBaseUrl}`,
+    `SECURITY_PASSKEY_RP_ID=${config.hostname}`
+  ]
+
+  if (normalizeString(rawInput.publicBaseUrl)) {
+    lines.push(`PUBLIC_BASE_URL=${config.publicBaseUrl}`)
+    lines.push(`SECURITY_PASSKEY_ORIGINS=${config.publicBaseUrl}`)
+  }
+
+  lines.push(
     `MULTI_USER_ENABLED=${config.multiUserEnabled}`,
     `POLL_INTERVAL=${config.pollInterval}`,
     `FETCH_WINDOW=${config.fetchWindow}`
-  ]
+  )
 
   if (config.googleClientId || config.googleClientSecret) {
     lines.push(
