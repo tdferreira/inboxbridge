@@ -247,6 +247,8 @@ a {
   line-height: 0.95;
   margin: 0.5rem 0 1rem;
   max-width: 13ch;
+  max-width: min(13ch, 100%);
+  overflow-wrap: anywhere;
 }
 
 .hero p {
@@ -1175,27 +1177,44 @@ a {
 }
 
 @media (max-width: 720px) {
-  .topbar .shell,
-  .topbar-actions,
   .section-header,
   .code-panel header {
     align-items: start;
     flex-direction: column;
   }
 
-  .nav {
-    width: 100%;
+  .topbar .shell {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto;
+    align-items: start;
+    gap: 0.85rem 0.75rem;
+  }
+
+  .brand {
+    grid-column: 1;
+    grid-row: 1;
   }
 
   .topbar-actions {
-    width: 100%;
+    display: contents;
+    width: auto;
     margin-left: 0;
   }
 
+  .nav {
+    grid-column: 1 / -1;
+    grid-row: 2;
+    width: 100%;
+    flex-wrap: wrap;
+  }
+
   .site-language-picker {
+    grid-column: 2;
+    grid-row: 1;
+    justify-self: end;
+    align-self: start;
     width: auto;
     margin-left: 0;
-    align-self: stretch;
   }
 
   .language-menu-button {

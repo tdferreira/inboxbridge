@@ -1,5 +1,19 @@
 import { useEffect, useState } from 'react'
 
+function detectManualInstallSupport() {
+  if (typeof window === 'undefined') return { manualInstallSupported: false, prefersAddToHomeScreenLabel: false }
+  const userAgent = window.navigator?.userAgent || ''
+  const isIos = /iPhone|iPad|iPod/i.test(userAgent)
+  const isAndroid = /Android/i.test(userAgent)
+  const isMobile = /Mobile|Android|iPhone|iPad|iPod/i.test(userAgent)
+    || window.matchMedia?.('(pointer: coarse)')?.matches === true
+
+  return {
+    manualInstallSupported: isIos || (isAndroid && isMobile),
+    prefersAddToHomeScreenLabel: isIos
+  }
+}
+
 export function usePwaInstallPrompt() {
   const [installEvent, setInstallEvent] = useState(null)
   const [installed, setInstalled] = useState(() => {
@@ -45,6 +59,7 @@ export function usePwaInstallPrompt() {
   return {
     canPromptInstall: Boolean(installEvent) && !installed,
     installed,
+    ...detectManualInstallSupport(),
     promptInstall
   }
 }
