@@ -66,9 +66,9 @@ inboxbridge:
         ipinfo-token: ${SECURITY_AUTH_GEO_IP_IPINFO_TOKEN:}
     passkeys:
       enabled: ${SECURITY_PASSKEYS_ENABLED:true}
-      rp-id: ${SECURITY_PASSKEY_RP_ID:localhost}
+      rp-id: ${SECURITY_PASSKEY_RP_ID:${PUBLIC_HOSTNAME:localhost}}
       rp-name: ${SECURITY_PASSKEY_RP_NAME:InboxBridge}
-      origins: ${SECURITY_PASSKEY_ORIGINS:${PUBLIC_BASE_URL:https://localhost:3000}}
+      origins: ${SECURITY_PASSKEY_ORIGINS:${PUBLIC_BASE_URL:https://${PUBLIC_HOSTNAME:localhost}:${PUBLIC_PORT:3000}}}
       challenge-ttl: ${SECURITY_PASSKEY_CHALLENGE_TTL:PT5M}
     remote:
       enabled: ${SECURITY_REMOTE_ENABLED:true}
@@ -82,7 +82,7 @@ inboxbridge:
     client-id: ${GOOGLE_CLIENT_ID:replace-me}
     client-secret: ${GOOGLE_CLIENT_SECRET:replace-me}
     refresh-token: ${GOOGLE_REFRESH_TOKEN:replace-me}
-    redirect-uri: ${GOOGLE_REDIRECT_URI:${PUBLIC_BASE_URL:https://localhost:3000}/api/google-oauth/callback}
+    redirect-uri: ${GOOGLE_REDIRECT_URI:${PUBLIC_BASE_URL:https://${PUBLIC_HOSTNAME:localhost}:${PUBLIC_PORT:3000}}/api/google-oauth/callback}
     create-missing-labels: ${GMAIL_CREATE_MISSING_LABELS:true}
     never-mark-spam: ${GMAIL_NEVER_MARK_SPAM:false}
     process-for-calendar: ${GMAIL_PROCESS_FOR_CALENDAR:false}
@@ -90,7 +90,7 @@ inboxbridge:
     tenant: ${MICROSOFT_TENANT:consumers}
     client-id: ${MICROSOFT_CLIENT_ID:replace-me}
     client-secret: ${MICROSOFT_CLIENT_SECRET:replace-me}
-    redirect-uri: ${MICROSOFT_REDIRECT_URI:${PUBLIC_BASE_URL:https://localhost:3000}/api/microsoft-oauth/callback}
+    redirect-uri: ${MICROSOFT_REDIRECT_URI:${PUBLIC_BASE_URL:https://${PUBLIC_HOSTNAME:localhost}:${PUBLIC_PORT:3000}}/api/microsoft-oauth/callback}
   sources:
     # Keep real source credentials out of this file. Configure them in .env
     # with indexed variables like MAIL_ACCOUNT_0__* and MAIL_ACCOUNT_1__*.

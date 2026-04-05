@@ -153,6 +153,10 @@
   opacity: 0.6;
 }
 
+.remote-hero-content {
+  min-width: 0;
+}
+
 .remote-source-actions > .primary,
 .remote-source-actions > .secondary {
   padding: 10px 14px;
@@ -341,16 +345,31 @@
     gap: 12px;
   }
 
+  .remote-hero {
+    position: relative;
+  }
+
+  .remote-hero-content {
+    padding-right: 60px;
+  }
+
+  .remote-hero-actions {
+    position: static;
+  }
+
   .remote-hero-menu {
-    width: 100%;
+    position: absolute;
+    top: 18px;
+    right: 18px;
+    width: auto;
   }
 
   .remote-hero-menu .fetcher-menu-button {
-    margin-left: auto;
+    margin-left: 0;
   }
 
   .remote-auth-language-picker {
-    margin-bottom: 0;
+    margin-bottom: 10px;
   }
 }
 

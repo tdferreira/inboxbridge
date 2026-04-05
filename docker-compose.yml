@@ -37,7 +37,7 @@ services:
       network: host
     container_name: inboxbridge-admin
     ports:
-      - "3000:443"
+      - "${PUBLIC_PORT:-3000}:443"
     depends_on:
       cert-init:
         condition: service_completed_successfully

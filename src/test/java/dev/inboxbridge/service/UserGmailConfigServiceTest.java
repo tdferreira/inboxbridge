@@ -101,6 +101,35 @@ class UserGmailConfigServiceTest {
     }
 
     @Test
+    void defaultRedirectUriFallsBackToDerivedPublicHostnameAndPort() {
+        UserGmailConfigService service = service(
+                false,
+                repositoryWithNoRow(),
+                Optional.empty(),
+                configWithBlankGmailRedirect(),
+                Optional.empty(),
+                "bridge.example.test",
+                "9443");
+
+        assertEquals("https://bridge.example.test:9443/api/google-oauth/callback", service.defaultRedirectUri());
+        assertEquals("https://bridge.example.test:9443/api/google-oauth/callback", service.defaultView(7L).defaultRedirectUri());
+    }
+
+    @Test
+    void defaultRedirectUriPrefersExplicitPublicBaseUrlOverride() {
+        UserGmailConfigService service = service(
+                false,
+                repositoryWithNoRow(),
+                Optional.empty(),
+                configWithBlankGmailRedirect(),
+                Optional.of("https://public.example.test:7443"),
+                "bridge.internal.test",
+                "9443");
+
+        assertEquals("https://public.example.test:7443/api/google-oauth/callback", service.defaultRedirectUri());
+    }
+
+    @Test
     void viewReflectsStoredGoogleRefreshTokenFromOAuthCredentialTable() {
         InMemoryUserGmailConfigRepository repository = repositoryWithNoRow();
         UserGmailConfig stored = new UserGmailConfig();
@@ -240,13 +269,84 @@ class UserGmailConfigServiceTest {
             boolean encryptionConfigured,
             InMemoryUserGmailConfigRepository repository,
             Optional<OAuthCredentialService.StoredOAuthCredential> googleCredential) {
+        return service(
+                encryptionConfigured,
+                repository,
+                googleCredential,
+                new TestConfig(),
+                Optional.empty(),
+                "localhost",
+                "3000");
+    }
+
+    private UserGmailConfigService service(
+            boolean encryptionConfigured,
+            InMemoryUserGmailConfigRepository repository,
+            Optional<OAuthCredentialService.StoredOAuthCredential> googleCredential,
+            InboxBridgeConfig config,
+            Optional<String> publicBaseUrl,
+            String publicHostname,
+            String publicPort) {
         UserGmailConfigService service = new UserGmailConfigService();
         service.repository = repository;
         service.secretEncryptionService = encryptionConfigured ? configuredSecrets() : unconfiguredSecrets();
-        service.inboxBridgeConfig = new TestConfig();
+        service.inboxBridgeConfig = config;
+        service.publicBaseUrl = publicBaseUrl;
+        service.publicHostname = publicHostname;
+        service.publicPort = publicPort;
         service.oAuthCredentialService = new FakeOAuthCredentialService(googleCredential);
         service.systemOAuthAppSettingsService = systemOAuthAppSettingsService(service.inboxBridgeConfig, service.secretEncryptionService);
         return service;
+    }
+
+    private InboxBridgeConfig configWithBlankGmailRedirect() {
+        return new TestConfig() {
+            @Override
+            public Gmail gmail() {
+                InboxBridgeConfig.Gmail defaults = super.gmail();
+                return new InboxBridgeConfig.Gmail() {
+                    @Override
+                    public String destinationUser() {
+                        return defaults.destinationUser();
+                    }
+
+                    @Override
+                    public String clientId() {
+                        return defaults.clientId();
+                    }
+
+                    @Override
+                    public String clientSecret() {
+                        return defaults.clientSecret();
+                    }
+
+                    @Override
+                    public String refreshToken() {
+                        return defaults.refreshToken();
+                    }
+
+                    @Override
+                    public String redirectUri() {
+                        return "";
+                    }
+
+                    @Override
+                    public boolean createMissingLabels() {
+                        return defaults.createMissingLabels();
+                    }
+
+                    @Override
+                    public boolean neverMarkSpam() {
+                        return defaults.neverMarkSpam();
+                    }
+
+                    @Override
+                    public boolean processForCalendar() {
+                        return defaults.processForCalendar();
+                    }
+                };
+            }
+        };
     }
 
     private SystemOAuthAppSettingsService systemOAuthAppSettingsService(InboxBridgeConfig config, SecretEncryptionService secretEncryptionService) {
@@ -298,7 +398,7 @@ class UserGmailConfigServiceTest {
         }
     }
 
-    private static final class TestConfig implements InboxBridgeConfig {
+    private static class TestConfig implements InboxBridgeConfig {
         @Override
         public boolean pollEnabled() {
             return true;

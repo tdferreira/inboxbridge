@@ -88,6 +88,7 @@ function RemoteApp({ timingOverrides = null }) {
   const lastLiveEventAtRef = useRef(0)
   const passwordInputRef = useRef(null)
   const installPrompt = usePwaInstallPrompt()
+  const installPromptCardRef = useRef(null)
   const deviceLocation = useSessionDeviceLocation({
     captureLocation: async (payload) => {
       await recordRemoteDeviceLocation(payload)
@@ -106,6 +107,10 @@ function RemoteApp({ timingOverrides = null }) {
   }, [t])
 
   async function handleInstallApp() {
+    if (!installPrompt.canPromptInstall) {
+      installPromptCardRef.current?.scrollIntoView?.({ behavior: 'smooth', block: 'start' })
+      return
+    }
     setInstallLoading(true)
     try {
       await installPrompt.promptInstall()
@@ -149,7 +154,21 @@ function RemoteApp({ timingOverrides = null }) {
     label: translate(language, `language.${value}`)
   })), [language])
 
-  const shouldShowInstallPromptCard = !installPrompt.installed && !installPromptDismissed
+  const shouldShowMobileInstallHintCard =
+    !installPrompt.installed
+    && !installPromptDismissed
+    && installPrompt.manualInstallSupported
+    && !installPrompt.canPromptInstall
+  const shouldShowInstallPromptCard =
+    !installPrompt.installed
+    && !installPromptDismissed
+    && !shouldShowMobileInstallHintCard
+  const mobileInstallHints = useMemo(
+    () => installPrompt.prefersAddToHomeScreenLabel
+      ? [t('pwa.mobileSafariIosHint')]
+      : [t('pwa.mobileAndroidHint')],
+    [installPrompt.prefersAddToHomeScreenLabel, t]
+  )
 
   function applySessionPreferences(nextLanguage, timezoneMode, timezone) {
     setLanguage(normalizeLocale(nextLanguage || language))
@@ -618,13 +637,30 @@ function RemoteApp({ timingOverrides = null }) {
       <div className="remote-shell">
         <main className="remote-panel">
           {shouldShowInstallPromptCard ? (
-            <InstallPromptCard
-              canPromptInstall={installPrompt.canPromptInstall}
-              installLoading={installLoading}
-              onDismiss={dismissInstallPrompt}
-              onInstall={handleInstallApp}
-              t={t}
-            />
+            <div ref={installPromptCardRef}>
+              <InstallPromptCard
+                canPromptInstall={installPrompt.canPromptInstall}
+                installLoading={installLoading}
+                onDismiss={dismissInstallPrompt}
+                onInstall={handleInstallApp}
+                showInstallAction={installPrompt.canPromptInstall}
+                t={t}
+              />
+            </div>
+          ) : null}
+          {shouldShowMobileInstallHintCard ? (
+            <div ref={installPromptCardRef}>
+              <InstallPromptCard
+                copy={t('pwa.mobileHintCopy')}
+                dismissInBody
+                dismissLabel={t('pwa.gotIt')}
+                hints={mobileInstallHints}
+                note={t('pwa.mobileHintNote')}
+                onDismiss={dismissInstallPrompt}
+                title={t('pwa.mobileHintTitle')}
+                t={t}
+              />
+            </div>
           ) : null}
           {deviceLocation.shouldPrompt ? (
             <DeviceLocationPrompt
@@ -637,8 +673,7 @@ function RemoteApp({ timingOverrides = null }) {
             />
           ) : null}
           <section className="remote-hero">
-            <div>
-              <p className="remote-eyebrow">{t('remote.eyebrow')}</p>
+            <div className="remote-hero-content">
               <h1>{t('remote.dashboardTitle')}</h1>
               <p className="remote-copy">{formatRemoteSessionLine(session, t)}</p>
             </div>
@@ -674,13 +709,30 @@ function RemoteApp({ timingOverrides = null }) {
     <div className="remote-shell">
       <main className="remote-panel">
         {shouldShowInstallPromptCard ? (
-          <InstallPromptCard
-            canPromptInstall={installPrompt.canPromptInstall}
-            installLoading={installLoading}
-            onDismiss={dismissInstallPrompt}
-            onInstall={handleInstallApp}
-            t={t}
-          />
+          <div ref={installPromptCardRef}>
+            <InstallPromptCard
+              canPromptInstall={installPrompt.canPromptInstall}
+              installLoading={installLoading}
+              onDismiss={dismissInstallPrompt}
+              onInstall={handleInstallApp}
+              showInstallAction={installPrompt.canPromptInstall}
+              t={t}
+            />
+          </div>
+        ) : null}
+        {shouldShowMobileInstallHintCard ? (
+          <div ref={installPromptCardRef}>
+            <InstallPromptCard
+              copy={t('pwa.mobileHintCopy')}
+              dismissInBody
+              dismissLabel={t('pwa.gotIt')}
+              hints={mobileInstallHints}
+              note={t('pwa.mobileHintNote')}
+              onDismiss={dismissInstallPrompt}
+              title={t('pwa.mobileHintTitle')}
+              t={t}
+            />
+          </div>
         ) : null}
         {deviceLocation.shouldPrompt ? (
           <DeviceLocationPrompt
@@ -693,8 +745,7 @@ function RemoteApp({ timingOverrides = null }) {
           />
         ) : null}
         <section className="remote-hero">
-          <div>
-            <p className="remote-eyebrow">{t('remote.eyebrow')}</p>
+          <div className="remote-hero-content">
             <h1>{t('remote.dashboardTitle')}</h1>
             <p className="remote-copy">{formatRemoteSessionLine(session, t)}</p>
           </div>

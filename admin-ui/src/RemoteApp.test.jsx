@@ -1675,6 +1675,65 @@ describe('RemoteApp', () => {
     expect(screen.getByText('Firefox on desktop does not currently expose a full install flow for this app, so use Chrome/Edge or Safari on Apple devices instead.')).toBeInTheDocument()
   })
 
+  it('shows a dismissable mobile home-screen hint instead of an install button on iPhone', async () => {
+    const originalUserAgent = navigator.userAgent
+    Object.defineProperty(window.navigator, 'userAgent', {
+      configurable: true,
+      value: 'Mozilla/5.0 (iPhone; CPU iPhone OS 17_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.0 Mobile/15E148 Safari/604.1'
+    })
+
+    const fetchMock = vi.fn((url) => {
+      if (url === '/api/remote/auth/me') {
+        return jsonResponse({
+          id: 7,
+          username: 'admin',
+          role: 'ADMIN',
+          canRunUserPoll: true,
+          canRunAllUsersPoll: true,
+          deviceLocationCaptured: true,
+          language: 'en'
+        })
+      }
+      if (url === '/api/remote/control') {
+        return jsonResponse({
+          session: {
+            id: 7,
+            username: 'admin',
+            role: 'ADMIN',
+            canRunUserPoll: true,
+            canRunAllUsersPoll: true,
+            language: 'en'
+          },
+          sources: [],
+          hasOwnSourceEmailAccounts: true,
+          hasReadyDestinationMailbox: true,
+          setupRequired: false,
+          remotePollRateLimitCount: 60,
+          remotePollRateLimitWindow: 'PT1M'
+        })
+      }
+      if (url === '/api/remote/poll/live') {
+        return jsonResponse({ running: false, sources: [] })
+      }
+      throw new Error(`Unexpected fetch: ${url}`)
+    })
+    vi.stubGlobal('fetch', fetchMock)
+
+    render(<RemoteApp />)
+
+    expect(await screen.findByText('Quick mobile access')).toBeInTheDocument()
+    expect(screen.queryByText('Install InboxBridge')).not.toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: 'Add to Home Screen' })).not.toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: 'Not now' })).not.toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Got it' })).toBeInTheDocument()
+    expect(screen.getByText('On iPhone or iPad, open Share and choose Add to Home Screen.')).toBeInTheDocument()
+
+    Object.defineProperty(window.navigator, 'userAgent', {
+      configurable: true,
+      value: originalUserAgent
+    })
+  })
+
   it('lets the user hide the install section and reopen it from the hero menu', async () => {
     const fetchMock = vi.fn((url) => {
       if (url === '/api/remote/auth/me') {

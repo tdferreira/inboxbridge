@@ -3,6 +3,8 @@ package dev.inboxbridge.service;
 import java.time.Instant;
 import java.util.Optional;
 
+import org.eclipse.microprofile.config.inject.ConfigProperty;
+
 import dev.inboxbridge.config.InboxBridgeConfig;
 import dev.inboxbridge.dto.UpdateUserGmailConfigRequest;
 import dev.inboxbridge.dto.UserGmailConfigView;
@@ -35,6 +37,15 @@ public class UserGmailConfigService {
 
     @Inject
     GoogleOAuthService googleOAuthService;
+
+    @ConfigProperty(name = "PUBLIC_BASE_URL")
+    Optional<String> publicBaseUrl;
+
+    @ConfigProperty(name = "PUBLIC_HOSTNAME", defaultValue = "localhost")
+    String publicHostname;
+
+    @ConfigProperty(name = "PUBLIC_PORT", defaultValue = "3000")
+    String publicPort;
 
     public Optional<UserGmailConfigView> viewForUser(Long userId) {
         return repository.findByUserId(userId).map(config -> toView(userId, config));
@@ -270,7 +281,14 @@ public class UserGmailConfigService {
     }
 
     public String defaultRedirectUri() {
-        return nonBlankOrDefault(inboxBridgeConfig.gmail().redirectUri(), "https://localhost:3000/api/google-oauth/callback");
+        return nonBlankOrDefault(inboxBridgeConfig.gmail().redirectUri(), defaultPublicBaseUrl() + "/api/google-oauth/callback");
+    }
+
+    private String defaultPublicBaseUrl() {
+        return (publicBaseUrl == null ? Optional.<String>empty() : publicBaseUrl)
+                .map(String::trim)
+                .filter(value -> !value.isBlank())
+                .orElse("https://" + nonBlankOrDefault(publicHostname, "localhost") + ":" + nonBlankOrDefault(publicPort, "3000"));
     }
 
     private String decrypt(String ciphertext, String nonce, String keyVersion, String context) {

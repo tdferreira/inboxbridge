@@ -99,7 +99,7 @@ Certificate trust is only one requirement. The browser must also reach
 InboxBridge through a hostname that matches:
 
 - the generated certificate SAN entries
-- `PUBLIC_BASE_URL`
+- `PUBLIC_BASE_URL` or the derived `PUBLIC_HOSTNAME` / `PUBLIC_PORT` base URL
 - `SECURITY_PASSKEY_RP_ID`
 - `SECURITY_PASSKEY_ORIGINS` for passkeys/WebAuthn
 

@@ -11,11 +11,14 @@ The preferred local callback origin is the HTTPS admin UI:
 - Google: `https://localhost:3000/api/google-oauth/callback`
 - Microsoft: `https://localhost:3000/api/microsoft-oauth/callback`
 
-If your deployment runs on another host, set `PUBLIC_BASE_URL` and InboxBridge will use that host for the default browser callback URLs unless you explicitly override `GOOGLE_REDIRECT_URI` or `MICROSOFT_REDIRECT_URI`.
+If your deployment runs on another host or port, set `PUBLIC_HOSTNAME` and
+`PUBLIC_PORT`. InboxBridge will derive the default browser callback URLs from
+that pair unless you explicitly override `PUBLIC_BASE_URL`,
+`GOOGLE_REDIRECT_URI`, or `MICROSOFT_REDIRECT_URI`.
 
 For self-hosted LAN or Tailscale deployments that still use the generated local certificates:
 
-- make sure the callback hostname is covered by the generated SAN list (`PUBLIC_BASE_URL` plus optional `TLS_FRONTEND_CERT_HOSTNAMES` / `TLS_BACKEND_CERT_HOSTNAMES`)
+- make sure the callback hostname is covered by the generated SAN list (`PUBLIC_BASE_URL` or the derived `PUBLIC_HOSTNAME` / `PUBLIC_PORT` base URL, plus optional `TLS_FRONTEND_CERT_HOSTNAMES` / `TLS_BACKEND_CERT_HOSTNAMES`)
 - trust `certs/ca.crt` on the browser/device opening the callback page
 - prefer one canonical hostname if you also want passkeys/WebAuthn to work on the same deployment
 

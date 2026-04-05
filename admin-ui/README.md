@@ -59,9 +59,14 @@ Key design choices:
 - the `/remote` surface can now expose an in-app install prompt when the browser considers that remote page installable as a PWA
 - the `/remote` surface now also keeps a visible install-help card even when the browser uses a manual install path, with guidance for Chrome/Edge, Safari `Add to Home Screen` / `Add to Dock`, Firefox Android install, and a note that Firefox desktop does not currently expose a full install flow
 - the `/remote` install-help card now also includes a `Not now` action that hides the section until the user reopens it from the hero hamburger menu, so the PWA guidance can be postponed without disappearing entirely
+- the `/remote` install-help card now shows a primary action only when the browser exposes a native install prompt or supports a mobile manual-install path such as iPhone/iPad `Add to Home Screen`; unsupported desktop/manual cases keep the guidance but hide the install button
+- on mobile browsers that only support OS-level home-screen pinning, `/remote` now swaps that install card for a dismissable local-only hint card that explains how to use the device’s built-in `Add to Home Screen` or similar feature instead of showing a dead-end install button
 - InboxBridge Go now groups install guidance, device-location sharing, and sign-out inside a top-right hero hamburger menu instead of exposing those utility actions as separate inline banner buttons
+- on narrow mobile widths, the InboxBridge Go hero keeps that hamburger menu pinned to the top-right corner of the card instead of letting it drop into the stacked action column
+- the signed-in InboxBridge Go hero now shows the `InboxBridge Go` label only once, using the main heading without repeating the same copy in a second eyebrow label above it
 - the unauthenticated InboxBridge Go login screen now shows a single `InboxBridge Go` heading, instead of repeating the same label in a blue eyebrow directly under the language picker
 - the unauthenticated InboxBridge Go login screen also keeps explicit spacing between the language picker and the main title so the top of the card does not feel cramped after removing the old blue eyebrow
+- on narrow mobile widths, that login-card spacing should still be preserved so the top-right language picker does not overlap or crowd the `InboxBridge Go` title
 - the InboxBridge Go login card now uses the standard `Sign in` button label, and any session-expired or other login notice is rendered below the sign-in actions instead of above the form copy
 - the InboxBridge Go login language control is now a mobile-friendly flag button in the top-right corner of the login card that opens a floating menu of languages showing both the language label and its flag, instead of rendering as a plain labeled select dropdown
 - the main My InboxBridge login screen now uses that same top-right flag language menu on the login card, while the registration dialog keeps its labeled selector

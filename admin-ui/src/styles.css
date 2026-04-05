@@ -449,6 +449,12 @@ h2 {
   line-height: 1.45;
 }
 
+.utility-prompt-footer {
+  display: flex;
+  justify-content: flex-end;
+  margin-top: 4px;
+}
+
 .utility-prompt-success {
   border-color: rgba(23, 101, 75, 0.2);
   color: var(--accent-strong);

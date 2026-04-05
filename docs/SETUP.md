@@ -39,12 +39,16 @@ The minimum local bootstrap values are:
 JDBC_URL=jdbc:postgresql://postgres:5432/inboxbridge
 JDBC_USERNAME=inboxbridge
 JDBC_PASSWORD=inboxbridge
-PUBLIC_BASE_URL=https://localhost:3000
+PUBLIC_HOSTNAME=localhost
+PUBLIC_PORT=3000
 SECURITY_TOKEN_ENCRYPTION_KEY=<base64-32-byte-key>
 SECURITY_TOKEN_ENCRYPTION_KEY_ID=v1
-SECURITY_PASSKEY_RP_ID=localhost
-SECURITY_PASSKEY_ORIGINS=https://localhost:3000
 ```
+
+By default, InboxBridge derives its canonical browser URL as
+`https://${PUBLIC_HOSTNAME}:${PUBLIC_PORT}`. You can still set
+`PUBLIC_BASE_URL` explicitly if the public URL needs a different scheme or a
+more custom shape than that derived default.
 
 After startup:
 
@@ -60,7 +64,11 @@ TLS_FRONTEND_CERT_HOSTNAMES=inboxbridge.local,inboxbridge.your-tailnet.ts.net
 TLS_BACKEND_CERT_HOSTNAMES=inboxbridge.local,inboxbridge.your-tailnet.ts.net
 ```
 
-`cert-init` always includes `localhost`, the internal Docker service names, and the hostname from `PUBLIC_BASE_URL`; these variables add more SAN entries on top. If the expected SAN list changes later, `cert-init` regenerates the self-signed frontend/backend certs automatically.
+`cert-init` always includes `localhost`, the internal Docker service names, and
+the hostname from `PUBLIC_BASE_URL` or the derived `PUBLIC_HOSTNAME` /
+`PUBLIC_PORT` base URL; these variables add more SAN entries on top. If the
+expected SAN list changes later, `cert-init` regenerates the self-signed
+frontend/backend certs automatically.
 
 For passkeys/WebAuthn, prefer one canonical hostname everywhere instead of mixing unrelated hostnames such as `raspberrypi.local` and `something.ts.net`. One `SECURITY_PASSKEY_RP_ID` cannot span unrelated domains.
 

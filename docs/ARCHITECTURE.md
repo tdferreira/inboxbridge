@@ -231,7 +231,7 @@ frontend/backend leaf certificates used by the admin UI and backend.
 
 The SAN hostnames are now derived from:
 
-- the hostname in `PUBLIC_BASE_URL`
+- the hostname in `PUBLIC_BASE_URL`, or the hostname from the derived `https://${PUBLIC_HOSTNAME}:${PUBLIC_PORT}` public URL when `PUBLIC_BASE_URL` is unset
 - mandatory Docker-internal names (`localhost`, `inboxbridge`, `inboxbridge-admin`)
 - optional extra comma-separated names from `TLS_FRONTEND_CERT_HOSTNAMES` and `TLS_BACKEND_CERT_HOSTNAMES`
 

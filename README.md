@@ -11,6 +11,10 @@ InboxBridge is a self-hosted mail importer. It connects to one or more source ma
 
 It is designed for people who want to keep mail from several accounts together in one place while still controlling where credentials, tokens, and imported-message history are stored.
 
+Explore the public project page: [https://tdferreira.github.io/inboxbridge/](https://tdferreira.github.io/inboxbridge/)
+
+It gives a quick tour of the product, the top-level architecture, the self-hosted security model, and the bootstrap `.env` helper for operators.
+
 ## What InboxBridge Does
 
 InboxBridge can:
@@ -24,6 +28,7 @@ InboxBridge can:
 - provide a browser-based admin UI plus a lightweight `/remote` control page for phones and quick access
 - show live polling progress with pause, resume, stop, retry, and queue reprioritization controls
 - let IMAP sources opt into real-time IMAP IDLE watching with durable UID checkpoints and scheduler fallback if a watcher stays unhealthy
+- publish a lightweight GitHub Pages site that explains the project and can generate a starter `.env` snippet for env-managed deployments
 
 ## Who It Is For
 
@@ -116,12 +121,16 @@ For a normal first run, these minimum values are already present in
 JDBC_URL=jdbc:postgresql://postgres:5432/inboxbridge
 JDBC_USERNAME=inboxbridge
 JDBC_PASSWORD=inboxbridge
-PUBLIC_BASE_URL=https://localhost:3000
+PUBLIC_HOSTNAME=localhost
+PUBLIC_PORT=3000
 SECURITY_TOKEN_ENCRYPTION_KEY=<base64-32-byte-key>
 SECURITY_TOKEN_ENCRYPTION_KEY_ID=v1
-SECURITY_PASSKEY_RP_ID=localhost
-SECURITY_PASSKEY_ORIGINS=https://localhost:3000
 ```
+
+InboxBridge now derives the browser-facing HTTPS URL as
+`https://${PUBLIC_HOSTNAME}:${PUBLIC_PORT}` by default. If you need a custom
+scheme or a more unusual public URL shape, you can still override it with
+`PUBLIC_BASE_URL`.
 
 ### 2. Start the stack
 
@@ -152,6 +161,40 @@ After signing in:
 2. Open `My Destination Mailbox` and connect the mailbox that should receive imported mail.
 3. Open `My Source Email Accounts` and add at least one source mailbox.
 4. Run a poll and confirm the messages arrive in the destination mailbox.
+
+## GitHub Pages Site
+
+This repository also includes a static site under [`site/`](site) intended for GitHub Pages.
+
+It is meant to:
+
+- explain what InboxBridge is and how it works
+- show a top-level architecture view with animated moving mail icons so the source-to-core-to-destination direction is obvious at a glance
+- keep the animated-view note visually smaller than the main cards because it is explanatory copy rather than the main diagram
+- include an expandable lower-level runtime view with a real diagram, clearer separation from the animated note, and a deeper explanation of transport, runtime coordination, durable state, and provider boundaries
+- answer common operator questions in a production-ready FAQ section
+- expose the same language set as the admin UI through a top-level flag language selector so the public site can be read in the same supported locales
+- keep the full public-site copy translated across those locales so architecture, FAQ, generator, and footer text do not silently fall back to English
+- keep the language selector styled like the other topbar actions and grouped with the header controls so longer locale labels do not visually detach the picker from the navigation
+- keep the language selector pinned to the top-right corner on narrow mobile widths and make sure longer translated hero titles wrap without introducing horizontal overflow or a shifted-looking page background
+- make the privacy and self-hosting advantage explicit, including that
+  mailbox credentials stay under the owner’s control instead of being
+  handed to a third-party forwarding service
+- explain that InboxBridge is designed around encrypted IMAP, POP3, HTTPS, and provider-API communication, and that PostgreSQL stores operational metadata, dedupe identifiers, checkpoints, settings, notifications, and encrypted secrets rather than a shadow archive of mailbox content
+- highlight that the self-hosted deployment model fits personal computers, homelab servers, Raspberry Pi systems, VPS instances, and dedicated hosts, so the operator keeps control over the runtime boundary
+- highlight the main source and destination mailbox flows
+- link operators back to the full setup docs
+- generate a starter `.env` snippet for env-managed deployments and shared OAuth app configuration
+- explain the configurator fields with compact info-icon hints
+- generate the required base64 token-encryption key directly in the browser when Web Crypto is available
+- reuse the same InboxBridge icon family as the `/remote` PWA so the public site and installed surface feel related
+
+The generator is intentionally a convenience for operators. It does not replace the browser admin UI for normal UI-managed setup, and it does not replace the full operator docs in [`docs/SETUP.md`](docs/SETUP.md).
+The recommended path is to keep `.env` as small as possible for bootstrap settings so you avoid leaving mailbox passwords in plain text there, then complete destination and source mailbox configuration from the application web interface unless you intentionally want env-managed accounts.
+
+For GitHub Pages deployment, the repository's Pages feature still needs to be enabled once in GitHub settings and configured to use GitHub Actions. After that one-time setup, the workflow in [`.github/workflows/pages.yml`](.github/workflows/pages.yml) can publish the `site/` directory normally.
+
+The local Docker Compose stack does not publish that standalone GitHub Pages site by default. When you run InboxBridge locally, `https://localhost:3000/` serves the admin UI, not the contents of `site/`.
 
 ## Configuration Overview
 
@@ -185,7 +228,9 @@ create a Google Cloud project and OAuth client for InboxBridge.
 
 These are the settings most operators care about first:
 
-- `PUBLIC_BASE_URL`: public HTTPS URL used for browser links and default OAuth callbacks
+- `PUBLIC_HOSTNAME`: browser-facing hostname used for local TLS SAN generation and derived HTTPS defaults
+- `PUBLIC_PORT`: published HTTPS port for the admin UI and remote page; Docker Compose maps this host port to the frontend container
+- `PUBLIC_BASE_URL`: optional override for the canonical public HTTPS URL when it should differ from `https://${PUBLIC_HOSTNAME}:${PUBLIC_PORT}`
 - `MULTI_USER_ENABLED`: choose single-user or multi-user mode
 - `SECURITY_TOKEN_ENCRYPTION_KEY`: required for encrypted UI-managed secrets and browser OAuth exchange
 - `SECURITY_TOKEN_ENCRYPTION_KEY_ID`: key label stored with encrypted data
@@ -209,7 +254,9 @@ Quick callback defaults:
 - Google: `https://localhost:3000/api/google-oauth/callback`
 - Microsoft: `https://localhost:3000/api/microsoft-oauth/callback`
 
-If you deploy on another hostname, set `PUBLIC_BASE_URL` and use a certificate that matches that host.
+If you deploy on another hostname or port, set `PUBLIC_HOSTNAME` / `PUBLIC_PORT`
+and use a certificate that matches that host. Keep `PUBLIC_BASE_URL` for cases
+where you need to override the derived URL explicitly.
 
 ## Remote Control
 
@@ -289,8 +336,8 @@ AI assistance was used to help design, implement, refactor, test, and document p
 
 - Dependabot is configured in [.github/dependabot.yml](.github/dependabot.yml) for GitHub Actions, Maven, npm, and Docker base-image updates.
 - GitHub Releases can be created automatically from tags matching `v*` through [.github/workflows/release.yml](.github/workflows/release.yml).
-- The release workflow can also be started manually from the GitHub Actions UI by providing a tag name such as `v0.2.0`.
+- The release workflow can also be started manually from the GitHub Actions UI by providing a tag name such as `v0.3.0`.
 
 ## Current Version
 
-The repository currently declares version `0.2.0` in [`pom.xml`](pom.xml) and `0.2.0` in [`admin-ui/package.json`](admin-ui/package.json).
+The repository currently declares version `0.3.0` in [`pom.xml`](pom.xml) and `0.3.0` in [`admin-ui/package.json`](admin-ui/package.json).

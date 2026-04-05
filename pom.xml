@@ -6,7 +6,7 @@
 
     <groupId>dev.inboxbridge</groupId>
     <artifactId>inboxbridge</artifactId>
-    <version>0.2.0</version>
+    <version>0.3.0</version>
     <name>InboxBridge</name>
     <description>Self-hosted Gmail import bridge for external POP3/IMAP mailboxes</description>
 
