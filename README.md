@@ -174,6 +174,7 @@ It is meant to:
 - reuse the same InboxBridge icon family as the `/remote` PWA so the public site and installed surface feel related
 
 The generator is intentionally a convenience for operators. It does not replace the browser admin UI for normal UI-managed setup, and it does not replace the full operator docs in [`docs/SETUP.md`](docs/SETUP.md).
+The recommended path is to keep `.env` as small as possible for bootstrap settings so you avoid leaving mailbox passwords in plain text there, then complete destination and source mailbox configuration from the application web interface unless you intentionally want env-managed accounts.
 
 For GitHub Pages deployment, the repository's Pages feature still needs to be enabled once in GitHub settings and configured to use GitHub Actions. After that one-time setup, the workflow in [`.github/workflows/pages.yml`](.github/workflows/pages.yml) can publish the `site/` directory normally.
 
