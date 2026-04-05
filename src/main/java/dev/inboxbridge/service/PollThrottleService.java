@@ -129,11 +129,7 @@ public class PollThrottleService {
         if (key == null || baseSpacing == null || baseSpacing.isZero() || baseSpacing.isNegative()) {
             return;
         }
-        String normalized = normalizeError(errorMessage);
-        if (normalized.isBlank()) {
-            return;
-        }
-        int delta = errorSeverityDelta(normalized);
+        int delta = MailFailureClassifier.classify(errorMessage).throttleSeverityDelta();
         if (delta <= 0) {
             return;
         }
@@ -171,29 +167,6 @@ public class PollThrottleService {
             return Optional.empty();
         }
         return Optional.of(host.trim().toLowerCase(Locale.ROOT));
-    }
-
-    private String normalizeError(String errorMessage) {
-        return errorMessage == null ? "" : errorMessage.toLowerCase(Locale.ROOT);
-    }
-
-    private int errorSeverityDelta(String normalized) {
-        if (containsAny(normalized, "429", "too many", "rate limit", "throttl", "quota", "temporarily blocked", "try again later")) {
-            return 2;
-        }
-        if (containsAny(normalized, "timeout", "timed out", "connection refused", "connection reset", "service unavailable", "temporarily unavailable")) {
-            return 1;
-        }
-        return 0;
-    }
-
-    private boolean containsAny(String normalized, String... patterns) {
-        for (String pattern : patterns) {
-            if (normalized.contains(pattern)) {
-                return true;
-            }
-        }
-        return false;
     }
 
     @Transactional

@@ -3,10 +3,8 @@ package dev.inboxbridge.service;
 import java.time.Duration;
 import java.time.Instant;
 import java.util.List;
-import java.util.Locale;
 import java.util.Map;
 import java.util.Optional;
-import java.util.function.Function;
 import java.util.stream.Collectors;
 
 import dev.inboxbridge.domain.ImapCheckpoint;
@@ -24,10 +22,6 @@ import jakarta.transaction.Transactional;
 @ApplicationScoped
 public class SourcePollingStateService {
 
-    private static final Duration DEFAULT_FAILURE_BACKOFF = Duration.ofMinutes(2);
-    private static final Duration TRANSIENT_FAILURE_BACKOFF = Duration.ofMinutes(5);
-    private static final Duration RATE_LIMIT_BACKOFF = Duration.ofMinutes(15);
-    private static final Duration AUTH_FAILURE_BACKOFF = Duration.ofMinutes(30);
     private static final Duration MAX_BACKOFF = Duration.ofHours(6);
 
     @Inject
@@ -208,17 +202,7 @@ public class SourcePollingStateService {
     }
 
     private Duration backoffFor(String errorMessage, int consecutiveFailures) {
-        String normalized = errorMessage == null ? "" : errorMessage.toLowerCase(Locale.ROOT);
-        Duration base = DEFAULT_FAILURE_BACKOFF;
-        if (containsAny(normalized, "429", "too many", "rate limit", "throttl", "quota", "temporarily blocked", "try again later", "lockout")) {
-            base = RATE_LIMIT_BACKOFF;
-        } else if (containsAny(normalized, "authenticate failed", "authenticationfailed", "basicauthblocked", "invalid_grant", "consent_required", "logondenied", "authent")) {
-            base = AUTH_FAILURE_BACKOFF;
-        } else if (containsAny(normalized, "timeout", "timed out", "connection refused", "connection reset", "service unavailable", "temporarily unavailable", "i/o", "ioexception")) {
-            base = TRANSIENT_FAILURE_BACKOFF;
-        }
-
-        Duration result = base;
+        Duration result = MailFailureClassifier.classify(errorMessage).baseBackoff();
         int multiplierSteps = Math.max(0, Math.min(4, consecutiveFailures - 1));
         for (int i = 0; i < multiplierSteps; i++) {
             result = result.multipliedBy(2);
@@ -227,15 +211,6 @@ public class SourcePollingStateService {
             }
         }
         return result.compareTo(MAX_BACKOFF) > 0 ? MAX_BACKOFF : result;
-    }
-
-    private boolean containsAny(String normalized, String... patterns) {
-        for (String pattern : patterns) {
-            if (normalized.contains(pattern)) {
-                return true;
-            }
-        }
-        return false;
     }
 
     private String truncate(String value) {

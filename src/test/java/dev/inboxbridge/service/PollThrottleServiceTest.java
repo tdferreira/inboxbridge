@@ -85,6 +85,28 @@ class PollThrottleServiceTest {
     }
 
     @Test
+    void providerAvailabilityFailuresApplySingleStepPenalty() {
+        RecordingPollThrottleService service = service();
+        RuntimeEmailAccount emailAccount = source("imap.example.com");
+
+        service.recordSourceFailure(emailAccount, "503 service unavailable");
+
+        PollThrottleState state = service.stateRepository.findByThrottleKey("source-host:imap.example.com").orElseThrow();
+        assertEquals(2, state.adaptiveMultiplier);
+        assertNotNull(state.nextAllowedAt);
+    }
+
+    @Test
+    void authenticationFailuresDoNotEscalateAdaptiveThrottle() {
+        RecordingPollThrottleService service = service();
+        RuntimeEmailAccount emailAccount = source("imap.example.com");
+
+        service.recordSourceFailure(emailAccount, "AUTHENTICATE failed");
+
+        assertTrue(service.stateRepository.findByThrottleKey("source-host:imap.example.com").isEmpty());
+    }
+
+    @Test
     void successDecaysAdaptiveMultiplierTowardOne() {
         RecordingPollThrottleService service = service();
         RuntimeEmailAccount emailAccount = source("imap.example.com");

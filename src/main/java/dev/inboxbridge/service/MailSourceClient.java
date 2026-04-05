@@ -970,32 +970,7 @@ public class MailSourceClient {
     }
 
     static boolean isRetryableMicrosoftOAuthFailure(Throwable error) {
-        String normalized = normalizeErrorMessage(error);
-        return normalized.contains("session invalidated")
-                || normalized.contains("authenticate failed")
-                || normalized.contains("authenticationfailed")
-                || normalized.contains("logondenied")
-                || normalized.contains("login failed")
-                || normalized.contains("invalid token")
-                || normalized.contains("invalid_grant")
-                || normalized.contains("invalid")
-                || normalized.contains("oauth");
-    }
-
-    private static String normalizeErrorMessage(Throwable error) {
-        StringBuilder builder = new StringBuilder();
-        Throwable current = error;
-        while (current != null) {
-            String message = current.getMessage();
-            if (message != null && !message.isBlank()) {
-                if (!builder.isEmpty()) {
-                    builder.append(' ');
-                }
-                builder.append(message.toLowerCase(java.util.Locale.ROOT));
-            }
-            current = current.getCause();
-        }
-        return builder.toString();
+        return MailFailureClassifier.classify(error).retryableOAuthSessionFailure();
     }
 
     private Instant messageInstant(Message message) {

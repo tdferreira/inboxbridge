@@ -78,6 +78,26 @@ class SourcePollingStateServiceTest {
     }
 
     @Test
+    void oauthAuthorizationFailuresUseLongAuthCooldown() {
+        SourcePollingStateService service = service();
+
+        service.recordFailure("fetcher-1", Instant.parse("2026-03-26T12:00:00Z"), "invalid_grant");
+
+        var state = service.viewForSource("fetcher-1").orElseThrow();
+        assertEquals(Instant.parse("2026-03-26T12:30:00Z"), state.cooldownUntil());
+    }
+
+    @Test
+    void providerAvailabilityFailuresUseTransientCooldownTier() {
+        SourcePollingStateService service = service();
+
+        service.recordFailure("fetcher-1", Instant.parse("2026-03-26T12:00:00Z"), "503 service unavailable");
+
+        var state = service.viewForSource("fetcher-1").orElseThrow();
+        assertEquals(Instant.parse("2026-03-26T12:05:00Z"), state.cooldownUntil());
+    }
+
+    @Test
     void cooldownBlocksPollingUntilExpiry() {
         SourcePollingStateService service = service();
         service.recordFailure("fetcher-1", Instant.parse("2026-03-26T12:00:00Z"), "invalid_grant");

@@ -165,13 +165,15 @@ Polling hardening also now includes:
 - per-source-host minimum spacing and concurrency caps
 - per-destination-provider/host minimum spacing and concurrency caps
 - adaptive throttle widening after contention or throttling-style failures
+- a shared mail-failure classifier that now drives source cooldown backoff, adaptive throttle penalties, and OAuth session retryability from the same categories instead of separate ad hoc string lists
+
+That classifier currently distinguishes rate limits, mailbox authentication failures, OAuth authorization failures, provider availability problems, transient network failures, mailbox-state problems such as closed folders, and unknown failures. Rate limits still get the strongest throttle penalty, auth/authz failures still get the longest cooldown tier without widening host/provider throttle state, and transient/provider/mailbox-state failures keep the medium retry tier.
 
 Those values can be overridden live from `Administration -> Global Poller Settings`.
 
 That is still deliberately simpler than a full mailbox-sync engine. The next evolution should be:
 
 - multi-folder IMAP IDLE / checkpoint support
-- richer retry classification
 - richer metrics and audit logs for poll cooldown decisions
 
 ## Package map

@@ -456,11 +456,12 @@ Each source also persists scheduler state in PostgreSQL:
 - `lastFailureAt`
 - `lastSuccessAt`
 
-Current backoff behavior is heuristic but practical:
+Current backoff behavior now uses one shared mail-failure classifier across source cooldowns, adaptive throttle penalties, and OAuth session retry decisions:
 
 - rate-limit, throttling, quota, or lockout style errors trigger longer cooldowns
-- auth and consent failures trigger an even longer cooldown so InboxBridge does not repeatedly hammer a blocked account
-- transient network failures trigger a medium cooldown
+- mailbox authentication and OAuth authorization failures trigger the longest cooldown tier so InboxBridge does not repeatedly hammer a blocked account, but they do not widen the host/provider adaptive throttle state
+- transient network failures, provider-availability failures, and mailbox-state issues such as closed folders trigger a medium cooldown and a single-step adaptive throttle penalty
+- unknown failures fall back to the short default cooldown tier
 - repeated failures increase the cooldown window with exponential growth up to a capped maximum
 - successful polls now schedule their next eligible run on aligned interval boundaries instead of drifting from the previous success timestamp, so user-visible cadences like `2m`, `5m`, and `10m` stay anchored to predictable clock slots
 
@@ -618,6 +619,8 @@ Still missing for a higher-assurance v1:
 - richer metrics and audit-friendly event logs around poll cooldown/backoff decisions
 - richer metrics and alerting
 - more structured audit logging
+
+The earlier retry/backoff roadmap item is now implemented: polling cooldown decisions, adaptive throttle penalties, and source OAuth session retries share the same richer mail-failure categories instead of maintaining separate overlapping string heuristics.
 
 ## Runtime model
 

@@ -45,6 +45,13 @@ class MailSourceClientTest {
     }
 
     @Test
+    void retryableMicrosoftOAuthFailureDoesNotTreatGenericInvalidMessagesAsOauthFailures() {
+        MessagingException error = new MessagingException("Invalid folder name");
+
+        assertFalse(MailSourceClient.isRetryableMicrosoftOAuthFailure(error));
+    }
+
+    @Test
     void toRawBytesRetriesAfterFolderClosedException() throws Exception {
         MailSourceClient client = new MailSourceClient();
         FakeFolder folder = new FakeFolder();
