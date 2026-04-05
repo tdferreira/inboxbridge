@@ -285,6 +285,44 @@ a {
   color: var(--ink-soft);
 }
 
+.optional-block {
+  border-radius: 22px;
+  border: 1px solid rgba(20, 33, 61, 0.1);
+  background: rgba(255, 255, 255, 0.46);
+  padding: 0.2rem 0.9rem 0.9rem;
+}
+
+.optional-block-summary {
+  cursor: pointer;
+  list-style: none;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  padding: 0.7rem 0 0.35rem;
+}
+
+.optional-block-summary::-webkit-details-marker {
+  display: none;
+}
+
+.optional-block-summary::after {
+  content: '+';
+  font-size: 1.1rem;
+  color: var(--accent);
+}
+
+.optional-block[open] .optional-block-summary::after {
+  content: '-';
+}
+
+.optional-block-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0.9rem;
+  padding-top: 0.4rem;
+}
+
 .architecture-stack {
   display: grid;
   gap: 1rem;
@@ -593,6 +631,30 @@ a {
   color: var(--ink);
 }
 
+.input-action-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 0.7rem;
+  align-items: center;
+}
+
+.dual-input-row {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0.9rem;
+}
+
+.nested-field {
+  display: flex;
+  flex-direction: column;
+  gap: 0.45rem;
+}
+
+.field-action-button {
+  min-height: 3.05rem;
+  white-space: nowrap;
+}
+
 .checkbox {
   display: inline-flex;
   align-items: center;
@@ -681,6 +743,7 @@ a {
   .architecture-diagram,
   .how-grid,
   .faq-grid,
+  .optional-block-grid,
   .info-band-grid {
     grid-template-columns: 1fr;
   }

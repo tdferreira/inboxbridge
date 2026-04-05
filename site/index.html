@@ -313,33 +313,40 @@
                   <label for="jdbcUrl"><span class="label-copy">JDBC URL</span><button class="info-hint" type="button" aria-label="JDBC URL help" data-hint="Where InboxBridge should reach PostgreSQL for durable state, dedupe history, and encrypted secrets.">i</button></label>
                   <input id="jdbcUrl" name="jdbcUrl" value="jdbc:postgresql://postgres:5432/inboxbridge" />
                 </div>
-                <div class="field">
-                  <label for="jdbcUsername"><span class="label-copy">JDBC username</span><button class="info-hint" type="button" aria-label="JDBC username help" data-hint="The PostgreSQL login used by the backend application.">i</button></label>
-                  <input id="jdbcUsername" name="jdbcUsername" value="inboxbridge" />
-                </div>
-                <div class="field">
-                  <label for="jdbcPassword"><span class="label-copy">JDBC password</span><button class="info-hint" type="button" aria-label="JDBC password help" data-hint="The password for that PostgreSQL application account.">i</button></label>
-                  <input id="jdbcPassword" name="jdbcPassword" value="inboxbridge" />
+                <div class="field full">
+                  <div class="dual-input-row">
+                    <div class="nested-field">
+                      <label for="jdbcUsername"><span class="label-copy">JDBC username</span><button class="info-hint" type="button" aria-label="JDBC username help" data-hint="The PostgreSQL login used by the backend application.">i</button></label>
+                      <input id="jdbcUsername" name="jdbcUsername" value="inboxbridge" />
+                    </div>
+                    <div class="nested-field">
+                      <label for="jdbcPassword"><span class="label-copy">JDBC password</span><button class="info-hint" type="button" aria-label="JDBC password help" data-hint="The password for that PostgreSQL application account.">i</button></label>
+                      <input id="jdbcPassword" name="jdbcPassword" value="inboxbridge" />
+                    </div>
+                  </div>
                 </div>
                 <div class="field">
                   <label for="encryptionKey"><span class="label-copy">Token encryption key</span><button class="info-hint" type="button" aria-label="Token encryption key help" data-hint="Required for encrypting UI-managed passwords, OAuth refresh tokens, and other stored secrets.">i</button></label>
-                  <input id="encryptionKey" name="encryptionKey" placeholder="Paste a base64 32-byte key" />
-                </div>
-                <div class="field">
-                  <label for="generateKeyButton"><span class="label-copy">Generate key in browser</span><button class="info-hint" type="button" aria-label="Generate key in browser help" data-hint="Creates a fresh 32-byte base64 key locally in the browser when secure Web Crypto is available.">i</button></label>
-                  <button class="button secondary inline-button" id="generateKeyButton" type="button" data-generate-key>Generate 32-byte key</button>
+                  <div class="input-action-row">
+                    <input id="encryptionKey" name="encryptionKey" placeholder="Paste a base64 32-byte key" />
+                    <button class="button secondary inline-button field-action-button" id="generateKeyButton" type="button" data-generate-key>Generate 32-byte key</button>
+                  </div>
                 </div>
                 <div class="field">
                   <label for="encryptionKeyId"><span class="label-copy">Encryption key ID</span><button class="info-hint" type="button" aria-label="Encryption key ID help" data-hint="A short label stored with encrypted records so you can track which key version protected them.">i</button></label>
                   <input id="encryptionKeyId" name="encryptionKeyId" value="v1" />
                 </div>
-                <div class="field">
-                  <label for="pollInterval"><span class="label-copy">Poll interval</span><button class="info-hint" type="button" aria-label="Poll interval help" data-hint="How often scheduled polling runs for sources that are not using IMAP IDLE.">i</button></label>
-                  <input id="pollInterval" name="pollInterval" value="5m" />
-                </div>
-                <div class="field">
-                  <label for="fetchWindow"><span class="label-copy">Fetch window</span><button class="info-hint" type="button" aria-label="Fetch window help" data-hint="How many recent messages InboxBridge scans when a source does not have newer checkpoint state to resume from.">i</button></label>
-                  <input id="fetchWindow" name="fetchWindow" value="50" />
+                <div class="field full">
+                  <div class="dual-input-row">
+                    <div class="nested-field">
+                      <label for="pollInterval"><span class="label-copy">Poll interval</span><button class="info-hint" type="button" aria-label="Poll interval help" data-hint="How often scheduled polling runs for sources that are not using IMAP IDLE.">i</button></label>
+                      <input id="pollInterval" name="pollInterval" value="5m" />
+                    </div>
+                    <div class="nested-field">
+                      <label for="fetchWindow"><span class="label-copy">Fetch window</span><button class="info-hint" type="button" aria-label="Fetch window help" data-hint="How many recent messages InboxBridge scans when a source does not have newer checkpoint state to resume from.">i</button></label>
+                      <input id="fetchWindow" name="fetchWindow" value="50" />
+                    </div>
+                  </div>
                 </div>
                 <div class="field full">
                   <label class="checkbox" for="multiUserEnabled">
@@ -349,101 +356,113 @@
                   </label>
                 </div>
 
-                <div class="field full">
-                  <div class="subsection-title">Optional shared OAuth apps</div>
-                </div>
-                <div class="field">
-                  <label for="googleClientId"><span class="label-copy">Google client ID</span><button class="info-hint" type="button" aria-label="Google client ID help" data-hint="Needed only if the deployment should support Google OAuth flows such as Gmail destination import.">i</button></label>
-                  <input id="googleClientId" name="googleClientId" placeholder="Optional" />
-                </div>
-                <div class="field">
-                  <label for="googleClientSecret"><span class="label-copy">Google client secret</span><button class="info-hint" type="button" aria-label="Google client secret help" data-hint="The matching secret from the same Google OAuth application.">i</button></label>
-                  <input id="googleClientSecret" name="googleClientSecret" placeholder="Optional" />
-                </div>
-                <div class="field">
-                  <label for="microsoftTenant"><span class="label-copy">Microsoft tenant</span><button class="info-hint" type="button" aria-label="Microsoft tenant help" data-hint="Use the tenant that matches your Microsoft app registration. consumers works for personal Outlook accounts.">i</button></label>
-                  <input id="microsoftTenant" name="microsoftTenant" value="consumers" />
-                </div>
-                <div class="field">
-                  <label for="microsoftClientId"><span class="label-copy">Microsoft client ID</span><button class="info-hint" type="button" aria-label="Microsoft client ID help" data-hint="Needed for Microsoft OAuth source or IMAP APPEND destination flows.">i</button></label>
-                  <input id="microsoftClientId" name="microsoftClientId" placeholder="Optional" />
-                </div>
-                <div class="field full">
-                  <label for="microsoftClientSecret"><span class="label-copy">Microsoft client secret</span><button class="info-hint" type="button" aria-label="Microsoft client secret help" data-hint="The secret paired with that Microsoft OAuth app registration.">i</button></label>
-                  <input id="microsoftClientSecret" name="microsoftClientSecret" placeholder="Optional" />
-                </div>
+                <details class="optional-block field full">
+                  <summary class="optional-block-summary">
+                    <span class="subsection-title">Optional shared OAuth apps</span>
+                  </summary>
+                  <div class="optional-block-grid">
+                    <div class="field">
+                      <label for="googleClientId"><span class="label-copy">Google client ID</span><button class="info-hint" type="button" aria-label="Google client ID help" data-hint="Needed only if the deployment should support Google OAuth flows such as Gmail destination import.">i</button></label>
+                      <input id="googleClientId" name="googleClientId" placeholder="Optional" />
+                    </div>
+                    <div class="field">
+                      <label for="googleClientSecret"><span class="label-copy">Google client secret</span><button class="info-hint" type="button" aria-label="Google client secret help" data-hint="The matching secret from the same Google OAuth application.">i</button></label>
+                      <input id="googleClientSecret" name="googleClientSecret" placeholder="Optional" />
+                    </div>
+                    <div class="field">
+                      <label for="microsoftTenant"><span class="label-copy">Microsoft tenant</span><button class="info-hint" type="button" aria-label="Microsoft tenant help" data-hint="Use the tenant that matches your Microsoft app registration. consumers works for personal Outlook accounts.">i</button></label>
+                      <input id="microsoftTenant" name="microsoftTenant" value="consumers" />
+                    </div>
+                    <div class="field full">
+                      <div class="dual-input-row">
+                        <div class="nested-field">
+                          <label for="microsoftClientId"><span class="label-copy">Microsoft client ID</span><button class="info-hint" type="button" aria-label="Microsoft client ID help" data-hint="Needed for Microsoft OAuth source or IMAP APPEND destination flows.">i</button></label>
+                          <input id="microsoftClientId" name="microsoftClientId" placeholder="Optional" />
+                        </div>
+                        <div class="nested-field">
+                          <label for="microsoftClientSecret"><span class="label-copy">Microsoft client secret</span><button class="info-hint" type="button" aria-label="Microsoft client secret help" data-hint="The secret paired with that Microsoft OAuth app registration.">i</button></label>
+                          <input id="microsoftClientSecret" name="microsoftClientSecret" placeholder="Optional" />
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                </details>
 
-                <div class="field full">
-                  <div class="subsection-title">Optional env-managed source mailbox</div>
-                </div>
-                <div class="field">
-                  <label for="sourceId"><span class="label-copy">Source ID</span><button class="info-hint" type="button" aria-label="Source ID help" data-hint="A stable identifier for this env-managed source mailbox. Keep it short and unique.">i</button></label>
-                  <input id="sourceId" name="sourceId" placeholder="outlook-main" />
-                </div>
-                <div class="field">
-                  <label for="sourceProtocol"><span class="label-copy">Protocol</span><button class="info-hint" type="button" aria-label="Protocol help" data-hint="Choose IMAP for folders and optional IDLE support, or POP3 for simpler mailbox retrieval.">i</button></label>
-                  <select id="sourceProtocol" name="sourceProtocol">
-                    <option value="IMAP">IMAP</option>
-                    <option value="POP3">POP3</option>
-                  </select>
-                </div>
-                <div class="field">
-                  <label for="sourceHost"><span class="label-copy">Source host</span><button class="info-hint" type="button" aria-label="Source host help" data-hint="The mail server hostname for the source account you want InboxBridge to read from.">i</button></label>
-                  <input id="sourceHost" name="sourceHost" placeholder="outlook.office365.com" />
-                </div>
-                <div class="field">
-                  <label for="sourcePort"><span class="label-copy">Source port</span><button class="info-hint" type="button" aria-label="Source port help" data-hint="Usually 993 for IMAP over TLS or 995 for POP3 over TLS.">i</button></label>
-                  <input id="sourcePort" name="sourcePort" value="993" />
-                </div>
-                <div class="field">
-                  <label for="sourceAuthMethod"><span class="label-copy">Auth method</span><button class="info-hint" type="button" aria-label="Auth method help" data-hint="Password works well for app passwords. Choose OAuth2 when the provider requires delegated login tokens.">i</button></label>
-                  <select id="sourceAuthMethod" name="sourceAuthMethod">
-                    <option value="PASSWORD">PASSWORD</option>
-                    <option value="OAUTH2">OAUTH2</option>
-                  </select>
-                </div>
-                <div class="field">
-                  <label for="sourceOauthProvider"><span class="label-copy">OAuth provider</span><button class="info-hint" type="button" aria-label="OAuth provider help" data-hint="Only relevant when the source auth method is OAuth2.">i</button></label>
-                  <select id="sourceOauthProvider" name="sourceOauthProvider">
-                    <option value="NONE">NONE</option>
-                    <option value="MICROSOFT">MICROSOFT</option>
-                    <option value="GOOGLE">GOOGLE</option>
-                  </select>
-                </div>
-                <div class="field">
-                  <label for="sourceUsername"><span class="label-copy">Source username</span><button class="info-hint" type="button" aria-label="Source username help" data-hint="Normally the full email address of the source mailbox account.">i</button></label>
-                  <input id="sourceUsername" name="sourceUsername" placeholder="replace-me@example.com" />
-                </div>
-                <div class="field" data-password-only>
-                  <label for="sourcePassword"><span class="label-copy">Password / app password</span><button class="info-hint" type="button" aria-label="Password or app password help" data-hint="Use an app password when the provider supports it instead of a normal interactive sign-in password.">i</button></label>
-                  <input id="sourcePassword" name="sourcePassword" placeholder="Optional if using OAuth2" />
-                </div>
-                <div class="field" data-oauth-only hidden>
-                  <label for="sourceOauthRefreshToken"><span class="label-copy">OAuth refresh token</span><button class="info-hint" type="button" aria-label="OAuth refresh token help" data-hint="Lets InboxBridge renew access in the background without asking the user to sign in again every time.">i</button></label>
-                  <input id="sourceOauthRefreshToken" name="sourceOauthRefreshToken" placeholder="Optional" />
-                </div>
-                <div class="field" data-imap-only>
-                  <label for="sourceFolder"><span class="label-copy">IMAP folder</span><button class="info-hint" type="button" aria-label="IMAP folder help" data-hint="The IMAP folder InboxBridge should watch or poll for new messages.">i</button></label>
-                  <input id="sourceFolder" name="sourceFolder" value="INBOX" />
-                </div>
-                <div class="field" data-imap-only>
-                  <label for="sourceFetchMode"><span class="label-copy">Fetch mode</span><button class="info-hint" type="button" aria-label="Fetch mode help" data-hint="Use IDLE for near-real-time IMAP imports when the provider supports it. POP3 always stays on polling.">i</button></label>
-                  <select id="sourceFetchMode" name="sourceFetchMode">
-                    <option value="POLLING">POLLING</option>
-                    <option value="IDLE">IDLE</option>
-                  </select>
-                </div>
-                <div class="field full">
-                  <label for="sourceCustomLabel"><span class="label-copy">Custom label</span><button class="info-hint" type="button" aria-label="Custom label help" data-hint="Optional label text that can help identify where imported mail came from on Gmail-style destinations.">i</button></label>
-                  <input id="sourceCustomLabel" name="sourceCustomLabel" placeholder="Optional Gmail label" />
-                </div>
-                <div class="field full">
-                  <label class="checkbox" for="sourceUnreadOnly">
-                    <input id="sourceUnreadOnly" name="sourceUnreadOnly" type="checkbox" />
-                    <span>Import only unread source messages</span>
-                    <button class="info-hint" type="button" aria-label="Import only unread source messages help" data-hint="Useful when the source mailbox already contains older mail that you do not want to import again.">i</button>
-                  </label>
-                </div>
+                <details class="optional-block field full">
+                  <summary class="optional-block-summary">
+                    <span class="subsection-title">Optional env-managed source mailbox</span>
+                  </summary>
+                  <div class="optional-block-grid">
+                    <div class="field">
+                      <label for="sourceId"><span class="label-copy">Source ID</span><button class="info-hint" type="button" aria-label="Source ID help" data-hint="A stable identifier for this env-managed source mailbox. Keep it short and unique.">i</button></label>
+                      <input id="sourceId" name="sourceId" placeholder="outlook-main" />
+                    </div>
+                    <div class="field">
+                      <label for="sourceProtocol"><span class="label-copy">Protocol</span><button class="info-hint" type="button" aria-label="Protocol help" data-hint="Choose IMAP for folders and optional IDLE support, or POP3 for simpler mailbox retrieval.">i</button></label>
+                      <select id="sourceProtocol" name="sourceProtocol">
+                        <option value="IMAP">IMAP</option>
+                        <option value="POP3">POP3</option>
+                      </select>
+                    </div>
+                    <div class="field">
+                      <label for="sourceHost"><span class="label-copy">Source host</span><button class="info-hint" type="button" aria-label="Source host help" data-hint="The mail server hostname for the source account you want InboxBridge to read from.">i</button></label>
+                      <input id="sourceHost" name="sourceHost" placeholder="outlook.office365.com" />
+                    </div>
+                    <div class="field">
+                      <label for="sourcePort"><span class="label-copy">Source port</span><button class="info-hint" type="button" aria-label="Source port help" data-hint="Usually 993 for IMAP over TLS or 995 for POP3 over TLS.">i</button></label>
+                      <input id="sourcePort" name="sourcePort" value="993" />
+                    </div>
+                    <div class="field">
+                      <label for="sourceAuthMethod"><span class="label-copy">Auth method</span><button class="info-hint" type="button" aria-label="Auth method help" data-hint="Password works well for app passwords. Choose OAuth2 when the provider requires delegated login tokens.">i</button></label>
+                      <select id="sourceAuthMethod" name="sourceAuthMethod">
+                        <option value="PASSWORD">PASSWORD</option>
+                        <option value="OAUTH2">OAUTH2</option>
+                      </select>
+                    </div>
+                    <div class="field" data-oauth-only hidden>
+                      <label for="sourceOauthProvider"><span class="label-copy">OAuth provider</span><button class="info-hint" type="button" aria-label="OAuth provider help" data-hint="Only relevant when the source auth method is OAuth2.">i</button></label>
+                      <select id="sourceOauthProvider" name="sourceOauthProvider">
+                        <option value="NONE">NONE</option>
+                        <option value="MICROSOFT">MICROSOFT</option>
+                        <option value="GOOGLE">GOOGLE</option>
+                      </select>
+                    </div>
+                    <div class="field">
+                      <label for="sourceUsername"><span class="label-copy">Source username</span><button class="info-hint" type="button" aria-label="Source username help" data-hint="Normally the full email address of the source mailbox account.">i</button></label>
+                      <input id="sourceUsername" name="sourceUsername" placeholder="replace-me@example.com" />
+                    </div>
+                    <div class="field" data-password-only>
+                      <label for="sourcePassword"><span class="label-copy">Password / app password</span><button class="info-hint" type="button" aria-label="Password or app password help" data-hint="Use an app password when the provider supports it instead of a normal interactive sign-in password.">i</button></label>
+                      <input id="sourcePassword" name="sourcePassword" placeholder="Optional if using OAuth2" />
+                    </div>
+                    <div class="field" data-oauth-only hidden>
+                      <label for="sourceOauthRefreshToken"><span class="label-copy">OAuth refresh token</span><button class="info-hint" type="button" aria-label="OAuth refresh token help" data-hint="Lets InboxBridge renew access in the background without asking the user to sign in again every time.">i</button></label>
+                      <input id="sourceOauthRefreshToken" name="sourceOauthRefreshToken" placeholder="Optional" />
+                    </div>
+                    <div class="field" data-imap-only>
+                      <label for="sourceFolder"><span class="label-copy">IMAP folder</span><button class="info-hint" type="button" aria-label="IMAP folder help" data-hint="The IMAP folder InboxBridge should watch or poll for new messages.">i</button></label>
+                      <input id="sourceFolder" name="sourceFolder" value="INBOX" />
+                    </div>
+                    <div class="field" data-imap-only>
+                      <label for="sourceFetchMode"><span class="label-copy">Fetch mode</span><button class="info-hint" type="button" aria-label="Fetch mode help" data-hint="Use IDLE for near-real-time IMAP imports when the provider supports it. POP3 always stays on polling.">i</button></label>
+                      <select id="sourceFetchMode" name="sourceFetchMode">
+                        <option value="POLLING">POLLING</option>
+                        <option value="IDLE">IDLE</option>
+                      </select>
+                    </div>
+                    <div class="field full">
+                      <label for="sourceCustomLabel"><span class="label-copy">Custom label</span><button class="info-hint" type="button" aria-label="Custom label help" data-hint="Optional label text that can help identify where imported mail came from on Gmail-style destinations.">i</button></label>
+                      <input id="sourceCustomLabel" name="sourceCustomLabel" placeholder="Optional Gmail label" />
+                    </div>
+                    <div class="field full">
+                      <label class="checkbox" for="sourceUnreadOnly">
+                        <input id="sourceUnreadOnly" name="sourceUnreadOnly" type="checkbox" />
+                        <span>Import only unread source messages</span>
+                        <button class="info-hint" type="button" aria-label="Import only unread source messages help" data-hint="Useful when the source mailbox already contains older mail that you do not want to import again.">i</button>
+                      </label>
+                    </div>
+                  </div>
+                </details>
               </form>
             </section>
 

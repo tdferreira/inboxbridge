@@ -11,6 +11,10 @@ InboxBridge is a self-hosted mail importer. It connects to one or more source ma
 
 It is designed for people who want to keep mail from several accounts together in one place while still controlling where credentials, tokens, and imported-message history are stored.
 
+Explore the public project page: [https://tdferreira.github.io/inboxbridge/](https://tdferreira.github.io/inboxbridge/)
+
+It gives a quick tour of the product, the top-level architecture, the self-hosted security model, and the bootstrap `.env` helper for operators.
+
 ## What InboxBridge Does
 
 InboxBridge can:
