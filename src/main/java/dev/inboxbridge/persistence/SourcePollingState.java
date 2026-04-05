@@ -62,6 +62,9 @@ public class SourcePollingState extends PanacheEntityBase {
     @Column(name = "imap_last_seen_uid")
     public Long imapLastSeenUid;
 
+    @Column(name = "pop_last_seen_uidl", length = 255)
+    public String popLastSeenUidl;
+
     @Column(name = "updated_at", nullable = false)
     public Instant updatedAt;
 }

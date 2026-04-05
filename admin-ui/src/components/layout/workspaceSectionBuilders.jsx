@@ -134,6 +134,8 @@ export function buildUserWorkspaceSections({
           collapseLoading={isPending('uiPreferences') && uiPreferences.persistLayout}
           connectingEmailAccountId={emailAccounts.connectingEmailAccountId}
           deletingEmailAccountId={emailAccounts.deletingEmailAccountId}
+          destinationConfig={destinationConfig}
+          destinationMeta={destinationMeta}
           duplicateIdError={emailAccounts.emailAccountDuplicateError}
           emailAccountForm={emailAccounts.emailAccountForm}
           emailAccountFolders={emailAccounts.emailAccountFolders}

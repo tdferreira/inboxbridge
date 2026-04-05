@@ -130,6 +130,7 @@ Each source now has its own persisted polling state:
 - consecutive failure count
 - last failure reason and timestamps
 - for IMAP sources, the current folder plus the last seen `UIDVALIDITY` / UID checkpoint
+- for POP3 sources, the last seen UIDL checkpoint used to resume from newer mail when that POP mailbox still advertises the older message
 
 The scheduler checks that state on every run so one blocked or throttled mailbox does not stall unrelated source email accounts.
 
@@ -169,7 +170,6 @@ Those values can be overridden live from `Administration -> Global Poller Settin
 
 That is still deliberately simpler than a full mailbox-sync engine. The next evolution should be:
 
-- POP UIDL checkpoints
 - multi-folder IMAP IDLE / checkpoint support
 - richer retry classification
 - richer metrics and audit logs for poll cooldown decisions

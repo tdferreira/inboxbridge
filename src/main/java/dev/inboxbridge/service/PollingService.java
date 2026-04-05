@@ -346,7 +346,7 @@ public class PollingService {
                 processedBytes += message.rawMessage().length;
                 if (importDeduplicationService.alreadyImported(message, emailAccount.destination())) {
                     mailSourceClient.applyPostPollSettings(emailAccount, message);
-                    recordImapCheckpoint(emailAccount, message);
+                    recordSourceCheckpoint(emailAccount, message);
                     tally.incrementDuplicate();
                     duplicates++;
                     publishLiveProgress(liveRunId, emailAccount.id(), messages.size(), totalBytes, processedBytes, fetched, imported, duplicates);
@@ -357,7 +357,7 @@ public class PollingService {
                     MailImportResponse importResponse = destinationService.importMessage(emailAccount.destination(), emailAccount, message);
                     importDeduplicationService.recordImport(message, emailAccount.destination(), importResponse);
                     mailSourceClient.applyPostPollSettings(emailAccount, message);
-                    recordImapCheckpoint(emailAccount, message);
+                    recordSourceCheckpoint(emailAccount, message);
                     recordDestinationThrottleSuccess(emailAccount.destination());
                     tally.incrementImported();
                     tally.addImportedBytes(message.rawMessage().length);
@@ -679,16 +679,25 @@ public class PollingService {
         }
     }
 
-    private void recordImapCheckpoint(RuntimeEmailAccount emailAccount, FetchedMessage message) {
-        if (emailAccount.protocol() != dev.inboxbridge.config.InboxBridgeConfig.Protocol.IMAP || sourcePollingStateService == null) {
+    private void recordSourceCheckpoint(RuntimeEmailAccount emailAccount, FetchedMessage message) {
+        if (sourcePollingStateService == null) {
             return;
         }
-        sourcePollingStateService.recordImapCheckpoint(
-                emailAccount.id(),
-                message.folderName().orElse(emailAccount.folder().orElse("INBOX")),
-                message.uidValidity(),
-                message.uid(),
-                Instant.now());
+        if (emailAccount.protocol() == dev.inboxbridge.config.InboxBridgeConfig.Protocol.IMAP) {
+            sourcePollingStateService.recordImapCheckpoint(
+                    emailAccount.id(),
+                    message.folderName().orElse(emailAccount.folder().orElse("INBOX")),
+                    message.uidValidity(),
+                    message.uid(),
+                    Instant.now());
+            return;
+        }
+        if (emailAccount.protocol() == dev.inboxbridge.config.InboxBridgeConfig.Protocol.POP3) {
+            sourcePollingStateService.recordPopCheckpoint(
+                    emailAccount.id(),
+                    message.popUidl(),
+                    Instant.now());
+        }
     }
 
     private PollThrottleService.ThrottleLease acquireSourceThrottle(RuntimeEmailAccount emailAccount) {

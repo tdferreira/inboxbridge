@@ -74,6 +74,80 @@ describe('EmailAccountDialog', () => {
     }
   })
 
+  it('shows custom label when the destination is not configured yet', () => {
+    render(
+      <EmailAccountDialog
+        emailAccountForm={{
+          originalEmailAccountId: '',
+          emailAccountId: '',
+          enabled: true,
+          protocol: 'IMAP',
+          host: '',
+          port: 993,
+          tls: true,
+          authMethod: 'PASSWORD',
+          oauthProvider: 'NONE',
+          username: '',
+          password: '',
+          oauthRefreshToken: '',
+          folder: 'INBOX',
+          unreadOnly: false,
+          customLabel: '',
+          markReadAfterPoll: false,
+          postPollAction: 'NONE',
+          postPollTargetFolder: ''
+        }}
+        destinationConfig={{ provider: 'GMAIL_API' }}
+        destinationMeta={null}
+        onApplyPreset={vi.fn()}
+        onEmailAccountFormChange={vi.fn()}
+        onClose={vi.fn()}
+        onSave={vi.fn((event) => event.preventDefault())}
+        saveLoading={false}
+        t={(key, params) => translate('en', key, params)}
+      />
+    )
+
+    expect(screen.getByText('Custom Label')).toBeInTheDocument()
+  })
+
+  it('hides custom label when the current destination does not support labels', () => {
+    render(
+      <EmailAccountDialog
+        emailAccountForm={{
+          originalEmailAccountId: '',
+          emailAccountId: '',
+          enabled: true,
+          protocol: 'IMAP',
+          host: '',
+          port: 993,
+          tls: true,
+          authMethod: 'PASSWORD',
+          oauthProvider: 'NONE',
+          username: '',
+          password: '',
+          oauthRefreshToken: '',
+          folder: 'INBOX',
+          unreadOnly: false,
+          customLabel: 'Imported/DEI',
+          markReadAfterPoll: false,
+          postPollAction: 'NONE',
+          postPollTargetFolder: ''
+        }}
+        destinationConfig={{ provider: 'OUTLOOK_IMAP' }}
+        destinationMeta={{ provider: 'OUTLOOK_IMAP', linked: true }}
+        onApplyPreset={vi.fn()}
+        onEmailAccountFormChange={vi.fn()}
+        onClose={vi.fn()}
+        onSave={vi.fn((event) => event.preventDefault())}
+        saveLoading={false}
+        t={(key, params) => translate('en', key, params)}
+      />
+    )
+
+    expect(screen.queryByLabelText('Custom Label')).not.toBeInTheDocument()
+  })
+
   it('hides OAuth2 choices when no source OAuth provider is configured', () => {
     render(
       <EmailAccountDialog

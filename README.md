@@ -28,6 +28,7 @@ InboxBridge can:
 - provide a browser-based admin UI plus a lightweight `/remote` control page for phones and quick access
 - show live polling progress with pause, resume, stop, retry, and queue reprioritization controls
 - let IMAP sources opt into real-time IMAP IDLE watching with durable UID checkpoints and scheduler fallback if a watcher stays unhealthy
+- keep durable POP3 UIDL checkpoints so scheduled polling can resume from newer POP mail instead of always re-reading only the latest tail window
 - publish a lightweight GitHub Pages site that explains the project and can generate a starter `.env` snippet for env-managed deployments
 
 ## Who It Is For
@@ -86,7 +87,7 @@ InboxBridge currently does not:
 
 - encrypt secrets that you place directly in `.env`
 - support every provider-specific OAuth flow
-- keep POP UIDL checkpoints or full multi-folder mailbox cursor state
+- keep full multi-folder mailbox cursor state
 - include production-grade metrics, circuit breakers, or external secret-vault integration
 
 ## Quick Start

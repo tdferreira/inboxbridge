@@ -16,6 +16,7 @@ import java.util.Set;
 
 import org.jboss.logging.Logger;
 import org.eclipse.angus.mail.imap.IMAPFolder;
+import org.eclipse.angus.mail.pop3.POP3Folder;
 
 import dev.inboxbridge.config.InboxBridgeConfig;
 import dev.inboxbridge.domain.ImapCheckpoint;
@@ -450,7 +451,7 @@ public class MailSourceClient {
             folder = store.getFolder("INBOX");
             registerFolder(folder);
             folder.open(Folder.READ_ONLY);
-            Message[] candidateMessages = selectTailMessages(folder, fetchWindow);
+            Message[] candidateMessages = selectPop3CandidateMessages(source.id(), fetchWindow, folder);
             return toFetchedMessages(source, candidateMessages);
         } catch (MessagingException e) {
             throw new IllegalStateException("Failed to fetch POP3 mail for source " + source.id(), e);
@@ -487,7 +488,7 @@ public class MailSourceClient {
             folder = store.getFolder("INBOX");
             registerFolder(folder);
             folder.open(Folder.READ_ONLY);
-            Message[] candidateMessages = selectTailMessages(folder, fetchWindow);
+            Message[] candidateMessages = selectPop3CandidateMessages(bridge.id(), fetchWindow, folder);
             return toFetchedMessages(bridge.id(), candidateMessages);
         } catch (MessagingException e) {
             throw new IllegalStateException("Failed to fetch POP3 mail for source " + bridge.id(), e);
@@ -643,7 +644,9 @@ public class MailSourceClient {
 
     private List<FetchedMessage> toFetchedMessages(String sourceId, Folder folder, Message[] messages) {
         List<Message> sorted = new ArrayList<>(Arrays.asList(messages));
-        sorted.sort(Comparator.comparing(this::messageInstant));
+        if (!(folder instanceof POP3Folder)) {
+            sorted.sort(Comparator.comparing(this::messageInstant));
+        }
 
         List<FetchedMessage> fetchedMessages = new ArrayList<>();
         Exception firstFailure = null;
@@ -665,6 +668,7 @@ public class MailSourceClient {
                         Optional.ofNullable(folderName),
                         uidValidity,
                         metadata.uid(),
+                        metadata.popUidl(),
                         raw));
             } catch (MessagingException | IOException e) {
                 failedMessages++;
@@ -726,6 +730,9 @@ public class MailSourceClient {
         if (metadata.uid() != null && metadata.uid() > 0) {
             return sourceId + ":uid:" + metadata.uid();
         }
+        if (metadata.popUidl() != null && !metadata.popUidl().isBlank()) {
+            return sourceId + ":uidl:" + metadata.popUidl();
+        }
         if (metadata.messageId() != null && !metadata.messageId().isBlank()) {
             return sourceId + ":message-id:" + metadata.messageId();
         }
@@ -734,6 +741,7 @@ public class MailSourceClient {
 
     private MessageMetadata captureMetadata(Message message) {
         Long uid = null;
+        String popUidl = null;
         String messageId = null;
         try {
             if (message.getFolder() instanceof UIDFolder uidFolder) {
@@ -746,11 +754,18 @@ public class MailSourceClient {
             LOG.debugf(e, "Unable to resolve UID for message %s", safeMessageNumber(message));
         }
         try {
+            if (message.getFolder() instanceof POP3Folder pop3Folder) {
+                popUidl = pop3Folder.getUID(message);
+            }
+        } catch (MessagingException e) {
+            LOG.debugf(e, "Unable to resolve POP UIDL for message %s", safeMessageNumber(message));
+        }
+        try {
             messageId = firstHeader(message, "Message-ID");
         } catch (MessagingException e) {
             LOG.debugf(e, "Unable to resolve Message-ID for message %s", safeMessageNumber(message));
         }
-        return new MessageMetadata(uid, messageId, messageInstant(message));
+        return new MessageMetadata(uid, popUidl, messageId, messageInstant(message));
     }
 
     private Message[] selectImapCandidateMessages(
@@ -769,6 +784,17 @@ public class MailSourceClient {
         return unreadOnly
                 ? trimTailMessages(folder.search(new FlagTerm(new Flags(Flags.Flag.SEEN), false)), fetchWindow)
                 : selectTailMessages(folder, fetchWindow);
+    }
+
+    private Message[] selectPop3CandidateMessages(String sourceId, int fetchWindow, Folder folder) throws MessagingException {
+        Optional<String> checkpoint = sourcePollingStateService == null
+                ? Optional.empty()
+                : sourcePollingStateService.popCheckpoint(sourceId);
+        Message[] checkpointMessages = selectMessagesFromPopCheckpoint(folder, checkpoint);
+        if (checkpointMessages != null) {
+            return checkpointMessages;
+        }
+        return selectTailMessages(folder, fetchWindow);
     }
 
     private Message[] selectMessagesFromCheckpoint(
@@ -800,6 +826,36 @@ public class MailSourceClient {
             }
         }
         return unreadMessages.toArray(Message[]::new);
+    }
+
+    private Message[] selectMessagesFromPopCheckpoint(Folder folder, Optional<String> checkpoint) throws MessagingException {
+        if (checkpoint.isEmpty() || !(folder instanceof POP3Folder pop3Folder)) {
+            return null;
+        }
+        int count = folder.getMessageCount();
+        if (count <= 0) {
+            return new Message[0];
+        }
+        Message[] messages = folder.getMessages(1, count);
+        for (int index = messages.length - 1; index >= 0; index--) {
+            String uidl = resolvePopUidl(pop3Folder, messages[index]);
+            if (checkpoint.get().equals(uidl)) {
+                if (index + 1 >= messages.length) {
+                    return new Message[0];
+                }
+                return Arrays.copyOfRange(messages, index + 1, messages.length);
+            }
+        }
+        return null;
+    }
+
+    private String resolvePopUidl(POP3Folder folder, Message message) {
+        try {
+            return folder.getUID(message);
+        } catch (MessagingException e) {
+            LOG.debugf(e, "Unable to resolve POP UIDL for message %s", safeMessageNumber(message));
+            return null;
+        }
     }
 
     private String safeFolderName(Folder folder) {
@@ -1257,7 +1313,7 @@ public class MailSourceClient {
         String get();
     }
 
-    private record MessageMetadata(Long uid, String messageId, Instant instant) {
+    private record MessageMetadata(Long uid, String popUidl, String messageId, Instant instant) {
     }
 
     public record MailboxCountProbe(String folderName, int messageCount) {

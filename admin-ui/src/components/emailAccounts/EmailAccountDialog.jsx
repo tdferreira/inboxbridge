@@ -9,6 +9,8 @@ import './EmailAccountDialog.css'
 
 function EmailAccountDialog({
   availableOAuthProviders = [],
+  destinationConfig = null,
+  destinationMeta = null,
   emailAccountForm,
   emailAccountFolders = [],
   emailAccountFoldersLoading = false,
@@ -44,7 +46,9 @@ function EmailAccountDialog({
   const canLaunchProviderOAuth = !usingPassword && effectiveOauthProvider !== 'NONE' && resolvedOAuthProviders.includes(effectiveOauthProvider)
   const editingExistingAccount = Boolean(emailAccountForm.originalEmailAccountId)
   const supportsFolder = emailAccountForm.protocol === 'IMAP'
-  const supportsCustomLabel = !requiresMicrosoftOAuth
+  const destinationProvider = destinationMeta?.provider || destinationConfig?.provider || 'GMAIL_API'
+  const destinationSupportsLabels = destinationProvider === 'GMAIL_API'
+  const supportsCustomLabel = destinationSupportsLabels
   const supportsPostPollActions = emailAccountForm.protocol === 'IMAP'
   const detectedFolders = supportsFolder ? emailAccountFolders : []
   const currentFolder = emailAccountForm.folder || ''

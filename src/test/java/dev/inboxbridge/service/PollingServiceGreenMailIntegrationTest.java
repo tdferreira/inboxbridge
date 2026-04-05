@@ -16,6 +16,7 @@ import java.util.Random;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.RegisterExtension;
+import org.eclipse.angus.mail.pop3.POP3Folder;
 
 import com.icegreen.greenmail.junit5.GreenMailExtension;
 import com.icegreen.greenmail.util.GreenMail;
@@ -33,6 +34,8 @@ import dev.inboxbridge.dto.MailImportResponse;
 import dev.inboxbridge.dto.PollRunResult;
 import dev.inboxbridge.persistence.ImportedMessage;
 import dev.inboxbridge.persistence.ImportedMessageRepository;
+import dev.inboxbridge.persistence.SourcePollingState;
+import dev.inboxbridge.persistence.SourcePollingStateRepository;
 import jakarta.enterprise.inject.Instance;
 import jakarta.enterprise.util.TypeLiteral;
 import jakarta.mail.Folder;
@@ -53,7 +56,10 @@ class PollingServiceGreenMailIntegrationTest {
     private static final Long BOB_USER_ID = 8L;
 
     @RegisterExtension
-    final GreenMailExtension sourceMail = new GreenMailExtension(new ServerSetup(0, null, ServerSetup.PROTOCOL_IMAP));
+    final GreenMailExtension sourceMail = new GreenMailExtension(new ServerSetup[] {
+            new ServerSetup(0, null, ServerSetup.PROTOCOL_IMAP),
+            new ServerSetup(0, null, ServerSetup.PROTOCOL_POP3)
+    });
 
     @RegisterExtension
     final GreenMailExtension destinationMail = new GreenMailExtension(new ServerSetup(0, null, ServerSetup.PROTOCOL_IMAP));
@@ -62,6 +68,48 @@ class PollingServiceGreenMailIntegrationTest {
     void setUp() {
         sourceMail.setUser(SOURCE_USERNAME, SOURCE_PASSWORD);
         destinationMail.setUser(DESTINATION_USERNAME, DESTINATION_PASSWORD);
+    }
+
+    @Test
+    void pop3PollingUsesPersistedUidlCheckpointToResumeOnlyNewMail() throws Exception {
+        appendMessage(sourceMail, SOURCE_USERNAME, SOURCE_PASSWORD, "INBOX", "alpha", "First imported message", "<alpha-pop@example.com>");
+        appendMessage(sourceMail, SOURCE_USERNAME, SOURCE_PASSWORD, "INBOX", "beta", "Second imported message", "<beta-pop@example.com>");
+
+        RecordingImportedMessageRepository importedMessageRepository = new RecordingImportedMessageRepository();
+        InMemoryReadyCheckpointSourcePollingStateService sourcePollingStateService = new InMemoryReadyCheckpointSourcePollingStateService();
+        PollingService service = pollService(List.of(runtimePop3Account()), importedMessageRepository, sourcePollingStateService);
+
+        PollRunResult firstRun = service.runPoll("greenmail-integration:pop3:first");
+
+        assertEquals(2, firstRun.getFetched());
+        assertEquals(2, firstRun.getImported());
+        assertEquals(0, firstRun.getDuplicates());
+        assertTrue(firstRun.getErrorDetails().isEmpty());
+        String checkpointAfterFirstRun = sourcePollingStateService.popCheckpoint("greenmail-source-pop").orElseThrow();
+        List<String> uidlsAfterFirstRun = listPopUidls(sourceMail, SOURCE_USERNAME, SOURCE_PASSWORD);
+        assertEquals(List.of("alpha", "beta"), listSubjects(destinationMail, DESTINATION_USERNAME, DESTINATION_PASSWORD, DESTINATION_FOLDER));
+
+        PollRunResult secondRun = service.runPoll("greenmail-integration:pop3:second");
+        List<String> uidlsAfterSecondRun = listPopUidls(sourceMail, SOURCE_USERNAME, SOURCE_PASSWORD);
+
+        assertEquals(uidlsAfterFirstRun, uidlsAfterSecondRun, "GreenMail POP UIDLs changed across reconnects for checkpoint " + checkpointAfterFirstRun);
+        assertEquals(0, secondRun.getFetched(), "Expected POP checkpoint " + checkpointAfterFirstRun + " to suppress refetch when UIDLs are stable");
+        assertEquals(0, secondRun.getImported());
+        assertEquals(0, secondRun.getDuplicates());
+        assertTrue(secondRun.getErrorDetails().isEmpty());
+        assertEquals(checkpointAfterFirstRun, sourcePollingStateService.popCheckpoint("greenmail-source-pop").orElseThrow());
+        assertEquals(List.of("alpha", "beta"), listSubjects(destinationMail, DESTINATION_USERNAME, DESTINATION_PASSWORD, DESTINATION_FOLDER));
+
+        appendMessage(sourceMail, SOURCE_USERNAME, SOURCE_PASSWORD, "INBOX", "gamma", "Third imported message", "<gamma-pop@example.com>");
+
+        PollRunResult thirdRun = service.runPoll("greenmail-integration:pop3:third");
+
+        assertEquals(1, thirdRun.getFetched());
+        assertEquals(1, thirdRun.getImported());
+        assertEquals(0, thirdRun.getDuplicates());
+        assertTrue(thirdRun.getErrorDetails().isEmpty());
+        assertEquals(List.of("alpha", "beta", "gamma"), listSubjects(destinationMail, DESTINATION_USERNAME, DESTINATION_PASSWORD, DESTINATION_FOLDER));
+        assertTrue(!checkpointAfterFirstRun.equals(sourcePollingStateService.popCheckpoint("greenmail-source-pop").orElseThrow()));
     }
 
     @Test
@@ -434,9 +482,17 @@ class PollingServiceGreenMailIntegrationTest {
     }
 
     private PollingService pollService(List<RuntimeEmailAccount> runtimeAccounts, RecordingImportedMessageRepository importedMessageRepository) {
+        return pollService(runtimeAccounts, importedMessageRepository, new ReadySourcePollingStateService());
+    }
+
+    private PollingService pollService(
+            List<RuntimeEmailAccount> runtimeAccounts,
+            RecordingImportedMessageRepository importedMessageRepository,
+            SourcePollingStateService sourcePollingStateService) {
         PollingService service = new PollingService();
         MailSourceClient mailSourceClient = new MailSourceClient();
         mailSourceClient.mimeHashService = new MimeHashService();
+        mailSourceClient.sourcePollingStateService = sourcePollingStateService;
         ImapAppendMailDestinationService destinationService = new ImapAppendMailDestinationService();
         ImportDeduplicationService deduplicationService = new ImportDeduplicationService();
         deduplicationService.importedMessageRepository = importedMessageRepository;
@@ -450,7 +506,7 @@ class PollingServiceGreenMailIntegrationTest {
         service.pollingSettingsService = new FixedPollingSettingsService();
         service.userPollingSettingsService = new FixedUserPollingSettingsService();
         service.sourcePollingSettingsService = new FixedSourcePollingSettingsService();
-        service.sourcePollingStateService = new ReadySourcePollingStateService();
+        service.sourcePollingStateService = sourcePollingStateService;
         service.manualPollRateLimitService = new ManualPollRateLimitService();
         return service;
     }
@@ -465,6 +521,40 @@ class PollingServiceGreenMailIntegrationTest {
 
     private RuntimeEmailAccount runtimeAccountWithFetchMode(SourceFetchMode fetchMode) {
         return runtimeAccount("INBOX", DESTINATION_FOLDER, fetchMode);
+    }
+
+    private RuntimeEmailAccount runtimePop3Account() {
+        return new RuntimeEmailAccount(
+                "greenmail-source-pop",
+                "USER",
+                7L,
+                "alice",
+                true,
+                InboxBridgeConfig.Protocol.POP3,
+                "127.0.0.1",
+                sourceMail.getPop3().getPort(),
+                false,
+                InboxBridgeConfig.AuthMethod.PASSWORD,
+                InboxBridgeConfig.OAuthProvider.NONE,
+                SOURCE_USERNAME,
+                SOURCE_PASSWORD,
+                "",
+                Optional.empty(),
+                false,
+                Optional.of("Imported/Test"),
+                new ImapAppendDestinationTarget(
+                        "user-destination:7",
+                        7L,
+                        "alice",
+                        UserMailDestinationConfigService.PROVIDER_CUSTOM,
+                        "127.0.0.1",
+                        destinationMail.getImap().getPort(),
+                        false,
+                        InboxBridgeConfig.AuthMethod.PASSWORD,
+                        InboxBridgeConfig.OAuthProvider.NONE,
+                        DESTINATION_USERNAME,
+                        DESTINATION_PASSWORD,
+                        DESTINATION_FOLDER));
     }
 
     private RuntimeEmailAccount runtimeAccount(String sourceFolder, String destinationFolder, SourceFetchMode fetchMode) {
@@ -726,6 +816,27 @@ class PollingServiceGreenMailIntegrationTest {
         }
     }
 
+    private static List<String> listPopUidls(GreenMailExtension greenMail, String username, String password) throws Exception {
+        Properties properties = new Properties();
+        properties.put("mail.store.protocol", "pop3");
+        Session session = Session.getInstance(properties);
+        Store store = session.getStore("pop3");
+        POP3Folder folder = null;
+        try {
+            store.connect("127.0.0.1", greenMail.getPop3().getPort(), username, password);
+            folder = (POP3Folder) store.getFolder("INBOX");
+            folder.open(Folder.READ_ONLY);
+            List<String> uidls = new ArrayList<>();
+            for (Message message : folder.getMessages()) {
+                uidls.add(folder.getUID(message));
+            }
+            return uidls;
+        } finally {
+            closeQuietly(folder);
+            closeQuietly(store);
+        }
+    }
+
     private static boolean messageHasUserFlag(
             GreenMailExtension greenMail,
             String username,
@@ -872,6 +983,56 @@ class PollingServiceGreenMailIntegrationTest {
 
         @Override
         public void recordFailure(String sourceId, Instant finishedAt, String failureReason) {
+        }
+    }
+
+    private static final class InMemoryReadyCheckpointSourcePollingStateService extends SourcePollingStateService {
+        private InMemoryReadyCheckpointSourcePollingStateService() {
+            this.repository = new InMemorySourcePollingStateRepository();
+            this.pollingSettingsService = new FixedPollingSettingsService();
+        }
+
+        @Override
+        public PollEligibility eligibility(String sourceId, PollingSettingsService.EffectivePollingSettings settings, Instant now, boolean ignoreInterval, boolean ignoreCooldown) {
+            return new PollEligibility(true, "READY", null);
+        }
+
+        @Override
+        public PollEligibility eligibility(String sourceId, PollingSettingsService.EffectivePollingSettings settings, Instant now, boolean ignoreInterval) {
+            return new PollEligibility(true, "READY", null);
+        }
+
+        @Override
+        public void recordSuccess(String sourceId, Instant finishedAt, PollingSettingsService.EffectivePollingSettings settings) {
+        }
+
+        @Override
+        public void recordFailure(String sourceId, Instant finishedAt, String failureReason) {
+        }
+    }
+
+    private static final class InMemorySourcePollingStateRepository extends SourcePollingStateRepository {
+        private final List<SourcePollingState> states = new java.util.concurrent.CopyOnWriteArrayList<>();
+        private long sequence = 1L;
+
+        @Override
+        public Optional<SourcePollingState> findBySourceId(String sourceId) {
+            return states.stream().filter((state) -> sourceId.equals(state.sourceId)).findFirst();
+        }
+
+        @Override
+        public java.util.Map<String, SourcePollingState> findBySourceIds(List<String> sourceIds) {
+            return states.stream()
+                    .filter((state) -> sourceIds.contains(state.sourceId))
+                    .collect(java.util.stream.Collectors.toMap((state) -> state.sourceId, (state) -> state));
+        }
+
+        @Override
+        public void persist(SourcePollingState entity) {
+            if (entity.id == null) {
+                entity.id = sequence++;
+                states.add(entity);
+            }
         }
     }
 

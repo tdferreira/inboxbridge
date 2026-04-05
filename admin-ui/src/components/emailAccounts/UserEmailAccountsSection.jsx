@@ -7,6 +7,8 @@ import './UserEmailAccountsSection.css'
 
 function UserEmailAccountsSection({
   emailAccountForm,
+  destinationConfig = null,
+  destinationMeta = null,
   collapsed,
   collapseLoading,
   connectingEmailAccountId,
@@ -117,6 +119,8 @@ function UserEmailAccountsSection({
         {fetcherDialogOpen ? (
           <EmailAccountDialog
             availableOAuthProviders={resolvedOAuthProviders}
+            destinationConfig={destinationConfig}
+            destinationMeta={destinationMeta}
             emailAccountForm={emailAccountForm}
             emailAccountFolders={emailAccountFolders}
             emailAccountFoldersLoading={emailAccountFoldersLoading}

@@ -11,6 +11,7 @@ public record FetchedMessage(
         Optional<String> folderName,
         Long uidValidity,
         Long uid,
+        String popUidl,
         byte[] rawMessage) {
 
     public FetchedMessage(
@@ -19,6 +20,6 @@ public record FetchedMessage(
             Optional<String> messageIdHeader,
             Instant messageInstant,
             byte[] rawMessage) {
-        this(sourceAccountId, sourceMessageKey, messageIdHeader, messageInstant, Optional.empty(), null, null, rawMessage);
+        this(sourceAccountId, sourceMessageKey, messageIdHeader, messageInstant, Optional.empty(), null, null, null, rawMessage);
     }
 }

@@ -5,6 +5,7 @@ import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
+import java.lang.reflect.Method;
 import java.time.Duration;
 import java.time.Instant;
 import java.util.ArrayList;
@@ -17,6 +18,7 @@ import org.junit.jupiter.api.Test;
 import dev.inboxbridge.domain.ImapCheckpoint;
 import dev.inboxbridge.persistence.SourcePollingState;
 import dev.inboxbridge.persistence.SourcePollingStateRepository;
+import jakarta.transaction.Transactional;
 
 class SourcePollingStateServiceTest {
 
@@ -143,6 +145,22 @@ class SourcePollingStateServiceTest {
 
         ImapCheckpoint checkpoint = service.imapCheckpoint("fetcher-1", "INBOX").orElseThrow();
         assertEquals(105L, checkpoint.lastSeenUid());
+    }
+
+    @Test
+    void recordPopCheckpointStoresAndReturnsUidl() {
+        SourcePollingStateService service = service();
+
+        service.recordPopCheckpoint("fetcher-1", "uidl-101", Instant.parse("2026-03-26T12:14:00Z"));
+
+        assertEquals("uidl-101", service.popCheckpoint("fetcher-1").orElseThrow());
+    }
+
+    @Test
+    void popCheckpointIsTransactionalForAsyncWorkerAccess() throws Exception {
+        Method method = SourcePollingStateService.class.getDeclaredMethod("popCheckpoint", String.class);
+
+        assertTrue(method.isAnnotationPresent(Transactional.class));
     }
 
     private SourcePollingStateService service() {

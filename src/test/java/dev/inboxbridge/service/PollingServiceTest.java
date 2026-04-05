@@ -45,7 +45,16 @@ class PollingServiceTest {
         RecordingSourcePollingStateService sourcePollingStateService = new RecordingSourcePollingStateService();
         RecordingSourcePollEventService sourcePollEventService = new RecordingSourcePollEventService();
         service.mailSourceClient = mailSourceClient;
-        service.importDeduplicationService = new ImportDeduplicationService();
+        service.importDeduplicationService = new ImportDeduplicationService() {
+            @Override
+            public boolean alreadyImported(FetchedMessage fetchedMessage, MailDestinationTarget destinationTarget) {
+                return false;
+            }
+
+            @Override
+            public void recordImport(FetchedMessage fetchedMessage, MailDestinationTarget destinationTarget, MailImportResponse response) {
+            }
+        };
         service.mailDestinationServices = new FakeMailDestinationServices(new FakeMailDestinationService(true));
         service.sourcePollEventService = sourcePollEventService;
         service.runtimeEmailAccountService = new FakeRuntimeEmailAccountService(List.of(userBridge(7L)));
@@ -64,6 +73,63 @@ class PollingServiceTest {
         assertEquals(0L, result.getImportedBytes());
         assertEquals(4, sourcePollEventService.lastSpamJunkMessageCount);
         assertEquals(0L, sourcePollEventService.lastImportedBytes);
+    }
+
+    @Test
+    void runPollRecordsPopUidlCheckpointAfterHandledMessages() {
+        PollingService service = new PollingService();
+        RecordingSourcePollingStateService sourcePollingStateService = new RecordingSourcePollingStateService();
+        service.mailSourceClient = new RecordingMailSourceClient() {
+            @Override
+            public List<FetchedMessage> fetch(RuntimeEmailAccount bridge, int fetchWindow) {
+                lastFetchWindow = fetchWindow;
+                return List.of(
+                        new FetchedMessage(
+                                bridge.id(),
+                                bridge.id() + ":uidl:uidl-1",
+                                java.util.Optional.of("<message-1@example.com>"),
+                                Instant.parse("2026-03-31T10:00:00Z"),
+                                java.util.Optional.empty(),
+                                null,
+                                null,
+                                "uidl-1",
+                                "raw-1".getBytes(java.nio.charset.StandardCharsets.UTF_8)),
+                        new FetchedMessage(
+                                bridge.id(),
+                                bridge.id() + ":uidl:uidl-2",
+                                java.util.Optional.of("<message-2@example.com>"),
+                                Instant.parse("2026-03-31T10:01:00Z"),
+                                java.util.Optional.empty(),
+                                null,
+                                null,
+                                "uidl-2",
+                                "raw-2".getBytes(java.nio.charset.StandardCharsets.UTF_8)));
+            }
+        };
+        service.importDeduplicationService = new ImportDeduplicationService() {
+            @Override
+            public boolean alreadyImported(FetchedMessage fetchedMessage, MailDestinationTarget destinationTarget) {
+                return false;
+            }
+
+            @Override
+            public void recordImport(FetchedMessage fetchedMessage, MailDestinationTarget destinationTarget, MailImportResponse response) {
+            }
+        };
+        service.mailDestinationServices = new FakeMailDestinationServices(new FakeMailDestinationService(true));
+        service.sourcePollEventService = new NoopSourcePollEventService();
+        service.runtimeEmailAccountService = new FakeRuntimeEmailAccountService(List.of(popBridge("legacy-pop", 7L, "alice", "target")));
+        service.pollingSettingsService = new FakePollingSettingsService(true, Duration.ofMinutes(5), "5m", 10);
+        service.userPollingSettingsService = new FakeUserPollingSettingsService(true, Duration.ofMinutes(5), "5m", 10);
+        service.sourcePollingSettingsService = new FakeSourcePollingSettingsService();
+        service.sourcePollingStateService = sourcePollingStateService;
+        service.manualPollRateLimitService = new ManualPollRateLimitService();
+
+        PollRunResult result = service.runPoll("manual-api");
+
+        assertEquals(0, result.getErrors().size());
+        assertEquals("legacy-pop", sourcePollingStateService.lastRecordedSuccessSourceId);
+        assertEquals("uidl-2", sourcePollingStateService.lastRecordedPopCheckpoint);
     }
 
     @Test
@@ -1060,6 +1126,40 @@ class PollingServiceTest {
                 new GmailApiDestinationTarget("target", null, "system", UserMailDestinationConfigService.PROVIDER_GMAIL, "me", "client", "secret", "refresh", "https://localhost", true, false, false));
     }
 
+    private static RuntimeEmailAccount popBridge(String sourceId, Long userId, String ownerUsername, String destinationSubjectKey) {
+        return new RuntimeEmailAccount(
+                sourceId,
+                "USER",
+                userId,
+                ownerUsername,
+                true,
+                dev.inboxbridge.config.InboxBridgeConfig.Protocol.POP3,
+                "pop.example.com",
+                995,
+                true,
+                dev.inboxbridge.config.InboxBridgeConfig.AuthMethod.PASSWORD,
+                dev.inboxbridge.config.InboxBridgeConfig.OAuthProvider.NONE,
+                "user@example.com",
+                "Secret#123",
+                "",
+                java.util.Optional.empty(),
+                false,
+                java.util.Optional.of("Imported/Test"),
+                new GmailApiDestinationTarget(
+                        destinationSubjectKey,
+                        userId,
+                        ownerUsername,
+                        UserMailDestinationConfigService.PROVIDER_GMAIL,
+                        "me",
+                        "client",
+                        "secret",
+                        "refresh",
+                        "https://localhost",
+                        true,
+                        false,
+                        false));
+    }
+
     private static RuntimeEmailAccount microsoftUserEmailAccount(Long userId) {
         return new RuntimeEmailAccount(
                 "outlook-main",
@@ -1311,6 +1411,7 @@ class PollingServiceTest {
 
     private static final class RecordingSourcePollingStateService extends SourcePollingStateService {
         private String lastRecordedSuccessSourceId;
+        private String lastRecordedPopCheckpoint;
         private Instant cooldownUntil;
 
         @Override
@@ -1344,6 +1445,11 @@ class PollingServiceTest {
         @Override
         public void recordSuccess(String sourceId, Instant finishedAt, PollingSettingsService.EffectivePollingSettings settings) {
             lastRecordedSuccessSourceId = sourceId;
+        }
+
+        @Override
+        public void recordPopCheckpoint(String sourceId, String uidl, Instant observedAt) {
+            lastRecordedPopCheckpoint = uidl;
         }
     }
 

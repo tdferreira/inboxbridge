@@ -62,6 +62,16 @@ public class SourcePollingStateService {
                 .map(state -> new ImapCheckpoint(state.imapFolderName, state.imapUidValidity, state.imapLastSeenUid));
     }
 
+    @Transactional
+    public Optional<String> popCheckpoint(String sourceId) {
+        if (repository == null) {
+            return Optional.empty();
+        }
+        return repository.findBySourceId(sourceId)
+                .map(state -> state.popLastSeenUidl)
+                .filter(uidl -> uidl != null && !uidl.isBlank());
+    }
+
     public PollEligibility eligibility(
             String sourceId,
             PollingSettingsService.EffectivePollingSettings settings,
@@ -175,6 +185,22 @@ public class SourcePollingStateService {
         } else if (lastSeenUid > state.imapLastSeenUid) {
             state.imapLastSeenUid = lastSeenUid;
         }
+        if (observedAt != null) {
+            state.updatedAt = observedAt;
+        }
+        repository.persist(state);
+    }
+
+    @Transactional
+    public void recordPopCheckpoint(String sourceId, String uidl, Instant observedAt) {
+        if (repository == null || sourceId == null || uidl == null || uidl.isBlank()) {
+            return;
+        }
+        SourcePollingState state = repository.findBySourceId(sourceId).orElseGet(SourcePollingState::new);
+        if (state.id == null) {
+            state.sourceId = sourceId;
+        }
+        state.popLastSeenUidl = uidl;
         if (observedAt != null) {
             state.updatedAt = observedAt;
         }
