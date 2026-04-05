@@ -165,11 +165,16 @@ This repository also includes a static site under [`site/`](site) intended for G
 It is meant to:
 
 - explain what InboxBridge is and how it works
-- show a top-level architecture view with an animated mailflow diagram
+- show a top-level architecture view with animated moving mail icons so the source-to-core-to-destination direction is obvious at a glance
+- keep the animated-view note visually smaller than the main cards because it is explanatory copy rather than the main diagram
+- include an expandable lower-level runtime view with a real diagram, clearer separation from the animated note, and a deeper explanation of transport, runtime coordination, durable state, and provider boundaries
 - answer common operator questions in a production-ready FAQ section
+- expose the same language set as the admin UI through a top-level flag language selector so the public site can be read in the same supported locales
 - make the privacy and self-hosting advantage explicit, including that
   mailbox credentials stay under the owner’s control instead of being
   handed to a third-party forwarding service
+- explain that InboxBridge is designed around encrypted IMAP, POP3, HTTPS, and provider-API communication, and that PostgreSQL stores operational metadata, dedupe identifiers, checkpoints, settings, notifications, and encrypted secrets rather than a shadow archive of mailbox content
+- highlight that the self-hosted deployment model fits personal computers, homelab servers, Raspberry Pi systems, VPS instances, and dedicated hosts, so the operator keeps control over the runtime boundary
 - highlight the main source and destination mailbox flows
 - link operators back to the full setup docs
 - generate a starter `.env` snippet for env-managed deployments and shared OAuth app configuration
@@ -181,6 +186,8 @@ The generator is intentionally a convenience for operators. It does not replace 
 The recommended path is to keep `.env` as small as possible for bootstrap settings so you avoid leaving mailbox passwords in plain text there, then complete destination and source mailbox configuration from the application web interface unless you intentionally want env-managed accounts.
 
 For GitHub Pages deployment, the repository's Pages feature still needs to be enabled once in GitHub settings and configured to use GitHub Actions. After that one-time setup, the workflow in [`.github/workflows/pages.yml`](.github/workflows/pages.yml) can publish the `site/` directory normally.
+
+The local Docker Compose stack does not publish that standalone GitHub Pages site by default. When you run InboxBridge locally, `https://localhost:3000/` serves the admin UI, not the contents of `site/`.
 
 ## Configuration Overview
 
