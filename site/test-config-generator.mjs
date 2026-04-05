@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict'
 import fs from 'node:fs'
 import { buildEnvConfig, generateEncryptionKey, generateEnvText } from './config-generator.mjs'
-import { languageOptions, normalizeLocale, translate } from './i18n.mjs'
+import { languageOptions, normalizeLocale, translate, translationCatalog } from './i18n.mjs'
 
 const config = buildEnvConfig({
   publicBaseUrl: 'https://inboxbridge.example.com',
@@ -59,6 +59,31 @@ assert.equal(translate('pt-PT', 'nav.features'), 'Funcionalidades')
 assert.equal(translate('fr', 'env.copy'), 'Copier')
 assert.match(translate('en', 'arch.detail.copy'), /operational metadata/)
 assert.match(translate('en', 'band.remember.three'), /encrypted mailbox and API connections/)
+assert.equal(
+  Object.keys(translationCatalog.fr).length,
+  Object.keys(translationCatalog.en).length
+)
+assert.equal(
+  Object.keys(translationCatalog.de).length,
+  Object.keys(translationCatalog.en).length
+)
+assert.equal(
+  Object.keys(translationCatalog['pt-PT']).length,
+  Object.keys(translationCatalog.en).length
+)
+assert.equal(
+  Object.keys(translationCatalog['pt-BR']).length,
+  Object.keys(translationCatalog.en).length
+)
+assert.equal(
+  Object.keys(translationCatalog.es).length,
+  Object.keys(translationCatalog.en).length
+)
+assert.notEqual(translate('fr', 'hero.body'), translate('en', 'hero.body'))
+assert.notEqual(translate('de', 'arch.detail.copy'), translate('en', 'arch.detail.copy'))
+assert.notEqual(translate('pt-PT', 'faq.security.a'), translate('en', 'faq.security.a'))
+assert.notEqual(translate('pt-BR', 'env.body'), translate('en', 'env.body'))
+assert.notEqual(translate('es', 'band.remember.three'), translate('en', 'band.remember.three'))
 
 const siteHtml = fs.readFileSync(new URL('./index.html', import.meta.url), 'utf8')
 assert.match(siteHtml, /data-language-picker/)

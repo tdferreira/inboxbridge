@@ -170,6 +170,8 @@ It is meant to:
 - include an expandable lower-level runtime view with a real diagram, clearer separation from the animated note, and a deeper explanation of transport, runtime coordination, durable state, and provider boundaries
 - answer common operator questions in a production-ready FAQ section
 - expose the same language set as the admin UI through a top-level flag language selector so the public site can be read in the same supported locales
+- keep the full public-site copy translated across those locales so architecture, FAQ, generator, and footer text do not silently fall back to English
+- keep the language selector styled like the other topbar actions and grouped with the header controls so longer locale labels do not visually detach the picker from the navigation
 - make the privacy and self-hosting advantage explicit, including that
   mailbox credentials stay under the owner’s control instead of being
   handed to a third-party forwarding service
