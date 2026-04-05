@@ -166,7 +166,7 @@ It is meant to:
 
 - explain what InboxBridge is and how it works
 - show a top-level architecture view with an animated mailflow diagram
-- answer common operator questions in an FAQ section
+- answer common operator questions in a production-ready FAQ section
 - make the privacy and self-hosting advantage explicit, including that
   mailbox credentials stay under the owner’s control instead of being
   handed to a third-party forwarding service

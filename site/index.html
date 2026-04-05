@@ -233,14 +233,29 @@
             <details class="faq-card" open>
               <summary>Why is the self-hosted model important for security?</summary>
               <p>
-                InboxBridge is designed so you do not have to hand your email credentials over to a third-party mailbox
-                forwarding service. The biggest advantage of this approach is that you keep control of where your
-                passwords, app passwords, refresh tokens, and imported-message history live: on infrastructure that you
-                operate yourself.
+                InboxBridge is for people who want mailbox consolidation without handing credentials to a third-party
+                service. Passwords, app passwords, refresh tokens, and import history stay on infrastructure you
+                control, which is one of the main reasons to choose a self-hosted deployment.
               </p>
             </details>
             <details class="faq-card">
-              <summary>Does InboxBridge preserve the original message headers?</summary>
+              <summary>Are IMAP and POP3 secure enough for this?</summary>
+              <p>
+                Yes, when they are used over encrypted connections. InboxBridge is designed for TLS-protected mailbox
+                access such as IMAPS and POP3S. The real risk is not the protocol name, but weak deployment choices
+                like plaintext transport or careless secret handling.
+              </p>
+            </details>
+            <details class="faq-card">
+              <summary>Why import mail instead of using forwarding rules?</summary>
+              <p>
+                Forwarding rules relay mail onward as a new delivery step. InboxBridge instead fetches messages from the
+                source mailbox and imports them into the destination mailbox. That keeps the flow closer to mailbox
+                import than classic forwarding and avoids turning InboxBridge into a forwarding hop.
+              </p>
+            </details>
+            <details class="faq-card">
+              <summary>Does InboxBridge preserve the original message content?</summary>
               <p>
                 Yes. InboxBridge carries the raw message bytes through the import pipeline, so IMAP APPEND destinations
                 receive the original RFC822 message content instead of a rebuilt synthetic forward.
@@ -252,6 +267,21 @@
                 It is near-real-time for supported IMAP sources. InboxBridge keeps a long-lived IMAP IDLE watcher per
                 configured folder, uses durable UID checkpoints, and falls back to scheduler polling if a watcher stays
                 unhealthy long enough.
+              </p>
+            </details>
+            <details class="faq-card">
+              <summary>Can I still reply from another address?</summary>
+              <p>
+                Yes, if your destination mailbox or mail client supports sending as another identity. InboxBridge
+                handles inbound consolidation; outbound identities are still configured on the destination side.
+              </p>
+            </details>
+            <details class="faq-card">
+              <summary>What providers does InboxBridge work with?</summary>
+              <p>
+                Source-side support is broad: any provider that gives you usable IMAP or POP3 access can usually fit.
+                Destination-side support depends on the import path, including Gmail API and IMAP APPEND destinations
+                such as Outlook, Yahoo, Proton Bridge, and other standard IMAP providers.
               </p>
             </details>
             <details class="faq-card">
@@ -427,13 +457,17 @@
                         <option value="GOOGLE">GOOGLE</option>
                       </select>
                     </div>
-                    <div class="field">
-                      <label for="sourceUsername"><span class="label-copy">Source username</span><button class="info-hint" type="button" aria-label="Source username help" data-hint="Normally the full email address of the source mailbox account.">i</button></label>
-                      <input id="sourceUsername" name="sourceUsername" placeholder="replace-me@example.com" />
-                    </div>
-                    <div class="field" data-password-only>
-                      <label for="sourcePassword"><span class="label-copy">Password / app password</span><button class="info-hint" type="button" aria-label="Password or app password help" data-hint="Use an app password when the provider supports it instead of a normal interactive sign-in password.">i</button></label>
-                      <input id="sourcePassword" name="sourcePassword" placeholder="Optional if using OAuth2" />
+                    <div class="field full">
+                      <div class="dual-input-row">
+                        <div class="nested-field">
+                          <label for="sourceUsername"><span class="label-copy">Source username</span><button class="info-hint" type="button" aria-label="Source username help" data-hint="Normally the full email address of the source mailbox account.">i</button></label>
+                          <input id="sourceUsername" name="sourceUsername" placeholder="replace-me@example.com" />
+                        </div>
+                        <div class="nested-field" data-password-only>
+                          <label for="sourcePassword"><span class="label-copy">Password / app password</span><button class="info-hint" type="button" aria-label="Password or app password help" data-hint="Use an app password when the provider supports it instead of a normal interactive sign-in password.">i</button></label>
+                          <input id="sourcePassword" name="sourcePassword" placeholder="Optional if using OAuth2" />
+                        </div>
+                      </div>
                     </div>
                     <div class="field" data-oauth-only hidden>
                       <label for="sourceOauthRefreshToken"><span class="label-copy">OAuth refresh token</span><button class="info-hint" type="button" aria-label="OAuth refresh token help" data-hint="Lets InboxBridge renew access in the background without asking the user to sign in again every time.">i</button></label>
@@ -519,6 +553,35 @@
       </div>
     </footer>
 
+    <script>
+      (() => {
+        const form = document.querySelector('[data-env-generator]')
+        if (!form) {
+          return
+        }
+
+        function syncStaticConditionalFields() {
+          const protocol = form.querySelector('#sourceProtocol')?.value
+          const authMethod = form.querySelector('#sourceAuthMethod')?.value
+          const isImap = protocol === 'IMAP'
+          const isOauth = authMethod === 'OAUTH2'
+
+          form.querySelectorAll('[data-imap-only]').forEach((element) => {
+            element.hidden = !isImap
+          })
+          form.querySelectorAll('[data-password-only]').forEach((element) => {
+            element.hidden = isOauth
+          })
+          form.querySelectorAll('[data-oauth-only]').forEach((element) => {
+            element.hidden = !isOauth
+          })
+        }
+
+        syncStaticConditionalFields()
+        form.addEventListener('input', syncStaticConditionalFields)
+        form.addEventListener('change', syncStaticConditionalFields)
+      })()
+    </script>
     <script type="module" src="./app.js"></script>
     <noscript>
       <div class="shell noscript-note">
