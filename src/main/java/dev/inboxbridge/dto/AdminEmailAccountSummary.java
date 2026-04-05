@@ -16,6 +16,7 @@ public record AdminEmailAccountSummary(
         boolean tls,
         String folder,
         boolean unreadOnly,
+        String fetchMode,
         String customLabel,
         boolean markReadAfterPoll,
         String postPollAction,

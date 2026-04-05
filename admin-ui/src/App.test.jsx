@@ -123,7 +123,7 @@ describe('App', () => {
 
     vi.stubGlobal('fetch', fetchMock)
 
-    render(<App />)
+    render(<App timingOverrides={{ liveConnectedSnapshotReconcileMs: 10 }} />)
 
     fireEvent.change(await screen.findByLabelText('Username'), { target: { value: 'alice' } })
     fireEvent.click(await screen.findByRole('button', { name: 'Sign in' }))
@@ -206,7 +206,7 @@ describe('App', () => {
 
     vi.stubGlobal('fetch', fetchMock)
 
-    render(<App />)
+    render(<App timingOverrides={{ liveConnectedSnapshotReconcileMs: 10 }} />)
 
     fireEvent.change(await screen.findByLabelText('Username'), { target: { value: 'alice' } })
     fireEvent.click(screen.getByRole('button', { name: 'Sign in' }))
@@ -256,7 +256,7 @@ describe('App', () => {
     })
     vi.stubGlobal('fetch', fetchMock)
 
-    render(<App />)
+    render(<App timingOverrides={{ statsAnomalyAttentionMs: 80 }} />)
 
     await waitFor(() => expect(fetchMock).toHaveBeenCalledWith('/api/auth/session/device-location', expect.any(Object)))
   })
@@ -298,7 +298,7 @@ describe('App', () => {
     })
     vi.stubGlobal('fetch', fetchMock)
 
-    render(<App />)
+    render(<App timingOverrides={{ statsAnomalyAttentionMs: 80 }} />)
 
     await waitFor(() => expect(fetchMock).toHaveBeenCalledWith('/api/auth/session/device-location', expect.any(Object)))
   })
@@ -337,7 +337,7 @@ describe('App', () => {
     })
     vi.stubGlobal('fetch', fetchMock)
 
-    render(<App />)
+    render(<App timingOverrides={{ statsAnomalyAttentionMs: 80 }} />)
 
     expect(fetchMock).not.toHaveBeenCalledWith('/api/auth/session/device-location', expect.any(Object))
     fireEvent.click(await screen.findByRole('button', { name: 'Share Device Location' }))
@@ -1240,7 +1240,7 @@ describe('App', () => {
     })
 
     await act(async () => {
-      await new Promise((resolve) => window.setTimeout(resolve, 5200))
+      await new Promise((resolve) => window.setTimeout(resolve, 140))
     })
 
     await waitFor(() => {
@@ -1386,7 +1386,7 @@ describe('App', () => {
 
     vi.stubGlobal('fetch', fetchMock)
 
-    render(<App />)
+    render(<App timingOverrides={{ statsAnomalyAttentionMs: 10 }} />)
 
     await screen.findByText(/signed in as/i)
     expect(screen.getByRole('tab', { name: /My InboxBridge/, selected: true })).toBeInTheDocument()
@@ -1465,7 +1465,7 @@ describe('App', () => {
       return fetchMock(input, init)
     }))
 
-    render(<App />)
+    render(<App timingOverrides={{ statsAnomalyAttentionMs: 80 }} />)
 
     await screen.findByText(/signed in as admin/i)
     expect(await screen.findByText('Global Statistics detected scheduled polling activity that looks unusually high. Review that section.')).toBeInTheDocument()
@@ -1475,14 +1475,18 @@ describe('App', () => {
     const statsSection = await screen.findByText('Global Statistics')
     const statsCard = statsSection.closest('section')
     expect(statsCard).toHaveClass('polling-statistics-section-alerting')
-    expect(statsCard).toHaveClass('polling-statistics-section-attention')
+    await waitFor(() => {
+      expect(statsCard).toHaveClass('polling-statistics-section-attention')
+    })
 
     await act(async () => {
-      await new Promise((resolve) => window.setTimeout(resolve, 9500))
+      await new Promise((resolve) => window.setTimeout(resolve, 120))
     })
 
     expect(statsCard).toHaveClass('polling-statistics-section-alerting')
-    expect(statsCard).not.toHaveClass('polling-statistics-section-attention')
+    await waitFor(() => {
+      expect(statsCard).not.toHaveClass('polling-statistics-section-attention')
+    })
   }, 10000)
 
   it('keeps admin user rows collapsed until one is explicitly opened', async () => {
@@ -2541,19 +2545,23 @@ describe('App', () => {
     await waitFor(() => {
       const statsCalls = fetchMock.mock.calls.filter(([url]) => String(url) === '/api/app/polling-stats')
       const dashboardCalls = fetchMock.mock.calls.filter(([url]) => String(url) === '/api/admin/dashboard')
-      expect(statsCalls.at(-1)?.[1]?.headers).toEqual({ 'X-InboxBridge-Timezone': 'America/New_York' })
-      expect(dashboardCalls.at(-1)?.[1]?.headers).toEqual({ 'X-InboxBridge-Timezone': 'America/New_York' })
+      expect(statsCalls.some(([, options]) => options?.headers?.['X-InboxBridge-Timezone'] === 'America/New_York')).toBe(true)
+      expect(dashboardCalls.some(([, options]) => options?.headers?.['X-InboxBridge-Timezone'] === 'America/New_York')).toBe(true)
     })
 
     const statsCallCountBeforeRefresh = fetchMock.mock.calls.filter(([url]) => String(url) === '/api/app/polling-stats').length
+    const dashboardCallCountBeforeRefresh = fetchMock.mock.calls.filter(([url]) => String(url) === '/api/admin/dashboard').length
     fireEvent.click(screen.getByRole('button', { name: 'Refresh' }))
 
     await waitFor(() => {
       const statsCalls = fetchMock.mock.calls.filter(([url]) => String(url) === '/api/app/polling-stats')
       const dashboardCalls = fetchMock.mock.calls.filter(([url]) => String(url) === '/api/admin/dashboard')
-      expect(statsCalls.length).toBeGreaterThan(statsCallCountBeforeRefresh)
-      expect(statsCalls.at(-1)?.[1]?.headers).toEqual({ 'X-InboxBridge-Timezone': 'America/New_York' })
-      expect(dashboardCalls.at(-1)?.[1]?.headers).toEqual({ 'X-InboxBridge-Timezone': 'America/New_York' })
+      const newStatsCalls = statsCalls.slice(statsCallCountBeforeRefresh)
+      const newDashboardCalls = dashboardCalls.slice(dashboardCallCountBeforeRefresh)
+      expect(newStatsCalls.length).toBeGreaterThan(0)
+      expect(newDashboardCalls.length).toBeGreaterThan(0)
+      expect(newStatsCalls.some(([, options]) => options?.headers?.['X-InboxBridge-Timezone'] === 'America/New_York')).toBe(true)
+      expect(newDashboardCalls.some(([, options]) => options?.headers?.['X-InboxBridge-Timezone'] === 'America/New_York')).toBe(true)
     })
   })
 

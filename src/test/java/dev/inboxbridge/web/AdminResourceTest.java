@@ -352,10 +352,12 @@ class AdminResourceTest {
                     java.util.Map.of(),
                     java.util.Map.of(),
                     java.util.Map.of(),
+                    java.util.Map.of(),
                     new dev.inboxbridge.dto.PollingHealthSummaryView(1, 0, 0, 0),
                     java.util.List.of(new dev.inboxbridge.dto.PollingBreakdownItemView("generic-imap", "Generic IMAP", 1L)),
                     0L,
                     1L,
+                    0L,
                     900L);
         }
 
@@ -366,7 +368,8 @@ class AdminResourceTest {
                     java.util.Map.of("custom", java.util.List.of()),
                     java.util.Map.of("custom", java.util.List.of()),
                     java.util.Map.of("custom", java.util.List.of()),
-                    java.util.Map.of("custom", java.util.List.of(new dev.inboxbridge.dto.ImportTimelinePointView("2026-03-26", 1L))));
+                    java.util.Map.of("custom", java.util.List.of(new dev.inboxbridge.dto.ImportTimelinePointView("2026-03-26", 1L))),
+                    java.util.Map.of("custom", java.util.List.of()));
         }
     }
 

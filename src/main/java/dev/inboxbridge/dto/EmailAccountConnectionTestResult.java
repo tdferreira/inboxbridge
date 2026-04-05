@@ -18,5 +18,6 @@ public record EmailAccountConnectionTestResult(
         Integer visibleMessageCount,
         Integer unreadMessageCount,
         Boolean sampleMessageAvailable,
-        Boolean sampleMessageMaterialized) {
+        Boolean sampleMessageMaterialized,
+        Boolean forwardedMarkerSupported) {
 }

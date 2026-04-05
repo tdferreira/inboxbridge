@@ -8,5 +8,17 @@ public record FetchedMessage(
         String sourceMessageKey,
         Optional<String> messageIdHeader,
         Instant messageInstant,
+        Optional<String> folderName,
+        Long uidValidity,
+        Long uid,
         byte[] rawMessage) {
+
+    public FetchedMessage(
+            String sourceAccountId,
+            String sourceMessageKey,
+            Optional<String> messageIdHeader,
+            Instant messageInstant,
+            byte[] rawMessage) {
+        this(sourceAccountId, sourceMessageKey, messageIdHeader, messageInstant, Optional.empty(), null, null, rawMessage);
+    }
 }

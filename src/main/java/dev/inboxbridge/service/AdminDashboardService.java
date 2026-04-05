@@ -8,6 +8,7 @@ import java.util.List;
 import java.util.Map;
 
 import dev.inboxbridge.config.InboxBridgeConfig;
+import dev.inboxbridge.domain.SourceFetchMode;
 import dev.inboxbridge.domain.SourcePostPollSettings;
 import dev.inboxbridge.dto.AdminEmailAccountSummary;
 import dev.inboxbridge.dto.AdminDashboardResponse;
@@ -97,6 +98,7 @@ public class AdminDashboardService {
                                     source.oauthRefreshToken().orElse(""),
                                     source.folder(),
                                     source.unreadOnly(),
+                                    source.fetchMode(),
                                     source.customLabel(),
                                     SourcePostPollSettings.none(),
                                     null));
@@ -114,6 +116,7 @@ public class AdminDashboardService {
                             source.tls(),
                             source.folder().orElse("INBOX"),
                             source.unreadOnly(),
+                            source.fetchMode().name(),
                             source.customLabel().orElse(""),
                             false,
                             "NONE",

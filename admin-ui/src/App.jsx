@@ -43,8 +43,6 @@ import { detectScheduledRunAnomaly } from './lib/pollingStatsAlerts'
 import { statsTimezoneHeader } from './lib/statsTimezone'
 import { readStoredTimeZonePreference, resolveEffectiveTimeZone, resetCurrentFormattingTimeZone, setCurrentFormattingTimeZone } from './lib/timeZonePreferences'
 
-const REFRESH_MS = 30000
-const LIVE_EVENTS_STALE_MS = 45000
 const DEFAULT_AUTH_SECURITY_FORM = {
   loginFailureThresholdOverride: '',
   loginInitialBlockOverride: '',
@@ -160,6 +158,7 @@ const DEFAULT_USER_POLLING_STATS = {
   errorTimelines: {},
   manualRunTimelines: {},
   scheduledRunTimelines: {},
+  idleRunTimelines: {},
   health: {
     activeMailFetchers: 0,
     coolingDownMailFetchers: 0,
@@ -169,6 +168,7 @@ const DEFAULT_USER_POLLING_STATS = {
   providerBreakdown: [],
   manualRuns: 0,
   scheduledRuns: 0,
+  idleRuns: 0,
   averagePollDurationMillis: 0
 }
 const DEFAULT_AUTH_OPTIONS = {
@@ -181,7 +181,15 @@ const DEFAULT_AUTH_OPTIONS = {
   sourceOAuthProviders: ['MICROSOFT', 'GOOGLE']
 }
 const SECTION_HIGHLIGHT_MS = 2600
-const STATS_ANOMALY_ATTENTION_MS = 9000
+const DEFAULT_APP_TIMINGS = {
+  refreshMs: 30000,
+  liveEventsStaleMs: 45000,
+  liveFallbackRunningRefreshMs: 1000,
+  liveFallbackIdleRefreshMs: 5000,
+  liveConnectedWatchdogCheckMs: 5000,
+  liveConnectedSnapshotReconcileMs: 5000,
+  statsAnomalyAttentionMs: 9000
+}
 const NOTIFICATION_AUTO_CLOSE_MS = {
   success: 8000,
   warning: 12000,
@@ -231,7 +239,7 @@ function authSecurityFormFromSettings(settings) {
  * Coordinates admin-ui data fetching and browser interactions while delegating
  * UI structure to smaller reusable components.
  */
-function AppContent() {
+function AppContent({ timings = DEFAULT_APP_TIMINGS }) {
   const location = useLocation()
   const navigate = useNavigate()
   const [authOptions, setAuthOptions] = useState(DEFAULT_AUTH_OPTIONS)
@@ -609,7 +617,8 @@ function AppContent() {
       duplicates: payload.duplicateTimelines?.custom || [],
       errors: payload.errorTimelines?.custom || [],
       manualRuns: payload.manualRunTimelines?.custom || [],
-      scheduledRuns: payload.scheduledRunTimelines?.custom || []
+      scheduledRuns: payload.scheduledRunTimelines?.custom || [],
+      idleRuns: payload.idleRunTimelines?.custom || []
     }
   }
 
@@ -810,9 +819,9 @@ function AppContent() {
     void polling.runLivePollSnapshotLoad()
     const timer = window.setInterval(() => {
       void refreshRuntimeState({ announceNewSessions: true, suppressSessionErrors: true })
-    }, REFRESH_MS)
+    }, timings.refreshMs)
     return () => window.clearInterval(timer)
-  }, [authOptions.multiUserEnabled, effectiveTimeZone, isAdmin, session])
+  }, [authOptions.multiUserEnabled, effectiveTimeZone, isAdmin, session, timings.refreshMs])
 
   useEffect(() => {
     if (!session || uiPreferencesLoadedForUserId !== session.id) {
@@ -870,13 +879,25 @@ function AppContent() {
     void refreshPollStatus()
     const timer = window.setInterval(() => {
       void refreshPollStatus()
-    }, (polling.livePoll?.running || polling.runningPoll || polling.runningUserPoll || hasSourcePollInFlight) ? 1000 : 5000)
+    }, (polling.livePoll?.running || polling.runningPoll || polling.runningUserPoll || hasSourcePollInFlight)
+      ? timings.liveFallbackRunningRefreshMs
+      : timings.liveFallbackIdleRefreshMs)
 
     return () => {
       cancelled = true
       window.clearInterval(timer)
     }
-  }, [hasSourcePollInFlight, isAdmin, liveEventsConnected, polling.livePoll?.running, polling.runningPoll, polling.runningUserPoll, session])
+  }, [
+    hasSourcePollInFlight,
+    isAdmin,
+    liveEventsConnected,
+    polling.livePoll?.running,
+    polling.runningPoll,
+    polling.runningUserPoll,
+    session,
+    timings.liveFallbackIdleRefreshMs,
+    timings.liveFallbackRunningRefreshMs
+  ])
 
   useEffect(() => {
     setActiveBatchPollSourceIds(polling.livePoll?.running
@@ -981,12 +1002,12 @@ function AppContent() {
       return
     }
     const timer = window.setInterval(() => {
-      if (lastLiveEventAtRef.current && Date.now() - lastLiveEventAtRef.current > LIVE_EVENTS_STALE_MS) {
+      if (lastLiveEventAtRef.current && Date.now() - lastLiveEventAtRef.current > timings.liveEventsStaleMs) {
         setLiveEventsConnected(false)
       }
-    }, 5000)
+    }, timings.liveConnectedWatchdogCheckMs)
     return () => window.clearInterval(timer)
-  }, [liveEventsConnected, polling.livePoll?.running, session])
+  }, [liveEventsConnected, polling.livePoll?.running, session, timings.liveConnectedWatchdogCheckMs, timings.liveEventsStaleMs])
 
   useEffect(() => {
     if (!session || !polling.livePoll?.running || !liveEventsConnected) {
@@ -1015,13 +1036,13 @@ function AppContent() {
 
     const timer = window.setInterval(() => {
       void reconcileLivePollSnapshot()
-    }, 5000)
+    }, timings.liveConnectedSnapshotReconcileMs)
 
     return () => {
       cancelled = true
       window.clearInterval(timer)
     }
-  }, [isAdmin, liveEventsConnected, polling.livePoll?.running, session])
+  }, [isAdmin, liveEventsConnected, polling.livePoll?.running, session, timings.liveConnectedSnapshotReconcileMs])
 
   useEffect(() => {
     if (!session) {
@@ -1403,8 +1424,11 @@ function AppContent() {
     }
 
     const anomalyKey = [
-      globalStatsAnomaly.bucketLabel,
-      globalStatsAnomaly.occurredAt,
+      globalStatsAnomaly.rangeKey,
+      globalStatsAnomaly.startBucketLabel,
+      globalStatsAnomaly.endBucketLabel,
+      globalStatsAnomaly.startOccurredAt,
+      globalStatsAnomaly.endOccurredAt,
       globalStatsAnomaly.observedRuns,
       globalStatsAnomaly.expectedRunsPerHour,
       globalStatsAnomaly.sourceCount
@@ -1417,7 +1441,7 @@ function AppContent() {
     setGlobalStatsNeedsAttention(true)
     const timer = window.setTimeout(() => {
       setGlobalStatsNeedsAttention(false)
-    }, STATS_ANOMALY_ATTENTION_MS)
+    }, timings.statsAnomalyAttentionMs)
 
     pushNotification({
       autoCloseMs: null,
@@ -1429,7 +1453,7 @@ function AppContent() {
     })
 
     return () => window.clearTimeout(timer)
-  }, [globalStatsAnomaly, isAdmin, session, t])
+  }, [globalStatsAnomaly, isAdmin, session, t, timings.statsAnomalyAttentionMs])
 
   useEffect(() => {
     if (!session) {
@@ -2029,10 +2053,14 @@ function AppContent() {
   )
 }
 
-function App() {
+function App({ timingOverrides = null }) {
+  const timings = useMemo(
+    () => ({ ...DEFAULT_APP_TIMINGS, ...(timingOverrides || {}) }),
+    [timingOverrides]
+  )
   return (
     <BrowserRouter>
-      <AppContent />
+      <AppContent timings={timings} />
     </BrowserRouter>
   )
 }

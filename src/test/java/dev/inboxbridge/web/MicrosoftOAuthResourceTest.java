@@ -11,6 +11,7 @@ import java.util.Optional;
 import org.junit.jupiter.api.Test;
 
 import dev.inboxbridge.config.InboxBridgeConfig;
+import dev.inboxbridge.domain.SourceFetchMode;
 import dev.inboxbridge.config.InboxBridgeConfig.Security.Auth;
 import dev.inboxbridge.dto.ApiError;
 import dev.inboxbridge.dto.MicrosoftOAuthSourceOption;
@@ -435,6 +436,11 @@ class MicrosoftOAuthResourceTest {
                     @Override
                     public boolean enabled() {
                         return true;
+                    }
+
+                    @Override
+                    public SourceFetchMode fetchMode() {
+                        return SourceFetchMode.POLLING;
                     }
 
                     @Override

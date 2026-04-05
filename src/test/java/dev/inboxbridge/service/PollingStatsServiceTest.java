@@ -121,7 +121,7 @@ class PollingStatsServiceTest {
             public List<SourcePollEvent> listBySourceIdsSince(List<String> sourceIds, Instant since) {
                 SourcePollEvent event = new SourcePollEvent();
                 event.sourceId = "outlook-main";
-                event.triggerName = "app-fetcher";
+                event.triggerName = "idle-source";
                 event.status = "SUCCESS";
                 event.startedAt = Instant.parse("2026-03-26T10:00:00Z");
                 event.finishedAt = Instant.parse("2026-03-26T10:00:02Z");
@@ -164,13 +164,19 @@ class PollingStatsServiceTest {
         assertEquals(0L, stats.errorPolls());
         assertEquals(1, stats.health().activeMailFetchers());
         assertEquals("Microsoft", stats.providerBreakdown().getFirst().label());
-        assertEquals(1L, stats.manualRuns());
+        assertEquals(0L, stats.manualRuns());
         assertEquals(0L, stats.scheduledRuns());
+        assertEquals(1L, stats.idleRuns());
+        assertEquals(1L, stats.idleRunTimelines().get("pastMonth").stream()
+                .mapToLong(dev.inboxbridge.dto.ImportTimelinePointView::importedMessages)
+                .sum());
     }
 
     @Test
     void timelineBucketsFollowRequestedTimezone() {
-        Instant importAt = Instant.parse("2026-04-04T09:15:00Z");
+        Instant importAt = LocalDate.now(ZoneOffset.UTC)
+                .atTime(9, 15)
+                .toInstant(ZoneOffset.UTC);
         PollingStatsService service = new PollingStatsService();
         service.importedMessageRepository = new ImportedMessageRepository() {
             @Override

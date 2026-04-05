@@ -7,9 +7,13 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.time.Instant;
 import java.util.ArrayList;
-import java.util.Base64;
 import java.util.List;
+import java.util.Base64;
 import java.util.Optional;
+import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.CompletionStage;
+
+import java.lang.annotation.Annotation;
 
 import org.junit.jupiter.api.Test;
 
@@ -19,12 +23,16 @@ import dev.inboxbridge.dto.UpdateUserEmailAccountRequest;
 import dev.inboxbridge.dto.UserEmailAccountView;
 import dev.inboxbridge.config.InboxBridgeConfig;
 import dev.inboxbridge.domain.RuntimeEmailAccount;
+import dev.inboxbridge.domain.SourceFetchMode;
 import dev.inboxbridge.persistence.AppUser;
 import dev.inboxbridge.persistence.ImportedMessageRepository;
 import dev.inboxbridge.persistence.UserEmailAccount;
 import dev.inboxbridge.persistence.UserEmailAccountRepository;
 import dev.inboxbridge.persistence.UserGmailConfig;
 import dev.inboxbridge.persistence.UserGmailConfigRepository;
+import jakarta.enterprise.event.Event;
+import jakarta.enterprise.event.NotificationOptions;
+import jakarta.enterprise.util.TypeLiteral;
 
 class UserEmailAccountServiceTest {
 
@@ -321,6 +329,92 @@ class UserEmailAccountServiceTest {
     }
 
     @Test
+    void upsertPersistsForwardedPostPollAction() {
+        UserEmailAccountService service = service();
+        AppUser owner = user(1L);
+
+        UserEmailAccountView view = service.upsert(owner, new UpdateUserEmailAccountRequest(
+                null,
+                "fetcher-a",
+                true,
+                "IMAP",
+                "imap.example.com",
+                993,
+                true,
+                "PASSWORD",
+                "NONE",
+                "user@example.com",
+                "Secret#123",
+                "",
+                "INBOX",
+                false,
+                "Imported/Test",
+                false,
+                "FORWARDED",
+                ""));
+
+        UserEmailAccount stored = service.repository.findByEmailAccountId("fetcher-a").orElseThrow();
+        assertEquals(dev.inboxbridge.domain.SourcePostPollAction.FORWARDED, stored.postPollAction);
+        assertEquals("FORWARDED", view.postPollAction());
+    }
+
+    @Test
+    void upsertPersistsIdleFetchModeForImapAccounts() {
+        UserEmailAccountService service = service();
+        AppUser owner = user(1L);
+
+        UserEmailAccountView view = service.upsert(owner, new UpdateUserEmailAccountRequest(
+                null,
+                "fetcher-a",
+                true,
+                "IMAP",
+                "imap.example.com",
+                993,
+                true,
+                "PASSWORD",
+                "NONE",
+                "user@example.com",
+                "Secret#123",
+                "",
+                "INBOX",
+                false,
+                "IDLE",
+                "Imported/Test"));
+
+        UserEmailAccount stored = service.repository.findByEmailAccountId("fetcher-a").orElseThrow();
+        assertEquals(SourceFetchMode.IDLE, stored.fetchMode);
+        assertEquals("IDLE", view.fetchMode());
+    }
+
+    @Test
+    void upsertForcesPollingFetchModeForPop3Accounts() {
+        UserEmailAccountService service = service();
+        AppUser owner = user(1L);
+
+        UserEmailAccountView view = service.upsert(owner, new UpdateUserEmailAccountRequest(
+                null,
+                "fetcher-a",
+                true,
+                "POP3",
+                "pop.example.com",
+                995,
+                true,
+                "PASSWORD",
+                "NONE",
+                "user@example.com",
+                "Secret#123",
+                "",
+                "INBOX",
+                false,
+                "IDLE",
+                "Imported/Test"));
+
+        UserEmailAccount stored = service.repository.findByEmailAccountId("fetcher-a").orElseThrow();
+        assertEquals(SourceFetchMode.POLLING, stored.fetchMode);
+        assertEquals("POLLING", view.fetchMode());
+    }
+
+    @Test
     void previewRejectsPostPollActionsForPop3Accounts() {
         UserEmailAccountService service = service();
 
@@ -349,6 +443,31 @@ class UserEmailAccountServiceTest {
         assertEquals("Source-side message actions are only supported for IMAP accounts", error.getMessage());
     }
 
+    @Test
+    void upsertFiresSourceMailboxConfigurationChangedEvent() {
+        UserEmailAccountService service = service();
+        FakeSourceMailboxConfigurationChangedEvent event = (FakeSourceMailboxConfigurationChangedEvent) service.sourceMailboxConfigurationChangedEvent;
+
+        service.upsert(user(1L), request(null, "fetcher-a"));
+
+        assertEquals(1, event.events.size());
+        assertEquals("fetcher-a", event.events.getFirst().sourceId());
+    }
+
+    @Test
+    void deleteFiresSourceMailboxConfigurationChangedEvent() {
+        UserEmailAccountService service = service();
+        FakeSourceMailboxConfigurationChangedEvent event = (FakeSourceMailboxConfigurationChangedEvent) service.sourceMailboxConfigurationChangedEvent;
+        AppUser owner = user(1L);
+        service.upsert(owner, request(null, "fetcher-a"));
+        event.events.clear();
+
+        service.delete(owner, "fetcher-a");
+
+        assertEquals(1, event.events.size());
+        assertEquals("fetcher-a", event.events.getFirst().sourceId());
+    }
+
     private UserEmailAccountService service() {
         UserEmailAccountService service = new UserEmailAccountService();
         service.repository = new InMemoryUserEmailAccountRepository();
@@ -362,6 +481,7 @@ class UserEmailAccountServiceTest {
         service.oAuthCredentialService = new FakeOAuthCredentialService(null);
         service.envSourceService = new FakeEnvSourceService();
         service.mailSourceClient = new FakeMailSourceClient();
+        service.sourceMailboxConfigurationChangedEvent = new FakeSourceMailboxConfigurationChangedEvent();
         service.mailboxConflictService = new MailboxConflictService() {
             @Override
             public boolean conflictsWithCurrentDestination(Long userId, RuntimeEmailAccount source) {
@@ -472,6 +592,11 @@ class UserEmailAccountServiceTest {
             if (emailAccount.updatedAt == null) {
                 emailAccount.updatedAt = Instant.now();
             }
+        }
+
+        @Override
+        public void delete(UserEmailAccount entity) {
+            emailAccounts.remove(entity);
         }
     }
 
@@ -638,6 +763,7 @@ class UserEmailAccountServiceTest {
                     0,
                     0,
                     Boolean.FALSE,
+                    null,
                     null);
         }
 
@@ -645,6 +771,46 @@ class UserEmailAccountServiceTest {
         public List<String> listFolders(RuntimeEmailAccount bridge) {
             this.lastBridge = bridge;
             return List.of("INBOX", "Archive");
+        }
+    }
+
+    private static final class FakeSourceMailboxConfigurationChangedEvent implements Event<SourceMailboxConfigurationChanged> {
+        private final List<SourceMailboxConfigurationChanged> events = new ArrayList<>();
+
+        @Override
+        public void fire(SourceMailboxConfigurationChanged event) {
+            events.add(event);
+        }
+
+        @Override
+        public <U extends SourceMailboxConfigurationChanged> Event<U> select(Class<U> subtype, Annotation... qualifiers) {
+            @SuppressWarnings("unchecked")
+            Event<U> self = (Event<U>) this;
+            return self;
+        }
+
+        @Override
+        public <U extends SourceMailboxConfigurationChanged> Event<U> select(TypeLiteral<U> subtype, Annotation... qualifiers) {
+            @SuppressWarnings("unchecked")
+            Event<U> self = (Event<U>) this;
+            return self;
+        }
+
+        @Override
+        public Event<SourceMailboxConfigurationChanged> select(Annotation... qualifiers) {
+            return this;
+        }
+
+        @Override
+        public <U extends SourceMailboxConfigurationChanged> CompletionStage<U> fireAsync(U event) {
+            fire(event);
+            return CompletableFuture.completedFuture(event);
+        }
+
+        @Override
+        public <U extends SourceMailboxConfigurationChanged> CompletionStage<U> fireAsync(U event, NotificationOptions options) {
+            fire(event);
+            return CompletableFuture.completedFuture(event);
         }
     }
 }

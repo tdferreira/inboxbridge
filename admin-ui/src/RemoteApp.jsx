@@ -45,8 +45,19 @@ const AUTH_ACTION_NONE = ''
 const AUTH_ACTION_SIGN_IN = 'sign-in'
 const AUTH_ACTION_PASSKEY = 'passkey'
 const REMOTE_INSTALL_PROMPT_DISMISSED_KEY = 'inboxbridge.remote.installPromptDismissed'
-const LIVE_EVENTS_STALE_MS = 45000
-function RemoteApp() {
+const DEFAULT_REMOTE_APP_TIMINGS = {
+  liveEventsStaleMs: 45000,
+  liveConnectedWatchdogCheckMs: 5000,
+  liveConnectedSnapshotReconcileMs: 5000,
+  liveFallbackRunningRefreshMs: 1000,
+  liveFallbackIdleRefreshMs: 5000
+}
+
+function RemoteApp({ timingOverrides = null }) {
+  const timings = useMemo(
+    () => ({ ...DEFAULT_REMOTE_APP_TIMINGS, ...(timingOverrides || {}) }),
+    [timingOverrides]
+  )
   const [language, setLanguage] = useState(() => normalizeLocale(window.localStorage.getItem('inboxbridge.language') || navigator.language))
   const [timezonePreference, setTimezonePreference] = useState({ timezoneMode: TIMEZONE_MODE_AUTO, timezone: '' })
   const t = useMemo(() => (key, params) => translate(language, key, params), [language])
@@ -441,12 +452,12 @@ function RemoteApp() {
       return
     }
     const timer = window.setInterval(() => {
-      if (lastLiveEventAtRef.current && Date.now() - lastLiveEventAtRef.current > LIVE_EVENTS_STALE_MS) {
+      if (lastLiveEventAtRef.current && Date.now() - lastLiveEventAtRef.current > timings.liveEventsStaleMs) {
         setLiveEventsConnected(false)
       }
-    }, 5000)
+    }, timings.liveConnectedWatchdogCheckMs)
     return () => window.clearInterval(timer)
-  }, [liveEventsConnected, livePoll?.running, session])
+  }, [liveEventsConnected, livePoll?.running, session, timings.liveConnectedWatchdogCheckMs, timings.liveEventsStaleMs])
 
   useEffect(() => {
     if (!session || !livePoll?.running || !liveEventsConnected) {
@@ -468,13 +479,13 @@ function RemoteApp() {
 
     const timer = window.setInterval(() => {
       void reconcileRemoteLivePoll()
-    }, 5000)
+    }, timings.liveConnectedSnapshotReconcileMs)
 
     return () => {
       cancelled = true
       window.clearInterval(timer)
     }
-  }, [liveEventsConnected, livePoll?.running, session])
+  }, [liveEventsConnected, livePoll?.running, session, timings.liveConnectedSnapshotReconcileMs])
 
   useEffect(() => {
     const hasPollRequestInFlight = Boolean(pollingKey && pollingKey !== 'logout')
@@ -500,13 +511,22 @@ function RemoteApp() {
     void refreshRemoteLivePoll()
     const timer = window.setInterval(() => {
       void refreshRemoteLivePoll()
-    }, (livePoll?.running || hasPollRequestInFlight) ? 1000 : 5000)
+    }, (livePoll?.running || hasPollRequestInFlight)
+      ? timings.liveFallbackRunningRefreshMs
+      : timings.liveFallbackIdleRefreshMs)
 
     return () => {
       cancelled = true
       window.clearInterval(timer)
     }
-  }, [liveEventsConnected, livePoll?.running, pollingKey, session])
+  }, [
+    liveEventsConnected,
+    livePoll?.running,
+    pollingKey,
+    session,
+    timings.liveFallbackIdleRefreshMs,
+    timings.liveFallbackRunningRefreshMs
+  ])
 
   const liveSourcesById = useMemo(
     () => new Map((livePoll?.sources || []).map((source) => [source.sourceId, source])),

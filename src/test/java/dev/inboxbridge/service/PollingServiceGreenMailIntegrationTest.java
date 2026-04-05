@@ -3,8 +3,6 @@ package dev.inboxbridge.service;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
-import java.io.IOException;
-import java.net.ServerSocket;
 import java.nio.charset.StandardCharsets;
 import java.time.Duration;
 import java.time.Instant;
@@ -15,10 +13,11 @@ import java.util.Optional;
 import java.util.Properties;
 import java.util.Random;
 
-import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.extension.RegisterExtension;
 
+import com.icegreen.greenmail.junit5.GreenMailExtension;
 import com.icegreen.greenmail.util.GreenMail;
 import com.icegreen.greenmail.util.ServerSetup;
 
@@ -27,6 +26,7 @@ import dev.inboxbridge.domain.FetchedMessage;
 import dev.inboxbridge.domain.ImapAppendDestinationTarget;
 import dev.inboxbridge.domain.MailDestinationTarget;
 import dev.inboxbridge.domain.RuntimeEmailAccount;
+import dev.inboxbridge.domain.SourceFetchMode;
 import dev.inboxbridge.domain.SourcePostPollAction;
 import dev.inboxbridge.domain.SourcePostPollSettings;
 import dev.inboxbridge.dto.MailImportResponse;
@@ -52,28 +52,16 @@ class PollingServiceGreenMailIntegrationTest {
     private static final Long ALICE_USER_ID = 7L;
     private static final Long BOB_USER_ID = 8L;
 
-    private GreenMail sourceMail;
-    private GreenMail destinationMail;
+    @RegisterExtension
+    final GreenMailExtension sourceMail = new GreenMailExtension(new ServerSetup(0, null, ServerSetup.PROTOCOL_IMAP));
+
+    @RegisterExtension
+    final GreenMailExtension destinationMail = new GreenMailExtension(new ServerSetup(0, null, ServerSetup.PROTOCOL_IMAP));
 
     @BeforeEach
     void setUp() {
-        sourceMail = new GreenMail(new ServerSetup(freePort(), null, ServerSetup.PROTOCOL_IMAP));
-        sourceMail.start();
         sourceMail.setUser(SOURCE_USERNAME, SOURCE_PASSWORD);
-
-        destinationMail = new GreenMail(new ServerSetup(freePort(), null, ServerSetup.PROTOCOL_IMAP));
-        destinationMail.start();
         destinationMail.setUser(DESTINATION_USERNAME, DESTINATION_PASSWORD);
-    }
-
-    @AfterEach
-    void tearDown() {
-        if (sourceMail != null) {
-            sourceMail.stop();
-        }
-        if (destinationMail != null) {
-            destinationMail.stop();
-        }
     }
 
     @Test
@@ -403,6 +391,44 @@ class PollingServiceGreenMailIntegrationTest {
         assertEquals(List.of(), listSubjectsIfFolderExists(sourceMail, SOURCE_USERNAME, SOURCE_PASSWORD, "INBOX"));
     }
 
+    @Test
+    void runPollCanMarkSourceMessagesForwardedAfterImport() throws Exception {
+        appendMessage(sourceMail, SOURCE_USERNAME, SOURCE_PASSWORD, "INBOX", "gamma", "Mark forwarded after import", "<gamma@example.com>");
+
+        PollRunResult result = pollService(runtimeAccountWithPostPollSettings(new SourcePostPollSettings(
+                false,
+                SourcePostPollAction.FORWARDED,
+                Optional.empty())))
+                .runPoll("greenmail-integration:forwarded");
+
+        assertEquals(1, result.getImported());
+        assertTrue(result.getErrorDetails().isEmpty());
+        assertEquals(List.of("gamma"), listSubjects(destinationMail, DESTINATION_USERNAME, DESTINATION_PASSWORD, DESTINATION_FOLDER));
+        assertTrue(messageHasUserFlag(sourceMail, SOURCE_USERNAME, SOURCE_PASSWORD, "INBOX", "gamma", "$Forwarded"));
+    }
+
+    @Test
+    void schedulerSkipsIdleSourcesButIdleTriggeredRunsStillImportViaImapAppend() throws Exception {
+        appendMessage(sourceMail, SOURCE_USERNAME, SOURCE_PASSWORD, "INBOX", "idle-alpha", "Imported by idle trigger", "<idle-alpha@example.com>");
+
+        RuntimeEmailAccount idleAccount = runtimeAccountWithFetchMode(SourceFetchMode.IDLE);
+        PollingService service = pollService(idleAccount);
+
+        PollRunResult schedulerRun = service.runPoll("scheduler");
+
+        assertEquals(0, schedulerRun.getFetched());
+        assertEquals(0, schedulerRun.getImported());
+        assertTrue(schedulerRun.getErrorDetails().isEmpty());
+        assertEquals(List.of(), listSubjectsIfFolderExists(destinationMail, DESTINATION_USERNAME, DESTINATION_PASSWORD, DESTINATION_FOLDER));
+
+        PollRunResult idleRun = service.runIdleTriggeredPollForSource(idleAccount);
+
+        assertEquals(1, idleRun.getFetched());
+        assertEquals(1, idleRun.getImported());
+        assertTrue(idleRun.getErrorDetails().isEmpty());
+        assertEquals(List.of("idle-alpha"), listSubjects(destinationMail, DESTINATION_USERNAME, DESTINATION_PASSWORD, DESTINATION_FOLDER));
+    }
+
     private PollingService pollService(RuntimeEmailAccount runtimeAccount) {
         return pollService(List.of(runtimeAccount), new RecordingImportedMessageRepository());
     }
@@ -434,6 +460,14 @@ class PollingServiceGreenMailIntegrationTest {
     }
 
     private RuntimeEmailAccount runtimeAccount(String sourceFolder, String destinationFolder) {
+        return runtimeAccount(sourceFolder, destinationFolder, SourceFetchMode.POLLING);
+    }
+
+    private RuntimeEmailAccount runtimeAccountWithFetchMode(SourceFetchMode fetchMode) {
+        return runtimeAccount("INBOX", DESTINATION_FOLDER, fetchMode);
+    }
+
+    private RuntimeEmailAccount runtimeAccount(String sourceFolder, String destinationFolder, SourceFetchMode fetchMode) {
         return new RuntimeEmailAccount(
                 "greenmail-source",
                 "USER",
@@ -451,6 +485,7 @@ class PollingServiceGreenMailIntegrationTest {
                 "",
                 Optional.of(sourceFolder),
                 false,
+                fetchMode,
                 Optional.of("Imported/Test"),
                 new ImapAppendDestinationTarget(
                         "user-destination:7",
@@ -564,7 +599,7 @@ class PollingServiceGreenMailIntegrationTest {
     }
 
     private static void appendMessage(
-            GreenMail greenMail,
+            GreenMailExtension greenMail,
             String username,
             String password,
             String folderName,
@@ -600,7 +635,7 @@ class PollingServiceGreenMailIntegrationTest {
         }
     }
 
-    private static List<String> listSubjects(GreenMail greenMail, String username, String password, String folderName) throws Exception {
+    private static List<String> listSubjects(GreenMailExtension greenMail, String username, String password, String folderName) throws Exception {
         Properties properties = new Properties();
         properties.put("mail.store.protocol", "imap");
         Session session = Session.getInstance(properties);
@@ -623,7 +658,7 @@ class PollingServiceGreenMailIntegrationTest {
         }
     }
 
-    private static void ensureFolderExists(GreenMail greenMail, String username, String password, String folderName) throws Exception {
+    private static void ensureFolderExists(GreenMailExtension greenMail, String username, String password, String folderName) throws Exception {
         Properties properties = new Properties();
         properties.put("mail.store.protocol", "imap");
         Session session = Session.getInstance(properties);
@@ -641,7 +676,7 @@ class PollingServiceGreenMailIntegrationTest {
         }
     }
 
-    private static List<String> listSubjectsIfFolderExists(GreenMail greenMail, String username, String password, String folderName) throws Exception {
+    private static List<String> listSubjectsIfFolderExists(GreenMailExtension greenMail, String username, String password, String folderName) throws Exception {
         Properties properties = new Properties();
         properties.put("mail.store.protocol", "imap");
         Session session = Session.getInstance(properties);
@@ -666,7 +701,7 @@ class PollingServiceGreenMailIntegrationTest {
         }
     }
 
-    private static List<String> listUnreadSubjects(GreenMail greenMail, String username, String password, String folderName) throws Exception {
+    private static List<String> listUnreadSubjects(GreenMailExtension greenMail, String username, String password, String folderName) throws Exception {
         Properties properties = new Properties();
         properties.put("mail.store.protocol", "imap");
         Session session = Session.getInstance(properties);
@@ -685,6 +720,37 @@ class PollingServiceGreenMailIntegrationTest {
                 subjects.add(message.getSubject());
             }
             return subjects;
+        } finally {
+            closeQuietly(folder);
+            closeQuietly(store);
+        }
+    }
+
+    private static boolean messageHasUserFlag(
+            GreenMailExtension greenMail,
+            String username,
+            String password,
+            String folderName,
+            String subject,
+            String flag) throws Exception {
+        Properties properties = new Properties();
+        properties.put("mail.store.protocol", "imap");
+        Session session = Session.getInstance(properties);
+        Store store = session.getStore("imap");
+        Folder folder = null;
+        try {
+            store.connect("127.0.0.1", greenMail.getImap().getPort(), username, password);
+            folder = store.getFolder(folderName);
+            if (!folder.exists()) {
+                return false;
+            }
+            folder.open(Folder.READ_ONLY);
+            for (Message message : folder.getMessages()) {
+                if (subject.equals(message.getSubject())) {
+                    return java.util.Arrays.asList(message.getFlags().getUserFlags()).contains(flag);
+                }
+            }
+            return false;
         } finally {
             closeQuietly(folder);
             closeQuietly(store);
@@ -719,16 +785,8 @@ class PollingServiceGreenMailIntegrationTest {
         }
     }
 
-    private static int freePort() {
-        try (ServerSocket socket = new ServerSocket(0)) {
-            return socket.getLocalPort();
-        } catch (IOException e) {
-            throw new IllegalStateException("Unable to allocate a free TCP port for GreenMail", e);
-        }
-    }
-
     private static final class RecordingImportedMessageRepository extends ImportedMessageRepository {
-        private final List<ImportedMessage> importedMessages = new ArrayList<>();
+        private final List<ImportedMessage> importedMessages = new java.util.concurrent.CopyOnWriteArrayList<>();
 
         @Override
         public boolean existsBySourceMessageKey(String destinationKey, String sourceAccountId, String sourceMessageKey) {

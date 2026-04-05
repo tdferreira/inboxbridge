@@ -228,6 +228,53 @@ describe('EmailAccountListItem', () => {
     expect(screen.getByRole('button', { name: 'Reconnect Microsoft OAuth' })).toBeInTheDocument()
   })
 
+  it('explains manual runs for IMAP IDLE sources', () => {
+    render(
+      <EmailAccountListItem
+        fetcher={{
+          emailAccountId: 'idle-source',
+          customLabel: '',
+          managementSource: 'DATABASE',
+          protocol: 'IMAP',
+          host: 'imap.example.com',
+          port: 993,
+          authMethod: 'PASSWORD',
+          oauthProvider: 'NONE',
+          tls: true,
+          folder: 'INBOX',
+          fetchMode: 'IDLE',
+          tokenStorageMode: 'DATABASE',
+          oauthConnected: false,
+          markReadAfterPoll: false,
+          postPollAction: 'NONE',
+          postPollTargetFolder: '',
+          totalImportedMessages: 0,
+          lastImportedAt: null,
+          effectivePollEnabled: true,
+          effectivePollInterval: '5m',
+          effectiveFetchWindow: 50,
+          pollingState: null,
+          lastEvent: null,
+          canEdit: true,
+          canDelete: true,
+          canConnectMicrosoft: false
+        }}
+        locale="en"
+        onConfigurePolling={vi.fn()}
+        onConnectMicrosoft={vi.fn()}
+        onDelete={vi.fn()}
+        onEdit={vi.fn()}
+        onRunPoll={vi.fn()}
+        t={t}
+      />
+    )
+
+    fireEvent.click(screen.getByRole('button', { name: /idle-source/i }))
+
+    expect(screen.getByText('IMAP IDLE (real-time)')).toBeInTheDocument()
+    expect(screen.getByText('Run Poll Now still starts an immediate one-off sync for this source. It does not disable IMAP IDLE, and scheduled polling still skips this mailbox while the watcher stays active.')).toBeInTheDocument()
+  })
+
   it('shows determinate live progress for a running source', () => {
     render(
       <EmailAccountListItem
@@ -573,6 +620,7 @@ describe('EmailAccountListItem', () => {
           port: 993,
           authMethod: 'PASSWORD',
           oauthProvider: 'NONE',
+          fetchMode: 'IDLE',
           tls: true,
           folder: 'INBOX',
           tokenStorageMode: 'PASSWORD',
@@ -606,9 +654,13 @@ describe('EmailAccountListItem', () => {
           errorTimelines: {},
           manualRunTimelines: {},
           scheduledRunTimelines: {},
+          idleRunTimelines: {
+            today: [{ bucketLabel: '09:00', importedMessages: 3 }]
+          },
           providerBreakdown: [{ key: 'gmail', label: 'Gmail', count: 12 }],
           manualRuns: 2,
           scheduledRuns: 4,
+          idleRuns: 3,
           averagePollDurationMillis: 1000
         }}
         t={t}
@@ -620,6 +672,7 @@ describe('EmailAccountListItem', () => {
     expect(await screen.findByText('Provider')).toBeInTheDocument()
     expect(screen.getByText('Gmail')).toBeInTheDocument()
     expect(screen.queryByText('Provider breakdown')).not.toBeInTheDocument()
+    expect(await screen.findByText('Source activity over time')).toBeInTheDocument()
   })
 
   it('keeps the contextual menu attached to the trigger and flips above when needed', async () => {

@@ -265,19 +265,28 @@ MAIL_ACCOUNT_0__AUTH_METHOD=OAUTH2
 MAIL_ACCOUNT_0__OAUTH_PROVIDER=MICROSOFT
 MAIL_ACCOUNT_0__USERNAME=replace-me@example.com
 MAIL_ACCOUNT_0__FOLDER=INBOX
+MAIL_ACCOUNT_0__FETCH_MODE=POLLING
 MAIL_ACCOUNT_0__CUSTOM_LABEL=Imported/Outlook
 ```
 
 If no `MAIL_ACCOUNT_*` values are configured, InboxBridge loads no env-managed source accounts.
 
+IMAP sources can now also choose a fetch mode:
+
+- `POLLING`: normal scheduled fetches using the effective poll interval and fetch window
+- `IDLE`: a long-lived IMAP IDLE watcher for that one folder, with scheduled batch polling skipped for that source while the watcher stays healthy; if the watcher remains unhealthy long enough, InboxBridge temporarily falls back to scheduler polling until the watcher reconnects
+
+`IDLE` is only available for IMAP accounts. POP3 sources are always forced back to `POLLING`. Saving a source after switching it to `IDLE` refreshes the watcher registry immediately, so the new watcher starts right away instead of waiting for the periodic refresh loop.
+
 For UI-managed IMAP source accounts, the admin UI can also store optional post-poll source-side actions:
 
 - leave handled mail untouched
 - mark handled mail as read
+- mark handled mail as forwarded
 - delete handled mail
 - move handled mail into another source folder
 
-Those actions run after either a successful import or a duplicate match. POP3 accounts do not expose them because the protocol does not support equivalent source-side folder or flag operations.
+Those actions run after either a successful import or a duplicate match. POP3 accounts do not expose them because the protocol does not support equivalent source-side folder or flag operations. The forwarded option sets the IMAP `$Forwarded` flag when the source server supports it.
 
 ## Recommended First Run
 

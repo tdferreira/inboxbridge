@@ -11,6 +11,7 @@ import java.util.Optional;
 import org.junit.jupiter.api.Test;
 
 import dev.inboxbridge.config.InboxBridgeConfig;
+import dev.inboxbridge.domain.SourceFetchMode;
 
 class EnvSourceServiceTest {
 
@@ -364,5 +365,10 @@ class EnvSourceServiceTest {
             Optional<String> folder,
             boolean unreadOnly,
             Optional<String> customLabel) implements InboxBridgeConfig.Source {
+
+        @Override
+        public SourceFetchMode fetchMode() {
+            return SourceFetchMode.POLLING;
+        }
     }
 }

@@ -32,6 +32,9 @@ function isHourlyTimelineBucket(bucketLabel) {
   return typeof bucketLabel === 'string' && bucketLabel.includes(':')
 }
 
+const HOUR_IN_MS = 60 * 60 * 1000
+const CONTIGUOUS_SPAN_GAP_MS = HOUR_IN_MS + (5 * 60 * 1000)
+
 export const GLOBAL_STATS_ANOMALY_NOTIFICATION_MAX_AGE_MS = 24 * 60 * 60 * 1000
 export const GLOBAL_STATS_ANOMALY_WARNING_MAX_AGE_MS = 7 * 24 * 60 * 60 * 1000
 
@@ -75,8 +78,11 @@ export function detectScheduledRunAnomaly(stats, scheduledRunAlertInterval, sche
     }))
     .filter((point) => point.observedRuns > anomalyThreshold)
     .sort((left, right) => {
+      if (left.rangeKey !== right.rangeKey) {
+        return String(left.rangeKey).localeCompare(String(right.rangeKey))
+      }
       if (left.occurredAt != null && right.occurredAt != null && left.occurredAt !== right.occurredAt) {
-        return right.occurredAt - left.occurredAt
+        return left.occurredAt - right.occurredAt
       }
       if (left.occurredAt != null && right.occurredAt == null) {
         return -1
@@ -84,20 +90,67 @@ export function detectScheduledRunAnomaly(stats, scheduledRunAlertInterval, sche
       if (left.occurredAt == null && right.occurredAt != null) {
         return 1
       }
-      return right.observedRuns - left.observedRuns
+      return left.observedRuns - right.observedRuns
     })
 
   if (suspiciousPoints.length === 0) {
     return null
   }
 
-  const worstPoint = suspiciousPoints[0]
-  const ageMs = worstPoint.occurredAt == null ? null : Math.max(0, nowMs - worstPoint.occurredAt)
+  const suspiciousSpans = []
+  suspiciousPoints.forEach((point) => {
+    const currentSpan = suspiciousSpans[suspiciousSpans.length - 1]
+    const extendsCurrentSpan = Boolean(
+      currentSpan
+      && currentSpan.rangeKey === point.rangeKey
+      && currentSpan.endOccurredAt != null
+      && point.occurredAt != null
+      && point.occurredAt - currentSpan.endOccurredAt <= CONTIGUOUS_SPAN_GAP_MS
+    )
+
+    if (!extendsCurrentSpan) {
+      suspiciousSpans.push({
+        rangeKey: point.rangeKey,
+        startBucketLabel: point.bucketLabel,
+        endBucketLabel: point.bucketLabel,
+        markerBucketLabel: point.bucketLabel,
+        startOccurredAt: point.occurredAt,
+        endOccurredAt: point.occurredAt,
+        peakObservedRuns: point.observedRuns
+      })
+      return
+    }
+
+    currentSpan.endBucketLabel = point.bucketLabel
+    currentSpan.endOccurredAt = point.occurredAt
+    currentSpan.peakObservedRuns = Math.max(currentSpan.peakObservedRuns, point.observedRuns)
+  })
+
+  suspiciousSpans.sort((left, right) => {
+    if (left.endOccurredAt != null && right.endOccurredAt != null && left.endOccurredAt !== right.endOccurredAt) {
+      return right.endOccurredAt - left.endOccurredAt
+    }
+    if (left.endOccurredAt != null && right.endOccurredAt == null) {
+      return -1
+    }
+    if (left.endOccurredAt == null && right.endOccurredAt != null) {
+      return 1
+    }
+    return right.peakObservedRuns - left.peakObservedRuns
+  })
+
+  const latestSpan = suspiciousSpans[0]
+  const ageMs = latestSpan.endOccurredAt == null ? null : Math.max(0, nowMs - latestSpan.endOccurredAt)
   return {
-    bucketLabel: worstPoint.bucketLabel,
-    occurredAt: worstPoint.occurredAt,
+    bucketLabel: latestSpan.markerBucketLabel,
+    rangeKey: latestSpan.rangeKey,
+    occurredAt: latestSpan.startOccurredAt,
     ageMs,
-    observedRuns: worstPoint.observedRuns,
+    observedRuns: latestSpan.peakObservedRuns,
+    startBucketLabel: latestSpan.startBucketLabel,
+    endBucketLabel: latestSpan.endBucketLabel,
+    startOccurredAt: latestSpan.startOccurredAt,
+    endOccurredAt: latestSpan.endOccurredAt,
     expectedRunsPerHour,
     sourceCount,
     notificationVisible: ageMs == null || ageMs <= GLOBAL_STATS_ANOMALY_NOTIFICATION_MAX_AGE_MS,

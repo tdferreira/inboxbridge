@@ -14,6 +14,7 @@ import java.util.Optional;
 
 import org.junit.jupiter.api.Test;
 
+import dev.inboxbridge.domain.ImapCheckpoint;
 import dev.inboxbridge.persistence.SourcePollingState;
 import dev.inboxbridge.persistence.SourcePollingStateRepository;
 
@@ -118,6 +119,30 @@ class SourcePollingStateServiceTest {
 
         assertFalse(eligibility.shouldPoll());
         assertEquals("DISABLED", eligibility.reason());
+    }
+
+    @Test
+    void recordImapCheckpointStoresAndReturnsFolderCheckpoint() {
+        SourcePollingStateService service = service();
+
+        service.recordImapCheckpoint("fetcher-1", "INBOX", 44L, 101L, Instant.parse("2026-03-26T12:11:00Z"));
+
+        ImapCheckpoint checkpoint = service.imapCheckpoint("fetcher-1", "inbox").orElseThrow();
+        assertEquals("INBOX", checkpoint.folderName());
+        assertEquals(44L, checkpoint.uidValidity());
+        assertEquals(101L, checkpoint.lastSeenUid());
+    }
+
+    @Test
+    void recordImapCheckpointOnlyMovesForwardForSameFolderAndUidValidity() {
+        SourcePollingStateService service = service();
+
+        service.recordImapCheckpoint("fetcher-1", "INBOX", 44L, 101L, Instant.parse("2026-03-26T12:11:00Z"));
+        service.recordImapCheckpoint("fetcher-1", "INBOX", 44L, 99L, Instant.parse("2026-03-26T12:12:00Z"));
+        service.recordImapCheckpoint("fetcher-1", "INBOX", 44L, 105L, Instant.parse("2026-03-26T12:13:00Z"));
+
+        ImapCheckpoint checkpoint = service.imapCheckpoint("fetcher-1", "INBOX").orElseThrow();
+        assertEquals(105L, checkpoint.lastSeenUid());
     }
 
     private SourcePollingStateService service() {

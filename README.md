@@ -23,6 +23,7 @@ InboxBridge can:
 - support multi-user or single-user deployments
 - provide a browser-based admin UI plus a lightweight `/remote` control page for phones and quick access
 - show live polling progress with pause, resume, stop, retry, and queue reprioritization controls
+- let IMAP sources opt into real-time IMAP IDLE watching with durable UID checkpoints and scheduler fallback if a watcher stays unhealthy
 
 ## Who It Is For
 
@@ -69,7 +70,8 @@ By default, the local Docker setup serves the app over HTTPS with generated self
 - WebAuthn passkey support for sign-in
 - User sessions with browser/device hints, Geo-IP, and optional browser-reported device location
 - Per-user notification history that survives refreshes and sign-in cycles
-- Optional post-poll actions for IMAP sources such as mark as read, delete, or move to folder
+- Optional post-poll actions for IMAP sources such as mark as read, mark as forwarded, delete, or move to folder
+- Per-source IMAP fetch mode: scheduled polling or real-time IMAP IDLE
 - Live polling over authenticated SSE with bounded parallel workers
 - A mobile-friendly `/remote` page for quick poll control without opening the full workspace
 
@@ -79,7 +81,7 @@ InboxBridge currently does not:
 
 - encrypt secrets that you place directly in `.env`
 - support every provider-specific OAuth flow
-- keep durable IMAP IDLE or full mailbox cursor state
+- keep POP UIDL checkpoints or full multi-folder mailbox cursor state
 - include production-grade metrics, circuit breakers, or external secret-vault integration
 
 ## Quick Start

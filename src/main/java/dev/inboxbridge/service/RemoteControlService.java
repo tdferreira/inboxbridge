@@ -157,6 +157,7 @@ public class RemoteControlService {
                                 source.oauthRefreshToken().orElse(""),
                                 source.folder(),
                                 source.unreadOnly(),
+                                source.fetchMode(),
                                 source.customLabel(),
                                 SourcePostPollSettings.none(),
                                 null)));

@@ -100,6 +100,27 @@ class MailSourceClientTest {
         assertTrue("Correo no deseado".equals(folder.getFullName()));
     }
 
+    @Test
+    void resolveForwardedMarkerSupportAcceptsExplicitForwardedFlag() {
+        Flags permanentFlags = new Flags();
+        permanentFlags.add("$Forwarded");
+
+        assertTrue(MailSourceClient.resolveForwardedMarkerSupport(new PermanentFlagsFolder(permanentFlags)));
+    }
+
+    @Test
+    void resolveForwardedMarkerSupportAcceptsGenericUserFlags() {
+        Flags permanentFlags = new Flags();
+        permanentFlags.add(Flags.Flag.USER);
+
+        assertTrue(MailSourceClient.resolveForwardedMarkerSupport(new PermanentFlagsFolder(permanentFlags)));
+    }
+
+    @Test
+    void resolveForwardedMarkerSupportReturnsFalseWhenUserFlagsAreUnavailable() {
+        assertFalse(MailSourceClient.resolveForwardedMarkerSupport(new PermanentFlagsFolder(new Flags())));
+    }
+
     private byte[] invokeToRawBytes(MailSourceClient client, Message message) throws Exception {
         Method method = MailSourceClient.class.getDeclaredMethod("toRawBytes", Message.class);
         method.setAccessible(true);
@@ -426,6 +447,21 @@ class MailSourceClientTest {
             return attributes;
         }
     }
+
+    private static final class PermanentFlagsFolder extends TreeFolder {
+        private final Flags permanentFlags;
+
+        private PermanentFlagsFolder(Flags permanentFlags) {
+            super("INBOX", List.of());
+            this.permanentFlags = permanentFlags;
+        }
+
+        @Override
+        public Flags getPermanentFlags() {
+            return permanentFlags;
+        }
+    }
+
 
     private static final class FakeMessage extends Message {
         private final FakeFolder folder;

@@ -162,6 +162,7 @@ public class ImapAppendMailDestinationService implements MailDestinationService 
                     visibleMessageCount,
                     null,
                     visibleMessageCount > 0,
+                    null,
                     null);
         } catch (MessagingException e) {
             if (MailSourceClient.isRetryableMicrosoftOAuthFailure(e)) {

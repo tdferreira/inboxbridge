@@ -5,7 +5,7 @@ ARG RUN_TESTS=true
 COPY admin-ui/package.json ./
 RUN npm install
 COPY admin-ui/ ./
-RUN if [ "$RUN_TESTS" = "true" ]; then npm run test:run; fi
+RUN if [ "$RUN_TESTS" = "true" ]; then VITEST_MAX_WORKERS=1 npm run test:run; fi
 RUN npm run build
 
 FROM nginx:1.29-alpine

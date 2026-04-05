@@ -115,10 +115,12 @@ public class PollingStatsService {
                 buildTimelinesFromTimedCounts(computation.errorPoints(), effectiveZoneId),
                 buildTimelinesFromTimedCounts(computation.manualRunPoints(), effectiveZoneId),
                 buildTimelinesFromTimedCounts(computation.scheduledRunPoints(), effectiveZoneId),
+                buildTimelinesFromTimedCounts(computation.idleRunPoints(), effectiveZoneId),
                 computation.health(),
                 computation.providerBreakdown(),
                 computation.manualRuns(),
                 computation.scheduledRuns(),
+                computation.idleRuns(),
                 computation.averagePollDurationMillis());
     }
 
@@ -165,10 +167,12 @@ public class PollingStatsService {
                 scopedStats.errorTimelines(),
                 scopedStats.manualRunTimelines(),
                 scopedStats.scheduledRunTimelines(),
+                scopedStats.idleRunTimelines(),
                 scopedStats.health(),
                 scopedStats.providerBreakdown(),
                 scopedStats.manualRuns(),
                 scopedStats.scheduledRuns(),
+                scopedStats.idleRuns(),
                 scopedStats.averagePollDurationMillis());
     }
 
@@ -218,10 +222,12 @@ public class PollingStatsService {
                 scopedStats.errorTimelines(),
                 scopedStats.manualRunTimelines(),
                 scopedStats.scheduledRunTimelines(),
+                scopedStats.idleRunTimelines(),
                 scopedStats.health(),
                 scopedStats.providerBreakdown(),
                 scopedStats.manualRuns(),
                 scopedStats.scheduledRuns(),
+                scopedStats.idleRuns(),
                 scopedStats.averagePollDurationMillis());
     }
 
@@ -300,10 +306,12 @@ public class PollingStatsService {
                 buildTimelinesFromTimedCounts(computation.errorPoints(), zoneId),
                 buildTimelinesFromTimedCounts(computation.manualRunPoints(), zoneId),
                 buildTimelinesFromTimedCounts(computation.scheduledRunPoints(), zoneId),
+                buildTimelinesFromTimedCounts(computation.idleRunPoints(), zoneId),
                 computation.health(),
                 computation.providerBreakdown(),
                 computation.manualRuns(),
                 computation.scheduledRuns(),
+                computation.idleRuns(),
                 computation.averagePollDurationMillis());
     }
 
@@ -337,7 +345,7 @@ public class PollingStatsService {
                         zoneId)),
                 Map.of("custom", buildCustomTimeline(
                         events.stream()
-                                .filter(event -> !"scheduler".equals(event.triggerName))
+                                .filter(this::isManualTrigger)
                                 .map(event -> new TimedCount(event.finishedAt, 1L))
                                 .toList(),
                         fromInclusive,
@@ -345,7 +353,15 @@ public class PollingStatsService {
                         zoneId)),
                 Map.of("custom", buildCustomTimeline(
                         events.stream()
-                                .filter(event -> "scheduler".equals(event.triggerName))
+                                .filter(this::isScheduledTrigger)
+                                .map(event -> new TimedCount(event.finishedAt, 1L))
+                                .toList(),
+                        fromInclusive,
+                        toExclusive,
+                        zoneId)),
+                Map.of("custom", buildCustomTimeline(
+                        events.stream()
+                                .filter(this::isIdleTrigger)
                                 .map(event -> new TimedCount(event.finishedAt, 1L))
                                 .toList(),
                         fromInclusive,
@@ -639,9 +655,14 @@ public class PollingStatsService {
         }
 
         long manualRuns = events.stream()
-                .filter(event -> !"scheduler".equals(event.triggerName))
+                .filter(this::isManualTrigger)
                 .count();
-        long scheduledRuns = events.size() - manualRuns;
+        long scheduledRuns = events.stream()
+                .filter(this::isScheduledTrigger)
+                .count();
+        long idleRuns = events.stream()
+                .filter(this::isIdleTrigger)
+                .count();
         long errorPolls = events.stream()
                 .filter(event -> "ERROR".equals(event.status))
                 .count();
@@ -658,11 +679,15 @@ public class PollingStatsService {
                 .map(event -> new TimedCount(event.finishedAt, 1L))
                 .toList();
         List<TimedCount> manualRunPoints = events.stream()
-                .filter(event -> !"scheduler".equals(event.triggerName))
+                .filter(this::isManualTrigger)
                 .map(event -> new TimedCount(event.finishedAt, 1L))
                 .toList();
         List<TimedCount> scheduledRunPoints = events.stream()
-                .filter(event -> "scheduler".equals(event.triggerName))
+                .filter(this::isScheduledTrigger)
+                .map(event -> new TimedCount(event.finishedAt, 1L))
+                .toList();
+        List<TimedCount> idleRunPoints = events.stream()
+                .filter(this::isIdleTrigger)
                 .map(event -> new TimedCount(event.finishedAt, 1L))
                 .toList();
         int derivedSourcesWithErrors = failing + coolingDown;
@@ -678,13 +703,27 @@ public class PollingStatsService {
                         .toList(),
                 manualRuns,
                 scheduledRuns,
+                idleRuns,
                 averagePollDurationMillis,
                 errorPolls,
                 duplicatePoints,
                 errorPoints,
                 manualRunPoints,
                 scheduledRunPoints,
+                idleRunPoints,
                 fallbackSourcesWithErrors >= 0 ? fallbackSourcesWithErrors : derivedSourcesWithErrors);
+    }
+
+    private boolean isScheduledTrigger(SourcePollEvent event) {
+        return "scheduler".equals(event.triggerName);
+    }
+
+    private boolean isIdleTrigger(SourcePollEvent event) {
+        return "idle-source".equals(event.triggerName);
+    }
+
+    private boolean isManualTrigger(SourcePollEvent event) {
+        return !isScheduledTrigger(event) && !isIdleTrigger(event);
     }
 
     private String providerLabel(ConfiguredSourceSnapshot source) {
@@ -732,12 +771,14 @@ public class PollingStatsService {
             List<PollingBreakdownItemView> providerBreakdown,
             long manualRuns,
             long scheduledRuns,
+            long idleRuns,
             long averagePollDurationMillis,
             long errorPolls,
             List<TimedCount> duplicatePoints,
             List<TimedCount> errorPoints,
             List<TimedCount> manualRunPoints,
             List<TimedCount> scheduledRunPoints,
+            List<TimedCount> idleRunPoints,
             int sourcesWithErrors) {
     }
 
@@ -753,10 +794,12 @@ public class PollingStatsService {
             Map<String, List<ImportTimelinePointView>> errorTimelines,
             Map<String, List<ImportTimelinePointView>> manualRunTimelines,
             Map<String, List<ImportTimelinePointView>> scheduledRunTimelines,
+            Map<String, List<ImportTimelinePointView>> idleRunTimelines,
             PollingHealthSummaryView health,
             List<PollingBreakdownItemView> providerBreakdown,
             long manualRuns,
             long scheduledRuns,
+            long idleRuns,
             long averagePollDurationMillis) {
     }
 

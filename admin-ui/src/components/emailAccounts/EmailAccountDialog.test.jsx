@@ -221,6 +221,102 @@ describe('EmailAccountDialog', () => {
     expect(screen.getByRole('button', { name: 'Adicionar' })).toBeInTheDocument()
   })
 
+  it('offers the forwarded post-poll action for IMAP accounts', () => {
+    render(
+      <EmailAccountDialog
+        emailAccountForm={{
+          originalEmailAccountId: '',
+          emailAccountId: '',
+          enabled: true,
+          protocol: 'IMAP',
+          host: 'imap.example.com',
+          port: 993,
+          tls: true,
+          authMethod: 'PASSWORD',
+          oauthProvider: 'NONE',
+          username: 'user@example.com',
+          password: '',
+          oauthRefreshToken: '',
+          folder: 'INBOX',
+          unreadOnly: false,
+          fetchMode: 'POLLING',
+          customLabel: '',
+          markReadAfterPoll: false,
+          postPollAction: 'NONE',
+          postPollTargetFolder: ''
+        }}
+        onApplyPreset={vi.fn()}
+        onEmailAccountFormChange={vi.fn()}
+        onClose={vi.fn()}
+        onSave={vi.fn((event) => event.preventDefault())}
+        saveLoading={false}
+        t={(key, params) => translate('en', key, params)}
+      />
+    )
+
+    expect(screen.getByRole('option', { name: 'Mark source message as forwarded' })).toBeInTheDocument()
+  })
+
+  it('shows translated info hints for connection test results instead of a long forwarded marker paragraph', () => {
+    render(
+      <EmailAccountDialog
+        emailAccountForm={{
+          originalEmailAccountId: '',
+          emailAccountId: 'source-a',
+          enabled: true,
+          protocol: 'IMAP',
+          host: 'imap.example.com',
+          port: 993,
+          tls: true,
+          authMethod: 'PASSWORD',
+          oauthProvider: 'NONE',
+          username: 'user@example.com',
+          password: '',
+          oauthRefreshToken: '',
+          folder: 'INBOX',
+          unreadOnly: true,
+          fetchMode: 'IDLE',
+          customLabel: '',
+          markReadAfterPoll: false,
+          postPollAction: 'FORWARDED',
+          postPollTargetFolder: ''
+        }}
+        onApplyPreset={vi.fn()}
+        onEmailAccountFormChange={vi.fn()}
+        onClose={vi.fn()}
+        onSave={vi.fn((event) => event.preventDefault())}
+        saveLoading={false}
+        t={(key, params) => translate('pt-PT', key, params)}
+        testResult={{
+          tone: 'success',
+          message: 'Ligação com sucesso.',
+          protocol: 'IMAP',
+          host: 'imap.example.com',
+          port: 993,
+          tls: true,
+          authMethod: 'PASSWORD',
+          oauthProvider: 'NONE',
+          authenticated: true,
+          folder: 'INBOX',
+          folderAccessible: true,
+          unreadFilterRequested: true,
+          unreadFilterSupported: true,
+          unreadFilterValidated: true,
+          visibleMessageCount: 12,
+          unreadMessageCount: 5,
+          sampleMessageAvailable: true,
+          sampleMessageMaterialized: true,
+          forwardedMarkerSupported: true
+        }}
+      />
+    )
+
+    expect(screen.getByText('Marcador forwarded suportado')).toBeInTheDocument()
+    expect(screen.getByLabelText('Se o servidor IMAP aparenta suportar o marcador opcional $Forwarded.')).toBeInTheDocument()
+    expect(screen.getByLabelText('Qual o protocolo de caixa de correio que o InboxBridge conseguiu negociar durante o teste de ligação.')).toBeInTheDocument()
+    expect(screen.queryByText(/verificação IMAP de melhor esforço/i)).not.toBeInTheDocument()
+  })
+
   it('closes without confirmation when no changes were introduced', () => {
     const onClose = vi.fn()
     const confirmSpy = vi.spyOn(window, 'confirm')
@@ -313,7 +409,8 @@ describe('EmailAccountDialog', () => {
           visibleMessageCount: 12,
           unreadMessageCount: 3,
           sampleMessageAvailable: true,
-          sampleMessageMaterialized: true
+          sampleMessageMaterialized: true,
+          forwardedMarkerSupported: false
         }}
         t={(key, params) => translate('en', key, params)}
       />
@@ -324,7 +421,10 @@ describe('EmailAccountDialog', () => {
     expect(screen.getByText('imap.example.com:993')).toBeInTheDocument()
     expect(screen.getByText('Authenticated')).toBeInTheDocument()
     expect(screen.getByText('Unread filter validated')).toBeInTheDocument()
+    expect(screen.getByText('Forwarded marker supported')).toBeInTheDocument()
     expect(screen.getByText('12')).toBeInTheDocument()
+    expect(screen.getByLabelText('Whether the IMAP server appears to support the optional $Forwarded marker.')).toBeInTheDocument()
+    expect(screen.queryByText('InboxBridge treats this as a best-effort IMAP capability probe. Servers that do not advertise user flags may still reject $Forwarded later, and InboxBridge will continue without failing the import.')).not.toBeInTheDocument()
   })
 
   it('disables test connection until the required connection fields are present', () => {
@@ -564,6 +664,50 @@ describe('EmailAccountDialog', () => {
     expect(screen.getByLabelText(/Mark as read after polling/)).toBeInTheDocument()
     expect(screen.getByLabelText(/After polling/)).toHaveValue('MOVE')
     expect(screen.getByLabelText(/Move to folder/)).toHaveValue('Archive')
+  })
+
+  it('orders fetch mode, TLS and unread filters, and enabled as the final account toggle', () => {
+    render(
+      <EmailAccountDialog
+        emailAccountForm={{
+          originalEmailAccountId: '',
+          emailAccountId: 'fetcher-a',
+          enabled: true,
+          protocol: 'IMAP',
+          host: 'imap.example.com',
+          port: 993,
+          tls: true,
+          authMethod: 'PASSWORD',
+          oauthProvider: 'NONE',
+          username: 'user@example.com',
+          password: 'secret',
+          oauthRefreshToken: '',
+          folder: 'INBOX',
+          unreadOnly: false,
+          customLabel: '',
+          fetchMode: 'POLLING',
+          markReadAfterPoll: true,
+          postPollAction: 'NONE',
+          postPollTargetFolder: ''
+        }}
+        onApplyPreset={vi.fn()}
+        onEmailAccountFormChange={vi.fn()}
+        onClose={vi.fn()}
+        onSave={vi.fn((event) => event.preventDefault())}
+        saveLoading={false}
+        t={(key, params) => translate('en', key, params)}
+      />
+    )
+
+    const fetchMode = screen.getByLabelText(/Source update mode/)
+    const tlsOnly = screen.getByLabelText(/TLS only/)
+    const unreadOnly = screen.getByLabelText(/Unread only/)
+    const enabled = screen.getByRole('checkbox', { name: /Enabled/ })
+
+    expect(fetchMode.compareDocumentPosition(tlsOnly) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()
+    expect(fetchMode.compareDocumentPosition(unreadOnly) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()
+    expect(tlsOnly.compareDocumentPosition(enabled) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()
+    expect(unreadOnly.compareDocumentPosition(enabled) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()
   })
 
   it('hides post-poll source actions for POP3 accounts', () => {

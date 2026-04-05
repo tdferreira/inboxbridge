@@ -9,6 +9,7 @@ import java.util.Optional;
 import java.util.function.Function;
 import java.util.stream.Collectors;
 
+import dev.inboxbridge.domain.ImapCheckpoint;
 import dev.inboxbridge.dto.SourcePollingStateView;
 import dev.inboxbridge.persistence.SourcePollingState;
 import dev.inboxbridge.persistence.SourcePollingStateRepository;
@@ -36,12 +37,29 @@ public class SourcePollingStateService {
     PollingSettingsService pollingSettingsService;
 
     public Optional<SourcePollingStateView> viewForSource(String sourceId) {
+        if (repository == null) {
+            return Optional.empty();
+        }
         return repository.findBySourceId(sourceId).map(this::toView);
     }
 
     public Map<String, SourcePollingStateView> viewBySourceIds(List<String> sourceIds) {
+        if (repository == null) {
+            return Map.of();
+        }
         return repository.findBySourceIds(sourceIds).values().stream()
                 .collect(Collectors.toMap(state -> state.sourceId, this::toView));
+    }
+
+    @Transactional
+    public Optional<ImapCheckpoint> imapCheckpoint(String sourceId, String folderName) {
+        if (repository == null) {
+            return Optional.empty();
+        }
+        return repository.findBySourceId(sourceId)
+                .filter(state -> state.imapFolderName != null && state.imapUidValidity != null && state.imapLastSeenUid != null)
+                .filter(state -> state.imapFolderName.equalsIgnoreCase(folderName))
+                .map(state -> new ImapCheckpoint(state.imapFolderName, state.imapUidValidity, state.imapLastSeenUid));
     }
 
     public PollEligibility eligibility(
@@ -136,6 +154,30 @@ public class SourcePollingStateService {
         state.cooldownUntil = finishedAt.plus(backoff);
         state.nextPollAt = state.cooldownUntil;
         state.updatedAt = finishedAt;
+        repository.persist(state);
+    }
+
+    @Transactional
+    public void recordImapCheckpoint(String sourceId, String folderName, Long uidValidity, Long lastSeenUid, Instant observedAt) {
+        if (repository == null || sourceId == null || folderName == null || uidValidity == null || lastSeenUid == null || lastSeenUid <= 0L) {
+            return;
+        }
+        SourcePollingState state = repository.findBySourceId(sourceId).orElseGet(SourcePollingState::new);
+        if (state.id == null) {
+            state.sourceId = sourceId;
+        }
+        boolean sameFolder = state.imapFolderName != null && state.imapFolderName.equalsIgnoreCase(folderName);
+        boolean sameUidValidity = state.imapUidValidity != null && state.imapUidValidity.equals(uidValidity);
+        if (!sameFolder || !sameUidValidity || state.imapLastSeenUid == null) {
+            state.imapFolderName = folderName;
+            state.imapUidValidity = uidValidity;
+            state.imapLastSeenUid = lastSeenUid;
+        } else if (lastSeenUid > state.imapLastSeenUid) {
+            state.imapLastSeenUid = lastSeenUid;
+        }
+        if (observedAt != null) {
+            state.updatedAt = observedAt;
+        }
         repository.persist(state);
     }
 

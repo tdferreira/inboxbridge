@@ -15,8 +15,10 @@ import java.util.Properties;
 import java.util.Set;
 
 import org.jboss.logging.Logger;
+import org.eclipse.angus.mail.imap.IMAPFolder;
 
 import dev.inboxbridge.config.InboxBridgeConfig;
+import dev.inboxbridge.domain.ImapCheckpoint;
 import dev.inboxbridge.dto.EmailAccountConnectionTestResult;
 import dev.inboxbridge.domain.FetchedMessage;
 import dev.inboxbridge.domain.RuntimeEmailAccount;
@@ -44,6 +46,9 @@ public class MailSourceClient {
 
     @Inject
     PollingSettingsService pollingSettingsService;
+
+    @Inject
+    SourcePollingStateService sourcePollingStateService;
 
     @Inject
     MimeHashService mimeHashService;
@@ -158,6 +163,8 @@ public class MailSourceClient {
                 sourceFolder.copyMessages(new Message[] { sourceMessage }, targetFolder);
                 sourceMessage.setFlag(Flags.Flag.DELETED, true);
                 expunge = true;
+            } else if (bridge.postPollSettings().action() == dev.inboxbridge.domain.SourcePostPollAction.FORWARDED) {
+                applyForwardedFlag(sourceMessage, bridge);
             } else if (bridge.postPollSettings().action() == dev.inboxbridge.domain.SourcePostPollAction.DELETE) {
                 sourceMessage.setFlag(Flags.Flag.DELETED, true);
                 expunge = true;
@@ -168,6 +175,16 @@ public class MailSourceClient {
             closeQuietly(sourceFolder, expunge);
             closeQuietly(targetFolder);
             closeQuietly(store);
+        }
+    }
+
+    private void applyForwardedFlag(Message sourceMessage, RuntimeEmailAccount bridge) throws MessagingException {
+        Flags forwarded = new Flags();
+        forwarded.add("$Forwarded");
+        try {
+            sourceMessage.setFlags(forwarded, true);
+        } catch (MessagingException unsupportedFlag) {
+            LOG.warnf(unsupportedFlag, "Unable to set $Forwarded on source %s; continuing without that marker", bridge.id());
         }
     }
 
@@ -214,6 +231,7 @@ public class MailSourceClient {
                 prefetchMessageMetadata(folder, candidateMessages);
                 sampleMessageMaterialized = !toFetchedMessages(bridge.id(), candidateMessages).isEmpty();
             }
+            Boolean forwardedMarkerSupported = resolveForwardedMarkerSupport(folder);
             return buildProbeResult(
                     bridge,
                     targetFolder,
@@ -223,7 +241,8 @@ public class MailSourceClient {
                     visibleMessageCount,
                     unreadMessageCount,
                     sampleMessageAvailable,
-                    sampleMessageMaterialized);
+                    sampleMessageMaterialized,
+                    forwardedMarkerSupported);
         } catch (MessagingException e) {
             throw new IllegalStateException("Failed to connect to IMAP mail fetcher " + bridge.id(), e);
         } finally {
@@ -345,11 +364,14 @@ public class MailSourceClient {
             folder = store.getFolder(source.folder().orElse("INBOX"));
             registerFolder(folder);
             folder.open(Folder.READ_ONLY);
-            Message[] candidateMessages = source.unreadOnly()
-                    ? trimTailMessages(folder.search(new FlagTerm(new Flags(Flags.Flag.SEEN), false)), fetchWindow)
-                    : selectTailMessages(folder, fetchWindow);
+            Message[] candidateMessages = selectImapCandidateMessages(
+                    source.id(),
+                    source.folder().orElse("INBOX"),
+                    source.unreadOnly(),
+                    fetchWindow,
+                    folder);
             prefetchMessageMetadata(folder, candidateMessages);
-            return toFetchedMessages(source, candidateMessages);
+            return toFetchedMessages(source.id(), folder, candidateMessages);
         } catch (MessagingException e) {
             throw new IllegalStateException("Failed to fetch IMAP mail for source " + source.id(), e);
         } finally {
@@ -385,11 +407,14 @@ public class MailSourceClient {
             folder = store.getFolder(bridge.folder().orElse("INBOX"));
             registerFolder(folder);
             folder.open(Folder.READ_ONLY);
-            Message[] candidateMessages = bridge.unreadOnly()
-                    ? trimTailMessages(folder.search(new FlagTerm(new Flags(Flags.Flag.SEEN), false)), fetchWindow)
-                    : selectTailMessages(folder, fetchWindow);
+            Message[] candidateMessages = selectImapCandidateMessages(
+                    bridge.id(),
+                    bridge.folder().orElse("INBOX"),
+                    bridge.unreadOnly(),
+                    fetchWindow,
+                    folder);
             prefetchMessageMetadata(folder, candidateMessages);
-            return toFetchedMessages(bridge.id(), candidateMessages);
+            return toFetchedMessages(bridge.id(), folder, candidateMessages);
         } catch (MessagingException e) {
             throw new IllegalStateException("Failed to fetch IMAP mail for source " + bridge.id(), e);
         } finally {
@@ -515,7 +540,8 @@ public class MailSourceClient {
                     visibleMessageCount,
                     null,
                     sampleMessageAvailable,
-                    sampleMessageMaterialized);
+                    sampleMessageMaterialized,
+                    null);
         } catch (MessagingException e) {
             throw new IllegalStateException("Failed to connect to POP3 mail fetcher " + bridge.id(), e);
         } finally {
@@ -533,7 +559,8 @@ public class MailSourceClient {
             Integer visibleMessageCount,
             Integer unreadMessageCount,
             Boolean sampleMessageAvailable,
-            Boolean sampleMessageMaterialized) {
+            Boolean sampleMessageMaterialized,
+            Boolean forwardedMarkerSupported) {
         StringBuilder message = new StringBuilder("Connection test succeeded.");
         message.append(" Mailbox path ").append(targetFolder).append(" is reachable.");
         if (Boolean.TRUE.equals(unreadFilterSupported)) {
@@ -570,7 +597,30 @@ public class MailSourceClient {
                 visibleMessageCount,
                 unreadMessageCount,
                 sampleMessageAvailable,
-                sampleMessageMaterialized);
+                sampleMessageMaterialized,
+                forwardedMarkerSupported);
+    }
+
+    static Boolean resolveForwardedMarkerSupport(Folder folder) {
+        if (folder == null) {
+            return null;
+        }
+        Flags permanentFlags = folder.getPermanentFlags();
+        if (permanentFlags == null) {
+            return null;
+        }
+        String[] userFlags = permanentFlags.getUserFlags();
+        if (userFlags != null) {
+            for (String userFlag : userFlags) {
+                if ("$forwarded".equalsIgnoreCase(userFlag)) {
+                    return Boolean.TRUE;
+                }
+            }
+        }
+        if (permanentFlags.contains(Flags.Flag.USER)) {
+            return Boolean.TRUE;
+        }
+        return Boolean.FALSE;
     }
 
     private Message[] selectTailMessages(Folder folder, int fetchWindow) throws MessagingException {
@@ -591,17 +641,15 @@ public class MailSourceClient {
         return Arrays.copyOfRange(messages, messages.length - normalizedFetchWindow, messages.length);
     }
 
-    private List<FetchedMessage> toFetchedMessages(InboxBridgeConfig.Source source, Message[] messages) {
-        return toFetchedMessages(source.id(), messages);
-    }
-
-    private List<FetchedMessage> toFetchedMessages(String sourceId, Message[] messages) {
+    private List<FetchedMessage> toFetchedMessages(String sourceId, Folder folder, Message[] messages) {
         List<Message> sorted = new ArrayList<>(Arrays.asList(messages));
         sorted.sort(Comparator.comparing(this::messageInstant));
 
         List<FetchedMessage> fetchedMessages = new ArrayList<>();
         Exception firstFailure = null;
         int failedMessages = 0;
+        String folderName = safeFolderName(folder);
+        Long uidValidity = resolveUidValidity(folder);
         for (Message message : sorted) {
             try {
                 MessageMetadata metadata = captureMetadata(message);
@@ -614,6 +662,9 @@ public class MailSourceClient {
                         sourceMessageKey,
                         messageId,
                         metadata.instant(),
+                        Optional.ofNullable(folderName),
+                        uidValidity,
+                        metadata.uid(),
                         raw));
             } catch (MessagingException | IOException e) {
                 failedMessages++;
@@ -636,6 +687,21 @@ public class MailSourceClient {
                     sourceId);
         }
         return fetchedMessages;
+    }
+
+    private List<FetchedMessage> toFetchedMessages(InboxBridgeConfig.Source source, Message[] messages) {
+        return toFetchedMessages(source.id(), source.protocol() == InboxBridgeConfig.Protocol.IMAP ? inferredFolder(messages) : null, messages);
+    }
+
+    private List<FetchedMessage> toFetchedMessages(String sourceId, Message[] messages) {
+        return toFetchedMessages(sourceId, inferredFolder(messages), messages);
+    }
+
+    private Folder inferredFolder(Message[] messages) {
+        if (messages == null || messages.length == 0) {
+            return null;
+        }
+        return messages[0].getFolder();
     }
 
     private String resolveSourceMessageKey(InboxBridgeConfig.Source source, Message message, String sha) throws MessagingException {
@@ -685,6 +751,73 @@ public class MailSourceClient {
             LOG.debugf(e, "Unable to resolve Message-ID for message %s", safeMessageNumber(message));
         }
         return new MessageMetadata(uid, messageId, messageInstant(message));
+    }
+
+    private Message[] selectImapCandidateMessages(
+            String sourceId,
+            String folderName,
+            boolean unreadOnly,
+            int fetchWindow,
+            Folder folder) throws MessagingException {
+        Optional<ImapCheckpoint> checkpoint = sourcePollingStateService == null
+                ? Optional.empty()
+                : sourcePollingStateService.imapCheckpoint(sourceId, folderName);
+        Message[] checkpointMessages = selectMessagesFromCheckpoint(folder, checkpoint, unreadOnly);
+        if (checkpointMessages != null) {
+            return checkpointMessages;
+        }
+        return unreadOnly
+                ? trimTailMessages(folder.search(new FlagTerm(new Flags(Flags.Flag.SEEN), false)), fetchWindow)
+                : selectTailMessages(folder, fetchWindow);
+    }
+
+    private Message[] selectMessagesFromCheckpoint(
+            Folder folder,
+            Optional<ImapCheckpoint> checkpoint,
+            boolean unreadOnly) throws MessagingException {
+        if (checkpoint.isEmpty()) {
+            return null;
+        }
+        if (!(folder instanceof UIDFolder uidFolder)) {
+            return null;
+        }
+        Long uidValidity = resolveUidValidity(folder);
+        if (uidValidity == null || !uidValidity.equals(checkpoint.get().uidValidity())) {
+            return null;
+        }
+        long startUid = checkpoint.get().lastSeenUid() == null ? -1L : checkpoint.get().lastSeenUid();
+        if (startUid < 0L) {
+            return null;
+        }
+        Message[] messages = uidFolder.getMessagesByUID(startUid + 1L, UIDFolder.LASTUID);
+        if (!unreadOnly || messages.length == 0) {
+            return messages;
+        }
+        List<Message> unreadMessages = new ArrayList<>();
+        for (Message message : messages) {
+            if (!message.isSet(Flags.Flag.SEEN)) {
+                unreadMessages.add(message);
+            }
+        }
+        return unreadMessages.toArray(Message[]::new);
+    }
+
+    private String safeFolderName(Folder folder) {
+        if (folder == null) {
+            return null;
+        }
+        return folder.getFullName();
+    }
+
+    private Long resolveUidValidity(Folder folder) {
+        if (folder instanceof IMAPFolder imapFolder) {
+            try {
+                return imapFolder.getUIDValidity();
+            } catch (MessagingException ignored) {
+                return null;
+            }
+        }
+        return null;
     }
 
     private String firstHeader(Message message, String name) throws MessagingException {

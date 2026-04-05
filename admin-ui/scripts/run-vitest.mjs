@@ -6,6 +6,8 @@ const nodeMajor = Number.parseInt(majorString, 10)
 
 const nodeArgs = []
 const env = { ...process.env }
+const hasMaxWorkersArg = vitestArgs.some((arg) => arg === '--maxWorkers' || arg.startsWith('--maxWorkers='))
+const defaultMaxWorkers = env.VITEST_MAX_WORKERS || (env.CI ? '1' : '50%')
 
 if (Number.isFinite(nodeMajor) && nodeMajor >= 25) {
   env.NODE_OPTIONS = [process.env.NODE_OPTIONS, '--no-webstorage'].filter(Boolean).join(' ')
@@ -14,7 +16,8 @@ if (Number.isFinite(nodeMajor) && nodeMajor >= 25) {
 nodeArgs.push(
   '--max-old-space-size=4096',
   './node_modules/vitest/vitest.mjs',
-  ...vitestArgs
+  ...vitestArgs,
+  ...(hasMaxWorkersArg ? [] : ['--maxWorkers', defaultMaxWorkers])
 )
 
 const result = spawnSync(process.execPath, nodeArgs, {

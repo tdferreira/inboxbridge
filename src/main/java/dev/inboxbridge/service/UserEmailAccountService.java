@@ -14,6 +14,7 @@ import dev.inboxbridge.dto.EmailAccountConnectionTestResult;
 import dev.inboxbridge.dto.UpdateUserEmailAccountRequest;
 import dev.inboxbridge.dto.UserEmailAccountView;
 import dev.inboxbridge.domain.RuntimeEmailAccount;
+import dev.inboxbridge.domain.SourceFetchMode;
 import dev.inboxbridge.domain.SourcePostPollAction;
 import dev.inboxbridge.domain.SourcePostPollSettings;
 import dev.inboxbridge.persistence.AppUser;
@@ -22,6 +23,7 @@ import dev.inboxbridge.persistence.UserEmailAccount;
 import dev.inboxbridge.persistence.UserEmailAccountRepository;
 import dev.inboxbridge.persistence.UserGmailConfigRepository;
 import jakarta.enterprise.context.ApplicationScoped;
+import jakarta.enterprise.event.Event;
 import jakarta.inject.Inject;
 import jakarta.transaction.Transactional;
 
@@ -66,6 +68,9 @@ public class UserEmailAccountService {
 
     @Inject
     MailboxConflictService mailboxConflictService;
+
+    @Inject
+    Event<SourceMailboxConfigurationChanged> sourceMailboxConfigurationChangedEvent;
 
     public List<UserEmailAccountView> listForUser(Long userId) {
         Map<String, ImportStats> importStatsBySource = importStatsBySource();
@@ -131,6 +136,7 @@ public class UserEmailAccountService {
                 resolveRefreshToken(existing, authMethod, oauthProvider, request.oauthRefreshToken()),
                 Optional.ofNullable(blankToNull(request.folder())),
                 request.unreadOnly() != null && request.unreadOnly(),
+                resolveFetchMode(protocol, request.fetchMode()),
                 Optional.ofNullable(blankToNull(request.customLabel())),
                 resolvePostPollSettings(protocol, request.markReadAfterPoll(), request.postPollAction(), request.postPollTargetFolder()),
                 null);
@@ -181,6 +187,7 @@ public class UserEmailAccountService {
         emailAccount.username = requireNonBlank(request.username(), "Username");
         emailAccount.folderName = blankToNull(request.folder());
         emailAccount.unreadOnly = request.unreadOnly() != null && request.unreadOnly();
+        emailAccount.fetchMode = resolveFetchMode(emailAccount.protocol, request.fetchMode());
         emailAccount.customLabel = blankToNull(request.customLabel());
         SourcePostPollSettings postPollSettings = resolvePostPollSettings(
                 emailAccount.protocol,
@@ -212,6 +219,7 @@ public class UserEmailAccountService {
                 emailAccount.authMethod == InboxBridgeConfig.AuthMethod.OAUTH2 ? resolveRefreshToken(existing, emailAccount.authMethod, emailAccount.oauthProvider, request.oauthRefreshToken()) : "",
                 Optional.ofNullable(blankToNull(request.folder())),
                 emailAccount.unreadOnly,
+                emailAccount.fetchMode,
                 Optional.ofNullable(emailAccount.customLabel),
                 postPollSettings,
                 null);
@@ -237,6 +245,7 @@ public class UserEmailAccountService {
         }
 
         repository.persist(emailAccount);
+        notifySourceMailboxConfigurationChanged(emailAccount.emailAccountId);
         return toView(
                 emailAccount,
                 ImportStats.EMPTY,
@@ -249,6 +258,7 @@ public class UserEmailAccountService {
                 .filter(existing -> existing.userId.equals(user.id))
                 .orElseThrow(() -> new IllegalArgumentException("Unknown mail fetcher id"));
         repository.delete(bridge);
+        notifySourceMailboxConfigurationChanged(emailAccountId);
     }
 
     public String decryptPassword(UserEmailAccount emailAccount) {
@@ -295,6 +305,7 @@ public class UserEmailAccountService {
                         decryptRefreshToken(emailAccount),
                         Optional.ofNullable(emailAccount.folderName),
                         emailAccount.unreadOnly,
+                        emailAccount.fetchMode == null ? SourceFetchMode.POLLING : emailAccount.fetchMode,
                         Optional.ofNullable(emailAccount.customLabel),
                         storedPostPollSettings(emailAccount),
                         null));
@@ -317,6 +328,7 @@ public class UserEmailAccountService {
                 hasEffectiveOAuthRefreshToken(emailAccount),
                 emailAccount.folderName == null ? "INBOX" : emailAccount.folderName,
                 emailAccount.unreadOnly,
+                (emailAccount.fetchMode == null ? SourceFetchMode.POLLING : emailAccount.fetchMode).name(),
                 emailAccount.customLabel == null ? "" : emailAccount.customLabel,
                 emailAccount.markReadAfterPoll,
                 storedPostPollAction(emailAccount).name(),
@@ -510,6 +522,12 @@ public class UserEmailAccountService {
                 : SourcePostPollAction.valueOf(value.trim().toUpperCase(Locale.ROOT));
     }
 
+    private void notifySourceMailboxConfigurationChanged(String sourceId) {
+        if (sourceMailboxConfigurationChangedEvent != null && sourceId != null && !sourceId.isBlank()) {
+            sourceMailboxConfigurationChangedEvent.fire(new SourceMailboxConfigurationChanged(sourceId));
+        }
+    }
+
     private SourcePostPollSettings storedPostPollSettings(UserEmailAccount emailAccount) {
         return new SourcePostPollSettings(
                 emailAccount.markReadAfterPoll,
@@ -519,6 +537,25 @@ public class UserEmailAccountService {
 
     private SourcePostPollAction storedPostPollAction(UserEmailAccount emailAccount) {
         return emailAccount.postPollAction == null ? SourcePostPollAction.NONE : emailAccount.postPollAction;
+    }
+
+    private SourceFetchMode resolveFetchMode(InboxBridgeConfig.Protocol protocol, String requestedMode) {
+        SourceFetchMode mode = parseFetchMode(requestedMode);
+        if (protocol != InboxBridgeConfig.Protocol.IMAP) {
+            return SourceFetchMode.POLLING;
+        }
+        return mode;
+    }
+
+    private SourceFetchMode parseFetchMode(String requestedMode) {
+        if (requestedMode == null || requestedMode.isBlank()) {
+            return SourceFetchMode.POLLING;
+        }
+        try {
+            return SourceFetchMode.valueOf(requestedMode.trim().toUpperCase(Locale.ROOT));
+        } catch (IllegalArgumentException invalid) {
+            throw new IllegalArgumentException("Unknown source fetch mode");
+        }
     }
 
     private int defaultPort(InboxBridgeConfig.Protocol protocol) {

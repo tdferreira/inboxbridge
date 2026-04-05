@@ -8,6 +8,7 @@ import dev.inboxbridge.config.InboxBridgeConfig;
 import dev.inboxbridge.domain.GmailApiDestinationTarget;
 import dev.inboxbridge.domain.MailDestinationTarget;
 import dev.inboxbridge.domain.RuntimeEmailAccount;
+import dev.inboxbridge.domain.SourceFetchMode;
 import dev.inboxbridge.domain.SourcePostPollAction;
 import dev.inboxbridge.domain.SourcePostPollSettings;
 import dev.inboxbridge.persistence.AppUser;
@@ -15,6 +16,7 @@ import dev.inboxbridge.persistence.AppUserRepository;
 import dev.inboxbridge.persistence.UserEmailAccount;
 import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.inject.Inject;
+import jakarta.transaction.Transactional;
 
 @ApplicationScoped
 public class RuntimeEmailAccountService {
@@ -40,6 +42,7 @@ public class RuntimeEmailAccountService {
     @Inject
     SystemOAuthAppSettingsService systemOAuthAppSettingsService;
 
+    @Transactional
     public Optional<RuntimeEmailAccount> findSystemBridge(String sourceId) {
         return envSourceService.configuredSources().stream()
                 .map(EnvSourceService.IndexedSource::source)
@@ -48,6 +51,7 @@ public class RuntimeEmailAccountService {
                 .map(source -> toRuntimeEmailAccount(source, systemDestinationTarget()));
     }
 
+    @Transactional
     public Optional<RuntimeEmailAccount> findAccessibleForUser(AppUser actor, String sourceId) {
         // User-scoped endpoints must only target DB-managed fetchers. Env-managed
         // sources are exposed through the admin endpoints to avoid ID collisions.
@@ -58,11 +62,13 @@ public class RuntimeEmailAccountService {
         return toRuntimeEmailAccount(emailAccount.get());
     }
 
+    @Transactional
     public Optional<RuntimeEmailAccount> findUserManagedById(String sourceId) {
         return userEmailAccountService.findByEmailAccountId(sourceId)
                 .flatMap(this::toRuntimeEmailAccount);
     }
 
+    @Transactional
     public Optional<RuntimeEmailAccount> findAnyAccessibleForAdmin(String sourceId) {
         Optional<RuntimeEmailAccount> systemSource = findSystemBridge(sourceId);
         if (systemSource.isPresent()) {
@@ -71,6 +77,7 @@ public class RuntimeEmailAccountService {
         return findUserManagedById(sourceId);
     }
 
+    @Transactional
     public List<RuntimeEmailAccount> listEnabledForPolling() {
         List<RuntimeEmailAccount> emailAccounts = new ArrayList<>();
         MailDestinationTarget systemTarget = systemDestinationTarget();
@@ -89,6 +96,7 @@ public class RuntimeEmailAccountService {
         return emailAccounts;
     }
 
+    @Transactional
     public List<RuntimeEmailAccount> listEnabledForUser(AppUser actor) {
         List<RuntimeEmailAccount> emailAccounts = new ArrayList<>();
         for (UserEmailAccount emailAccount : userEmailAccountService.listEnabledBridges()) {
@@ -134,6 +142,7 @@ public class RuntimeEmailAccountService {
                 source.oauthRefreshToken().orElse(""),
                 source.folder(),
                 source.unreadOnly(),
+                source.fetchMode(),
                 source.customLabel(),
                 SourcePostPollSettings.none(),
                 destinationTarget);
@@ -165,6 +174,7 @@ public class RuntimeEmailAccountService {
                 userEmailAccountService.decryptRefreshToken(emailAccount),
                 Optional.ofNullable(emailAccount.folderName),
                 emailAccount.unreadOnly,
+                emailAccount.fetchMode == null ? SourceFetchMode.POLLING : emailAccount.fetchMode,
                 Optional.ofNullable(emailAccount.customLabel),
                 new SourcePostPollSettings(
                         emailAccount.markReadAfterPoll,

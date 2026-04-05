@@ -15,6 +15,7 @@ export const DEFAULT_EMAIL_ACCOUNT_FORM = {
   oauthRefreshToken: '',
   folder: 'INBOX',
   unreadOnly: false,
+  fetchMode: 'POLLING',
   customLabel: '',
   markReadAfterPoll: false,
   postPollAction: 'NONE',
@@ -53,6 +54,7 @@ export function normalizeEmailAccountForm(nextEmailAccountForm, authOptions = {}
   }
 
   if (next.protocol !== 'IMAP') {
+    next.fetchMode = 'POLLING'
     next.markReadAfterPoll = false
     next.postPollAction = 'NONE'
     next.postPollTargetFolder = ''

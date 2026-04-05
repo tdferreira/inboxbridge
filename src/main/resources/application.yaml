@@ -107,4 +107,5 @@ inboxbridge:
       oauth-refresh-token: ${MAIL_ACCOUNT_0__OAUTH_REFRESH_TOKEN:}
       folder: ${MAIL_ACCOUNT_0__FOLDER:INBOX}
       unread-only: ${MAIL_ACCOUNT_0__UNREAD_ONLY:false}
+      fetch-mode: ${MAIL_ACCOUNT_0__FETCH_MODE:POLLING}
       custom-label: ${MAIL_ACCOUNT_0__CUSTOM_LABEL:Imported/Source0}

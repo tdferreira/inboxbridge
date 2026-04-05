@@ -130,6 +130,20 @@ function EmailAccountDialog({
     setManualPostPollTargetEntry(false)
   }
 
+  function renderTestResultRow(labelKey, value, helpKey) {
+    return (
+      <div>
+        <dt>
+          <span className="field-label-row">
+            <span>{t(labelKey)}</span>
+            <InfoHint text={t(helpKey)} />
+          </span>
+        </dt>
+        <dd>{value}</dd>
+      </div>
+    )
+  }
+
   return (
     <ModalDialog
       isDirty={isDirty}
@@ -257,20 +271,23 @@ function EmailAccountDialog({
         ) : null}
         {supportsPostPollActions ? (
           <>
-            <label className="checkbox-row">
-              <input type="checkbox" checked={Boolean(emailAccountForm.markReadAfterPoll)} onChange={(event) => onEmailAccountFormChange((current) => ({ ...current, markReadAfterPoll: event.target.checked }))} />
-              <span className="field-label-row">
-                <span>{t('emailAccounts.markReadAfterPoll')}</span>
-                <InfoHint text={t('emailAccounts.markReadAfterPollHelp')} />
-              </span>
-            </label>
-            <FormField helpText={t('emailAccounts.postPollActionHelp')} label={t('emailAccounts.postPollAction')}>
-              <select value={currentPostPollAction} onChange={(event) => onEmailAccountFormChange((current) => ({ ...current, postPollAction: event.target.value, postPollTargetFolder: event.target.value === 'MOVE' ? current.postPollTargetFolder : '' }))}>
-                <option value="NONE">{t('emailAccounts.postPollAction.none')}</option>
-                <option value="DELETE">{t('emailAccounts.postPollAction.delete')}</option>
-                <option value="MOVE">{t('emailAccounts.postPollAction.move')}</option>
-              </select>
-            </FormField>
+            <div className="form-field-pair full fetcher-post-poll-row">
+              <FormField helpText={t('emailAccounts.postPollActionHelp')} label={t('emailAccounts.postPollAction')}>
+                <select value={currentPostPollAction} onChange={(event) => onEmailAccountFormChange((current) => ({ ...current, postPollAction: event.target.value, postPollTargetFolder: event.target.value === 'MOVE' ? current.postPollTargetFolder : '' }))}>
+                  <option value="NONE">{t('emailAccounts.postPollAction.none')}</option>
+                  <option value="FORWARDED">{t('emailAccounts.postPollAction.forwarded')}</option>
+                  <option value="DELETE">{t('emailAccounts.postPollAction.delete')}</option>
+                  <option value="MOVE">{t('emailAccounts.postPollAction.move')}</option>
+                </select>
+              </FormField>
+              <label className="checkbox-row fetcher-inline-checkbox">
+                <input type="checkbox" checked={Boolean(emailAccountForm.markReadAfterPoll)} onChange={(event) => onEmailAccountFormChange((current) => ({ ...current, markReadAfterPoll: event.target.checked }))} />
+                <span className="field-label-row">
+                  <span>{t('emailAccounts.markReadAfterPoll')}</span>
+                  <InfoHint text={t('emailAccounts.markReadAfterPollHelp')} />
+                </span>
+              </label>
+            </div>
             {currentPostPollAction === 'MOVE' ? (
               <div className="fetcher-folder-control full">
                 <label>
@@ -299,25 +316,35 @@ function EmailAccountDialog({
             ) : null}
           </>
         ) : null}
-        <label className="checkbox-row">
+        {supportsFolder ? (
+          <FormField helpText={t('emailAccounts.fetchModeHelp')} label={t('emailAccounts.fetchMode')}>
+            <select value={emailAccountForm.fetchMode || 'POLLING'} onChange={(event) => onEmailAccountFormChange((current) => ({ ...current, fetchMode: event.target.value }))}>
+              <option value="POLLING">{t('emailAccounts.fetchMode.polling')}</option>
+              <option value="IDLE">{t('emailAccounts.fetchMode.idle')}</option>
+            </select>
+          </FormField>
+        ) : null}
+        <div className="form-field-pair full fetcher-checkbox-pair">
+          <label className="checkbox-row">
+            <input type="checkbox" checked={emailAccountForm.tls} onChange={(event) => onEmailAccountFormChange((current) => ({ ...current, tls: event.target.checked }))} />
+            <span className="field-label-row">
+              <span>{t('emailAccounts.tlsOnly')}</span>
+              <InfoHint text={t('emailAccounts.tlsOnlyHelp')} />
+            </span>
+          </label>
+          <label className="checkbox-row">
+            <input type="checkbox" checked={emailAccountForm.unreadOnly} onChange={(event) => onEmailAccountFormChange((current) => ({ ...current, unreadOnly: event.target.checked }))} />
+            <span className="field-label-row">
+              <span>{t('emailAccounts.unreadOnly')}</span>
+              <InfoHint text={t('emailAccounts.unreadOnlyHelp')} />
+            </span>
+          </label>
+        </div>
+        <label className="checkbox-row full">
           <input type="checkbox" checked={emailAccountForm.enabled} onChange={(event) => onEmailAccountFormChange((current) => ({ ...current, enabled: event.target.checked }))} />
           <span className="field-label-row">
             <span>{t('emailAccounts.enabled')}</span>
             <InfoHint text={t('emailAccounts.enabledHelp')} />
-          </span>
-        </label>
-        <label className="checkbox-row">
-          <input type="checkbox" checked={emailAccountForm.tls} onChange={(event) => onEmailAccountFormChange((current) => ({ ...current, tls: event.target.checked }))} />
-          <span className="field-label-row">
-            <span>{t('emailAccounts.tlsOnly')}</span>
-            <InfoHint text={t('emailAccounts.tlsOnlyHelp')} />
-          </span>
-        </label>
-        <label className="checkbox-row">
-          <input type="checkbox" checked={emailAccountForm.unreadOnly} onChange={(event) => onEmailAccountFormChange((current) => ({ ...current, unreadOnly: event.target.checked }))} />
-          <span className="field-label-row">
-            <span>{t('emailAccounts.unreadOnly')}</span>
-            <InfoHint text={t('emailAccounts.unreadOnlyHelp')} />
           </span>
         </label>
         <div className="full action-row">
@@ -350,20 +377,31 @@ function EmailAccountDialog({
             <strong>{testResult.message}</strong>
             {testResult.tone !== 'error' && testResult.protocol ? (
               <dl className="fetcher-test-result-grid">
-                <div><dt>{t('emailAccounts.testProtocol')}</dt><dd>{testResult.protocol}</dd></div>
-                <div><dt>{t('emailAccounts.testEndpoint')}</dt><dd>{testResult.host}:{testResult.port}</dd></div>
-                <div><dt>{t('emailAccounts.testTls')}</dt><dd>{testResult.tls ? t('common.yes') : t('common.no')}</dd></div>
-                <div><dt>{t('emailAccounts.testAuth')}</dt><dd>{t(`authMethod.${testResult.authMethod.toLowerCase()}`)}{testResult.oauthProvider && testResult.oauthProvider !== 'NONE' ? ` / ${t(`oauthProvider.${testResult.oauthProvider.toLowerCase()}`)}` : ''}</dd></div>
-                <div><dt>{t('emailAccounts.testAuthenticated')}</dt><dd>{testResult.authenticated ? t('common.yes') : t('common.no')}</dd></div>
-                <div><dt>{t('emailAccounts.testFolder')}</dt><dd>{testResult.folder || 'INBOX'}</dd></div>
-                <div><dt>{t('emailAccounts.testFolderAccessible')}</dt><dd>{testResult.folderAccessible ? t('common.yes') : t('common.no')}</dd></div>
-                <div><dt>{t('emailAccounts.testUnreadFilterRequested')}</dt><dd>{testResult.unreadFilterRequested ? t('common.yes') : t('common.no')}</dd></div>
-                <div><dt>{t('emailAccounts.testUnreadFilterSupported')}</dt><dd>{testResult.unreadFilterSupported === null ? t('common.unavailable') : testResult.unreadFilterSupported ? t('common.yes') : t('common.no')}</dd></div>
-                <div><dt>{t('emailAccounts.testUnreadFilterValidated')}</dt><dd>{testResult.unreadFilterValidated === null ? t('common.unavailable') : testResult.unreadFilterValidated ? t('common.yes') : t('common.no')}</dd></div>
-                <div><dt>{t('emailAccounts.testVisibleMessages')}</dt><dd>{testResult.visibleMessageCount ?? t('common.unavailable')}</dd></div>
-                <div><dt>{t('emailAccounts.testUnreadMessages')}</dt><dd>{testResult.unreadMessageCount ?? t('common.unavailable')}</dd></div>
-                <div><dt>{t('emailAccounts.testSampleAvailable')}</dt><dd>{testResult.sampleMessageAvailable === null ? t('common.unavailable') : testResult.sampleMessageAvailable ? t('common.yes') : t('common.no')}</dd></div>
-                <div><dt>{t('emailAccounts.testSampleMaterialized')}</dt><dd>{testResult.sampleMessageMaterialized === null ? t('common.unavailable') : testResult.sampleMessageMaterialized ? t('common.yes') : t('common.no')}</dd></div>
+                {renderTestResultRow('emailAccounts.testProtocol', testResult.protocol, 'emailAccounts.testProtocolHelp')}
+                {renderTestResultRow('emailAccounts.testEndpoint', `${testResult.host}:${testResult.port}`, 'emailAccounts.testEndpointHelp')}
+                {renderTestResultRow('emailAccounts.testTls', testResult.tls ? t('common.yes') : t('common.no'), 'emailAccounts.testTlsHelp')}
+                {renderTestResultRow(
+                  'emailAccounts.testAuth',
+                  `${t(`authMethod.${testResult.authMethod.toLowerCase()}`)}${testResult.oauthProvider && testResult.oauthProvider !== 'NONE' ? ` / ${t(`oauthProvider.${testResult.oauthProvider.toLowerCase()}`)}` : ''}`,
+                  'emailAccounts.testAuthHelp'
+                )}
+                {renderTestResultRow('emailAccounts.testAuthenticated', testResult.authenticated ? t('common.yes') : t('common.no'), 'emailAccounts.testAuthenticatedHelp')}
+                {renderTestResultRow('emailAccounts.testFolder', testResult.folder || 'INBOX', 'emailAccounts.testFolderHelp')}
+                {renderTestResultRow('emailAccounts.testFolderAccessible', testResult.folderAccessible ? t('common.yes') : t('common.no'), 'emailAccounts.testFolderAccessibleHelp')}
+                {renderTestResultRow('emailAccounts.testUnreadFilterRequested', testResult.unreadFilterRequested ? t('common.yes') : t('common.no'), 'emailAccounts.testUnreadFilterRequestedHelp')}
+                {renderTestResultRow('emailAccounts.testUnreadFilterSupported', testResult.unreadFilterSupported === null ? t('common.unavailable') : testResult.unreadFilterSupported ? t('common.yes') : t('common.no'), 'emailAccounts.testUnreadFilterSupportedHelp')}
+                {renderTestResultRow('emailAccounts.testUnreadFilterValidated', testResult.unreadFilterValidated === null ? t('common.unavailable') : testResult.unreadFilterValidated ? t('common.yes') : t('common.no'), 'emailAccounts.testUnreadFilterValidatedHelp')}
+                {renderTestResultRow('emailAccounts.testVisibleMessages', testResult.visibleMessageCount ?? t('common.unavailable'), 'emailAccounts.testVisibleMessagesHelp')}
+                {renderTestResultRow('emailAccounts.testUnreadMessages', testResult.unreadMessageCount ?? t('common.unavailable'), 'emailAccounts.testUnreadMessagesHelp')}
+                {renderTestResultRow('emailAccounts.testSampleAvailable', testResult.sampleMessageAvailable === null ? t('common.unavailable') : testResult.sampleMessageAvailable ? t('common.yes') : t('common.no'), 'emailAccounts.testSampleAvailableHelp')}
+                {renderTestResultRow('emailAccounts.testSampleMaterialized', testResult.sampleMessageMaterialized === null ? t('common.unavailable') : testResult.sampleMessageMaterialized ? t('common.yes') : t('common.no'), 'emailAccounts.testSampleMaterializedHelp')}
+                {testResult.protocol === 'IMAP' ? (
+                  renderTestResultRow(
+                    'emailAccounts.testForwardedMarkerSupported',
+                    testResult.forwardedMarkerSupported === null ? t('common.unavailable') : testResult.forwardedMarkerSupported ? t('common.yes') : t('common.no'),
+                    'emailAccounts.testForwardedMarkerSupportedHelp'
+                  )
+                ) : null}
               </dl>
             ) : null}
           </div>

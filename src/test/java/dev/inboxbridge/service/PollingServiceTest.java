@@ -19,6 +19,7 @@ import dev.inboxbridge.domain.FetchedMessage;
 import dev.inboxbridge.domain.GmailApiDestinationTarget;
 import dev.inboxbridge.domain.MailDestinationTarget;
 import dev.inboxbridge.domain.RuntimeEmailAccount;
+import dev.inboxbridge.domain.SourceFetchMode;
 import dev.inboxbridge.dto.MailImportResponse;
 import dev.inboxbridge.dto.PollRunResult;
 import jakarta.enterprise.inject.Instance;
@@ -252,6 +253,182 @@ class PollingServiceTest {
 
         assertEquals(0, result.getErrors().size());
         assertEquals(7, mailSourceClient.lastFetchWindow);
+    }
+
+    @Test
+    void schedulerPollSkipsIdleSources() {
+        PollingService service = new PollingService();
+        MultiSourceRecordingMailSourceClient mailSourceClient = new MultiSourceRecordingMailSourceClient();
+        RecordingDestinationMailboxService destinationService = new RecordingDestinationMailboxService();
+        service.mailSourceClient = mailSourceClient;
+        service.importDeduplicationService = new NeverDuplicateImportDeduplicationService();
+        service.mailDestinationServices = new FakeMailDestinationServices(destinationService);
+        service.sourcePollEventService = new NoopSourcePollEventService();
+        service.runtimeEmailAccountService = new FakeRuntimeEmailAccountService(List.of(
+                userBridgeWithFetchMode("polling-fetcher", 7L, "alice", "alice-destination", SourceFetchMode.POLLING),
+                userBridgeWithFetchMode("idle-fetcher", 7L, "alice", "alice-destination", SourceFetchMode.IDLE)));
+        service.pollingSettingsService = new FakePollingSettingsService(true, Duration.ofMinutes(5), "5m", 10);
+        service.userPollingSettingsService = new FakeUserPollingSettingsService(true, Duration.ofMinutes(5), "5m", 10);
+        service.sourcePollingSettingsService = new FakeSourcePollingSettingsService();
+        service.sourcePollingStateService = new RecordingSourcePollingStateService();
+        service.manualPollRateLimitService = new ManualPollRateLimitService();
+
+        PollRunResult result = service.runPoll("scheduler");
+
+        assertEquals(0, result.getErrors().size());
+        assertEquals(List.of("polling-fetcher"), mailSourceClient.fetchedSourceIds);
+        assertEquals(List.of("polling-fetcher->alice-destination"), destinationService.importRoutes);
+    }
+
+    @Test
+    void schedulerPollFallsBackToIdleSourceWhenWatcherHasStayedUnhealthyLongEnough() {
+        PollingService service = new PollingService();
+        MultiSourceRecordingMailSourceClient mailSourceClient = new MultiSourceRecordingMailSourceClient();
+        RecordingDestinationMailboxService destinationService = new RecordingDestinationMailboxService();
+        ImapIdleHealthService imapIdleHealthService = new ImapIdleHealthService();
+        Instant baseline = Instant.now().minus(ImapIdleHealthService.SCHEDULER_FALLBACK_THRESHOLD).minusSeconds(5);
+        imapIdleHealthService.ensureTracked("polling-fetcher", baseline);
+        imapIdleHealthService.ensureTracked("idle-fetcher", baseline);
+        imapIdleHealthService.markConnected("polling-fetcher", baseline);
+        imapIdleHealthService.markDisconnected("idle-fetcher", baseline);
+        service.imapIdleHealthService = imapIdleHealthService;
+        service.mailSourceClient = mailSourceClient;
+        service.importDeduplicationService = new NeverDuplicateImportDeduplicationService();
+        service.mailDestinationServices = new FakeMailDestinationServices(destinationService);
+        service.sourcePollEventService = new NoopSourcePollEventService();
+        service.runtimeEmailAccountService = new FakeRuntimeEmailAccountService(List.of(
+                userBridgeWithFetchMode("polling-fetcher", 7L, "alice", "alice-destination", SourceFetchMode.POLLING),
+                userBridgeWithFetchMode("idle-fetcher", 7L, "alice", "alice-destination", SourceFetchMode.IDLE)));
+        service.pollingSettingsService = new FakePollingSettingsService(true, Duration.ofMinutes(5), "5m", 10);
+        service.userPollingSettingsService = new FakeUserPollingSettingsService(true, Duration.ofMinutes(5), "5m", 10);
+        service.sourcePollingSettingsService = new FakeSourcePollingSettingsService();
+        service.sourcePollingStateService = new RecordingSourcePollingStateService();
+        service.manualPollRateLimitService = new ManualPollRateLimitService();
+
+        PollRunResult result = service.runPoll("scheduler");
+
+        assertEquals(0, result.getErrors().size());
+        assertEquals(List.of("idle-fetcher", "polling-fetcher"), mailSourceClient.fetchedSourceIds.stream().sorted().toList());
+        assertEquals(
+                List.of("idle-fetcher->alice-destination", "polling-fetcher->alice-destination"),
+                destinationService.importRoutes.stream().sorted().toList());
+    }
+
+    @Test
+    void schedulerPollStillSkipsRecentlyDisconnectedIdleSourcesDuringNormalReconnectWindow() {
+        PollingService service = new PollingService();
+        MultiSourceRecordingMailSourceClient mailSourceClient = new MultiSourceRecordingMailSourceClient();
+        RecordingDestinationMailboxService destinationService = new RecordingDestinationMailboxService();
+        ImapIdleHealthService imapIdleHealthService = new ImapIdleHealthService();
+        Instant now = Instant.now();
+        imapIdleHealthService.ensureTracked("polling-fetcher", now);
+        imapIdleHealthService.ensureTracked("idle-fetcher", now);
+        imapIdleHealthService.markConnected("polling-fetcher", now);
+        imapIdleHealthService.markDisconnected("idle-fetcher", now.minusSeconds(10));
+        service.imapIdleHealthService = imapIdleHealthService;
+        service.mailSourceClient = mailSourceClient;
+        service.importDeduplicationService = new NeverDuplicateImportDeduplicationService();
+        service.mailDestinationServices = new FakeMailDestinationServices(destinationService);
+        service.sourcePollEventService = new NoopSourcePollEventService();
+        service.runtimeEmailAccountService = new FakeRuntimeEmailAccountService(List.of(
+                userBridgeWithFetchMode("polling-fetcher", 7L, "alice", "alice-destination", SourceFetchMode.POLLING),
+                userBridgeWithFetchMode("idle-fetcher", 7L, "alice", "alice-destination", SourceFetchMode.IDLE)));
+        service.pollingSettingsService = new FakePollingSettingsService(true, Duration.ofMinutes(5), "5m", 10);
+        service.userPollingSettingsService = new FakeUserPollingSettingsService(true, Duration.ofMinutes(5), "5m", 10);
+        service.sourcePollingSettingsService = new FakeSourcePollingSettingsService();
+        service.sourcePollingStateService = new RecordingSourcePollingStateService();
+        service.manualPollRateLimitService = new ManualPollRateLimitService();
+
+        PollRunResult result = service.runPoll("scheduler");
+
+        assertEquals(0, result.getErrors().size());
+        assertEquals(List.of("polling-fetcher"), mailSourceClient.fetchedSourceIds);
+        assertEquals(List.of("polling-fetcher->alice-destination"), destinationService.importRoutes);
+    }
+
+    @Test
+    void idleTriggeredRunPollsIdleSourceExplicitly() {
+        PollingService service = new PollingService();
+        RecordingMailSourceClient mailSourceClient = new RecordingMailSourceClient();
+        RecordingSourcePollingStateService sourcePollingStateService = new RecordingSourcePollingStateService();
+        RuntimeEmailAccount emailAccount = userBridgeWithFetchMode("idle-fetcher", 7L, "alice", "alice-destination", SourceFetchMode.IDLE);
+        service.mailSourceClient = mailSourceClient;
+        service.importDeduplicationService = new ImportDeduplicationService();
+        service.mailDestinationServices = new FakeMailDestinationServices(new FakeMailDestinationService(true));
+        service.sourcePollEventService = new NoopSourcePollEventService();
+        service.runtimeEmailAccountService = new FakeRuntimeEmailAccountService(List.of(emailAccount));
+        service.pollingSettingsService = new FakePollingSettingsService(true, Duration.ofMinutes(5), "5m", 10);
+        service.userPollingSettingsService = new FakeUserPollingSettingsService(true, Duration.ofMinutes(5), "5m", 10);
+        service.sourcePollingSettingsService = new FakeSourcePollingSettingsService();
+        service.sourcePollingStateService = sourcePollingStateService;
+        service.manualPollRateLimitService = new ManualPollRateLimitService();
+
+        PollRunResult result = service.runIdleTriggeredPollForSource(emailAccount);
+
+        assertEquals(0, result.getErrors().size());
+        assertEquals(10, mailSourceClient.lastFetchWindow);
+        assertEquals("idle-fetcher", sourcePollingStateService.lastRecordedSuccessSourceId);
+    }
+
+    @Test
+    void idleTriggeredRunCanProceedWhileSchedulerPollIsMarkedActive() throws Exception {
+        PollingService service = new PollingService();
+        RecordingMailSourceClient mailSourceClient = new RecordingMailSourceClient();
+        RecordingSourcePollingStateService sourcePollingStateService = new RecordingSourcePollingStateService();
+        RuntimeEmailAccount emailAccount = userBridgeWithFetchMode("idle-fetcher", 7L, "alice", "alice-destination", SourceFetchMode.IDLE);
+        service.mailSourceClient = mailSourceClient;
+        service.importDeduplicationService = new ImportDeduplicationService();
+        service.mailDestinationServices = new FakeMailDestinationServices(new FakeMailDestinationService(true));
+        service.sourcePollEventService = new NoopSourcePollEventService();
+        service.runtimeEmailAccountService = new FakeRuntimeEmailAccountService(List.of(emailAccount));
+        service.pollingSettingsService = new FakePollingSettingsService(true, Duration.ofMinutes(5), "5m", 10);
+        service.userPollingSettingsService = new FakeUserPollingSettingsService(true, Duration.ofMinutes(5), "5m", 10);
+        service.sourcePollingSettingsService = new FakeSourcePollingSettingsService();
+        service.sourcePollingStateService = sourcePollingStateService;
+        service.manualPollRateLimitService = new ManualPollRateLimitService();
+
+        setRunning(service, true);
+        setActivePoll(service, "scheduler", null, Instant.parse("2026-04-05T08:26:40Z"));
+        try {
+            PollRunResult result = service.runIdleTriggeredPollForSource(emailAccount);
+
+            assertEquals(0, result.getErrors().size());
+            assertEquals(10, mailSourceClient.lastFetchWindow);
+            assertEquals("idle-fetcher", sourcePollingStateService.lastRecordedSuccessSourceId);
+        } finally {
+            setActivePoll(service, null, null, null);
+            setRunning(service, false);
+        }
+    }
+
+    @Test
+    void idleTriggeredRunStillReturnsBusyWhenAnotherManualPollIsActive() throws Exception {
+        PollingService service = new PollingService();
+        RecordingMailSourceClient mailSourceClient = new RecordingMailSourceClient();
+        RuntimeEmailAccount emailAccount = userBridgeWithFetchMode("idle-fetcher", 7L, "alice", "alice-destination", SourceFetchMode.IDLE);
+        service.mailSourceClient = mailSourceClient;
+        service.importDeduplicationService = new ImportDeduplicationService();
+        service.mailDestinationServices = new FakeMailDestinationServices(new FakeMailDestinationService(true));
+        service.sourcePollEventService = new NoopSourcePollEventService();
+        service.runtimeEmailAccountService = new FakeRuntimeEmailAccountService(List.of(emailAccount));
+        service.pollingSettingsService = new FakePollingSettingsService(true, Duration.ofMinutes(5), "5m", 10);
+        service.userPollingSettingsService = new FakeUserPollingSettingsService(true, Duration.ofMinutes(5), "5m", 10);
+        service.sourcePollingSettingsService = new FakeSourcePollingSettingsService();
+        service.sourcePollingStateService = new RecordingSourcePollingStateService();
+        service.manualPollRateLimitService = new ManualPollRateLimitService();
+
+        setRunning(service, true);
+        setActivePoll(service, "manual-source", "other-source", Instant.parse("2026-04-05T08:26:40Z"));
+        try {
+            PollRunResult result = service.runIdleTriggeredPollForSource(emailAccount);
+
+            assertEquals(1, result.getErrorDetails().size());
+            assertEquals("poll_busy", result.getErrorDetails().getFirst().code());
+            assertEquals(0, mailSourceClient.lastFetchWindow);
+        } finally {
+            setActivePoll(service, null, null, null);
+            setRunning(service, false);
+        }
     }
 
     @Test
@@ -684,16 +861,7 @@ class PollingServiceTest {
     @Test
     void busyPollMessageIncludesCurrentSourceWhenSingleSourcePollIsActive() throws Exception {
         PollingService service = new PollingService();
-        java.lang.reflect.Field activePollField = PollingService.class.getDeclaredField("activePoll");
-        activePollField.setAccessible(true);
-        @SuppressWarnings("unchecked")
-        java.util.concurrent.atomic.AtomicReference<Object> activePoll =
-                (java.util.concurrent.atomic.AtomicReference<Object>) activePollField.get(service);
-        java.lang.reflect.Constructor<?> constructor = Class
-                .forName("dev.inboxbridge.service.PollingService$ActivePoll")
-                .getDeclaredConstructors()[0];
-        constructor.setAccessible(true);
-        activePoll.set(constructor.newInstance("app-fetcher", "outlook-main", Instant.parse("2026-03-27T09:56:56Z")));
+        setActivePoll(service, "app-fetcher", "outlook-main", Instant.parse("2026-03-27T09:56:56Z"));
 
         java.lang.reflect.Method method = PollingService.class.getDeclaredMethod("currentBusyMessage");
         method.setAccessible(true);
@@ -827,6 +995,15 @@ class PollingServiceTest {
     }
 
     private static RuntimeEmailAccount userBridge(String sourceId, Long userId, String ownerUsername, String destinationSubjectKey) {
+        return userBridgeWithFetchMode(sourceId, userId, ownerUsername, destinationSubjectKey, SourceFetchMode.POLLING);
+    }
+
+    private static RuntimeEmailAccount userBridgeWithFetchMode(
+            String sourceId,
+            Long userId,
+            String ownerUsername,
+            String destinationSubjectKey,
+            SourceFetchMode fetchMode) {
         return new RuntimeEmailAccount(
                 sourceId,
                 "USER",
@@ -844,6 +1021,7 @@ class PollingServiceTest {
                 "",
                 java.util.Optional.of("INBOX"),
                 false,
+                fetchMode,
                 java.util.Optional.of("Imported/Test"),
                 new GmailApiDestinationTarget(
                         destinationSubjectKey,
@@ -1389,6 +1567,31 @@ class PollingServiceTest {
         public Iterable<? extends Handle<MailDestinationService>> handles() {
             throw new UnsupportedOperationException();
         }
+    }
+
+    private static void setRunning(PollingService service, boolean value) throws Exception {
+        java.lang.reflect.Field runningField = PollingService.class.getDeclaredField("running");
+        runningField.setAccessible(true);
+        java.util.concurrent.atomic.AtomicBoolean running =
+                (java.util.concurrent.atomic.AtomicBoolean) runningField.get(service);
+        running.set(value);
+    }
+
+    private static void setActivePoll(PollingService service, String trigger, String sourceId, Instant startedAt) throws Exception {
+        java.lang.reflect.Field activePollField = PollingService.class.getDeclaredField("activePoll");
+        activePollField.setAccessible(true);
+        @SuppressWarnings("unchecked")
+        java.util.concurrent.atomic.AtomicReference<Object> activePoll =
+                (java.util.concurrent.atomic.AtomicReference<Object>) activePollField.get(service);
+        if (trigger == null) {
+            activePoll.set(null);
+            return;
+        }
+        java.lang.reflect.Constructor<?> constructor = Class
+                .forName("dev.inboxbridge.service.PollingService$ActivePoll")
+                .getDeclaredConstructors()[0];
+        constructor.setAccessible(true);
+        activePoll.set(constructor.newInstance(trigger, sourceId, startedAt));
     }
 
     private static final class NoopSourcePollEventService extends SourcePollEventService {

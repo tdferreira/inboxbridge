@@ -28,6 +28,7 @@ function hasMeaningfulStats(stats) {
   return (stats.totalImportedMessages || 0) > 0
     || (stats.manualRuns || 0) > 0
     || (stats.scheduledRuns || 0) > 0
+    || (stats.idleRuns || 0) > 0
     || (stats.errorPolls || 0) > 0
     || (stats.sourcesWithErrors || 0) > 0
     || (stats.providerBreakdown?.length || 0) > 0
@@ -35,6 +36,8 @@ function hasMeaningfulStats(stats) {
 
 function describePostPollAction(fetcher, t) {
   switch (fetcher.postPollAction) {
+    case 'FORWARDED':
+      return t('emailAccount.postPollAction.forwarded')
     case 'DELETE':
       return t('emailAccount.postPollAction.delete')
     case 'MOVE':
@@ -208,6 +211,7 @@ function EmailAccountListItem({
             <div><dt>{t('emailAccount.totalImported')}</dt><dd>{fetcher.totalImportedMessages}</dd></div>
             <div><dt>{t('emailAccount.lastImport')}</dt><dd>{formatDate(fetcher.lastImportedAt, locale)}</dd></div>
             <div><dt>{t('emailAccount.folder')}</dt><dd>{fetcher.folder || 'INBOX'}</dd></div>
+            <div><dt>{t('emailAccounts.fetchMode')}</dt><dd>{t(`emailAccounts.fetchMode.${(fetcher.fetchMode || 'POLLING').toLowerCase()}`)}</dd></div>
             <div><dt>{t('emailAccount.customLabel')}</dt><dd>{fetcher.customLabel || t('users.notSet')}</dd></div>
             <div><dt>{t('emailAccount.markReadAfterPoll')}</dt><dd>{fetcher.markReadAfterPoll ? t('common.yes') : t('common.no')}</dd></div>
             <div><dt>{t('emailAccount.postPollAction')}</dt><dd>{describePostPollAction(fetcher, t)}</dd></div>
@@ -221,6 +225,9 @@ function EmailAccountListItem({
             <div><dt>{t('emailAccount.cooldownUntil')}</dt><dd>{formatDate(fetcher.pollingState?.cooldownUntil, locale)}</dd></div>
             <div><dt>{t('emailAccount.consecutiveFailures')}</dt><dd>{fetcher.pollingState?.consecutiveFailures || 0}</dd></div>
           </dl>
+          {fetcher.fetchMode === 'IDLE' ? (
+            <div className="muted-box">{t('emailAccount.idleManualRunHelp')}</div>
+          ) : null}
           {fetcher.pollingState?.lastFailureReason ? (
             <div className="muted-box">
               <strong>{t('emailAccount.lastFailureReason')}</strong><br />
@@ -261,6 +268,7 @@ function EmailAccountListItem({
               locale={locale}
               sectionLoading={statsLoading}
               showCollapseToggle={true}
+              sourceFetchMode={fetcher.fetchMode || 'POLLING'}
               stats={stats}
               t={t}
               title={t('pollingStats.sourceTitle', { emailAccountId: fetcher.emailAccountId })}

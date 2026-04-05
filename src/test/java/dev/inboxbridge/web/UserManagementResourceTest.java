@@ -315,10 +315,12 @@ class UserManagementResourceTest {
                     java.util.Map.of(),
                     java.util.Map.of(),
                     java.util.Map.of(),
+                    java.util.Map.of(),
                     new dev.inboxbridge.dto.PollingHealthSummaryView(1, 0, 0, 0),
                     java.util.List.of(),
                     1L,
                     2L,
+                    0L,
                     1100L);
         }
 
@@ -326,6 +328,7 @@ class UserManagementResourceTest {
         public PollingTimelineBundleView userTimelineBundle(Long userId, java.time.Instant fromInclusive, java.time.Instant toExclusive, java.time.ZoneId zoneId) {
           return new PollingTimelineBundleView(
                   java.util.Map.of("custom", java.util.List.of(new dev.inboxbridge.dto.ImportTimelinePointView("2026-03-26", 1L))),
+                  java.util.Map.of("custom", java.util.List.of()),
                   java.util.Map.of("custom", java.util.List.of()),
                   java.util.Map.of("custom", java.util.List.of()),
                   java.util.Map.of("custom", java.util.List.of()),

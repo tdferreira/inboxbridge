@@ -42,6 +42,19 @@
   grid-template-columns: repeat(2, minmax(0, 1fr));
 }
 
+.fetcher-post-poll-row {
+  align-items: end;
+}
+
+.fetcher-inline-checkbox {
+  min-height: 100%;
+  padding: 0 0 12px;
+}
+
+.fetcher-checkbox-pair .checkbox-row {
+  min-height: 100%;
+}
+
 .fetcher-test-result {
   display: grid;
   gap: 10px;

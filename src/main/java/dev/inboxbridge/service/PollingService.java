@@ -4,6 +4,7 @@ import java.time.Instant;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;
+import java.util.Set;
 import java.util.concurrent.ConcurrentLinkedQueue;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Future;
@@ -16,6 +17,7 @@ import org.jboss.logging.Logger;
 import dev.inboxbridge.domain.FetchedMessage;
 import dev.inboxbridge.domain.MailDestinationTarget;
 import dev.inboxbridge.domain.RuntimeEmailAccount;
+import dev.inboxbridge.domain.SourceFetchMode;
 import dev.inboxbridge.dto.MailImportResponse;
 import dev.inboxbridge.dto.PollRunError;
 import dev.inboxbridge.dto.PollRunResult;
@@ -80,8 +82,12 @@ public class PollingService {
     @Inject
     PollCancellationService pollCancellationService;
 
+    @Inject
+    ImapIdleHealthService imapIdleHealthService;
+
     private final AtomicBoolean running = new AtomicBoolean(false);
     private final AtomicReference<ActivePoll> activePoll = new AtomicReference<>();
+    private final Set<String> activeIdleSources = java.util.concurrent.ConcurrentHashMap.newKeySet();
 
     @Scheduled(every = "5s")
     void scheduledPoll() {
@@ -130,6 +136,21 @@ public class PollingService {
         return runPollInternal(trigger, List.of(emailAccount), actor, actorKey, true, true, true, emailAccount.id(), executionSurfaceForTrigger(trigger));
     }
 
+    public PollRunResult runIdleTriggeredPollForSource(RuntimeEmailAccount emailAccount) {
+        if (!activeIdleSources.add(emailAccount.id())) {
+            return busyResult(emailAccount.id(), "A realtime source activation is already running for source " + emailAccount.id() + ".");
+        }
+        try {
+            ActivePoll current = activePoll.get();
+            if (running.get() && current != null && "scheduler".equals(current.trigger())) {
+                return runConcurrentIdleSourcePoll(emailAccount);
+            }
+            return runPollInternal("idle-source", List.of(emailAccount), null, null, true, true, true, emailAccount.id(), executionSurfaceForTrigger("idle-source"));
+        } finally {
+            activeIdleSources.remove(emailAccount.id());
+        }
+    }
+
     public PollStatusView status() {
         ActivePoll current = activePoll.get();
         if (current == null) {
@@ -149,10 +170,7 @@ public class PollingService {
             String singleSourceId,
             String executionSurface) {
         if (!running.compareAndSet(false, true)) {
-            PollRunResult busy = new PollRunResult();
-            busy.addError(new PollRunError("poll_busy", singleSourceId, currentBusyMessage(), null));
-            busy.finish();
-            return busy;
+            return busyResult(singleSourceId, currentBusyMessage());
         }
 
         PollRunResult result = new PollRunResult();
@@ -328,6 +346,7 @@ public class PollingService {
                 processedBytes += message.rawMessage().length;
                 if (importDeduplicationService.alreadyImported(message, emailAccount.destination())) {
                     mailSourceClient.applyPostPollSettings(emailAccount, message);
+                    recordImapCheckpoint(emailAccount, message);
                     tally.incrementDuplicate();
                     duplicates++;
                     publishLiveProgress(liveRunId, emailAccount.id(), messages.size(), totalBytes, processedBytes, fetched, imported, duplicates);
@@ -338,6 +357,7 @@ public class PollingService {
                     MailImportResponse importResponse = destinationService.importMessage(emailAccount.destination(), emailAccount, message);
                     importDeduplicationService.recordImport(message, emailAccount.destination(), importResponse);
                     mailSourceClient.applyPostPollSettings(emailAccount, message);
+                    recordImapCheckpoint(emailAccount, message);
                     recordDestinationThrottleSuccess(emailAccount.destination());
                     tally.incrementImported();
                     tally.addImportedBytes(message.rawMessage().length);
@@ -432,7 +452,15 @@ public class PollingService {
                 effectiveSettingsFor(emailAccount),
                 now,
                 false,
-                false).shouldPoll();
+                false).shouldPoll() && isSchedulerAllowedForFetchMode(emailAccount, now);
+    }
+
+    private boolean isSchedulerAllowedForFetchMode(RuntimeEmailAccount emailAccount, Instant now) {
+        if (emailAccount.fetchMode() != SourceFetchMode.IDLE) {
+            return true;
+        }
+        return imapIdleHealthService != null
+                && imapIdleHealthService.shouldSchedulerFallback(emailAccount.id(), now);
     }
 
     private long totalBytes(List<FetchedMessage> messages) {
@@ -611,11 +639,56 @@ public class PollingService {
     private String executionSurfaceForTrigger(String trigger) {
         return switch (String.valueOf(trigger)) {
             case "scheduler" -> "AUTOMATIC";
+            case "idle-source" -> "AUTOMATIC";
             case "user-ui", "app-fetcher" -> "MY_INBOXBRIDGE";
             case "admin-ui", "admin-fetcher" -> "ADMINISTRATION";
             case "remote-ui", "remote-admin", "remote-source" -> "INBOXBRIDGE_GO";
             default -> null;
         };
+    }
+
+    public boolean isRunning() {
+        return running.get();
+    }
+
+    private PollRunResult runConcurrentIdleSourcePoll(RuntimeEmailAccount emailAccount) {
+        PollRunResult result = new PollRunResult();
+        try {
+            LOG.infof("Starting single-source poll triggered by idle-source alongside the active scheduler run for %s", emailAccount.id());
+            SourcePollTally tally = new SourcePollTally();
+            pollSingleSource(
+                    "idle-source",
+                    Instant.now(),
+                    tally,
+                    null,
+                    emailAccount,
+                    true,
+                    true,
+                    null,
+                    executionSurfaceForTrigger("idle-source"));
+            tally.mergeInto(result);
+            return result;
+        } catch (RuntimeException e) {
+            LOG.error("Unexpected concurrent idle-source polling failure", e);
+            result.addError(Optional.ofNullable(e.getMessage()).orElse(e.getClass().getSimpleName()));
+            return result;
+        } finally {
+            result.finish();
+            LOG.infof("Poll finished: fetched=%d imported=%d duplicates=%d errors=%d",
+                    result.getFetched(), result.getImported(), result.getDuplicates(), result.getErrors().size());
+        }
+    }
+
+    private void recordImapCheckpoint(RuntimeEmailAccount emailAccount, FetchedMessage message) {
+        if (emailAccount.protocol() != dev.inboxbridge.config.InboxBridgeConfig.Protocol.IMAP || sourcePollingStateService == null) {
+            return;
+        }
+        sourcePollingStateService.recordImapCheckpoint(
+                emailAccount.id(),
+                message.folderName().orElse(emailAccount.folder().orElse("INBOX")),
+                message.uidValidity(),
+                message.uid(),
+                Instant.now());
     }
 
     private PollThrottleService.ThrottleLease acquireSourceThrottle(RuntimeEmailAccount emailAccount) {
@@ -770,6 +843,13 @@ public class PollingService {
         return "A poll is already running"
                 + " (trigger=" + current.trigger()
                 + ", startedAt=" + current.startedAt() + ")";
+    }
+
+    private PollRunResult busyResult(String singleSourceId, String message) {
+        PollRunResult busy = new PollRunResult();
+        busy.addError(new PollRunError("poll_busy", singleSourceId, message, null));
+        busy.finish();
+        return busy;
     }
 
     private record ActivePoll(String trigger, String sourceId, Instant startedAt) {

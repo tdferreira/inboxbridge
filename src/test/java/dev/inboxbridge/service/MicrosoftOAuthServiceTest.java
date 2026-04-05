@@ -19,6 +19,7 @@ import org.junit.jupiter.api.Test;
 import com.fasterxml.jackson.databind.ObjectMapper;
 
 import dev.inboxbridge.config.InboxBridgeConfig;
+import dev.inboxbridge.domain.SourceFetchMode;
 import dev.inboxbridge.persistence.UserEmailAccount;
 import dev.inboxbridge.persistence.UserEmailAccountRepository;
 
@@ -541,6 +542,11 @@ class MicrosoftOAuthServiceTest {
             InboxBridgeConfig.Protocol protocol,
             InboxBridgeConfig.AuthMethod authMethod,
             InboxBridgeConfig.OAuthProvider oauthProvider) implements InboxBridgeConfig.Source {
+
+        @Override
+        public SourceFetchMode fetchMode() {
+            return SourceFetchMode.POLLING;
+        }
 
         @Override
         public boolean enabled() {

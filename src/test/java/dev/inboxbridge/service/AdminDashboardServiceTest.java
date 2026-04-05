@@ -14,6 +14,7 @@ import java.util.Optional;
 import org.junit.jupiter.api.Test;
 
 import dev.inboxbridge.config.InboxBridgeConfig;
+import dev.inboxbridge.domain.SourceFetchMode;
 import dev.inboxbridge.dto.AdminDashboardResponse;
 import dev.inboxbridge.dto.AdminPollEventSummary;
 import dev.inboxbridge.dto.SourcePollingStateView;
@@ -734,6 +735,11 @@ class AdminDashboardServiceTest {
             InboxBridgeConfig.Protocol protocol,
             InboxBridgeConfig.AuthMethod authMethod,
             InboxBridgeConfig.OAuthProvider oauthProvider) implements InboxBridgeConfig.Source {
+
+        @Override
+        public SourceFetchMode fetchMode() {
+            return SourceFetchMode.POLLING;
+        }
 
         @Override
         public String host() {

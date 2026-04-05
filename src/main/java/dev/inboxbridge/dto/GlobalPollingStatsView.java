@@ -18,9 +18,11 @@ public record GlobalPollingStatsView(
         Map<String, List<ImportTimelinePointView>> errorTimelines,
         Map<String, List<ImportTimelinePointView>> manualRunTimelines,
         Map<String, List<ImportTimelinePointView>> scheduledRunTimelines,
+        Map<String, List<ImportTimelinePointView>> idleRunTimelines,
         PollingHealthSummaryView health,
         List<PollingBreakdownItemView> providerBreakdown,
         long manualRuns,
         long scheduledRuns,
+        long idleRuns,
         long averagePollDurationMillis) {
 }

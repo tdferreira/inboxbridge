@@ -4,6 +4,7 @@ import java.time.Duration;
 import java.util.List;
 import java.util.Optional;
 
+import dev.inboxbridge.domain.SourceFetchMode;
 import io.smallrye.config.ConfigMapping;
 import io.smallrye.config.WithDefault;
 
@@ -237,6 +238,9 @@ public interface InboxBridgeConfig {
 
         @WithDefault("false")
         boolean unreadOnly();
+
+        @WithDefault("POLLING")
+        SourceFetchMode fetchMode();
 
         Optional<String> customLabel();
     }

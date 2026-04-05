@@ -83,7 +83,7 @@ describe('RemoteApp', () => {
   it('shows the remote login screen when no remote session exists', async () => {
     vi.stubGlobal('fetch', vi.fn(() => jsonResponse({ code: 'unauthorized', message: 'Not authenticated' }, 401)))
 
-    render(<RemoteApp />)
+    render(<RemoteApp timingOverrides={{ liveConnectedSnapshotReconcileMs: 10 }} />)
 
     expect(await screen.findByRole('button', { name: 'Sign in' })).toBeInTheDocument()
     expect(screen.getByRole('button', { name: 'Sign in' })).toBeInTheDocument()
@@ -92,7 +92,7 @@ describe('RemoteApp', () => {
   it('shows only one InboxBridge Go title on the remote login screen', async () => {
     vi.stubGlobal('fetch', vi.fn(() => jsonResponse({ code: 'unauthorized', message: 'Not authenticated' }, 401)))
 
-    render(<RemoteApp />)
+    render(<RemoteApp timingOverrides={{ liveConnectedSnapshotReconcileMs: 10 }} />)
 
     expect(await screen.findByRole('heading', { name: 'InboxBridge Go' })).toBeInTheDocument()
     expect(screen.getAllByText('InboxBridge Go')).toHaveLength(1)
@@ -101,7 +101,7 @@ describe('RemoteApp', () => {
   it('lets unauthenticated remote users choose the language on the login screen', async () => {
     vi.stubGlobal('fetch', vi.fn(() => jsonResponse({ code: 'unauthorized', message: 'Not authenticated' }, 401)))
 
-    render(<RemoteApp />)
+    render(<RemoteApp timingOverrides={{ liveConnectedSnapshotReconcileMs: 10 }} />)
 
     expect(await screen.findByRole('button', { name: 'Language' })).toBeInTheDocument()
     expect(screen.queryByText('Language')).not.toBeInTheDocument()
@@ -195,7 +195,7 @@ describe('RemoteApp', () => {
     })
     vi.stubGlobal('fetch', fetchMock)
 
-    render(<RemoteApp />)
+    render(<RemoteApp timingOverrides={{ liveConnectedSnapshotReconcileMs: 10 }} />)
 
     fireEvent.change(await screen.findByLabelText('Username'), { target: { value: 'alice' } })
     fireEvent.click(screen.getByRole('button', { name: 'Sign in' }))
@@ -1367,7 +1367,7 @@ describe('RemoteApp', () => {
     })
     vi.stubGlobal('fetch', fetchMock)
 
-    render(<RemoteApp />)
+    render(<RemoteApp timingOverrides={{ liveConnectedSnapshotReconcileMs: 10 }} />)
 
     expect(await screen.findByText('Main Inbox')).toBeInTheDocument()
     await waitFor(() => expect(FakeEventSource.instances).toHaveLength(1))
@@ -1381,7 +1381,7 @@ describe('RemoteApp', () => {
     })
 
     await act(async () => {
-      await new Promise((resolve) => window.setTimeout(resolve, 5200))
+      await new Promise((resolve) => window.setTimeout(resolve, 250))
     })
 
     await waitFor(() => {

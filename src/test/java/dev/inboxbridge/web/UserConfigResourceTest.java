@@ -306,9 +306,11 @@ class UserConfigResourceTest {
                     java.util.Map.of(),
                     java.util.Map.of(),
                     java.util.Map.of(),
+                    java.util.Map.of(),
                     new PollingHealthSummaryView(1, 0, 0, 0),
                     java.util.List.of(new PollingBreakdownItemView("generic-imap", "Generic IMAP", 1L)),
                     1L,
+                    0L,
                     0L,
                     1200L);
         }
@@ -327,9 +329,11 @@ class UserConfigResourceTest {
                     java.util.Map.of(),
                     java.util.Map.of(),
                     java.util.Map.of(),
+                    java.util.Map.of(),
                     new PollingHealthSummaryView(1, 0, 0, 0),
                     java.util.List.of(new PollingBreakdownItemView("microsoft", "Microsoft", 1L)),
                     1L,
+                    0L,
                     0L,
                     1500L);
         }
@@ -341,6 +345,7 @@ class UserConfigResourceTest {
                     java.util.Map.of("custom", java.util.List.of()),
                     java.util.Map.of("custom", java.util.List.of()),
                     java.util.Map.of("custom", java.util.List.of(new dev.inboxbridge.dto.ImportTimelinePointView("2026-03-26", 1L))),
+                    java.util.Map.of("custom", java.util.List.of()),
                     java.util.Map.of("custom", java.util.List.of()));
         }
     }
@@ -398,7 +403,7 @@ class UserConfigResourceTest {
 
         @Override
         public EmailAccountConnectionTestResult testConnection(AppUser user, UpdateUserEmailAccountRequest request) {
-            return new EmailAccountConnectionTestResult(true, "Connection test succeeded.", "IMAP", "imap.example.com", 993, true, "PASSWORD", "NONE", true, "INBOX", true, false, Boolean.TRUE, null, 0, 0, Boolean.FALSE, null);
+            return new EmailAccountConnectionTestResult(true, "Connection test succeeded.", "IMAP", "imap.example.com", 993, true, "PASSWORD", "NONE", true, "INBOX", true, false, Boolean.TRUE, null, 0, 0, Boolean.FALSE, null, Boolean.TRUE);
         }
     }
 
@@ -410,7 +415,7 @@ class UserConfigResourceTest {
 
         @Override
         public EmailAccountConnectionTestResult testConnectionForUser(AppUser user, UpdateUserMailDestinationRequest request) {
-            return new EmailAccountConnectionTestResult(true, "Connection test succeeded.", "IMAP", request.host(), request.port(), request.tls(), request.authMethod(), request.oauthProvider(), true, request.folder(), true, false, null, null, 0, null, false, null);
+            return new EmailAccountConnectionTestResult(true, "Connection test succeeded.", "IMAP", request.host(), request.port(), request.tls(), request.authMethod(), request.oauthProvider(), true, request.folder(), true, false, null, null, 0, null, false, null, null);
         }
     }
 

@@ -22,6 +22,7 @@ public record UserEmailAccountView(
         boolean oauthRefreshTokenConfigured,
         String folder,
         boolean unreadOnly,
+        String fetchMode,
         String customLabel,
         boolean markReadAfterPoll,
         String postPollAction,

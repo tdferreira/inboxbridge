@@ -110,7 +110,10 @@ into another user's destination.
 
 ## Current compromise for simplicity
 
-This starter scans the latest configured message window rather than maintaining a high-fidelity mailbox cursor.
+InboxBridge now supports two IMAP source-ingestion modes:
+
+- scheduled polling, which still inspects the latest configured fetch window when no durable checkpoint is available
+- opt-in IMAP IDLE watching, which keeps one long-lived watcher per eligible IMAP source/folder and triggers the normal import pipeline when new mail arrives
 
 The fetch window and scheduler interval now come from effective runtime polling settings:
 
@@ -126,22 +129,33 @@ Each source now has its own persisted polling state:
 - active cooldown-until time
 - consecutive failure count
 - last failure reason and timestamps
+- for IMAP sources, the current folder plus the last seen `UIDVALIDITY` / UID checkpoint
 
 The scheduler checks that state on every run so one blocked or throttled mailbox does not stall unrelated source email accounts.
 
 Scheduler-triggered runs now also filter out sources whose current eligibility says `INTERVAL`, `COOLDOWN`, or `DISABLED` before creating any live run state, so the user-facing live coordinator only tracks real runnable work instead of every scheduler tick.
 
+Scheduler-triggered runs also skip sources whose fetch mode is `IDLE`, because those sources are expected to wake the shared import pipeline from the background watcher instead of being batch-polled every few minutes. When a source mailbox is saved or deleted, an after-commit event also forces the watcher registry to refresh immediately so newly switched `IDLE` sources do not wait for the normal periodic rescan. On backend startup the watcher registry is refreshed immediately as well, so eligible `IDLE` sources reconnect within the normal Quarkus boot path instead of waiting for the 30-second sweep.
+
+Realtime `idle-source` activations now also get priority over scheduler contention. If a scheduler batch is already running, InboxBridge can start a single-source `idle-source` run alongside that scheduler batch for the newly activated IMAP source instead of repeatedly re-queueing it until the whole batch finishes. Other busy states still return `poll_busy`, so manual/source-scoped runs keep the existing safety guardrails.
+
+IDLE sources now also keep a lightweight watcher-health record. Healthy watchers remain the primary ingestion path and scheduler polling continues to skip those sources. If a watcher disconnects and stays unhealthy beyond the normal reconnect window, the scheduler temporarily treats that source as eligible again so mail still flows while the watcher keeps retrying in the background. Once the watcher reconnects, scheduler fallback stops automatically and the source returns to pure IDLE-driven ingestion.
+
 Successful scheduled polls now persist the next eligible time on aligned interval boundaries rather than `last success + interval`, so the single scheduler loop still wakes up every few seconds but each source's actual cadence follows predictable slots such as `:00`, `:05`, and `:10` according to that source's effective polling settings.
 
 Polling statistics are intentionally timezone-aware at the request boundary: the browser sends the signed-in user's effective IANA timezone in `X-InboxBridge-Timezone`, and `PollingStatsService` uses that zone when building hourly, daily, monthly, and custom buckets. The persisted timestamps stay in UTC, but chart labels such as `09:00` or `2026-04-04` are computed relative to that user's effective timezone. The effective zone itself comes from the persisted user UI-preferences model: `AUTO` follows the current browser timezone, while `MANUAL` pins the account to one chosen timezone so the same user can keep consistent charts and date-time rendering across different devices or travel scenarios. The admin-side scheduled-run anomaly signal is layered on top of those viewer-local buckets in the browser: it warns only admins, keeps the floating notification for at most 24 hours after the suspicious bucket, and lets the static section warning age out after one week.
+For source-scoped statistics, IMAP IDLE now has its own run category. `idle-source` events are no longer folded into the generic manual bucket, and source charts for IDLE-configured mailboxes switch to `Source activity over time` so realtime imports are represented as source activity instead of misleading manual polls. The UI labels those runs as `Realtime source activations` and explicitly clarifies that they count the initial IDLE sync plus later activations caused by new mail, not how long a watcher stayed connected.
+
+The source connection test path now also inspects IMAP permanent flags for the selected folder and surfaces a best-effort `$Forwarded` capability signal back to the admin UI. This is advisory only: InboxBridge still treats source-side `$Forwarded` marking as optional and continues importing even if the server later rejects that flag.
 
 UI-managed IMAP sources now also persist optional post-poll source-side actions:
 
 - mark handled mail as read
+- mark handled mail with the IMAP `$Forwarded` flag when the server accepts it
 - delete handled mail
 - move handled mail into another source folder
 
-Those actions are intentionally unavailable for POP3 accounts because there is no equivalent source-side folder/flag model there.
+Those actions are intentionally unavailable for POP3 accounts because there is no equivalent source-side folder/flag model there. The `$Forwarded` action is treated as a best-effort hint only: DB-backed dedupe remains authoritative, and unsupported IMAP servers only emit a warning instead of failing the import.
 
 Polling hardening also now includes:
 
@@ -153,10 +167,10 @@ Polling hardening also now includes:
 
 Those values can be overridden live from `Administration -> Global Poller Settings`.
 
-That is deliberately simple for a first self-hosted version. The next evolution should be:
+That is still deliberately simpler than a full mailbox-sync engine. The next evolution should be:
 
-- persistent IMAP UID / UIDVALIDITY checkpoints
 - POP UIDL checkpoints
+- multi-folder IMAP IDLE / checkpoint support
 - richer retry classification
 - richer metrics and audit logs for poll cooldown decisions
 

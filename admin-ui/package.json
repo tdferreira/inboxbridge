@@ -8,7 +8,7 @@
     "build": "vite build",
     "preview": "vite preview --host 0.0.0.0 --port 4173",
     "test": "vitest",
-    "test:run": "node ./scripts/run-vitest.mjs run --pool forks --maxWorkers=1",
+    "test:run": "node ./scripts/run-vitest.mjs run --pool forks",
     "test:coverage": "mkdir -p coverage/.tmp && node ./scripts/run-vitest.mjs run --coverage --pool forks --maxWorkers=1"
   },
   "dependencies": {

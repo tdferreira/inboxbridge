@@ -226,7 +226,7 @@ class UserMailDestinationConfigServiceTest {
         microsoftService.linked = true;
         FakeImapAppendMailDestinationService imapService = (FakeImapAppendMailDestinationService) service.imapAppendMailDestinationService;
         imapService.linked = true;
-        imapService.testResult = new EmailAccountConnectionTestResult(true, "Connection test succeeded.", "IMAP", "outlook.office365.com", 993, true, "OAUTH2", "MICROSOFT", true, "INBOX", true, false, null, null, 0, null, false, null);
+        imapService.testResult = new EmailAccountConnectionTestResult(true, "Connection test succeeded.", "IMAP", "outlook.office365.com", 993, true, "OAUTH2", "MICROSOFT", true, "INBOX", true, false, null, null, 0, null, false, null, null);
 
         EmailAccountConnectionTestResult result = service.testConnectionForUser(user, new UpdateUserMailDestinationRequest(
                 UserMailDestinationConfigService.PROVIDER_OUTLOOK,
@@ -542,7 +542,7 @@ class UserMailDestinationConfigServiceTest {
         private List<String> folders = List.of();
         private boolean linked;
         private dev.inboxbridge.domain.ImapAppendDestinationTarget lastTarget;
-        private EmailAccountConnectionTestResult testResult = new EmailAccountConnectionTestResult(true, "Connection test succeeded.", "IMAP", "imap.example.com", 993, true, "PASSWORD", "NONE", true, "INBOX", true, false, null, null, 0, null, false, null);
+        private EmailAccountConnectionTestResult testResult = new EmailAccountConnectionTestResult(true, "Connection test succeeded.", "IMAP", "imap.example.com", 993, true, "PASSWORD", "NONE", true, "INBOX", true, false, null, null, 0, null, false, null, null);
 
         @Override
         public boolean isLinked(dev.inboxbridge.domain.MailDestinationTarget target) {

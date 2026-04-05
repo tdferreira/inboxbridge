@@ -44,6 +44,7 @@ function buildEmailAccountRequestPayload(emailAccountForm) {
     oauthRefreshToken: emailAccountForm.oauthRefreshToken,
     folder: emailAccountForm.folder,
     unreadOnly: emailAccountForm.unreadOnly,
+    fetchMode: emailAccountForm.fetchMode,
     customLabel: emailAccountForm.customLabel,
     markReadAfterPoll: emailAccountForm.markReadAfterPoll,
     postPollAction: emailAccountForm.postPollAction,
@@ -157,6 +158,7 @@ export function useEmailAccountsController({
         tls: emailAccount.tls,
         folder: emailAccount.folder,
         unreadOnly: emailAccount.unreadOnly,
+        fetchMode: emailAccount.fetchMode,
         customLabel: emailAccount.customLabel,
         markReadAfterPoll: emailAccount.markReadAfterPoll,
         postPollAction: emailAccount.postPollAction,
@@ -262,6 +264,7 @@ export function useEmailAccountsController({
       oauthRefreshToken: '',
       folder: emailAccount.folder,
       unreadOnly: emailAccount.unreadOnly,
+      fetchMode: emailAccount.fetchMode || 'POLLING',
       customLabel: emailAccount.customLabel,
       markReadAfterPoll: emailAccount.markReadAfterPoll ?? false,
       postPollAction: emailAccount.postPollAction || 'NONE',
@@ -386,7 +389,8 @@ export function useEmailAccountsController({
       duplicates: payload.duplicateTimelines?.custom || [],
       errors: payload.errorTimelines?.custom || [],
       manualRuns: payload.manualRunTimelines?.custom || [],
-      scheduledRuns: payload.scheduledRunTimelines?.custom || []
+      scheduledRuns: payload.scheduledRunTimelines?.custom || [],
+      idleRuns: payload.idleRunTimelines?.custom || []
     }
   }
 
@@ -731,6 +735,7 @@ export function useEmailAccountsController({
             oauthRefreshToken: '',
             folder: fetcher.folder,
             unreadOnly: fetcher.unreadOnly,
+            fetchMode: fetcher.fetchMode || 'POLLING',
             customLabel: fetcher.customLabel,
             markReadAfterPoll: fetcher.markReadAfterPoll,
             postPollAction: fetcher.postPollAction,

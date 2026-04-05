@@ -15,6 +15,7 @@ import jakarta.persistence.Table;
 import jakarta.persistence.UniqueConstraint;
 
 import dev.inboxbridge.config.InboxBridgeConfig;
+import dev.inboxbridge.domain.SourceFetchMode;
 import dev.inboxbridge.domain.SourcePostPollAction;
 
 @Entity
@@ -85,6 +86,10 @@ public class UserEmailAccount extends PanacheEntityBase {
 
     @Column(name = "unread_only", nullable = false)
     public boolean unreadOnly;
+
+    @Enumerated(EnumType.STRING)
+    @Column(name = "fetch_mode", nullable = false, length = 20)
+    public SourceFetchMode fetchMode;
 
     @Column(name = "custom_label", length = 255)
     public String customLabel;
