@@ -27,7 +27,12 @@ public class ImportDeduplicationService {
             return true;
         }
         String rawSha256 = mimeHashService.sha256Hex(message.rawMessage());
-        return importedMessageRepository.existsByRawSha256(destinationIdentityKey, rawSha256);
+        if (importedMessageRepository.existsByRawSha256(destinationIdentityKey, rawSha256)) {
+            return true;
+        }
+        String normalizedMessageIdHeader = normalizeMessageIdHeader(message.messageIdHeader().orElse(null));
+        return normalizedMessageIdHeader != null
+                && importedMessageRepository.existsByMessageIdHeader(destinationIdentityKey, message.sourceAccountId(), normalizedMessageIdHeader);
     }
 
     @Transactional
@@ -35,7 +40,7 @@ public class ImportDeduplicationService {
         ImportedMessage entity = new ImportedMessage();
         entity.sourceAccountId = message.sourceAccountId();
         entity.sourceMessageKey = message.sourceMessageKey();
-        entity.messageIdHeader = message.messageIdHeader().orElse(null);
+        entity.messageIdHeader = normalizeMessageIdHeader(message.messageIdHeader().orElse(null));
         entity.rawSha256 = mimeHashService.sha256Hex(message.rawMessage());
         entity.destinationKey = target.subjectKey();
         entity.destinationIdentityKey = DestinationIdentityKeys.forTarget(target);
@@ -43,5 +48,20 @@ public class ImportDeduplicationService {
         entity.gmailThreadId = importResponse.destinationThreadId();
         entity.importedAt = Instant.now();
         importedMessageRepository.persist(entity);
+    }
+
+    private String normalizeMessageIdHeader(String messageIdHeader) {
+        if (messageIdHeader == null) {
+            return null;
+        }
+        String trimmed = messageIdHeader.trim();
+        if (trimmed.isEmpty()) {
+            return null;
+        }
+        if (trimmed.startsWith("<") && trimmed.endsWith(">") && trimmed.length() > 2) {
+            String unwrapped = trimmed.substring(1, trimmed.length() - 1).trim();
+            return unwrapped.isEmpty() ? null : unwrapped;
+        }
+        return trimmed;
     }
 }

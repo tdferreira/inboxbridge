@@ -2,6 +2,8 @@ package dev.inboxbridge.service;
 
 import static org.junit.jupiter.api.Assertions.assertArrayEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
@@ -12,10 +14,12 @@ import java.lang.reflect.Method;
 import java.util.ArrayList;
 import java.util.Date;
 import java.util.List;
+import java.util.Optional;
 import java.util.Properties;
 
 import org.junit.jupiter.api.Test;
 
+import dev.inboxbridge.domain.FetchedMessage;
 import jakarta.mail.Address;
 import jakarta.mail.Flags;
 import jakarta.mail.Folder;
@@ -128,6 +132,54 @@ class MailSourceClientTest {
         assertFalse(MailSourceClient.resolveForwardedMarkerSupport(new PermanentFlagsFolder(new Flags())));
     }
 
+    @Test
+    void imapSourceMessageKeyIncludesUidValidityWhenAvailable() throws Exception {
+        MailSourceClient client = new MailSourceClient();
+
+        String sourceMessageKey = invokeImapSourceMessageKey(client, "source-1", "Projects/2026", 44L, 200L);
+
+        assertEquals("source-1:imap-folder-uid:UHJvamVjdHMvMjAyNg:44:200", sourceMessageKey);
+    }
+
+    @Test
+    void extractImapUidFromSourceKeySupportsDestinationAwareImapKeys() throws Exception {
+        MailSourceClient client = new MailSourceClient();
+        FetchedMessage message = new FetchedMessage(
+                "source-1",
+                "source-1:imap-uid:44:200",
+                Optional.of("<message@example.com>"),
+                java.time.Instant.parse("2026-04-06T00:00:00Z"),
+                "raw".getBytes());
+
+        assertEquals(200L, invokeExtractImapUidFromSourceKey(client, message));
+    }
+
+    @Test
+    void extractImapUidFromSourceKeyKeepsLegacyUidKeysReadable() throws Exception {
+        MailSourceClient client = new MailSourceClient();
+        FetchedMessage message = new FetchedMessage(
+                "source-1",
+                "source-1:uid:200",
+                Optional.of("<message@example.com>"),
+                java.time.Instant.parse("2026-04-06T00:00:00Z"),
+                "raw".getBytes());
+
+        assertEquals(200L, invokeExtractImapUidFromSourceKey(client, message));
+    }
+
+    @Test
+    void extractImapUidFromSourceKeyIgnoresMalformedKeys() throws Exception {
+        MailSourceClient client = new MailSourceClient();
+        FetchedMessage message = new FetchedMessage(
+                "source-1",
+                "source-1:imap-uid:not-a-number",
+                Optional.of("<message@example.com>"),
+                java.time.Instant.parse("2026-04-06T00:00:00Z"),
+                "raw".getBytes());
+
+        assertNull(invokeExtractImapUidFromSourceKey(client, message));
+    }
+
     private byte[] invokeToRawBytes(MailSourceClient client, Message message) throws Exception {
         Method method = MailSourceClient.class.getDeclaredMethod("toRawBytes", Message.class);
         method.setAccessible(true);
@@ -146,6 +198,32 @@ class MailSourceClientTest {
         method.setAccessible(true);
         try {
             return (Folder) method.invoke(client, store);
+        } catch (InvocationTargetException e) {
+            if (e.getCause() instanceof Exception exception) {
+                throw exception;
+            }
+            throw e;
+        }
+    }
+
+    private String invokeImapSourceMessageKey(MailSourceClient client, String sourceId, String folderName, Long uidValidity, long uid) throws Exception {
+        Method method = MailSourceClient.class.getDeclaredMethod("imapSourceMessageKey", String.class, String.class, Long.class, long.class);
+        method.setAccessible(true);
+        try {
+            return (String) method.invoke(client, sourceId, folderName, uidValidity, uid);
+        } catch (InvocationTargetException e) {
+            if (e.getCause() instanceof Exception exception) {
+                throw exception;
+            }
+            throw e;
+        }
+    }
+
+    private Long invokeExtractImapUidFromSourceKey(MailSourceClient client, FetchedMessage message) throws Exception {
+        Method method = MailSourceClient.class.getDeclaredMethod("extractImapUidFromSourceKey", FetchedMessage.class);
+        method.setAccessible(true);
+        try {
+            return (Long) method.invoke(client, message);
         } catch (InvocationTargetException e) {
             if (e.getCause() instanceof Exception exception) {
                 throw exception;

@@ -22,6 +22,13 @@ public class ImportedMessageRepository implements PanacheRepository<ImportedMess
         return count("destinationIdentityKey = ?1 and rawSha256 = ?2", destinationIdentityKey, rawSha256) > 0;
     }
 
+    public boolean existsByMessageIdHeader(String destinationIdentityKey, String sourceAccountId, String messageIdHeader) {
+        return count("destinationIdentityKey = ?1 and sourceAccountId = ?2 and messageIdHeader = ?3",
+                destinationIdentityKey,
+                sourceAccountId,
+                messageIdHeader) > 0;
+    }
+
     public Optional<ImportedMessage> findBySourceMessageKey(String destinationIdentityKey, String sourceAccountId, String sourceMessageKey) {
         return find("destinationIdentityKey = ?1 and sourceAccountId = ?2 and sourceMessageKey = ?3",
                 destinationIdentityKey,

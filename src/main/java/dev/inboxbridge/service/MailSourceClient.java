@@ -2,9 +2,11 @@ package dev.inboxbridge.service;
 
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
+import java.nio.charset.StandardCharsets;
 import java.time.Instant;
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.Base64;
 import java.util.Comparator;
 import java.util.HashSet;
 import java.util.LinkedHashSet;
@@ -718,7 +720,7 @@ public class MailSourceClient {
         if (message.getFolder() instanceof UIDFolder uidFolder) {
             long uid = uidFolder.getUID(message);
             if (uid > 0) {
-                return sourceId + ":uid:" + uid;
+                return imapSourceMessageKey(sourceId, safeFolderName(message.getFolder()), resolveUidValidity(message.getFolder()), uid);
             }
         }
         String messageIdHeader = firstHeader(message, "Message-ID");
@@ -730,7 +732,7 @@ public class MailSourceClient {
 
     private String resolveSourceMessageKey(String sourceId, MessageMetadata metadata, String sha) {
         if (metadata.uid() != null && metadata.uid() > 0) {
-            return sourceId + ":uid:" + metadata.uid();
+            return imapSourceMessageKey(sourceId, metadata.folderName(), metadata.uidValidity(), metadata.uid());
         }
         if (metadata.popUidl() != null && !metadata.popUidl().isBlank()) {
             return sourceId + ":uidl:" + metadata.popUidl();
@@ -767,7 +769,7 @@ public class MailSourceClient {
         } catch (MessagingException e) {
             LOG.debugf(e, "Unable to resolve Message-ID for message %s", safeMessageNumber(message));
         }
-        return new MessageMetadata(uid, popUidl, messageId, messageInstant(message));
+        return new MessageMetadata(uid, resolveUidValidity(message.getFolder()), popUidl, messageId, messageInstant(message), safeFolderName(message.getFolder()));
     }
 
     private Message[] selectImapCandidateMessages(
@@ -893,9 +895,9 @@ public class MailSourceClient {
 
     private Message resolveSourceMessage(Folder folder, FetchedMessage message) throws MessagingException {
         String sourceMessageKey = message.sourceMessageKey();
-        String uidPrefix = message.sourceAccountId() + ":uid:";
-        if (sourceMessageKey != null && sourceMessageKey.startsWith(uidPrefix) && folder instanceof UIDFolder uidFolder) {
-            long uid = Long.parseLong(sourceMessageKey.substring(uidPrefix.length()));
+        Long imapUid = extractImapUidFromSourceKey(message);
+        if (imapUid != null && folder instanceof UIDFolder uidFolder) {
+            long uid = imapUid.longValue();
             return uidFolder.getMessageByUID(uid);
         }
         Optional<String> messageId = message.messageIdHeader()
@@ -919,6 +921,66 @@ public class MailSourceClient {
             return Optional.empty();
         }
         return Optional.of(sourceMessageKey.substring(messageIdPrefix.length()));
+    }
+
+    private String imapSourceMessageKey(String sourceId, Long uidValidity, long uid) {
+        return imapSourceMessageKey(sourceId, null, uidValidity, uid);
+    }
+
+    private String imapSourceMessageKey(String sourceId, String folderName, Long uidValidity, long uid) {
+        if (folderName != null && !folderName.isBlank() && uidValidity != null && uidValidity > 0L) {
+            return sourceId + ":imap-folder-uid:" + encodeFolderName(folderName) + ":" + uidValidity + ":" + uid;
+        }
+        if (uidValidity != null && uidValidity > 0L) {
+            return sourceId + ":imap-uid:" + uidValidity + ":" + uid;
+        }
+        return sourceId + ":uid:" + uid;
+    }
+
+    private Long extractImapUidFromSourceKey(FetchedMessage message) {
+        String sourceMessageKey = message.sourceMessageKey();
+        if (sourceMessageKey == null) {
+            return null;
+        }
+        String imapFolderUidPrefix = message.sourceAccountId() + ":imap-folder-uid:";
+        if (sourceMessageKey.startsWith(imapFolderUidPrefix)) {
+            int separatorIndex = sourceMessageKey.lastIndexOf(':');
+            if (separatorIndex > imapFolderUidPrefix.length()) {
+                try {
+                    return Long.parseLong(sourceMessageKey.substring(separatorIndex + 1));
+                } catch (NumberFormatException ignored) {
+                    return null;
+                }
+            }
+            return null;
+        }
+        String imapUidPrefix = message.sourceAccountId() + ":imap-uid:";
+        if (sourceMessageKey.startsWith(imapUidPrefix)) {
+            int separatorIndex = sourceMessageKey.lastIndexOf(':');
+            if (separatorIndex > imapUidPrefix.length()) {
+                try {
+                    return Long.parseLong(sourceMessageKey.substring(separatorIndex + 1));
+                } catch (NumberFormatException ignored) {
+                    return null;
+                }
+            }
+            return null;
+        }
+        String legacyUidPrefix = message.sourceAccountId() + ":uid:";
+        if (!sourceMessageKey.startsWith(legacyUidPrefix)) {
+            return null;
+        }
+        try {
+            return Long.parseLong(sourceMessageKey.substring(legacyUidPrefix.length()));
+        } catch (NumberFormatException ignored) {
+            return null;
+        }
+    }
+
+    private String encodeFolderName(String folderName) {
+        return Base64.getUrlEncoder()
+                .withoutPadding()
+                .encodeToString(folderName.getBytes(StandardCharsets.UTF_8));
     }
 
     private byte[] toRawBytes(Message message) throws MessagingException, IOException {
@@ -1295,7 +1357,7 @@ public class MailSourceClient {
         String get();
     }
 
-    private record MessageMetadata(Long uid, String popUidl, String messageId, Instant instant) {
+    private record MessageMetadata(Long uid, Long uidValidity, String popUidl, String messageId, Instant instant, String folderName) {
     }
 
     public record MailboxCountProbe(String folderName, int messageCount) {

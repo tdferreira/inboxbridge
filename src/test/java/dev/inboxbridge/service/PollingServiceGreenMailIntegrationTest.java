@@ -183,6 +183,44 @@ class PollingServiceGreenMailIntegrationTest {
     }
 
     @Test
+    void imapMessageIdDedupeSuppressesReimportWhenUidAndMimeChange() throws Exception {
+        appendMessage(sourceMail, SOURCE_USERNAME, SOURCE_PASSWORD, "INBOX", "alpha", "First imported message", "<stable-imap@example.com>");
+        appendMessage(sourceMail, SOURCE_USERNAME, SOURCE_PASSWORD, "INBOX", "beta", "Second imported message variant", "<stable-imap@example.com>");
+
+        RecordingImportedMessageRepository importedMessageRepository = new RecordingImportedMessageRepository();
+        PollRunResult result = pollService(
+                List.of(runtimeAccount()),
+                importedMessageRepository,
+                new ReadySourcePollingStateService())
+                .runPoll("greenmail-integration:imap-message-id-dedupe");
+
+        assertEquals(2, result.getFetched());
+        assertEquals(1, result.getImported());
+        assertEquals(1, result.getDuplicates());
+        assertEquals(List.of("alpha"), listSubjects(destinationMail, DESTINATION_USERNAME, DESTINATION_PASSWORD, DESTINATION_FOLDER));
+    }
+
+    @Test
+    void pop3MessageIdDedupeSuppressesReimportWhenUidlAndMimeChange() throws Exception {
+        appendMessage(sourceMail, SOURCE_USERNAME, SOURCE_PASSWORD, "INBOX", "alpha", "First POP imported message", "<stable-pop@example.com>");
+        appendMessage(sourceMail, SOURCE_USERNAME, SOURCE_PASSWORD, "INBOX", "beta", "Second POP imported message variant", "<stable-pop@example.com>");
+
+        RecordingImportedMessageRepository importedMessageRepository = new RecordingImportedMessageRepository();
+        InMemoryReadyCheckpointSourcePollingStateService sourcePollingStateService = new InMemoryReadyCheckpointSourcePollingStateService();
+
+        PollRunResult result = pollService(
+                List.of(runtimePop3Account()),
+                importedMessageRepository,
+                sourcePollingStateService)
+                .runPoll("greenmail-integration:pop3-message-id-dedupe");
+
+        assertEquals(2, result.getFetched());
+        assertEquals(1, result.getImported());
+        assertEquals(1, result.getDuplicates());
+        assertEquals(List.of("alpha"), listSubjects(destinationMail, DESTINATION_USERNAME, DESTINATION_PASSWORD, DESTINATION_FOLDER));
+    }
+
+    @Test
     void runPollFetchesFromSourceAndAppendsIntoDestinationWithoutDuplicatingMessages() throws Exception {
         appendMessage(sourceMail, SOURCE_USERNAME, SOURCE_PASSWORD, "INBOX", "alpha", "First imported message", "<alpha@example.com>");
         appendMessage(sourceMail, SOURCE_USERNAME, SOURCE_PASSWORD, "INBOX", "beta", "Second imported message", "<beta@example.com>");
@@ -269,6 +307,100 @@ class PollingServiceGreenMailIntegrationTest {
         assertEquals(
                 List.of(),
                 listSubjects(destinationMail, DESTINATION_USERNAME, DESTINATION_PASSWORD, "INBOX"));
+    }
+
+    @Test
+    void imapFolderAwareSourceIdentityDoesNotTreatDifferentFolderMessagesWithSameUidAsDuplicates() throws Exception {
+        appendMessage(sourceMail, SOURCE_USERNAME, SOURCE_PASSWORD, "INBOX", "inbox-alpha", "Inbox message", "<imap-folder-a@example.com>");
+        appendMessage(sourceMail, SOURCE_USERNAME, SOURCE_PASSWORD, "Projects/2026", "project-beta", "Project message", "<imap-folder-b@example.com>");
+
+        RecordingImportedMessageRepository importedMessageRepository = new RecordingImportedMessageRepository();
+        InMemoryReadyCheckpointSourcePollingStateService sourcePollingStateService = new InMemoryReadyCheckpointSourcePollingStateService();
+
+        PollRunResult firstRun = pollService(
+                List.of(runtimeAccount("INBOX", DESTINATION_FOLDER)),
+                importedMessageRepository,
+                sourcePollingStateService)
+                .runPoll("greenmail-integration:imap-folder-identity:first");
+
+        assertEquals(1, firstRun.getFetched());
+        assertEquals(1, firstRun.getImported());
+        assertEquals(0, firstRun.getDuplicates());
+
+        PollRunResult secondRun = pollService(
+                List.of(runtimeAccount("Projects/2026", DESTINATION_FOLDER)),
+                importedMessageRepository,
+                sourcePollingStateService)
+                .runPoll("greenmail-integration:imap-folder-identity:second");
+
+        assertEquals(1, secondRun.getFetched());
+        assertEquals(1, secondRun.getImported());
+        assertEquals(0, secondRun.getDuplicates());
+        assertEquals(List.of("inbox-alpha", "project-beta"), listSubjects(destinationMail, DESTINATION_USERNAME, DESTINATION_PASSWORD, DESTINATION_FOLDER));
+    }
+
+    @Test
+    void imapMessageIdFallbackStillSuppressesReimportAcrossFolderSwitches() throws Exception {
+        appendMessage(sourceMail, SOURCE_USERNAME, SOURCE_PASSWORD, "INBOX", "inbox-alpha", "Inbox variant", "<imap-stable-message@example.com>");
+        appendMessage(sourceMail, SOURCE_USERNAME, SOURCE_PASSWORD, "Projects/2026", "project-alpha", "Project variant", "<imap-stable-message@example.com>");
+
+        RecordingImportedMessageRepository importedMessageRepository = new RecordingImportedMessageRepository();
+        InMemoryReadyCheckpointSourcePollingStateService sourcePollingStateService = new InMemoryReadyCheckpointSourcePollingStateService();
+
+        PollRunResult firstRun = pollService(
+                List.of(runtimeAccount("INBOX", DESTINATION_FOLDER)),
+                importedMessageRepository,
+                sourcePollingStateService)
+                .runPoll("greenmail-integration:imap-folder-message-id:first");
+
+        assertEquals(1, firstRun.getFetched());
+        assertEquals(1, firstRun.getImported());
+        assertEquals(0, firstRun.getDuplicates());
+
+        PollRunResult secondRun = pollService(
+                List.of(runtimeAccount("Projects/2026", DESTINATION_FOLDER)),
+                importedMessageRepository,
+                sourcePollingStateService)
+                .runPoll("greenmail-integration:imap-folder-message-id:second");
+
+        assertEquals(1, secondRun.getFetched());
+        assertEquals(0, secondRun.getImported());
+        assertEquals(1, secondRun.getDuplicates());
+        assertEquals(List.of("inbox-alpha"), listSubjects(destinationMail, DESTINATION_USERNAME, DESTINATION_PASSWORD, DESTINATION_FOLDER));
+    }
+
+    @Test
+    void imapMovedMessageIsRecognizedAsAlreadyImportedAfterFolderSwitch() throws Exception {
+        appendMessage(sourceMail, SOURCE_USERNAME, SOURCE_PASSWORD, "INBOX", "moved-alpha", "Same moved message", "<imap-moved-message@example.com>");
+
+        RecordingImportedMessageRepository importedMessageRepository = new RecordingImportedMessageRepository();
+        InMemoryReadyCheckpointSourcePollingStateService sourcePollingStateService = new InMemoryReadyCheckpointSourcePollingStateService();
+
+        PollRunResult firstRun = pollService(
+                List.of(runtimeAccount("INBOX", DESTINATION_FOLDER)),
+                importedMessageRepository,
+                sourcePollingStateService)
+                .runPoll("greenmail-integration:imap-moved-message:first");
+
+        assertEquals(1, firstRun.getFetched());
+        assertEquals(1, firstRun.getImported());
+        assertEquals(0, firstRun.getDuplicates());
+        assertEquals(List.of("moved-alpha"), listSubjects(destinationMail, DESTINATION_USERNAME, DESTINATION_PASSWORD, DESTINATION_FOLDER));
+
+        moveMessage(sourceMail, SOURCE_USERNAME, SOURCE_PASSWORD, "INBOX", "Projects/2026", "moved-alpha");
+
+        PollRunResult secondRun = pollService(
+                List.of(runtimeAccount("Projects/2026", DESTINATION_FOLDER)),
+                importedMessageRepository,
+                sourcePollingStateService)
+                .runPoll("greenmail-integration:imap-moved-message:second");
+
+        assertEquals(1, secondRun.getFetched());
+        assertEquals(0, secondRun.getImported());
+        assertEquals(1, secondRun.getDuplicates());
+        assertEquals(List.of(), listSubjectsIfFolderExists(sourceMail, SOURCE_USERNAME, SOURCE_PASSWORD, "INBOX"));
+        assertEquals(List.of("moved-alpha"), listSubjects(sourceMail, SOURCE_USERNAME, SOURCE_PASSWORD, "Projects/2026"));
+        assertEquals(List.of("moved-alpha"), listSubjects(destinationMail, DESTINATION_USERNAME, DESTINATION_PASSWORD, DESTINATION_FOLDER));
     }
 
     @Test
@@ -868,12 +1000,52 @@ class PollingServiceGreenMailIntegrationTest {
             message.setRecipients(Message.RecipientType.TO, InternetAddress.parse(username));
             message.setSubject(subject, StandardCharsets.UTF_8.name());
             message.setText(body, StandardCharsets.UTF_8.name());
-            message.setHeader("Message-ID", messageId);
             message.setSentDate(java.util.Date.from(Instant.now()));
             message.saveChanges();
+            message.setHeader("Message-ID", messageId);
             folder.appendMessages(new Message[] { message });
         } finally {
             closeQuietly(folder);
+            closeQuietly(store);
+        }
+    }
+
+    private static void moveMessage(
+            GreenMailExtension greenMail,
+            String username,
+            String password,
+            String fromFolderName,
+            String toFolderName,
+            String subject) throws Exception {
+        Properties properties = new Properties();
+        properties.put("mail.store.protocol", "imap");
+        Session session = Session.getInstance(properties);
+        Store store = session.getStore("imap");
+        Folder sourceFolder = null;
+        Folder targetFolder = null;
+        try {
+            store.connect("127.0.0.1", greenMail.getImap().getPort(), username, password);
+            sourceFolder = store.getFolder(fromFolderName);
+            targetFolder = store.getFolder(toFolderName);
+            if (!targetFolder.exists()) {
+                targetFolder.create(Folder.HOLDS_MESSAGES);
+            }
+            sourceFolder.open(Folder.READ_WRITE);
+            Message targetMessage = null;
+            for (Message message : sourceFolder.getMessages()) {
+                if (subject.equals(message.getSubject())) {
+                    targetMessage = message;
+                    break;
+                }
+            }
+            assertTrue(targetMessage != null, "Expected source message to exist before move");
+            sourceFolder.copyMessages(new Message[] { targetMessage }, targetFolder);
+            targetMessage.setFlag(jakarta.mail.Flags.Flag.DELETED, true);
+            sourceFolder.close(true);
+            sourceFolder = null;
+        } finally {
+            closeQuietly(sourceFolder);
+            closeQuietly(targetFolder);
             closeQuietly(store);
         }
     }
@@ -1065,6 +1237,14 @@ class PollingServiceGreenMailIntegrationTest {
             return importedMessages.stream().anyMatch((message) ->
                     destinationIdentityKey.equals(message.destinationIdentityKey)
                             && rawSha256.equals(message.rawSha256));
+        }
+
+        @Override
+        public boolean existsByMessageIdHeader(String destinationIdentityKey, String sourceAccountId, String messageIdHeader) {
+            return importedMessages.stream().anyMatch((message) ->
+                    destinationIdentityKey.equals(message.destinationIdentityKey)
+                            && sourceAccountId.equals(message.sourceAccountId)
+                            && messageIdHeader.equals(message.messageIdHeader));
         }
 
         @Override

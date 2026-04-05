@@ -889,13 +889,13 @@ class PollingServiceTest {
                 return List.of(
                         new FetchedMessage(
                                 bridge.id(),
-                                bridge.id() + ":uid:1",
+                                bridge.id() + ":imap-uid:44:1",
                                 java.util.Optional.of("<imported@example.com>"),
                                 Instant.parse("2026-03-27T10:00:00Z"),
                                 "raw-1".getBytes(java.nio.charset.StandardCharsets.UTF_8)),
                         new FetchedMessage(
                                 bridge.id(),
-                                bridge.id() + ":uid:2",
+                                bridge.id() + ":imap-uid:44:2",
                                 java.util.Optional.of("<duplicate@example.com>"),
                                 Instant.parse("2026-03-27T10:01:00Z"),
                                 "raw-2".getBytes(java.nio.charset.StandardCharsets.UTF_8)));
@@ -905,7 +905,7 @@ class PollingServiceTest {
         service.importDeduplicationService = new ImportDeduplicationService() {
             @Override
             public boolean alreadyImported(FetchedMessage fetchedMessage, MailDestinationTarget destinationTarget) {
-                return fetchedMessage.sourceMessageKey().endsWith(":uid:2");
+                return fetchedMessage.sourceMessageKey().endsWith(":2");
             }
 
             @Override
@@ -924,7 +924,7 @@ class PollingServiceTest {
         PollRunResult result = service.runPoll("manual-api");
 
         assertEquals(0, result.getErrors().size());
-        assertEquals(List.of("user-fetcher:uid:1", "user-fetcher:uid:2"), mailSourceClient.postPollAppliedMessageKeys);
+        assertEquals(List.of("user-fetcher:imap-uid:44:1", "user-fetcher:imap-uid:44:2"), mailSourceClient.postPollAppliedMessageKeys);
     }
 
     @Test

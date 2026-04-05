@@ -35,5 +35,10 @@ class ImportedMessageEntityTest {
                 .findFirst()
                 .orElseThrow()
                 .columnList());
+        assertEquals("destination_identity_key, source_account_id, message_id_header", indexes.stream()
+                .filter((index) -> "idx_imported_message_destination_identity_message_id".equals(index.name()))
+                .findFirst()
+                .orElseThrow()
+                .columnList());
     }
 }

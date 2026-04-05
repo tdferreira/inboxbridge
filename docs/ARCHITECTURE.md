@@ -171,6 +171,8 @@ Polling hardening also now includes:
 
 That classifier currently distinguishes rate limits, mailbox authentication failures, OAuth authorization failures, provider availability problems, transient network failures, mailbox-state problems such as closed folders, and unknown failures. Rate limits still get the strongest throttle penalty, auth/authz failures still get the longest cooldown tier without widening host/provider throttle state, and transient/provider/mailbox-state failures keep the medium retry tier.
 
+Import dedupe is now destination-mailbox-identity aware and layered. InboxBridge first checks the persisted source message key for that destination identity and source account. For IMAP those source keys now prefer `UIDVALIDITY + UID`, while POP3 source keys prefer `UIDL`. If that protocol-native identity does not match, InboxBridge next falls back to raw MIME SHA-256 and only then to the normalized `Message-ID` header for that same source account. That keeps protocol-native mailbox identifiers authoritative while still leaving one last heuristic safety net for providers that change UIDs, UIDLs, or MIME details.
+
 Those values can be overridden live from `Administration -> Global Poller Settings`.
 
 That is still deliberately simpler than a full mailbox-sync engine. The next evolution should be:

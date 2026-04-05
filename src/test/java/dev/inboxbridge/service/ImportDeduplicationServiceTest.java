@@ -45,6 +45,46 @@ class ImportDeduplicationServiceTest {
         assertTrue(service.alreadyImported(second, target));
     }
 
+    @Test
+    void sameSourceAndDestinationDedupesByMessageIdWhenSourceKeyAndMimeChange() {
+        ImportDeduplicationService service = service();
+        ImapAppendDestinationTarget target = destination("user-destination:7", "first@example.com");
+        FetchedMessage first = message(
+                "source-1",
+                "source-1:uid:10",
+                "stable-message-id@example.com",
+                rawMessage("stable-message-id@example.com", "first body"));
+        FetchedMessage second = message(
+                "source-1",
+                "source-1:uid:11",
+                " stable-message-id@example.com ",
+                rawMessage("stable-message-id@example.com", "second body"));
+
+        service.recordImport(first, target, new MailImportResponse("dest-1", "thread-1"));
+
+        assertTrue(service.alreadyImported(second, target));
+    }
+
+    @Test
+    void differentSourcesDoNotShareMessageIdDedupe() {
+        ImportDeduplicationService service = service();
+        ImapAppendDestinationTarget target = destination("user-destination:7", "first@example.com");
+        FetchedMessage first = message(
+                "source-1",
+                "source-1:uid:10",
+                "shared-message-id@example.com",
+                rawMessage("shared-message-id@example.com", "first body"));
+        FetchedMessage second = message(
+                "source-2",
+                "source-2:uid:20",
+                "shared-message-id@example.com",
+                rawMessage("shared-message-id@example.com", "second body"));
+
+        service.recordImport(first, target, new MailImportResponse("dest-1", "thread-1"));
+
+        assertFalse(service.alreadyImported(second, target));
+    }
+
     private ImportDeduplicationService service() {
         ImportDeduplicationService service = new ImportDeduplicationService();
         service.importedMessageRepository = new InMemoryImportedMessageRepository();
@@ -107,6 +147,14 @@ class ImportDeduplicationServiceTest {
             return importedMessages.stream().anyMatch(message ->
                     destinationIdentityKey.equals(message.destinationIdentityKey)
                             && rawSha256.equals(message.rawSha256));
+        }
+
+        @Override
+        public boolean existsByMessageIdHeader(String destinationIdentityKey, String sourceAccountId, String messageIdHeader) {
+            return importedMessages.stream().anyMatch(message ->
+                    destinationIdentityKey.equals(message.destinationIdentityKey)
+                            && sourceAccountId.equals(message.sourceAccountId)
+                            && messageIdHeader.equals(message.messageIdHeader));
         }
 
         @Override

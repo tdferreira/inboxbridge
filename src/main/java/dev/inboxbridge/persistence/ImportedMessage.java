@@ -21,6 +21,7 @@ import jakarta.persistence.UniqueConstraint;
         indexes = {
                 @Index(name = "idx_imported_message_destination", columnList = "destination_key"),
                 @Index(name = "idx_imported_message_destination_identity", columnList = "destination_identity_key"),
+                @Index(name = "idx_imported_message_destination_identity_message_id", columnList = "destination_identity_key, source_account_id, message_id_header"),
                 @Index(name = "idx_imported_message_account", columnList = "source_account_id"),
                 @Index(name = "idx_imported_message_gmail", columnList = "gmail_message_id")
         })
