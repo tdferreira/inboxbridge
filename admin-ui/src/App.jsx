@@ -1048,14 +1048,11 @@ function AppContent({ timings = DEFAULT_APP_TIMINGS }) {
     if (!session) {
       return
     }
-    if (uiPreferencesLoadedForUserId !== session.id) {
-      return
-    }
     const nextPath = canonicalWorkspacePath(location.pathname, language, isAdmin)
     if (nextPath && nextPath !== location.pathname) {
       navigate(nextPath, { replace: true })
     }
-  }, [isAdmin, language, location.pathname, navigate, session, uiPreferencesLoadedForUserId])
+  }, [isAdmin, language, location.pathname, navigate, session])
 
   useEffect(() => {
     let cancelled = false
