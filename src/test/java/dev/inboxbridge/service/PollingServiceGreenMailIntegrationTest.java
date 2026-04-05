@@ -85,7 +85,9 @@ class PollingServiceGreenMailIntegrationTest {
         assertEquals(2, firstRun.getImported());
         assertEquals(0, firstRun.getDuplicates());
         assertTrue(firstRun.getErrorDetails().isEmpty());
-        String checkpointAfterFirstRun = sourcePollingStateService.popCheckpoint("greenmail-source-pop").orElseThrow();
+        String checkpointAfterFirstRun = sourcePollingStateService.popCheckpoint(
+                "greenmail-source-pop",
+                DestinationIdentityKeys.forTarget(runtimePop3Account().destination())).orElseThrow();
         List<String> uidlsAfterFirstRun = listPopUidls(sourceMail, SOURCE_USERNAME, SOURCE_PASSWORD);
         assertEquals(List.of("alpha", "beta"), listSubjects(destinationMail, DESTINATION_USERNAME, DESTINATION_PASSWORD, DESTINATION_FOLDER));
 
@@ -97,7 +99,11 @@ class PollingServiceGreenMailIntegrationTest {
         assertEquals(0, secondRun.getImported());
         assertEquals(0, secondRun.getDuplicates());
         assertTrue(secondRun.getErrorDetails().isEmpty());
-        assertEquals(checkpointAfterFirstRun, sourcePollingStateService.popCheckpoint("greenmail-source-pop").orElseThrow());
+        assertEquals(
+                checkpointAfterFirstRun,
+                sourcePollingStateService.popCheckpoint(
+                        "greenmail-source-pop",
+                        DestinationIdentityKeys.forTarget(runtimePop3Account().destination())).orElseThrow());
         assertEquals(List.of("alpha", "beta"), listSubjects(destinationMail, DESTINATION_USERNAME, DESTINATION_PASSWORD, DESTINATION_FOLDER));
 
         appendMessage(sourceMail, SOURCE_USERNAME, SOURCE_PASSWORD, "INBOX", "gamma", "Third imported message", "<gamma-pop@example.com>");
@@ -109,7 +115,71 @@ class PollingServiceGreenMailIntegrationTest {
         assertEquals(0, thirdRun.getDuplicates());
         assertTrue(thirdRun.getErrorDetails().isEmpty());
         assertEquals(List.of("alpha", "beta", "gamma"), listSubjects(destinationMail, DESTINATION_USERNAME, DESTINATION_PASSWORD, DESTINATION_FOLDER));
-        assertTrue(!checkpointAfterFirstRun.equals(sourcePollingStateService.popCheckpoint("greenmail-source-pop").orElseThrow()));
+        assertTrue(!checkpointAfterFirstRun.equals(sourcePollingStateService.popCheckpoint(
+                "greenmail-source-pop",
+                DestinationIdentityKeys.forTarget(runtimePop3Account().destination())).orElseThrow()));
+    }
+
+    @Test
+    void pop3CheckpointDoesNotCarryAcrossDestinationMailboxSwitches() throws Exception {
+        String secondDestinationUsername = "destination-two@example.com";
+        destinationMail.setUser(secondDestinationUsername, DESTINATION_PASSWORD);
+        appendMessage(sourceMail, SOURCE_USERNAME, SOURCE_PASSWORD, "INBOX", "alpha", "First imported message", "<alpha-pop-switch@example.com>");
+
+        RecordingImportedMessageRepository importedMessageRepository = new RecordingImportedMessageRepository();
+        InMemoryReadyCheckpointSourcePollingStateService sourcePollingStateService = new InMemoryReadyCheckpointSourcePollingStateService();
+
+        PollRunResult firstRun = pollService(
+                List.of(runtimePop3Account("user-destination:7", DESTINATION_USERNAME, DESTINATION_FOLDER)),
+                importedMessageRepository,
+                sourcePollingStateService)
+                .runPoll("greenmail-integration:pop3-destination-switch:first");
+
+        assertEquals(1, firstRun.getFetched());
+        assertEquals(1, firstRun.getImported());
+        assertEquals(List.of("alpha"), listSubjects(destinationMail, DESTINATION_USERNAME, DESTINATION_PASSWORD, DESTINATION_FOLDER));
+
+        PollRunResult secondRun = pollService(
+                List.of(runtimePop3Account("user-destination:7", secondDestinationUsername, DESTINATION_FOLDER)),
+                importedMessageRepository,
+                sourcePollingStateService)
+                .runPoll("greenmail-integration:pop3-destination-switch:second");
+
+        assertEquals(1, secondRun.getFetched());
+        assertEquals(1, secondRun.getImported());
+        assertEquals(0, secondRun.getDuplicates());
+        assertEquals(List.of("alpha"), listSubjects(destinationMail, secondDestinationUsername, DESTINATION_PASSWORD, DESTINATION_FOLDER));
+    }
+
+    @Test
+    void imapCheckpointDoesNotCarryAcrossDestinationMailboxSwitches() throws Exception {
+        String secondDestinationUsername = "imap-destination-two@example.com";
+        destinationMail.setUser(secondDestinationUsername, DESTINATION_PASSWORD);
+        appendMessage(sourceMail, SOURCE_USERNAME, SOURCE_PASSWORD, "INBOX", "alpha", "First imported message", "<alpha-imap-switch@example.com>");
+
+        RecordingImportedMessageRepository importedMessageRepository = new RecordingImportedMessageRepository();
+        InMemoryReadyCheckpointSourcePollingStateService sourcePollingStateService = new InMemoryReadyCheckpointSourcePollingStateService();
+
+        PollRunResult firstRun = pollService(
+                List.of(runtimeAccount("greenmail-source", 7L, "alice", SOURCE_USERNAME, SOURCE_PASSWORD, "user-destination:7", DESTINATION_USERNAME, DESTINATION_PASSWORD)),
+                importedMessageRepository,
+                sourcePollingStateService)
+                .runPoll("greenmail-integration:imap-destination-switch:first");
+
+        assertEquals(1, firstRun.getFetched());
+        assertEquals(1, firstRun.getImported());
+        assertEquals(List.of("alpha"), listSubjects(destinationMail, DESTINATION_USERNAME, DESTINATION_PASSWORD, DESTINATION_FOLDER));
+
+        PollRunResult secondRun = pollService(
+                List.of(runtimeAccount("greenmail-source", 7L, "alice", SOURCE_USERNAME, SOURCE_PASSWORD, "user-destination:7", secondDestinationUsername, DESTINATION_PASSWORD)),
+                importedMessageRepository,
+                sourcePollingStateService)
+                .runPoll("greenmail-integration:imap-destination-switch:second");
+
+        assertEquals(1, secondRun.getFetched());
+        assertEquals(1, secondRun.getImported());
+        assertEquals(0, secondRun.getDuplicates());
+        assertEquals(List.of("alpha"), listSubjects(destinationMail, secondDestinationUsername, DESTINATION_PASSWORD, DESTINATION_FOLDER));
     }
 
     @Test
@@ -279,6 +349,42 @@ class PollingServiceGreenMailIntegrationTest {
         assertTrue(listSubjects(destinationMail, bobDestination, sharedDestinationPassword, DESTINATION_FOLDER)
                 .stream()
                 .noneMatch((subject) -> subject.startsWith("alice-")));
+    }
+
+    @Test
+    void pop3SourcesNeverMixMessagesAcrossDifferentUserDestinations() throws Exception {
+        String aliceSource = "alice-pop@example.com";
+        String bobSource = "bob-pop@example.com";
+        String sharedSourcePassword = "Source#Pop";
+        String aliceDestination = "alice-pop-destination@example.com";
+        String bobDestination = "bob-pop-destination@example.com";
+        String sharedDestinationPassword = "Destination#Pop";
+
+        sourceMail.setUser(aliceSource, sharedSourcePassword);
+        sourceMail.setUser(bobSource, sharedSourcePassword);
+        destinationMail.setUser(aliceDestination, sharedDestinationPassword);
+        destinationMail.setUser(bobDestination, sharedDestinationPassword);
+
+        appendMessage(sourceMail, aliceSource, sharedSourcePassword, "INBOX", "alice-pop-1", "Alice POP message", "<alice-pop-1@example.com>");
+        appendMessage(sourceMail, bobSource, sharedSourcePassword, "INBOX", "bob-pop-1", "Bob POP message", "<bob-pop-1@example.com>");
+
+        RecordingImportedMessageRepository importedMessageRepository = new RecordingImportedMessageRepository();
+        InMemoryReadyCheckpointSourcePollingStateService sourcePollingStateService = new InMemoryReadyCheckpointSourcePollingStateService();
+
+        PollRunResult result = pollService(
+                List.of(
+                        runtimePop3Account("alice-pop-source", ALICE_USER_ID, "alice", aliceSource, sharedSourcePassword, "user-destination:7:pop", aliceDestination, sharedDestinationPassword),
+                        runtimePop3Account("bob-pop-source", BOB_USER_ID, "bob", bobSource, sharedSourcePassword, "user-destination:8:pop", bobDestination, sharedDestinationPassword)),
+                importedMessageRepository,
+                sourcePollingStateService)
+                .runPollForAllUsers(adminActor(1L), "greenmail-integration:pop3-all-users");
+
+        assertEquals(2, result.getFetched());
+        assertEquals(2, result.getImported());
+        assertEquals(0, result.getDuplicates());
+        assertTrue(result.getErrorDetails().isEmpty());
+        assertEquals(List.of("alice-pop-1"), listSubjects(destinationMail, aliceDestination, sharedDestinationPassword, DESTINATION_FOLDER));
+        assertEquals(List.of("bob-pop-1"), listSubjects(destinationMail, bobDestination, sharedDestinationPassword, DESTINATION_FOLDER));
     }
 
     @Test
@@ -524,11 +630,58 @@ class PollingServiceGreenMailIntegrationTest {
     }
 
     private RuntimeEmailAccount runtimePop3Account() {
-        return new RuntimeEmailAccount(
+        return runtimePop3Account("user-destination:7", DESTINATION_USERNAME, DESTINATION_FOLDER);
+    }
+
+    private RuntimeEmailAccount runtimePop3Account(String destinationKey, String destinationUsername, String destinationFolder) {
+        return runtimePop3Account(
                 "greenmail-source-pop",
-                "USER",
                 7L,
                 "alice",
+                SOURCE_USERNAME,
+                SOURCE_PASSWORD,
+                destinationKey,
+                destinationUsername,
+                DESTINATION_PASSWORD,
+                destinationFolder);
+    }
+
+    private RuntimeEmailAccount runtimePop3Account(
+            String sourceId,
+            Long userId,
+            String ownerUsername,
+            String sourceUsername,
+            String sourcePassword,
+            String destinationKey,
+            String destinationUsername,
+            String destinationPassword) {
+        return runtimePop3Account(
+                sourceId,
+                userId,
+                ownerUsername,
+                sourceUsername,
+                sourcePassword,
+                destinationKey,
+                destinationUsername,
+                destinationPassword,
+                DESTINATION_FOLDER);
+    }
+
+    private RuntimeEmailAccount runtimePop3Account(
+            String sourceId,
+            Long userId,
+            String ownerUsername,
+            String sourceUsername,
+            String sourcePassword,
+            String destinationKey,
+            String destinationUsername,
+            String destinationPassword,
+            String destinationFolder) {
+        return new RuntimeEmailAccount(
+                sourceId,
+                "USER",
+                userId,
+                ownerUsername,
                 true,
                 InboxBridgeConfig.Protocol.POP3,
                 "127.0.0.1",
@@ -536,25 +689,25 @@ class PollingServiceGreenMailIntegrationTest {
                 false,
                 InboxBridgeConfig.AuthMethod.PASSWORD,
                 InboxBridgeConfig.OAuthProvider.NONE,
-                SOURCE_USERNAME,
-                SOURCE_PASSWORD,
+                sourceUsername,
+                sourcePassword,
                 "",
                 Optional.empty(),
                 false,
                 Optional.of("Imported/Test"),
                 new ImapAppendDestinationTarget(
-                        "user-destination:7",
-                        7L,
-                        "alice",
+                        destinationKey,
+                        userId,
+                        ownerUsername,
                         UserMailDestinationConfigService.PROVIDER_CUSTOM,
                         "127.0.0.1",
                         destinationMail.getImap().getPort(),
                         false,
                         InboxBridgeConfig.AuthMethod.PASSWORD,
                         InboxBridgeConfig.OAuthProvider.NONE,
-                        DESTINATION_USERNAME,
-                        DESTINATION_PASSWORD,
-                        DESTINATION_FOLDER));
+                        destinationUsername,
+                        destinationPassword,
+                        destinationFolder));
     }
 
     private RuntimeEmailAccount runtimeAccount(String sourceFolder, String destinationFolder, SourceFetchMode fetchMode) {
@@ -900,17 +1053,17 @@ class PollingServiceGreenMailIntegrationTest {
         private final List<ImportedMessage> importedMessages = new java.util.concurrent.CopyOnWriteArrayList<>();
 
         @Override
-        public boolean existsBySourceMessageKey(String destinationKey, String sourceAccountId, String sourceMessageKey) {
+        public boolean existsBySourceMessageKey(String destinationIdentityKey, String sourceAccountId, String sourceMessageKey) {
             return importedMessages.stream().anyMatch((message) ->
-                    destinationKey.equals(message.destinationKey)
+                    destinationIdentityKey.equals(message.destinationIdentityKey)
                             && sourceAccountId.equals(message.sourceAccountId)
                             && sourceMessageKey.equals(message.sourceMessageKey));
         }
 
         @Override
-        public boolean existsByRawSha256(String destinationKey, String rawSha256) {
+        public boolean existsByRawSha256(String destinationIdentityKey, String rawSha256) {
             return importedMessages.stream().anyMatch((message) ->
-                    destinationKey.equals(message.destinationKey)
+                    destinationIdentityKey.equals(message.destinationIdentityKey)
                             && rawSha256.equals(message.rawSha256));
         }
 

@@ -100,7 +100,7 @@ Current dedupe uses two keys:
 - source-message key (`IMAP UID` when available, otherwise `Message-ID`, otherwise SHA-256)
 - SHA-256 of the raw MIME message
 
-That gives a strong baseline while keeping the code easy to understand.
+Those dedupe checks are also scoped to a derived destination mailbox identity rather than just the signed-in user. That means switching a user's destination mailbox causes InboxBridge to treat the new target as a new import surface, even if the same user/provider route remains active.
 
 A second invariant now has explicit regression coverage too: even during a
 multi-user poll run, a source mailbox must remain bound to its own resolved
@@ -129,8 +129,10 @@ Each source now has its own persisted polling state:
 - active cooldown-until time
 - consecutive failure count
 - last failure reason and timestamps
-- for IMAP sources, the current folder plus the last seen `UIDVALIDITY` / UID checkpoint
-- for POP3 sources, the last seen UIDL checkpoint used to resume from newer mail when that POP mailbox still advertises the older message
+- for IMAP sources, the current folder plus the last seen `UIDVALIDITY` / UID checkpoint, scoped to the destination mailbox identity that was active when the checkpoint was recorded
+- for POP3 sources, the last seen UIDL checkpoint used to resume from newer mail when that POP mailbox still advertises the older message, also scoped to the active destination mailbox identity
+
+That destination-aware checkpoint scoping matters during destination changes: when a user repoints InboxBridge to a different destination mailbox, the old source checkpoint is no longer reused for that new target, and dedupe also shifts to the new destination identity, so already-seen source mail can be replayed into the new destination under the normal fetch-window rules.
 
 The scheduler checks that state on every run so one blocked or throttled mailbox does not stall unrelated source email accounts.
 

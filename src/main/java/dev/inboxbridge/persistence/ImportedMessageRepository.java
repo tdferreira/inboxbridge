@@ -11,16 +11,22 @@ import jakarta.transaction.Transactional;
 @ApplicationScoped
 public class ImportedMessageRepository implements PanacheRepository<ImportedMessage> {
 
-    public boolean existsBySourceMessageKey(String destinationKey, String sourceAccountId, String sourceMessageKey) {
-        return count("destinationKey = ?1 and sourceAccountId = ?2 and sourceMessageKey = ?3", destinationKey, sourceAccountId, sourceMessageKey) > 0;
+    public boolean existsBySourceMessageKey(String destinationIdentityKey, String sourceAccountId, String sourceMessageKey) {
+        return count("destinationIdentityKey = ?1 and sourceAccountId = ?2 and sourceMessageKey = ?3",
+                destinationIdentityKey,
+                sourceAccountId,
+                sourceMessageKey) > 0;
     }
 
-    public boolean existsByRawSha256(String destinationKey, String rawSha256) {
-        return count("destinationKey = ?1 and rawSha256 = ?2", destinationKey, rawSha256) > 0;
+    public boolean existsByRawSha256(String destinationIdentityKey, String rawSha256) {
+        return count("destinationIdentityKey = ?1 and rawSha256 = ?2", destinationIdentityKey, rawSha256) > 0;
     }
 
-    public Optional<ImportedMessage> findBySourceMessageKey(String destinationKey, String sourceAccountId, String sourceMessageKey) {
-        return find("destinationKey = ?1 and sourceAccountId = ?2 and sourceMessageKey = ?3", destinationKey, sourceAccountId, sourceMessageKey)
+    public Optional<ImportedMessage> findBySourceMessageKey(String destinationIdentityKey, String sourceAccountId, String sourceMessageKey) {
+        return find("destinationIdentityKey = ?1 and sourceAccountId = ?2 and sourceMessageKey = ?3",
+                destinationIdentityKey,
+                sourceAccountId,
+                sourceMessageKey)
                 .firstResultOptional();
     }
 

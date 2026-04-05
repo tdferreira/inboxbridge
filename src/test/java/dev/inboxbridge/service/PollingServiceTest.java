@@ -130,6 +130,9 @@ class PollingServiceTest {
         assertEquals(0, result.getErrors().size());
         assertEquals("legacy-pop", sourcePollingStateService.lastRecordedSuccessSourceId);
         assertEquals("uidl-2", sourcePollingStateService.lastRecordedPopCheckpoint);
+        assertEquals(
+                DestinationIdentityKeys.forTarget(popBridge("legacy-pop", 7L, "alice", "target").destination()),
+                sourcePollingStateService.lastRecordedCheckpointDestinationKey);
     }
 
     @Test
@@ -1412,6 +1415,7 @@ class PollingServiceTest {
     private static final class RecordingSourcePollingStateService extends SourcePollingStateService {
         private String lastRecordedSuccessSourceId;
         private String lastRecordedPopCheckpoint;
+        private String lastRecordedCheckpointDestinationKey;
         private Instant cooldownUntil;
 
         @Override
@@ -1448,7 +1452,8 @@ class PollingServiceTest {
         }
 
         @Override
-        public void recordPopCheckpoint(String sourceId, String uidl, Instant observedAt) {
+        public void recordPopCheckpoint(String sourceId, String destinationKey, String uidl, Instant observedAt) {
+            lastRecordedCheckpointDestinationKey = destinationKey;
             lastRecordedPopCheckpoint = uidl;
         }
     }

@@ -15,11 +15,12 @@ import jakarta.persistence.UniqueConstraint;
 @Entity
 @Table(name = "imported_message",
         uniqueConstraints = {
-                @UniqueConstraint(name = "uk_imported_message_destination_source_key", columnNames = { "destination_key", "source_account_id", "source_message_key" }),
-                @UniqueConstraint(name = "uk_imported_message_destination_sha", columnNames = { "destination_key", "raw_sha256" })
+                @UniqueConstraint(name = "uk_imported_message_destination_identity_source_key", columnNames = { "destination_identity_key", "source_account_id", "source_message_key" }),
+                @UniqueConstraint(name = "uk_imported_message_destination_identity_sha", columnNames = { "destination_identity_key", "raw_sha256" })
         },
         indexes = {
                 @Index(name = "idx_imported_message_destination", columnList = "destination_key"),
+                @Index(name = "idx_imported_message_destination_identity", columnList = "destination_identity_key"),
                 @Index(name = "idx_imported_message_account", columnList = "source_account_id"),
                 @Index(name = "idx_imported_message_gmail", columnList = "gmail_message_id")
         })
@@ -43,6 +44,9 @@ public class ImportedMessage extends PanacheEntityBase {
 
     @Column(name = "destination_key", nullable = false, length = 160)
     public String destinationKey;
+
+    @Column(name = "destination_identity_key", nullable = false, length = 160)
+    public String destinationIdentityKey;
 
     @Column(name = "gmail_message_id", nullable = false, length = 255)
     public String gmailMessageId;

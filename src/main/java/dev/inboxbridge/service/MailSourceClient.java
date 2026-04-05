@@ -367,6 +367,7 @@ public class MailSourceClient {
             folder.open(Folder.READ_ONLY);
             Message[] candidateMessages = selectImapCandidateMessages(
                     source.id(),
+                    null,
                     source.folder().orElse("INBOX"),
                     source.unreadOnly(),
                     fetchWindow,
@@ -410,6 +411,7 @@ public class MailSourceClient {
             folder.open(Folder.READ_ONLY);
             Message[] candidateMessages = selectImapCandidateMessages(
                     bridge.id(),
+                    destinationKeyFor(bridge),
                     bridge.folder().orElse("INBOX"),
                     bridge.unreadOnly(),
                     fetchWindow,
@@ -451,7 +453,7 @@ public class MailSourceClient {
             folder = store.getFolder("INBOX");
             registerFolder(folder);
             folder.open(Folder.READ_ONLY);
-            Message[] candidateMessages = selectPop3CandidateMessages(source.id(), fetchWindow, folder);
+            Message[] candidateMessages = selectPop3CandidateMessages(source.id(), null, fetchWindow, folder);
             return toFetchedMessages(source, candidateMessages);
         } catch (MessagingException e) {
             throw new IllegalStateException("Failed to fetch POP3 mail for source " + source.id(), e);
@@ -488,7 +490,7 @@ public class MailSourceClient {
             folder = store.getFolder("INBOX");
             registerFolder(folder);
             folder.open(Folder.READ_ONLY);
-            Message[] candidateMessages = selectPop3CandidateMessages(bridge.id(), fetchWindow, folder);
+            Message[] candidateMessages = selectPop3CandidateMessages(bridge.id(), destinationKeyFor(bridge), fetchWindow, folder);
             return toFetchedMessages(bridge.id(), candidateMessages);
         } catch (MessagingException e) {
             throw new IllegalStateException("Failed to fetch POP3 mail for source " + bridge.id(), e);
@@ -770,13 +772,14 @@ public class MailSourceClient {
 
     private Message[] selectImapCandidateMessages(
             String sourceId,
+            String destinationKey,
             String folderName,
             boolean unreadOnly,
             int fetchWindow,
             Folder folder) throws MessagingException {
         Optional<ImapCheckpoint> checkpoint = sourcePollingStateService == null
                 ? Optional.empty()
-                : sourcePollingStateService.imapCheckpoint(sourceId, folderName);
+                : sourcePollingStateService.imapCheckpoint(sourceId, destinationKey, folderName);
         Message[] checkpointMessages = selectMessagesFromCheckpoint(folder, checkpoint, unreadOnly);
         if (checkpointMessages != null) {
             return checkpointMessages;
@@ -786,10 +789,10 @@ public class MailSourceClient {
                 : selectTailMessages(folder, fetchWindow);
     }
 
-    private Message[] selectPop3CandidateMessages(String sourceId, int fetchWindow, Folder folder) throws MessagingException {
+    private Message[] selectPop3CandidateMessages(String sourceId, String destinationKey, int fetchWindow, Folder folder) throws MessagingException {
         Optional<String> checkpoint = sourcePollingStateService == null
                 ? Optional.empty()
-                : sourcePollingStateService.popCheckpoint(sourceId);
+                : sourcePollingStateService.popCheckpoint(sourceId, destinationKey);
         Message[] checkpointMessages = selectMessagesFromPopCheckpoint(folder, checkpoint);
         if (checkpointMessages != null) {
             return checkpointMessages;
@@ -856,6 +859,10 @@ public class MailSourceClient {
             LOG.debugf(e, "Unable to resolve POP UIDL for message %s", safeMessageNumber(message));
             return null;
         }
+    }
+
+    private String destinationKeyFor(RuntimeEmailAccount bridge) {
+        return bridge == null ? null : DestinationIdentityKeys.forTarget(bridge.destination());
     }
 
     private String safeFolderName(Folder folder) {

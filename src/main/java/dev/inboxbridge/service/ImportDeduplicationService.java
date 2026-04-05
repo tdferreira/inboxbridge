@@ -22,11 +22,12 @@ public class ImportDeduplicationService {
 
     @Transactional
     public boolean alreadyImported(FetchedMessage message, MailDestinationTarget target) {
-        if (importedMessageRepository.existsBySourceMessageKey(target.subjectKey(), message.sourceAccountId(), message.sourceMessageKey())) {
+        String destinationIdentityKey = DestinationIdentityKeys.forTarget(target);
+        if (importedMessageRepository.existsBySourceMessageKey(destinationIdentityKey, message.sourceAccountId(), message.sourceMessageKey())) {
             return true;
         }
         String rawSha256 = mimeHashService.sha256Hex(message.rawMessage());
-        return importedMessageRepository.existsByRawSha256(target.subjectKey(), rawSha256);
+        return importedMessageRepository.existsByRawSha256(destinationIdentityKey, rawSha256);
     }
 
     @Transactional
@@ -37,6 +38,7 @@ public class ImportDeduplicationService {
         entity.messageIdHeader = message.messageIdHeader().orElse(null);
         entity.rawSha256 = mimeHashService.sha256Hex(message.rawMessage());
         entity.destinationKey = target.subjectKey();
+        entity.destinationIdentityKey = DestinationIdentityKeys.forTarget(target);
         entity.gmailMessageId = importResponse.destinationMessageId();
         entity.gmailThreadId = importResponse.destinationThreadId();
         entity.importedAt = Instant.now();

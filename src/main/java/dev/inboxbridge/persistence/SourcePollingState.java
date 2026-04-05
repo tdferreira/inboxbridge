@@ -56,6 +56,9 @@ public class SourcePollingState extends PanacheEntityBase {
     @Column(name = "imap_folder_name", length = 255)
     public String imapFolderName;
 
+    @Column(name = "imap_checkpoint_destination_key", length = 160)
+    public String imapCheckpointDestinationKey;
+
     @Column(name = "imap_uid_validity")
     public Long imapUidValidity;
 
@@ -64,6 +67,9 @@ public class SourcePollingState extends PanacheEntityBase {
 
     @Column(name = "pop_last_seen_uidl", length = 255)
     public String popLastSeenUidl;
+
+    @Column(name = "pop_checkpoint_destination_key", length = 160)
+    public String popCheckpointDestinationKey;
 
     @Column(name = "updated_at", nullable = false)
     public Instant updatedAt;

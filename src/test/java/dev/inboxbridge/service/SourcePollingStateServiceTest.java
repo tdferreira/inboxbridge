@@ -147,9 +147,9 @@ class SourcePollingStateServiceTest {
     void recordImapCheckpointStoresAndReturnsFolderCheckpoint() {
         SourcePollingStateService service = service();
 
-        service.recordImapCheckpoint("fetcher-1", "INBOX", 44L, 101L, Instant.parse("2026-03-26T12:11:00Z"));
+        service.recordImapCheckpoint("fetcher-1", "user-destination:7", "INBOX", 44L, 101L, Instant.parse("2026-03-26T12:11:00Z"));
 
-        ImapCheckpoint checkpoint = service.imapCheckpoint("fetcher-1", "inbox").orElseThrow();
+        ImapCheckpoint checkpoint = service.imapCheckpoint("fetcher-1", "user-destination:7", "inbox").orElseThrow();
         assertEquals("INBOX", checkpoint.folderName());
         assertEquals(44L, checkpoint.uidValidity());
         assertEquals(101L, checkpoint.lastSeenUid());
@@ -159,11 +159,11 @@ class SourcePollingStateServiceTest {
     void recordImapCheckpointOnlyMovesForwardForSameFolderAndUidValidity() {
         SourcePollingStateService service = service();
 
-        service.recordImapCheckpoint("fetcher-1", "INBOX", 44L, 101L, Instant.parse("2026-03-26T12:11:00Z"));
-        service.recordImapCheckpoint("fetcher-1", "INBOX", 44L, 99L, Instant.parse("2026-03-26T12:12:00Z"));
-        service.recordImapCheckpoint("fetcher-1", "INBOX", 44L, 105L, Instant.parse("2026-03-26T12:13:00Z"));
+        service.recordImapCheckpoint("fetcher-1", "user-destination:7", "INBOX", 44L, 101L, Instant.parse("2026-03-26T12:11:00Z"));
+        service.recordImapCheckpoint("fetcher-1", "user-destination:7", "INBOX", 44L, 99L, Instant.parse("2026-03-26T12:12:00Z"));
+        service.recordImapCheckpoint("fetcher-1", "user-destination:7", "INBOX", 44L, 105L, Instant.parse("2026-03-26T12:13:00Z"));
 
-        ImapCheckpoint checkpoint = service.imapCheckpoint("fetcher-1", "INBOX").orElseThrow();
+        ImapCheckpoint checkpoint = service.imapCheckpoint("fetcher-1", "user-destination:7", "INBOX").orElseThrow();
         assertEquals(105L, checkpoint.lastSeenUid());
     }
 
@@ -171,14 +171,25 @@ class SourcePollingStateServiceTest {
     void recordPopCheckpointStoresAndReturnsUidl() {
         SourcePollingStateService service = service();
 
-        service.recordPopCheckpoint("fetcher-1", "uidl-101", Instant.parse("2026-03-26T12:14:00Z"));
+        service.recordPopCheckpoint("fetcher-1", "user-destination:7", "uidl-101", Instant.parse("2026-03-26T12:14:00Z"));
 
-        assertEquals("uidl-101", service.popCheckpoint("fetcher-1").orElseThrow());
+        assertEquals("uidl-101", service.popCheckpoint("fetcher-1", "user-destination:7").orElseThrow());
+    }
+
+    @Test
+    void checkpointsOnlyApplyToTheMatchingDestinationKey() {
+        SourcePollingStateService service = service();
+
+        service.recordImapCheckpoint("fetcher-1", "user-destination:7", "INBOX", 44L, 101L, Instant.parse("2026-03-26T12:11:00Z"));
+        service.recordPopCheckpoint("fetcher-1", "user-destination:7", "uidl-101", Instant.parse("2026-03-26T12:14:00Z"));
+
+        assertTrue(service.imapCheckpoint("fetcher-1", "user-destination:8", "INBOX").isEmpty());
+        assertTrue(service.popCheckpoint("fetcher-1", "user-destination:8").isEmpty());
     }
 
     @Test
     void popCheckpointIsTransactionalForAsyncWorkerAccess() throws Exception {
-        Method method = SourcePollingStateService.class.getDeclaredMethod("popCheckpoint", String.class);
+        Method method = SourcePollingStateService.class.getDeclaredMethod("popCheckpoint", String.class, String.class);
 
         assertTrue(method.isAnnotationPresent(Transactional.class));
     }

@@ -46,22 +46,24 @@ public class SourcePollingStateService {
     }
 
     @Transactional
-    public Optional<ImapCheckpoint> imapCheckpoint(String sourceId, String folderName) {
+    public Optional<ImapCheckpoint> imapCheckpoint(String sourceId, String destinationKey, String folderName) {
         if (repository == null) {
             return Optional.empty();
         }
         return repository.findBySourceId(sourceId)
                 .filter(state -> state.imapFolderName != null && state.imapUidValidity != null && state.imapLastSeenUid != null)
+                .filter(state -> checkpointMatchesDestination(state.imapCheckpointDestinationKey, destinationKey))
                 .filter(state -> state.imapFolderName.equalsIgnoreCase(folderName))
                 .map(state -> new ImapCheckpoint(state.imapFolderName, state.imapUidValidity, state.imapLastSeenUid));
     }
 
     @Transactional
-    public Optional<String> popCheckpoint(String sourceId) {
+    public Optional<String> popCheckpoint(String sourceId, String destinationKey) {
         if (repository == null) {
             return Optional.empty();
         }
         return repository.findBySourceId(sourceId)
+                .filter(state -> checkpointMatchesDestination(state.popCheckpointDestinationKey, destinationKey))
                 .map(state -> state.popLastSeenUidl)
                 .filter(uidl -> uidl != null && !uidl.isBlank());
     }
@@ -162,17 +164,26 @@ public class SourcePollingStateService {
     }
 
     @Transactional
-    public void recordImapCheckpoint(String sourceId, String folderName, Long uidValidity, Long lastSeenUid, Instant observedAt) {
-        if (repository == null || sourceId == null || folderName == null || uidValidity == null || lastSeenUid == null || lastSeenUid <= 0L) {
+    public void recordImapCheckpoint(
+            String sourceId,
+            String destinationKey,
+            String folderName,
+            Long uidValidity,
+            Long lastSeenUid,
+            Instant observedAt) {
+        if (repository == null || sourceId == null || destinationKey == null || destinationKey.isBlank()
+                || folderName == null || uidValidity == null || lastSeenUid == null || lastSeenUid <= 0L) {
             return;
         }
         SourcePollingState state = repository.findBySourceId(sourceId).orElseGet(SourcePollingState::new);
         if (state.id == null) {
             state.sourceId = sourceId;
         }
+        boolean sameDestination = checkpointMatchesDestination(state.imapCheckpointDestinationKey, destinationKey);
         boolean sameFolder = state.imapFolderName != null && state.imapFolderName.equalsIgnoreCase(folderName);
         boolean sameUidValidity = state.imapUidValidity != null && state.imapUidValidity.equals(uidValidity);
-        if (!sameFolder || !sameUidValidity || state.imapLastSeenUid == null) {
+        if (!sameDestination || !sameFolder || !sameUidValidity || state.imapLastSeenUid == null) {
+            state.imapCheckpointDestinationKey = destinationKey;
             state.imapFolderName = folderName;
             state.imapUidValidity = uidValidity;
             state.imapLastSeenUid = lastSeenUid;
@@ -186,14 +197,16 @@ public class SourcePollingStateService {
     }
 
     @Transactional
-    public void recordPopCheckpoint(String sourceId, String uidl, Instant observedAt) {
-        if (repository == null || sourceId == null || uidl == null || uidl.isBlank()) {
+    public void recordPopCheckpoint(String sourceId, String destinationKey, String uidl, Instant observedAt) {
+        if (repository == null || sourceId == null || destinationKey == null || destinationKey.isBlank()
+                || uidl == null || uidl.isBlank()) {
             return;
         }
         SourcePollingState state = repository.findBySourceId(sourceId).orElseGet(SourcePollingState::new);
         if (state.id == null) {
             state.sourceId = sourceId;
         }
+        state.popCheckpointDestinationKey = destinationKey;
         state.popLastSeenUidl = uidl;
         if (observedAt != null) {
             state.updatedAt = observedAt;
@@ -218,6 +231,13 @@ public class SourcePollingStateService {
             return null;
         }
         return value.length() <= 4000 ? value : value.substring(0, 4000);
+    }
+
+    private boolean checkpointMatchesDestination(String storedDestinationKey, String requestedDestinationKey) {
+        if (storedDestinationKey == null || storedDestinationKey.isBlank()) {
+            return false;
+        }
+        return storedDestinationKey.equals(requestedDestinationKey);
     }
 
     private SourcePollingStateView toView(SourcePollingState state) {

@@ -19,10 +19,10 @@ class ImportedMessageEntityTest {
         Table table = ImportedMessage.class.getAnnotation(Table.class);
 
         List<UniqueConstraint> constraints = Arrays.asList(table.uniqueConstraints());
-        assertTrue(constraints.stream().anyMatch((constraint) -> "uk_imported_message_destination_source_key".equals(constraint.name())
-                && Arrays.equals(new String[] { "destination_key", "source_account_id", "source_message_key" }, constraint.columnNames())));
-        assertTrue(constraints.stream().anyMatch((constraint) -> "uk_imported_message_destination_sha".equals(constraint.name())
-                && Arrays.equals(new String[] { "destination_key", "raw_sha256" }, constraint.columnNames())));
+        assertTrue(constraints.stream().anyMatch((constraint) -> "uk_imported_message_destination_identity_source_key".equals(constraint.name())
+                && Arrays.equals(new String[] { "destination_identity_key", "source_account_id", "source_message_key" }, constraint.columnNames())));
+        assertTrue(constraints.stream().anyMatch((constraint) -> "uk_imported_message_destination_identity_sha".equals(constraint.name())
+                && Arrays.equals(new String[] { "destination_identity_key", "raw_sha256" }, constraint.columnNames())));
     }
 
     @Test

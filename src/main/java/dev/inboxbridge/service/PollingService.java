@@ -686,6 +686,7 @@ public class PollingService {
         if (emailAccount.protocol() == dev.inboxbridge.config.InboxBridgeConfig.Protocol.IMAP) {
             sourcePollingStateService.recordImapCheckpoint(
                     emailAccount.id(),
+                    DestinationIdentityKeys.forTarget(emailAccount.destination()),
                     message.folderName().orElse(emailAccount.folder().orElse("INBOX")),
                     message.uidValidity(),
                     message.uid(),
@@ -695,6 +696,7 @@ public class PollingService {
         if (emailAccount.protocol() == dev.inboxbridge.config.InboxBridgeConfig.Protocol.POP3) {
             sourcePollingStateService.recordPopCheckpoint(
                     emailAccount.id(),
+                    DestinationIdentityKeys.forTarget(emailAccount.destination()),
                     message.popUidl(),
                     Instant.now());
         }
