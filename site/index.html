@@ -1,0 +1,498 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>InboxBridge | Self-hosted one inbox, many accounts</title>
+    <meta
+      name="description"
+      content="InboxBridge is a self-hosted mail importer for IMAP, POP3, Gmail API, and IMAP APPEND destinations, with optional IMAP IDLE and a guided .env generator."
+    />
+    <link rel="icon" type="image/svg+xml" href="./remote-icon.svg" />
+    <link rel="stylesheet" href="./styles.css" />
+  </head>
+  <body>
+    <header class="topbar">
+      <div class="shell">
+        <a class="brand" href="#top">
+          <img class="brand-mark brand-mark-image" src="./remote-icon.svg" alt="" />
+          <span class="brand-copy">
+            <strong>InboxBridge</strong>
+            <span>Self-hosted one inbox, many accounts</span>
+          </span>
+        </a>
+        <nav class="nav">
+          <a href="#features">Features</a>
+          <a href="#architecture">Architecture</a>
+          <a href="#how-it-works">How it works</a>
+          <a href="#faq">FAQ</a>
+          <a href="#env-generator">.env generator</a>
+          <a href="https://github.com/tdferreira/inboxbridge">GitHub</a>
+        </nav>
+      </div>
+    </header>
+
+    <main id="top">
+      <section class="hero">
+        <div class="shell hero-grid">
+          <div>
+            <div class="eyebrow">Mailbox import without forwarding rules</div>
+            <h1>Keep one inbox without giving up your other accounts.</h1>
+            <p>
+              InboxBridge imports mail from IMAP and POP3 source mailboxes into one destination mailbox.
+              It supports Gmail API delivery, IMAP APPEND destinations, realtime IMAP IDLE for supported sources,
+              encrypted UI-managed secrets, and a browser admin UI that does not require hand-editing configuration for day-to-day use.
+            </p>
+            <div class="hero-actions">
+              <a class="button primary" href="https://github.com/tdferreira/inboxbridge">View repository</a>
+              <a class="button secondary" href="#env-generator">Generate .env</a>
+            </div>
+          </div>
+          <aside class="hero-card">
+            <div class="hero-card-grid">
+              <article>
+                <div class="mini-kicker">Sources</div>
+                <h2>IMAP, POP3, OAuth</h2>
+                <p>Import from classic mailboxes, Outlook OAuth sources, and supported Google-based flows.</p>
+              </article>
+              <article>
+                <div class="mini-kicker">Destinations</div>
+                <h2>Gmail API or IMAP APPEND</h2>
+                <p>Deliver into Gmail, Outlook, Yahoo, Proton Bridge, or other IMAP APPEND targets.</p>
+              </article>
+              <article>
+                <div class="mini-kicker">Realtime</div>
+                <h2>IMAP IDLE when it matters</h2>
+                <p>Use long-lived IMAP IDLE watchers with durable UID checkpoints for near-real-time imports.</p>
+              </article>
+              <article>
+                <div class="mini-kicker">Control</div>
+                <h2>UI-managed by default</h2>
+                <p>Use the admin UI for normal setup, or generate an env-managed deployment for operators who prefer `.env`.</p>
+              </article>
+            </div>
+          </aside>
+        </div>
+      </section>
+
+      <section class="section" id="features">
+        <div class="shell">
+          <div class="section-header">
+            <div>
+              <div class="eyebrow">What InboxBridge does</div>
+              <h2>Designed for practical mailbox consolidation.</h2>
+            </div>
+            <p>
+              InboxBridge is broader than a simple forwarder. It keeps import history, supports multi-user deployments,
+              and lets operators choose between env-managed and UI-managed configuration.
+            </p>
+          </div>
+          <div class="feature-grid">
+            <article class="feature-card">
+              <div class="mini-kicker">Raw message import</div>
+              <h3>Preserves the original message content</h3>
+              <p>InboxBridge carries the raw message bytes through the pipeline and appends them into IMAP destinations or hands them to the Gmail API.</p>
+            </article>
+            <article class="feature-card">
+              <div class="mini-kicker">Source flexibility</div>
+              <h3>Polling for everything, IDLE for IMAP</h3>
+              <p>POP3 stays on polling. IMAP can use scheduled polling or opt into IMAP IDLE with scheduler fallback if a watcher stays unhealthy.</p>
+            </article>
+            <article class="feature-card">
+              <div class="mini-kicker">Operator choice</div>
+              <h3>UI-managed or env-managed</h3>
+              <p>Most users can configure mailboxes in the web UI. Operators can still define deployment-wide accounts and defaults in `.env`.</p>
+            </article>
+          </div>
+        </div>
+      </section>
+
+      <section class="section" id="architecture">
+        <div class="shell">
+          <div class="section-header">
+            <div>
+              <div class="eyebrow">Top-level architecture</div>
+              <h2>See the flow before you configure it.</h2>
+            </div>
+            <p>
+              InboxBridge sits between source mailboxes and one chosen destination mailbox, keeping import state,
+              dedupe history, encrypted secrets, and realtime watcher state in the middle.
+            </p>
+          </div>
+          <div class="architecture-stack">
+            <div class="architecture-diagram">
+              <article class="arch-card arch-card-sources">
+                <div class="mini-kicker">Sources</div>
+                <h3>IMAP and POP3 accounts</h3>
+                <p>Classic mailbox pull for everything, with optional IMAP IDLE watchers for eligible IMAP folders.</p>
+                <ul class="arch-list">
+                  <li>IMAP polling</li>
+                  <li>IMAP IDLE</li>
+                  <li>POP3 polling</li>
+                </ul>
+              </article>
+
+              <div class="arch-flow" aria-hidden="true">
+                <div class="flow-node">Detect</div>
+                <div class="flow-track">
+                  <span class="flow-pulse flow-pulse-one"></span>
+                  <span class="flow-pulse flow-pulse-two"></span>
+                  <span class="flow-pulse flow-pulse-three"></span>
+                </div>
+                <div class="flow-node">Import</div>
+              </div>
+
+              <article class="arch-card arch-card-core">
+                <div class="mini-kicker">InboxBridge core</div>
+                <h3>Quarkus backend + PostgreSQL</h3>
+                <p>Tracks checkpoints, dedupe, encrypted UI-managed secrets, live poll state, and post-import actions.</p>
+                <ul class="arch-list">
+                  <li>UID checkpoints</li>
+                  <li>Import history</li>
+                  <li>Token encryption</li>
+                </ul>
+              </article>
+
+              <div class="arch-flow arch-flow-final" aria-hidden="true">
+                <div class="flow-node">Route</div>
+                <div class="flow-track">
+                  <span class="flow-pulse flow-pulse-one"></span>
+                  <span class="flow-pulse flow-pulse-two"></span>
+                  <span class="flow-pulse flow-pulse-three"></span>
+                </div>
+                <div class="flow-node">Append</div>
+              </div>
+
+              <article class="arch-card arch-card-destination">
+                <div class="mini-kicker">Destination</div>
+                <h3>One mailbox, many imported sources</h3>
+                <p>Deliver into Gmail through the Gmail API or into IMAP APPEND destinations such as Outlook and other providers.</p>
+                <ul class="arch-list">
+                  <li>Gmail API</li>
+                  <li>IMAP APPEND</li>
+                  <li>Source labels and folders</li>
+                </ul>
+              </article>
+            </div>
+
+            <div class="architecture-caption">
+              <div class="pill">Animated view</div>
+              <p>
+                The moving pulses represent mail progressing through detection, durable tracking, and final delivery.
+                On IMAP IDLE sources, detection can start from a long-lived watcher instead of waiting for the next scheduled poll.
+              </p>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <section class="section" id="how-it-works">
+        <div class="shell">
+          <div class="section-header">
+            <div>
+              <div class="eyebrow">How it works</div>
+              <h2>Three moving parts, one clean import path.</h2>
+            </div>
+            <p>
+              InboxBridge reads from source accounts, deduplicates imports, and writes into one destination mailbox while tracking runtime state.
+            </p>
+          </div>
+          <div class="how-grid">
+            <article class="how-card">
+              <div class="mini-kicker">1</div>
+              <h3>Connect sources</h3>
+              <p>Configure one or more source mailboxes from the UI or `.env`. IMAP sources can use either scheduled polling or IMAP IDLE.</p>
+            </article>
+            <article class="how-card">
+              <div class="mini-kicker">2</div>
+              <h3>Import safely</h3>
+              <p>InboxBridge records dedupe state in PostgreSQL and can optionally mark, move, delete, or mark-read handled IMAP source messages.</p>
+            </article>
+            <article class="how-card">
+              <div class="mini-kicker">3</div>
+              <h3>Deliver centrally</h3>
+              <p>Messages are delivered into Gmail or IMAP APPEND destinations so the destination mailbox becomes the single place to triage mail.</p>
+            </article>
+          </div>
+        </div>
+      </section>
+
+      <section class="section" id="faq">
+        <div class="shell">
+          <div class="section-header">
+            <div>
+              <div class="eyebrow">FAQ</div>
+              <h2>Answers to the first operator questions.</h2>
+            </div>
+            <p>
+              These are the common points people usually want clarified after seeing the flow, the architecture view,
+              and the env-managed generator.
+            </p>
+          </div>
+          <div class="faq-grid">
+            <details class="faq-card" open>
+              <summary>Does InboxBridge preserve the original message headers?</summary>
+              <p>
+                Yes. InboxBridge carries the raw message bytes through the import pipeline, so IMAP APPEND destinations
+                receive the original RFC822 message content instead of a rebuilt synthetic forward.
+              </p>
+            </details>
+            <details class="faq-card">
+              <summary>Is IMAP IDLE real-time?</summary>
+              <p>
+                It is near-real-time for supported IMAP sources. InboxBridge keeps a long-lived IMAP IDLE watcher per
+                configured folder, uses durable UID checkpoints, and falls back to scheduler polling if a watcher stays
+                unhealthy long enough.
+              </p>
+            </details>
+            <details class="faq-card">
+              <summary>Does POP3 have an IMAP IDLE equivalent?</summary>
+              <p>
+                No. POP3 remains polling-only. If a provider exposes only POP3, the usual way to make it feel more
+                responsive is to shorten the poll interval rather than expecting a push-style mailbox listener.
+              </p>
+            </details>
+            <details class="faq-card">
+              <summary>Do I need to use the generated `.env` file?</summary>
+              <p>
+                No. The browser generator is for operators who want env-managed setup. Normal day-to-day mailbox setup
+                can still be done from the InboxBridge admin UI with encrypted secret storage in PostgreSQL.
+              </p>
+            </details>
+            <details class="faq-card">
+              <summary>Is the `$Forwarded` marker standard?</summary>
+              <p>
+                Not in the same sense as `\Seen`. `$Forwarded` is commonly treated as an IMAP keyword, so server support
+                varies. InboxBridge treats it as best-effort only and does not rely on it for correctness.
+              </p>
+            </details>
+            <details class="faq-card">
+              <summary>Can the page generate the token encryption key safely?</summary>
+              <p>
+                Yes, when the browser exposes secure Web Crypto. The page generates 32 random bytes locally in the
+                browser and converts them into the base64 value InboxBridge expects. If Web Crypto is unavailable, the
+                page tells you to generate the key outside the browser instead.
+              </p>
+            </details>
+          </div>
+        </div>
+      </section>
+
+      <section class="section" id="env-generator">
+        <div class="shell">
+          <div class="section-header">
+            <div>
+              <div class="eyebrow">Operator helper</div>
+              <h2>Generate a starter `.env` for env-managed deployments.</h2>
+            </div>
+            <p>
+              This is intentionally a starter, not a full replacement for the docs. Use it when you want to bootstrap a deployment-level setup or define env-managed source mailboxes.
+            </p>
+          </div>
+          <div class="generator-layout">
+            <section class="generator-panel">
+              <form class="form-grid" data-env-generator>
+                <div class="field full">
+                  <label for="publicBaseUrl"><span class="label-copy">Public base URL</span><button class="info-hint" type="button" aria-label="Public base URL help" data-hint="The HTTPS address browsers and OAuth providers should use when linking back to InboxBridge.">i</button></label>
+                  <input id="publicBaseUrl" name="publicBaseUrl" type="url" value="https://localhost:3000" />
+                </div>
+
+                <div class="field">
+                  <label for="jdbcUrl"><span class="label-copy">JDBC URL</span><button class="info-hint" type="button" aria-label="JDBC URL help" data-hint="Where InboxBridge should reach PostgreSQL for durable state, dedupe history, and encrypted secrets.">i</button></label>
+                  <input id="jdbcUrl" name="jdbcUrl" value="jdbc:postgresql://postgres:5432/inboxbridge" />
+                </div>
+                <div class="field">
+                  <label for="jdbcUsername"><span class="label-copy">JDBC username</span><button class="info-hint" type="button" aria-label="JDBC username help" data-hint="The PostgreSQL login used by the backend application.">i</button></label>
+                  <input id="jdbcUsername" name="jdbcUsername" value="inboxbridge" />
+                </div>
+                <div class="field">
+                  <label for="jdbcPassword"><span class="label-copy">JDBC password</span><button class="info-hint" type="button" aria-label="JDBC password help" data-hint="The password for that PostgreSQL application account.">i</button></label>
+                  <input id="jdbcPassword" name="jdbcPassword" value="inboxbridge" />
+                </div>
+                <div class="field">
+                  <label for="encryptionKey"><span class="label-copy">Token encryption key</span><button class="info-hint" type="button" aria-label="Token encryption key help" data-hint="Required for encrypting UI-managed passwords, OAuth refresh tokens, and other stored secrets.">i</button></label>
+                  <input id="encryptionKey" name="encryptionKey" placeholder="Paste a base64 32-byte key" />
+                </div>
+                <div class="field">
+                  <label for="generateKeyButton"><span class="label-copy">Generate key in browser</span><button class="info-hint" type="button" aria-label="Generate key in browser help" data-hint="Creates a fresh 32-byte base64 key locally in the browser when secure Web Crypto is available.">i</button></label>
+                  <button class="button secondary inline-button" id="generateKeyButton" type="button" data-generate-key>Generate 32-byte key</button>
+                </div>
+                <div class="field">
+                  <label for="encryptionKeyId"><span class="label-copy">Encryption key ID</span><button class="info-hint" type="button" aria-label="Encryption key ID help" data-hint="A short label stored with encrypted records so you can track which key version protected them.">i</button></label>
+                  <input id="encryptionKeyId" name="encryptionKeyId" value="v1" />
+                </div>
+                <div class="field">
+                  <label for="pollInterval"><span class="label-copy">Poll interval</span><button class="info-hint" type="button" aria-label="Poll interval help" data-hint="How often scheduled polling runs for sources that are not using IMAP IDLE.">i</button></label>
+                  <input id="pollInterval" name="pollInterval" value="5m" />
+                </div>
+                <div class="field">
+                  <label for="fetchWindow"><span class="label-copy">Fetch window</span><button class="info-hint" type="button" aria-label="Fetch window help" data-hint="How many recent messages InboxBridge scans when a source does not have newer checkpoint state to resume from.">i</button></label>
+                  <input id="fetchWindow" name="fetchWindow" value="50" />
+                </div>
+                <div class="field full">
+                  <label class="checkbox" for="multiUserEnabled">
+                    <input id="multiUserEnabled" name="multiUserEnabled" type="checkbox" checked />
+                    <span>Enable multi-user mode</span>
+                    <button class="info-hint" type="button" aria-label="Enable multi-user mode help" data-hint="Turn this off only if the deployment is meant for a single person and you do not need separate user workspaces.">i</button>
+                  </label>
+                </div>
+
+                <div class="field full">
+                  <div class="subsection-title">Optional shared OAuth apps</div>
+                </div>
+                <div class="field">
+                  <label for="googleClientId"><span class="label-copy">Google client ID</span><button class="info-hint" type="button" aria-label="Google client ID help" data-hint="Needed only if the deployment should support Google OAuth flows such as Gmail destination import.">i</button></label>
+                  <input id="googleClientId" name="googleClientId" placeholder="Optional" />
+                </div>
+                <div class="field">
+                  <label for="googleClientSecret"><span class="label-copy">Google client secret</span><button class="info-hint" type="button" aria-label="Google client secret help" data-hint="The matching secret from the same Google OAuth application.">i</button></label>
+                  <input id="googleClientSecret" name="googleClientSecret" placeholder="Optional" />
+                </div>
+                <div class="field">
+                  <label for="microsoftTenant"><span class="label-copy">Microsoft tenant</span><button class="info-hint" type="button" aria-label="Microsoft tenant help" data-hint="Use the tenant that matches your Microsoft app registration. consumers works for personal Outlook accounts.">i</button></label>
+                  <input id="microsoftTenant" name="microsoftTenant" value="consumers" />
+                </div>
+                <div class="field">
+                  <label for="microsoftClientId"><span class="label-copy">Microsoft client ID</span><button class="info-hint" type="button" aria-label="Microsoft client ID help" data-hint="Needed for Microsoft OAuth source or IMAP APPEND destination flows.">i</button></label>
+                  <input id="microsoftClientId" name="microsoftClientId" placeholder="Optional" />
+                </div>
+                <div class="field full">
+                  <label for="microsoftClientSecret"><span class="label-copy">Microsoft client secret</span><button class="info-hint" type="button" aria-label="Microsoft client secret help" data-hint="The secret paired with that Microsoft OAuth app registration.">i</button></label>
+                  <input id="microsoftClientSecret" name="microsoftClientSecret" placeholder="Optional" />
+                </div>
+
+                <div class="field full">
+                  <div class="subsection-title">Optional env-managed source mailbox</div>
+                </div>
+                <div class="field">
+                  <label for="sourceId"><span class="label-copy">Source ID</span><button class="info-hint" type="button" aria-label="Source ID help" data-hint="A stable identifier for this env-managed source mailbox. Keep it short and unique.">i</button></label>
+                  <input id="sourceId" name="sourceId" placeholder="outlook-main" />
+                </div>
+                <div class="field">
+                  <label for="sourceProtocol"><span class="label-copy">Protocol</span><button class="info-hint" type="button" aria-label="Protocol help" data-hint="Choose IMAP for folders and optional IDLE support, or POP3 for simpler mailbox retrieval.">i</button></label>
+                  <select id="sourceProtocol" name="sourceProtocol">
+                    <option value="IMAP">IMAP</option>
+                    <option value="POP3">POP3</option>
+                  </select>
+                </div>
+                <div class="field">
+                  <label for="sourceHost"><span class="label-copy">Source host</span><button class="info-hint" type="button" aria-label="Source host help" data-hint="The mail server hostname for the source account you want InboxBridge to read from.">i</button></label>
+                  <input id="sourceHost" name="sourceHost" placeholder="outlook.office365.com" />
+                </div>
+                <div class="field">
+                  <label for="sourcePort"><span class="label-copy">Source port</span><button class="info-hint" type="button" aria-label="Source port help" data-hint="Usually 993 for IMAP over TLS or 995 for POP3 over TLS.">i</button></label>
+                  <input id="sourcePort" name="sourcePort" value="993" />
+                </div>
+                <div class="field">
+                  <label for="sourceAuthMethod"><span class="label-copy">Auth method</span><button class="info-hint" type="button" aria-label="Auth method help" data-hint="Password works well for app passwords. Choose OAuth2 when the provider requires delegated login tokens.">i</button></label>
+                  <select id="sourceAuthMethod" name="sourceAuthMethod">
+                    <option value="PASSWORD">PASSWORD</option>
+                    <option value="OAUTH2">OAUTH2</option>
+                  </select>
+                </div>
+                <div class="field">
+                  <label for="sourceOauthProvider"><span class="label-copy">OAuth provider</span><button class="info-hint" type="button" aria-label="OAuth provider help" data-hint="Only relevant when the source auth method is OAuth2.">i</button></label>
+                  <select id="sourceOauthProvider" name="sourceOauthProvider">
+                    <option value="NONE">NONE</option>
+                    <option value="MICROSOFT">MICROSOFT</option>
+                    <option value="GOOGLE">GOOGLE</option>
+                  </select>
+                </div>
+                <div class="field">
+                  <label for="sourceUsername"><span class="label-copy">Source username</span><button class="info-hint" type="button" aria-label="Source username help" data-hint="Normally the full email address of the source mailbox account.">i</button></label>
+                  <input id="sourceUsername" name="sourceUsername" placeholder="replace-me@example.com" />
+                </div>
+                <div class="field" data-password-only>
+                  <label for="sourcePassword"><span class="label-copy">Password / app password</span><button class="info-hint" type="button" aria-label="Password or app password help" data-hint="Use an app password when the provider supports it instead of a normal interactive sign-in password.">i</button></label>
+                  <input id="sourcePassword" name="sourcePassword" placeholder="Optional if using OAuth2" />
+                </div>
+                <div class="field" data-oauth-only hidden>
+                  <label for="sourceOauthRefreshToken"><span class="label-copy">OAuth refresh token</span><button class="info-hint" type="button" aria-label="OAuth refresh token help" data-hint="Lets InboxBridge renew access in the background without asking the user to sign in again every time.">i</button></label>
+                  <input id="sourceOauthRefreshToken" name="sourceOauthRefreshToken" placeholder="Optional" />
+                </div>
+                <div class="field" data-imap-only>
+                  <label for="sourceFolder"><span class="label-copy">IMAP folder</span><button class="info-hint" type="button" aria-label="IMAP folder help" data-hint="The IMAP folder InboxBridge should watch or poll for new messages.">i</button></label>
+                  <input id="sourceFolder" name="sourceFolder" value="INBOX" />
+                </div>
+                <div class="field" data-imap-only>
+                  <label for="sourceFetchMode"><span class="label-copy">Fetch mode</span><button class="info-hint" type="button" aria-label="Fetch mode help" data-hint="Use IDLE for near-real-time IMAP imports when the provider supports it. POP3 always stays on polling.">i</button></label>
+                  <select id="sourceFetchMode" name="sourceFetchMode">
+                    <option value="POLLING">POLLING</option>
+                    <option value="IDLE">IDLE</option>
+                  </select>
+                </div>
+                <div class="field full">
+                  <label for="sourceCustomLabel"><span class="label-copy">Custom label</span><button class="info-hint" type="button" aria-label="Custom label help" data-hint="Optional label text that can help identify where imported mail came from on Gmail-style destinations.">i</button></label>
+                  <input id="sourceCustomLabel" name="sourceCustomLabel" placeholder="Optional Gmail label" />
+                </div>
+                <div class="field full">
+                  <label class="checkbox" for="sourceUnreadOnly">
+                    <input id="sourceUnreadOnly" name="sourceUnreadOnly" type="checkbox" />
+                    <span>Import only unread source messages</span>
+                    <button class="info-hint" type="button" aria-label="Import only unread source messages help" data-hint="Useful when the source mailbox already contains older mail that you do not want to import again.">i</button>
+                  </label>
+                </div>
+              </form>
+            </section>
+
+            <section class="code-panel">
+              <header>
+                <div>
+                  <div class="eyebrow">Generated output</div>
+                  <h3>Starter `.env`</h3>
+                </div>
+                <button class="button secondary" type="button" data-copy-env>Copy</button>
+              </header>
+              <textarea data-env-output readonly spellcheck="false">Loading generator…</textarea>
+              <p class="summary" data-env-summary>Preparing your starter configuration…</p>
+            </section>
+          </div>
+        </div>
+      </section>
+
+      <section class="section">
+        <div class="shell info-band">
+          <div class="info-band-grid">
+            <div>
+              <div class="eyebrow">Good fit</div>
+              <ul>
+                <li>You want one self-hosted destination mailbox for multiple sources.</li>
+                <li>You want IMAP APPEND or Gmail API delivery instead of forwarding rules.</li>
+                <li>You want a real admin UI, multi-user support, and durable dedupe history.</li>
+              </ul>
+            </div>
+            <div>
+              <div class="eyebrow">Worth remembering</div>
+              <ul>
+                <li>POP3 has no IMAP IDLE equivalent, so POP3 sources stay on polling.</li>
+                <li>`$Forwarded` is treated as best-effort because IMAP keyword support varies by server.</li>
+                <li>The generator can also create the 32-byte base64 token encryption key in the browser when Web Crypto is available.</li>
+                <li>The generator is a convenience for operators, not a substitute for the full setup docs.</li>
+              </ul>
+            </div>
+          </div>
+        </div>
+      </section>
+    </main>
+
+    <footer class="site-footer">
+      <div class="shell">
+        <span>InboxBridge GitHub Pages site</span>
+        <span>
+          <a href="https://github.com/tdferreira/inboxbridge">Repository</a>
+          ·
+          <a href="https://github.com/tdferreira/inboxbridge/blob/main/README.md">README</a>
+          ·
+          <a href="https://github.com/tdferreira/inboxbridge/blob/main/docs/SETUP.md">Setup guide</a>
+        </span>
+      </div>
+    </footer>
+
+    <script type="module" src="./app.js"></script>
+    <noscript>
+      <div class="shell noscript-note">
+        This page needs JavaScript for the live `.env` generator.
+      </div>
+    </noscript>
+  </body>
+</html>

@@ -66,3 +66,6 @@ jobs:
       - name: Build frontend
         working-directory: admin-ui
         run: npm run build
+
+      - name: Validate GitHub Pages site generator
+        run: node site/test-config-generator.mjs

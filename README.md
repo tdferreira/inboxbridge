@@ -24,6 +24,7 @@ InboxBridge can:
 - provide a browser-based admin UI plus a lightweight `/remote` control page for phones and quick access
 - show live polling progress with pause, resume, stop, retry, and queue reprioritization controls
 - let IMAP sources opt into real-time IMAP IDLE watching with durable UID checkpoints and scheduler fallback if a watcher stays unhealthy
+- publish a lightweight GitHub Pages site that explains the project and can generate a starter `.env` snippet for env-managed deployments
 
 ## Who It Is For
 
@@ -152,6 +153,24 @@ After signing in:
 2. Open `My Destination Mailbox` and connect the mailbox that should receive imported mail.
 3. Open `My Source Email Accounts` and add at least one source mailbox.
 4. Run a poll and confirm the messages arrive in the destination mailbox.
+
+## GitHub Pages Site
+
+This repository also includes a static site under [`site/`](site) intended for GitHub Pages.
+
+It is meant to:
+
+- explain what InboxBridge is and how it works
+- show a top-level architecture view with an animated mailflow diagram
+- answer common operator questions in an FAQ section
+- highlight the main source and destination mailbox flows
+- link operators back to the full setup docs
+- generate a starter `.env` snippet for env-managed deployments and shared OAuth app configuration
+- explain the configurator fields with compact info-icon hints
+- generate the required base64 token-encryption key directly in the browser when Web Crypto is available
+- reuse the same InboxBridge icon family as the `/remote` PWA so the public site and installed surface feel related
+
+The generator is intentionally a convenience for operators. It does not replace the browser admin UI for normal UI-managed setup, and it does not replace the full operator docs in [`docs/SETUP.md`](docs/SETUP.md).
 
 ## Configuration Overview
 
