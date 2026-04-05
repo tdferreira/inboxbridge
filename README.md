@@ -175,6 +175,8 @@ It is meant to:
 
 The generator is intentionally a convenience for operators. It does not replace the browser admin UI for normal UI-managed setup, and it does not replace the full operator docs in [`docs/SETUP.md`](docs/SETUP.md).
 
+For GitHub Pages deployment, the repository's Pages feature still needs to be enabled once in GitHub settings and configured to use GitHub Actions. After that one-time setup, the workflow in [`.github/workflows/pages.yml`](.github/workflows/pages.yml) can publish the `site/` directory normally.
+
 ## Configuration Overview
 
 ### Minimum configuration to explore the app
