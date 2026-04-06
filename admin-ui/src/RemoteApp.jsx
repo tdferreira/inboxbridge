@@ -28,7 +28,16 @@ import {
   remoteStartPasskey
 } from './lib/remoteApi'
 import { languageOptions, normalizeLocale, translate } from './lib/i18n'
-import { formatDate, formatDurationMeaning, formatPollError, formatRemoteImportedSizeSummary } from './lib/formatters'
+import {
+  DATE_FORMAT_AUTO,
+  formatDate,
+  formatDurationMeaning,
+  formatPollError,
+  formatRemoteImportedSizeSummary,
+  normalizeDateFormatPreference,
+  resetCurrentFormattingDateFormat,
+  setCurrentFormattingDateFormat
+} from './lib/formatters'
 import { formatLiveProgressLabel, formatLiveProgressSummary, hasDeterminateLiveProgress, liveProgressPercent } from './lib/livePollProgress'
 import { normalizeManualTimeZone, normalizeTimeZoneMode, resetCurrentFormattingTimeZone, resolveEffectiveTimeZone, setCurrentFormattingTimeZone, TIMEZONE_MODE_AUTO } from './lib/timeZonePreferences'
 import { usePwaInstallPrompt } from './lib/usePwaInstallPrompt'
@@ -60,12 +69,14 @@ function RemoteApp({ timingOverrides = null }) {
   )
   const [language, setLanguage] = useState(() => normalizeLocale(window.localStorage.getItem('inboxbridge.language') || navigator.language))
   const [timezonePreference, setTimezonePreference] = useState({ timezoneMode: TIMEZONE_MODE_AUTO, timezone: '' })
+  const [dateFormatPreference, setDateFormatPreference] = useState(DATE_FORMAT_AUTO)
   const t = useMemo(() => (key, params) => translate(language, key, params), [language])
   const effectiveTimeZone = useMemo(
     () => resolveEffectiveTimeZone(timezonePreference.timezoneMode, timezonePreference.timezone),
     [timezonePreference.timezone, timezonePreference.timezoneMode]
   )
   setCurrentFormattingTimeZone(effectiveTimeZone)
+  setCurrentFormattingDateFormat(dateFormatPreference)
   const [session, setSession] = useState(null)
   const [control, setControl] = useState(null)
   const [loading, setLoading] = useState(true)
@@ -129,6 +140,7 @@ function RemoteApp({ timingOverrides = null }) {
 
   useEffect(() => {
     return () => {
+      resetCurrentFormattingDateFormat()
       resetCurrentFormattingTimeZone()
     }
   }, [])
@@ -170,12 +182,13 @@ function RemoteApp({ timingOverrides = null }) {
     [installPrompt.prefersAddToHomeScreenLabel, t]
   )
 
-  function applySessionPreferences(nextLanguage, timezoneMode, timezone) {
+  function applySessionPreferences(nextLanguage, timezoneMode, timezone, dateFormat) {
     setLanguage(normalizeLocale(nextLanguage || language))
     setTimezonePreference({
       timezoneMode: normalizeTimeZoneMode(timezoneMode),
       timezone: normalizeManualTimeZone(timezone)
     })
+    setDateFormatPreference(normalizeDateFormatPreference(dateFormat))
   }
 
   function applyLivePoll(nextLivePoll) {
@@ -208,7 +221,7 @@ function RemoteApp({ timingOverrides = null }) {
         remoteLivePoll().catch(() => null)
       ])
       setSession(sessionPayload)
-      applySessionPreferences(sessionPayload?.language, sessionPayload?.timezoneMode, sessionPayload?.timezone)
+      applySessionPreferences(sessionPayload?.language, sessionPayload?.timezoneMode, sessionPayload?.timezone, sessionPayload?.dateFormat)
       setControl(controlPayload)
       applyLivePoll(livePollPayload)
       lastLiveEventAtRef.current = Date.now()
@@ -246,6 +259,7 @@ function RemoteApp({ timingOverrides = null }) {
     setActiveAuthAction(AUTH_ACTION_NONE)
     setExpandedSources(new Set())
     setTimezonePreference({ timezoneMode: TIMEZONE_MODE_AUTO, timezone: '' })
+    setDateFormatPreference(DATE_FORMAT_AUTO)
   }
 
   async function handleLogin(event) {
@@ -272,7 +286,7 @@ function RemoteApp({ timingOverrides = null }) {
         return
       }
       setSession(payload)
-      applySessionPreferences(payload?.language, payload?.timezoneMode, payload?.timezone)
+      applySessionPreferences(payload?.language, payload?.timezoneMode, payload?.timezone, payload?.dateFormat)
       setLoginForm(DEFAULT_LOGIN_FORM)
       const [controlPayload, livePollPayload] = await Promise.all([
         remoteControl(),
@@ -306,7 +320,7 @@ function RemoteApp({ timingOverrides = null }) {
         credentialJson: serializeCredential(credential)
       })
       setSession(payload)
-      applySessionPreferences(payload?.language, payload?.timezoneMode, payload?.timezone)
+      applySessionPreferences(payload?.language, payload?.timezoneMode, payload?.timezone, payload?.dateFormat)
       setLoginForm(DEFAULT_LOGIN_FORM)
       const [controlPayload, livePollPayload] = await Promise.all([
         remoteControl(),

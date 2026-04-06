@@ -1,9 +1,11 @@
 import { fireEvent, render, screen } from '@testing-library/react'
 import { vi } from 'vitest'
 import PollingStatisticsSection from './PollingStatisticsSection'
+import { DATE_FORMAT_YMD_24, resetCurrentFormattingDateFormat, setCurrentFormattingDateFormat } from '../../lib/formatters'
 import { translate } from '../../lib/i18n'
 import { colorForSeries } from '../common/ImportTimelineChart'
 import * as pollingStatsAlerts from '../../lib/pollingStatsAlerts'
+import { resetCurrentFormattingTimeZone, setCurrentFormattingTimeZone } from '../../lib/timeZonePreferences'
 
 vi.mock('recharts', async () => {
   const actual = await vi.importActual('recharts')
@@ -94,6 +96,8 @@ function renderSection(props = {}) {
 
 describe('PollingStatisticsSection', () => {
   afterEach(() => {
+    resetCurrentFormattingDateFormat()
+    resetCurrentFormattingTimeZone()
     vi.restoreAllMocks()
   })
 
@@ -268,7 +272,7 @@ describe('PollingStatisticsSection', () => {
     })
 
     expect(screen.getByText('Scheduled polling activity looks unusually high.')).toBeInTheDocument()
-    expect(screen.getByText(/During Today at 03:00, InboxBridge recorded a peak of 720 scheduled runs/)).toBeInTheDocument()
+    expect(screen.getByText(/During Past day at 03:00, InboxBridge recorded a peak of 720 scheduled runs/)).toBeInTheDocument()
     expect(screen.getByRole('button', { name: 'Show on chart' })).toBeInTheDocument()
     expect(document.querySelector('.polling-statistics-section-alerting')).toBeInTheDocument()
   })
@@ -315,6 +319,47 @@ describe('PollingStatisticsSection', () => {
 
     expect(screen.getByText(/During Yesterday from 07:00 until 09:00, InboxBridge recorded a peak of 1147 scheduled runs/)).toBeInTheDocument()
     expect(document.querySelector('.polling-statistics-section-alerting')).toBeInTheDocument()
+  })
+
+  it('renders anomaly timestamps with the active manual date format', () => {
+    setCurrentFormattingDateFormat(DATE_FORMAT_YMD_24)
+    setCurrentFormattingTimeZone('UTC')
+    vi.spyOn(Date, 'now').mockReturnValue(Date.parse('2026-04-05T10:00:00Z'))
+
+    renderSection({
+      scheduledRunAlertInterval: '5m',
+      scheduledRunAlertSourceCount: 2,
+      stats: {
+        totalImportedMessages: 14,
+        configuredMailFetchers: 2,
+        enabledMailFetchers: 2,
+        sourcesWithErrors: 1,
+        errorPolls: 2,
+        importsByDay: [],
+        importTimelines: {},
+        duplicateTimelines: {},
+        errorTimelines: {},
+        manualRunTimelines: {},
+        scheduledRunTimelines: {
+          custom: [
+            { bucketLabel: '2026-04-04T03:00:00Z', importedMessages: 720 },
+            { bucketLabel: '2026-04-04T04:00:00Z', importedMessages: 680 }
+          ]
+        },
+        health: {
+          activeMailFetchers: 2,
+          coolingDownMailFetchers: 0,
+          failingMailFetchers: 0,
+          disabledMailFetchers: 0
+        },
+        providerBreakdown: [],
+        manualRuns: 0,
+        scheduledRuns: 720,
+        averagePollDurationMillis: 2100
+      }
+    })
+
+    expect(screen.getByText(/From 2026-04-04 03:00:00 until 2026-04-04 04:00:00/)).toBeInTheDocument()
   })
 
   it('moves the run chart to the anomaly range when the warning action is clicked', () => {

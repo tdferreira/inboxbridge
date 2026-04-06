@@ -16,7 +16,7 @@ Start with [`admin-ui/README.md`](../../../admin-ui/README.md), [`CONTEXT.md`](.
 - Respect the existing workspace/layout model: collapsible sections, section cards, persisted preferences, and quick-setup behavior.
 - Keep auth/session browser hardening intact, including the same-origin CSRF wrapper behavior for unsafe `/api/...` writes.
 - Treat `PillboxInput` as the shared multi-value picker for folder-like inputs. Keep its desktop floating-combobox behavior, real-touch native-picker behavior, keyboard navigation, and mobile touch-target sizing coherent across callers instead of re-implementing picker logic inside feature dialogs.
-- Preserve the current source-detail diagnostics surface in `EmailAccountListItem`: operators can now inspect destination identity, POP/IMAP checkpoints, throttle state, IMAP IDLE watcher health, and persisted poll audit fields from the normal UI.
+- Preserve the current source-detail diagnostics surface in `EmailAccountListItem`: operators can now inspect destination identity, POP/IMAP checkpoints, throttle state, IMAP IDLE watcher health, persisted poll audit fields, and explicit runtime alerts from the normal UI.
 - Match existing styling and UX patterns unless the user explicitly asks for a broader redesign.
 
 ## Testing expectations

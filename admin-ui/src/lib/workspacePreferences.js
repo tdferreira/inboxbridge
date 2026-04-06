@@ -1,3 +1,5 @@
+import { normalizeDateFormatPreference } from './formatters'
+
 export const DEFAULT_UI_PREFERENCES = {
   persistLayout: false,
   layoutEditEnabled: false,
@@ -19,6 +21,7 @@ export const DEFAULT_UI_PREFERENCES = {
   userSectionOrder: ['quickSetup', 'destination', 'sourceEmailAccounts', 'userPolling', 'remoteControl', 'userStats'],
   adminSectionOrder: ['adminQuickSetup', 'systemDashboard', 'oauthApps', 'userManagement', 'authSecurity', 'globalStats'],
   language: 'en',
+  dateFormat: 'AUTO',
   timezoneMode: 'AUTO',
   timezone: '',
   notificationHistory: []
@@ -58,6 +61,7 @@ export function normalizeUiPreferences(payload) {
     adminQuickSetupDismissed: payload?.adminQuickSetupDismissed ?? false,
     adminQuickSetupPinnedVisible: payload?.adminQuickSetupPinnedVisible ?? false,
     userSectionOrder: normalizedUserSectionOrder,
+    dateFormat: normalizeDateFormatPreference(payload?.dateFormat),
     timezoneMode: payload?.timezoneMode === 'MANUAL' ? 'MANUAL' : 'AUTO',
     timezone: typeof payload?.timezone === 'string' ? payload.timezone : ''
   }

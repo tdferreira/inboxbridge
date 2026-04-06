@@ -1,8 +1,12 @@
 import { fireEvent, render, screen, waitFor } from '@testing-library/react'
 import SessionsPanel from './SessionsPanel'
+import { DATE_FORMAT_YMD_24, resetCurrentFormattingDateFormat, setCurrentFormattingDateFormat } from '../../lib/formatters'
+import { resetCurrentFormattingTimeZone, setCurrentFormattingTimeZone } from '../../lib/timeZonePreferences'
 
 describe('SessionsPanel', () => {
   afterEach(() => {
+    resetCurrentFormattingDateFormat()
+    resetCurrentFormattingTimeZone()
     vi.unstubAllGlobals()
   })
 
@@ -108,5 +112,48 @@ describe('SessionsPanel', () => {
     fireEvent.click(screen.getByRole('button', { name: 'sessions.captureDeviceLocation' }))
     expect(onRequestCurrentDeviceLocation).toHaveBeenCalledTimes(1)
     expect(screen.getByText('deviceLocation.errors.timeout')).toBeInTheDocument()
+  })
+
+  it('renders session timestamps with the active manual date format', async () => {
+    setCurrentFormattingDateFormat(DATE_FORMAT_YMD_24)
+    setCurrentFormattingTimeZone('UTC')
+
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue({
+      ok: true,
+      json: async () => ({
+        address: {
+          city: 'Lisbon',
+          state: 'Lisbon',
+          country_code: 'pt'
+        }
+      })
+    }))
+
+    render(
+      <SessionsPanel
+        activeSessions={[
+          { id: 1, sessionType: 'BROWSER', current: true, browserLabel: 'Microsoft Edge', deviceLabel: 'Desktop (Windows)', ipAddress: '203.0.113.10', locationLabel: null, deviceLocationLabel: '38.7223, -9.1393 (±25 m)', deviceLatitude: 38.7223, deviceLongitude: -9.1393, deviceLocationCapturedAt: '2026-03-30T12:03:00Z', loginMethod: 'PASSWORD', lastSeenAt: '2026-03-30T12:05:00Z', expiresAt: '2026-03-30T13:00:00Z' }
+        ]}
+        currentSessionCanRequestDeviceLocation={false}
+        currentSessionDeviceLocationError=""
+        geoIpConfigured
+        locale="en"
+        onRequestCurrentDeviceLocation={vi.fn()}
+        onRevokeOtherSessions={vi.fn()}
+        onRevokeSession={vi.fn()}
+        recentLogins={[
+          { id: 1, sessionType: 'BROWSER', current: true, active: true, browserLabel: 'Microsoft Edge', deviceLabel: 'Desktop (Windows)', ipAddress: '203.0.113.10', locationLabel: null, deviceLocationLabel: '38.7223, -9.1393 (±25 m)', deviceLatitude: 38.7223, deviceLongitude: -9.1393, deviceLocationCapturedAt: '2026-03-30T12:03:00Z', loginMethod: 'PASSWORD', createdAt: '2026-03-30T12:00:00Z', lastSeenAt: '2026-03-30T12:05:00Z' }
+        ]}
+        revokeLoadingId={null}
+        revokeOthersLoading={false}
+        requestCurrentDeviceLocationLoading={false}
+        t={(key, params = {}) => params.value ? `${key}:${params.value}` : key}
+      />
+    )
+
+    await waitFor(() => expect(screen.getByText((value) => value.includes('2026-03-30 12:00:00'))).toBeInTheDocument())
+    expect(screen.getAllByText((value) => value.includes('2026-03-30 12:03:00')).length).toBeGreaterThan(0)
+    expect(screen.getAllByText((value) => value.includes('2026-03-30 12:05:00')).length).toBeGreaterThan(0)
+    expect(screen.getByText((value) => value.includes('2026-03-30 13:00:00'))).toBeInTheDocument()
   })
 })

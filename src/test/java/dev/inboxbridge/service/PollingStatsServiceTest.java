@@ -4,6 +4,7 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 
 import java.time.Instant;
 import java.time.LocalDate;
+import java.time.LocalDateTime;
 import java.time.ZoneId;
 import java.time.ZoneOffset;
 import java.util.List;
@@ -93,6 +94,68 @@ class PollingStatsServiceTest {
     }
 
     @Test
+    void todayTimelineTracksThePastTwentyFourHoursEndingAtTheCurrentHour() {
+        ZoneId zoneId = ZoneOffset.UTC;
+        LocalDateTime endHour = LocalDateTime.now(zoneId).withMinute(0).withSecond(0).withNano(0);
+        LocalDateTime startHour = endHour.minusHours(23);
+        Instant importAt = startHour.plusHours(1).plusMinutes(15).toInstant(ZoneOffset.UTC);
+
+        PollingStatsService service = new PollingStatsService();
+        service.importedMessageRepository = new ImportedMessageRepository() {
+            @Override
+            public long countByDestinationKey(String destinationKey) {
+                return 1L;
+            }
+
+            @Override
+            public List<Instant> listImportedAtSinceForDestinationKey(String destinationKey, Instant since) {
+                return List.of(importAt);
+            }
+        };
+        service.userEmailAccountRepository = new UserEmailAccountRepository() {
+            @Override
+            public List<UserEmailAccount> listByUserId(Long userId) {
+                UserEmailAccount bridge = new UserEmailAccount();
+                bridge.userId = userId;
+                bridge.emailAccountId = "user-fetcher";
+                bridge.enabled = true;
+                return List.of(bridge);
+            }
+        };
+        service.sourcePollEventService = new SourcePollEventService() {
+            @Override
+            public Optional<dev.inboxbridge.dto.AdminPollEventSummary> latestForSource(String sourceId) {
+                return Optional.empty();
+            }
+
+            @Override
+            public List<SourcePollEvent> listBySourceIdsSince(List<String> sourceIds, Instant since) {
+                return List.of();
+            }
+        };
+        service.envSourceService = new EnvSourceService();
+        service.sourcePollingStateService = new SourcePollingStateService() {
+            @Override
+            public Map<String, SourcePollingStateView> viewBySourceIds(List<String> sourceIds) {
+                return Map.of();
+            }
+        };
+
+        UserPollingStatsView stats = service.userStats(7L, zoneId);
+
+        assertEquals(24, stats.importTimelines().get("today").size());
+        assertEquals(
+                String.format("%sT%02d:00", startHour.toLocalDate(), startHour.getHour()),
+                stats.importTimelines().get("today").getFirst().bucketLabel());
+        assertEquals(
+                String.format("%sT%02d:00", endHour.toLocalDate(), endHour.getHour()),
+                stats.importTimelines().get("today").getLast().bucketLabel());
+        assertEquals(1L, stats.importTimelines().get("today").stream()
+                .mapToLong(dev.inboxbridge.dto.ImportTimelinePointView::importedMessages)
+                .sum());
+    }
+
+    @Test
     void sourceStatsStayScopedToOneMailFetcher() {
         Instant importDay = LocalDate.now(ZoneOffset.UTC).minusDays(1).atStartOfDay().toInstant(ZoneOffset.UTC);
         PollingStatsService service = new PollingStatsService();
@@ -174,8 +237,11 @@ class PollingStatsServiceTest {
 
     @Test
     void timelineBucketsFollowRequestedTimezone() {
-        Instant importAt = LocalDate.now(ZoneOffset.UTC)
-                .atTime(9, 15)
+        Instant importAt = LocalDateTime.now(ZoneOffset.UTC)
+                .withMinute(15)
+                .withSecond(0)
+                .withNano(0)
+                .minusHours(2)
                 .toInstant(ZoneOffset.UTC);
         PollingStatsService service = new PollingStatsService();
         service.importedMessageRepository = new ImportedMessageRepository() {
@@ -220,14 +286,19 @@ class PollingStatsServiceTest {
 
         UserPollingStatsView utcStats = service.userStats(7L, ZoneOffset.UTC);
         UserPollingStatsView lisbonStats = service.userStats(7L, ZoneId.of("Europe/Lisbon"));
+        String utcBucket = String.format("%sT%02d:00", importAt.atZone(ZoneOffset.UTC).toLocalDate(), importAt.atZone(ZoneOffset.UTC).getHour());
+        String lisbonBucket = String.format(
+                "%sT%02d:00",
+                importAt.atZone(ZoneId.of("Europe/Lisbon")).toLocalDate(),
+                importAt.atZone(ZoneId.of("Europe/Lisbon")).getHour());
 
         long utcNineAm = utcStats.importTimelines().get("today").stream()
-                .filter(point -> "09:00".equals(point.bucketLabel()))
+                .filter(point -> utcBucket.equals(point.bucketLabel()))
                 .findFirst()
                 .orElseThrow()
                 .importedMessages();
         long lisbonTenAm = lisbonStats.importTimelines().get("today").stream()
-                .filter(point -> "10:00".equals(point.bucketLabel()))
+                .filter(point -> lisbonBucket.equals(point.bucketLabel()))
                 .findFirst()
                 .orElseThrow()
                 .importedMessages();

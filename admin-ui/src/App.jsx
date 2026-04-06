@@ -51,6 +51,7 @@ import { useSessionDeviceLocation } from './lib/useSessionDeviceLocation'
 import { detectScheduledRunAnomaly } from './lib/pollingStatsAlerts'
 import { statsTimezoneHeader } from './lib/statsTimezone'
 import { readStoredTimeZonePreference, resolveEffectiveTimeZone, resetCurrentFormattingTimeZone, setCurrentFormattingTimeZone } from './lib/timeZonePreferences'
+import { DATE_FORMAT_AUTO, formatDate, resetCurrentFormattingDateFormat, setCurrentFormattingDateFormat } from './lib/formatters'
 
 const DEFAULT_AUTH_SECURITY_FORM = {
   loginFailureThresholdOverride: '',
@@ -341,6 +342,7 @@ function AppContent({ timings = DEFAULT_APP_TIMINGS }) {
     handleLayoutEditChange,
     handlePersistLayoutChange,
     handleQuickSetupVisibilityChange,
+    handleDateFormatChange,
     handleTimeZoneChange,
     handleTimeZoneModeChange,
     hasUnsavedLayoutEdits,
@@ -375,14 +377,13 @@ function AppContent({ timings = DEFAULT_APP_TIMINGS }) {
       : storedTimeZonePreference?.timezone
     return resolveEffectiveTimeZone(timezoneMode, timezone)
   }, [session?.id, storedTimeZonePreference?.timezone, storedTimeZonePreference?.timezoneMode, uiPreferences.timezone, uiPreferences.timezoneMode, uiPreferencesLoadedForUserId])
-  const notificationTimestampFormatter = useMemo(
-    () => new Intl.DateTimeFormat(language, { dateStyle: 'medium', timeStyle: 'medium', timeZone: effectiveTimeZone }),
-    [effectiveTimeZone, language]
-  )
+  const effectiveDateFormat = uiPreferencesLoadedForUserId === session?.id ? uiPreferences.dateFormat : DATE_FORMAT_AUTO
   setCurrentFormattingTimeZone(effectiveTimeZone)
+  setCurrentFormattingDateFormat(effectiveDateFormat)
 
   useEffect(() => {
     return () => {
+      resetCurrentFormattingDateFormat()
       resetCurrentFormattingTimeZone()
     }
   }, [])
@@ -1614,7 +1615,7 @@ function AppContent({ timings = DEFAULT_APP_TIMINGS }) {
     if (!notification?.createdAt) {
       return ''
     }
-    return t('notifications.createdAt', { value: notificationTimestampFormatter.format(new Date(notification.createdAt)) })
+    return t('notifications.createdAt', { value: formatDate(new Date(notification.createdAt), language, effectiveTimeZone, effectiveDateFormat) })
   }
 
   const userWorkspaceSections = buildUserWorkspaceSections({
@@ -1759,6 +1760,7 @@ function AppContent({ timings = DEFAULT_APP_TIMINGS }) {
             language={language}
             languageOptions={selectableLanguages}
             onClose={closePreferencesDialog}
+            onDateFormatChange={handleDateFormatChange}
             onExitLayoutEditing={commitLayoutEditingChanges}
             onLanguageChange={handleLanguageChange}
             onPersistLayoutChange={handlePersistLayoutChange}
@@ -1772,6 +1774,7 @@ function AppContent({ timings = DEFAULT_APP_TIMINGS }) {
             selectableTimeZones={selectableTimeZones}
             savingLayout={isPending('uiPreferences')}
             t={t}
+            dateFormat={uiPreferences.dateFormat}
             timezone={uiPreferences.timezone}
             timezoneMode={uiPreferences.timezoneMode}
           />

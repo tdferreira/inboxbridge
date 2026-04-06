@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { apiErrorText } from './api'
+import { normalizeDateFormatPreference } from './formatters'
 import { languageOptions, normalizeLocale, translate } from './i18n'
 import { pollErrorNotification, translatedNotification } from './notifications'
 import {
@@ -167,6 +168,7 @@ export function useWorkspacePreferencesController({ language, pushNotification, 
       ...DEFAULT_UI_PREFERENCES,
       persistLayout: currentPreferences.persistLayout,
       language,
+      dateFormat: currentPreferences.dateFormat,
       timezoneMode: currentPreferences.timezoneMode,
       timezone: currentPreferences.timezone
     })
@@ -313,6 +315,17 @@ export function useWorkspacePreferencesController({ language, pushNotification, 
     void persistUiPreferences(nextPreferences)
   }
 
+  function handleDateFormatChange(nextDateFormat) {
+    const currentPreferences = uiPreferencesRef.current
+    const normalizedDateFormat = normalizeDateFormatPreference(nextDateFormat)
+    const nextPreferences = {
+      ...currentPreferences,
+      dateFormat: normalizedDateFormat
+    }
+    commitUiPreferences(nextPreferences)
+    void persistUiPreferences(nextPreferences)
+  }
+
   function resetLayoutState() {
     commitUiPreferences(DEFAULT_UI_PREFERENCES)
     setUiPreferencesLoadedForUserId(null)
@@ -354,6 +367,7 @@ export function useWorkspacePreferencesController({ language, pushNotification, 
     handleLayoutEditChange,
     handlePersistLayoutChange,
     handleQuickSetupVisibilityChange,
+    handleDateFormatChange,
     handleTimeZoneChange,
     handleTimeZoneModeChange,
     hasUnsavedLayoutEdits: hasLayoutPreferenceChanges(uiPreferences, layoutEditSnapshot),

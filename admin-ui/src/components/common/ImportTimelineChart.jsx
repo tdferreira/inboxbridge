@@ -30,7 +30,10 @@ const CHART_VIEW_STATE = new Map()
 const CHART_VIEW_STATE_STORAGE_PREFIX = 'inboxbridge.chartViewState.'
 
 function formatBucketLabel(rangeKey, bucketLabel) {
-  if (rangeKey === 'today' || rangeKey === 'yesterday') return bucketLabel
+  if (rangeKey === 'today') {
+    return /^\d{4}-\d{2}-\d{2}T/.test(bucketLabel) ? bucketLabel.slice(5).replace('T', ' ') : bucketLabel
+  }
+  if (rangeKey === 'yesterday') return bucketLabel
   if (rangeKey === 'pastWeek') {
     return /^\d{4}-\d{2}-\d{2}T/.test(bucketLabel) ? bucketLabel.slice(5).replace('T', ' ') : bucketLabel
   }

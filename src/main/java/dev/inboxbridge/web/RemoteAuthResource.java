@@ -207,6 +207,7 @@ public class RemoteAuthResource {
                 systemOAuthAppSettingsService.effectiveMultiUserEnabled(),
                 currentUserContext.remoteSession() != null && currentUserContext.remoteSession().deviceLocationCapturedAt != null,
                 uiPreference.language(),
+                uiPreference.dateFormat(),
                 uiPreference.timezoneMode(),
                 uiPreference.timezone());
     }

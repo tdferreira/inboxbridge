@@ -1,6 +1,8 @@
 import { act, fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { within } from '@testing-library/react'
 import RemoteApp from './RemoteApp'
+import { resetCurrentFormattingDateFormat } from './lib/formatters'
+import { resetCurrentFormattingTimeZone } from './lib/timeZonePreferences'
 
 class FakeEventSource {
   static instances = []
@@ -76,6 +78,8 @@ describe('RemoteApp', () => {
   })
 
   afterEach(() => {
+    resetCurrentFormattingDateFormat()
+    resetCurrentFormattingTimeZone()
     restoreNavigatorProperty('geolocation', originalGeolocation)
     restoreNavigatorProperty('permissions', originalPermissions)
   })
@@ -1078,6 +1082,8 @@ describe('RemoteApp', () => {
     render(<RemoteApp />)
 
     expect(await screen.findByRole('button', { name: 'Poll My Sources' })).toBeInTheDocument()
+
+    await waitFor(() => expect(FakeEventSource.instances.length).toBeGreaterThan(0))
 
     await act(async () => {
       await FakeEventSource.instances[0].onerror?.()
@@ -2264,5 +2270,88 @@ describe('RemoteApp', () => {
     expect(screen.getByText('Tamanho importado: 3 MB')).toBeInTheDocument()
     expect(screen.getByText('Duplicadas: 3')).toBeInTheDocument()
     expect(screen.getByText('Spam / Lixo: 6')).toBeInTheDocument()
+  })
+
+  it('renders remote timestamps with the signed-in user date format preference', async () => {
+    vi.stubGlobal('fetch', vi.fn((url) => {
+      if (url === '/api/remote/auth/me') {
+        return jsonResponse({
+          id: 12,
+          username: 'alice',
+          role: 'USER',
+          canRunUserPoll: true,
+          canRunAllUsersPoll: false,
+          deviceLocationCaptured: true,
+          language: 'en',
+          dateFormat: 'YMD_24',
+          timezoneMode: 'MANUAL',
+          timezone: 'UTC'
+        })
+      }
+      if (url === '/api/remote/control') {
+        return jsonResponse({
+          session: {
+            id: 12,
+            username: 'alice',
+            role: 'USER',
+            canRunUserPoll: true,
+            canRunAllUsersPoll: false,
+            language: 'en',
+            dateFormat: 'YMD_24',
+            timezoneMode: 'MANUAL',
+            timezone: 'UTC'
+          },
+          sources: [
+            {
+              sourceId: 'source-1',
+              ownerLabel: 'System',
+              protocol: 'IMAP',
+              host: 'imap.example.com',
+              port: 993,
+              folder: 'INBOX',
+              effectivePollEnabled: true,
+              effectivePollInterval: 'PT5M',
+              lastImportedAt: '2026-03-31T10:00:10Z',
+              lastEvent: {
+                sourceId: 'source-1',
+                trigger: 'MANUAL',
+                status: 'SUCCESS',
+                startedAt: '2026-03-31T10:00:00Z',
+                finishedAt: '2026-03-31T10:00:10Z',
+                fetched: 7,
+                imported: 4,
+                duplicates: 3,
+                error: null
+              },
+              customLabel: 'Primary mailbox'
+            }
+          ],
+          lastRun: {
+            trigger: 'remote-ui',
+            status: 'SUCCESS',
+            startedAt: '2026-03-31T10:00:00Z',
+            finishedAt: '2026-03-31T10:00:10Z',
+            fetched: 7,
+            imported: 4,
+            duplicates: 3
+          },
+          hasOwnSourceEmailAccounts: true,
+          hasReadyDestinationMailbox: true,
+          setupRequired: false,
+          remotePollRateLimitCount: 60,
+          remotePollRateLimitWindow: 'PT1M'
+        })
+      }
+      if (url === '/api/remote/poll/live') {
+        return jsonResponse({ running: false, sources: [] })
+      }
+      throw new Error(`Unexpected fetch: ${url}`)
+    }))
+
+    render(<RemoteApp />)
+
+    fireEvent.click(await screen.findByRole('button', { name: 'Show details' }))
+    expect((await screen.findAllByText((value) => value.includes('2026-03-31 10:00:10'))).length).toBeGreaterThan(0)
+    expect(screen.getAllByText((value) => value.includes('2026-03-31 10:00:10')).length).toBeGreaterThan(0)
   })
 })

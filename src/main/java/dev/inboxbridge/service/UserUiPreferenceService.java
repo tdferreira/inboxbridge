@@ -29,10 +29,13 @@ import jakarta.transaction.Transactional;
 public class UserUiPreferenceService {
 
     static final String DEFAULT_LANGUAGE = "en";
+    static final String DEFAULT_DATE_FORMAT = "AUTO";
     static final String DEFAULT_TIMEZONE_MODE = "AUTO";
     static final List<String> DEFAULT_USER_SECTION_ORDER = List.of("quickSetup", "destination", "sourceEmailAccounts", "userPolling", "remoteControl", "userStats");
     static final List<String> DEFAULT_ADMIN_SECTION_ORDER = List.of("adminQuickSetup", "systemDashboard", "oauthApps", "userManagement", "authSecurity", "globalStats");
     static final int MAX_NOTIFICATION_HISTORY = 50;
+    private static final List<String> SUPPORTED_PREDEFINED_DATE_FORMATS = List.of("AUTO", "DMY_24", "DMY_12", "MDY_24", "MDY_12", "YMD_24", "YMD_12");
+    private static final List<String> SUPPORTED_CUSTOM_DATE_FORMAT_TOKENS = List.of("YYYY", "YY", "MMMM", "MMM", "MM", "DD", "dddd", "ddd", "HH", "H", "hh", "h", "mm", "M", "ss", "S", "A");
     private static final TypeReference<List<UserUiNotificationView>> NOTIFICATION_HISTORY_TYPE = new TypeReference<>() {
     };
 
@@ -67,6 +70,7 @@ public class UserUiPreferenceService {
                 DEFAULT_USER_SECTION_ORDER,
                 DEFAULT_ADMIN_SECTION_ORDER,
                 DEFAULT_LANGUAGE,
+                DEFAULT_DATE_FORMAT,
                 DEFAULT_TIMEZONE_MODE,
                 "",
                 List.of());
@@ -97,6 +101,7 @@ public class UserUiPreferenceService {
         preference.userSectionOrder = joinSectionOrder(normalizeSectionOrder(request.userSectionOrder(), DEFAULT_USER_SECTION_ORDER));
         preference.adminSectionOrder = joinSectionOrder(normalizeSectionOrder(request.adminSectionOrder(), DEFAULT_ADMIN_SECTION_ORDER));
         preference.language = normalizeLanguage(request.language());
+        preference.dateFormat = normalizeDateFormat(request.dateFormat());
         preference.timezoneMode = normalizeTimezoneMode(request.timezoneMode());
         preference.timezone = normalizeTimezone(preference.timezoneMode, request.timezone());
         preference.notificationHistory = serializeNotificationHistory(normalizeNotificationHistory(request.notificationHistory()));
@@ -126,6 +131,7 @@ public class UserUiPreferenceService {
                 normalizeSectionOrder(splitSectionOrder(preference.userSectionOrder), DEFAULT_USER_SECTION_ORDER),
                 normalizeSectionOrder(splitSectionOrder(preference.adminSectionOrder), DEFAULT_ADMIN_SECTION_ORDER),
                 normalizeLanguage(preference.language),
+                normalizeDateFormat(preference.dateFormat),
                 normalizeTimezoneMode(preference.timezoneMode),
                 normalizeTimezone(preference.timezoneMode, preference.timezone),
                 normalizeNotificationHistory(deserializeNotificationHistory(preference.notificationHistory)));
@@ -143,6 +149,33 @@ public class UserUiPreferenceService {
             return "MANUAL";
         }
         return DEFAULT_TIMEZONE_MODE;
+    }
+
+    private String normalizeDateFormat(String dateFormat) {
+        if (dateFormat == null || dateFormat.isBlank()) {
+            return DEFAULT_DATE_FORMAT;
+        }
+        String normalized = dateFormat.trim();
+        if (SUPPORTED_PREDEFINED_DATE_FORMATS.contains(normalized)) {
+            return normalized;
+        }
+        if (normalized.length() > 64) {
+            return DEFAULT_DATE_FORMAT;
+        }
+        java.util.regex.Matcher matcher = java.util.regex.Pattern.compile("(YYYY|YY|MMMM|MMM|MM|DD|dddd|ddd|HH|H|hh|h|mm|M|ss|S|A|[^A-Za-z]+)").matcher(normalized);
+        StringBuilder rebuilt = new StringBuilder();
+        boolean hasToken = false;
+        while (matcher.find()) {
+            String part = matcher.group();
+            rebuilt.append(part);
+            if (SUPPORTED_CUSTOM_DATE_FORMAT_TOKENS.contains(part)) {
+                hasToken = true;
+            }
+        }
+        if (!hasToken || !rebuilt.toString().equals(normalized)) {
+            return DEFAULT_DATE_FORMAT;
+        }
+        return normalized;
     }
 
     private String normalizeTimezone(String timezoneMode, String timezone) {

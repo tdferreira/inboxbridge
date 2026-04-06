@@ -2,7 +2,9 @@ import { act, fireEvent, render, screen } from '@testing-library/react'
 import { vi } from 'vitest'
 
 import ImportTimelineChart from './ImportTimelineChart'
+import { DATE_FORMAT_YMD_24, resetCurrentFormattingDateFormat, setCurrentFormattingDateFormat } from '../../lib/formatters'
 import { translate } from '../../lib/i18n'
+import { resetCurrentFormattingTimeZone, setCurrentFormattingTimeZone } from '../../lib/timeZonePreferences'
 
 vi.mock('recharts', () => ({
   CartesianGrid: () => null,
@@ -75,6 +77,8 @@ async function mountFrame(resizeObservers) {
 
 describe('ImportTimelineChart', () => {
   afterEach(() => {
+    resetCurrentFormattingDateFormat()
+    resetCurrentFormattingTimeZone()
     if (typeof window.sessionStorage?.clear === 'function') {
       window.sessionStorage.clear()
     }
@@ -509,6 +513,7 @@ describe('ImportTimelineChart', () => {
     await mountFrame(resizeObservers)
 
     expect(screen.getByRole('combobox', { name: 'Range' })).toHaveValue('today')
+    expect(screen.getByRole('combobox', { name: 'Range' })).toHaveTextContent('Past day')
     expect(screen.getByText('Resolution: Hour')).toBeInTheDocument()
     expect(screen.queryByRole('combobox', { name: 'Resolution' })).not.toBeInTheDocument()
 
@@ -817,6 +822,47 @@ describe('ImportTimelineChart', () => {
     expect(screen.queryByRole('combobox', { name: 'Resolution' })).not.toBeInTheDocument()
     expect(screen.getByText('Resolution: Hour')).toBeInTheDocument()
     expect(screen.getByText(/Custom range: past 12 Hours \(/)).toBeInTheDocument()
+  })
+
+  it('renders custom range summaries with the active manual date format', async () => {
+    setCurrentFormattingDateFormat(DATE_FORMAT_YMD_24)
+    setCurrentFormattingTimeZone('UTC')
+    const resizeObservers = installResizeObserver()
+
+    render(
+      <ImportTimelineChart
+        customRangeLoader={vi.fn(async () => ({
+          imports: [
+            { bucketLabel: '2026-03-01', importedMessages: 1 },
+            { bucketLabel: '2026-03-20', importedMessages: 2 }
+          ]
+        }))}
+        series={[
+          {
+            key: 'imports',
+            label: 'Imported',
+            timelines: {
+              pastMonth: [
+                { bucketLabel: '2026-03-01', importedMessages: 1 },
+                { bucketLabel: '2026-03-02', importedMessages: 2 }
+              ]
+            }
+          }
+        ]}
+        t={(key, params) => translate('en', key, params)}
+        title="Import activity over time"
+      />
+    )
+
+    await mountFrame(resizeObservers)
+
+    fireEvent.change(screen.getByRole('combobox', { name: 'Range' }), { target: { value: 'custom' } })
+    fireEvent.change(screen.getByRole('combobox', { name: 'Custom range type' }), { target: { value: 'absolute' } })
+    fireEvent.change(screen.getByLabelText('Date-time from'), { target: { value: '2026-03-01T00:00' } })
+    fireEvent.change(screen.getByLabelText('Date-time to'), { target: { value: '2026-03-20T00:00' } })
+    fireEvent.click(screen.getByRole('button', { name: 'Apply custom range' }))
+
+    expect(await screen.findByText('Custom range: 2026-03-01 00:00:00 to 2026-03-20 00:00:00')).toBeInTheDocument()
   })
 
   it('offers broader custom-range resolutions as the relative window grows', async () => {

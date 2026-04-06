@@ -1,0 +1,2 @@
+ALTER TABLE user_ui_preference
+    ADD COLUMN IF NOT EXISTS date_format VARCHAR(64) NOT NULL DEFAULT 'AUTO';

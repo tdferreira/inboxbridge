@@ -48,6 +48,7 @@ class UserUiPreferenceServiceTest {
         assertEquals(UserUiPreferenceService.DEFAULT_USER_SECTION_ORDER, view.userSectionOrder());
         assertEquals(UserUiPreferenceService.DEFAULT_ADMIN_SECTION_ORDER, view.adminSectionOrder());
         assertEquals("en", view.language());
+        assertEquals("AUTO", view.dateFormat());
         assertEquals("AUTO", view.timezoneMode());
         assertEquals("", view.timezone());
         assertEquals(List.of(), view.notificationHistory());
@@ -82,6 +83,7 @@ class UserUiPreferenceServiceTest {
                 java.util.List.of("sourceEmailAccounts", "destination"),
                 java.util.List.of("userManagement", "authSecurity"),
                 "pt-PT",
+                "YMD_12",
                 "MANUAL",
                 "Europe/Lisbon",
                 List.of(new UserUiNotificationView(
@@ -114,11 +116,86 @@ class UserUiPreferenceServiceTest {
         assertEquals(java.util.List.of("sourceEmailAccounts", "destination", "quickSetup", "userPolling", "remoteControl", "userStats"), updated.userSectionOrder());
         assertEquals(java.util.List.of("userManagement", "authSecurity", "adminQuickSetup", "systemDashboard", "oauthApps", "globalStats"), updated.adminSectionOrder());
         assertEquals("pt-PT", updated.language());
+        assertEquals("YMD_12", updated.dateFormat());
         assertEquals("MANUAL", updated.timezoneMode());
         assertEquals("Europe/Lisbon", updated.timezone());
         assertEquals(1, updated.notificationHistory().size());
         assertEquals("note-1", updated.notificationHistory().getFirst().id());
         assertEquals(Optional.of(updated), service.viewForUser(user.id));
+    }
+
+    @Test
+    void updateFallsBackToAutomaticDateFormatForUnknownValues() {
+        UserUiPreferenceService service = new UserUiPreferenceService();
+        InMemoryUserUiPreferenceRepository repository = new InMemoryUserUiPreferenceRepository();
+        service.repository = repository;
+        service.objectMapper = new ObjectMapper();
+        AppUser user = new AppUser();
+        user.id = 21L;
+
+        UserUiPreferenceView updated = service.update(user, new UpdateUserUiPreferenceRequest(
+                false,
+                false,
+                false,
+                false,
+                false,
+                false,
+                false,
+                false,
+                false,
+                false,
+                false,
+                false,
+                false,
+                false,
+                false,
+                false,
+                null,
+                null,
+                "en",
+                "NOT_A_REAL_FORMAT",
+                "AUTO",
+                "",
+                List.of()));
+
+        assertEquals("AUTO", updated.dateFormat());
+    }
+
+    @Test
+    void updatePersistsValidCustomDateFormatsInDateFormat() {
+        UserUiPreferenceService service = new UserUiPreferenceService();
+        InMemoryUserUiPreferenceRepository repository = new InMemoryUserUiPreferenceRepository();
+        service.repository = repository;
+        service.objectMapper = new ObjectMapper();
+        AppUser user = new AppUser();
+        user.id = 31L;
+
+        UserUiPreferenceView updated = service.update(user, new UpdateUserUiPreferenceRequest(
+                false,
+                false,
+                false,
+                false,
+                false,
+                false,
+                false,
+                false,
+                false,
+                false,
+                false,
+                false,
+                false,
+                false,
+                false,
+                false,
+                null,
+                null,
+                "en",
+                "ddd, MMM DD YY h:M:S A",
+                "AUTO",
+                "",
+                List.of()));
+
+        assertEquals("ddd, MMM DD YY h:M:S A", updated.dateFormat());
     }
 
     private static final class InMemoryUserUiPreferenceRepository extends UserUiPreferenceRepository {

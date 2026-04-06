@@ -8,8 +8,34 @@
   gap: 8px;
 }
 
+.preferences-custom-format-summary {
+  display: grid;
+  gap: 8px;
+}
+
+.preferences-custom-format-actions {
+  display: flex;
+  justify-content: flex-start;
+}
+
+.preferences-custom-format-field {
+  position: relative;
+}
+
+.preferences-token-suggestion-token {
+  font-weight: 700;
+}
+
+.preferences-token-suggestion-sample {
+  color: var(--text-soft);
+}
+
 @media (max-width: 560px) {
   .preferences-dialog .action-row > * {
+    width: 100%;
+  }
+
+  .preferences-custom-format-actions > * {
     width: 100%;
   }
 }

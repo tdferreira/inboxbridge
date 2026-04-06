@@ -408,7 +408,7 @@ public class PollingStatsService {
     }
 
     private List<ImportTimelinePointView> buildTodayTimeline(List<TimedCount> values, ZoneId zoneId) {
-        return buildHourlyRangeTimeline(values, LocalDate.now(zoneId), zoneId);
+        return buildRecentHourlyTimeline(values, HOURLY_BUCKETS, zoneId);
     }
 
     private List<ImportTimelinePointView> buildYesterdayTimeline(List<TimedCount> values, ZoneId zoneId) {

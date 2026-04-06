@@ -1,6 +1,10 @@
-import { authMethodLabel, effectiveEmailAccountStatus, formatBytes, formatDate, formatDurationHint, formatDurationMeaning, formatImportedSizeSummary, formatPollError, formatPollExecutionSummary, formatRemoteImportedSizeSummary, isOauthRevokedError, oauthProviderLabel, protocolLabel, roleLabel, statusLabel, statusTone, tokenStorageLabel, triggerLabel } from './formatters'
+import { authMethodLabel, DATE_FORMAT_DMY_12, DATE_FORMAT_DMY_24, DATE_FORMAT_MDY_12, DATE_FORMAT_MDY_24, DATE_FORMAT_YMD_12, DATE_FORMAT_YMD_24, dateFormatPreferenceToPattern, describeAutomaticDateFormat, effectiveEmailAccountStatus, formatBytes, formatDate, formatDurationHint, formatDurationMeaning, formatImportedSizeSummary, formatPollError, formatPollExecutionSummary, formatRemoteImportedSizeSummary, getLocalizedCustomDateFormatTokens, isCustomDateFormatPreference, isOauthRevokedError, localizeCustomDateFormatPattern, normalizeCustomDateFormat, normalizeLocalizedCustomDateFormat, oauthProviderLabel, protocolLabel, resetCurrentFormattingDateFormat, roleLabel, setCurrentFormattingDateFormat, statusLabel, statusTone, tokenStorageLabel, triggerLabel, validateCustomDateFormat, validateLocalizedCustomDateFormat } from './formatters'
 
 describe('formatters', () => {
+  afterEach(() => {
+    resetCurrentFormattingDateFormat()
+  })
+
   it('formats missing dates as Never', () => {
     expect(formatDate('')).toBe('Never')
   })
@@ -70,6 +74,72 @@ describe('formatters', () => {
   it('formats dates in the requested timezone', () => {
     expect(formatDate('2026-04-04T09:15:00Z', 'en', 'Europe/Lisbon')).toContain('10:')
     expect(formatDate('2026-04-04T09:15:00Z', 'en', 'UTC')).toContain('9:')
+  })
+
+  it('uses locale-specific automatic date patterns while timezone only changes the rendered local time', () => {
+    expect(formatDate('2026-04-04T09:15:00Z', 'en-US', 'UTC')).toContain('9:15:00 AM')
+    expect(formatDate('2026-04-04T09:15:00Z', 'en-GB', 'UTC')).toContain('09:15:00')
+    expect(formatDate('2026-04-04T09:15:00Z', 'en-US', 'Europe/Lisbon')).toContain('10:15:00 AM')
+  })
+
+  it('describes the automatic date pattern from the selected locale', () => {
+    expect(describeAutomaticDateFormat('en-US')).toContain('MM')
+    expect(describeAutomaticDateFormat('en-US')).toContain('hh')
+    expect(describeAutomaticDateFormat('en-US')).toContain('A')
+    expect(describeAutomaticDateFormat('en-GB')).toContain('DD')
+    expect(describeAutomaticDateFormat('en-GB')).toContain('HH')
+  })
+
+  it('derives editable custom-pattern drafts from presets and automatic mode', () => {
+    expect(dateFormatPreferenceToPattern(DATE_FORMAT_DMY_12, 'en')).toBe('DD/MM/YYYY hh:mm:ss A')
+    expect(dateFormatPreferenceToPattern(DATE_FORMAT_YMD_24, 'en')).toBe('YYYY-MM-DD HH:mm:ss')
+    expect(dateFormatPreferenceToPattern('AUTO', 'en-US')).toBe(describeAutomaticDateFormat('en-US'))
+    expect(dateFormatPreferenceToPattern('ddd, MMM DD YY h:M:S A', 'en')).toBe('ddd, MMM DD YY h:M:S A')
+  })
+
+  it('formats dates with a selected manual preset', () => {
+    expect(formatDate('2026-04-04T09:15:00Z', 'en', 'UTC', DATE_FORMAT_DMY_24)).toBe('04/04/2026 09:15:00')
+    expect(formatDate('2026-04-04T21:15:00Z', 'en', 'UTC', DATE_FORMAT_DMY_12)).toBe('04/04/2026 09:15:00 PM')
+    expect(formatDate('2026-04-04T09:15:00Z', 'en', 'UTC', DATE_FORMAT_MDY_24)).toBe('04/04/2026 09:15:00')
+    expect(formatDate('2026-04-04T21:15:00Z', 'en', 'UTC', DATE_FORMAT_MDY_12)).toBe('04/04/2026 09:15:00 PM')
+    expect(formatDate('2026-04-04T09:15:00Z', 'en', 'UTC', DATE_FORMAT_YMD_24)).toBe('2026-04-04 09:15:00')
+    expect(formatDate('2026-04-04T21:15:00Z', 'en', 'UTC', DATE_FORMAT_YMD_12)).toBe('2026-04-04 09:15:00 PM')
+  })
+
+  it('formats dates with a valid custom pattern', () => {
+    expect(formatDate('2026-04-04T21:15:00Z', 'en', 'UTC', 'DD/MM/YYYY hh:mm:ss A')).toBe('04/04/2026 09:15:00 PM')
+    expect(formatDate('2026-04-06T21:05:06Z', 'en', 'UTC', 'ddd, MMM DD YY h:M:S A')).toBe('Mon, Apr 06 26 9:5:6 PM')
+    expect(formatDate('2026-04-06T09:05:06Z', 'en', 'UTC', 'dddd, MMMM DD YYYY H:M:S')).toBe('Monday, April 06 2026 9:5:6')
+  })
+
+  it('uses the active global date-format preference when no explicit format is passed', () => {
+    setCurrentFormattingDateFormat(DATE_FORMAT_YMD_24)
+    expect(formatDate('2026-04-04T09:15:00Z', 'en', 'UTC')).toBe('2026-04-04 09:15:00')
+  })
+
+  it('uses the active global custom date-format preference when the mode is custom', () => {
+    setCurrentFormattingDateFormat('DD/MM/YYYY HH:mm:ss')
+    expect(formatDate('2026-04-04T09:15:00Z', 'en', 'UTC')).toBe('04/04/2026 09:15:00')
+  })
+
+  it('validates and normalizes custom date-format patterns', () => {
+    expect(validateCustomDateFormat('DD/MM/YYYY HH:mm:ss').valid).toBe(true)
+    expect(validateCustomDateFormat('ddd, MMM DD YY h:M:S A').valid).toBe(true)
+    expect(validateCustomDateFormat('weekday DD/MM/YYYY').valid).toBe(false)
+    expect(normalizeCustomDateFormat(' DD/MM/YYYY HH:mm:ss ')).toBe('DD/MM/YYYY HH:mm:ss')
+    expect(normalizeCustomDateFormat('weekday DD/MM/YYYY')).toBe('')
+    expect(isCustomDateFormatPreference('DD/MM/YYYY HH:mm:ss')).toBe(true)
+    expect(isCustomDateFormatPreference(DATE_FORMAT_YMD_24)).toBe(false)
+  })
+
+  it('localizes the editable token aliases without changing canonical storage', () => {
+    expect(localizeCustomDateFormatPattern('DD/MM/YYYY HH:mm:ss', 'pt-PT')).toBe('DD/MM/AAAA HH:mm:ss')
+    expect(normalizeLocalizedCustomDateFormat('DD/MM/AAAA HH:mm:ss', 'pt-PT')).toBe('DD/MM/YYYY HH:mm:ss')
+    expect(validateLocalizedCustomDateFormat('DD/MM/AAAA HH:mm:ss', 'pt-PT')).toEqual({
+      valid: true,
+      value: 'DD/MM/YYYY HH:mm:ss'
+    })
+    expect(getLocalizedCustomDateFormatTokens('pt-PT').find((entry) => entry.canonical === 'YYYY')?.alias).toBe('AAAA')
   })
 
   it('renders cooldown errors in portuguese', () => {

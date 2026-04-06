@@ -1,7 +1,9 @@
 import { fireEvent, render, screen, waitFor, within } from '@testing-library/react'
 import UserListItem from './UserListItem'
+import { DATE_FORMAT_YMD_24, resetCurrentFormattingDateFormat, setCurrentFormattingDateFormat } from '../../lib/formatters'
 import { translate } from '../../lib/i18n'
 import { resolveNotificationContent } from '../../lib/notifications'
+import { resetCurrentFormattingTimeZone, setCurrentFormattingTimeZone } from '../../lib/timeZonePreferences'
 
 function buildConfig() {
   return {
@@ -79,6 +81,11 @@ function buildConfig() {
 }
 
 describe('UserListItem', () => {
+  afterEach(() => {
+    resetCurrentFormattingDateFormat()
+    resetCurrentFormattingTimeZone()
+  })
+
   it('renders translated subsection details in portuguese', async () => {
     render(
       <UserListItem
@@ -350,5 +357,33 @@ describe('UserListItem', () => {
     )
 
     expect(screen.queryByText('Import activity over time')).not.toBeInTheDocument()
+  })
+
+  it('renders admin detail timestamps with the active manual date format', () => {
+    setCurrentFormattingDateFormat(DATE_FORMAT_YMD_24)
+    setCurrentFormattingTimeZone('UTC')
+
+    render(
+      <UserListItem
+        config={buildConfig()}
+        isExpanded
+        isLoading={false}
+        locale="en"
+        onDeleteUser={vi.fn()}
+        onForcePasswordChange={vi.fn()}
+        onOpenResetPasswordDialog={vi.fn()}
+        onResetUserPasskeys={vi.fn()}
+        onToggleExpand={vi.fn()}
+        onToggleUserActive={vi.fn()}
+        onUpdateUser={vi.fn()}
+        session={{ id: 99, role: 'ADMIN' }}
+        t={(key, params) => translate('en', key, params)}
+        updatingPasskeysReset={false}
+        updatingUser={false}
+      />
+    )
+
+    expect(screen.getByText((value) => value.includes('2026-03-27 09:00:00'))).toBeInTheDocument()
+    expect(screen.getByText((value) => value.includes('2026-03-27 10:00:00'))).toBeInTheDocument()
   })
 })

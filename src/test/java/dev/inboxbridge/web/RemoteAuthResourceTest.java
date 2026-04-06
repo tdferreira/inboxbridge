@@ -277,6 +277,7 @@ class RemoteAuthResourceTest {
                     java.util.List.of("quickSetup", "destination", "sourceEmailAccounts", "userPolling", "remoteControl", "userStats"),
                     java.util.List.of("adminQuickSetup", "systemDashboard", "oauthApps", "userManagement", "authSecurity", "globalStats"),
                     "pt-PT",
+                    "DMY_24",
                     "MANUAL",
                     "Europe/Lisbon",
                     java.util.List.of()));

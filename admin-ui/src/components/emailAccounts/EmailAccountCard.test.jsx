@@ -1,10 +1,17 @@
 import { fireEvent, render, screen, waitFor } from '@testing-library/react'
 import EmailAccountCard from './EmailAccountCard'
+import { DATE_FORMAT_YMD_24, resetCurrentFormattingDateFormat, setCurrentFormattingDateFormat } from '../../lib/formatters'
 import { translate } from '../../lib/i18n'
+import { resetCurrentFormattingTimeZone, setCurrentFormattingTimeZone } from '../../lib/timeZonePreferences'
 
 const t = (key, params) => translate('en', key, params)
 
 describe('EmailAccountCard', () => {
+  afterEach(() => {
+    resetCurrentFormattingDateFormat()
+    resetCurrentFormattingTimeZone()
+  })
+
   it('shows bridge metadata and emits edit/delete/oauth actions', () => {
     const onEdit = vi.fn()
     const onDelete = vi.fn()
@@ -211,5 +218,34 @@ describe('EmailAccountCard', () => {
 
     expect(screen.getByText('Disabled')).toBeInTheDocument()
     expect(screen.queryByText('Error')).not.toBeInTheDocument()
+  })
+
+  it('renders last-import timestamps with the active manual date format', () => {
+    setCurrentFormattingDateFormat(DATE_FORMAT_YMD_24)
+    setCurrentFormattingTimeZone('UTC')
+
+    render(
+      <EmailAccountCard
+        emailAccount={{
+          emailAccountId: 'outlook-main',
+          protocol: 'IMAP',
+          authMethod: 'PASSWORD',
+          oauthProvider: 'NONE',
+          host: 'outlook.office365.com',
+          port: 993,
+          tls: true,
+          tokenStorageMode: 'PASSWORD',
+          totalImportedMessages: 0,
+          lastImportedAt: '2026-03-26T12:00:00Z',
+          folder: 'INBOX',
+          lastEvent: null
+        }}
+        locale="en"
+        onConnectMicrosoft={vi.fn()}
+        t={t}
+      />
+    )
+
+    expect(screen.getByText('2026-03-26 12:00:00')).toBeInTheDocument()
   })
 })

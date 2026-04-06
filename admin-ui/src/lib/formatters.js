@@ -1,6 +1,124 @@
 import { translate } from './i18n'
 import { getCurrentFormattingTimeZone } from './timeZonePreferences'
 
+export const DATE_FORMAT_AUTO = 'AUTO'
+export const DATE_FORMAT_YMD_24 = 'YMD_24'
+export const DATE_FORMAT_YMD_12 = 'YMD_12'
+export const DATE_FORMAT_DMY_24 = 'DMY_24'
+export const DATE_FORMAT_DMY_12 = 'DMY_12'
+export const DATE_FORMAT_MDY_24 = 'MDY_24'
+export const DATE_FORMAT_MDY_12 = 'MDY_12'
+export const DATE_FORMAT_CUSTOM = 'CUSTOM'
+export const DATE_FORMAT_OPTIONS = [DATE_FORMAT_AUTO, DATE_FORMAT_DMY_24, DATE_FORMAT_DMY_12, DATE_FORMAT_MDY_24, DATE_FORMAT_MDY_12, DATE_FORMAT_YMD_24, DATE_FORMAT_YMD_12]
+const CUSTOM_DATE_FORMAT_TOKEN_PATTERN = /(YYYY|YY|MMMM|MMM|MM|DD|dddd|ddd|HH|H|hh|h|mm|M|ss|S|A|[^A-Za-z]+)/g
+const AUTOMATIC_DATE_FORMAT_REFERENCE = new Date('2026-04-06T13:24:56Z')
+const CUSTOM_DATE_FORMAT_TOKEN_DEFINITIONS = [
+  { canonical: 'YYYY', aliasByLocale: { de: 'JJJJ', es: 'AAAA', fr: 'AAAA', pt: 'AAAA' }, descriptionKey: 'preferences.customDateFormatToken.year4', id: 'year4', sampleKey: 'preferences.customDateFormatTokenSample.year4' },
+  { canonical: 'YY', aliasByLocale: { de: 'JJ', es: 'AA', fr: 'AA', pt: 'AA' }, descriptionKey: 'preferences.customDateFormatToken.year2', id: 'year2', sampleKey: 'preferences.customDateFormatTokenSample.year2' },
+  { canonical: 'MMMM', aliasByLocale: {}, descriptionKey: 'preferences.customDateFormatToken.monthLong', id: 'monthLong', sampleKey: 'preferences.customDateFormatTokenSample.monthLong' },
+  { canonical: 'MMM', aliasByLocale: {}, descriptionKey: 'preferences.customDateFormatToken.monthShort', id: 'monthShort', sampleKey: 'preferences.customDateFormatTokenSample.monthShort' },
+  { canonical: 'MM', aliasByLocale: {}, descriptionKey: 'preferences.customDateFormatToken.monthNumber', id: 'monthNumber', sampleKey: 'preferences.customDateFormatTokenSample.monthNumber' },
+  { canonical: 'DD', aliasByLocale: {}, descriptionKey: 'preferences.customDateFormatToken.dayNumber', id: 'dayNumber', sampleKey: 'preferences.customDateFormatTokenSample.dayNumber' },
+  { canonical: 'dddd', aliasByLocale: {}, descriptionKey: 'preferences.customDateFormatToken.weekdayLong', id: 'weekdayLong', sampleKey: 'preferences.customDateFormatTokenSample.weekdayLong' },
+  { canonical: 'ddd', aliasByLocale: {}, descriptionKey: 'preferences.customDateFormatToken.weekdayShort', id: 'weekdayShort', sampleKey: 'preferences.customDateFormatTokenSample.weekdayShort' },
+  { canonical: 'HH', aliasByLocale: {}, descriptionKey: 'preferences.customDateFormatToken.hour24Padded', id: 'hour24Padded', sampleKey: 'preferences.customDateFormatTokenSample.hour24Padded' },
+  { canonical: 'H', aliasByLocale: {}, descriptionKey: 'preferences.customDateFormatToken.hour24', id: 'hour24', sampleKey: 'preferences.customDateFormatTokenSample.hour24' },
+  { canonical: 'hh', aliasByLocale: {}, descriptionKey: 'preferences.customDateFormatToken.hour12Padded', id: 'hour12Padded', sampleKey: 'preferences.customDateFormatTokenSample.hour12Padded' },
+  { canonical: 'h', aliasByLocale: {}, descriptionKey: 'preferences.customDateFormatToken.hour12', id: 'hour12', sampleKey: 'preferences.customDateFormatTokenSample.hour12' },
+  { canonical: 'mm', aliasByLocale: {}, descriptionKey: 'preferences.customDateFormatToken.minutePadded', id: 'minutePadded', sampleKey: 'preferences.customDateFormatTokenSample.minutePadded' },
+  { canonical: 'M', aliasByLocale: {}, descriptionKey: 'preferences.customDateFormatToken.minute', id: 'minute', sampleKey: 'preferences.customDateFormatTokenSample.minute' },
+  { canonical: 'ss', aliasByLocale: {}, descriptionKey: 'preferences.customDateFormatToken.secondPadded', id: 'secondPadded', sampleKey: 'preferences.customDateFormatTokenSample.secondPadded' },
+  { canonical: 'S', aliasByLocale: {}, descriptionKey: 'preferences.customDateFormatToken.second', id: 'second', sampleKey: 'preferences.customDateFormatTokenSample.second' },
+  { canonical: 'A', aliasByLocale: {}, descriptionKey: 'preferences.customDateFormatToken.meridiem', id: 'meridiem', sampleKey: 'preferences.customDateFormatTokenSample.meridiem' }
+]
+
+let currentFormattingDateFormat = DATE_FORMAT_AUTO
+
+function resolveCustomDateFormatLocaleKey(locale = 'en') {
+  const normalized = String(locale || 'en').toLowerCase()
+  if (normalized.startsWith('pt')) return 'pt'
+  if (normalized.startsWith('fr')) return 'fr'
+  if (normalized.startsWith('es')) return 'es'
+  if (normalized.startsWith('de')) return 'de'
+  return 'en'
+}
+
+function escapeRegExp(value) {
+  return String(value).replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+}
+
+export function getLocalizedCustomDateFormatTokens(locale = 'en', translateFn = translate) {
+  const localeKey = resolveCustomDateFormatLocaleKey(locale)
+  return CUSTOM_DATE_FORMAT_TOKEN_DEFINITIONS.map((definition) => ({
+    alias: definition.aliasByLocale[localeKey] || definition.canonical,
+    canonical: definition.canonical,
+    description: translateFn(locale, definition.descriptionKey),
+    id: definition.id,
+    sample: translateFn(locale, definition.sampleKey)
+  }))
+}
+
+function buildLocalizedCustomTokenPattern(locale = 'en') {
+  const tokens = getLocalizedCustomDateFormatTokens(locale)
+  const variants = Array.from(new Set(tokens.flatMap((token) => [token.alias, token.canonical])))
+    .sort((left, right) => right.length - left.length)
+    .map(escapeRegExp)
+  return new RegExp(`(${variants.join('|')}|[^A-Za-z]+)`, 'g')
+}
+
+export function normalizeLocalizedCustomDateFormat(value, locale = 'en') {
+  if (value == null || String(value).trim() === '') {
+    return ''
+  }
+  const normalized = String(value).trim()
+  const tokenLookup = new Map(
+    getLocalizedCustomDateFormatTokens(locale).flatMap((token) => [
+      [token.alias, token.canonical],
+      [token.canonical, token.canonical]
+    ])
+  )
+  const matches = normalized.match(buildLocalizedCustomTokenPattern(locale))
+  if (!matches || matches.join('') !== normalized) {
+    return ''
+  }
+  let hasToken = false
+  const rebuilt = matches.map((part) => {
+    const canonical = tokenLookup.get(part)
+    if (canonical) {
+      hasToken = true
+      return canonical
+    }
+    return part
+  }).join('')
+  if (!hasToken) {
+    return ''
+  }
+  return normalizeCustomDateFormat(rebuilt)
+}
+
+export function validateLocalizedCustomDateFormat(value, locale = 'en') {
+  if (value == null || String(value).trim() === '') {
+    return { valid: false, reason: 'empty' }
+  }
+  if (String(value).trim().length > 64) {
+    return { valid: false, reason: 'tooLong' }
+  }
+  const normalized = normalizeLocalizedCustomDateFormat(value, locale)
+  if (!normalized) {
+    return { valid: false, reason: 'invalidToken' }
+  }
+  return { valid: true, value: normalized }
+}
+
+export function localizeCustomDateFormatPattern(value, locale = 'en') {
+  const normalized = normalizeCustomDateFormat(value)
+  if (!normalized) {
+    return ''
+  }
+  const tokenLookup = new Map(getLocalizedCustomDateFormatTokens(locale).map((token) => [token.canonical, token.alias]))
+  return normalized.replace(/YYYY|YY|MMMM|MMM|MM|DD|dddd|ddd|HH|H|hh|h|mm|M|ss|S|A/g, (token) => tokenLookup.get(token) || token)
+}
+
 function normalizeDateValue(value) {
   if (!value) return value
   if (value instanceof Date) return value
@@ -17,14 +135,297 @@ function normalizeDateValue(value) {
   return null
 }
 
-export function formatDate(value, locale = 'en', timeZone = getCurrentFormattingTimeZone()) {
+export function normalizeDateFormatPreference(value) {
+  if (DATE_FORMAT_OPTIONS.includes(value)) {
+    return value
+  }
+  return normalizeCustomDateFormat(value) || DATE_FORMAT_AUTO
+}
+
+export function setCurrentFormattingDateFormat(value) {
+  currentFormattingDateFormat = normalizeDateFormatPreference(value)
+}
+
+export function resetCurrentFormattingDateFormat() {
+  currentFormattingDateFormat = DATE_FORMAT_AUTO
+}
+
+export function getCurrentFormattingDateFormat() {
+  return normalizeDateFormatPreference(currentFormattingDateFormat)
+}
+
+export function validateCustomDateFormat(value) {
+  if (value == null || String(value).trim() === '') {
+    return { valid: false, reason: 'empty' }
+  }
+  const normalized = String(value).trim()
+  if (normalized.length > 64) {
+    return { valid: false, reason: 'tooLong' }
+  }
+  const matches = normalized.match(CUSTOM_DATE_FORMAT_TOKEN_PATTERN)
+  if (!matches || matches.join('') !== normalized) {
+    return { valid: false, reason: 'invalidToken' }
+  }
+  if (!matches.some((part) => /^(YYYY|YY|MMMM|MMM|MM|DD|dddd|ddd|HH|H|hh|h|mm|M|ss|S|A)$/.test(part))) {
+    return { valid: false, reason: 'missingToken' }
+  }
+  return { valid: true, value: normalized }
+}
+
+export function normalizeCustomDateFormat(value) {
+  const validation = validateCustomDateFormat(value)
+  return validation.valid ? validation.value : ''
+}
+
+function padPart(value) {
+  return String(value).padStart(2, '0')
+}
+
+function readDateTimeParts(date, timeZone, hour12) {
+  const formatter = new Intl.DateTimeFormat('en-US-u-nu-latn', {
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+    hour: '2-digit',
+    minute: '2-digit',
+    second: '2-digit',
+    hour12,
+    ...(timeZone ? { timeZone } : {})
+  })
+  const parts = formatter.formatToParts(date)
+  const lookup = Object.fromEntries(parts.filter((part) => part.type !== 'literal').map((part) => [part.type, part.value]))
+  const year = lookup.year || ''
+  const month = lookup.month || ''
+  const day = lookup.day || ''
+  const minute = lookup.minute || ''
+  const second = lookup.second || ''
+  const dayPeriod = (lookup.dayPeriod || '').toUpperCase()
+  const rawHour = Number(lookup.hour || 0)
+  const monthNumber = Number(month || 0)
+  const dayNumber = Number(day || 0)
+  const minuteNumber = Number(minute || 0)
+  const secondNumber = Number(second || 0)
+  const hour24 = hour12
+    ? padPart(rawHour === 12 ? 12 : (dayPeriod === 'PM' ? rawHour + 12 : rawHour))
+    : padPart(rawHour)
+  const hour12Value = hour12
+    ? padPart(rawHour === 0 ? 12 : rawHour)
+    : padPart(((rawHour + 11) % 12) + 1)
+  return {
+    year,
+    month,
+    monthNumber,
+    day,
+    dayNumber,
+    hour24,
+    hour24Number: Number(hour24 || 0),
+    hour12: hour12Value,
+    hour12Number: Number(hour12Value || 0),
+    minute,
+    minuteNumber,
+    second,
+    secondNumber,
+    dayPeriod
+  }
+}
+
+function readCalendarNameParts(date, locale, timeZone) {
+  const formatter = new Intl.DateTimeFormat(locale, {
+    weekday: 'long',
+    month: 'long',
+    timeZone: timeZone || undefined
+  })
+  const parts = formatter.formatToParts(date)
+  const lookup = Object.fromEntries(parts.filter((part) => part.type !== 'literal').map((part) => [part.type, part.value]))
+  const fullMonth = lookup.month || ''
+  const fullWeekday = lookup.weekday || ''
+  const shortMonth = fullMonth ? new Intl.DateTimeFormat(locale, { month: 'short', timeZone: timeZone || undefined }).format(date) : ''
+  const shortWeekday = fullWeekday ? new Intl.DateTimeFormat(locale, { weekday: 'short', timeZone: timeZone || undefined }).format(date) : ''
+  return { fullMonth, shortMonth, fullWeekday, shortWeekday }
+}
+
+function formatDateByPreference(date, dateFormat, locale, timeZone) {
+  switch (normalizeDateFormatPreference(dateFormat)) {
+    case DATE_FORMAT_YMD_24: {
+      const { year, month, day, hour24, minute, second } = readDateTimeParts(date, timeZone, false)
+      return `${year}-${month}-${day} ${hour24}:${minute}:${second}`
+    }
+    case DATE_FORMAT_YMD_12: {
+      const { year, month, day, hour12, minute, second, dayPeriod } = readDateTimeParts(date, timeZone, true)
+      return `${year}-${month}-${day} ${hour12}:${minute}:${second} ${dayPeriod}`
+    }
+    case DATE_FORMAT_DMY_24: {
+      const { year, month, day, hour24, minute, second } = readDateTimeParts(date, timeZone, false)
+      return `${day}/${month}/${year} ${hour24}:${minute}:${second}`
+    }
+    case DATE_FORMAT_DMY_12: {
+      const { year, month, day, hour12, minute, second, dayPeriod } = readDateTimeParts(date, timeZone, true)
+      return `${day}/${month}/${year} ${hour12}:${minute}:${second} ${dayPeriod}`
+    }
+    case DATE_FORMAT_MDY_24: {
+      const { year, month, day, hour24, minute, second } = readDateTimeParts(date, timeZone, false)
+      return `${month}/${day}/${year} ${hour24}:${minute}:${second}`
+    }
+    case DATE_FORMAT_MDY_12: {
+      const { year, month, day, hour12, minute, second, dayPeriod } = readDateTimeParts(date, timeZone, true)
+      return `${month}/${day}/${year} ${hour12}:${minute}:${second} ${dayPeriod}`
+    }
+    default:
+      return date.toLocaleString(locale, timeZone ? { timeZone } : undefined)
+  }
+}
+
+export function describeAutomaticDateFormat(locale = 'en') {
+  try {
+    const formatter = new Intl.DateTimeFormat(locale, {
+      year: 'numeric',
+      month: '2-digit',
+      day: '2-digit',
+      hour: '2-digit',
+      minute: '2-digit',
+      second: '2-digit',
+      timeZone: 'UTC'
+    })
+    const parts = formatter.formatToParts(AUTOMATIC_DATE_FORMAT_REFERENCE)
+    const usesDayPeriod = parts.some((part) => part.type === 'dayPeriod')
+    return parts
+      .map((part) => {
+        switch (part.type) {
+          case 'year':
+            return 'YYYY'
+          case 'month':
+            return 'MM'
+          case 'day':
+            return 'DD'
+          case 'hour':
+            return usesDayPeriod ? 'hh' : 'HH'
+          case 'minute':
+            return 'mm'
+          case 'second':
+            return 'ss'
+          case 'dayPeriod':
+            return 'A'
+          case 'literal':
+            return part.value
+          default:
+            return ''
+        }
+      })
+      .join('')
+      .trim()
+  } catch {
+    return 'YYYY-MM-DD HH:mm:ss'
+  }
+}
+
+export function dateFormatPreferenceToPattern(dateFormat, locale = 'en') {
+  switch (normalizeDateFormatPreference(dateFormat)) {
+    case DATE_FORMAT_DMY_24:
+      return 'DD/MM/YYYY HH:mm:ss'
+    case DATE_FORMAT_DMY_12:
+      return 'DD/MM/YYYY hh:mm:ss A'
+    case DATE_FORMAT_MDY_24:
+      return 'MM/DD/YYYY HH:mm:ss'
+    case DATE_FORMAT_MDY_12:
+      return 'MM/DD/YYYY hh:mm:ss A'
+    case DATE_FORMAT_YMD_24:
+      return 'YYYY-MM-DD HH:mm:ss'
+    case DATE_FORMAT_YMD_12:
+      return 'YYYY-MM-DD hh:mm:ss A'
+    case DATE_FORMAT_AUTO:
+      return describeAutomaticDateFormat(locale)
+    default:
+      return normalizeCustomDateFormat(dateFormat) || 'YYYY-MM-DD HH:mm:ss'
+  }
+}
+
+function formatDateByCustomPattern(date, customPattern, locale, timeZone) {
+  const pattern = normalizeCustomDateFormat(customPattern)
+  if (!pattern) {
+    return ''
+  }
+  const twentyFourHourParts = readDateTimeParts(date, timeZone, false)
+  const twelveHourParts = readDateTimeParts(date, timeZone, true)
+  const calendarNameParts = readCalendarNameParts(date, locale, timeZone)
+  return pattern.replace(/YYYY|YY|MMMM|MMM|MM|DD|dddd|ddd|HH|H|hh|h|mm|M|ss|S|A/g, (token) => {
+    switch (token) {
+      case 'YYYY':
+        return twentyFourHourParts.year
+      case 'YY':
+        return twentyFourHourParts.year.slice(-2)
+      case 'MMMM':
+        return calendarNameParts.fullMonth
+      case 'MMM':
+        return calendarNameParts.shortMonth
+      case 'MM':
+        return twentyFourHourParts.month
+      case 'DD':
+        return twentyFourHourParts.day
+      case 'dddd':
+        return calendarNameParts.fullWeekday
+      case 'ddd':
+        return calendarNameParts.shortWeekday
+      case 'HH':
+        return twentyFourHourParts.hour24
+      case 'H':
+        return String(twentyFourHourParts.hour24Number)
+      case 'hh':
+        return twelveHourParts.hour12
+      case 'h':
+        return String(twelveHourParts.hour12Number)
+      case 'mm':
+        return twentyFourHourParts.minute
+      case 'M':
+        return String(twentyFourHourParts.minuteNumber)
+      case 'ss':
+        return twentyFourHourParts.second
+      case 'S':
+        return String(twentyFourHourParts.secondNumber)
+      case 'A':
+        return twelveHourParts.dayPeriod
+      default:
+        return token
+    }
+  })
+}
+
+export function isCustomDateFormatPreference(value) {
+  const normalized = normalizeDateFormatPreference(value)
+  return normalized !== DATE_FORMAT_AUTO
+    && normalized !== DATE_FORMAT_YMD_24
+    && normalized !== DATE_FORMAT_YMD_12
+    && normalized !== DATE_FORMAT_DMY_24
+    && normalized !== DATE_FORMAT_DMY_12
+    && normalized !== DATE_FORMAT_MDY_24
+    && normalized !== DATE_FORMAT_MDY_12
+}
+
+export function formatDate(value, locale = 'en', timeZone = getCurrentFormattingTimeZone(), dateFormat = getCurrentFormattingDateFormat()) {
   if (!value) return translate(locale, 'common.never')
   const date = normalizeDateValue(value)
   if (!date) return translate(locale, 'common.unavailable')
+  const normalizedDateFormat = normalizeDateFormatPreference(dateFormat)
+  const fallbackDateFormat = isCustomDateFormatPreference(normalizedDateFormat) ? DATE_FORMAT_AUTO : normalizedDateFormat
   try {
-    return date.toLocaleString(locale, timeZone ? { timeZone } : undefined)
+    if (isCustomDateFormatPreference(normalizedDateFormat)) {
+      const customFormatted = formatDateByCustomPattern(date, normalizedDateFormat, locale, timeZone)
+      if (customFormatted) {
+        return customFormatted
+      }
+    }
+    return formatDateByPreference(date, fallbackDateFormat, locale, timeZone)
   } catch {
-    return date.toLocaleString(locale)
+    try {
+      if (isCustomDateFormatPreference(normalizedDateFormat)) {
+        const customFormatted = formatDateByCustomPattern(date, normalizedDateFormat, locale, null)
+        if (customFormatted) {
+          return customFormatted
+        }
+      }
+      return formatDateByPreference(date, fallbackDateFormat, locale, null)
+    } catch {
+      return date.toLocaleString(locale)
+    }
   }
 }
 

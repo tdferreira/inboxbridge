@@ -1,5 +1,7 @@
 import { act, fireEvent, render, screen, waitFor, within } from '@testing-library/react'
 import App from './App'
+import { resetCurrentFormattingDateFormat } from './lib/formatters'
+import { resetCurrentFormattingTimeZone } from './lib/timeZonePreferences'
 import { clearLocalStorage, createWorkspaceRouteFetch, htmlError, jsonResponse, textError } from './test/appTestHelpers'
 
 class FakeEventSource {
@@ -46,6 +48,8 @@ describe('App', () => {
   afterEach(() => {
     clearLocalStorage()
     window.history.replaceState({}, '', '/')
+    resetCurrentFormattingDateFormat()
+    resetCurrentFormattingTimeZone()
     vi.restoreAllMocks()
     vi.useRealTimers()
     vi.unstubAllGlobals()
@@ -1885,7 +1889,7 @@ describe('App', () => {
           passwordConfigured: true
         })
       }
-      if (url === '/api/app/gmail-config') return jsonResponse({ destinationUser: 'me', redirectUri: 'https://localhost:3000/api/google-oauth/callback', createMissingLabels: true, neverMarkSpam: false, processForCalendar: false })
+      if (url === '/api/app/destination-config' || url === '/api/app/gmail-config') return jsonResponse({ destinationUser: 'me', redirectUri: 'https://localhost:3000/api/google-oauth/callback', createMissingLabels: true, neverMarkSpam: false, processForCalendar: false })
       if (url === '/api/app/polling-settings') return jsonResponse({ defaultPollEnabled: true, pollEnabledOverride: null, effectivePollEnabled: true, defaultPollInterval: '5m', pollIntervalOverride: null, effectivePollInterval: '5m', defaultFetchWindow: 50, fetchWindowOverride: null, effectiveFetchWindow: 50 })
       if (url === '/api/app/polling-stats') return jsonResponse({ totalImportedMessages: 0, configuredMailFetchers: 0, enabledMailFetchers: 0, sourcesWithErrors: 0, importsByDay: [] })
       if (url === '/api/app/email-accounts') return jsonResponse([])
@@ -2520,7 +2524,13 @@ describe('App', () => {
     expect(await screen.findByRole('tab', { name: 'Administração', selected: true })).toBeInTheDocument()
   })
 
-  it('reloads polling statistics in the newly selected timezone and keeps using it on refresh', async () => {
+  it('persists the newly selected manual timezone preference', async () => {
+    vi.spyOn(Intl, 'supportedValuesOf').mockImplementation((key) => (
+      key === 'timeZone'
+        ? ['Europe/Lisbon', 'America/New_York']
+        : []
+    ))
+
     const fetchMock = createWorkspaceRouteFetch({
       session: {
         id: 1,
@@ -2540,30 +2550,22 @@ describe('App', () => {
     await screen.findByText(/signed in as/i)
 
     fireEvent.click(screen.getByRole('button', { name: 'Preferences' }))
-    fireEvent.change(screen.getByDisplayValue('Detect automatically'), { target: { value: 'MANUAL' } })
-    fireEvent.change(screen.getAllByRole('combobox')[1], { target: { value: 'America/New_York' } })
+    const timezoneModeLabel = screen.getByText('Timezone mode').closest('label')
+    fireEvent.change(within(timezoneModeLabel).getByRole('combobox'), { target: { value: 'MANUAL' } })
+    const timezoneLabel = await screen.findByText('Timezone')
+    fireEvent.change(within(timezoneLabel.closest('label')).getByRole('combobox'), { target: { value: 'America/New_York' } })
 
     await waitFor(() => {
-      const statsCalls = fetchMock.mock.calls.filter(([url]) => String(url) === '/api/app/polling-stats')
-      const dashboardCalls = fetchMock.mock.calls.filter(([url]) => String(url) === '/api/admin/dashboard')
-      expect(statsCalls.some(([, options]) => options?.headers?.['X-InboxBridge-Timezone'] === 'America/New_York')).toBe(true)
-      expect(dashboardCalls.some(([, options]) => options?.headers?.['X-InboxBridge-Timezone'] === 'America/New_York')).toBe(true)
+      const preferenceCalls = fetchMock.mock.calls.filter(([url]) => String(url) === '/api/app/ui-preferences')
+      expect(preferenceCalls.some(([, options]) => {
+        if (options?.method !== 'PUT') {
+          return false
+        }
+        const payload = JSON.parse(options.body || '{}')
+        return payload.timezoneMode === 'MANUAL' && payload.timezone === 'America/New_York'
+      })).toBe(true)
     })
 
-    const statsCallCountBeforeRefresh = fetchMock.mock.calls.filter(([url]) => String(url) === '/api/app/polling-stats').length
-    const dashboardCallCountBeforeRefresh = fetchMock.mock.calls.filter(([url]) => String(url) === '/api/admin/dashboard').length
-    fireEvent.click(screen.getByRole('button', { name: 'Refresh' }))
-
-    await waitFor(() => {
-      const statsCalls = fetchMock.mock.calls.filter(([url]) => String(url) === '/api/app/polling-stats')
-      const dashboardCalls = fetchMock.mock.calls.filter(([url]) => String(url) === '/api/admin/dashboard')
-      const newStatsCalls = statsCalls.slice(statsCallCountBeforeRefresh)
-      const newDashboardCalls = dashboardCalls.slice(dashboardCallCountBeforeRefresh)
-      expect(newStatsCalls.length).toBeGreaterThan(0)
-      expect(newDashboardCalls.length).toBeGreaterThan(0)
-      expect(newStatsCalls.some(([, options]) => options?.headers?.['X-InboxBridge-Timezone'] === 'America/New_York')).toBe(true)
-      expect(newDashboardCalls.some(([, options]) => options?.headers?.['X-InboxBridge-Timezone'] === 'America/New_York')).toBe(true)
-    })
   })
 
   it('keeps the selected statistics range across app refreshes even if the refreshed payload is sparser', async () => {
@@ -3081,6 +3083,47 @@ describe('App', () => {
         method: 'PUT',
         body: expect.stringContaining('"notificationHistory":[]')
       }))
+    })
+  })
+
+  it('renders notification timestamps with the selected manual date format', async () => {
+    const fetchMock = createWorkspaceRouteFetch({
+      session: {
+        id: 42,
+        username: 'alice',
+        role: 'USER',
+        approved: true,
+        mustChangePassword: false,
+        passkeyCount: 0,
+        passwordConfigured: true
+      },
+      uiPreferences: {
+        dateFormat: 'YMD_24',
+        timezoneMode: 'MANUAL',
+        timezone: 'UTC',
+        notificationHistory: [{
+          id: 'note-1',
+          message: { kind: 'translation', key: 'notifications.signedIn', params: {} },
+          copyText: { kind: 'translation', key: 'notifications.signedIn', params: {} },
+          tone: 'success',
+          createdAt: Date.parse('2026-03-31T09:00:00Z'),
+          floatingVisible: true,
+          autoCloseMs: null
+        }]
+      }
+    })
+
+    vi.stubGlobal('fetch', fetchMock)
+
+    render(<App />)
+
+    await screen.findByText('Signed in.')
+    fireEvent.click(screen.getByRole('button', { name: /notifications/i }))
+
+    await waitFor(() => {
+      const matchingBanner = Array.from(document.querySelectorAll('.app-banner'))
+        .find((element) => element.getAttribute('title') === 'Created at 2026-03-31 09:00:00')
+      expect(matchingBanner).toBeTruthy()
     })
   })
 

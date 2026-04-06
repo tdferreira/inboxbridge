@@ -97,6 +97,13 @@
   height: 0.95rem;
 }
 
+.fetcher-list-item-status-pills {
+  display: inline-flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 0.45rem;
+}
+
 .fetcher-menu {
   position: fixed;
   z-index: 1000;
@@ -132,6 +139,10 @@
 
   .fetcher-list-item-main {
     flex-direction: column;
+  }
+
+  .fetcher-list-item-status-pills {
+    justify-content: flex-start;
   }
 
   .fetcher-list-item-actions {

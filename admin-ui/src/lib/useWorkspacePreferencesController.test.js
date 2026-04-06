@@ -156,6 +156,37 @@ describe('useWorkspacePreferencesController', () => {
     }))
   })
 
+  it('persists a manually selected date format', async () => {
+    fetch.mockResolvedValue(createFetchResponse({ dateFormat: 'YMD_24' }))
+
+    const { result } = renderController()
+
+    await act(async () => {
+      await result.current.handleDateFormatChange('YMD_24')
+    })
+
+    expect(result.current.uiPreferences.dateFormat).toBe('YMD_24')
+    expect(fetch).toHaveBeenCalledWith('/api/app/ui-preferences', expect.objectContaining({
+      method: 'PUT'
+    }))
+  })
+
+  it('persists a valid custom date format in the single dateFormat preference', async () => {
+    fetch.mockResolvedValue(createFetchResponse({ dateFormat: 'DD/MM/YYYY HH:mm:ss' }))
+
+    const { result } = renderController()
+
+    await act(async () => {
+      await result.current.handleDateFormatChange('DD/MM/YYYY HH:mm:ss')
+    })
+
+    expect(result.current.uiPreferences.dateFormat).toBe('DD/MM/YYYY HH:mm:ss')
+    expect(fetch).toHaveBeenCalledWith('/api/app/ui-preferences', expect.objectContaining({
+      method: 'PUT',
+      body: expect.stringContaining('"dateFormat":"DD/MM/YYYY HH:mm:ss"')
+    }))
+  })
+
   it('tracks layout edits against a snapshot and can discard them', async () => {
     fetch.mockImplementation(async (_url, options = {}) => createFetchResponse({
       ...(options.body ? JSON.parse(options.body) : {}),

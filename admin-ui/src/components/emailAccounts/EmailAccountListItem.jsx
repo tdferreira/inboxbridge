@@ -2,6 +2,7 @@ import { Suspense, lazy, useEffect, useState } from 'react'
 import { authMethodLabel, effectiveEmailAccountStatus, formatDate, formatImportedSizeSummary, formatPollError, formatPollExecutionSummary, oauthProviderLabel, protocolLabel, statusLabel, statusTone, tokenStorageLabel } from '../../lib/formatters'
 import { buildSourceEmailAccountTargetId } from '../../lib/sectionTargets'
 import { formatLiveProgressLabel, formatLiveProgressSummary, hasDeterminateLiveProgress, liveProgressPercent } from '../../lib/livePollProgress'
+import { buildSourceDiagnosticsAlerts } from '../../lib/sourceDiagnosticsAlerts'
 import CopyButton from '../common/CopyButton'
 import FloatingActionMenu from '../common/FloatingActionMenu'
 import './EmailAccountCard.css'
@@ -118,6 +119,7 @@ function EmailAccountListItem({
   const liveProgressSummary = formatLiveProgressSummary(liveSource, locale, t)
   const showInlineRunningProgress = hasDeterminateLiveProgress(liveSource)
   const [statsCollapsed, setStatsCollapsed] = useState(!statsAvailable)
+  const diagnosticsAlerts = buildSourceDiagnosticsAlerts(fetcher)
 
   useEffect(() => {
     setStatsCollapsed(!statsAvailable)
@@ -171,7 +173,12 @@ function EmailAccountListItem({
               </span>
             </span>
           ) : (
-            <span className={`status-pill ${statusTone(effectiveStatus)}`}>{statusLabel(effectiveStatus, locale)}</span>
+            <div className="fetcher-list-item-status-pills">
+              <span className={`status-pill ${statusTone(effectiveStatus)}`}>{statusLabel(effectiveStatus, locale)}</span>
+              {diagnosticsAlerts.length ? (
+                <span className="status-pill tone-bad">{t('emailAccount.alertCount', { count: diagnosticsAlerts.length })}</span>
+              ) : null}
+            </div>
           )}
         </button>
         <div className="fetcher-list-item-menu">
@@ -267,6 +274,18 @@ function EmailAccountListItem({
             <div className="muted-box">
               <strong>{t('emailAccount.lastFailureReason')}</strong><br />
               {formatPollError(fetcher.pollingState.lastFailureReason, locale)}
+            </div>
+          ) : null}
+          {diagnosticsAlerts.length ? (
+            <div className="event-box">
+              <strong>{t('emailAccount.runtimeAlerts')}</strong>
+              <div className="email-account-last-result-pills">
+                {diagnosticsAlerts.map((alert) => (
+                  <span className="status-pill tone-bad" key={`${fetcher.emailAccountId}:${alert.code}`}>
+                    {t(`emailAccount.alert.${alert.code}`, alert.params)}
+                  </span>
+                ))}
+              </div>
             </div>
           ) : null}
           {fetcher.diagnostics ? (

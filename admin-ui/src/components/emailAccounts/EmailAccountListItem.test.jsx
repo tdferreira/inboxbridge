@@ -1,10 +1,17 @@
 import { fireEvent, render, screen, waitFor } from '@testing-library/react'
 import EmailAccountListItem from './EmailAccountListItem'
+import { DATE_FORMAT_YMD_24, resetCurrentFormattingDateFormat, setCurrentFormattingDateFormat } from '../../lib/formatters'
 import { translate } from '../../lib/i18n'
+import { resetCurrentFormattingTimeZone, setCurrentFormattingTimeZone } from '../../lib/timeZonePreferences'
 
 const t = (key, params) => translate('en', key, params)
 
 describe('EmailAccountListItem', () => {
+  afterEach(() => {
+    resetCurrentFormattingDateFormat()
+    resetCurrentFormattingTimeZone()
+  })
+
   it('closes the contextual menu when clicking outside', () => {
     render(
       <div>
@@ -253,7 +260,10 @@ describe('EmailAccountListItem', () => {
           effectivePollEnabled: true,
           effectivePollInterval: '5m',
           effectiveFetchWindow: 50,
-          pollingState: null,
+          pollingState: {
+            cooldownUntil: '2099-04-07T10:15:00Z',
+            consecutiveFailures: 4
+          },
           diagnostics: {
             destinationIdentityKey: 'imap-append:abc123',
             popLastSeenUidl: null,
@@ -261,7 +271,7 @@ describe('EmailAccountListItem', () => {
               { folderName: 'INBOX', uidValidity: 44, lastSeenUid: 101 },
               { folderName: 'Projects/2026', uidValidity: 77, lastSeenUid: 205 }
             ],
-            sourceThrottle: { adaptiveMultiplier: 2, nextAllowedAt: '2026-04-06T10:06:00Z' },
+            sourceThrottle: { adaptiveMultiplier: 3, nextAllowedAt: '2026-04-06T10:06:00Z' },
             destinationThrottle: { adaptiveMultiplier: 3, nextAllowedAt: '2026-04-06T10:07:00Z' },
             idleHealthy: false,
             idleSchedulerFallback: true,
@@ -308,6 +318,130 @@ describe('EmailAccountListItem', () => {
     expect(screen.getByText(/Failure category/)).toBeInTheDocument()
     expect(screen.getByText(/Rate Limit/)).toBeInTheDocument()
     expect(screen.getByText(/Cooldown backoff/)).toBeInTheDocument()
+    expect(screen.getByText('4 alerts')).toBeInTheDocument()
+    expect(screen.getByText('IMAP IDLE disconnected on Projects/2026')).toBeInTheDocument()
+    expect(screen.getByText('Cooling down after 4 consecutive failures')).toBeInTheDocument()
+    expect(screen.getByText('Source host throttle widened to 3×')).toBeInTheDocument()
+    expect(screen.getByText('Destination delivery throttle widened to 3×')).toBeInTheDocument()
+  })
+
+  it('does not show diagnostics alerts when the current state is healthy', () => {
+    render(
+      <EmailAccountListItem
+        fetcher={{
+          emailAccountId: 'healthy-source',
+          customLabel: '',
+          managementSource: 'DATABASE',
+          protocol: 'IMAP',
+          host: 'imap.example.com',
+          port: 993,
+          authMethod: 'PASSWORD',
+          oauthProvider: 'NONE',
+          tls: true,
+          folder: 'INBOX',
+          fetchMode: 'IDLE',
+          tokenStorageMode: 'PASSWORD',
+          oauthConnected: false,
+          markReadAfterPoll: false,
+          postPollAction: 'NONE',
+          postPollTargetFolder: '',
+          totalImportedMessages: 0,
+          lastImportedAt: null,
+          effectivePollEnabled: true,
+          effectivePollInterval: '5m',
+          effectiveFetchWindow: 50,
+          pollingState: {
+            cooldownUntil: '2026-04-06T09:00:00Z',
+            consecutiveFailures: 1
+          },
+          diagnostics: {
+            destinationIdentityKey: 'imap-append:def456',
+            popLastSeenUidl: null,
+            imapCheckpoints: [],
+            sourceThrottle: { adaptiveMultiplier: 1, nextAllowedAt: '2026-04-06T10:06:00Z' },
+            destinationThrottle: { adaptiveMultiplier: 1, nextAllowedAt: '2026-04-06T10:07:00Z' },
+            idleHealthy: true,
+            idleSchedulerFallback: false,
+            idleWatches: [
+              { folderName: 'INBOX', status: 'CONNECTED' }
+            ]
+          },
+          lastEvent: null,
+          canEdit: true,
+          canDelete: true,
+          canConnectMicrosoft: false
+        }}
+        locale="en"
+        onConfigurePolling={vi.fn()}
+        onConnectMicrosoft={vi.fn()}
+        onDelete={vi.fn()}
+        onEdit={vi.fn()}
+        onRunPoll={vi.fn()}
+        t={t}
+      />
+    )
+
+    expect(screen.queryByText('1 alert')).not.toBeInTheDocument()
+
+    fireEvent.click(screen.getByRole('button', { name: /healthy-source/i }))
+
+    expect(screen.queryByText('Runtime alerts')).not.toBeInTheDocument()
+  })
+
+  it('renders source timestamps with the active manual date format', () => {
+    setCurrentFormattingDateFormat(DATE_FORMAT_YMD_24)
+    setCurrentFormattingTimeZone('UTC')
+
+    render(
+      <EmailAccountListItem
+        fetcher={{
+          emailAccountId: 'dated-source',
+          customLabel: '',
+          managementSource: 'DATABASE',
+          protocol: 'IMAP',
+          host: 'imap.example.com',
+          port: 993,
+          authMethod: 'PASSWORD',
+          oauthProvider: 'NONE',
+          tls: true,
+          folder: 'INBOX',
+          fetchMode: 'POLLING',
+          tokenStorageMode: 'PASSWORD',
+          oauthConnected: false,
+          markReadAfterPoll: false,
+          postPollAction: 'NONE',
+          postPollTargetFolder: '',
+          totalImportedMessages: 0,
+          lastImportedAt: '2026-04-06T10:00:00Z',
+          effectivePollEnabled: true,
+          effectivePollInterval: '5m',
+          effectiveFetchWindow: 50,
+          pollingState: {
+            nextPollAt: '2026-04-06T10:30:00Z',
+            cooldownUntil: '2026-04-06T10:15:00Z',
+            consecutiveFailures: 1
+          },
+          lastEvent: null,
+          diagnostics: null,
+          canEdit: true,
+          canDelete: true,
+          canConnectMicrosoft: false
+        }}
+        locale="en"
+        onConfigurePolling={vi.fn()}
+        onConnectMicrosoft={vi.fn()}
+        onDelete={vi.fn()}
+        onEdit={vi.fn()}
+        onRunPoll={vi.fn()}
+        t={t}
+      />
+    )
+
+    fireEvent.click(screen.getByRole('button', { name: /dated-source/i }))
+
+    expect(screen.getByText('2026-04-06 10:00:00')).toBeInTheDocument()
+    expect(screen.getByText('2026-04-06 10:30:00')).toBeInTheDocument()
+    expect(screen.getByText('2026-04-06 10:15:00')).toBeInTheDocument()
   })
 
   it('explains manual runs for IMAP IDLE sources', () => {
