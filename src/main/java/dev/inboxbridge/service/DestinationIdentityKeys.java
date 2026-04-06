@@ -13,6 +13,15 @@ final class DestinationIdentityKeys {
     private DestinationIdentityKeys() {
     }
 
+    /**
+     * Derives a stable mailbox identity key for dedupe and checkpoint scoping.
+     *
+     * <p>The identity intentionally follows the effective destination mailbox
+     * configuration rather than the user-scoped destination subject key. This lets
+     * InboxBridge keep history separate when the same user switches to a different
+     * destination mailbox or folder, while still treating unchanged configurations
+     * as the same mailbox identity across polls and restarts.
+     */
     static String forTarget(MailDestinationTarget target) {
         if (target == null) {
             return null;
