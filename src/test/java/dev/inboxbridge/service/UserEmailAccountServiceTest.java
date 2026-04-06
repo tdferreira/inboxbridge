@@ -4,6 +4,7 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 
 import java.time.Instant;
 import java.util.ArrayList;
@@ -252,6 +253,136 @@ class UserEmailAccountServiceTest {
         UserEmailAccount stored = service.repository.findByEmailAccountId("outlook-main").orElseThrow();
         assertEquals(InboxBridgeConfig.AuthMethod.OAUTH2, stored.authMethod);
         assertEquals(InboxBridgeConfig.OAuthProvider.MICROSOFT, stored.oauthProvider);
+        assertTrue(stored.enabled);
+        assertFalse(stored.enableAfterOauthConnect);
+    }
+
+    @Test
+    void oauthUpsertWithoutRefreshTokenStoresDisabledUntilOauthCompletes() {
+        UserEmailAccountService service = service();
+        AppUser owner = user(1L);
+
+        UserEmailAccountView view = service.upsert(owner, new UpdateUserEmailAccountRequest(
+                null,
+                "google-source",
+                true,
+                "IMAP",
+                "imap.gmail.com",
+                993,
+                true,
+                "OAUTH2",
+                "GOOGLE",
+                "user@example.com",
+                "",
+                "",
+                "INBOX",
+                false,
+                "Imported/Test"));
+
+        UserEmailAccount stored = service.repository.findByEmailAccountId("google-source").orElseThrow();
+        assertFalse(stored.enabled);
+        assertTrue(stored.enableAfterOauthConnect);
+        assertFalse(view.enabled());
+    }
+
+    @Test
+    void successfulOauthCompletionEnablesPendingOauthSource() {
+        UserEmailAccountService service = service();
+        AppUser owner = user(1L);
+        service.upsert(owner, new UpdateUserEmailAccountRequest(
+                null,
+                "google-source",
+                true,
+                "IMAP",
+                "imap.gmail.com",
+                993,
+                true,
+                "OAUTH2",
+                "GOOGLE",
+                "user@example.com",
+                "",
+                "",
+                "INBOX",
+                false,
+                "Imported/Test"));
+        service.oAuthCredentialService = new FakeOAuthCredentialService(
+                null,
+                new OAuthCredentialService.StoredOAuthCredential(
+                        OAuthCredentialService.GOOGLE_PROVIDER,
+                        "source-google:google-source",
+                        "refresh-token",
+                        "access-token",
+                        Instant.parse("2026-03-27T09:28:30Z"),
+                        "scope",
+                        "Bearer",
+                        Instant.parse("2026-03-27T09:28:30Z")));
+
+        boolean enabled = service.enableAfterSuccessfulOauthConnection("google-source");
+
+        UserEmailAccount stored = service.repository.findByEmailAccountId("google-source").orElseThrow();
+        assertTrue(enabled);
+        assertTrue(stored.enabled);
+        assertFalse(stored.enableAfterOauthConnect);
+    }
+
+    @Test
+    void failedOauthValidationLeavesPendingOauthSourceDisabled() {
+        UserEmailAccountService service = service();
+        AppUser owner = user(1L);
+        service.upsert(owner, new UpdateUserEmailAccountRequest(
+                null,
+                "google-source",
+                true,
+                "IMAP",
+                "imap.gmail.com",
+                993,
+                true,
+                "OAUTH2",
+                "GOOGLE",
+                "user@example.com",
+                "",
+                "",
+                "INBOX",
+                false,
+                "Imported/Test"));
+        service.oAuthCredentialService = new FakeOAuthCredentialService(
+                null,
+                new OAuthCredentialService.StoredOAuthCredential(
+                        OAuthCredentialService.GOOGLE_PROVIDER,
+                        "source-google:google-source",
+                        "refresh-token",
+                        "access-token",
+                        Instant.parse("2026-03-27T09:28:30Z"),
+                        "scope",
+                        "Bearer",
+                        Instant.parse("2026-03-27T09:28:30Z")));
+        ((FakeMailSourceClient) service.mailSourceClient).nextTestConnectionResult = new EmailAccountConnectionTestResult(
+                false,
+                "Authentication failed",
+                "IMAP",
+                "imap.gmail.com",
+                993,
+                true,
+                "OAUTH2",
+                "GOOGLE",
+                false,
+                "INBOX",
+                false,
+                false,
+                null,
+                null,
+                null,
+                null,
+                null,
+                null,
+                null);
+
+        boolean enabled = service.enableAfterSuccessfulOauthConnection("google-source");
+
+        UserEmailAccount stored = service.repository.findByEmailAccountId("google-source").orElseThrow();
+        assertFalse(enabled);
+        assertFalse(stored.enabled);
+        assertTrue(stored.enableAfterOauthConnect);
     }
 
     @Test
@@ -678,28 +809,37 @@ class UserEmailAccountServiceTest {
     }
 
     private static final class FakeOAuthCredentialService extends OAuthCredentialService {
-        private final StoredOAuthCredential credential;
+        private final StoredOAuthCredential microsoftCredential;
+        private final StoredOAuthCredential googleCredential;
 
         private FakeOAuthCredentialService(StoredOAuthCredential credential) {
-            this.credential = credential;
+            this(credential, null);
+        }
+
+        private FakeOAuthCredentialService(StoredOAuthCredential microsoftCredential, StoredOAuthCredential googleCredential) {
+            this.microsoftCredential = microsoftCredential;
+            this.googleCredential = googleCredential;
         }
 
         @Override
         public boolean secureStorageConfigured() {
-            return credential != null;
+            return microsoftCredential != null || googleCredential != null;
         }
 
         @Override
         public Optional<StoredOAuthCredential> findMicrosoftCredential(String sourceId) {
-            if (credential == null || !credential.subjectKey().equals(sourceId)) {
+            if (microsoftCredential == null || !microsoftCredential.subjectKey().equals(sourceId)) {
                 return Optional.empty();
             }
-            return Optional.of(credential);
+            return Optional.of(microsoftCredential);
         }
 
         @Override
         public Optional<StoredOAuthCredential> findGoogleCredential(String subjectKey) {
-            return Optional.empty();
+            if (googleCredential == null || !googleCredential.subjectKey().equals(subjectKey)) {
+                return Optional.empty();
+            }
+            return Optional.of(googleCredential);
         }
     }
 
@@ -744,10 +884,14 @@ class UserEmailAccountServiceTest {
 
     private static final class FakeMailSourceClient extends MailSourceClient {
         private RuntimeEmailAccount lastBridge;
+        private EmailAccountConnectionTestResult nextTestConnectionResult;
 
         @Override
         public dev.inboxbridge.dto.EmailAccountConnectionTestResult testConnection(RuntimeEmailAccount bridge) {
             this.lastBridge = bridge;
+            if (nextTestConnectionResult != null) {
+                return nextTestConnectionResult;
+            }
             return new dev.inboxbridge.dto.EmailAccountConnectionTestResult(
                     true,
                     "Connection test succeeded.",

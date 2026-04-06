@@ -10,7 +10,7 @@ describe('NotificationsDialog', () => {
     render(
       <NotificationsDialog
         notifications={[
-          { id: 'n1', message: 'Mailbox check failed.', tone: 'error' },
+          { id: 'n1', message: 'Mailbox check failed.', tone: 'error', repeatCount: 3 },
           { id: 'n2', message: 'Mail imported successfully.', tone: 'success' }
         ]}
         onClearAll={onClearAll}
@@ -23,6 +23,7 @@ describe('NotificationsDialog', () => {
 
     expect(screen.getByText('Mailbox check failed.')).toBeInTheDocument()
     expect(screen.getByText('Mail imported successfully.')).toBeInTheDocument()
+    expect(screen.getByText('×3')).toBeInTheDocument()
 
     fireEvent.click(screen.getByRole('button', { name: 'Clear All' }))
     fireEvent.click(screen.getAllByRole('button', { name: 'Dismiss notification' })[0])

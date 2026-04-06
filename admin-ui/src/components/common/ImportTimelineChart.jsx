@@ -1020,7 +1020,7 @@ function ImportTimelineChart({
               </div>
             ) : null}
             {chartFrameReady ? (
-              <ResponsiveContainer height="100%" minHeight={240} minWidth={320} width="100%">
+              <ResponsiveContainer height="100%" minHeight={240} width="100%">
                 <LineChart data={resolvedChartRows} margin={{ top: 8, right: 16, bottom: 6, left: 0 }}>
                   <CartesianGrid stroke="rgba(15, 23, 42, 0.08)" strokeDasharray="3 4" vertical={false} />
                   <XAxis

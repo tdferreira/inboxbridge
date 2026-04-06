@@ -21,6 +21,10 @@ function createEmailAccount(overrides = {}) {
 }
 
 describe('useEmailAccountsController', () => {
+  afterEach(() => {
+    vi.useRealTimers()
+  })
+
   function renderController(overrides = {}) {
     const withPending = vi.fn(async (_key, action) => action())
     const pushNotification = vi.fn()
@@ -221,6 +225,179 @@ describe('useEmailAccountsController', () => {
     global.fetch = originalFetch
   })
 
+  it('loads source folders when the folder field receives focus and the dialog still has no folder list', async () => {
+    const originalFetch = global.fetch
+    global.fetch = vi.fn().mockResolvedValue({
+      ok: true,
+      json: async () => ({ folders: ['INBOX', 'Archive'] })
+    })
+
+    const { result } = renderController()
+
+    act(() => {
+      result.current.openAddFetcherDialog()
+      result.current.handleEmailAccountFormChange({
+        ...DEFAULT_EMAIL_ACCOUNT_FORM,
+        emailAccountId: 'fetcher-a',
+        protocol: 'IMAP',
+        host: 'imap.example.com',
+        username: 'user@example.com',
+        password: 'secret'
+      })
+    })
+
+    await act(async () => {
+      result.current.handleFolderInputFocus()
+    })
+
+    await waitFor(() => {
+      expect(result.current.emailAccountFolders).toEqual(['INBOX', 'Archive'])
+    })
+    expect(global.fetch).toHaveBeenCalledTimes(1)
+
+    global.fetch = originalFetch
+  })
+
+  it('retries folder loading on later focus after an earlier edit-time fetch failed', async () => {
+    const originalFetch = global.fetch
+    vi.useFakeTimers()
+    vi.setSystemTime(new Date('2026-04-06T00:00:00Z'))
+    global.fetch = vi.fn()
+      .mockRejectedValueOnce(new Error('offline'))
+      .mockResolvedValueOnce({
+        ok: true,
+        json: async () => ({ folders: ['INBOX', 'Archive'] })
+      })
+
+    const { result } = renderController()
+    const existingAccount = createEmailAccount({
+      emailAccountId: 'fetcher-a',
+      protocol: 'IMAP',
+      folder: 'INBOX'
+    })
+
+    await act(async () => {
+      result.current.editEmailAccount(existingAccount)
+      await Promise.resolve()
+      await Promise.resolve()
+    })
+
+    expect(global.fetch).toHaveBeenCalledTimes(1)
+    expect(result.current.emailAccountFolders).toEqual([])
+
+    await act(async () => {
+      vi.advanceTimersByTime(2_500)
+      result.current.handleFolderInputFocus()
+      await Promise.resolve()
+      await Promise.resolve()
+    })
+
+    expect(result.current.emailAccountFolders).toEqual(['INBOX', 'Archive'])
+    expect(global.fetch).toHaveBeenCalledTimes(2)
+
+    vi.useRealTimers()
+    global.fetch = originalFetch
+  })
+
+  it('does not refetch folders on repeated focus after they were already loaded, but does refetch after server settings change', async () => {
+    const originalFetch = global.fetch
+    global.fetch = vi.fn()
+      .mockResolvedValueOnce({
+        ok: true,
+        json: async () => ({ folders: ['INBOX', 'Archive'] })
+      })
+      .mockResolvedValueOnce({
+        ok: true,
+        json: async () => ({ folders: ['Projects', 'Sent'] })
+      })
+
+    const { result } = renderController()
+
+    act(() => {
+      result.current.openAddFetcherDialog()
+      result.current.handleEmailAccountFormChange({
+        ...DEFAULT_EMAIL_ACCOUNT_FORM,
+        emailAccountId: 'fetcher-a',
+        protocol: 'IMAP',
+        host: 'imap.example.com',
+        username: 'user@example.com',
+        password: 'secret'
+      })
+    })
+
+    await act(async () => {
+      result.current.handleFolderInputFocus()
+    })
+
+    await waitFor(() => {
+      expect(result.current.emailAccountFolders).toEqual(['INBOX', 'Archive'])
+    })
+
+    act(() => {
+      result.current.handleFolderInputFocus()
+    })
+
+    expect(global.fetch).toHaveBeenCalledTimes(1)
+
+    act(() => {
+      result.current.handleEmailAccountFormChange((current) => ({
+        ...current,
+        host: 'mail.changed.example.com'
+      }))
+    })
+
+    await act(async () => {
+      result.current.handleFolderInputFocus()
+    })
+
+    await waitFor(() => {
+      expect(result.current.emailAccountFolders).toEqual(['Projects', 'Sent'])
+    })
+    expect(global.fetch).toHaveBeenCalledTimes(2)
+
+    global.fetch = originalFetch
+  })
+
+  it('uses first-letter typing as a fallback fetch trigger only while folders are still unknown', async () => {
+    const originalFetch = global.fetch
+    global.fetch = vi.fn().mockResolvedValue({
+      ok: true,
+      json: async () => ({ folders: ['INBOX', 'Archive'] })
+    })
+
+    const { result } = renderController()
+
+    act(() => {
+      result.current.openAddFetcherDialog()
+      result.current.handleEmailAccountFormChange({
+        ...DEFAULT_EMAIL_ACCOUNT_FORM,
+        emailAccountId: 'fetcher-a',
+        protocol: 'IMAP',
+        host: 'imap.example.com',
+        username: 'user@example.com',
+        password: 'secret'
+      })
+    })
+
+    await act(async () => {
+      result.current.handleFolderInputActivity('I')
+    })
+
+    await waitFor(() => {
+      expect(result.current.emailAccountFolders).toEqual(['INBOX', 'Archive'])
+    })
+    expect(global.fetch).toHaveBeenCalledTimes(1)
+
+    act(() => {
+      result.current.handleFolderInputActivity('In')
+      result.current.handleFolderInputActivity('A')
+    })
+
+    expect(global.fetch).toHaveBeenCalledTimes(1)
+
+    global.fetch = originalFetch
+  })
+
   it('includes post-poll source actions in the save payload', async () => {
     const originalFetch = global.fetch
     global.fetch = vi.fn().mockResolvedValue({
@@ -347,6 +524,41 @@ describe('useEmailAccountsController', () => {
       }),
       tone: 'success'
     }))
+
+    global.fetch = originalFetch
+  })
+
+  it('can save an unvalidated email account with polling disabled', async () => {
+    const originalFetch = global.fetch
+    global.fetch = vi.fn().mockResolvedValue({
+      ok: true,
+      json: async () => ({ emailAccountId: 'fetcher-a' })
+    })
+
+    const { result, loadAppData } = renderController()
+
+    act(() => {
+      result.current.handleEmailAccountFormChange({
+        ...DEFAULT_EMAIL_ACCOUNT_FORM,
+        emailAccountId: 'fetcher-a',
+        host: 'imap.example.com',
+        username: 'user@example.com',
+        password: 'secret',
+        enabled: true
+      })
+    })
+
+    await act(async () => {
+      await result.current.saveEmailAccountWithoutValidation()
+    })
+
+    const [, request] = global.fetch.mock.calls[0]
+    expect(request.method).toBe('PUT')
+    expect(JSON.parse(request.body)).toEqual(expect.objectContaining({
+      emailAccountId: 'fetcher-a',
+      enabled: false
+    }))
+    expect(loadAppData).toHaveBeenCalled()
 
     global.fetch = originalFetch
   })

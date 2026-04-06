@@ -21,6 +21,22 @@
   word-break: break-word;
 }
 
+.app-banner-repeat-count {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 2.15rem;
+  margin-right: 0.55rem;
+  padding: 0.15rem 0.55rem;
+  border-radius: 999px;
+  border: 1px solid rgba(36, 26, 20, 0.14);
+  background: rgba(255, 255, 255, 0.72);
+  font-size: 0.78rem;
+  font-weight: 700;
+  line-height: 1.1;
+  vertical-align: middle;
+}
+
 .app-banner-actions {
   display: inline-flex;
   align-items: start;

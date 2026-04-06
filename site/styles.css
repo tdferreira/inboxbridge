@@ -942,6 +942,88 @@ a {
   color: var(--ink);
 }
 
+.site-pillbox {
+  display: grid;
+  gap: 0.45rem;
+}
+
+.site-pillbox-shell {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.55rem;
+  width: 100%;
+  min-height: 48px;
+  padding: 0.5rem 0.8rem;
+  border: 1px solid var(--line);
+  border-radius: 16px;
+  background: rgba(255, 255, 255, 0.9);
+  cursor: text;
+}
+
+.site-pillbox-shell:focus-within {
+  outline: 2px solid rgba(29, 95, 191, 0.18);
+  border-color: rgba(29, 95, 191, 0.28);
+}
+
+.site-pillbox-values {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.45rem;
+}
+
+.site-pillbox-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.45rem;
+  min-height: 2rem;
+  padding: 0.35rem 0.7rem;
+  border-radius: 999px;
+  background: rgba(20, 33, 61, 0.08);
+  border: 1px solid rgba(20, 33, 61, 0.1);
+  font-size: 0.82rem;
+  line-height: 1.1;
+}
+
+.site-pillbox-pill-remove {
+  border: 0;
+  background: transparent;
+  color: inherit;
+  padding: 0;
+  font: inherit;
+  font-size: 1rem;
+  line-height: 1;
+  cursor: pointer;
+}
+
+.field .site-pillbox-input,
+.site-pillbox .site-pillbox-input {
+  width: auto;
+  flex: 1 1 180px;
+  min-width: 180px;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  padding: 0.2rem 0;
+  font: inherit;
+  color: var(--ink);
+  box-shadow: none;
+  outline: none;
+}
+
+.field .site-pillbox-input:focus,
+.site-pillbox .site-pillbox-input:focus {
+  outline: none;
+  border: 0;
+}
+
+.site-pillbox-help {
+  margin: 0;
+  color: var(--ink-soft);
+  font-size: 0.82rem;
+  line-height: 1.45;
+}
+
 .dual-input-row {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));

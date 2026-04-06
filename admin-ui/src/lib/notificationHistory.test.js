@@ -49,4 +49,14 @@ describe('notificationHistory helpers', () => {
 
     expect(notificationHistoriesEqual(left, right)).toBe(true)
   })
+
+  it('normalizes grouped repeat counts and falls back to 1 for invalid values', () => {
+    const [grouped, fallback] = normalizeNotificationHistory([
+      { id: 'grouped', message: 'Load failed', createdAt: 1, repeatCount: 5 },
+      { id: 'fallback', message: 'Saved', createdAt: 2, repeatCount: 0 }
+    ])
+
+    expect(grouped.repeatCount).toBe(5)
+    expect(fallback.repeatCount).toBe(1)
+  })
 })

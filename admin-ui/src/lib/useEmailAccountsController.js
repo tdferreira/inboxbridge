@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { apiErrorText } from './api'
 import { isOauthRevokedError } from './formatters'
 import { pollErrorNotification, translatedNotification } from './notifications'
@@ -18,6 +18,8 @@ const DEFAULT_SOURCE_POLLING_FORM = {
   effectiveFetchWindow: 50,
   isDirty: false
 }
+
+const FOLDER_FETCH_RETRY_WINDOW_MS = 2000
 
 function normalizeLoadedEmailAccount(emailAccount) {
   const emailAccountId = emailAccount?.emailAccountId || emailAccount?.emailAccountId || ''
@@ -130,6 +132,8 @@ export function useEmailAccountsController({
   const [showFetcherPollingDialog, setShowFetcherPollingDialog] = useState(false)
   const [fetcherPollingTarget, setFetcherPollingTarget] = useState(null)
   const [fetcherPollingForm, setFetcherPollingForm] = useState(DEFAULT_SOURCE_POLLING_FORM)
+  const folderFetchSuccessSignatureRef = useRef('')
+  const folderFetchAttemptRef = useRef({ signature: '', startedAt: 0 })
 
   const visibleFetchers = useMemo(() => {
     const databaseFetchers = userEmailAccounts.map((emailAccount) => ({
@@ -228,6 +232,7 @@ export function useEmailAccountsController({
       const next = normalizeEmailAccountForm(typeof updater === 'function' ? updater(current) : updater, authOptions)
       if (sourceFolderSignature(current) !== sourceFolderSignature(next)) {
         setEmailAccountFolders([])
+        folderFetchSuccessSignatureRef.current = ''
       }
       return next
     })
@@ -242,6 +247,8 @@ export function useEmailAccountsController({
     setEmailAccountDuplicateError('')
     setEmailAccountFolders([])
     setEmailAccountTestResult(null)
+    folderFetchSuccessSignatureRef.current = ''
+    folderFetchAttemptRef.current = { signature: '', startedAt: 0 }
     setEmailAccountForm(DEFAULT_EMAIL_ACCOUNT_FORM)
     setShowFetcherDialog(true)
   }
@@ -249,6 +256,8 @@ export function useEmailAccountsController({
   function editEmailAccount(emailAccount) {
     setEmailAccountFolders([])
     setEmailAccountTestResult(null)
+    folderFetchSuccessSignatureRef.current = ''
+    folderFetchAttemptRef.current = { signature: '', startedAt: 0 }
     handleEmailAccountFormChange({
       originalEmailAccountId: emailAccount.emailAccountId,
       emailAccountId: emailAccount.emailAccountId,
@@ -276,6 +285,8 @@ export function useEmailAccountsController({
   function closeFetcherDialog() {
     setEmailAccountFolders([])
     setEmailAccountTestResult(null)
+    folderFetchSuccessSignatureRef.current = ''
+    folderFetchAttemptRef.current = { signature: '', startedAt: 0 }
     setShowFetcherDialog(false)
   }
 
@@ -287,6 +298,8 @@ export function useEmailAccountsController({
       return []
     }
     setEmailAccountFoldersLoading(true)
+    const signature = sourceFolderSignature(formOverride)
+    folderFetchAttemptRef.current = { signature, startedAt: Date.now() }
     try {
       const response = await fetch('/api/app/email-accounts/folders', {
         method: 'POST',
@@ -299,6 +312,7 @@ export function useEmailAccountsController({
       const folderPayload = await response.json()
       const folders = Array.isArray(folderPayload?.folders) ? folderPayload.folders : []
       setEmailAccountFolders(folders)
+      folderFetchSuccessSignatureRef.current = signature
       return folders
     } catch (err) {
       setEmailAccountFolders([])
@@ -315,6 +329,42 @@ export function useEmailAccountsController({
     } finally {
       setEmailAccountFoldersLoading(false)
     }
+  }
+
+  function ensureEmailAccountFoldersForForm(formOverride = emailAccountForm, options = {}) {
+    const { suppressErrors = true } = options
+    const signature = sourceFolderSignature(formOverride)
+    const now = Date.now()
+    const lastAttempt = folderFetchAttemptRef.current
+    if (
+      formOverride.protocol !== 'IMAP'
+      || emailAccountFoldersLoading
+      || (emailAccountFolders.length > 0 && folderFetchSuccessSignatureRef.current === signature)
+      || folderFetchSuccessSignatureRef.current === signature
+      || (lastAttempt.signature === signature && now - lastAttempt.startedAt < FOLDER_FETCH_RETRY_WINDOW_MS)
+    ) {
+      return Promise.resolve(emailAccountFolders)
+    }
+    return loadEmailAccountFolders(formOverride, { suppressErrors })
+  }
+
+  function handleFolderInputFocus() {
+    if (!showFetcherDialog) {
+      return
+    }
+    ensureEmailAccountFoldersForForm(emailAccountForm, { suppressErrors: true }).catch(() => {})
+  }
+
+  function handleFolderInputActivity(nextValue = '') {
+    if (
+      !showFetcherDialog
+      || emailAccountFolders.length > 0
+      || emailAccountFoldersLoading
+      || String(nextValue).trim().length !== 1
+    ) {
+      return
+    }
+    ensureEmailAccountFoldersForForm(emailAccountForm, { suppressErrors: true }).catch(() => {})
   }
 
   function startGoogleSourceOAuth(sourceId) {
@@ -405,9 +455,9 @@ export function useEmailAccountsController({
   }
 
   async function upsertEmailAccountForm(options = {}) {
-    const { connectMicrosoftAfterSave = false } = options
-    const normalizedEmailAccountId = emailAccountForm.emailAccountId.trim()
-    const originalEmailAccountId = emailAccountForm.originalEmailAccountId.trim()
+    const { connectMicrosoftAfterSave = false, formOverride = emailAccountForm } = options
+    const normalizedEmailAccountId = formOverride.emailAccountId.trim()
+    const originalEmailAccountId = formOverride.originalEmailAccountId.trim()
     const duplicateFetcher = visibleFetchers.find((fetcher) => (
       fetcher.emailAccountId === normalizedEmailAccountId && fetcher.emailAccountId !== originalEmailAccountId
     ))
@@ -423,7 +473,7 @@ export function useEmailAccountsController({
         const response = await fetch('/api/app/email-accounts', {
           method: 'PUT',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify(buildEmailAccountRequestPayload(emailAccountForm))
+          body: JSON.stringify(buildEmailAccountRequestPayload(formOverride))
         })
         if (!response.ok) {
           throw new Error(await apiErrorText(response, errorText('saveMailFetcher')))
@@ -432,15 +482,15 @@ export function useEmailAccountsController({
         setEmailAccountDuplicateError('')
         setEmailAccountTestResult(null)
         if (!connectMicrosoftAfterSave) {
-          pushNotification({ message: translatedNotification('notifications.emailAccountSaved', { emailAccountId: emailAccountForm.emailAccountId }), targetId: 'source-email-accounts-section', tone: 'success' })
+          pushNotification({ message: translatedNotification('notifications.emailAccountSaved', { emailAccountId: formOverride.emailAccountId }), targetId: 'source-email-accounts-section', tone: 'success' })
           setEmailAccountForm(DEFAULT_EMAIL_ACCOUNT_FORM)
           setShowFetcherDialog(false)
           await loadAppData()
         } else {
           pushNotification({
             message: translatedNotification('notifications.emailAccountSavedStartingProviderOAuth', {
-              emailAccountId: payload.emailAccountId || payload.emailAccountId || emailAccountForm.emailAccountId,
-              provider: emailAccountForm.oauthProvider === 'GOOGLE'
+              emailAccountId: payload.emailAccountId || payload.emailAccountId || formOverride.emailAccountId,
+              provider: formOverride.oauthProvider === 'GOOGLE'
                 ? translateProviderLabel('GOOGLE')
                 : translateProviderLabel('MICROSOFT')
             }),
@@ -459,6 +509,15 @@ export function useEmailAccountsController({
   async function saveEmailAccount(event) {
     event.preventDefault()
     await upsertEmailAccountForm()
+  }
+
+  async function saveEmailAccountWithoutValidation() {
+    await upsertEmailAccountForm({
+      formOverride: {
+        ...emailAccountForm,
+        enabled: false
+      }
+    })
   }
 
   async function saveEmailAccountAndConnectOAuth() {
@@ -791,7 +850,7 @@ export function useEmailAccountsController({
     if (!showFetcherDialog || emailAccountForm.protocol !== 'IMAP' || !emailAccountForm.originalEmailAccountId) {
       return
     }
-    loadEmailAccountFolders(emailAccountForm, { suppressErrors: true }).catch(() => {})
+    ensureEmailAccountFoldersForForm(emailAccountForm, { suppressErrors: true }).catch(() => {})
   }, [emailAccountForm.originalEmailAccountId, emailAccountForm.protocol, showFetcherDialog])
 
   return {
@@ -816,6 +875,8 @@ export function useEmailAccountsController({
     fetcherStatsById,
     fetcherStatsLoadingId,
     handleEmailAccountFormChange,
+    handleFolderInputActivity,
+    handleFolderInputFocus,
     handleFetcherPollingFormChange,
     loadFetcherCustomRange,
     openAddFetcherDialog,
@@ -824,6 +885,7 @@ export function useEmailAccountsController({
     resetFetcherPollingSettings,
     runFetcherPoll,
     saveEmailAccount,
+    saveEmailAccountWithoutValidation,
     saveEmailAccountAndConnectOAuth,
     saveFetcherPollingSettings,
     showFetcherDialog,

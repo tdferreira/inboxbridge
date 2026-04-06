@@ -73,6 +73,9 @@ public class MicrosoftOAuthService {
     @Inject
     MailboxConflictService mailboxConflictService;
 
+    @Inject
+    UserEmailAccountService userEmailAccountService;
+
     private final HttpClient httpClient = HttpClient.newBuilder()
             .connectTimeout(HTTP_TIMEOUT)
             .build();
@@ -356,6 +359,7 @@ public class MicrosoftOAuthService {
                 expiresAt,
                 token.scope(),
                 token.tokenType());
+        userEmailAccountService.enableAfterSuccessfulOauthConnection(sourceRef.sourceId());
 
         return new MicrosoftTokenExchangeResponse(
                 sourceRef.sourceId(),

@@ -175,9 +175,15 @@ public class UserEmailAccountService {
             authMethod = InboxBridgeConfig.AuthMethod.OAUTH2;
             oauthProvider = InboxBridgeConfig.OAuthProvider.MICROSOFT;
         }
+        boolean requestedEnabled = request.enabled() == null || request.enabled();
+        String persistedRefreshToken = resolvePersistableRefreshToken(existing, authMethod, oauthProvider, request.oauthRefreshToken());
+        boolean oauthConnectionPending = authMethod == InboxBridgeConfig.AuthMethod.OAUTH2
+                && oauthProvider != InboxBridgeConfig.OAuthProvider.NONE
+                && persistedRefreshToken.isBlank();
         emailAccount.userId = user.id;
         emailAccount.emailAccountId = emailAccountId;
-        emailAccount.enabled = request.enabled() == null || request.enabled();
+        emailAccount.enabled = requestedEnabled && !oauthConnectionPending;
+        emailAccount.enableAfterOauthConnect = requestedEnabled && oauthConnectionPending;
         emailAccount.protocol = parseProtocol(request.protocol());
         emailAccount.host = host;
         emailAccount.port = request.port() == null ? defaultPort(emailAccount.protocol) : request.port();
@@ -216,7 +222,7 @@ public class UserEmailAccountService {
                 emailAccount.oauthProvider,
                 emailAccount.username,
                 emailAccount.authMethod == InboxBridgeConfig.AuthMethod.PASSWORD ? resolvePassword(existing, emailAccount.authMethod, request.password()) : "",
-                emailAccount.authMethod == InboxBridgeConfig.AuthMethod.OAUTH2 ? resolveRefreshToken(existing, emailAccount.authMethod, emailAccount.oauthProvider, request.oauthRefreshToken()) : "",
+                persistedRefreshToken,
                 Optional.ofNullable(blankToNull(request.folder())),
                 emailAccount.unreadOnly,
                 emailAccount.fetchMode,
@@ -250,6 +256,57 @@ public class UserEmailAccountService {
                 emailAccount,
                 ImportStats.EMPTY,
                 sourcePollEventState(emailAccount.emailAccountId));
+    }
+
+    @Transactional
+    public boolean enableAfterSuccessfulOauthConnection(String emailAccountId) {
+        UserEmailAccount emailAccount = repository.findByEmailAccountId(emailAccountId).orElse(null);
+        if (emailAccount == null
+                || emailAccount.authMethod != InboxBridgeConfig.AuthMethod.OAUTH2
+                || !emailAccount.enableAfterOauthConnect) {
+            return false;
+        }
+
+        RuntimeEmailAccount candidate = new RuntimeEmailAccount(
+                emailAccount.emailAccountId,
+                "USER",
+                emailAccount.userId,
+                null,
+                true,
+                emailAccount.protocol,
+                emailAccount.host,
+                emailAccount.port,
+                emailAccount.tls,
+                emailAccount.authMethod,
+                emailAccount.oauthProvider,
+                emailAccount.username,
+                "",
+                decryptRefreshToken(emailAccount),
+                Optional.ofNullable(emailAccount.folderName),
+                emailAccount.unreadOnly,
+                emailAccount.fetchMode == null ? SourceFetchMode.POLLING : emailAccount.fetchMode,
+                Optional.ofNullable(emailAccount.customLabel),
+                storedPostPollSettings(emailAccount),
+                null);
+        // UI-managed OAuth sources save disabled until a provider grant exists.
+        // Flip them on only after the freshly stored credential passes the same
+        // mailbox validation path that the dialog uses for explicit tests.
+        if (candidate.oauthRefreshToken().isBlank()) {
+            return false;
+        }
+        if (mailboxConflictService.conflictsWithCurrentDestination(emailAccount.userId, candidate)) {
+            return false;
+        }
+        EmailAccountConnectionTestResult validation = mailSourceClient.testConnection(candidate);
+        if (!validation.success() || !validation.authenticated() || !validation.folderAccessible()) {
+            return false;
+        }
+        emailAccount.enabled = true;
+        emailAccount.enableAfterOauthConnect = false;
+        emailAccount.updatedAt = Instant.now();
+        repository.persist(emailAccount);
+        notifySourceMailboxConfigurationChanged(emailAccount.emailAccountId);
+        return true;
     }
 
     @Transactional
@@ -622,6 +679,26 @@ public class UserEmailAccountService {
             }
         }
         throw new IllegalArgumentException("OAuth refresh token is required or connect provider OAuth first");
+    }
+
+    private String resolvePersistableRefreshToken(
+            UserEmailAccount existing,
+            InboxBridgeConfig.AuthMethod authMethod,
+            InboxBridgeConfig.OAuthProvider oauthProvider,
+            String oauthRefreshToken) {
+        if (authMethod != InboxBridgeConfig.AuthMethod.OAUTH2 || oauthProvider == InboxBridgeConfig.OAuthProvider.NONE) {
+            return "";
+        }
+        if (oauthRefreshToken != null && !oauthRefreshToken.isBlank()) {
+            return oauthRefreshToken;
+        }
+        if (existing != null) {
+            String stored = decryptRefreshToken(existing);
+            if (!stored.isBlank()) {
+                return stored;
+            }
+        }
+        return "";
     }
 
     private String requireNonBlank(String value, String label) {

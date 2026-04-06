@@ -13,6 +13,7 @@ function Banner({
   focusLabel = 'Focus the related section',
   onDismiss,
   onFocus,
+  repeatCount = 1,
   title,
   tone = 'success'
 }) {
@@ -47,6 +48,7 @@ function Banner({
       title={title}
     >
       <div className="app-banner-content">
+        {repeatCount > 1 ? <span className="app-banner-repeat-count" aria-label={`Repeated ${repeatCount} times`}>×{repeatCount}</span> : null}
         {children}
       </div>
       <div className="app-banner-actions" onClick={(event) => event.stopPropagation()} onKeyDown={(event) => event.stopPropagation()}>

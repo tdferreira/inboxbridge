@@ -39,6 +39,12 @@ describe('Banner', () => {
     expect(onDismiss).toHaveBeenCalledTimes(1)
   })
 
+  it('renders a repeat-count badge when the same notification was grouped several times', () => {
+    render(<Banner repeatCount={4} tone="warning">Repeated warning</Banner>)
+
+    expect(screen.getByText('×4')).toBeInTheDocument()
+  })
+
   it('makes the whole banner clickable without letting action buttons trigger focus', async () => {
     const onDismiss = vi.fn()
     const onFocus = vi.fn()

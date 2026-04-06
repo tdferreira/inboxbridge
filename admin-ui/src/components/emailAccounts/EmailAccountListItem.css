@@ -2,6 +2,7 @@
   padding: 18px;
   display: grid;
   gap: 14px;
+  min-width: 0;
 }
 
 .fetcher-list-item-summary {
@@ -9,6 +10,7 @@
   grid-template-columns: minmax(0, 1fr) auto;
   gap: 12px;
   align-items: start;
+  min-width: 0;
 }
 
 .fetcher-list-item-main {
@@ -28,6 +30,27 @@
     background-color 140ms ease,
     box-shadow 140ms ease,
     transform 140ms ease;
+  min-width: 0;
+}
+
+.fetcher-list-item-main > div,
+.fetcher-list-item-summary > div,
+.fetcher-list-item-actions,
+.fetcher-list-item-details {
+  min-width: 0;
+}
+
+.fetcher-list-item-main > div {
+  width: 100%;
+}
+
+.fetcher-list-item-main .section-copy,
+.fetcher-list-item-title-row strong,
+.fetcher-list-item-details dd,
+.fetcher-list-item-details .muted-box,
+.fetcher-list-item-details .section-copy {
+  overflow-wrap: anywhere;
+  white-space: normal;
 }
 
 .fetcher-list-item-main:hover:not(:disabled),
@@ -111,7 +134,14 @@
     flex-direction: column;
   }
 
+  .fetcher-list-item-actions {
+    width: 100%;
+    justify-content: flex-end;
+    flex-wrap: wrap;
+  }
+
   .fetcher-list-item-menu {
     justify-self: end;
+    width: 100%;
   }
 }

@@ -16,6 +16,8 @@ import java.util.Optional;
 import org.junit.jupiter.api.Test;
 
 import dev.inboxbridge.domain.ImapCheckpoint;
+import dev.inboxbridge.persistence.SourceImapCheckpoint;
+import dev.inboxbridge.persistence.SourceImapCheckpointRepository;
 import dev.inboxbridge.persistence.SourcePollingState;
 import dev.inboxbridge.persistence.SourcePollingStateRepository;
 import jakarta.transaction.Transactional;
@@ -183,6 +185,22 @@ class SourcePollingStateServiceTest {
     }
 
     @Test
+    void recordImapCheckpointKeepsIndependentStatePerFolder() {
+        SourcePollingStateService service = service();
+
+        service.recordImapCheckpoint("fetcher-1", "user-destination:7", "INBOX", 44L, 101L, Instant.parse("2026-03-26T12:11:00Z"));
+        service.recordImapCheckpoint("fetcher-1", "user-destination:7", "Projects/2026", 77L, 205L, Instant.parse("2026-03-26T12:12:00Z"));
+
+        ImapCheckpoint inbox = service.imapCheckpoint("fetcher-1", "user-destination:7", "INBOX").orElseThrow();
+        ImapCheckpoint projects = service.imapCheckpoint("fetcher-1", "user-destination:7", "Projects/2026").orElseThrow();
+
+        assertEquals(44L, inbox.uidValidity());
+        assertEquals(101L, inbox.lastSeenUid());
+        assertEquals(77L, projects.uidValidity());
+        assertEquals(205L, projects.lastSeenUid());
+    }
+
+    @Test
     void recordPopCheckpointStoresAndReturnsUidl() {
         SourcePollingStateService service = service();
 
@@ -212,6 +230,7 @@ class SourcePollingStateServiceTest {
     private SourcePollingStateService service() {
         SourcePollingStateService service = new SourcePollingStateService();
         service.repository = new InMemorySourcePollingStateRepository();
+        service.imapCheckpointRepository = new InMemorySourceImapCheckpointRepository();
         service.pollingSettingsService = new FakePollingSettingsService();
         return service;
     }
@@ -258,6 +277,28 @@ class SourcePollingStateServiceTest {
                     6,
                     0.2d,
                     Duration.ofSeconds(30));
+        }
+    }
+
+    private static final class InMemorySourceImapCheckpointRepository extends SourceImapCheckpointRepository {
+        private final List<SourceImapCheckpoint> checkpoints = new ArrayList<>();
+        private long sequence = 1L;
+
+        @Override
+        public Optional<SourceImapCheckpoint> findByScope(String sourceId, String destinationKey, String folderName) {
+            return checkpoints.stream()
+                    .filter(checkpoint -> sourceId.equals(checkpoint.sourceId))
+                    .filter(checkpoint -> destinationKey.equals(checkpoint.destinationKey))
+                    .filter(checkpoint -> checkpoint.folderName != null && checkpoint.folderName.equalsIgnoreCase(folderName))
+                    .findFirst();
+        }
+
+        @Override
+        public void persist(SourceImapCheckpoint entity) {
+            if (entity.id == null) {
+                entity.id = sequence++;
+                checkpoints.add(entity);
+            }
         }
     }
 }

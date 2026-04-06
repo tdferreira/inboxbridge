@@ -15,6 +15,7 @@ import org.jboss.logging.Logger;
 
 import dev.inboxbridge.config.InboxBridgeConfig;
 import dev.inboxbridge.domain.RuntimeEmailAccount;
+import dev.inboxbridge.domain.SourceMailboxFolders;
 import dev.inboxbridge.domain.SourceFetchMode;
 import dev.inboxbridge.dto.PollRunError;
 import dev.inboxbridge.dto.PollRunResult;
@@ -70,7 +71,8 @@ public class ImapIdleWatchService {
     @PreDestroy
     void shutdown() {
         if (imapIdleHealthService != null) {
-            new ArrayList<>(handles.keySet()).forEach(imapIdleHealthService::clear);
+            new ArrayList<>(handles.entrySet()).forEach(entry ->
+                    imapIdleHealthService.clear(entry.getValue().source.id(), entry.getKey()));
         }
         handles.values().forEach(IdleWatchHandle::stop);
         handles.clear();
@@ -128,28 +130,30 @@ public class ImapIdleWatchService {
 
     synchronized void refreshWatches() {
         Instant now = Instant.now();
-        Map<String, RuntimeEmailAccount> desired = currentIdleSources().stream()
-                .collect(java.util.stream.Collectors.toMap(RuntimeEmailAccount::id, source -> source));
+        Map<String, WatchTarget> desired = currentIdleSources().stream()
+                .flatMap(source -> source.sourceFolders().stream()
+                        .map(folderName -> new WatchTarget(watchKey(source.id(), folderName), source, folderName)))
+                .collect(java.util.stream.Collectors.toMap(WatchTarget::watchKey, target -> target));
 
         for (Map.Entry<String, IdleWatchHandle> entry : new ArrayList<>(handles.entrySet())) {
-            RuntimeEmailAccount next = desired.get(entry.getKey());
-            if (next == null || !entry.getValue().matches(next)) {
+            WatchTarget next = desired.get(entry.getKey());
+            if (next == null || !entry.getValue().matches(next.source(), next.folderName())) {
                 entry.getValue().stop();
                 handles.remove(entry.getKey());
                 if (imapIdleHealthService != null) {
-                    imapIdleHealthService.clear(entry.getKey());
+                    imapIdleHealthService.clear(entry.getValue().source.id(), entry.getKey());
                 }
             }
         }
 
-        for (RuntimeEmailAccount source : desired.values()) {
+        for (WatchTarget target : desired.values()) {
             if (imapIdleHealthService != null) {
-                imapIdleHealthService.ensureTracked(source.id(), now);
+                imapIdleHealthService.ensureTracked(target.source().id(), target.watchKey(), now);
             }
-            handles.computeIfAbsent(source.id(), ignored -> {
-                IdleWatchHandle handle = new IdleWatchHandle(source);
+            handles.computeIfAbsent(target.watchKey(), ignored -> {
+                IdleWatchHandle handle = new IdleWatchHandle(target.source(), target.folderName());
                 handle.start();
-                pendingSources.add(source.id());
+                pendingSources.add(target.source().id());
                 return handle;
             });
         }
@@ -165,21 +169,23 @@ public class ImapIdleWatchService {
 
     private final class IdleWatchHandle {
         private final RuntimeEmailAccount source;
+        private final String watchedFolderName;
         private final AtomicBoolean active = new AtomicBoolean(true);
         private volatile Thread thread;
         private volatile Store store;
         private volatile Folder folder;
         private volatile int lastKnownMessageCount = -1;
 
-        private IdleWatchHandle(RuntimeEmailAccount source) {
+        private IdleWatchHandle(RuntimeEmailAccount source, String watchedFolderName) {
             this.source = source;
+            this.watchedFolderName = watchedFolderName;
         }
 
         private void start() {
             thread = Thread.startVirtualThread(this::runLoop);
         }
 
-        private boolean matches(RuntimeEmailAccount candidate) {
+        private boolean matches(RuntimeEmailAccount candidate, String candidateFolderName) {
             return source.id().equals(candidate.id())
                     && source.enabled() == candidate.enabled()
                     && source.protocol() == candidate.protocol()
@@ -192,7 +198,7 @@ public class ImapIdleWatchService {
                     && source.username().equals(candidate.username())
                     && source.password().equals(candidate.password())
                     && source.oauthRefreshToken().equals(candidate.oauthRefreshToken())
-                    && source.folder().orElse("INBOX").equals(candidate.folder().orElse("INBOX"));
+                    && watchedFolderName.equals(candidateFolderName);
         }
 
         private void stop() {
@@ -226,7 +232,7 @@ public class ImapIdleWatchService {
         }
 
         private void watchUntilInterrupted() {
-            String folderName = source.folder().orElse("INBOX");
+            String folderName = watchedFolderName;
             try {
                 Session session = Session.getInstance(idleProperties(source));
                 store = session.getStore(source.tls() ? "imaps" : "imap");
@@ -238,7 +244,7 @@ public class ImapIdleWatchService {
                 folder.open(Folder.READ_ONLY);
                 lastKnownMessageCount = safeMessageCount(folder);
                 if (imapIdleHealthService != null) {
-                    imapIdleHealthService.markConnected(source.id(), Instant.now());
+                    imapIdleHealthService.markConnected(source.id(), watchKey(source.id(), folderName), Instant.now());
                 }
                 LOG.infof("IMAP IDLE watcher connected for %s on %s", source.id(), folderName);
                 if (!(folder instanceof IMAPFolder imapFolder)) {
@@ -261,7 +267,7 @@ public class ImapIdleWatchService {
                 throw new IllegalStateException("IMAP IDLE watcher failed for source " + source.id(), error);
             } finally {
                 if (active.get() && imapIdleHealthService != null) {
-                    imapIdleHealthService.markDisconnected(source.id(), Instant.now());
+                    imapIdleHealthService.markDisconnected(source.id(), watchKey(source.id(), folderName), Instant.now());
                 }
                 closeQuietly(folder);
                 closeQuietly(store);
@@ -317,6 +323,13 @@ public class ImapIdleWatchService {
             return "<unknown>";
         }
         return folder.getFullName();
+    }
+
+    private String watchKey(String sourceId, String folderName) {
+        return sourceId + "\n" + folderName;
+    }
+
+    private record WatchTarget(String watchKey, RuntimeEmailAccount source, String folderName) {
     }
 
     private Properties idleProperties(RuntimeEmailAccount source) {

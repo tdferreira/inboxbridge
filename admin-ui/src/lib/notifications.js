@@ -33,3 +33,30 @@ export function resolveNotificationContent(content, language = 'en') {
   }
   return String(content.message || '')
 }
+
+export function notificationDeduplicationKey(notification, language = 'en') {
+  if (!notification || typeof notification !== 'object') {
+    return null
+  }
+
+  if (typeof notification.groupKey === 'string' && notification.groupKey.trim()) {
+    return `group:${notification.groupKey.trim()}`
+  }
+
+  const tone = notification.tone || 'success'
+  if (tone !== 'error' && tone !== 'warning') {
+    return null
+  }
+
+  const resolvedMessage = resolveNotificationContent(notification.message, language).trim()
+  const resolvedCopyText = resolveNotificationContent(
+    notification.copyText ?? notification.message,
+    language
+  ).trim()
+
+  if (!resolvedMessage && !resolvedCopyText) {
+    return null
+  }
+
+  return `tone:${tone}|message:${resolvedMessage}|copy:${resolvedCopyText}`
+}

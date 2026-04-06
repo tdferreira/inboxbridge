@@ -161,6 +161,8 @@ export function buildUserWorkspaceSections({
           onDeleteEmailAccount={(emailAccountId) => emailAccounts.deleteEmailAccount(emailAccountId, openConfirmation)}
           onEditEmailAccount={emailAccounts.editEmailAccount}
           onEmailAccountFormChange={emailAccounts.handleEmailAccountFormChange}
+          onFolderInputActivity={emailAccounts.handleFolderInputActivity}
+          onFolderInputFocus={emailAccounts.handleFolderInputFocus}
           onFetcherPollingFormChange={emailAccounts.handleFetcherPollingFormChange}
           onFetcherToggleExpand={emailAccounts.refreshFetcherState}
           onLoadFetcherCustomRange={emailAccounts.loadFetcherCustomRange}
@@ -168,6 +170,7 @@ export function buildUserWorkspaceSections({
           onRunFetcherPoll={emailAccounts.runFetcherPoll}
           onToggleEmailAccountEnabled={emailAccounts.toggleEmailAccountEnabled}
           onSaveEmailAccount={emailAccounts.saveEmailAccount}
+          onSaveEmailAccountWithoutValidation={emailAccounts.saveEmailAccountWithoutValidation}
           onSaveEmailAccountAndConnectOAuth={emailAccounts.saveEmailAccountAndConnectOAuth}
           onSaveFetcherPollingSettings={emailAccounts.saveFetcherPollingSettings}
           onTestEmailAccountConnection={emailAccounts.testEmailAccountConnection}

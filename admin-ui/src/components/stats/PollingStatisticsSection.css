@@ -1,6 +1,7 @@
 .polling-statistics-section {
   display: grid;
   gap: 1rem;
+  min-width: 0;
   padding: 1.25rem;
 }
 
@@ -42,10 +43,15 @@
 .polling-statistics-grid {
   display: grid;
   gap: 1rem;
-  grid-template-columns: repeat(auto-fit, minmax(16rem, 1fr));
+  grid-template-columns: repeat(auto-fit, minmax(min(16rem, 100%), 1fr));
+}
+
+.polling-statistics-grid > * {
+  min-width: 0;
 }
 
 .polling-statistics-card {
+  min-width: 0;
   padding: 1rem;
 }
 
@@ -76,6 +82,11 @@
 
 .polling-statistics-breakdown strong {
   flex-shrink: 0;
+}
+
+.polling-statistics-section .system-dashboard-summary,
+.polling-statistics-section .section-copy {
+  min-width: 0;
 }
 
 @media (max-width: 720px) {

@@ -17,6 +17,7 @@ const configuredInput = {
   sourceOauthProvider: 'MICROSOFT',
   sourceUsername: 'owner@example.com',
   sourceOauthRefreshToken: 'refresh-token',
+  sourceFolder: 'INBOX, Projects/2026',
   sourceUnreadOnly: true
 }
 
@@ -39,6 +40,7 @@ assert.match(envText, /MAIL_ACCOUNT_0__ID=outlook-main/)
 assert.match(envText, /MAIL_ACCOUNT_0__AUTH_METHOD=OAUTH2/)
 assert.match(envText, /MAIL_ACCOUNT_0__OAUTH_PROVIDER=MICROSOFT/)
 assert.match(envText, /MAIL_ACCOUNT_0__FETCH_MODE=IDLE/)
+assert.match(envText, /MAIL_ACCOUNT_0__FOLDER=INBOX, Projects\/2026/)
 assert.doesNotMatch(envText, /MAIL_ACCOUNT_0__PASSWORD=/)
 
 const popEnv = generateEnvText({
@@ -112,6 +114,8 @@ assert.notEqual(translate('es', 'band.remember.three'), translate('en', 'band.re
 const siteHtml = fs.readFileSync(new URL('./index.html', import.meta.url), 'utf8')
 const siteCss = fs.readFileSync(new URL('./styles.css', import.meta.url), 'utf8')
 assert.match(siteHtml, /data-language-picker/)
+assert.match(siteHtml, /POP UIDL checkpoints/)
+assert.match(siteHtml, /multi-folder IMAP/)
 assert.match(siteHtml, /language-menu-picker language-menu-picker-fallback/)
 assert.match(siteHtml, /id="architecture"/)
 assert.match(siteHtml, /class="architecture-diagram"/)
@@ -177,6 +181,10 @@ assert.match(siteHtml, /id="sourceOauthProvider"/)
 assert.match(siteHtml, /id="sourceUsername"/)
 assert.match(siteHtml, /id="sourcePassword"/)
 assert.match(siteHtml, /id="sourceFolder"/)
+assert.match(siteHtml, /id="sourceFolderPillbox"/)
+assert.match(siteHtml, /data-pillbox-hidden-input="sourceFolder"/)
+assert.match(siteHtml, /class="site-pillbox-input"/)
+assert.match(siteHtml, /comma-separated IMAP folder list/)
 assert.match(siteHtml, /id="sourceFetchMode"/)
 assert.match(siteHtml, /data-password-only/)
 assert.match(siteHtml, /syncStaticConditionalFields/)
@@ -187,5 +195,10 @@ assert.match(siteHtml, /Computed public base URL help/)
 assert.match(siteHtml, /Fetch mode help/)
 assert.match(siteCss, /\.optional-block\s*\{[^}]*overflow:\s*visible;/s)
 assert.match(siteCss, /\.optional-block\s*\{[^}]*z-index:\s*1;/s)
+assert.match(siteCss, /\.site-pillbox-shell\s*\{/)
+assert.match(siteCss, /\.site-pillbox-values\s*\{/)
+assert.match(siteCss, /\.(field\s+)?\.?site-pillbox-input|\.field \.site-pillbox-input/s)
+assert.match(siteCss, /\.field \.site-pillbox-input[^}]*width:\s*auto;/s)
+assert.match(siteCss, /\.field \.site-pillbox-input[^}]*border:\s*0;/s)
 
 console.log('site config generator ok')

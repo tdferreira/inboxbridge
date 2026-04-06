@@ -1,4 +1,5 @@
 export const MAX_NOTIFICATION_HISTORY = 50
+export const NOTIFICATION_GROUPING_WINDOW_MS = 8_000
 
 export function normalizeNotificationHistory(notifications) {
   if (!Array.isArray(notifications) || !notifications.length) {
@@ -22,6 +23,9 @@ export function normalizeNotificationHistory(notifications) {
         floatingVisible,
         groupKey: typeof notification.groupKey === 'string' && notification.groupKey ? notification.groupKey : null,
         id: notification.id.trim(),
+        repeatCount: Number.isFinite(notification.repeatCount) && notification.repeatCount > 1
+          ? Math.floor(notification.repeatCount)
+          : 1,
         message: notification.message,
         targetId: typeof notification.targetId === 'string' && notification.targetId ? notification.targetId : null,
         tone: normalizeNotificationTone(notification.tone)

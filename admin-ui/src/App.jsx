@@ -24,8 +24,17 @@ import { AUTH_EXPIRED_EVENT, apiErrorText, installSecureApiFetch } from './lib/a
 import { requestSessionDeviceLocation } from './lib/api'
 import { buildSetupGuideState } from './lib/setupGuide'
 import { normalizeDestinationProviderConfig } from './lib/emailProviderPresets'
-import { pollErrorNotification, resolveNotificationContent, translatedNotification } from './lib/notifications'
-import { normalizeNotificationHistory, notificationHistoriesEqual } from './lib/notificationHistory'
+import {
+  notificationDeduplicationKey,
+  pollErrorNotification,
+  resolveNotificationContent,
+  translatedNotification
+} from './lib/notifications'
+import {
+  normalizeNotificationHistory,
+  NOTIFICATION_GROUPING_WINDOW_MS,
+  notificationHistoriesEqual
+} from './lib/notificationHistory'
 import { isRecentSessionTargetId, isSourceEmailAccountTargetId } from './lib/sectionTargets'
 import { normalizeLocale, translate } from './lib/i18n'
 import { enforceHttpsIfNeeded } from './lib/httpsRedirect'
@@ -552,32 +561,53 @@ function AppContent({ timings = DEFAULT_APP_TIMINGS }) {
     targetId = null,
     tone = 'success'
   }) {
-    const id = `${Date.now()}-${Math.random().toString(36).slice(2)}`
+    const now = Date.now()
+    const id = `${now}-${Math.random().toString(36).slice(2)}`
     const resolvedAutoCloseMs = typeof autoCloseMs === 'number'
       ? autoCloseMs
       : (NOTIFICATION_AUTO_CLOSE_MS[tone] || NOTIFICATION_AUTO_CLOSE_MS.success)
-    setNotifications((current) => normalizeNotificationHistory([
-      ...current.filter((notification) => {
+    const nextNotification = {
+      autoCloseMs: resolvedAutoCloseMs,
+      copyText: copyText ?? message,
+      createdAt: now,
+      floatingVisible: true,
+      groupKey,
+      id,
+      message,
+      repeatCount: 1,
+      targetId,
+      tone
+    }
+    const deduplicationKey = notificationDeduplicationKey(nextNotification, language)
+    setNotifications((current) => {
+      let aggregated = false
+      const nextItems = current.filter((notification) => {
         if (replaceGroup && groupKey && notification.groupKey === groupKey) {
           return false
         }
         if (notification.groupKey && supersedesGroupKeys.includes(notification.groupKey)) {
           return false
         }
+        if (
+          deduplicationKey
+          && notificationDeduplicationKey(notification, language) === deduplicationKey
+        ) {
+          if (
+            !aggregated
+            && now - notification.createdAt <= NOTIFICATION_GROUPING_WINDOW_MS
+          ) {
+            aggregated = true
+            nextNotification.repeatCount = Math.max(1, notification.repeatCount || 1) + 1
+          }
+          return false
+        }
         return true
-      }),
-      {
-        autoCloseMs: resolvedAutoCloseMs,
-        copyText: copyText ?? message,
-        createdAt: Date.now(),
-        floatingVisible: true,
-        groupKey,
-        id,
-        message,
-        targetId,
-        tone
-      }
-    ]))
+      })
+      return normalizeNotificationHistory([
+        ...nextItems,
+        nextNotification
+      ])
+    })
   }
 
   function resolveNotificationText(notification) {
@@ -1926,6 +1956,7 @@ function AppContent({ timings = DEFAULT_APP_TIMINGS }) {
               dismissLabel={t('common.dismissNotification')}
               focusLabel={t('common.focusSection')}
               tone={notification.tone}
+              repeatCount={notification.repeatCount}
               title={notificationTimestamp(notification)}
             >
               {resolveNotificationText(notification)}

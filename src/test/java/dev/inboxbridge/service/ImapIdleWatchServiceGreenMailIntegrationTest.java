@@ -84,6 +84,26 @@ class ImapIdleWatchServiceGreenMailIntegrationTest {
     }
 
     @Test
+    void idleWatcherAlsoWatchesSecondaryConfiguredFolders() throws Exception {
+        RecordingPollingService pollingService = new RecordingPollingService();
+        ImapIdleWatchService watchService = new ImapIdleWatchService();
+        watchService.runtimeEmailAccountService = new FixedRuntimeEmailAccountService(List.of(runtimeAccount("INBOX, Projects/2026", SourceFetchMode.IDLE)));
+        watchService.pollingService = pollingService;
+        pollingService.watchService = watchService;
+
+        ensureFolderExists("Projects/2026");
+        watchService.refreshWatches();
+        waitForInvocations(pollingService, 1);
+        pollingService.invokedSourceIds.clear();
+
+        appendMessage("Projects/2026", "watched-project", "<watched-project@example.com>");
+        waitForInvocations(pollingService, 1);
+
+        assertEquals(List.of(SOURCE_ID), pollingService.invokedSourceIds);
+        watchService.shutdown();
+    }
+
+    @Test
     void idleWatcherRequeuesBusyRunsUntilThePollRunnerAcceptsThem() {
         BusyOncePollingService pollingService = new BusyOncePollingService();
         ImapIdleWatchService watchService = new ImapIdleWatchService();
@@ -117,6 +137,10 @@ class ImapIdleWatchServiceGreenMailIntegrationTest {
     }
 
     private RuntimeEmailAccount runtimeAccount(SourceFetchMode fetchMode) {
+        return runtimeAccount("INBOX", fetchMode);
+    }
+
+    private RuntimeEmailAccount runtimeAccount(String sourceFolders, SourceFetchMode fetchMode) {
         return new RuntimeEmailAccount(
                 SOURCE_ID,
                 "USER",
@@ -132,7 +156,7 @@ class ImapIdleWatchServiceGreenMailIntegrationTest {
                 SOURCE_USERNAME,
                 SOURCE_PASSWORD,
                 "",
-                Optional.of("INBOX"),
+                Optional.of(sourceFolders),
                 false,
                 fetchMode,
                 Optional.of("Imported/Test"),
@@ -140,6 +164,11 @@ class ImapIdleWatchServiceGreenMailIntegrationTest {
     }
 
     private void appendMessage(String subject, String messageId) throws Exception {
+        appendMessage("INBOX", subject, messageId);
+    }
+
+    private void appendMessage(String folderName, String subject, String messageId) throws Exception {
+        ensureFolderExists(folderName);
         Properties properties = new Properties();
         properties.put("mail.store.protocol", "imap");
         Session session = Session.getInstance(properties);
@@ -147,7 +176,7 @@ class ImapIdleWatchServiceGreenMailIntegrationTest {
         Folder folder = null;
         try {
             store.connect("127.0.0.1", sourceMail.getImap().getPort(), SOURCE_USERNAME, SOURCE_PASSWORD);
-            folder = store.getFolder("INBOX");
+            folder = store.getFolder(folderName);
             folder.open(Folder.READ_WRITE);
             MimeMessage message = new MimeMessage(session);
             message.setFrom(new InternetAddress("sender@example.com"));
@@ -158,6 +187,24 @@ class ImapIdleWatchServiceGreenMailIntegrationTest {
             message.setSentDate(java.util.Date.from(Instant.now()));
             message.saveChanges();
             folder.appendMessages(new Message[] { message });
+        } finally {
+            closeQuietly(folder);
+            closeQuietly(store);
+        }
+    }
+
+    private void ensureFolderExists(String folderName) throws Exception {
+        Properties properties = new Properties();
+        properties.put("mail.store.protocol", "imap");
+        Session session = Session.getInstance(properties);
+        Store store = session.getStore("imap");
+        Folder folder = null;
+        try {
+            store.connect("127.0.0.1", sourceMail.getImap().getPort(), SOURCE_USERNAME, SOURCE_PASSWORD);
+            folder = store.getFolder(folderName);
+            if (!folder.exists()) {
+                folder.create(Folder.HOLDS_MESSAGES);
+            }
         } finally {
             closeQuietly(folder);
             closeQuietly(store);

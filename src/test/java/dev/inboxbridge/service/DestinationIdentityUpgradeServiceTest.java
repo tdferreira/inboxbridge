@@ -20,6 +20,8 @@ import dev.inboxbridge.persistence.AppUser;
 import dev.inboxbridge.persistence.AppUserRepository;
 import dev.inboxbridge.persistence.ImportedMessage;
 import dev.inboxbridge.persistence.ImportedMessageRepository;
+import dev.inboxbridge.persistence.SourceImapCheckpoint;
+import dev.inboxbridge.persistence.SourceImapCheckpointRepository;
 import dev.inboxbridge.persistence.SourcePollingState;
 import dev.inboxbridge.persistence.SourcePollingStateRepository;
 import dev.inboxbridge.persistence.UserEmailAccount;
@@ -48,6 +50,14 @@ class DestinationIdentityUpgradeServiceTest {
         pollingState.imapLastSeenUid = 10L;
         pollingState.popLastSeenUidl = "uidl-1";
 
+        SourceImapCheckpoint imapCheckpoint = new SourceImapCheckpoint();
+        imapCheckpoint.sourceId = "source-1";
+        imapCheckpoint.destinationKey = "user-destination:7";
+        imapCheckpoint.folderName = "Projects/2026";
+        imapCheckpoint.uidValidity = 77L;
+        imapCheckpoint.lastSeenUid = 30L;
+        imapCheckpoint.updatedAt = Instant.parse("2026-04-06T11:30:00Z");
+
         ImapAppendDestinationTarget currentTarget = new ImapAppendDestinationTarget(
                 "user-destination:7",
                 7L,
@@ -67,6 +77,7 @@ class DestinationIdentityUpgradeServiceTest {
         service.userEmailAccountRepository = new FakeUserEmailAccountRepository(List.of(source));
         service.importedMessageRepository = new FakeImportedMessageRepository(List.of(importedMessage));
         service.sourcePollingStateRepository = new FakeSourcePollingStateRepository(List.of(pollingState));
+        service.sourceImapCheckpointRepository = new FakeSourceImapCheckpointRepository(List.of(imapCheckpoint));
         service.userMailDestinationConfigService = new FakeUserMailDestinationConfigService(Map.of(7L, currentTarget));
         service.systemOAuthAppSettingsService = new FakeSystemOAuthAppSettingsService();
         service.envSourceService = new FakeEnvSourceService(List.of());
@@ -77,6 +88,7 @@ class DestinationIdentityUpgradeServiceTest {
         assertEquals(expectedIdentity, importedMessage.destinationIdentityKey);
         assertEquals(expectedIdentity, pollingState.imapCheckpointDestinationKey);
         assertEquals(expectedIdentity, pollingState.popCheckpointDestinationKey);
+        assertEquals(expectedIdentity, imapCheckpoint.destinationKey);
     }
 
     @Test
@@ -373,6 +385,23 @@ class DestinationIdentityUpgradeServiceTest {
 
         @Override
         public void persist(SourcePollingState entity) {
+        }
+    }
+
+    private static final class FakeSourceImapCheckpointRepository extends SourceImapCheckpointRepository {
+        private final List<SourceImapCheckpoint> checkpoints;
+
+        private FakeSourceImapCheckpointRepository(List<SourceImapCheckpoint> checkpoints) {
+            this.checkpoints = checkpoints;
+        }
+
+        @Override
+        public List<SourceImapCheckpoint> listAll() {
+            return checkpoints;
+        }
+
+        @Override
+        public void persist(SourceImapCheckpoint entity) {
         }
     }
 

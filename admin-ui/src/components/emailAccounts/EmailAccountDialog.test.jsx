@@ -78,7 +78,7 @@ describe('EmailAccountDialog', () => {
     render(
       <EmailAccountDialog
         emailAccountForm={{
-          originalEmailAccountId: '',
+          originalEmailAccountId: 'fetcher-a',
           emailAccountId: '',
           enabled: true,
           protocol: 'IMAP',
@@ -115,7 +115,7 @@ describe('EmailAccountDialog', () => {
     render(
       <EmailAccountDialog
         emailAccountForm={{
-          originalEmailAccountId: '',
+          originalEmailAccountId: 'fetcher-a',
           emailAccountId: '',
           enabled: true,
           protocol: 'IMAP',
@@ -295,6 +295,47 @@ describe('EmailAccountDialog', () => {
     expect(screen.getByRole('button', { name: 'Adicionar' })).toBeInTheDocument()
   })
 
+  it('clicking the folder label focuses the pillbox input without removing pills', () => {
+    render(
+      <EmailAccountDialog
+        emailAccountForm={{
+          originalEmailAccountId: 'imap-main',
+          emailAccountId: 'imap-main',
+          enabled: true,
+          protocol: 'IMAP',
+          host: 'imap.example.com',
+          port: 993,
+          tls: true,
+          authMethod: 'PASSWORD',
+          oauthProvider: 'NONE',
+          username: 'user@example.com',
+          password: '',
+          oauthRefreshToken: '',
+          folder: 'INBOX, Projects/2026',
+          unreadOnly: false,
+          customLabel: '',
+          markReadAfterPoll: false,
+          postPollAction: 'NONE',
+          postPollTargetFolder: ''
+        }}
+        emailAccountFolders={['INBOX', 'Projects/2026']}
+        onApplyPreset={vi.fn()}
+        onEmailAccountFormChange={vi.fn()}
+        onClose={vi.fn()}
+        onSave={vi.fn((event) => event.preventDefault())}
+        saveLoading={false}
+        testResult={{ tone: 'success' }}
+        t={(key, params) => translate('en', key, params)}
+      />
+    )
+
+    fireEvent.click(screen.getByText('Folder'))
+
+    expect(screen.getByRole('combobox', { name: 'Folder' })).toHaveFocus()
+    expect(screen.getByText('INBOX')).toBeInTheDocument()
+    expect(screen.getByText('Projects/2026')).toBeInTheDocument()
+  })
+
   it('offers the forwarded post-poll action for IMAP accounts', () => {
     render(
       <EmailAccountDialog
@@ -329,6 +370,121 @@ describe('EmailAccountDialog', () => {
     )
 
     expect(screen.getByRole('option', { name: 'Mark source message as forwarded' })).toBeInTheDocument()
+  })
+
+  it('lets IMAP users select multiple detected folders from the generic folder pillbox', () => {
+    let emailAccountForm = {
+      originalEmailAccountId: '',
+      emailAccountId: 'source-a',
+      enabled: true,
+      protocol: 'IMAP',
+      host: 'imap.example.com',
+      port: 993,
+      tls: true,
+      authMethod: 'PASSWORD',
+      oauthProvider: 'NONE',
+      username: 'user@example.com',
+      password: '',
+      oauthRefreshToken: '',
+      folder: 'INBOX',
+      unreadOnly: false,
+      fetchMode: 'IDLE',
+      customLabel: '',
+      markReadAfterPoll: false,
+      postPollAction: 'NONE',
+      postPollTargetFolder: ''
+    }
+    const { rerender } = render(
+      <EmailAccountDialog
+        emailAccountForm={emailAccountForm}
+        emailAccountFolders={['INBOX', 'Projects/2026', 'Archive']}
+        onApplyPreset={vi.fn()}
+        onEmailAccountFormChange={(updater) => {
+          emailAccountForm = typeof updater === 'function' ? updater(emailAccountForm) : updater
+          rerenderUi()
+        }}
+        onClose={vi.fn()}
+        onSave={vi.fn((event) => event.preventDefault())}
+        saveLoading={false}
+        testResult={{ tone: 'success', message: 'Connection test succeeded.' }}
+        t={(key, params) => translate('en', key, params)}
+      />
+    )
+
+    const folderInput = screen.getByRole('combobox', { name: /^Folder/i })
+    fireEvent.change(folderInput, { target: { value: 'Pro' } })
+    fireEvent.keyDown(folderInput, { key: 'ArrowDown' })
+    fireEvent.keyDown(folderInput, { key: 'Enter' })
+
+    expect(emailAccountForm.folder).toBe('INBOX, Projects/2026')
+    expect(screen.getByText('INBOX')).toBeInTheDocument()
+    expect(screen.getByText('Projects/2026')).toBeInTheDocument()
+    expect(screen.getByText('Connection test fetched folders successfully. Start typing to pick one or more folders.')).toBeInTheDocument()
+
+    function rerenderUi() {
+      rerender(
+        <EmailAccountDialog
+          emailAccountForm={emailAccountForm}
+          emailAccountFolders={['INBOX', 'Projects/2026', 'Archive']}
+          onApplyPreset={vi.fn()}
+          onEmailAccountFormChange={(updater) => {
+            emailAccountForm = typeof updater === 'function' ? updater(emailAccountForm) : updater
+            rerenderUi()
+          }}
+          onClose={vi.fn()}
+          onSave={vi.fn((event) => event.preventDefault())}
+          saveLoading={false}
+          testResult={{ tone: 'success', message: 'Connection test succeeded.' }}
+          t={(key, params) => translate('en', key, params)}
+        />
+      )
+    }
+  })
+
+  it('forwards folder typing activity so the outer dialog controller can enrich folders', () => {
+    const onFolderInputActivity = vi.fn()
+    const onFolderInputFocus = vi.fn()
+
+    render(
+      <EmailAccountDialog
+        emailAccountForm={{
+          originalEmailAccountId: '',
+          emailAccountId: 'source-a',
+          enabled: true,
+          protocol: 'IMAP',
+          host: 'imap.example.com',
+          port: 993,
+          tls: true,
+          authMethod: 'PASSWORD',
+          oauthProvider: 'NONE',
+          username: 'user@example.com',
+          password: '',
+          oauthRefreshToken: '',
+          folder: '',
+          unreadOnly: false,
+          fetchMode: 'POLLING',
+          customLabel: '',
+          markReadAfterPoll: false,
+          postPollAction: 'NONE',
+          postPollTargetFolder: ''
+        }}
+        onApplyPreset={vi.fn()}
+        onEmailAccountFormChange={vi.fn()}
+        onFolderInputActivity={onFolderInputActivity}
+        onFolderInputFocus={onFolderInputFocus}
+        onClose={vi.fn()}
+        onSave={vi.fn((event) => event.preventDefault())}
+        saveLoading={false}
+        t={(key, params) => translate('en', key, params)}
+      />
+    )
+
+    const folderInput = screen.getByRole('combobox', { name: /^Folder/i })
+    fireEvent.focus(folderInput)
+    fireEvent.change(folderInput, { target: { value: 'In' } })
+
+    expect(onFolderInputFocus).toHaveBeenCalledTimes(1)
+    expect(onFolderInputActivity).toHaveBeenCalledWith('In')
   })
 
   it('shows translated info hints for connection test results instead of a long forwarded marker paragraph', () => {
@@ -440,7 +596,7 @@ describe('EmailAccountDialog', () => {
     render(
       <EmailAccountDialog
         emailAccountForm={{
-          originalEmailAccountId: '',
+          originalEmailAccountId: 'fetcher-a',
           emailAccountId: 'fetcher-a',
           enabled: true,
           protocol: 'IMAP',
@@ -563,6 +719,7 @@ describe('EmailAccountDialog', () => {
         onSaveAndConnectOAuth={onSaveAndConnectOAuth}
         onTestEmailAccountConnection={vi.fn()}
         saveLoading={false}
+        testResult={{ tone: 'success', message: 'Connection test succeeded.' }}
         t={(key, params) => translate('en', key, params)}
       />
     )
@@ -570,9 +727,10 @@ describe('EmailAccountDialog', () => {
     expect(screen.getByText(/save this mail account and then launch the microsoft consent flow/i)).toBeInTheDocument()
     fireEvent.click(screen.getByRole('button', { name: 'Save and Connect Microsoft' }))
     expect(onSaveAndConnectOAuth).toHaveBeenCalledTimes(1)
+    expect(screen.queryByText('Save without validating this source?')).not.toBeInTheDocument()
   })
 
-  it('uses detected IMAP folders while still allowing manual entry', () => {
+  it('lets IMAP users type custom folders directly in the pillbox before folders are loaded', () => {
     let emailAccountForm = {
       originalEmailAccountId: 'fetcher-a',
       emailAccountId: 'fetcher-a',
@@ -593,7 +751,6 @@ describe('EmailAccountDialog', () => {
 
     const { rerender } = render(
       <EmailAccountDialog
-        emailAccountFolders={['INBOX', 'Archive']}
         emailAccountForm={emailAccountForm}
         onApplyPreset={vi.fn()}
         onEmailAccountFormChange={(updater) => {
@@ -607,12 +764,297 @@ describe('EmailAccountDialog', () => {
       />
     )
 
-    expect(screen.getByRole('combobox', { name: /^Folder/i })).toHaveValue('INBOX')
-    fireEvent.click(screen.getByRole('button', { name: 'Enter folder manually' }))
-    fireEvent.change(screen.getByRole('textbox', { name: /^Folder/i }), { target: { value: 'Projects' } })
-    expect(screen.getByRole('textbox', { name: /^Folder/i })).toHaveValue('Projects')
-    fireEvent.click(screen.getByRole('button', { name: 'Use detected folders' }))
-    expect(screen.getByRole('combobox', { name: /^Folder/i })).toHaveValue('INBOX')
+    const folderInput = screen.getByRole('combobox', { name: /^Folder/i })
+    fireEvent.change(folderInput, { target: { value: 'Projects' } })
+    fireEvent.keyDown(folderInput, { key: 'Enter' })
+
+    expect(emailAccountForm.folder).toBe('INBOX, Projects')
+    expect(screen.getByText('Projects')).toBeInTheDocument()
+
+    function rerenderUi() {
+      rerender(
+        <EmailAccountDialog
+          emailAccountForm={emailAccountForm}
+          onApplyPreset={vi.fn()}
+          onEmailAccountFormChange={(updater) => {
+            emailAccountForm = typeof updater === 'function' ? updater(emailAccountForm) : updater
+            rerenderUi()
+          }}
+          onClose={vi.fn()}
+          onSave={vi.fn((event) => event.preventDefault())}
+          saveLoading={false}
+          t={(key, params) => translate('en', key, params)}
+        />
+      )
+    }
+  })
+
+  it('shows green and red folder validation pills after a successful connection test', () => {
+    render(
+      <EmailAccountDialog
+        emailAccountForm={{
+          originalEmailAccountId: '',
+          emailAccountId: 'fetcher-a',
+          enabled: true,
+          protocol: 'IMAP',
+          host: 'imap.example.com',
+          port: 993,
+          tls: true,
+          authMethod: 'PASSWORD',
+          oauthProvider: 'NONE',
+          username: 'user@example.com',
+          password: '',
+          oauthRefreshToken: '',
+          folder: 'INBOX, MissingFolder',
+          unreadOnly: false,
+          customLabel: '',
+          markReadAfterPoll: false,
+          postPollAction: 'NONE',
+          postPollTargetFolder: ''
+        }}
+        emailAccountFolders={['INBOX', 'Archive']}
+        onApplyPreset={vi.fn()}
+        onEmailAccountFormChange={vi.fn()}
+        onClose={vi.fn()}
+        onSave={vi.fn((event) => event.preventDefault())}
+        saveLoading={false}
+        testResult={{ tone: 'success', message: 'Connection test succeeded.' }}
+        t={(key, params) => translate('en', key, params)}
+      />
+    )
+
+    expect(screen.getByText('INBOX exists on the server')).toBeInTheDocument()
+    expect(screen.getByText('MissingFolder was not found on the server')).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Add' })).toBeDisabled()
+  })
+
+  it('blocks adding unknown folders after server folders were validated', () => {
+    let emailAccountForm = {
+      originalEmailAccountId: '',
+      emailAccountId: 'fetcher-a',
+      enabled: true,
+      protocol: 'IMAP',
+      host: 'imap.example.com',
+      port: 993,
+      tls: true,
+      authMethod: 'PASSWORD',
+      oauthProvider: 'NONE',
+      username: 'user@example.com',
+      password: '',
+      oauthRefreshToken: '',
+      folder: 'INBOX',
+      unreadOnly: false,
+      customLabel: '',
+      markReadAfterPoll: false,
+      postPollAction: 'NONE',
+      postPollTargetFolder: ''
+    }
+    const { rerender } = render(
+      <EmailAccountDialog
+        emailAccountForm={emailAccountForm}
+        emailAccountFolders={['INBOX', 'Archive']}
+        onApplyPreset={vi.fn()}
+        onEmailAccountFormChange={(updater) => {
+          emailAccountForm = typeof updater === 'function' ? updater(emailAccountForm) : updater
+          rerenderUi()
+        }}
+        onClose={vi.fn()}
+        onSave={vi.fn((event) => event.preventDefault())}
+        saveLoading={false}
+        testResult={{ tone: 'success', message: 'Connection test succeeded.' }}
+        t={(key, params) => translate('en', key, params)}
+      />
+    )
+
+    const folderInput = screen.getByRole('combobox', { name: /^Folder/i })
+    fireEvent.change(folderInput, { target: { value: 'MissingFolder' } })
+    fireEvent.keyDown(folderInput, { key: 'Enter' })
+
+    expect(emailAccountForm.folder).toBe('INBOX')
+    expect(screen.queryByText('MissingFolder')).not.toBeInTheDocument()
+
+    function rerenderUi() {
+      rerender(
+        <EmailAccountDialog
+          emailAccountForm={emailAccountForm}
+          emailAccountFolders={['INBOX', 'Archive']}
+          onApplyPreset={vi.fn()}
+          onEmailAccountFormChange={(updater) => {
+            emailAccountForm = typeof updater === 'function' ? updater(emailAccountForm) : updater
+            rerenderUi()
+          }}
+          onClose={vi.fn()}
+          onSave={vi.fn((event) => event.preventDefault())}
+          saveLoading={false}
+          testResult={{ tone: 'success', message: 'Connection test succeeded.' }}
+          t={(key, params) => translate('en', key, params)}
+        />
+      )
+    }
+  })
+
+  it('uses preloaded folders to lock the pillbox even before a fresh connection test succeeds', () => {
+    let emailAccountForm = {
+      originalEmailAccountId: 'fetcher-a',
+      emailAccountId: 'fetcher-a',
+      enabled: true,
+      protocol: 'IMAP',
+      host: 'imap.example.com',
+      port: 993,
+      tls: true,
+      authMethod: 'PASSWORD',
+      oauthProvider: 'NONE',
+      username: 'user@example.com',
+      password: '',
+      oauthRefreshToken: '',
+      folder: 'INBOX',
+      unreadOnly: false,
+      customLabel: '',
+      markReadAfterPoll: false,
+      postPollAction: 'NONE',
+      postPollTargetFolder: ''
+    }
+    const { rerender } = render(
+      <EmailAccountDialog
+        emailAccountForm={emailAccountForm}
+        emailAccountFolders={['INBOX', 'Archive']}
+        onApplyPreset={vi.fn()}
+        onEmailAccountFormChange={(updater) => {
+          emailAccountForm = typeof updater === 'function' ? updater(emailAccountForm) : updater
+          rerenderUi()
+        }}
+        onClose={vi.fn()}
+        onSave={vi.fn((event) => event.preventDefault())}
+        saveLoading={false}
+        t={(key, params) => translate('en', key, params)}
+      />
+    )
+
+    const folderInput = screen.getByRole('combobox', { name: /^Folder/i })
+    fireEvent.change(folderInput, { target: { value: 'MissingFolder' } })
+    fireEvent.keyDown(folderInput, { key: 'Enter' })
+
+    expect(emailAccountForm.folder).toBe('INBOX')
+    expect(screen.queryByText('MissingFolder')).not.toBeInTheDocument()
+    expect(screen.getByText('INBOX exists on the server')).toBeInTheDocument()
+
+    function rerenderUi() {
+      rerender(
+        <EmailAccountDialog
+          emailAccountForm={emailAccountForm}
+          emailAccountFolders={['INBOX', 'Archive']}
+          onApplyPreset={vi.fn()}
+          onEmailAccountFormChange={(updater) => {
+            emailAccountForm = typeof updater === 'function' ? updater(emailAccountForm) : updater
+            rerenderUi()
+          }}
+          onClose={vi.fn()}
+          onSave={vi.fn((event) => event.preventDefault())}
+          saveLoading={false}
+          t={(key, params) => translate('en', key, params)}
+        />
+      )
+    }
+  })
+
+  it('warns before saving an untested source and can save it disabled', () => {
+    const onSave = vi.fn((event) => event.preventDefault())
+    const onSaveWithoutValidation = vi.fn()
+
+    render(
+      <EmailAccountDialog
+        emailAccountForm={{
+          originalEmailAccountId: 'fetcher-a',
+          emailAccountId: 'fetcher-a',
+          enabled: true,
+          protocol: 'IMAP',
+          host: 'imap.example.com',
+          port: 993,
+          tls: true,
+          authMethod: 'PASSWORD',
+          oauthProvider: 'NONE',
+          username: 'user@example.com',
+          password: 'secret',
+          oauthRefreshToken: '',
+          folder: 'INBOX',
+          unreadOnly: false,
+          customLabel: '',
+          markReadAfterPoll: false,
+          postPollAction: 'NONE',
+          postPollTargetFolder: ''
+        }}
+        onApplyPreset={vi.fn()}
+        onEmailAccountFormChange={vi.fn()}
+        onClose={vi.fn()}
+        onSave={onSave}
+        onSaveWithoutValidation={onSaveWithoutValidation}
+        onTestEmailAccountConnection={vi.fn()}
+        saveLoading={false}
+        t={(key, params) => translate('en', key, params)}
+      />
+    )
+
+    fireEvent.click(screen.getByRole('button', { name: 'Save' }))
+
+    expect(screen.getByText('Save without validating this source?')).toBeInTheDocument()
+    expect(onSave).not.toHaveBeenCalled()
+
+    fireEvent.click(screen.getByRole('button', { name: 'Save Disabled Without Testing' }))
+
+    expect(onSaveWithoutValidation).toHaveBeenCalledTimes(1)
+  })
+
+  it('marks the folder pillbox invalid only after an enabled save attempt and clears it after editing', () => {
+    let emailAccountForm = {
+      originalEmailAccountId: 'fetcher-a',
+      emailAccountId: 'fetcher-a',
+      enabled: true,
+      protocol: 'IMAP',
+      host: 'imap.example.com',
+      port: 993,
+      tls: true,
+      authMethod: 'PASSWORD',
+      oauthProvider: 'NONE',
+      username: 'user@example.com',
+      password: 'secret',
+      oauthRefreshToken: '',
+      folder: 'INBOX, MissingFolder',
+      unreadOnly: false,
+      customLabel: '',
+      markReadAfterPoll: false,
+      postPollAction: 'NONE',
+      postPollTargetFolder: ''
+    }
+    const onSave = vi.fn((event) => event.preventDefault())
+    const { rerender } = render(
+      <EmailAccountDialog
+        emailAccountFolders={['INBOX', 'Archive']}
+        emailAccountForm={emailAccountForm}
+        onApplyPreset={vi.fn()}
+        onEmailAccountFormChange={(updater) => {
+          emailAccountForm = typeof updater === 'function' ? updater(emailAccountForm) : updater
+          rerenderUi()
+        }}
+        onClose={vi.fn()}
+        onSave={onSave}
+        saveLoading={false}
+        t={(key, params) => translate('en', key, params)}
+        testResult={{ message: 'Connection ok', tone: 'success' }}
+      />
+    )
+
+    const folderInput = screen.getByRole('combobox', { name: 'Folder' })
+    expect(folderInput).not.toHaveAttribute('aria-invalid')
+
+    fireEvent.click(screen.getByRole('button', { name: 'Save' }))
+
+    expect(onSave).not.toHaveBeenCalled()
+    expect(screen.getByRole('combobox', { name: 'Folder' })).toHaveAttribute('aria-invalid', 'true')
+
+    fireEvent.click(screen.getByRole('button', { name: 'Remove selected folder MissingFolder' }))
+
+    expect(emailAccountForm.folder).toBe('INBOX')
+    expect(screen.getByRole('combobox', { name: 'Folder' })).not.toHaveAttribute('aria-invalid')
 
     function rerenderUi() {
       rerender(
@@ -625,9 +1067,10 @@ describe('EmailAccountDialog', () => {
             rerenderUi()
           }}
           onClose={vi.fn()}
-          onSave={vi.fn((event) => event.preventDefault())}
+          onSave={onSave}
           saveLoading={false}
           t={(key, params) => translate('en', key, params)}
+          testResult={{ message: 'Connection ok', tone: 'success' }}
         />
       )
     }

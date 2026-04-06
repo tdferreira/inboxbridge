@@ -1,6 +1,11 @@
 import fs from 'node:fs'
 import path from 'node:path'
-import { pollErrorNotification, resolveNotificationContent, translatedNotification } from './notifications'
+import {
+  notificationDeduplicationKey,
+  pollErrorNotification,
+  resolveNotificationContent,
+  translatedNotification
+} from './notifications'
 import { languageOptions, translationCatalog } from './i18n'
 
 describe('notifications helpers', () => {
@@ -131,5 +136,26 @@ describe('notifications helpers', () => {
 
     expect(resolveNotificationContent(content, 'pt-PT')).toContain('A fonte outlook-main está em pausa até')
     expect(resolveNotificationContent(content, 'pt-PT')).toContain('A fonte gmail-main não pode ser executada')
+  })
+
+  it('derives the same deduplication key for repeated translated error notifications', () => {
+    const left = notificationDeduplicationKey({
+      message: translatedNotification('errors.loadApplicationData'),
+      tone: 'error'
+    }, 'en')
+    const right = notificationDeduplicationKey({
+      copyText: translatedNotification('errors.loadApplicationData'),
+      message: translatedNotification('errors.loadApplicationData'),
+      tone: 'error'
+    }, 'en')
+
+    expect(left).toBe(right)
+  })
+
+  it('does not derive deduplication keys for success notifications without a group', () => {
+    expect(notificationDeduplicationKey({
+      message: translatedNotification('notifications.destinationSaved'),
+      tone: 'success'
+    }, 'en')).toBeNull()
   })
 })

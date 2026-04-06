@@ -14,6 +14,7 @@ import dev.inboxbridge.persistence.AppUser;
 import dev.inboxbridge.persistence.AppUserRepository;
 import dev.inboxbridge.persistence.ImportedMessageRepository;
 import dev.inboxbridge.persistence.SourcePollEventRepository;
+import dev.inboxbridge.persistence.SourceImapCheckpointRepository;
 import dev.inboxbridge.persistence.SourcePollingSettingRepository;
 import dev.inboxbridge.persistence.SourcePollingStateRepository;
 import dev.inboxbridge.persistence.UserEmailAccountRepository;
@@ -71,6 +72,9 @@ public class AppUserService {
 
     @Inject
     SourcePollingStateRepository sourcePollingStateRepository;
+
+    @Inject
+    SourceImapCheckpointRepository sourceImapCheckpointRepository;
 
     @Inject
     SourcePollEventRepository sourcePollEventRepository;
@@ -360,6 +364,7 @@ public class AppUserService {
         if (!emailAccountIds.isEmpty()) {
             sourcePollingSettingRepository.deleteBySourceIds(emailAccountIds);
             sourcePollingStateRepository.deleteBySourceIds(emailAccountIds);
+            sourceImapCheckpointRepository.deleteBySourceIds(emailAccountIds);
             sourcePollEventRepository.deleteBySourceIds(emailAccountIds);
             importedMessageRepository.deleteBySourceAccountIds(emailAccountIds);
             oAuthCredentialService.deleteMicrosoftCredentials(emailAccountIds);

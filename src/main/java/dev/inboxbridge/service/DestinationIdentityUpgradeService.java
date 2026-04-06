@@ -11,6 +11,8 @@ import dev.inboxbridge.persistence.AppUser;
 import dev.inboxbridge.persistence.AppUserRepository;
 import dev.inboxbridge.persistence.ImportedMessage;
 import dev.inboxbridge.persistence.ImportedMessageRepository;
+import dev.inboxbridge.persistence.SourceImapCheckpoint;
+import dev.inboxbridge.persistence.SourceImapCheckpointRepository;
 import dev.inboxbridge.persistence.SourcePollingState;
 import dev.inboxbridge.persistence.SourcePollingStateRepository;
 import dev.inboxbridge.persistence.UserEmailAccount;
@@ -52,6 +54,9 @@ public class DestinationIdentityUpgradeService {
 
     @Inject
     SourcePollingStateRepository sourcePollingStateRepository;
+
+    @Inject
+    SourceImapCheckpointRepository sourceImapCheckpointRepository;
 
     @Inject
     UserMailDestinationConfigService userMailDestinationConfigService;
@@ -96,6 +101,17 @@ public class DestinationIdentityUpgradeService {
         }
 
         Map<String, String> destinationKeyBySourceId = legacyDestinationKeyBySourceId();
+        if (sourceImapCheckpointRepository != null) {
+            for (SourceImapCheckpoint checkpoint : sourceImapCheckpointRepository.listAll()) {
+                String legacyDestinationKey = destinationKeyBySourceId.get(checkpoint.sourceId);
+                String expectedIdentity = identityByDestinationKey.get(legacyDestinationKey);
+                if (expectedIdentity == null || !shouldBackfillCheckpointIdentity(checkpoint.destinationKey, legacyDestinationKey)) {
+                    continue;
+                }
+                checkpoint.destinationKey = expectedIdentity;
+                sourceImapCheckpointRepository.persist(checkpoint);
+            }
+        }
         for (SourcePollingState state : sourcePollingStateRepository.listAll()) {
             String legacyDestinationKey = destinationKeyBySourceId.get(state.sourceId);
             String expectedIdentity = identityByDestinationKey.get(legacyDestinationKey);

@@ -2,6 +2,7 @@
   padding: 20px;
   display: grid;
   gap: 14px;
+  min-width: 0;
 }
 
 .email-account-card-topline {
@@ -21,6 +22,7 @@
 .email-account-card-config div {
   display: grid;
   gap: 4px;
+  min-width: 0;
 }
 
 .email-account-card-config dt {
@@ -33,6 +35,8 @@
 .email-account-card-config dd {
   margin: 0;
   font-weight: 600;
+  min-width: 0;
+  overflow-wrap: anywhere;
 }
 
 .email-account-card-error {
@@ -80,6 +84,7 @@
 
 .fetcher-running-status {
   max-width: min(26rem, 100%);
+  min-width: 0;
 }
 
 @media (max-width: 760px) {

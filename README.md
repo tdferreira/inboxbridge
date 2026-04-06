@@ -77,7 +77,7 @@ By default, the local Docker setup serves the app over HTTPS with generated self
 - User sessions with browser/device hints, Geo-IP, and optional browser-reported device location
 - Per-user notification history that survives refreshes and sign-in cycles
 - Optional post-poll actions for IMAP sources such as mark as read, mark as forwarded, delete, or move to folder
-- Per-source IMAP fetch mode: scheduled polling or real-time IMAP IDLE
+- Per-source IMAP fetch mode: scheduled polling or real-time IMAP IDLE across one or more configured folders
 - Live polling over authenticated SSE with bounded parallel workers
 - A mobile-friendly `/remote` page for quick poll control without opening the full workspace
 
@@ -87,7 +87,6 @@ InboxBridge currently does not:
 
 - encrypt secrets that you place directly in `.env`
 - support every provider-specific OAuth flow
-- keep full multi-folder mailbox cursor state
 - include production-grade metrics, circuit breakers, or external secret-vault integration
 
 ## Quick Start
@@ -184,8 +183,10 @@ It is meant to:
 - explain that InboxBridge is designed around encrypted IMAP, POP3, HTTPS, and provider-API communication, and that PostgreSQL stores operational metadata, dedupe identifiers, checkpoints, settings, notifications, and encrypted secrets rather than a shadow archive of mailbox content
 - highlight that the self-hosted deployment model fits personal computers, homelab servers, Raspberry Pi systems, VPS instances, and dedicated hosts, so the operator keeps control over the runtime boundary
 - highlight the main source and destination mailbox flows
+- advertise meaningful runtime differentiators such as POP3 UIDL checkpoints, multi-folder IMAP polling, and per-folder IMAP IDLE/checkpoint support
 - link operators back to the full setup docs
 - generate a starter `.env` snippet for env-managed deployments and shared OAuth app configuration
+- collect IMAP source folders in the generator through a pillbox-style free-text control that still writes the same comma-separated env value used by InboxBridge
 - explain the configurator fields with compact info-icon hints
 - generate the required base64 token-encryption key directly in the browser when Web Crypto is available
 - reuse the same InboxBridge icon family as the `/remote` PWA so the public site and installed surface feel related

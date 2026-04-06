@@ -43,6 +43,7 @@ function NotificationsDialog({
                 focusLabel={t('common.focusSection')}
                 onDismiss={() => onDismissNotification(notification.id)}
                 onFocus={notification.targetId ? () => onFocusNotification(notification.targetId) : undefined}
+                repeatCount={notification.repeatCount}
                 tone={notification.tone}
                 title={notificationTitle ? notificationTitle(notification) : ''}
               >

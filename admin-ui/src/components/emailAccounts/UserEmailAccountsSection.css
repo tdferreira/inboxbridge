@@ -2,11 +2,13 @@
   padding: 24px;
   display: grid;
   gap: 18px;
+  min-width: 0;
 }
 
 .fetcher-list {
   display: grid;
   gap: 16px;
+  min-width: 0;
 }
 
 .user-email-accounts-empty-state {

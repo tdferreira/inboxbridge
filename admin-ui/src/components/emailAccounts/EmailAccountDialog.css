@@ -11,16 +11,11 @@
   gap: 10px;
 }
 
-.fetcher-folder-actions {
-  display: flex;
-  flex-wrap: wrap;
+.fetcher-folder-control > .field-label-row {
+  display: inline-flex;
   align-items: center;
-  gap: 10px;
-}
-
-.fetcher-folder-status {
-  font-size: 0.86rem;
-  color: var(--text-soft);
+  gap: 8px;
+  justify-self: start;
 }
 
 .fetcher-folder-toggle {

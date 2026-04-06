@@ -3002,6 +3002,47 @@ describe('App', () => {
     Object.defineProperty(window, 'innerHeight', { configurable: true, value: originalInnerHeight })
   })
 
+  it('collapses repeated identical error notifications into a single counted entry', async () => {
+    vi.stubGlobal('EventSource', FakeEventSource)
+    vi.stubGlobal('fetch', createWorkspaceRouteFetch({
+      session: {
+        id: 42,
+        username: 'alice',
+        role: 'USER',
+        approved: true,
+        mustChangePassword: false,
+        passkeyCount: 0,
+        passwordConfigured: true
+      }
+    }))
+
+    render(<App />)
+
+    await screen.findByText(/signed in as/i)
+
+    act(() => {
+      FakeEventSource.instances[0].emit('notification-created', {
+        notification: {
+          message: 'Load failed',
+          copyText: 'Load failed',
+          tone: 'error'
+        }
+      })
+      FakeEventSource.instances[0].emit('notification-created', {
+        notification: {
+          message: 'Load failed',
+          copyText: 'Load failed',
+          tone: 'error'
+        }
+      })
+    })
+
+    expect(await screen.findByText('Load failed')).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: /notifications/i })).toHaveTextContent('1')
+    expect(screen.getAllByRole('button', { name: 'Dismiss notification' })).toHaveLength(1)
+    expect(screen.getByText('×2')).toBeInTheDocument()
+  })
+
   it('persists notification dismissals back to the ui preferences endpoint', async () => {
     const fetchMock = createWorkspaceRouteFetch({
       session: {

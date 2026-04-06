@@ -34,6 +34,8 @@ import dev.inboxbridge.dto.MailImportResponse;
 import dev.inboxbridge.dto.PollRunResult;
 import dev.inboxbridge.persistence.ImportedMessage;
 import dev.inboxbridge.persistence.ImportedMessageRepository;
+import dev.inboxbridge.persistence.SourceImapCheckpoint;
+import dev.inboxbridge.persistence.SourceImapCheckpointRepository;
 import dev.inboxbridge.persistence.SourcePollingState;
 import dev.inboxbridge.persistence.SourcePollingStateRepository;
 import jakarta.enterprise.inject.Instance;
@@ -337,6 +339,59 @@ class PollingServiceGreenMailIntegrationTest {
         assertEquals(1, secondRun.getImported());
         assertEquals(0, secondRun.getDuplicates());
         assertEquals(List.of("inbox-alpha", "project-beta"), listSubjects(destinationMail, DESTINATION_USERNAME, DESTINATION_PASSWORD, DESTINATION_FOLDER));
+    }
+
+    @Test
+    void multiFolderImapPollingTracksIndependentPerFolderCheckpointsAndDedupeScopes() throws Exception {
+        appendMessage(sourceMail, SOURCE_USERNAME, SOURCE_PASSWORD, "INBOX", "inbox-alpha", "Inbox message", "<imap-multi-a@example.com>");
+        appendMessage(sourceMail, SOURCE_USERNAME, SOURCE_PASSWORD, "Projects/2026", "project-beta", "Project message", "<imap-multi-b@example.com>");
+
+        RecordingImportedMessageRepository importedMessageRepository = new RecordingImportedMessageRepository();
+        InMemoryReadyCheckpointSourcePollingStateService sourcePollingStateService = new InMemoryReadyCheckpointSourcePollingStateService();
+        RuntimeEmailAccount multiFolderAccount = runtimeAccount("INBOX, Projects/2026", DESTINATION_FOLDER);
+
+        PollRunResult firstRun = pollService(
+                List.of(multiFolderAccount),
+                importedMessageRepository,
+                sourcePollingStateService)
+                .runPoll("greenmail-integration:imap-multi-folder:first");
+
+        assertEquals(2, firstRun.getFetched());
+        assertEquals(2, firstRun.getImported());
+        assertEquals(0, firstRun.getDuplicates());
+        assertTrue(sourcePollingStateService.imapCheckpoint(
+                "greenmail-source",
+                DestinationIdentityKeys.forTarget(multiFolderAccount.destination()),
+                "INBOX").isPresent());
+        assertTrue(sourcePollingStateService.imapCheckpoint(
+                "greenmail-source",
+                DestinationIdentityKeys.forTarget(multiFolderAccount.destination()),
+                "Projects/2026").isPresent());
+
+        PollRunResult secondRun = pollService(
+                List.of(multiFolderAccount),
+                importedMessageRepository,
+                sourcePollingStateService)
+                .runPoll("greenmail-integration:imap-multi-folder:second");
+
+        assertEquals(2, secondRun.getFetched());
+        assertEquals(0, secondRun.getImported());
+        assertEquals(2, secondRun.getDuplicates());
+
+        appendMessage(sourceMail, SOURCE_USERNAME, SOURCE_PASSWORD, "Projects/2026", "project-gamma", "Second project message", "<imap-multi-c@example.com>");
+
+        PollRunResult thirdRun = pollService(
+                List.of(multiFolderAccount),
+                importedMessageRepository,
+                sourcePollingStateService)
+                .runPoll("greenmail-integration:imap-multi-folder:third");
+
+        assertEquals(2, thirdRun.getFetched());
+        assertEquals(1, thirdRun.getImported());
+        assertEquals(1, thirdRun.getDuplicates());
+        assertEquals(
+                List.of("inbox-alpha", "project-beta", "project-gamma"),
+                listSubjects(destinationMail, DESTINATION_USERNAME, DESTINATION_PASSWORD, DESTINATION_FOLDER));
     }
 
     @Test
@@ -662,6 +717,27 @@ class PollingServiceGreenMailIntegrationTest {
     }
 
     @Test
+    void runPollCanApplyPostPollMoveFromSecondaryConfiguredFolder() throws Exception {
+        appendMessage(sourceMail, SOURCE_USERNAME, SOURCE_PASSWORD, "Projects/2026", "delta", "Imported from a secondary folder", "<delta@example.com>");
+        ensureFolderExists(sourceMail, SOURCE_USERNAME, SOURCE_PASSWORD, "Processed");
+
+        PollRunResult result = pollService(runtimeAccountWithPostPollSettings(
+                "INBOX, Projects/2026",
+                new SourcePostPollSettings(
+                        true,
+                        SourcePostPollAction.MOVE,
+                        Optional.of("Processed"))))
+                .runPoll("greenmail-integration:move-and-read-secondary-folder");
+
+        assertEquals(1, result.getImported());
+        assertTrue(result.getErrorDetails().isEmpty());
+        assertEquals(List.of("delta"), listSubjects(destinationMail, DESTINATION_USERNAME, DESTINATION_PASSWORD, DESTINATION_FOLDER));
+        assertEquals(List.of(), listSubjectsIfFolderExists(sourceMail, SOURCE_USERNAME, SOURCE_PASSWORD, "Projects/2026"));
+        assertEquals(List.of("delta"), listSubjects(sourceMail, SOURCE_USERNAME, SOURCE_PASSWORD, "Processed"));
+        assertEquals(List.of(), listUnreadSubjects(sourceMail, SOURCE_USERNAME, SOURCE_PASSWORD, "Processed"));
+    }
+
+    @Test
     void runPollCanDeleteSourceMessagesAfterImport() throws Exception {
         appendMessage(sourceMail, SOURCE_USERNAME, SOURCE_PASSWORD, "INBOX", "beta", "Delete after import", "<beta@example.com>");
 
@@ -939,6 +1015,10 @@ class PollingServiceGreenMailIntegrationTest {
     }
 
     private RuntimeEmailAccount runtimeAccountWithPostPollSettings(SourcePostPollSettings postPollSettings) {
+        return runtimeAccountWithPostPollSettings("INBOX", postPollSettings);
+    }
+
+    private RuntimeEmailAccount runtimeAccountWithPostPollSettings(String sourceFolders, SourcePostPollSettings postPollSettings) {
         return new RuntimeEmailAccount(
                 "greenmail-source",
                 "USER",
@@ -954,7 +1034,7 @@ class PollingServiceGreenMailIntegrationTest {
                 SOURCE_USERNAME,
                 SOURCE_PASSWORD,
                 "",
-                Optional.of("INBOX"),
+                Optional.of(sourceFolders),
                 false,
                 Optional.of("Imported/Test"),
                 postPollSettings,
@@ -1323,6 +1403,7 @@ class PollingServiceGreenMailIntegrationTest {
     private static final class InMemoryReadyCheckpointSourcePollingStateService extends SourcePollingStateService {
         private InMemoryReadyCheckpointSourcePollingStateService() {
             this.repository = new InMemorySourcePollingStateRepository();
+            this.imapCheckpointRepository = new InMemorySourceImapCheckpointRepository();
             this.pollingSettingsService = new FixedPollingSettingsService();
         }
 
@@ -1367,6 +1448,28 @@ class PollingServiceGreenMailIntegrationTest {
             if (entity.id == null) {
                 entity.id = sequence++;
                 states.add(entity);
+            }
+        }
+    }
+
+    private static final class InMemorySourceImapCheckpointRepository extends SourceImapCheckpointRepository {
+        private final List<SourceImapCheckpoint> checkpoints = new java.util.concurrent.CopyOnWriteArrayList<>();
+        private long sequence = 1L;
+
+        @Override
+        public Optional<SourceImapCheckpoint> findByScope(String sourceId, String destinationKey, String folderName) {
+            return checkpoints.stream()
+                    .filter((checkpoint) -> sourceId.equals(checkpoint.sourceId))
+                    .filter((checkpoint) -> destinationKey.equals(checkpoint.destinationKey))
+                    .filter((checkpoint) -> checkpoint.folderName != null && checkpoint.folderName.equalsIgnoreCase(folderName))
+                    .findFirst();
+        }
+
+        @Override
+        public void persist(SourceImapCheckpoint entity) {
+            if (entity.id == null) {
+                entity.id = sequence++;
+                checkpoints.add(entity);
             }
         }
     }

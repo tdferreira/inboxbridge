@@ -8,6 +8,7 @@ const summary = document.querySelector('[data-env-summary]')
 const generateKeyButton = document.querySelector('[data-generate-key]')
 const languagePicker = document.querySelector('[data-language-picker]')
 const descriptionMeta = document.querySelector('meta[name="description"]')
+const pillboxRoots = Array.from(document.querySelectorAll('[data-pillbox]'))
 
 let language = normalizeLocale(window.localStorage.getItem('inboxbridge.language') || navigator.language)
 
@@ -83,6 +84,114 @@ function setCheckboxText(fieldId, labelKey, hintKey) {
     hint.dataset.hint = translate(language, hintKey)
   }
 }
+
+function parsePillboxValue(value) {
+  return String(value || '')
+    .split(',')
+    .map((entry) => entry.trim())
+    .filter(Boolean)
+}
+
+function createPillbox(root) {
+  const hiddenInputId = root.dataset.pillboxHiddenInput
+  const hiddenInput = hiddenInputId ? document.getElementById(hiddenInputId) : null
+  const valueContainer = root.querySelector('[data-pillbox-values]')
+  const textInput = root.querySelector('[data-pillbox-input]')
+  if (!hiddenInput || !valueContainer || !textInput) {
+    return null
+  }
+
+  function selectedValues() {
+    return parsePillboxValue(hiddenInput.value)
+  }
+
+  function updateValue(nextValues) {
+    hiddenInput.value = nextValues.join(', ')
+    renderValues()
+    hiddenInput.dispatchEvent(new Event('input', { bubbles: true }))
+    hiddenInput.dispatchEvent(new Event('change', { bubbles: true }))
+  }
+
+  function renderValues() {
+    valueContainer.innerHTML = ''
+    selectedValues().forEach((value) => {
+      const pill = document.createElement('span')
+      pill.className = 'site-pillbox-pill'
+      pill.innerHTML = `<span>${value}</span>`
+
+      const removeButton = document.createElement('button')
+      removeButton.type = 'button'
+      removeButton.className = 'site-pillbox-pill-remove'
+      removeButton.setAttribute('aria-label', `Remove ${value}`)
+      removeButton.textContent = '×'
+      removeButton.addEventListener('click', () => {
+        updateValue(selectedValues().filter((entry) => entry.toLowerCase() !== value.toLowerCase()))
+        textInput.focus()
+      })
+
+      pill.append(removeButton)
+      valueContainer.append(pill)
+    })
+  }
+
+  function commitValue(rawValue) {
+    const value = String(rawValue || '').trim()
+    if (!value) {
+      return
+    }
+    const existing = selectedValues()
+    if (existing.some((entry) => entry.toLowerCase() === value.toLowerCase())) {
+      textInput.value = ''
+      return
+    }
+    updateValue([...existing, value])
+    textInput.value = ''
+  }
+
+  root.querySelector('[data-pillbox-shell]')?.addEventListener('click', () => textInput.focus())
+
+  textInput.addEventListener('keydown', (event) => {
+    if (event.key === 'Enter' || event.key === ',') {
+      if (!textInput.value.trim()) {
+        return
+      }
+      event.preventDefault()
+      commitValue(textInput.value)
+      return
+    }
+    if (event.key === 'Backspace' && !textInput.value.trim()) {
+      const existing = selectedValues()
+      if (existing.length === 0) {
+        return
+      }
+      event.preventDefault()
+      updateValue(existing.slice(0, -1))
+    }
+  })
+
+  textInput.addEventListener('blur', () => {
+    if (textInput.value.trim()) {
+      commitValue(textInput.value)
+    }
+  })
+
+  renderValues()
+
+  return {
+    hiddenInput,
+    render() {
+      renderValues()
+      textInput.placeholder = translate(language, 'env.placeholder.sourceFolderPillbox')
+      textInput.setAttribute('aria-label', translate(language, 'env.field.sourceFolder'))
+      const help = root.querySelector('.site-pillbox-help')
+      if (help) {
+        help.textContent = translate(language, 'env.hint.sourceFolderPillbox')
+      }
+    }
+  }
+}
+
+const pillboxes = pillboxRoots.map((root) => createPillbox(root)).filter(Boolean)
 
 function applyTranslations() {
   document.documentElement.lang = language
@@ -282,7 +391,7 @@ function applyTranslations() {
   setFieldText('sourceUsername', 'env.field.sourceUsername', 'env.hint.sourceUsername', 'env.placeholder.sourceUsername')
   setFieldText('sourcePassword', 'env.field.sourcePassword', 'env.hint.sourcePassword', 'env.placeholder.sourcePassword')
   setFieldText('sourceOauthRefreshToken', 'env.field.sourceOauthRefreshToken', 'env.hint.sourceOauthRefreshToken', 'env.placeholder.sourceOauthRefreshToken')
-  setFieldText('sourceFolder', 'env.field.sourceFolder', 'env.hint.sourceFolder')
+  setFieldText('sourceFolderPillbox', 'env.field.sourceFolder', 'env.hint.sourceFolder')
   setFieldText('sourceFetchMode', 'env.field.sourceFetchMode', 'env.hint.sourceFetchMode')
   setFieldText('sourceCustomLabel', 'env.field.sourceCustomLabel', 'env.hint.sourceCustomLabel', 'env.placeholder.sourceCustomLabel')
   setCheckboxText('multiUserEnabled', 'env.field.multiUser', 'env.hint.multiUser')
@@ -298,6 +407,8 @@ function applyTranslations() {
     generateKeyButton.setAttribute('aria-label', generateLabel)
     generateKeyButton.setAttribute('title', generateLabel)
   }
+
+  pillboxes.forEach((pillbox) => pillbox.render())
 }
 
 function syncConditionalFields(formElement) {
@@ -322,6 +433,7 @@ function render() {
   const config = buildEnvConfig(state)
   form.publicBaseUrl.value = config.publicBaseUrl
   output.value = generateEnvText(state)
+  pillboxes.forEach((pillbox) => pillbox.render())
   summary.textContent = config.sourceId
     ? translate(language, 'env.summary.readySource', { protocol: config.sourceProtocol, sourceId: config.sourceId, publicBaseUrl: config.publicBaseUrl })
     : translate(language, 'env.summary.readyDeployment', { publicBaseUrl: config.publicBaseUrl })

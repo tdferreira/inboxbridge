@@ -8,6 +8,8 @@ import java.util.Optional;
 import java.util.stream.Collectors;
 
 import dev.inboxbridge.domain.ImapCheckpoint;
+import dev.inboxbridge.persistence.SourceImapCheckpoint;
+import dev.inboxbridge.persistence.SourceImapCheckpointRepository;
 import dev.inboxbridge.dto.SourcePollingStateView;
 import dev.inboxbridge.persistence.SourcePollingState;
 import dev.inboxbridge.persistence.SourcePollingStateRepository;
@@ -26,6 +28,9 @@ public class SourcePollingStateService {
 
     @Inject
     SourcePollingStateRepository repository;
+
+    @Inject
+    SourceImapCheckpointRepository imapCheckpointRepository;
 
     @Inject
     PollingSettingsService pollingSettingsService;
@@ -49,6 +54,13 @@ public class SourcePollingStateService {
     public Optional<ImapCheckpoint> imapCheckpoint(String sourceId, String destinationKey, String folderName) {
         if (repository == null) {
             return Optional.empty();
+        }
+        if (imapCheckpointRepository != null) {
+            Optional<ImapCheckpoint> persisted = imapCheckpointRepository.findByScope(sourceId, destinationKey, folderName)
+                    .map(state -> new ImapCheckpoint(state.folderName, state.uidValidity, state.lastSeenUid));
+            if (persisted.isPresent()) {
+                return persisted;
+            }
         }
         return repository.findBySourceId(sourceId)
                 .filter(state -> state.imapFolderName != null && state.imapUidValidity != null && state.imapLastSeenUid != null)
@@ -186,6 +198,23 @@ public class SourcePollingStateService {
                 || folderName == null || uidValidity == null || lastSeenUid == null || lastSeenUid <= 0L) {
             return;
         }
+        if (imapCheckpointRepository != null) {
+            SourceImapCheckpoint checkpoint = imapCheckpointRepository.findByScope(sourceId, destinationKey, folderName)
+                    .orElseGet(SourceImapCheckpoint::new);
+            if (checkpoint.id == null) {
+                checkpoint.sourceId = sourceId;
+                checkpoint.destinationKey = destinationKey;
+                checkpoint.folderName = folderName;
+            }
+            boolean sameUidValidity = checkpoint.uidValidity != null && checkpoint.uidValidity.equals(uidValidity);
+            if (!sameUidValidity || checkpoint.lastSeenUid == null || lastSeenUid > checkpoint.lastSeenUid) {
+                checkpoint.uidValidity = uidValidity;
+                checkpoint.lastSeenUid = lastSeenUid;
+            }
+            checkpoint.updatedAt = observedAt == null ? Instant.now() : observedAt;
+            imapCheckpointRepository.persist(checkpoint);
+        }
+
         SourcePollingState state = repository.findBySourceId(sourceId).orElseGet(SourcePollingState::new);
         if (state.id == null) {
             state.sourceId = sourceId;

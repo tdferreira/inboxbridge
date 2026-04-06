@@ -12,12 +12,14 @@
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
   gap: 14px;
+  min-width: 0;
 }
 
 .metric-card {
   padding: 20px;
   display: grid;
   gap: 8px;
+  min-width: 0;
 }
 
 .metric-card strong {
@@ -30,6 +32,7 @@
   letter-spacing: 0.14em;
   text-transform: uppercase;
   color: var(--muted);
+  overflow-wrap: anywhere;
 }
 
 .metric-card-accent {

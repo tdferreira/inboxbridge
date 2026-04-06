@@ -42,6 +42,9 @@ public class UserEmailAccount extends PanacheEntityBase {
     @Column(name = "enabled", nullable = false)
     public boolean enabled;
 
+    @Column(name = "enable_after_oauth_connect", nullable = false)
+    public boolean enableAfterOauthConnect;
+
     @Enumerated(EnumType.STRING)
     @Column(name = "protocol", nullable = false, length = 20)
     public InboxBridgeConfig.Protocol protocol;

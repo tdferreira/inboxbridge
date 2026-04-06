@@ -129,7 +129,7 @@ Each source now has its own persisted polling state:
 - active cooldown-until time
 - consecutive failure count
 - last failure reason and timestamps
-- for IMAP sources, the current folder plus the last seen `UIDVALIDITY` / UID checkpoint, scoped to the destination mailbox identity that was active when the checkpoint was recorded
+- for IMAP sources, one checkpoint row per watched folder, each storing that folder plus the last seen `UIDVALIDITY` / UID checkpoint scoped to the destination mailbox identity that was active when the checkpoint was recorded
 - for POP3 sources, the last seen UIDL checkpoint used to resume from newer mail when that POP mailbox still advertises the older message, also scoped to the active destination mailbox identity
 
 That destination-aware checkpoint scoping matters during destination changes: when a user repoints InboxBridge to a different destination mailbox, the old source checkpoint is no longer reused for that new target, and dedupe also shifts to the new destination identity, so already-seen source mail can be replayed into the new destination under the normal fetch-window rules.
@@ -173,15 +173,18 @@ That classifier currently distinguishes rate limits, mailbox authentication fail
 
 Persisted `source_poll_event` rows now also carry the cooldown/throttle decision snapshot for that poll attempt: the classified failure category, chosen cooldown backoff and `cooldown_until`, cumulative source/destination throttle wait time, and the final adaptive throttle multiplier / `next_allowed_at` state left behind by that run. This keeps cooldown reasoning durable for later stats and operator audit work instead of requiring the current mutable state tables alone to explain what happened.
 
-Import dedupe is now destination-mailbox-identity aware and layered. InboxBridge first checks the persisted source message key for that destination identity and source account. For IMAP those source keys now prefer `UIDVALIDITY + UID`, while POP3 source keys prefer `UIDL`. If that protocol-native identity does not match, InboxBridge next falls back to raw MIME SHA-256 and only then to the normalized `Message-ID` header for that same source account. That keeps protocol-native mailbox identifiers authoritative while still leaving one last heuristic safety net for providers that change UIDs, UIDLs, or MIME details.
+Import dedupe is now destination-mailbox-identity aware and layered. InboxBridge first checks the persisted source message key for that destination identity and source account. For IMAP those source keys now prefer `folder + UIDVALIDITY + UID`, while POP3 source keys prefer `UIDL`. If that protocol-native identity does not match, InboxBridge next falls back to raw MIME SHA-256 and only then to the normalized `Message-ID` header for that same source account. That keeps protocol-native mailbox identifiers authoritative while still leaving one last heuristic safety net for providers that change UIDs, UIDLs, or MIME details.
 
 To keep upgrades from older databases consistent, startup now also runs a lightweight reconciliation pass that backfills legacy `destination_key`-scoped imported-message rows and legacy/null checkpoint destination keys to the current resolved mailbox identity for each configured destination. This only upgrades rows that still look legacy-scoped; already destination-aware identities are left untouched.
+
+IMAP sources now also support watching more than one folder at a time by storing a comma-separated folder list in the existing source folder field. Polling selects candidate mail independently per folder, IMAP IDLE starts one watcher per configured folder, and post-poll source actions reopen the fetched message's actual source folder so move/delete/read updates still apply to the right mailbox path.
+
+For UI-managed OAuth2 source accounts, the persisted source row now tracks whether the user wanted the source enabled before OAuth was fully connected. If no usable refresh token exists yet, InboxBridge saves that source disabled, stores the pending-enable intent, and only flips the source to enabled after the OAuth flow completes and an immediate mailbox connection test succeeds with the stored provider credential.
 
 Those values can be overridden live from `Administration -> Global Poller Settings`.
 
 That is still deliberately simpler than a full mailbox-sync engine. The next evolution should be:
 
-- multi-folder IMAP IDLE / checkpoint support
 - optional admin diagnostics for destination identity, checkpoints, and persisted poll-decision history
 
 ## Package map

@@ -16,9 +16,17 @@
   max-height: calc(100vh - 48px);
   overflow-y: auto;
   overscroll-behavior: contain;
+  scrollbar-width: none;
+  -ms-overflow-style: none;
   padding: 24px;
   display: grid;
   gap: 16px;
+}
+
+.modal-surface::-webkit-scrollbar {
+  width: 0;
+  height: 0;
+  display: none;
 }
 
 .modal-surface-wide {

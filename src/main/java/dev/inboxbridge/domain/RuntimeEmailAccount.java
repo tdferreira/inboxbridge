@@ -1,5 +1,6 @@
 package dev.inboxbridge.domain;
 
+import java.util.List;
 import java.util.Optional;
 
 import dev.inboxbridge.config.InboxBridgeConfig;
@@ -152,5 +153,19 @@ public record RuntimeEmailAccount(
                 customLabel,
                 SourcePostPollSettings.none(),
                 destination);
+    }
+
+    /**
+     * Returns the normalized source mailbox folders for this account.
+     *
+     * <p>IMAP accounts may resolve to multiple configured folders, while POP3
+     * always resolves to the single INBOX maildrop.
+     */
+    public List<String> sourceFolders() {
+        return SourceMailboxFolders.forSource(protocol, folder);
+    }
+
+    public String primaryFolder() {
+        return SourceMailboxFolders.primary(protocol, folder);
     }
 }

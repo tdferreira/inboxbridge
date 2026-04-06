@@ -4,8 +4,24 @@ import InfoHint from '../common/InfoHint'
 import LoadingButton from '../common/LoadingButton'
 import ModalDialog from '../common/ModalDialog'
 import PasswordField from '../common/PasswordField'
+import PillboxInput from '../common/PillboxInput'
 import { EMAIL_PROVIDER_PRESETS, findEmailProviderPreset, inferEmailProviderPresetId, isOutlookSourceConfig } from '../../lib/emailProviderPresets'
 import './EmailAccountDialog.css'
+
+function parseFolderSelection(value) {
+  if (!value || !value.trim()) {
+    return []
+  }
+  return value
+    .split(/[,\n\r]+/)
+    .map((folder) => folder.trim())
+    .filter(Boolean)
+    .filter((folder, index, folders) => folders.findIndex((candidate) => candidate.toLowerCase() === folder.toLowerCase()) === index)
+}
+
+function serializeFolderSelection(folders) {
+  return folders.join(', ')
+}
 
 function EmailAccountDialog({
   availableOAuthProviders = [],
@@ -18,8 +34,11 @@ function EmailAccountDialog({
   microsoftOAuthAvailable = true,
   onApplyPreset,
   onEmailAccountFormChange,
+  onFolderInputActivity,
+  onFolderInputFocus,
   onClose,
   onSave,
+  onSaveWithoutValidation,
   onSaveAndConnectOAuth,
   onTestEmailAccountConnection,
   saveLoading,
@@ -52,14 +71,31 @@ function EmailAccountDialog({
   const supportsPostPollActions = emailAccountForm.protocol === 'IMAP'
   const detectedFolders = supportsFolder ? emailAccountFolders : []
   const currentFolder = emailAccountForm.folder || ''
-  const currentFolderDetected = detectedFolders.includes(currentFolder)
+  const selectedFolderValues = useMemo(() => parseFolderSelection(currentFolder), [currentFolder])
+  const connectionValidated = testResult?.tone === 'success'
+  const folderSuggestionsLoaded = supportsFolder && detectedFolders.length > 0
+  const folderSuggestionsValidated = supportsFolder && connectionValidated && folderSuggestionsLoaded
+  const invalidDetectedFolders = useMemo(
+    () => folderSuggestionsLoaded
+      ? selectedFolderValues.filter((folder) => !detectedFolders.some((candidate) => candidate.toLowerCase() === folder.toLowerCase()))
+      : [],
+    [detectedFolders, folderSuggestionsLoaded, selectedFolderValues]
+  )
+  const currentFolderDetected = selectedFolderValues.length > 0
+    && selectedFolderValues.every((folder) => detectedFolders.some((candidate) => candidate === folder))
   const defaultDetectedFolder = detectedFolders.find((folder) => folder.toUpperCase() === 'INBOX') || detectedFolders[0] || ''
   const currentPostPollAction = emailAccountForm.postPollAction || 'NONE'
   const currentPostPollTargetFolder = emailAccountForm.postPollTargetFolder || ''
   const currentPostPollTargetDetected = detectedFolders.includes(currentPostPollTargetFolder)
-  const [manualFolderEntry, setManualFolderEntry] = useState(detectedFolders.length === 0)
   const [manualPostPollTargetEntry, setManualPostPollTargetEntry] = useState(detectedFolders.length === 0)
+  const [showUntestedSaveDialog, setShowUntestedSaveDialog] = useState(false)
+  const [showFolderErrorState, setShowFolderErrorState] = useState(false)
   const canSaveWithoutOAuth = !requiresMicrosoftOAuth || editingExistingAccount
+  const canPersistEnabledSource = connectionValidated && invalidDetectedFolders.length === 0
+  const folderValidationError = supportsFolder
+    && folderSuggestionsValidated
+    && invalidDetectedFolders.length > 0
+  const folderSaveError = showFolderErrorState && folderValidationError
   const hasRequiredConnectionFields = Boolean(
     emailAccountForm.emailAccountId?.trim()
     && emailAccountForm.host?.trim()
@@ -78,13 +114,11 @@ function EmailAccountDialog({
     setSelectedPreset(inferredPresetId)
   }, [inferredPresetId])
   useEffect(() => {
-    if (!detectedFolders.length) {
-      setManualFolderEntry(true)
-    } else if (currentFolder && !currentFolderDetected) {
-      setManualFolderEntry(true)
-    } else {
-      setManualFolderEntry(false)
+    if (!folderValidationError) {
+      setShowFolderErrorState(false)
     }
+  }, [folderValidationError])
+  useEffect(() => {
     if (!detectedFolders.length) {
       setManualPostPollTargetEntry(true)
     } else if (currentPostPollTargetFolder && !currentPostPollTargetDetected) {
@@ -112,15 +146,12 @@ function EmailAccountDialog({
     }
   }
 
-  function useDetectedFolderOptions() {
-    if (!defaultDetectedFolder) {
-      return
-    }
+  function updateDetectedFolders(nextFolders) {
+    setShowFolderErrorState(false)
     onEmailAccountFormChange((current) => ({
       ...current,
-      folder: currentFolderDetected ? current.folder : defaultDetectedFolder
+      folder: serializeFolderSelection(nextFolders)
     }))
-    setManualFolderEntry(false)
   }
 
   function useDetectedPostPollTargetOptions() {
@@ -148,16 +179,44 @@ function EmailAccountDialog({
     )
   }
 
+  function handleSaveSubmit(event) {
+    event.preventDefault()
+    if (!emailAccountForm.enabled) {
+      onSave(event)
+      return
+    }
+    if (folderValidationError) {
+      setShowFolderErrorState(true)
+      return
+    }
+    if (canPersistEnabledSource) {
+      onSave(event)
+      return
+    }
+    setShowUntestedSaveDialog(true)
+  }
+
+  function handleSaveDisabledWithoutTesting() {
+    setShowUntestedSaveDialog(false)
+    onSaveWithoutValidation?.()
+  }
+
+  function handleTestBeforeSaving() {
+    setShowUntestedSaveDialog(false)
+    onTestEmailAccountConnection?.()
+  }
+
   return (
-    <ModalDialog
-      isDirty={isDirty}
-      onClose={onClose}
-      size="wide"
-      title={dialogTitle}
-      unsavedChangesMessage={t('common.unsavedChangesConfirm')}
-    >
-      <p className="section-copy">{t('emailAccounts.dialogCopy')}</p>
-      <form className="settings-grid fetcher-dialog-form" onSubmit={onSave}>
+    <>
+      <ModalDialog
+        isDirty={isDirty}
+        onClose={onClose}
+        size="wide"
+        title={dialogTitle}
+        unsavedChangesMessage={t('common.unsavedChangesConfirm')}
+      >
+        <p className="section-copy">{t('emailAccounts.dialogCopy')}</p>
+        <form className="settings-grid fetcher-dialog-form" onSubmit={handleSaveSubmit}>
         <FormField helpText={t('emailAccounts.providerPresetHelp')} label={t('emailAccounts.providerPreset')}>
           <select disabled={editingExistingAccount} value={selectedPreset} onChange={(event) => applyPreset(event.target.value)}>
             {availablePresets.map((option) => (
@@ -241,31 +300,34 @@ function EmailAccountDialog({
         ) : null}
         {supportsFolder ? (
           <div className="fetcher-folder-control full">
-            <label>
-              <span className="field-label-row">
-                <span>{t('emailAccounts.folder')}</span>
-                <InfoHint text={t('emailAccounts.folderHelp')} />
-              </span>
-              {detectedFolders.length > 0 && !manualFolderEntry ? (
-                <select value={currentFolderDetected ? currentFolder : defaultDetectedFolder} onChange={(event) => onEmailAccountFormChange((current) => ({ ...current, folder: event.target.value }))}>
-                  {detectedFolders.map((folder) => (
-                    <option key={folder} value={folder}>{folder}</option>
-                  ))}
-                </select>
-              ) : (
-                <input value={emailAccountForm.folder} onChange={(event) => onEmailAccountFormChange((current) => ({ ...current, folder: event.target.value }))} />
-              )}
+            <label className="field-label-row" htmlFor="email-account-folder-pillbox">
+              <span>{t('emailAccounts.folder')}</span>
+              <InfoHint text={t('emailAccounts.folderHelp')} />
             </label>
-            <div className="fetcher-folder-actions">
-              {emailAccountFoldersLoading ? (
-                <span className="fetcher-folder-status">{t('common.refreshingSection')}</span>
-              ) : null}
-              {detectedFolders.length > 0 ? (
-                <button className="fetcher-folder-toggle" onClick={manualFolderEntry ? useDetectedFolderOptions : () => setManualFolderEntry(true)} type="button">
-                  {t(manualFolderEntry ? 'destination.folderUseDetected' : 'destination.folderUseManual')}
-                </button>
-              ) : null}
-            </div>
+            <PillboxInput
+              allowCustomValues={!folderSuggestionsLoaded}
+              helperText={emailAccountFoldersLoading
+                ? t('common.refreshingSection')
+                : folderSuggestionsValidated
+                  ? t('emailAccounts.folderValidationReady')
+                  : ''}
+              inputAriaLabel={t('emailAccounts.folder')}
+              inputId="email-account-folder-pillbox"
+              loading={emailAccountFoldersLoading}
+              onChange={updateDetectedFolders}
+            onInputActivity={onFolderInputActivity}
+            onInputFocus={onFolderInputFocus}
+            invalid={folderSaveError}
+            options={detectedFolders}
+            placeholder={t('emailAccounts.folderAutocompletePlaceholder')}
+              removeLabel={(folder) => t('emailAccounts.folderRemoveSelected', { folder })}
+              validationActive={folderSuggestionsLoaded}
+              valueTone={(folder) => detectedFolders.some((candidate) => candidate.toLowerCase() === folder.toLowerCase()) ? 'success' : 'error'}
+              valueValidationLabel={(folder, tone) => tone === 'success'
+                ? t('emailAccounts.folderExists', { folder })
+                : t('emailAccounts.folderMissing', { folder })}
+              values={selectedFolderValues}
+            />
           </div>
         ) : null}
         {supportsCustomLabel ? (
@@ -368,7 +430,13 @@ function EmailAccountDialog({
             </LoadingButton>
           ) : null}
           {canSaveWithoutOAuth ? (
-            <LoadingButton className="primary" disabled={!hasRequiredConnectionFields} isLoading={saveLoading} loadingLabel={t('emailAccounts.saveLoading')} type="submit">
+            <LoadingButton
+              className="primary"
+              disabled={!hasRequiredConnectionFields}
+              isLoading={saveLoading}
+              loadingLabel={t('emailAccounts.saveLoading')}
+              type="submit"
+            >
               {editingExistingAccount ? t('emailAccounts.save') : t('emailAccounts.addAction')}
             </LoadingButton>
           ) : null}
@@ -410,8 +478,38 @@ function EmailAccountDialog({
             ) : null}
           </div>
         ) : null}
-      </form>
-    </ModalDialog>
+        </form>
+      </ModalDialog>
+      {showUntestedSaveDialog ? (
+        <ModalDialog onClose={() => setShowUntestedSaveDialog(false)} title={t('emailAccounts.untestedSaveConfirmTitle')}>
+          <p className="section-copy">{t('emailAccounts.untestedSaveConfirmBody')}</p>
+          <p className="section-copy">{t('emailAccounts.untestedSaveDisabledBody')}</p>
+          <div className="action-row">
+            <LoadingButton
+              className="primary"
+              isLoading={testConnectionLoading}
+              loadingLabel={t('emailAccounts.testConnectionLoading')}
+              onClick={handleTestBeforeSaving}
+              type="button"
+            >
+              {t('emailAccounts.testConnectionNow')}
+            </LoadingButton>
+            <LoadingButton
+              className="secondary"
+              isLoading={saveLoading}
+              loadingLabel={t('emailAccounts.saveLoading')}
+              onClick={handleSaveDisabledWithoutTesting}
+              type="button"
+            >
+              {t('emailAccounts.saveDisabledWithoutTesting')}
+            </LoadingButton>
+            <button className="secondary" onClick={() => setShowUntestedSaveDialog(false)} type="button">
+              {t('common.cancel')}
+            </button>
+          </div>
+        </ModalDialog>
+      ) : null}
+    </>
   )
 }
 

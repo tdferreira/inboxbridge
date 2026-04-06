@@ -29,20 +29,23 @@ function UserEmailAccountsSection({
   onLoadFetcherCustomRange,
   onAddFetcher,
   onApplyPreset,
-    onEmailAccountFormChange,
+  onEmailAccountFormChange,
   onCloseDialog,
   onClosePollingDialog,
   onCollapseToggle,
   onConfigureFetcherPolling,
   onConnectOAuth,
-    onDeleteEmailAccount,
+  onDeleteEmailAccount,
   onEditEmailAccount,
+  onFolderInputActivity,
+  onFolderInputFocus,
   onFetcherPollingFormChange,
   onFetcherToggleExpand,
   onResetFetcherPollingSettings,
   onRunFetcherPoll,
   onToggleEmailAccountEnabled,
   onSaveEmailAccount,
+  onSaveEmailAccountWithoutValidation,
   onSaveEmailAccountAndConnectOAuth,
   onSaveFetcherPollingSettings,
   onTestEmailAccountConnection,
@@ -127,8 +130,11 @@ function UserEmailAccountsSection({
             duplicateIdError={duplicateIdError}
             onApplyPreset={onApplyPreset}
             onEmailAccountFormChange={onEmailAccountFormChange}
+            onFolderInputActivity={onFolderInputActivity}
+            onFolderInputFocus={onFolderInputFocus}
             onClose={onCloseDialog}
             onSave={onSaveEmailAccount}
+            onSaveWithoutValidation={onSaveEmailAccountWithoutValidation}
             onSaveAndConnectOAuth={onSaveEmailAccountAndConnectOAuth}
             onTestEmailAccountConnection={onTestEmailAccountConnection}
             saveLoading={saveLoading}

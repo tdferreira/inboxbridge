@@ -25,6 +25,7 @@ import dev.inboxbridge.domain.ImapCheckpoint;
 import dev.inboxbridge.dto.EmailAccountConnectionTestResult;
 import dev.inboxbridge.domain.FetchedMessage;
 import dev.inboxbridge.domain.RuntimeEmailAccount;
+import dev.inboxbridge.domain.SourceMailboxFolders;
 import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.inject.Inject;
 import jakarta.mail.Flags;
@@ -141,7 +142,7 @@ public class MailSourceClient {
             store = session.getStore(bridge.tls() ? "imaps" : "imap");
             registerStore(store);
             connectStore(store, bridge);
-            sourceFolder = store.getFolder(bridge.folder().orElse("INBOX"));
+            sourceFolder = store.getFolder(message.folderName().orElse(bridge.primaryFolder()));
             registerFolder(sourceFolder);
             if (!sourceFolder.exists()) {
                 throw new IllegalStateException("The mailbox path " + sourceFolder.getFullName() + " does not exist on " + bridge.host() + ".");
@@ -215,26 +216,41 @@ public class MailSourceClient {
             store = session.getStore(bridge.tls() ? "imaps" : "imap");
             registerStore(store);
             connectStore(store, bridge);
-            String targetFolder = bridge.folder().orElse("INBOX");
-            folder = store.getFolder(targetFolder);
-            registerFolder(folder);
-            if (!folder.exists()) {
-                throw new IllegalStateException("The mailbox path " + targetFolder + " does not exist on " + bridge.host() + ".");
+            List<String> targetFolders = bridge.sourceFolders();
+            String targetFolder = String.join(", ", targetFolders);
+            int visibleMessageCount = 0;
+            int unreadMessageCount = 0;
+            Message[] candidateMessages = new Message[0];
+            Folder candidateFolder = null;
+            for (String folderName : targetFolders) {
+                folder = store.getFolder(folderName);
+                registerFolder(folder);
+                if (!folder.exists()) {
+                    throw new IllegalStateException("The mailbox path " + folderName + " does not exist on " + bridge.host() + ".");
+                }
+                folder.open(Folder.READ_ONLY);
+                visibleMessageCount += folder.getMessageCount();
+                Message[] unreadMessages = folder.search(new FlagTerm(new Flags(Flags.Flag.SEEN), false));
+                unreadMessageCount += unreadMessages.length;
+                Message[] folderCandidateMessages = bridge.unreadOnly()
+                        ? trimTailMessages(unreadMessages, 1)
+                        : selectTailMessages(folder, 1);
+                if (folderCandidateMessages.length > 0) {
+                    candidateMessages = folderCandidateMessages;
+                    candidateFolder = folder;
+                    folder = null;
+                    break;
+                }
+                closeQuietly(folder);
+                folder = null;
             }
-            folder.open(Folder.READ_ONLY);
-            int visibleMessageCount = folder.getMessageCount();
-            Message[] unreadMessages = folder.search(new FlagTerm(new Flags(Flags.Flag.SEEN), false));
-            Integer unreadMessageCount = Integer.valueOf(unreadMessages.length);
-            Message[] candidateMessages = bridge.unreadOnly()
-                    ? trimTailMessages(unreadMessages, 1)
-                    : selectTailMessages(folder, 1);
             boolean sampleMessageAvailable = candidateMessages.length > 0;
             Boolean sampleMessageMaterialized = null;
             if (sampleMessageAvailable) {
-                prefetchMessageMetadata(folder, candidateMessages);
-                sampleMessageMaterialized = !toFetchedMessages(bridge.id(), candidateMessages).isEmpty();
+                prefetchMessageMetadata(candidateFolder, candidateMessages);
+                sampleMessageMaterialized = !toFetchedMessages(bridge.id(), candidateFolder, candidateMessages).isEmpty();
             }
-            Boolean forwardedMarkerSupported = resolveForwardedMarkerSupport(folder);
+            Boolean forwardedMarkerSupported = resolveForwardedMarkerSupport(candidateFolder);
             return buildProbeResult(
                     bridge,
                     targetFolder,
@@ -359,27 +375,20 @@ public class MailSourceClient {
 
         Session session = Session.getInstance(properties);
         Store store = null;
-        Folder folder = null;
         try {
             store = session.getStore(source.tls() ? "imaps" : "imap");
             registerStore(store);
             connectStore(store, source);
-            folder = store.getFolder(source.folder().orElse("INBOX"));
-            registerFolder(folder);
-            folder.open(Folder.READ_ONLY);
-            Message[] candidateMessages = selectImapCandidateMessages(
+            return fetchImapMessages(
                     source.id(),
                     null,
-                    source.folder().orElse("INBOX"),
+                    SourceMailboxFolders.forSource(source.protocol(), source.folder()),
                     source.unreadOnly(),
                     fetchWindow,
-                    folder);
-            prefetchMessageMetadata(folder, candidateMessages);
-            return toFetchedMessages(source.id(), folder, candidateMessages);
+                    store);
         } catch (MessagingException e) {
             throw new IllegalStateException("Failed to fetch IMAP mail for source " + source.id(), e);
         } finally {
-            closeQuietly(folder);
             closeQuietly(store);
         }
     }
@@ -403,29 +412,60 @@ public class MailSourceClient {
 
         Session session = Session.getInstance(properties);
         Store store = null;
-        Folder folder = null;
         try {
             store = session.getStore(bridge.tls() ? "imaps" : "imap");
             registerStore(store);
             connectStore(store, bridge);
-            folder = store.getFolder(bridge.folder().orElse("INBOX"));
-            registerFolder(folder);
-            folder.open(Folder.READ_ONLY);
-            Message[] candidateMessages = selectImapCandidateMessages(
+            return fetchImapMessages(
                     bridge.id(),
                     destinationKeyFor(bridge),
-                    bridge.folder().orElse("INBOX"),
+                    bridge.sourceFolders(),
                     bridge.unreadOnly(),
                     fetchWindow,
-                    folder);
-            prefetchMessageMetadata(folder, candidateMessages);
-            return toFetchedMessages(bridge.id(), folder, candidateMessages);
+                    store);
         } catch (MessagingException e) {
             throw new IllegalStateException("Failed to fetch IMAP mail for source " + bridge.id(), e);
         } finally {
-            closeQuietly(folder);
             closeQuietly(store);
         }
+    }
+
+    /**
+     * Fetches candidate IMAP messages independently per configured folder so each
+     * folder keeps its own checkpoint continuity and visible-window selection.
+     */
+    private List<FetchedMessage> fetchImapMessages(
+            String sourceId,
+            String destinationKey,
+            List<String> folderNames,
+            boolean unreadOnly,
+            int fetchWindow,
+            Store store) throws MessagingException {
+        List<FetchedMessage> fetchedMessages = new ArrayList<>();
+        for (String folderName : folderNames) {
+            Folder folder = null;
+            try {
+                folder = store.getFolder(folderName);
+                registerFolder(folder);
+                if (!folder.exists()) {
+                    throw new IllegalStateException("The mailbox path " + folderName + " does not exist on " + store.getURLName().getHost() + ".");
+                }
+                folder.open(Folder.READ_ONLY);
+                Message[] candidateMessages = selectImapCandidateMessages(
+                        sourceId,
+                        destinationKey,
+                        folderName,
+                        unreadOnly,
+                        fetchWindow,
+                        folder);
+                prefetchMessageMetadata(folder, candidateMessages);
+                fetchedMessages.addAll(toFetchedMessages(sourceId, folder, candidateMessages));
+            } finally {
+                closeQuietly(folder);
+            }
+        }
+        fetchedMessages.sort(Comparator.comparing(FetchedMessage::messageInstant));
+        return fetchedMessages;
     }
 
     private List<FetchedMessage> fetchPop3(InboxBridgeConfig.Source source, int fetchWindow) {

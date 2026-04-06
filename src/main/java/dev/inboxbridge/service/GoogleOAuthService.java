@@ -58,6 +58,9 @@ public class GoogleOAuthService {
     @Inject
     MailboxConflictService mailboxConflictService;
 
+    @Inject
+    UserEmailAccountService userEmailAccountService;
+
     private final HttpClient httpClient = HttpClient.newBuilder()
             .connectTimeout(Duration.ofSeconds(20))
             .build();
@@ -273,6 +276,7 @@ public class GoogleOAuthService {
             });
             mailboxConflictService.disableSourcesMatchingCurrentDestination(userId);
         }
+        sourceIdFromSubjectKey(profile.subjectKey()).ifPresent(userEmailAccountService::enableAfterSuccessfulOauthConnection);
 
         return new GoogleTokenExchangeResponse(
                 true,
@@ -301,6 +305,14 @@ public class GoogleOAuthService {
         } catch (Exception ignored) {
             return null;
         }
+    }
+
+    private java.util.Optional<String> sourceIdFromSubjectKey(String subjectKey) {
+        if (subjectKey == null || !subjectKey.startsWith("source-google:")) {
+            return java.util.Optional.empty();
+        }
+        String sourceId = subjectKey.substring("source-google:".length());
+        return sourceId.isBlank() ? java.util.Optional.empty() : java.util.Optional.of(sourceId);
     }
 
     protected String resolveAccountAddress(String accessToken) {

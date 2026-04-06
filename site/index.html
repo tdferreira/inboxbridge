@@ -6,7 +6,7 @@
     <title>InboxBridge | Self-hosted one inbox, many accounts</title>
     <meta
       name="description"
-      content="InboxBridge is a self-hosted mail importer for IMAP, POP3, Gmail API, and IMAP APPEND destinations, with optional IMAP IDLE and a guided .env generator."
+      content="InboxBridge is a self-hosted mail importer for IMAP, POP3, Gmail API, and IMAP APPEND destinations, with multi-folder IMAP, POP UIDL checkpoints, optional IMAP IDLE, and a guided .env generator."
     />
     <link rel="icon" type="image/svg+xml" href="./remote-icon.svg" />
     <link rel="stylesheet" href="./styles.css" />
@@ -59,8 +59,9 @@
             <h1>Keep one inbox without giving up your other accounts.</h1>
             <p>
               InboxBridge imports mail from IMAP and POP3 source mailboxes into one destination mailbox.
-              It supports Gmail API delivery, IMAP APPEND destinations, realtime IMAP IDLE for supported sources,
-              encrypted UI-managed secrets, and a browser admin UI that does not require hand-editing configuration for day-to-day use.
+              It supports Gmail API delivery, IMAP APPEND destinations, POP UIDL checkpoints, multi-folder IMAP with
+              per-folder IMAP IDLE, encrypted UI-managed secrets, and a browser admin UI that does not require
+              hand-editing configuration for day-to-day use.
             </p>
             <div class="hero-actions">
               <a class="button primary" href="https://github.com/tdferreira/inboxbridge">View repository</a>
@@ -82,7 +83,7 @@
               <article>
                 <div class="mini-kicker">Realtime</div>
                 <h2>IMAP IDLE when it matters</h2>
-                <p>Use long-lived IMAP IDLE watchers with durable UID checkpoints for near-real-time imports.</p>
+                <p>Use long-lived IMAP IDLE watchers with per-folder checkpoints for near-real-time imports.</p>
               </article>
               <article>
                 <div class="mini-kicker">Control</div>
@@ -115,7 +116,7 @@
             <article class="feature-card">
               <div class="mini-kicker">Source flexibility</div>
               <h3>Polling for everything, IDLE for IMAP</h3>
-              <p>POP3 stays on polling. IMAP can use scheduled polling or opt into IMAP IDLE with scheduler fallback if a watcher stays unhealthy.</p>
+              <p>POP3 stays on polling with durable UIDL checkpoints. IMAP can poll one or many folders or opt into per-folder IMAP IDLE with scheduler fallback if a watcher stays unhealthy.</p>
             </article>
             <article class="feature-card">
               <div class="mini-kicker">Operator choice</div>
@@ -143,11 +144,11 @@
               <article class="arch-card arch-card-sources">
                 <div class="mini-kicker">Sources</div>
                 <h3>IMAP and POP3 accounts</h3>
-                <p>Classic mailbox pull for everything, with optional IMAP IDLE watchers for eligible IMAP folders.</p>
+                <p>Classic mailbox pull for everything, with multi-folder IMAP polling and optional IMAP IDLE watchers for eligible folders.</p>
                 <ul class="arch-list">
-                  <li>IMAP polling</li>
+                  <li>Multi-folder IMAP polling</li>
                   <li>IMAP IDLE</li>
-                  <li>POP3 polling</li>
+                  <li>POP3 UIDL checkpoints</li>
                 </ul>
               </article>
 
@@ -164,9 +165,9 @@
               <article class="arch-card arch-card-core">
                 <div class="mini-kicker">InboxBridge core</div>
                 <h3>Quarkus backend + PostgreSQL</h3>
-                <p>Tracks checkpoints, dedupe, encrypted UI-managed secrets, live poll state, and post-import actions.</p>
+                <p>Tracks per-folder checkpoints, dedupe, encrypted UI-managed secrets, live poll state, and post-import actions.</p>
                 <ul class="arch-list">
-                  <li>UID checkpoints</li>
+                  <li>IMAP and POP checkpoints</li>
                   <li>Import history</li>
                   <li>Token encryption</li>
                 </ul>
@@ -606,8 +607,22 @@
                     <div class="field full" data-imap-only>
                       <div class="dual-input-row dual-input-row-imap">
                         <div class="nested-field">
-                          <label for="sourceFolder"><span class="label-copy">IMAP folder</span><button class="info-hint" type="button" aria-label="IMAP folder help" data-hint="The IMAP folder InboxBridge should watch or poll for new messages.">i</button></label>
-                          <input id="sourceFolder" name="sourceFolder" value="INBOX" />
+                          <label for="sourceFolderPillbox"><span class="label-copy">IMAP folder</span><button class="info-hint" type="button" aria-label="IMAP folder help" data-hint="The IMAP folder InboxBridge should watch or poll for new messages.">i</button></label>
+                          <div class="site-pillbox" data-pillbox data-pillbox-hidden-input="sourceFolder">
+                            <div class="site-pillbox-shell" data-pillbox-shell>
+                              <div class="site-pillbox-values" data-pillbox-values></div>
+                              <input
+                                id="sourceFolderPillbox"
+                                class="site-pillbox-input"
+                                data-pillbox-input
+                                type="text"
+                                aria-label="IMAP folders"
+                                placeholder="Type a folder and press Enter"
+                              />
+                            </div>
+                            <p class="site-pillbox-help">Add one or more folders. The generator writes them as a comma-separated IMAP folder list.</p>
+                          </div>
+                          <input id="sourceFolder" name="sourceFolder" type="hidden" value="INBOX" />
                         </div>
                         <div class="nested-field">
                           <label for="sourceFetchMode"><span class="label-copy">Fetch mode</span><button class="info-hint" type="button" aria-label="Fetch mode help" data-hint="Use IDLE for near-real-time IMAP imports when the provider supports it. POP3 always stays on polling.">i</button></label>
