@@ -127,7 +127,8 @@ class AdminDashboardServiceTest {
                         0,
                         null,
                         null,
-                        "Source outlook-main-imap failed: Source outlook-main-imap is configured for OAuth2 but has no refresh token"));
+                        "Source outlook-main-imap failed: Source outlook-main-imap is configured for OAuth2 but has no refresh token",
+                        null, null, null, null, null, null, null, null, null));
             }
 
             @Override
@@ -359,7 +360,8 @@ class AdminDashboardServiceTest {
                 0,
                 null,
                 null,
-                "Source outlook-main-imap failed: AUTHENTICATE failed");
+                "Source outlook-main-imap failed: AUTHENTICATE failed",
+                null, null, null, null, null, null, null, null, null);
 
         @Override
         public Optional<AdminPollEventSummary> latestForSource(String sourceId) {

@@ -31,7 +31,8 @@ public class SourcePollEventService {
             int spamJunkMessageCount,
             String actorUsername,
             String executionSurface,
-            String error) {
+            String error,
+            PollDecisionSnapshot decisionSnapshot) {
         SourcePollEvent event = new SourcePollEvent();
         event.sourceId = sourceId;
         event.triggerName = trigger;
@@ -45,6 +46,15 @@ public class SourcePollEventService {
         event.spamJunkMessageCount = Math.max(0, spamJunkMessageCount);
         event.actorUsername = actorUsername == null || actorUsername.isBlank() ? null : actorUsername;
         event.executionSurface = executionSurface == null || executionSurface.isBlank() ? null : executionSurface;
+        event.failureCategory = decisionSnapshot == null ? null : decisionSnapshot.failureCategory();
+        event.cooldownBackoffMillis = decisionSnapshot == null ? null : nonNegative(decisionSnapshot.cooldownBackoffMillis());
+        event.cooldownUntil = decisionSnapshot == null ? null : decisionSnapshot.cooldownUntil();
+        event.sourceThrottleWaitMillis = decisionSnapshot == null ? null : nonNegative(decisionSnapshot.sourceThrottleWaitMillis());
+        event.sourceThrottleMultiplierAfter = decisionSnapshot == null ? null : decisionSnapshot.sourceThrottleMultiplierAfter();
+        event.sourceThrottleNextAllowedAt = decisionSnapshot == null ? null : decisionSnapshot.sourceThrottleNextAllowedAt();
+        event.destinationThrottleWaitMillis = decisionSnapshot == null ? null : nonNegative(decisionSnapshot.destinationThrottleWaitMillis());
+        event.destinationThrottleMultiplierAfter = decisionSnapshot == null ? null : decisionSnapshot.destinationThrottleMultiplierAfter();
+        event.destinationThrottleNextAllowedAt = decisionSnapshot == null ? null : decisionSnapshot.destinationThrottleNextAllowedAt();
         event.errorMessage = error;
         repository.persist(event);
     }
@@ -91,6 +101,22 @@ public class SourcePollEventService {
                 event.spamJunkMessageCount,
                 event.actorUsername,
                 event.executionSurface,
-                event.errorMessage);
+                event.errorMessage,
+                event.failureCategory,
+                event.cooldownBackoffMillis,
+                event.cooldownUntil,
+                event.sourceThrottleWaitMillis,
+                event.sourceThrottleMultiplierAfter,
+                event.sourceThrottleNextAllowedAt,
+                event.destinationThrottleWaitMillis,
+                event.destinationThrottleMultiplierAfter,
+                event.destinationThrottleNextAllowedAt);
+    }
+
+    private Long nonNegative(Long value) {
+        if (value == null) {
+            return null;
+        }
+        return Math.max(0L, value);
     }
 }

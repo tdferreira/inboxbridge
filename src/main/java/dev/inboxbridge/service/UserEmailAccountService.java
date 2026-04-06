@@ -420,7 +420,16 @@ public class UserEmailAccountService {
                     lastEvent.spamJunkMessageCount(),
                     lastEvent.actorUsername(),
                     lastEvent.executionSurface(),
-                    sourcePrefixedRevokedGmailAccessMessage(emailAccount.emailAccountId));
+                    sourcePrefixedRevokedGmailAccessMessage(emailAccount.emailAccountId),
+                    lastEvent.failureCategory(),
+                    lastEvent.cooldownBackoffMillis(),
+                    lastEvent.cooldownUntil(),
+                    lastEvent.sourceThrottleWaitMillis(),
+                    lastEvent.sourceThrottleMultiplierAfter(),
+                    lastEvent.sourceThrottleNextAllowedAt(),
+                    lastEvent.destinationThrottleWaitMillis(),
+                    lastEvent.destinationThrottleMultiplierAfter(),
+                    lastEvent.destinationThrottleNextAllowedAt());
         }
         return lastEvent;
     }

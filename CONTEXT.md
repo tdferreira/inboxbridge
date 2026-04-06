@@ -467,6 +467,8 @@ Current backoff behavior now uses one shared mail-failure classifier across sour
 - repeated failures increase the cooldown window with exponential growth up to a capped maximum
 - successful polls now schedule their next eligible run on aligned interval boundaries instead of drifting from the previous success timestamp, so user-visible cadences like `2m`, `5m`, and `10m` stay anchored to predictable clock slots
 
+Persisted `source_poll_event` history now also captures the cooldown/throttle decision snapshot observed during that poll run. Each row can now store the classified failure category, the chosen cooldown backoff and resulting `cooldownUntil`, the cumulative source/destination throttle wait time seen during that run, and the final adaptive throttle multiplier / `nextAllowedAt` state left behind after the run completed. That keeps cooldown reasoning queryable after the mutable per-source/per-throttle state has moved on.
+
 Manual poll requests now split into two behaviors:
 
 - single-source manual runs bypass the normal interval gate and cooldown window for that one selected mail account

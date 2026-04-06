@@ -119,7 +119,8 @@ class UserEmailAccountServiceTest {
                         0,
                         null,
                         null,
-                        "Source outlook-main failed: Source outlook-main is configured for OAuth2 but has no refresh token"));
+                        "Source outlook-main failed: Source outlook-main is configured for OAuth2 but has no refresh token",
+                        null, null, null, null, null, null, null, null, null));
 
         UserEmailAccountView view = service.listForUser(owner.id).getFirst();
 
@@ -147,7 +148,8 @@ class UserEmailAccountServiceTest {
                         0,
                         null,
                         null,
-                        "Source gmail-source failed: Failed to list Gmail labels: 401 - {\"error\":{\"message\":\"Invalid authentication credentials\"}}"));
+                        "Source gmail-source failed: Failed to list Gmail labels: 401 - {\"error\":{\"message\":\"Invalid authentication credentials\"}}",
+                        null, null, null, null, null, null, null, null, null));
         service.sourcePollingStateService = new StaticSourcePollingStateService(
                 new dev.inboxbridge.dto.SourcePollingStateView(
                         Instant.parse("2026-03-28T08:30:00Z"),
@@ -188,7 +190,8 @@ class UserEmailAccountServiceTest {
                         6,
                         "admin",
                         "ADMINISTRATION",
-                        null));
+                        null,
+                        null, null, null, null, null, null, null, null, null));
 
         UserEmailAccountView view = service.listForUser(owner.id).getFirst();
 

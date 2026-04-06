@@ -147,13 +147,19 @@ public class SourcePollingStateService {
     }
 
     @Transactional
-    public void recordFailure(String sourceId, Instant finishedAt, String errorMessage) {
+    /**
+     * Persists the current source failure and returns the applied cooldown
+     * decision so higher-level poll history can record why the source is cooling
+     * down and for how long.
+     */
+    public CooldownDecision recordFailure(String sourceId, Instant finishedAt, String errorMessage) {
         SourcePollingState state = repository.findBySourceId(sourceId).orElseGet(SourcePollingState::new);
         if (state.id == null) {
             state.sourceId = sourceId;
         }
+        MailFailureClassifier.Classification classification = MailFailureClassifier.classify(errorMessage);
         int failures = state.consecutiveFailures + 1;
-        Duration backoff = backoffFor(errorMessage, failures);
+        Duration backoff = backoffFor(classification, failures);
         state.consecutiveFailures = failures;
         state.lastFailureReason = truncate(errorMessage);
         state.lastFailureAt = finishedAt;
@@ -161,6 +167,11 @@ public class SourcePollingStateService {
         state.nextPollAt = state.cooldownUntil;
         state.updatedAt = finishedAt;
         repository.persist(state);
+        return new CooldownDecision(
+                classification.category().name(),
+                failures,
+                backoff,
+                state.cooldownUntil);
     }
 
     @Transactional
@@ -214,8 +225,8 @@ public class SourcePollingStateService {
         repository.persist(state);
     }
 
-    private Duration backoffFor(String errorMessage, int consecutiveFailures) {
-        Duration result = MailFailureClassifier.classify(errorMessage).baseBackoff();
+    private Duration backoffFor(MailFailureClassifier.Classification classification, int consecutiveFailures) {
+        Duration result = classification.baseBackoff();
         int multiplierSteps = Math.max(0, Math.min(4, consecutiveFailures - 1));
         for (int i = 0; i < multiplierSteps; i++) {
             result = result.multipliedBy(2);
@@ -254,5 +265,12 @@ public class SourcePollingStateService {
             boolean shouldPoll,
             String reason,
             SourcePollingStateView state) {
+    }
+
+    public record CooldownDecision(
+            String failureCategory,
+            int consecutiveFailures,
+            Duration backoff,
+            Instant cooldownUntil) {
     }
 }

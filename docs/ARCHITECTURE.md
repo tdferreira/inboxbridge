@@ -171,6 +171,8 @@ Polling hardening also now includes:
 
 That classifier currently distinguishes rate limits, mailbox authentication failures, OAuth authorization failures, provider availability problems, transient network failures, mailbox-state problems such as closed folders, and unknown failures. Rate limits still get the strongest throttle penalty, auth/authz failures still get the longest cooldown tier without widening host/provider throttle state, and transient/provider/mailbox-state failures keep the medium retry tier.
 
+Persisted `source_poll_event` rows now also carry the cooldown/throttle decision snapshot for that poll attempt: the classified failure category, chosen cooldown backoff and `cooldown_until`, cumulative source/destination throttle wait time, and the final adaptive throttle multiplier / `next_allowed_at` state left behind by that run. This keeps cooldown reasoning durable for later stats and operator audit work instead of requiring the current mutable state tables alone to explain what happened.
+
 Import dedupe is now destination-mailbox-identity aware and layered. InboxBridge first checks the persisted source message key for that destination identity and source account. For IMAP those source keys now prefer `UIDVALIDITY + UID`, while POP3 source keys prefer `UIDL`. If that protocol-native identity does not match, InboxBridge next falls back to raw MIME SHA-256 and only then to the normalized `Message-ID` header for that same source account. That keeps protocol-native mailbox identifiers authoritative while still leaving one last heuristic safety net for providers that change UIDs, UIDLs, or MIME details.
 
 To keep upgrades from older databases consistent, startup now also runs a lightweight reconciliation pass that backfills legacy `destination_key`-scoped imported-message rows and legacy/null checkpoint destination keys to the current resolved mailbox identity for each configured destination. This only upgrades rows that still look legacy-scoped; already destination-aware identities are left untouched.
@@ -180,7 +182,7 @@ Those values can be overridden live from `Administration -> Global Poller Settin
 That is still deliberately simpler than a full mailbox-sync engine. The next evolution should be:
 
 - multi-folder IMAP IDLE / checkpoint support
-- richer metrics and audit logs for poll cooldown decisions
+- optional admin diagnostics for destination identity, checkpoints, and persisted poll-decision history
 
 ## Package map
 

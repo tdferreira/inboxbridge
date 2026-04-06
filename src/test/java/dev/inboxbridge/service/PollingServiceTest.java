@@ -1,6 +1,7 @@
 package dev.inboxbridge.service;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.time.Duration;
@@ -175,6 +176,38 @@ class PollingServiceTest {
 
         assertEquals(1, result.getErrors().size());
         assertTrue(result.getErrors().getFirst().contains("cooling down"));
+    }
+
+    @Test
+    void runPollFailureEventIncludesCooldownAndThrottleDecisionAuditFields() {
+        PollingService service = new PollingService();
+        RecordingSourcePollEventService sourcePollEventService = new RecordingSourcePollEventService();
+        RecordingFailureSourcePollingStateService sourcePollingStateService = new RecordingFailureSourcePollingStateService();
+        RecordingPollThrottleService pollThrottleService = new RecordingPollThrottleService();
+        service.mailSourceClient = new RecordingMailSourceClient() {
+            @Override
+            public List<FetchedMessage> fetch(RuntimeEmailAccount bridge, int fetchWindow) {
+                throw new IllegalStateException("429 too many requests");
+            }
+        };
+        service.importDeduplicationService = new ImportDeduplicationService();
+        service.mailDestinationServices = new FakeMailDestinationServices(new FakeMailDestinationService(true));
+        service.sourcePollEventService = sourcePollEventService;
+        service.runtimeEmailAccountService = new FakeRuntimeEmailAccountService(List.of(userBridge(7L)));
+        service.pollingSettingsService = new FakePollingSettingsService(true, Duration.ofMinutes(5), "5m", 10);
+        service.userPollingSettingsService = new FakeUserPollingSettingsService(true, Duration.ofMinutes(5), "5m", 10);
+        service.sourcePollingSettingsService = new FakeSourcePollingSettingsService();
+        service.sourcePollingStateService = sourcePollingStateService;
+        service.pollThrottleService = pollThrottleService;
+        service.manualPollRateLimitService = new ManualPollRateLimitService();
+
+        PollRunResult result = service.runPoll("manual-api");
+
+        assertEquals(1, result.getErrors().size());
+        assertEquals("RATE_LIMIT", sourcePollEventService.lastFailureCategory);
+        assertEquals(15 * 60 * 1000L, sourcePollEventService.lastCooldownBackoffMillis);
+        assertNotNull(sourcePollEventService.lastCooldownUntil);
+        assertNotNull(sourcePollEventService.lastSourceThrottleMultiplierAfter);
     }
 
     @Test
@@ -1286,19 +1319,23 @@ class PollingServiceTest {
         }
 
         @Override
-        public void recordSourceSuccess(RuntimeEmailAccount emailAccount) {
+        public ThrottleAudit recordSourceSuccess(RuntimeEmailAccount emailAccount) {
+            return null;
         }
 
         @Override
-        public void recordSourceFailure(RuntimeEmailAccount emailAccount, String errorMessage) {
+        public ThrottleAudit recordSourceFailure(RuntimeEmailAccount emailAccount, String errorMessage) {
+            return new ThrottleAudit("source-host:" + emailAccount.host(), "SOURCE_HOST", "RATE_LIMIT", 1, 2, Duration.ofSeconds(2), Instant.now().plusSeconds(2));
         }
 
         @Override
-        public void recordDestinationSuccess(MailDestinationTarget target) {
+        public ThrottleAudit recordDestinationSuccess(MailDestinationTarget target) {
+            return null;
         }
 
         @Override
-        public void recordDestinationFailure(MailDestinationTarget target, String errorMessage) {
+        public ThrottleAudit recordDestinationFailure(MailDestinationTarget target, String errorMessage) {
+            return null;
         }
     }
 
@@ -1523,8 +1560,9 @@ class PollingServiceTest {
         }
 
         @Override
-        public void recordFailure(String sourceId, Instant finishedAt, String failureReason) {
+        public CooldownDecision recordFailure(String sourceId, Instant finishedAt, String failureReason) {
             failureCalls++;
+            return new CooldownDecision("RATE_LIMIT", failureCalls, Duration.ofMinutes(15), finishedAt.plus(Duration.ofMinutes(15)));
         }
     }
 
@@ -1707,7 +1745,7 @@ class PollingServiceTest {
 
     private static final class NoopSourcePollEventService extends SourcePollEventService {
         @Override
-        public void record(String sourceId, String trigger, Instant startedAt, Instant finishedAt, int fetched, int imported, long importedBytes, int duplicates, int spamJunkMessageCount, String actorUsername, String executionSurface, String error) {
+        public void record(String sourceId, String trigger, Instant startedAt, Instant finishedAt, int fetched, int imported, long importedBytes, int duplicates, int spamJunkMessageCount, String actorUsername, String executionSurface, String error, PollDecisionSnapshot decisionSnapshot) {
         }
     }
 
@@ -1716,19 +1754,27 @@ class PollingServiceTest {
         private long lastImportedBytes;
         private int lastSpamJunkMessageCount;
         private String lastStatus;
+        private String lastFailureCategory;
+        private Long lastCooldownBackoffMillis;
+        private Instant lastCooldownUntil;
+        private Integer lastSourceThrottleMultiplierAfter;
 
         @Override
-        public void record(String sourceId, String trigger, Instant startedAt, Instant finishedAt, int fetched, int imported, long importedBytes, int duplicates, int spamJunkMessageCount, String actorUsername, String executionSurface, String error) {
+        public void record(String sourceId, String trigger, Instant startedAt, Instant finishedAt, int fetched, int imported, long importedBytes, int duplicates, int spamJunkMessageCount, String actorUsername, String executionSurface, String error, PollDecisionSnapshot decisionSnapshot) {
             lastError = error;
             lastImportedBytes = importedBytes;
             lastSpamJunkMessageCount = spamJunkMessageCount;
             lastStatus = error == null ? "SUCCESS" : "Stopped by user.".equals(error) ? "STOPPED" : "ERROR";
+            lastFailureCategory = decisionSnapshot == null ? null : decisionSnapshot.failureCategory();
+            lastCooldownBackoffMillis = decisionSnapshot == null ? null : decisionSnapshot.cooldownBackoffMillis();
+            lastCooldownUntil = decisionSnapshot == null ? null : decisionSnapshot.cooldownUntil();
+            lastSourceThrottleMultiplierAfter = decisionSnapshot == null ? null : decisionSnapshot.sourceThrottleMultiplierAfter();
         }
     }
 
     private static final class ThrowingSourcePollEventService extends SourcePollEventService {
         @Override
-        public void record(String sourceId, String trigger, Instant startedAt, Instant finishedAt, int fetched, int imported, long importedBytes, int duplicates, int spamJunkMessageCount, String actorUsername, String executionSurface, String error) {
+        public void record(String sourceId, String trigger, Instant startedAt, Instant finishedAt, int fetched, int imported, long importedBytes, int duplicates, int spamJunkMessageCount, String actorUsername, String executionSurface, String error, PollDecisionSnapshot decisionSnapshot) {
             throw new IllegalStateException("simulated source poll event persistence failure");
         }
     }

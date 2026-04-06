@@ -65,21 +65,21 @@ public class PollThrottleService {
         }
     }
 
-    public void recordSourceSuccess(RuntimeEmailAccount emailAccount) {
-        updateAdaptiveState(sourceThrottleKey(emailAccount), "SOURCE_HOST", -1, Duration.ZERO);
+    public ThrottleAudit recordSourceSuccess(RuntimeEmailAccount emailAccount) {
+        return updateAdaptiveState(sourceThrottleKey(emailAccount), "SOURCE_HOST", -1, Duration.ZERO);
     }
 
-    public void recordSourceFailure(RuntimeEmailAccount emailAccount, String errorMessage) {
-        applyOutcome(sourceThrottleKey(emailAccount), "SOURCE_HOST",
+    public ThrottleAudit recordSourceFailure(RuntimeEmailAccount emailAccount, String errorMessage) {
+        return applyOutcome(sourceThrottleKey(emailAccount), "SOURCE_HOST",
                 pollingSettingsService.effectiveThrottleSettings().sourceHostMinSpacing(), errorMessage);
     }
 
-    public void recordDestinationSuccess(MailDestinationTarget target) {
-        updateAdaptiveState(destinationThrottleKey(target), destinationThrottleKind(target), -1, Duration.ZERO);
+    public ThrottleAudit recordDestinationSuccess(MailDestinationTarget target) {
+        return updateAdaptiveState(destinationThrottleKey(target), destinationThrottleKind(target), -1, Duration.ZERO);
     }
 
-    public void recordDestinationFailure(MailDestinationTarget target, String errorMessage) {
-        applyOutcome(destinationThrottleKey(target), destinationThrottleKind(target),
+    public ThrottleAudit recordDestinationFailure(MailDestinationTarget target, String errorMessage) {
+        return applyOutcome(destinationThrottleKey(target), destinationThrottleKind(target),
                 pollingSettingsService.effectiveThrottleSettings().destinationProviderMinSpacing(), errorMessage);
     }
 
@@ -113,28 +113,31 @@ public class PollThrottleService {
         if (key == null || baseSpacing == null || baseSpacing.isZero() || baseSpacing.isNegative() || maxConcurrency <= 0) {
             return ThrottleLease.noopLease();
         }
+        Duration totalWait = Duration.ZERO;
         while (true) {
             AcquireDecision decision = tryAcquire(key, kind, baseSpacing, maxConcurrency);
             if (decision.acquired()) {
-                return decision.lease();
+                return decision.lease().withWaitedFor(totalWait);
             }
             if (!decision.waitFor().isZero() && !decision.waitFor().isNegative()) {
                 LOG.debugf("Throttling %s for %d ms (adaptive, persisted)", key, decision.waitFor().toMillis());
+                totalWait = totalWait.plus(decision.waitFor());
                 pause(decision.waitFor());
             }
         }
     }
 
-    private void applyOutcome(String key, String kind, Duration baseSpacing, String errorMessage) {
+    private ThrottleAudit applyOutcome(String key, String kind, Duration baseSpacing, String errorMessage) {
         if (key == null || baseSpacing == null || baseSpacing.isZero() || baseSpacing.isNegative()) {
-            return;
+            return null;
         }
-        int delta = MailFailureClassifier.classify(errorMessage).throttleSeverityDelta();
+        MailFailureClassifier.Classification classification = MailFailureClassifier.classify(errorMessage);
+        int delta = classification.throttleSeverityDelta();
         if (delta <= 0) {
-            return;
+            return null;
         }
         Duration penalty = baseSpacing.multipliedBy(delta);
-        updateAdaptiveState(key, kind, delta, penalty);
+        return updateAdaptiveState(key, kind, delta, penalty, classification.category().name());
     }
 
     private String sourceThrottleKey(RuntimeEmailAccount emailAccount) {
@@ -207,13 +210,18 @@ public class PollThrottleService {
         state.updatedAt = currentTime;
         stateRepository.persist(state);
 
-        return AcquireDecision.acquired(new ThrottleLease(key, lease.leaseToken, false));
+        return AcquireDecision.acquired(new ThrottleLease(key, lease.leaseToken, false, Duration.ZERO));
     }
 
     @Transactional
-    protected void updateAdaptiveState(String key, String kind, int delta, Duration penalty) {
+    protected ThrottleAudit updateAdaptiveState(String key, String kind, int delta, Duration penalty) {
+        return updateAdaptiveState(key, kind, delta, penalty, null);
+    }
+
+    @Transactional
+    protected ThrottleAudit updateAdaptiveState(String key, String kind, int delta, Duration penalty, String failureCategory) {
         if (key == null) {
-            return;
+            return null;
         }
         Instant currentTime = now();
         PollThrottleState state = stateForUpdate(key, kind, currentTime);
@@ -226,14 +234,24 @@ public class PollThrottleService {
             nextMultiplier = Math.min(maxMultiplier, currentMultiplier + delta);
         }
         state.adaptiveMultiplier = nextMultiplier;
+        Instant nextAllowedAt = state.nextAllowedAt;
         if (penalty != null && !penalty.isZero() && !penalty.isNegative()) {
             Instant penalizedUntil = currentTime.plus(multiply(penalty, nextMultiplier));
             if (state.nextAllowedAt == null || penalizedUntil.isAfter(state.nextAllowedAt)) {
                 state.nextAllowedAt = penalizedUntil;
             }
+            nextAllowedAt = state.nextAllowedAt;
         }
         state.updatedAt = currentTime;
         stateRepository.persist(state);
+        return new ThrottleAudit(
+                key,
+                kind,
+                failureCategory,
+                currentMultiplier,
+                nextMultiplier,
+                penalty == null || penalty.isNegative() ? Duration.ZERO : penalty,
+                nextAllowedAt);
     }
 
     @Transactional
@@ -263,9 +281,13 @@ public class PollThrottleService {
         return duration.multipliedBy(multiplier);
     }
 
-    public record ThrottleLease(String key, String leaseToken, boolean noop) {
+    public record ThrottleLease(String key, String leaseToken, boolean noop, Duration waitedFor) {
         public static ThrottleLease noopLease() {
-            return new ThrottleLease(null, null, true);
+            return new ThrottleLease(null, null, true, Duration.ZERO);
+        }
+
+        ThrottleLease withWaitedFor(Duration totalWait) {
+            return new ThrottleLease(key, leaseToken, noop, totalWait == null ? Duration.ZERO : totalWait);
         }
     }
 
@@ -277,5 +299,15 @@ public class PollThrottleService {
         static AcquireDecision acquired(ThrottleLease lease) {
             return new AcquireDecision(true, Duration.ZERO, lease);
         }
+    }
+
+    public record ThrottleAudit(
+            String key,
+            String kind,
+            String failureCategory,
+            int multiplierBefore,
+            int multiplierAfter,
+            Duration penalty,
+            Instant nextAllowedAt) {
     }
 }

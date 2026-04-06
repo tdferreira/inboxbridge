@@ -34,6 +34,7 @@ class PollThrottleServiceTest {
         service.release(second);
 
         assertEquals(List.of(Duration.ofSeconds(1)), service.pauses);
+        assertEquals(Duration.ofSeconds(1), second.waitedFor());
     }
 
     @Test
@@ -89,11 +90,14 @@ class PollThrottleServiceTest {
         RecordingPollThrottleService service = service();
         RuntimeEmailAccount emailAccount = source("imap.example.com");
 
-        service.recordSourceFailure(emailAccount, "503 service unavailable");
+        PollThrottleService.ThrottleAudit audit = service.recordSourceFailure(emailAccount, "503 service unavailable");
 
         PollThrottleState state = service.stateRepository.findByThrottleKey("source-host:imap.example.com").orElseThrow();
         assertEquals(2, state.adaptiveMultiplier);
         assertNotNull(state.nextAllowedAt);
+        assertEquals("PROVIDER_UNAVAILABLE", audit.failureCategory());
+        assertEquals(1, audit.multiplierBefore());
+        assertEquals(2, audit.multiplierAfter());
     }
 
     @Test

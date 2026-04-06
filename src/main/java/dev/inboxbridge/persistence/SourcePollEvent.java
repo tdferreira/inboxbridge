@@ -13,6 +13,10 @@ import jakarta.persistence.Table;
 
 /**
  * Durable event log for each source poll attempt.
+ *
+ * <p>Besides the poll outcome counters, each row can also carry the cooldown
+ * and adaptive-throttle snapshot that applied during that run so later stats
+ * and operator debugging can explain why a source cooled down or waited.
  */
 @Entity
 @Table(name = "source_poll_event",
@@ -61,6 +65,33 @@ public class SourcePollEvent extends PanacheEntityBase {
 
     @Column(name = "execution_surface", length = 40)
     public String executionSurface;
+
+    @Column(name = "failure_category", length = 40)
+    public String failureCategory;
+
+    @Column(name = "cooldown_backoff_millis")
+    public Long cooldownBackoffMillis;
+
+    @Column(name = "cooldown_until")
+    public Instant cooldownUntil;
+
+    @Column(name = "source_throttle_wait_millis")
+    public Long sourceThrottleWaitMillis;
+
+    @Column(name = "source_throttle_multiplier_after")
+    public Integer sourceThrottleMultiplierAfter;
+
+    @Column(name = "source_throttle_next_allowed_at")
+    public Instant sourceThrottleNextAllowedAt;
+
+    @Column(name = "destination_throttle_wait_millis")
+    public Long destinationThrottleWaitMillis;
+
+    @Column(name = "destination_throttle_multiplier_after")
+    public Integer destinationThrottleMultiplierAfter;
+
+    @Column(name = "destination_throttle_next_allowed_at")
+    public Instant destinationThrottleNextAllowedAt;
 
     @Column(name = "error_message", length = 4000)
     public String errorMessage;

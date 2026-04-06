@@ -98,6 +98,21 @@ class SourcePollingStateServiceTest {
     }
 
     @Test
+    void failureReturnsCooldownDecisionAuditDetails() {
+        SourcePollingStateService service = service();
+
+        SourcePollingStateService.CooldownDecision decision = service.recordFailure(
+                "fetcher-1",
+                Instant.parse("2026-03-26T12:00:00Z"),
+                "429 too many requests");
+
+        assertEquals("RATE_LIMIT", decision.failureCategory());
+        assertEquals(1, decision.consecutiveFailures());
+        assertEquals(Duration.ofMinutes(15), decision.backoff());
+        assertEquals(Instant.parse("2026-03-26T12:15:00Z"), decision.cooldownUntil());
+    }
+
+    @Test
     void cooldownBlocksPollingUntilExpiry() {
         SourcePollingStateService service = service();
         service.recordFailure("fetcher-1", Instant.parse("2026-03-26T12:00:00Z"), "invalid_grant");

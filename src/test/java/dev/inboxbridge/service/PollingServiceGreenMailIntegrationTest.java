@@ -1315,7 +1315,8 @@ class PollingServiceGreenMailIntegrationTest {
         }
 
         @Override
-        public void recordFailure(String sourceId, Instant finishedAt, String failureReason) {
+        public CooldownDecision recordFailure(String sourceId, Instant finishedAt, String failureReason) {
+            return null;
         }
     }
 
@@ -1340,7 +1341,8 @@ class PollingServiceGreenMailIntegrationTest {
         }
 
         @Override
-        public void recordFailure(String sourceId, Instant finishedAt, String failureReason) {
+        public CooldownDecision recordFailure(String sourceId, Instant finishedAt, String failureReason) {
+            return null;
         }
     }
 
@@ -1371,7 +1373,7 @@ class PollingServiceGreenMailIntegrationTest {
 
     private static final class NoopSourcePollEventService extends SourcePollEventService {
         @Override
-        public void record(String sourceId, String trigger, Instant startedAt, Instant finishedAt, int fetched, int imported, long importedBytes, int duplicates, int spamJunkMessageCount, String actorUsername, String executionSurface, String error) {
+        public void record(String sourceId, String trigger, Instant startedAt, Instant finishedAt, int fetched, int imported, long importedBytes, int duplicates, int spamJunkMessageCount, String actorUsername, String executionSurface, String error, PollDecisionSnapshot decisionSnapshot) {
         }
     }
 

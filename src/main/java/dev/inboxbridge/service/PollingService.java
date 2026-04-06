@@ -308,6 +308,11 @@ public class PollingService {
         boolean shouldRecordFailure = false;
         boolean stoppedByUser = false;
         PollThrottleService.ThrottleLease sourceLease = PollThrottleService.ThrottleLease.noopLease();
+        long sourceThrottleWaitMillis = 0L;
+        long destinationThrottleWaitMillis = 0L;
+        PollThrottleService.ThrottleAudit sourceThrottleAudit = null;
+        PollThrottleService.ThrottleAudit destinationThrottleAudit = null;
+        SourcePollingStateService.CooldownDecision cooldownDecision = null;
         try (PollCancellationService.Scope ignored = pollCancellationService == null
                 ? PollCancellationService.Scope.noop()
                 : pollCancellationService.bind(liveRunId, emailAccount.id())) {
@@ -318,6 +323,7 @@ public class PollingService {
                 return;
             }
             sourceLease = acquireSourceThrottle(emailAccount);
+            sourceThrottleWaitMillis = Math.max(0L, sourceLease.waitedFor().toMillis());
             if (!awaitLiveCheckpoint(liveRunId)) {
                 stoppedByUser = true;
                 return;
@@ -353,19 +359,20 @@ public class PollingService {
                     continue;
                 }
                 PollThrottleService.ThrottleLease destinationLease = acquireDestinationThrottle(emailAccount.destination());
+                destinationThrottleWaitMillis += Math.max(0L, destinationLease.waitedFor().toMillis());
                 try {
                     MailImportResponse importResponse = destinationService.importMessage(emailAccount.destination(), emailAccount, message);
                     importDeduplicationService.recordImport(message, emailAccount.destination(), importResponse);
                     mailSourceClient.applyPostPollSettings(emailAccount, message);
                     recordSourceCheckpoint(emailAccount, message);
-                    recordDestinationThrottleSuccess(emailAccount.destination());
+                    destinationThrottleAudit = recordDestinationThrottleSuccess(emailAccount.destination());
                     tally.incrementImported();
                     tally.addImportedBytes(message.rawMessage().length);
                     imported++;
                     importedBytes += message.rawMessage().length;
                     publishLiveProgress(liveRunId, emailAccount.id(), messages.size(), totalBytes, processedBytes, fetched, imported, duplicates);
                 } catch (RuntimeException destinationError) {
-                    recordDestinationThrottleFailure(emailAccount.destination(), destinationError);
+                    destinationThrottleAudit = recordDestinationThrottleFailure(emailAccount.destination(), destinationError);
                     throw destinationError;
                 } finally {
                     releaseThrottle(destinationLease);
@@ -377,7 +384,7 @@ public class PollingService {
             } else {
             error = "Source " + emailAccount.id() + " failed: " + Optional.ofNullable(e.getMessage()).orElse(e.getClass().getSimpleName());
             shouldRecordFailure = true;
-            recordSourceThrottleFailure(emailAccount, error);
+            sourceThrottleAudit = recordSourceThrottleFailure(emailAccount, error);
             LOG.error(error, e);
             tally.addError(mapRuntimeError(emailAccount, error, e));
             }
@@ -397,7 +404,17 @@ public class PollingService {
                         spamJunkMessageCount,
                         actorUsername,
                         executionSurface,
-                        STOPPED_BY_USER_MESSAGE);
+                        STOPPED_BY_USER_MESSAGE,
+                        new PollDecisionSnapshot(
+                                null,
+                                null,
+                                null,
+                                sourceThrottleWaitMillis > 0L ? sourceThrottleWaitMillis : null,
+                                sourceThrottleAudit == null ? null : sourceThrottleAudit.multiplierAfter(),
+                                sourceThrottleAudit == null ? null : sourceThrottleAudit.nextAllowedAt(),
+                                destinationThrottleWaitMillis > 0L ? destinationThrottleWaitMillis : null,
+                                destinationThrottleAudit == null ? null : destinationThrottleAudit.multiplierAfter(),
+                                destinationThrottleAudit == null ? null : destinationThrottleAudit.nextAllowedAt()));
                 if (liveRunId != null && pollingLiveService != null) {
                     pollingLiveService.markSourceStopped(liveRunId, emailAccount.id(), fetched, imported, duplicates);
                 }
@@ -405,9 +422,9 @@ public class PollingService {
             }
             if (error == null) {
                 sourcePollingStateService.recordSuccess(emailAccount.id(), finishedAt, settings);
-                recordSourceThrottleSuccess(emailAccount);
+                sourceThrottleAudit = recordSourceThrottleSuccess(emailAccount);
             } else if (shouldRecordFailure) {
-                sourcePollingStateService.recordFailure(emailAccount.id(), finishedAt, error);
+                cooldownDecision = sourcePollingStateService.recordFailure(emailAccount.id(), finishedAt, error);
             }
             recordSourcePollEvent(
                     emailAccount.id(),
@@ -421,7 +438,17 @@ public class PollingService {
                     spamJunkMessageCount,
                     actorUsername,
                     executionSurface,
-                    error);
+                    error,
+                    new PollDecisionSnapshot(
+                            cooldownDecision == null ? null : cooldownDecision.failureCategory(),
+                            cooldownDecision == null ? null : cooldownDecision.backoff().toMillis(),
+                            cooldownDecision == null ? null : cooldownDecision.cooldownUntil(),
+                            sourceThrottleWaitMillis > 0L ? sourceThrottleWaitMillis : null,
+                            sourceThrottleAudit == null ? null : sourceThrottleAudit.multiplierAfter(),
+                            sourceThrottleAudit == null ? null : sourceThrottleAudit.nextAllowedAt(),
+                            destinationThrottleWaitMillis > 0L ? destinationThrottleWaitMillis : null,
+                            destinationThrottleAudit == null ? null : destinationThrottleAudit.multiplierAfter(),
+                            destinationThrottleAudit == null ? null : destinationThrottleAudit.nextAllowedAt()));
             if (liveRunId != null && pollingLiveService != null) {
                 pollingLiveService.markSourceFinished(liveRunId, emailAccount.id(), fetched, imported, duplicates, error);
             }
@@ -735,7 +762,8 @@ public class PollingService {
             int spamJunkMessageCount,
             String actorUsername,
             String executionSurface,
-            String error) {
+            String error,
+            PollDecisionSnapshot decisionSnapshot) {
         if (sourcePollEventService == null) {
             return;
         }
@@ -752,7 +780,8 @@ public class PollingService {
                     spamJunkMessageCount,
                     actorUsername,
                     executionSurface,
-                    error);
+                    error,
+                    decisionSnapshot == null ? PollDecisionSnapshot.empty() : decisionSnapshot);
         } catch (RuntimeException recordError) {
             LOG.warnf(recordError,
                     "Unable to record source poll event for %s; continuing without persisted last-run history",
@@ -760,32 +789,32 @@ public class PollingService {
         }
     }
 
-    private void recordSourceThrottleSuccess(RuntimeEmailAccount emailAccount) {
+    private PollThrottleService.ThrottleAudit recordSourceThrottleSuccess(RuntimeEmailAccount emailAccount) {
         if (pollThrottleService == null) {
-            return;
+            return null;
         }
-        pollThrottleService.recordSourceSuccess(emailAccount);
+        return pollThrottleService.recordSourceSuccess(emailAccount);
     }
 
-    private void recordSourceThrottleFailure(RuntimeEmailAccount emailAccount, String error) {
+    private PollThrottleService.ThrottleAudit recordSourceThrottleFailure(RuntimeEmailAccount emailAccount, String error) {
         if (pollThrottleService == null) {
-            return;
+            return null;
         }
-        pollThrottleService.recordSourceFailure(emailAccount, error);
+        return pollThrottleService.recordSourceFailure(emailAccount, error);
     }
 
-    private void recordDestinationThrottleSuccess(MailDestinationTarget target) {
+    private PollThrottleService.ThrottleAudit recordDestinationThrottleSuccess(MailDestinationTarget target) {
         if (pollThrottleService == null) {
-            return;
+            return null;
         }
-        pollThrottleService.recordDestinationSuccess(target);
+        return pollThrottleService.recordDestinationSuccess(target);
     }
 
-    private void recordDestinationThrottleFailure(MailDestinationTarget target, RuntimeException error) {
+    private PollThrottleService.ThrottleAudit recordDestinationThrottleFailure(MailDestinationTarget target, RuntimeException error) {
         if (pollThrottleService == null) {
-            return;
+            return null;
         }
-        pollThrottleService.recordDestinationFailure(target,
+        return pollThrottleService.recordDestinationFailure(target,
                 Optional.ofNullable(error.getMessage()).orElse(error.getClass().getSimpleName()));
     }
 
