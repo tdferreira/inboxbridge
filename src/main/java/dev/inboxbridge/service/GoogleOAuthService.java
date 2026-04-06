@@ -276,7 +276,9 @@ public class GoogleOAuthService {
             });
             mailboxConflictService.disableSourcesMatchingCurrentDestination(userId);
         }
-        sourceIdFromSubjectKey(profile.subjectKey()).ifPresent(userEmailAccountService::enableAfterSuccessfulOauthConnection);
+        if (userEmailAccountService != null) {
+            sourceIdFromSubjectKey(profile.subjectKey()).ifPresent(userEmailAccountService::enableAfterSuccessfulOauthConnection);
+        }
 
         return new GoogleTokenExchangeResponse(
                 true,
