@@ -18,10 +18,12 @@ import dev.inboxbridge.domain.SourceFetchMode;
 import dev.inboxbridge.domain.SourcePostPollAction;
 import dev.inboxbridge.domain.SourcePostPollSettings;
 import dev.inboxbridge.persistence.AppUser;
+import dev.inboxbridge.persistence.AppUserRepository;
 import dev.inboxbridge.persistence.ImportedMessageRepository;
 import dev.inboxbridge.persistence.UserEmailAccount;
 import dev.inboxbridge.persistence.UserEmailAccountRepository;
 import dev.inboxbridge.persistence.UserGmailConfigRepository;
+import dev.inboxbridge.domain.MailDestinationTarget;
 import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.enterprise.event.Event;
 import jakarta.inject.Inject;
@@ -72,18 +74,40 @@ public class UserEmailAccountService {
     @Inject
     Event<SourceMailboxConfigurationChanged> sourceMailboxConfigurationChangedEvent;
 
+    @Inject
+    AppUserRepository appUserRepository;
+
+    @Inject
+    UserMailDestinationConfigService userMailDestinationConfigService;
+
+    @Inject
+    SourceDiagnosticsService sourceDiagnosticsService;
+
     public List<UserEmailAccountView> listForUser(Long userId) {
         Map<String, ImportStats> importStatsBySource = importStatsBySource();
         List<UserEmailAccount> emailAccounts = repository.listByUserId(userId);
+        String ownerUsername = appUserRepository.findByIdOptional(userId)
+                .map(user -> user.username)
+                .orElse(null);
+        Optional<MailDestinationTarget> destinationTarget = ownerUsername == null
+                ? Optional.empty()
+                : userMailDestinationConfigService.resolveForUser(userId, ownerUsername);
         Map<String, dev.inboxbridge.dto.SourcePollingStateView> pollingStateBySource = sourcePollingStateService.viewBySourceIds(
                 emailAccounts.stream()
                         .map(emailAccount -> emailAccount.emailAccountId)
+                        .toList());
+        Map<String, dev.inboxbridge.dto.SourceDiagnosticsView> diagnosticsBySource = sourceDiagnosticsService.viewByRuntimeAccounts(
+                emailAccounts.stream()
+                        .map(emailAccount -> runtimeAccountForView(emailAccount, ownerUsername, destinationTarget.orElse(null)))
                         .toList());
         return emailAccounts.stream()
                 .map(emailAccount -> toView(
                         emailAccount,
                         importStatsBySource.getOrDefault(emailAccount.emailAccountId, ImportStats.EMPTY),
-                        pollingStateBySource.get(emailAccount.emailAccountId)))
+                        pollingStateBySource.get(emailAccount.emailAccountId),
+                        ownerUsername,
+                        destinationTarget.orElse(null),
+                        diagnosticsBySource.get(emailAccount.emailAccountId)))
                 .toList();
     }
 
@@ -252,10 +276,15 @@ public class UserEmailAccountService {
 
         repository.persist(emailAccount);
         notifySourceMailboxConfigurationChanged(emailAccount.emailAccountId);
+        MailDestinationTarget destinationTarget = userMailDestinationConfigService.resolveForUser(user.id, user.username).orElse(null);
         return toView(
                 emailAccount,
                 ImportStats.EMPTY,
-                sourcePollEventState(emailAccount.emailAccountId));
+                sourcePollEventState(emailAccount.emailAccountId),
+                user.username,
+                destinationTarget,
+                sourceDiagnosticsService.viewByRuntimeAccounts(List.of(runtimeAccountForView(emailAccount, user.username, destinationTarget)))
+                        .get(emailAccount.emailAccountId));
     }
 
     @Transactional
@@ -343,29 +372,12 @@ public class UserEmailAccountService {
     private UserEmailAccountView toView(
             UserEmailAccount emailAccount,
             ImportStats importStats,
-            dev.inboxbridge.dto.SourcePollingStateView pollingState) {
-        PollingSettingsService.EffectivePollingSettings effectiveSettings = sourcePollingSettingsService.effectiveSettingsFor(
-                new dev.inboxbridge.domain.RuntimeEmailAccount(
-                        emailAccount.emailAccountId,
-                        "USER",
-                        emailAccount.userId,
-                        null,
-                        emailAccount.enabled,
-                        emailAccount.protocol,
-                        emailAccount.host,
-                        emailAccount.port,
-                        emailAccount.tls,
-                        emailAccount.authMethod,
-                        emailAccount.oauthProvider,
-                        emailAccount.username,
-                        decryptPassword(emailAccount),
-                        decryptRefreshToken(emailAccount),
-                        Optional.ofNullable(emailAccount.folderName),
-                        emailAccount.unreadOnly,
-                        emailAccount.fetchMode == null ? SourceFetchMode.POLLING : emailAccount.fetchMode,
-                        Optional.ofNullable(emailAccount.customLabel),
-                        storedPostPollSettings(emailAccount),
-                        null));
+            dev.inboxbridge.dto.SourcePollingStateView pollingState,
+            String ownerUsername,
+            MailDestinationTarget destinationTarget,
+            dev.inboxbridge.dto.SourceDiagnosticsView diagnostics) {
+        RuntimeEmailAccount runtimeAccount = runtimeAccountForView(emailAccount, ownerUsername, destinationTarget);
+        PollingSettingsService.EffectivePollingSettings effectiveSettings = sourcePollingSettingsService.effectiveSettingsFor(runtimeAccount);
         AdminPollEventSummary lastEvent = sourcePollEventService.latestForSource(emailAccount.emailAccountId).orElse(null);
         dev.inboxbridge.dto.SourcePollingStateView sanitizedPollingState = sanitizePollingState(emailAccount, pollingState);
         return new UserEmailAccountView(
@@ -394,7 +406,35 @@ public class UserEmailAccountService {
                 importStats.totalImported(),
                 importStats.lastImportedAt(),
                 sanitizeLastEvent(emailAccount, lastEvent),
-                sanitizedPollingState);
+                sanitizedPollingState,
+                diagnostics);
+    }
+
+    private RuntimeEmailAccount runtimeAccountForView(
+            UserEmailAccount emailAccount,
+            String ownerUsername,
+            MailDestinationTarget destinationTarget) {
+        return new RuntimeEmailAccount(
+                emailAccount.emailAccountId,
+                "USER",
+                emailAccount.userId,
+                ownerUsername,
+                emailAccount.enabled,
+                emailAccount.protocol,
+                emailAccount.host,
+                emailAccount.port,
+                emailAccount.tls,
+                emailAccount.authMethod,
+                emailAccount.oauthProvider,
+                emailAccount.username,
+                decryptPassword(emailAccount),
+                decryptRefreshToken(emailAccount),
+                Optional.ofNullable(emailAccount.folderName),
+                emailAccount.unreadOnly,
+                emailAccount.fetchMode == null ? SourceFetchMode.POLLING : emailAccount.fetchMode,
+                Optional.ofNullable(emailAccount.customLabel),
+                storedPostPollSettings(emailAccount),
+                destinationTarget);
     }
 
     private dev.inboxbridge.dto.SourcePollingStateView sourcePollEventState(String emailAccountId) {

@@ -6,8 +6,11 @@ Standing instructions for future agents working in this repository.
 
 - Do not read `.env` unless the user explicitly asks for it.
 - Treat [CONTEXT.md](CONTEXT.md) as the source of truth for cross-chat memory in this repository, and keep it up to date when meaningful behavior, architecture, validation expectations, or runtime constraints change.
-- Update documentation whenever behavior, UI copy, setup flow, or architecture changes.
-- Add or update tests for every behavior change.
+- Keep documentation current whenever behavior, UI copy, setup flow, architecture, workflow expectations, or runtime constraints change.
+- Keep the Codex helper skills under [`.codex/skills`](.codex/skills), and any other agent-skill files in their respective folders, up to date with meaningful and relevant repository knowledge whenever those skill instructions would otherwise lag behind the product, architecture, validation path, or workflow requirements.
+- Document code properly. New or changed code should include clear, maintainable naming and any concise comments needed to explain non-obvious behavior, invariants, or tricky control flow.
+- Add or update tests for every behavior change, aiming for the highest practical regression coverage for the affected area rather than minimal happy-path coverage.
+- For any feature or bug fix that impacts communication with an email server, mailbox polling, mailbox import, deduplication, folder handling, or other protocol-facing behavior, include integration coverage with `greenmail-junit5` in addition to any narrower unit tests.
 - Always finish with the stack ready for manual testing whenever feasible.
 - When the task touches one or more runnable applications or services, finish by running the appropriate `docker compose` command to force a fresh deployment of every application or service affected by the changes, unless the user explicitly asks not to or the environment makes that impossible.
 - Prefer minimal, focused changes that preserve the existing architecture and style.
@@ -34,6 +37,7 @@ This repository also includes Codex-native helper skills under [`.codex/skills`]
 
 ## Security rules
 
+- This project aims for the maximum practical security standards that make sense in its context. Agents should prefer the more secure design when choosing between implementation options, especially around authentication, authorization, mailbox access, session handling, network exposure, secret storage, encryption at rest, and browser/server trust boundaries.
 - Treat secure encrypted token storage as the default path for UI-managed secrets.
 - Do not introduce fallback behavior that weakens secure-storage guarantees when the product now requires a hard failure.
 - Preserve or improve encryption-at-rest handling for passwords, refresh tokens, and other sensitive values.

@@ -16,6 +16,7 @@ import dev.inboxbridge.dto.AdminDestinationSummary;
 import dev.inboxbridge.dto.AdminOverallSummary;
 import dev.inboxbridge.dto.AdminPollEventSummary;
 import dev.inboxbridge.dto.GlobalPollingStatsView;
+import dev.inboxbridge.domain.RuntimeEmailAccount;
 import dev.inboxbridge.persistence.ImportedMessageRepository;
 import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.inject.Inject;
@@ -53,6 +54,12 @@ public class AdminDashboardService {
     @Inject
     SystemOAuthAppSettingsService systemOAuthAppSettingsService;
 
+    @Inject
+    RuntimeEmailAccountService runtimeEmailAccountService;
+
+    @Inject
+    SourceDiagnosticsService sourceDiagnosticsService;
+
     public AdminDashboardResponse dashboard() {
         return dashboard(ZoneOffset.UTC);
     }
@@ -67,10 +74,16 @@ public class AdminDashboardService {
         }
 
         List<EnvSourceService.IndexedSource> configuredSources = envSourceService.configuredSources();
+        Map<String, RuntimeEmailAccount> runtimeAccountsBySourceId = configuredSources.stream()
+                .map(indexedSource -> runtimeEmailAccountService.findSystemBridge(indexedSource.source().id()).orElse(null))
+                .filter(java.util.Objects::nonNull)
+                .collect(java.util.stream.Collectors.toMap(RuntimeEmailAccount::id, account -> account));
         Map<String, dev.inboxbridge.dto.SourcePollingStateView> pollingStateBySource = sourcePollingStateService.viewBySourceIds(
                 configuredSources.stream()
                         .map(indexedSource -> indexedSource.source().id())
                         .toList());
+        Map<String, dev.inboxbridge.dto.SourceDiagnosticsView> diagnosticsBySource = sourceDiagnosticsService.viewByRuntimeAccounts(
+                List.copyOf(runtimeAccountsBySourceId.values()));
 
         List<AdminEmailAccountSummary> emailAccounts = configuredSources.stream()
                 .map(indexedSource -> {
@@ -126,7 +139,8 @@ public class AdminDashboardService {
                             importStats.totalImported(),
                             importStats.lastImportedAt(),
                             lastEvent,
-                            pollingStateBySource.get(source.id()));
+                            pollingStateBySource.get(source.id()),
+                            diagnosticsBySource.get(source.id()));
                 })
                 .toList();
 

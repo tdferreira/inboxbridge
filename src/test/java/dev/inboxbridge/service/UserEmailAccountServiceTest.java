@@ -20,12 +20,16 @@ import org.junit.jupiter.api.Test;
 
 import dev.inboxbridge.dto.AdminPollEventSummary;
 import dev.inboxbridge.dto.EmailAccountConnectionTestResult;
+import dev.inboxbridge.dto.SourceDiagnosticsView;
 import dev.inboxbridge.dto.UpdateUserEmailAccountRequest;
 import dev.inboxbridge.dto.UserEmailAccountView;
 import dev.inboxbridge.config.InboxBridgeConfig;
+import dev.inboxbridge.domain.ImapAppendDestinationTarget;
+import dev.inboxbridge.domain.MailDestinationTarget;
 import dev.inboxbridge.domain.RuntimeEmailAccount;
 import dev.inboxbridge.domain.SourceFetchMode;
 import dev.inboxbridge.persistence.AppUser;
+import dev.inboxbridge.persistence.AppUserRepository;
 import dev.inboxbridge.persistence.ImportedMessageRepository;
 import dev.inboxbridge.persistence.UserEmailAccount;
 import dev.inboxbridge.persistence.UserEmailAccountRepository;
@@ -89,6 +93,7 @@ class UserEmailAccountServiceTest {
         assertTrue(view.oauthRefreshTokenConfigured());
         assertEquals("DATABASE", view.tokenStorageMode());
         assertEquals("refresh-token", service.decryptRefreshToken(emailAccount));
+        assertNotNull(view.diagnostics());
     }
 
     @Test
@@ -616,6 +621,9 @@ class UserEmailAccountServiceTest {
         service.envSourceService = new FakeEnvSourceService();
         service.mailSourceClient = new FakeMailSourceClient();
         service.sourceMailboxConfigurationChangedEvent = new FakeSourceMailboxConfigurationChangedEvent();
+        service.appUserRepository = new FakeAppUserRepository();
+        service.userMailDestinationConfigService = new FakeUserMailDestinationConfigService();
+        service.sourceDiagnosticsService = new FakeSourceDiagnosticsService();
         service.mailboxConflictService = new MailboxConflictService() {
             @Override
             public boolean conflictsWithCurrentDestination(Long userId, RuntimeEmailAccount source) {
@@ -847,6 +855,60 @@ class UserEmailAccountServiceTest {
         @Override
         public List<IndexedSource> configuredSources() {
             return List.of();
+        }
+    }
+
+    private static final class FakeAppUserRepository extends AppUserRepository {
+        @Override
+        public Optional<AppUser> findByIdOptional(Long userId) {
+            if (userId == null) {
+                return Optional.empty();
+            }
+            AppUser user = new AppUser();
+            user.id = userId;
+            user.username = "user-" + userId;
+            user.active = true;
+            user.approved = true;
+            return Optional.of(user);
+        }
+    }
+
+    private static final class FakeUserMailDestinationConfigService extends UserMailDestinationConfigService {
+        @Override
+        public Optional<MailDestinationTarget> resolveForUser(Long userId, String username) {
+            return Optional.of(new ImapAppendDestinationTarget(
+                    "user-destination:" + userId,
+                    userId,
+                    username,
+                    "OUTLOOK_IMAP",
+                    "outlook.office365.com",
+                    993,
+                    true,
+                    InboxBridgeConfig.AuthMethod.OAUTH2,
+                    InboxBridgeConfig.OAuthProvider.MICROSOFT,
+                    username + "@example.com",
+                    "",
+                    "INBOX"));
+        }
+    }
+
+    private static final class FakeSourceDiagnosticsService extends SourceDiagnosticsService {
+        @Override
+        public java.util.Map<String, SourceDiagnosticsView> viewByRuntimeAccounts(List<RuntimeEmailAccount> accounts) {
+            if (accounts == null || accounts.isEmpty()) {
+                return java.util.Map.of();
+            }
+            return accounts.stream().collect(java.util.stream.Collectors.toMap(
+                    RuntimeEmailAccount::id,
+                    account -> new SourceDiagnosticsView(
+                            "imap-append:demo",
+                            null,
+                            List.of(),
+                            null,
+                            null,
+                            false,
+                            false,
+                            List.of())));
         }
     }
 

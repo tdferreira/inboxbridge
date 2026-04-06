@@ -185,7 +185,7 @@ Those values can be overridden live from `Administration -> Global Poller Settin
 
 That is still deliberately simpler than a full mailbox-sync engine. The next evolution should be:
 
-- optional admin diagnostics for destination identity, checkpoints, and persisted poll-decision history
+- operator/admin diagnostics that expose destination identity, checkpoints, IMAP IDLE watcher health, and persisted poll-decision history directly in the source detail UI
 
 ## Package map
 

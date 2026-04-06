@@ -103,6 +103,20 @@ public class ImapIdleHealthService {
                 .orElse(false);
     }
 
+    public List<WatchHealth> watchStates(String sourceId) {
+        Map<String, IdleHealthState> perWatch = states.get(sourceId);
+        if (perWatch == null || perWatch.isEmpty()) {
+            return List.of();
+        }
+        return perWatch.entrySet().stream()
+                .map(entry -> new WatchHealth(
+                        entry.getKey(),
+                        entry.getValue().lastConnectedAt(),
+                        entry.getValue().disconnectedSince()))
+                .sorted(Comparator.comparing(WatchHealth::watchKey))
+                .toList();
+    }
+
     private List<IdleHealthState> statesFor(String sourceId) {
         Map<String, IdleHealthState> perWatch = states.get(sourceId);
         if (perWatch == null || perWatch.isEmpty()) {
@@ -112,5 +126,8 @@ public class ImapIdleHealthService {
     }
 
     record IdleHealthState(Instant lastConnectedAt, Instant disconnectedSince) {
+    }
+
+    public record WatchHealth(String watchKey, Instant lastConnectedAt, Instant disconnectedSince) {
     }
 }

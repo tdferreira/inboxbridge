@@ -12,8 +12,10 @@ Use this skill near the end of a task or when asked for release, PR, review, or 
 1. Run the smallest relevant automated checks first.
 2. Backend changes: `mvn -q test` or a narrower `-Dtest=...` pass before the full suite when appropriate.
 3. Frontend changes: `cd admin-ui && npm run test:run` and `cd admin-ui && npm run build`.
-4. If runnable services were touched, finish with `docker compose up --build -d` unless the user explicitly asked not to or the environment blocks it.
-5. Leave the stack ready for a human to open `https://localhost:3000` and `https://localhost:3000/remote`.
+4. For focused `PillboxInput`, App live-event, or other frontend regression work, run the narrow Vitest target first, then the full `cd admin-ui && npm run test:run` before handoff.
+5. Public GitHub Pages site changes: `node site/test-config-generator.mjs` to catch locale/catalog drift and public-site markup regressions.
+6. If runnable services were touched, finish with `docker compose up --build -d` unless the user explicitly asked not to or the environment blocks it.
+7. Leave the stack ready for a human to open `https://localhost:3000` and `https://localhost:3000/remote`.
 
 ## What to report back
 
@@ -35,3 +37,4 @@ The proposed commit message must include:
 - Contributor expectations: [`CONTRIBUTING.md`](../../../CONTRIBUTING.md)
 - Repo memory and validation notes: [`CONTEXT.md`](../../../CONTEXT.md)
 - Workflow rules: [`AGENTS.md`](../../../AGENTS.md)
+- Public-site validation target: [`site/test-config-generator.mjs`](../../../site/test-config-generator.mjs)

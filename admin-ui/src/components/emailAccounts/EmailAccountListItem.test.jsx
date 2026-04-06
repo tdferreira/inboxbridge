@@ -228,6 +228,88 @@ describe('EmailAccountListItem', () => {
     expect(screen.getByRole('button', { name: 'Reconnect Microsoft OAuth' })).toBeInTheDocument()
   })
 
+  it('renders diagnostics, checkpoints, idle watchers, and poll audit details', () => {
+    render(
+      <EmailAccountListItem
+        fetcher={{
+          emailAccountId: 'idle-source',
+          customLabel: '',
+          managementSource: 'DATABASE',
+          protocol: 'IMAP',
+          host: 'imap.example.com',
+          port: 993,
+          authMethod: 'PASSWORD',
+          oauthProvider: 'NONE',
+          tls: true,
+          folder: 'INBOX, Projects/2026',
+          fetchMode: 'IDLE',
+          tokenStorageMode: 'PASSWORD',
+          oauthConnected: false,
+          markReadAfterPoll: false,
+          postPollAction: 'NONE',
+          postPollTargetFolder: '',
+          totalImportedMessages: 0,
+          lastImportedAt: null,
+          effectivePollEnabled: true,
+          effectivePollInterval: '5m',
+          effectiveFetchWindow: 50,
+          pollingState: null,
+          diagnostics: {
+            destinationIdentityKey: 'imap-append:abc123',
+            popLastSeenUidl: null,
+            imapCheckpoints: [
+              { folderName: 'INBOX', uidValidity: 44, lastSeenUid: 101 },
+              { folderName: 'Projects/2026', uidValidity: 77, lastSeenUid: 205 }
+            ],
+            sourceThrottle: { adaptiveMultiplier: 2, nextAllowedAt: '2026-04-06T10:06:00Z' },
+            destinationThrottle: { adaptiveMultiplier: 3, nextAllowedAt: '2026-04-06T10:07:00Z' },
+            idleHealthy: false,
+            idleSchedulerFallback: true,
+            idleWatches: [
+              { folderName: 'INBOX', status: 'CONNECTED' },
+              { folderName: 'Projects/2026', status: 'DISCONNECTED' }
+            ]
+          },
+          lastEvent: {
+            status: 'ERROR',
+            finishedAt: '2026-04-06T10:00:00Z',
+            trigger: 'scheduler',
+            fetched: 0,
+            imported: 0,
+            duplicates: 0,
+            failureCategory: 'RATE_LIMIT',
+            cooldownBackoffMillis: 900000,
+            sourceThrottleWaitMillis: 2500,
+            destinationThrottleWaitMillis: 1000,
+            error: '429 too many requests'
+          },
+          canEdit: true,
+          canDelete: true,
+          canConnectMicrosoft: false
+        }}
+        locale="en"
+        onConfigurePolling={vi.fn()}
+        onConnectMicrosoft={vi.fn()}
+        onDelete={vi.fn()}
+        onEdit={vi.fn()}
+        onRunPoll={vi.fn()}
+        t={t}
+      />
+    )
+
+    fireEvent.click(screen.getByRole('button', { name: /idle-source/i }))
+
+    expect(screen.getByText('Diagnostics')).toBeInTheDocument()
+    expect(screen.getByText('imap-append:abc123')).toBeInTheDocument()
+    expect(screen.getByText('INBOX · UIDVALIDITY 44 · UID 101')).toBeInTheDocument()
+    expect(screen.getByText('Projects/2026 · UIDVALIDITY 77 · UID 205')).toBeInTheDocument()
+    expect(screen.getByText('INBOX · Connected')).toBeInTheDocument()
+    expect(screen.getByText('Projects/2026 · Disconnected')).toBeInTheDocument()
+    expect(screen.getByText(/Failure category/)).toBeInTheDocument()
+    expect(screen.getByText(/Rate Limit/)).toBeInTheDocument()
+    expect(screen.getByText(/Cooldown backoff/)).toBeInTheDocument()
+  })
+
   it('explains manual runs for IMAP IDLE sources', () => {
     render(
       <EmailAccountListItem

@@ -47,6 +47,41 @@ function describePostPollAction(fetcher, t) {
   }
 }
 
+function humanizeFailureCategory(value) {
+  if (!value) return null
+  return value
+    .toLowerCase()
+    .split('_')
+    .map((part) => part.charAt(0).toUpperCase() + part.slice(1))
+    .join(' ')
+}
+
+function formatMillis(value, locale) {
+  if (value == null || Number.isNaN(value)) return null
+  if (value < 1000) return `${value} ms`
+  if (value < 60000) {
+    const seconds = value / 1000
+    return `${new Intl.NumberFormat(locale, { maximumFractionDigits: seconds >= 10 ? 0 : 1 }).format(seconds)} s`
+  }
+  if (value < 3600000) {
+    const minutes = value / 60000
+    return `${new Intl.NumberFormat(locale, { maximumFractionDigits: minutes >= 10 ? 0 : 1 }).format(minutes)} min`
+  }
+  const hours = value / 3600000
+  return `${new Intl.NumberFormat(locale, { maximumFractionDigits: hours >= 10 ? 0 : 1 }).format(hours)} h`
+}
+
+function idleStatusTone(status) {
+  switch (status) {
+    case 'CONNECTED':
+      return 'tone-good'
+    case 'DISCONNECTED':
+      return 'tone-bad'
+    default:
+      return 'tone-neutral'
+  }
+}
+
 function EmailAccountListItem({
   connectLoading = false,
   deleteLoading = false,
@@ -234,6 +269,49 @@ function EmailAccountListItem({
               {formatPollError(fetcher.pollingState.lastFailureReason, locale)}
             </div>
           ) : null}
+          {fetcher.diagnostics ? (
+            <div className="event-box">
+              <strong>{t('emailAccount.diagnostics')}</strong>
+              <dl className="email-account-card-config">
+                <div><dt>{t('emailAccount.destinationIdentity')}</dt><dd>{fetcher.diagnostics.destinationIdentityKey || t('users.notSet')}</dd></div>
+                {fetcher.diagnostics.popLastSeenUidl ? (
+                  <div><dt>{t('emailAccount.popCheckpoint')}</dt><dd>{fetcher.diagnostics.popLastSeenUidl}</dd></div>
+                ) : null}
+                <div><dt>{t('emailAccount.sourceThrottle')}</dt><dd>{fetcher.diagnostics.sourceThrottle ? `${fetcher.diagnostics.sourceThrottle.adaptiveMultiplier}× · ${formatDate(fetcher.diagnostics.sourceThrottle.nextAllowedAt, locale)}` : t('users.notSet')}</dd></div>
+                <div><dt>{t('emailAccount.destinationThrottle')}</dt><dd>{fetcher.diagnostics.destinationThrottle ? `${fetcher.diagnostics.destinationThrottle.adaptiveMultiplier}× · ${formatDate(fetcher.diagnostics.destinationThrottle.nextAllowedAt, locale)}` : t('users.notSet')}</dd></div>
+                {fetcher.fetchMode === 'IDLE' ? (
+                  <>
+                    <div><dt>{t('emailAccount.idleHealthy')}</dt><dd>{fetcher.diagnostics.idleHealthy ? t('common.yes') : t('common.no')}</dd></div>
+                    <div><dt>{t('emailAccount.idleSchedulerFallback')}</dt><dd>{fetcher.diagnostics.idleSchedulerFallback ? t('common.yes') : t('common.no')}</dd></div>
+                  </>
+                ) : null}
+              </dl>
+              {fetcher.diagnostics.imapCheckpoints?.length ? (
+                <>
+                  <div className="section-copy"><strong>{t('emailAccount.imapCheckpoints')}</strong></div>
+                  <div className="email-account-last-result-pills">
+                    {fetcher.diagnostics.imapCheckpoints.map((checkpoint) => (
+                      <span className="status-pill tone-neutral" key={`${checkpoint.folderName}:${checkpoint.uidValidity}:${checkpoint.lastSeenUid}`}>
+                        {checkpoint.folderName} · UIDVALIDITY {checkpoint.uidValidity} · UID {checkpoint.lastSeenUid}
+                      </span>
+                    ))}
+                  </div>
+                </>
+              ) : null}
+              {fetcher.diagnostics.idleWatches?.length ? (
+                <>
+                  <div className="section-copy"><strong>{t('emailAccount.idleWatchers')}</strong></div>
+                  <div className="email-account-last-result-pills">
+                    {fetcher.diagnostics.idleWatches.map((watch) => (
+                      <span className={`status-pill ${idleStatusTone(watch.status)}`} key={`${watch.folderName}:${watch.status}`}>
+                        {watch.folderName} · {t(`emailAccount.idleStatus.${watch.status.toLowerCase()}`)}
+                      </span>
+                    ))}
+                  </div>
+                </>
+              ) : null}
+            </div>
+          ) : null}
           {fetcher.lastEvent ? (
             <div className="event-box">
               <div className="section-copy">{formatPollExecutionSummary(fetcher.lastEvent, locale, viewerUsername)}</div>
@@ -248,6 +326,25 @@ function EmailAccountListItem({
                   <span className="status-pill tone-neutral">{t('remote.spamJunk')}: {fetcher.lastEvent.spamJunkMessageCount}</span>
                 ) : null}
               </div>
+              {(fetcher.lastEvent.failureCategory
+                || fetcher.lastEvent.cooldownBackoffMillis
+                || fetcher.lastEvent.sourceThrottleWaitMillis
+                || fetcher.lastEvent.destinationThrottleWaitMillis) ? (
+                  <div className="section-copy">
+                    {fetcher.lastEvent.failureCategory ? (
+                      <div><strong>{t('emailAccount.lastFailureCategory')}</strong>: {humanizeFailureCategory(fetcher.lastEvent.failureCategory)}</div>
+                    ) : null}
+                    {fetcher.lastEvent.cooldownBackoffMillis ? (
+                      <div><strong>{t('emailAccount.lastCooldownBackoff')}</strong>: {formatMillis(fetcher.lastEvent.cooldownBackoffMillis, locale)}</div>
+                    ) : null}
+                    {fetcher.lastEvent.sourceThrottleWaitMillis ? (
+                      <div><strong>{t('emailAccount.lastSourceThrottleWait')}</strong>: {formatMillis(fetcher.lastEvent.sourceThrottleWaitMillis, locale)}</div>
+                    ) : null}
+                    {fetcher.lastEvent.destinationThrottleWaitMillis ? (
+                      <div><strong>{t('emailAccount.lastDestinationThrottleWait')}</strong>: {formatMillis(fetcher.lastEvent.destinationThrottleWaitMillis, locale)}</div>
+                    ) : null}
+                  </div>
+                ) : null}
               {fetcher.lastEvent.error ? (
                 <div className="email-account-card-error-block">
                   <div className="email-account-card-error">{formatPollError(fetcher.lastEvent.error, locale)}</div>

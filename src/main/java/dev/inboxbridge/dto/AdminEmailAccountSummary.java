@@ -26,5 +26,6 @@ public record AdminEmailAccountSummary(
         long totalImportedMessages,
         Instant lastImportedAt,
         AdminPollEventSummary lastEvent,
-        SourcePollingStateView pollingState) {
+        SourcePollingStateView pollingState,
+        SourceDiagnosticsView diagnostics) {
 }

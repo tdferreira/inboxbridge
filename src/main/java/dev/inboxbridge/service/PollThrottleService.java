@@ -2,14 +2,11 @@ package dev.inboxbridge.service;
 
 import java.time.Duration;
 import java.time.Instant;
-import java.util.Locale;
 import java.util.Optional;
 import java.util.UUID;
 
 import org.jboss.logging.Logger;
 
-import dev.inboxbridge.domain.GmailApiDestinationTarget;
-import dev.inboxbridge.domain.ImapAppendDestinationTarget;
 import dev.inboxbridge.domain.MailDestinationTarget;
 import dev.inboxbridge.domain.RuntimeEmailAccount;
 import dev.inboxbridge.persistence.PollThrottleLease;
@@ -141,35 +138,15 @@ public class PollThrottleService {
     }
 
     private String sourceThrottleKey(RuntimeEmailAccount emailAccount) {
-        return normalizeHost(emailAccount == null ? null : emailAccount.host())
-                .map(host -> "source-host:" + host)
-                .orElse(null);
+        return PollThrottleKeys.sourceMailbox(emailAccount);
     }
 
     private String destinationThrottleKey(MailDestinationTarget target) {
-        if (target instanceof GmailApiDestinationTarget gmailTarget) {
-            return "destination-provider:" + gmailTarget.deliveryMode().toLowerCase(Locale.ROOT);
-        }
-        if (target instanceof ImapAppendDestinationTarget imapTarget) {
-            return normalizeHost(imapTarget.host())
-                    .map(host -> "destination-host:" + host)
-                    .orElse(null);
-        }
-        return null;
+        return PollThrottleKeys.destination(target);
     }
 
     private String destinationThrottleKind(MailDestinationTarget target) {
-        if (target instanceof GmailApiDestinationTarget) {
-            return "DESTINATION_PROVIDER";
-        }
-        return "DESTINATION_HOST";
-    }
-
-    private Optional<String> normalizeHost(String host) {
-        if (host == null || host.isBlank()) {
-            return Optional.empty();
-        }
-        return Optional.of(host.trim().toLowerCase(Locale.ROOT));
+        return PollThrottleKeys.destinationKind(target);
     }
 
     @Transactional

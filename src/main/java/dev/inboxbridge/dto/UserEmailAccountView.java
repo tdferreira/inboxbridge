@@ -31,7 +31,8 @@ public record UserEmailAccountView(
         long totalImportedMessages,
         Instant lastImportedAt,
         AdminPollEventSummary lastEvent,
-                SourcePollingStateView pollingState) {
+        SourcePollingStateView pollingState,
+        SourceDiagnosticsView diagnostics) {
 
         @JsonProperty("bridgeId")
         public String legacyBridgeId() {

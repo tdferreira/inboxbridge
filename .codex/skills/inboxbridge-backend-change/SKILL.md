@@ -11,9 +11,12 @@ Start with [`docs/ARCHITECTURE.md`](../../../docs/ARCHITECTURE.md), [`CONTEXT.md
 
 - Keep Quarkus as the system of record for auth, OAuth, sessions, secret handling, and polling state.
 - Preserve the hard boundary that one user's source mail must never import into another user's destination mailbox.
+- Preserve the newer destination-aware runtime model: checkpoint reuse, dedupe visibility, and source diagnostics all key off the resolved destination mailbox identity rather than the source alone.
 - Preserve encrypted-at-rest handling for UI-managed passwords, refresh tokens, and related secrets.
 - Avoid fallback paths that weaken secure storage or browser OAuth exchange requirements.
 - When async polling workers touch repositories, keep transactional boundaries explicit. Virtual-thread workers do not inherit the original request context.
+- Remember that authenticated SSE endpoints also pass through database-backed auth/session filters, so blocking execution and transactional boundaries matter for `/api/poll/events`, `/api/admin/poll/events`, and related live-poll endpoints.
+- Keep the current source-diagnostics plumbing coherent when changing polling state or summaries: admin and user source views now surface destination identity, per-folder checkpoints, throttle state, IMAP IDLE watcher health, and recent poll audit details through dedicated DTOs/services.
 - Respect the existing package split: `config`, `domain`, `dto`, `persistence`, `service`, `web`.
 
 ## When to add stronger coverage

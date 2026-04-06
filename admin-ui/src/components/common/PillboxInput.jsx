@@ -88,11 +88,12 @@ export default function PillboxInput({
     }
     const pointerQuery = window.matchMedia('(pointer: coarse)')
     const hoverQuery = window.matchMedia('(hover: none)')
-    const updatePreference = () => setPreferNativePicker(
-      pointerQuery.matches
-      || hoverQuery.matches
-      || (typeof navigator !== 'undefined' && Number(navigator.maxTouchPoints) > 0)
-    )
+    const updatePreference = () => {
+      const touchCapable = typeof navigator !== 'undefined' && Number(navigator.maxTouchPoints) > 0
+      setPreferNativePicker(
+        touchCapable && (pointerQuery.matches || hoverQuery.matches)
+      )
+    }
     updatePreference()
     pointerQuery.addEventListener?.('change', updatePreference)
     hoverQuery.addEventListener?.('change', updatePreference)

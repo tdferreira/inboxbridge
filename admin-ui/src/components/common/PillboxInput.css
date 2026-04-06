@@ -11,7 +11,7 @@
   align-content: center;
   gap: 6px;
   min-height: 46px;
-  padding: 6px 16px;
+  padding: 3px 16px;
   border: 1px solid var(--line);
   border-radius: 16px;
   background: rgba(255, 255, 255, 0.88);
@@ -48,21 +48,32 @@
 
 .pillbox-input .pillbox-input-pill {
   max-width: 100%;
-  min-height: 20px;
-  padding: 0 6px;
-  font-size: 0.72rem;
+  min-height: 0;
+  padding: 7px 11px;
+  font-size: 0.76rem;
   line-height: 1;
-  letter-spacing: 0.08em;
+  letter-spacing: 0.12em;
 }
 
 .pillbox-input-pill-remove {
   border: none;
   background: transparent;
-  padding: 0;
+  padding: 0 0 0 2px;
+  min-height: 0;
+  min-width: 1.1rem;
+  width: auto;
+  height: auto;
   color: inherit;
   cursor: pointer;
   font-size: 1rem;
   line-height: 1;
+  flex: 0 0 auto;
+  align-self: stretch;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 999px;
+  touch-action: manipulation;
 }
 
 .pillbox-input-field {
@@ -173,15 +184,24 @@
   .pillbox-input-shell {
     gap: 4px;
     min-height: 46px;
-    padding: 2px 14px;
+    padding: 1px 14px;
   }
 
   .pillbox-input .pillbox-input-pill {
-    min-height: 16px;
-    padding: 0 5px;
-    font-size: 0.66rem;
-    line-height: 1;
-    letter-spacing: 0.06em;
+    min-height: 0;
+    gap: 6px;
+    padding: 7px 11px;
+    font-size: 0.76rem;
+    line-height: 0.95;
+    letter-spacing: 0.12em;
+  }
+
+  .pillbox-input .pillbox-input-pill-remove {
+    min-height: 0;
+    min-width: 1.35rem;
+    padding-left: 4px;
+    font-size: 1rem;
+    line-height: 0.95;
   }
 
   .pillbox-input-field,

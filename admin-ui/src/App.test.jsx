@@ -438,6 +438,7 @@ describe('App', () => {
     render(<App />)
 
     await screen.findByText(/signed in as/i)
+    await waitFor(() => expect(FakeEventSource.instances).toHaveLength(1))
 
     act(() => {
       FakeEventSource.instances[0].emit('session-revoked', {
@@ -3019,6 +3020,7 @@ describe('App', () => {
     render(<App />)
 
     await screen.findByText(/signed in as/i)
+    await waitFor(() => expect(FakeEventSource.instances).toHaveLength(1))
 
     act(() => {
       FakeEventSource.instances[0].emit('notification-created', {

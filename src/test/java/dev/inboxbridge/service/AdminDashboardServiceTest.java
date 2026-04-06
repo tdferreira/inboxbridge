@@ -14,6 +14,9 @@ import java.util.Optional;
 import org.junit.jupiter.api.Test;
 
 import dev.inboxbridge.config.InboxBridgeConfig;
+import dev.inboxbridge.domain.GmailApiDestinationTarget;
+import dev.inboxbridge.domain.RuntimeEmailAccount;
+import dev.inboxbridge.dto.SourceDiagnosticsView;
 import dev.inboxbridge.domain.SourceFetchMode;
 import dev.inboxbridge.dto.AdminDashboardResponse;
 import dev.inboxbridge.dto.AdminPollEventSummary;
@@ -34,6 +37,8 @@ class AdminDashboardServiceTest {
         service.sourcePollingSettingsService = new FakeSourcePollingSettingsService();
         service.envSourceService = envSourceService(service.config);
         service.sourcePollingStateService = new FakeSourcePollingStateService();
+        service.runtimeEmailAccountService = runtimeEmailAccountService(service.config);
+        service.sourceDiagnosticsService = new FakeSourceDiagnosticsService();
         service.pollingStatsService = pollingStatsService(service.importedMessageRepository, service.sourcePollEventService, service.envSourceService);
         service.systemOAuthAppSettingsService = systemOAuthAppSettingsService(service.config);
 
@@ -63,6 +68,7 @@ class AdminDashboardServiceTest {
         assertEquals("3m", response.emailAccounts().getFirst().effectivePollInterval());
         assertEquals(25, response.emailAccounts().getFirst().effectiveFetchWindow());
         assertNotNull(response.emailAccounts().getFirst().pollingState());
+        assertNotNull(response.emailAccounts().getFirst().diagnostics());
 
         assertEquals(1, response.recentEvents().size());
         assertEquals("outlook-main-imap", response.recentEvents().getFirst().sourceId());
@@ -145,6 +151,8 @@ class AdminDashboardServiceTest {
         service.sourcePollingSettingsService = new FakeSourcePollingSettingsService();
         service.envSourceService = envSourceService(service.config);
         service.sourcePollingStateService = new FakeSourcePollingStateService();
+        service.runtimeEmailAccountService = runtimeEmailAccountService(service.config);
+        service.sourceDiagnosticsService = new FakeSourceDiagnosticsService();
         service.pollingStatsService = pollingStatsService(service.importedMessageRepository, service.sourcePollEventService, service.envSourceService);
         service.systemOAuthAppSettingsService = systemOAuthAppSettingsService(service.config);
 
@@ -231,6 +239,48 @@ class AdminDashboardServiceTest {
     private EnvSourceService envSourceService(InboxBridgeConfig config) {
         EnvSourceService service = new EnvSourceService();
         service.setConfigForTest(config);
+        return service;
+    }
+
+    private RuntimeEmailAccountService runtimeEmailAccountService(InboxBridgeConfig config) {
+        RuntimeEmailAccountService service = new RuntimeEmailAccountService() {
+            @Override
+            public Optional<RuntimeEmailAccount> findSystemBridge(String sourceId) {
+                return Optional.of(new RuntimeEmailAccount(
+                        sourceId,
+                        "SYSTEM",
+                        null,
+                        "system",
+                        true,
+                        InboxBridgeConfig.Protocol.IMAP,
+                        "outlook.office365.com",
+                        993,
+                        true,
+                        InboxBridgeConfig.AuthMethod.OAUTH2,
+                        InboxBridgeConfig.OAuthProvider.MICROSOFT,
+                        "user@example.com",
+                        "",
+                        "refresh",
+                        Optional.of("INBOX"),
+                        false,
+                        SourceFetchMode.POLLING,
+                        Optional.of("Imported/Test"),
+                        dev.inboxbridge.domain.SourcePostPollSettings.none(),
+                        new GmailApiDestinationTarget(
+                                "gmail-destination",
+                                null,
+                                "system",
+                                "GMAIL",
+                                "destination@example.com",
+                                "client",
+                                "secret",
+                                "refresh",
+                                "https://localhost",
+                                true,
+                                true,
+                                true)));
+            }
+        };
         return service;
     }
 
@@ -386,6 +436,26 @@ class AdminDashboardServiceTest {
             event.duplicateCount = EVENT.duplicates();
             event.errorMessage = EVENT.error();
             return List.of(event);
+        }
+    }
+
+    private static final class FakeSourceDiagnosticsService extends SourceDiagnosticsService {
+        @Override
+        public java.util.Map<String, SourceDiagnosticsView> viewByRuntimeAccounts(List<dev.inboxbridge.domain.RuntimeEmailAccount> accounts) {
+            if (accounts == null || accounts.isEmpty()) {
+                return java.util.Map.of();
+            }
+            return accounts.stream().collect(java.util.stream.Collectors.toMap(
+                    dev.inboxbridge.domain.RuntimeEmailAccount::id,
+                    account -> new SourceDiagnosticsView(
+                            "gmail-api:demo",
+                            null,
+                            List.of(),
+                            null,
+                            null,
+                            false,
+                            false,
+                            List.of())));
         }
     }
 

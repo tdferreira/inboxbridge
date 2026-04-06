@@ -15,9 +15,14 @@ function Harness(props) {
 
 describe('PillboxInput', () => {
   const originalMatchMedia = window.matchMedia
+  const originalMaxTouchPoints = navigator.maxTouchPoints
 
   afterEach(() => {
     window.matchMedia = originalMatchMedia
+    Object.defineProperty(navigator, 'maxTouchPoints', {
+      configurable: true,
+      value: originalMaxTouchPoints
+    })
   })
 
   it('allows free-text entries before options are locked', () => {
@@ -147,6 +152,10 @@ describe('PillboxInput', () => {
       matches: query === '(pointer: coarse)',
       removeEventListener: vi.fn()
     }))
+    Object.defineProperty(navigator, 'maxTouchPoints', {
+      configurable: true,
+      value: 5
+    })
 
     render(
       <Harness
@@ -167,6 +176,77 @@ describe('PillboxInput', () => {
 
     expect(screen.getByRole('button', { name: 'Remove INBOX' })).toBeInTheDocument()
     expect(screen.getByRole('button', { name: 'Remove Archive' })).toBeInTheDocument()
+  })
+
+  it('keeps the floating combobox on desktop mobile emulation without touch capability', () => {
+    window.matchMedia = vi.fn().mockImplementation((query) => ({
+      addEventListener: vi.fn(),
+      matches: query === '(pointer: coarse)',
+      removeEventListener: vi.fn()
+    }))
+    Object.defineProperty(navigator, 'maxTouchPoints', {
+      configurable: true,
+      value: 0
+    })
+
+    render(
+      <Harness
+        allowCustomValues={false}
+        inputAriaLabel="Folders"
+        options={['INBOX', 'Projects/2026', 'Archive']}
+        placeholder="Select folders"
+      />
+    )
+
+    const input = screen.getByRole('combobox', { name: 'Folders' })
+    fireEvent.focus(input)
+    fireEvent.change(input, { target: { value: 'Pro' } })
+
+    expect(screen.getByRole('listbox')).toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: 'Remove INBOX' })).not.toBeInTheDocument()
+  })
+
+  it('opens the floating suggestions on shell click without auto-selecting an option on desktop emulation', () => {
+    window.matchMedia = vi.fn().mockImplementation((query) => ({
+      addEventListener: vi.fn(),
+      matches: query === '(pointer: coarse)',
+      removeEventListener: vi.fn()
+    }))
+    Object.defineProperty(navigator, 'maxTouchPoints', {
+      configurable: true,
+      value: 0
+    })
+
+    render(
+      <Harness
+        allowCustomValues={false}
+        inputAriaLabel="Folders"
+        options={['INBOX', 'Projects/2026', 'Archive']}
+        placeholder="Select folders"
+      />
+    )
+
+    fireEvent.click(screen.getByRole('presentation'))
+
+    expect(screen.getByRole('combobox', { name: 'Folders' })).toHaveFocus()
+    expect(screen.getByRole('listbox')).toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: 'Remove INBOX' })).not.toBeInTheDocument()
+  })
+
+  it('removes a selected value without accidentally selecting a new option', () => {
+    render(
+      <Harness
+        allowCustomValues={false}
+        initialValues={['INBOX']}
+        inputAriaLabel="Folders"
+        options={['INBOX', 'Projects/2026', 'Archive']}
+      />
+    )
+
+    fireEvent.click(screen.getByRole('button', { name: 'Remove INBOX' }))
+
+    expect(screen.queryByRole('button', { name: 'Remove INBOX' })).not.toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: 'Remove Projects/2026' })).not.toBeInTheDocument()
   })
 
   it('closes the floating suggestions when the anchor leaves the viewport', () => {
