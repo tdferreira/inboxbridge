@@ -31,6 +31,10 @@ The admin/operator slice now also has explicit feature seams:
 application-mode switching, and application-user lifecycle/admin-user
 management, while `dev.inboxbridge.web.admin` owns the `/api/admin` dashboard
 and `/api/admin/users` resources that expose those admin-only operations.
+The browser auth/account surface now also has a narrower web boundary:
+`dev.inboxbridge.web.auth` owns the `/api/auth` and `/api/account` resources,
+so browser session/login/passkey/account-security transport concerns evolve
+next to each other instead of staying in the flat top-level `web` package.
 Within that still mostly layer-oriented backend, the provider OAuth web surface
 now also uses a narrower seam under `dev.inboxbridge.web.oauth`: the Google and
 Microsoft OAuth REST resources live alongside their callback-page renderers and
@@ -124,6 +128,11 @@ infrastructure details:
   and `UserManagementResource` now live under `dev.inboxbridge.web.admin`, so
   admin dashboard aggregation, operator-only mode switches, and application
   user-management flows evolve behind one admin-focused feature boundary.
+- `AuthResource` and `AccountResource` now live together under
+  `dev.inboxbridge.web.auth`, so browser login, registration, current-session,
+  passkey, and own-account security endpoints evolve behind one narrower web
+  feature package instead of staying mixed into the flat top-level `web`
+  namespace.
 - `GoogleOAuthCallbackPageRenderer` and
   `MicrosoftOAuthCallbackPageRenderer` now own the provider-specific browser
   callback pages, while `OAuthPageI18n` and `OAuthPageSupport` keep the shared
@@ -213,9 +222,10 @@ That packaged smoke path runs the built Quarkus jar under the `%test` profile
 with an in-memory H2 datasource and no external TLS certificate requirement, so
 health, browser-auth session wiring, remote-session protection, OAuth callback
 rendering, the authenticated `/api/app` protection surface, the admin-only
-`/api/admin` surface, and startup regressions can be caught without depending
-on the normal Docker/PostgreSQL runtime. Those packaged `verify` runs should be
-executed sequentially because concurrent Quarkus builds can corrupt the shared
+`/api/admin` surface, the browser `/api/auth` session/account surface, and
+startup regressions can be caught without depending on the normal
+Docker/PostgreSQL runtime. Those packaged `verify` runs should be executed
+sequentially because concurrent Quarkus builds can corrupt the shared
 `target/quarkus-app` output.
 
 The user-deletion and session-revocation cleanup path now also keeps

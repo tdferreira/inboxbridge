@@ -42,7 +42,8 @@ destination-delivery code lives under `dev.inboxbridge.service.destination`,
 OAuth browser resources live under `dev.inboxbridge.web.oauth`, backend OAuth
 provider/config services live under `dev.inboxbridge.service.oauth`, and the
 login/passkey/session/auth-security slice now lives under
-`dev.inboxbridge.service.auth`. The remote-control surface now also has
+`dev.inboxbridge.service.auth`. The browser auth/account REST surface now also
+lives under `dev.inboxbridge.web.auth`. The remote-control surface now also has
 dedicated feature packages: `dev.inboxbridge.service.remote` owns remote
 sessions, remote service-token auth, remote poll rate limiting, and the remote
 dashboard/control projection, while `dev.inboxbridge.web.remote` owns the
@@ -866,6 +867,7 @@ Validated on 2026-04-01:
 - full backend Maven suite passes with `mvn -q test` when run in an environment that allows the GreenMail integration tests to bind local ports
 - the expected failure-path unit tests now capture and assert their intentionally induced warning/error records through a scoped test logger helper, so `mvn -q test` stays free of warning/error log lines without silently hiding unexpected extra records from those same logger paths
 - packaged Quarkus runtime smoke coverage now passes with `mvn -q -Dit.test=HealthResourceQuarkusIT verify`, `mvn -q -Dit.test=AuthSessionEndpointsQuarkusIT verify`, `mvn -q -Dit.test=RemoteEndpointsQuarkusIT verify`, and `mvn -q -Dit.test=OAuthCallbackPagesQuarkusIT verify`
+- the browser auth/account REST surface now also lives under `dev.inboxbridge.web.auth`: `AuthResource`, `AccountResource`, and the packaged `AuthSessionEndpointsQuarkusIT` smoke test moved there so `/api/auth` and `/api/account` evolve behind one narrower web feature boundary instead of staying in the flat top-level `web` package
 - packaged `verify` jobs must still run sequentially in this repository: concurrent Quarkus builds can corrupt the shared `target/quarkus-app` output and produce false failures such as `ZipException: zip END header not found`
 - focused backend polling coverage also passes with `mvn -q -Dtest=PollingSettingsServiceTest,UserPollingSettingsServiceTest,SourcePollingSettingsServiceTest,SourcePollingStateServiceTest,PollingServiceTest,PollingServiceGreenMailIntegrationTest test`
 - full frontend Vitest suite passes with `cd admin-ui && npm run test:run`

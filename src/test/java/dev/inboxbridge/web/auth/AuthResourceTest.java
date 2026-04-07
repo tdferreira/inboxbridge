@@ -1,4 +1,4 @@
-package dev.inboxbridge.web;
+package dev.inboxbridge.web.auth;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;

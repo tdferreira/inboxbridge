@@ -1,4 +1,4 @@
-package dev.inboxbridge.web;
+package dev.inboxbridge.web.auth;
 
 import java.time.Instant;
 import dev.inboxbridge.dto.ChangePasswordRequest;
@@ -21,6 +21,7 @@ import dev.inboxbridge.service.auth.SessionClientInfoService;
 import dev.inboxbridge.service.auth.UserSessionService;
 import dev.inboxbridge.service.oauth.UserGmailConfigService;
 import dev.inboxbridge.service.user.UserMailDestinationConfigService;
+import dev.inboxbridge.web.WebResourceSupport;
 import jakarta.inject.Inject;
 import jakarta.ws.rs.Consumes;
 import jakarta.ws.rs.DELETE;

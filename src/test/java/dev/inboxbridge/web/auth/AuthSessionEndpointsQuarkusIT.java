@@ -1,4 +1,4 @@
-package dev.inboxbridge.web;
+package dev.inboxbridge.web.auth;
 
 import static io.restassured.RestAssured.given;
 import static org.hamcrest.Matchers.is;

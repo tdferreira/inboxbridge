@@ -1,4 +1,4 @@
-package dev.inboxbridge.web;
+package dev.inboxbridge.web.auth;
 
 import dev.inboxbridge.dto.AuthUiOptionsResponse;
 import dev.inboxbridge.dto.ApiError;
@@ -29,6 +29,7 @@ import dev.inboxbridge.service.polling.PollingLiveService;
 import dev.inboxbridge.service.auth.RegistrationChallengeService;
 import dev.inboxbridge.service.oauth.SystemOAuthAppSettingsService;
 import dev.inboxbridge.service.auth.UserSessionService;
+import dev.inboxbridge.web.WebResourceSupport;
 import io.vertx.core.http.HttpServerRequest;
 import jakarta.inject.Inject;
 import jakarta.ws.rs.Consumes;
