@@ -833,7 +833,7 @@ src/main/resources/db/migration
 Validated on 2026-04-01:
 
 - full backend Maven suite passes with `mvn -q test` when run in an environment that allows the GreenMail integration tests to bind local ports
-- the expected failure-path unit tests now scope-silence their intentionally induced recovery logs, so `mvn -q test` no longer emits warning/error log lines just because a negative-path test deliberately forces a recoverable mail-session, throttle-release, or poll-event persistence failure
+- the expected failure-path unit tests now capture and assert their intentionally induced warning/error records through a scoped test logger helper, so `mvn -q test` stays free of warning/error log lines without silently hiding unexpected extra records from those same logger paths
 - packaged Quarkus runtime smoke coverage now passes with `mvn -q -Dit.test=HealthResourceQuarkusIT verify`
 - focused backend polling coverage also passes with `mvn -q -Dtest=PollingSettingsServiceTest,UserPollingSettingsServiceTest,SourcePollingSettingsServiceTest,SourcePollingStateServiceTest,PollingServiceTest,PollingServiceGreenMailIntegrationTest test`
 - full frontend Vitest suite passes with `cd admin-ui && npm run test:run`

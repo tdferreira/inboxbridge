@@ -2,10 +2,12 @@ package dev.inboxbridge.service;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.util.ArrayDeque;
 import java.util.Optional;
 import java.util.Properties;
+import java.util.logging.Level;
 
 import org.junit.jupiter.api.Test;
 
@@ -13,7 +15,7 @@ import dev.inboxbridge.config.InboxBridgeConfig;
 import dev.inboxbridge.domain.RuntimeEmailAccount;
 import dev.inboxbridge.domain.SourceFetchMode;
 import dev.inboxbridge.domain.SourcePostPollSettings;
-import dev.inboxbridge.testsupport.ScopedLogSilencer;
+import dev.inboxbridge.testsupport.ScopedLogCapture;
 import jakarta.mail.Folder;
 import jakarta.mail.MessagingException;
 import jakarta.mail.Session;
@@ -29,13 +31,20 @@ class MailSourceConnectionServiceTest {
         RecordingStore store = new RecordingStore();
         store.failFirst("* BYE Session invalidated - Invalid");
 
-        try (ScopedLogSilencer ignored = ScopedLogSilencer.suppressWarnings(MailSourceConnectionService.class)) {
+        java.util.List<ScopedLogCapture.CapturedRecord> records;
+        try (ScopedLogCapture capture = ScopedLogCapture.captureWarnings(MailSourceConnectionService.class)) {
             service.connectStore(store, runtimeAccount(InboxBridgeConfig.OAuthProvider.MICROSOFT));
+            records = capture.records();
         }
 
         assertEquals(2, store.connectAttempts);
         assertEquals("source-1", microsoft.invalidatedSourceId);
         assertEquals("fresh-token", store.lastPassword);
+        assertEquals(1, records.size());
+        assertEquals(Level.WARNING, records.getFirst().level());
+        assertEquals("Microsoft session for source-1 was rejected; invalidating the cached token and retrying once",
+                records.getFirst().message());
+        assertTrue(records.getFirst().thrown() instanceof MessagingException);
     }
 
     @Test
@@ -45,13 +54,20 @@ class MailSourceConnectionServiceTest {
         RecordingStore store = new RecordingStore();
         store.failFirst("* BYE Session invalidated - Invalid");
 
-        try (ScopedLogSilencer ignored = ScopedLogSilencer.suppressWarnings(MailSourceConnectionService.class)) {
+        java.util.List<ScopedLogCapture.CapturedRecord> records;
+        try (ScopedLogCapture capture = ScopedLogCapture.captureWarnings(MailSourceConnectionService.class)) {
             service.connectStore(store, runtimeAccount(InboxBridgeConfig.OAuthProvider.GOOGLE));
+            records = capture.records();
         }
 
         assertEquals(2, store.connectAttempts);
         assertEquals("source-google:source-1", google.clearedSubjectKey);
         assertEquals("fresh-token", store.lastPassword);
+        assertEquals(1, records.size());
+        assertEquals(Level.WARNING, records.getFirst().level());
+        assertEquals("Google session for source-1 was rejected; invalidating the cached token and retrying once",
+                records.getFirst().message());
+        assertTrue(records.getFirst().thrown() instanceof MessagingException);
     }
 
     @Test

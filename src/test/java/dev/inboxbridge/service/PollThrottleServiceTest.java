@@ -12,6 +12,7 @@ import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.List;
 import java.util.Optional;
+import java.util.logging.Level;
 
 import org.junit.jupiter.api.Test;
 
@@ -21,7 +22,7 @@ import dev.inboxbridge.persistence.PollThrottleLease;
 import dev.inboxbridge.persistence.PollThrottleLeaseRepository;
 import dev.inboxbridge.persistence.PollThrottleState;
 import dev.inboxbridge.persistence.PollThrottleStateRepository;
-import dev.inboxbridge.testsupport.ScopedLogSilencer;
+import dev.inboxbridge.testsupport.ScopedLogCapture;
 
 class PollThrottleServiceTest {
 
@@ -70,10 +71,17 @@ class PollThrottleServiceTest {
 
         PollThrottleService.ThrottleLease lease = service.acquireSourceMailboxPermit(source("imap.example.com"));
 
-        try (ScopedLogSilencer ignored = ScopedLogSilencer.suppressWarnings(PollThrottleService.class)) {
+        List<ScopedLogCapture.CapturedRecord> records;
+        try (ScopedLogCapture capture = ScopedLogCapture.captureWarnings(PollThrottleService.class)) {
             assertDoesNotThrow(() -> service.release(lease));
+            records = capture.records();
         }
         assertFalse(service.inMemoryLeaseRepository.leases.isEmpty());
+        assertEquals(1, records.size());
+        assertEquals(Level.WARNING, records.getFirst().level());
+        assertTrue(records.getFirst().message().startsWith("Unable to release poll throttle lease "));
+        assertTrue(records.getFirst().message().endsWith(" for source-host:imap.example.com; the lease will expire automatically"));
+        assertTrue(records.getFirst().thrown() instanceof IllegalStateException);
     }
 
     @Test

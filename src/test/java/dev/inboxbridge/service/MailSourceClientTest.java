@@ -14,11 +14,12 @@ import java.util.Date;
 import java.util.List;
 import java.util.Optional;
 import java.util.Properties;
+import java.util.logging.Level;
 
 import org.junit.jupiter.api.Test;
 
 import dev.inboxbridge.domain.FetchedMessage;
-import dev.inboxbridge.testsupport.ScopedLogSilencer;
+import dev.inboxbridge.testsupport.ScopedLogCapture;
 import jakarta.mail.Address;
 import jakarta.mail.Flags;
 import jakarta.mail.Folder;
@@ -77,13 +78,22 @@ class MailSourceClientTest {
         folder.forceClosed();
 
         IllegalStateException error;
-        try (ScopedLogSilencer ignored = ScopedLogSilencer.suppressWarnings(MailSourceMessageMapper.class)) {
+        List<ScopedLogCapture.CapturedRecord> records;
+        try (ScopedLogCapture capture = ScopedLogCapture.captureWarnings(MailSourceMessageMapper.class)) {
             error = assertThrows(
                     IllegalStateException.class,
                     () -> mapper.toFetchedMessages("source-1", folder, new Message[] { message }));
+            records = capture.records();
         }
 
         assertTrue(error.getCause() instanceof FolderClosedException);
+        assertEquals(2, records.size());
+        assertEquals(Level.WARNING, records.get(0).level());
+        assertEquals("Unable to reopen IMAP folder after a message materialization failure", records.get(0).message());
+        assertTrue(records.get(0).thrown() instanceof MessagingException);
+        assertEquals(Level.WARNING, records.get(1).level());
+        assertEquals("Skipping message 1 from source source-1 after materialization failure", records.get(1).message());
+        assertTrue(records.get(1).thrown() instanceof FolderClosedException);
     }
 
     @Test

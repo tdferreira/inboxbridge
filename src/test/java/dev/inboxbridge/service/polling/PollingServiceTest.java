@@ -15,6 +15,7 @@ import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicReference;
+import java.util.logging.Level;
 
 import org.junit.jupiter.api.Test;
 
@@ -25,7 +26,7 @@ import dev.inboxbridge.domain.RuntimeEmailAccount;
 import dev.inboxbridge.domain.SourceFetchMode;
 import dev.inboxbridge.dto.MailImportResponse;
 import dev.inboxbridge.dto.PollRunResult;
-import dev.inboxbridge.testsupport.ScopedLogSilencer;
+import dev.inboxbridge.testsupport.ScopedLogCapture;
 import jakarta.enterprise.inject.Instance;
 import jakarta.enterprise.util.TypeLiteral;
 
@@ -68,10 +69,7 @@ class PollingServiceTest {
         service.sourcePollingStateService = sourcePollingStateService;
         service.manualPollRateLimitService = new ManualPollRateLimitService();
 
-        PollRunResult result;
-        try (ScopedLogSilencer ignored = ScopedLogSilencer.suppressAll(PollingSourceExecutionService.class)) {
-            result = service.runPoll("manual-api");
-        }
+        PollRunResult result = service.runPoll("manual-api");
 
         assertEquals(33, mailSourceClient.lastFetchWindow);
         assertEquals("user-fetcher", sourcePollingStateService.lastRecordedSuccessSourceId);
@@ -132,10 +130,7 @@ class PollingServiceTest {
         service.sourcePollingStateService = sourcePollingStateService;
         service.manualPollRateLimitService = new ManualPollRateLimitService();
 
-        PollRunResult result;
-        try (ScopedLogSilencer ignored = ScopedLogSilencer.suppressAll(PollingSourceExecutionService.class)) {
-            result = service.runPoll("manual-api");
-        }
+        PollRunResult result = service.runPoll("manual-api");
 
         assertEquals(0, result.getErrors().size());
         assertEquals("legacy-pop", sourcePollingStateService.lastRecordedSuccessSourceId);
@@ -162,12 +157,20 @@ class PollingServiceTest {
         service.manualPollRateLimitService = new ManualPollRateLimitService();
 
         PollRunResult result;
-        try (ScopedLogSilencer ignored = ScopedLogSilencer.suppressWarnings(PollingSourceExecutionService.class)) {
+        List<ScopedLogCapture.CapturedRecord> records;
+        try (ScopedLogCapture capture = ScopedLogCapture.captureWarnings(PollingSourceExecutionService.class)) {
             result = service.runPoll("manual-api");
+            records = capture.records();
         }
 
         assertEquals(0, result.getErrors().size());
         assertEquals("user-fetcher", sourcePollingStateService.lastRecordedSuccessSourceId);
+        assertEquals(1, records.size());
+        assertEquals(Level.WARNING, records.getFirst().level());
+        assertEquals(
+                "Unable to record source poll event for user-fetcher; continuing without persisted last-run history",
+                records.getFirst().message());
+        assertTrue(records.getFirst().thrown() instanceof IllegalStateException);
     }
 
     @Test
@@ -214,8 +217,10 @@ class PollingServiceTest {
         service.manualPollRateLimitService = new ManualPollRateLimitService();
 
         PollRunResult result;
-        try (ScopedLogSilencer ignored = ScopedLogSilencer.suppressAll(PollingSourceExecutionService.class)) {
+        List<ScopedLogCapture.CapturedRecord> records;
+        try (ScopedLogCapture capture = ScopedLogCapture.captureWarnings(PollingSourceExecutionService.class)) {
             result = service.runPoll("manual-api");
+            records = capture.records();
         }
 
         assertEquals(1, result.getErrors().size());
@@ -223,6 +228,10 @@ class PollingServiceTest {
         assertEquals(15 * 60 * 1000L, sourcePollEventService.lastCooldownBackoffMillis);
         assertNotNull(sourcePollEventService.lastCooldownUntil);
         assertNotNull(sourcePollEventService.lastSourceThrottleMultiplierAfter);
+        assertEquals(1, records.size());
+        assertEquals(Level.SEVERE, records.getFirst().level());
+        assertEquals("Source user-fetcher failed: 429 too many requests", records.getFirst().message());
+        assertTrue(records.getFirst().thrown() instanceof IllegalStateException);
     }
 
     @Test
@@ -314,10 +323,7 @@ class PollingServiceTest {
         service.sourcePollingStateService = sourcePollingStateService;
         service.manualPollRateLimitService = new ManualPollRateLimitService();
 
-        PollRunResult result;
-        try (ScopedLogSilencer ignored = ScopedLogSilencer.suppressAll(PollingSourceExecutionService.class)) {
-            result = service.runPoll("manual-api");
-        }
+        PollRunResult result = service.runPoll("manual-api");
 
         assertEquals(1, result.getErrors().size());
         assertEquals(List.of("enabled-fetcher"), mailSourceClient.fetchedSourceIds);
@@ -689,10 +695,21 @@ class PollingServiceTest {
         service.sourcePollingStateService = new RecordingFailureSourcePollingStateService();
         service.manualPollRateLimitService = new ManualPollRateLimitService();
 
-        PollRunResult result = service.runPoll("manual-api");
+        PollRunResult result;
+        List<ScopedLogCapture.CapturedRecord> records;
+        try (ScopedLogCapture capture = ScopedLogCapture.captureWarnings(PollingSourceExecutionService.class)) {
+            result = service.runPoll("manual-api");
+            records = capture.records();
+        }
 
         assertEquals(1, result.getErrorDetails().size());
         assertEquals("microsoft_access_revoked", result.getErrorDetails().getFirst().code());
+        assertEquals(1, records.size());
+        assertEquals(Level.SEVERE, records.getFirst().level());
+        assertEquals(
+                "Source outlook-main failed: The linked Microsoft account no longer grants InboxBridge access. Reconnect it from this mail account.",
+                records.getFirst().message());
+        assertTrue(records.getFirst().thrown() instanceof IllegalStateException);
     }
 
     @Test
