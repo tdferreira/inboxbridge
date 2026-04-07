@@ -4,7 +4,6 @@ import java.util.Optional;
 
 import io.quarkus.hibernate.orm.panache.PanacheRepository;
 import jakarta.enterprise.context.ApplicationScoped;
-import jakarta.transaction.Transactional;
 
 @ApplicationScoped
 public class UserGmailConfigRepository implements PanacheRepository<UserGmailConfig> {
@@ -13,7 +12,6 @@ public class UserGmailConfigRepository implements PanacheRepository<UserGmailCon
         return find("userId", userId).firstResultOptional();
     }
 
-    @Transactional
     public long deleteByUserId(Long userId) {
         return delete("userId", userId);
     }

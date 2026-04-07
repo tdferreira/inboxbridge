@@ -6,7 +6,6 @@ import java.util.Optional;
 
 import io.quarkus.hibernate.orm.panache.PanacheRepository;
 import jakarta.enterprise.context.ApplicationScoped;
-import jakarta.transaction.Transactional;
 
 @ApplicationScoped
 public class UserSessionRepository implements PanacheRepository<UserSession> {
@@ -23,13 +22,11 @@ public class UserSessionRepository implements PanacheRepository<UserSession> {
         return find("userId = ?1 and revokedAt is null and expiresAt > ?2 order by lastSeenAt desc", userId, now).list();
     }
 
-    @Transactional
     public void deleteExpiredSessions() {
         // Preserve session history for the security panel; expired sessions are
         // excluded from active-session queries rather than deleted eagerly.
     }
 
-    @Transactional
     public void deleteByUserId(Long userId) {
         update("revokedAt = ?1 where userId = ?2 and revokedAt is null", Instant.now(), userId);
     }

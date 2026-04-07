@@ -127,6 +127,13 @@ The broader REST layer now also keeps one repeated concern centralized:
 `BadRequestException`, so resource classes can stay thinner without each method
 repeating the same `try/catch` boilerplate.
 
+The user-deletion and session-revocation cleanup path now also keeps
+transaction ownership at the service layer. Repository helpers in that slice
+remain thin data-access methods, while `AppUserService`, `PasskeyService`, and
+`UserSessionService` own the surrounding transactional workflow that deletes
+per-user config, per-source polling rows, imported-message history, passkeys,
+and browser sessions.
+
 The lightweight `/remote` surface now reuses that same live model through its own remote-scoped `/api/remote/poll/live`, `/api/remote/poll/events`, and `/api/remote/poll/live/...` endpoints, so phones and quick-access devices can follow the active source and issue live pause/resume/stop/reprioritize/retry commands without opening the full workspace. Those remote SSE streams can also push targeted `session-revoked` events for remote-session sign-outs. The remote UI now folds that live state back into the existing source cards instead of maintaining a second live-progress source list.
 
 For compatibility, the live DTO still exposes a single `activeSourceId`, but

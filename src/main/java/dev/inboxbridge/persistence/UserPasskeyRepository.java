@@ -5,7 +5,6 @@ import java.util.Optional;
 
 import io.quarkus.hibernate.orm.panache.PanacheRepository;
 import jakarta.enterprise.context.ApplicationScoped;
-import jakarta.transaction.Transactional;
 
 @ApplicationScoped
 public class UserPasskeyRepository implements PanacheRepository<UserPasskey> {
@@ -22,7 +21,6 @@ public class UserPasskeyRepository implements PanacheRepository<UserPasskey> {
         return count("userId", userId);
     }
 
-    @Transactional
     public long deleteByUserId(Long userId) {
         return delete("userId", userId);
     }
