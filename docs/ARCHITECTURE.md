@@ -95,7 +95,7 @@ The remote page is also the only installable PWA surface in InboxBridge. The mai
 InboxBridge now exposes authenticated live polling state for both the main app and the admin workspace:
 
 1. `PollingService` starts a run through `PollingLiveService`
-2. `PollingLiveService` snapshots the queued, running, completed, failed, paused, and stopped source state for the active run
+2. `PollingLiveService` coordinates the active run while the mutable queued/running/completed source model now lives in `PollingLiveRunState`
 3. `GET /api/poll/live` and `GET /api/admin/poll/live` return an immediate snapshot so a browser can hydrate mid-run without waiting for the next event
 4. `GET /api/poll/events` and `GET /api/admin/poll/events` stream SSE updates plus live notifications as the run changes, and they can also push targeted `session-revoked` events so a browser session signed out elsewhere leaves immediately
 5. authenticated `POST` controls call the live service to pause, resume, stop, move one queued source to the front, or retry a completed/failed source
@@ -105,6 +105,12 @@ InboxBridge now exposes authenticated live polling state for both the main app a
 9. a stop request also runs the registered cancellation actions for that run, which closes active mailbox sessions and interrupts worker threads so blocking I/O has a better chance to unwind promptly
 
 That keeps the poll engine authoritative in the backend while letting the UI show real-time progress without hammering every row with its own polling loop.
+
+The live service is therefore split similarly to the poll engine itself: the
+service owns coordination, permissions, SSE fan-out, and control flow, while
+`PollingLiveRunState` owns the in-memory run/source state shape plus queue and
+position helpers. That keeps the live service from mixing transport/control
+behavior with the mutable state model.
 
 The lightweight `/remote` surface now reuses that same live model through its own remote-scoped `/api/remote/poll/live`, `/api/remote/poll/events`, and `/api/remote/poll/live/...` endpoints, so phones and quick-access devices can follow the active source and issue live pause/resume/stop/reprioritize/retry commands without opening the full workspace. Those remote SSE streams can also push targeted `session-revoked` events for remote-session sign-outs. The remote UI now folds that live state back into the existing source cards instead of maintaining a second live-progress source list.
 

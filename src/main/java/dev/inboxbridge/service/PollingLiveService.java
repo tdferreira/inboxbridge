@@ -3,12 +3,8 @@ package dev.inboxbridge.service;
 import java.time.Instant;
 import java.util.ArrayList;
 import java.util.Comparator;
-import java.util.HashMap;
-import java.util.LinkedHashMap;
-import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
-import java.util.UUID;
 import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.concurrent.Executors;
 import java.util.concurrent.ScheduledExecutorService;
@@ -34,7 +30,7 @@ public class PollingLiveService {
 
     private final Object lock = new Object();
     private final CopyOnWriteArrayList<Subscriber> subscribers = new CopyOnWriteArrayList<>();
-    private final AtomicReference<RunState> activeRun = new AtomicReference<>();
+    private final AtomicReference<PollingLiveRunState> activeRun = new AtomicReference<>();
     private final ScheduledExecutorService heartbeatExecutor = Executors.newSingleThreadScheduledExecutor();
 
     @Inject
@@ -45,7 +41,7 @@ public class PollingLiveService {
             if (activeRun.get() != null) {
                 return null;
             }
-            RunState state = new RunState(trigger, actor, emailAccounts);
+            PollingLiveRunState state = new PollingLiveRunState(trigger, actor, emailAccounts);
             activeRun.set(state);
             publishPollEvent("poll-run-started", state);
             publishNotification(notificationForRunStarted(state));
@@ -54,7 +50,7 @@ public class PollingLiveService {
     }
 
     public String currentActiveSourceId() {
-        RunState state = activeRun.get();
+        PollingLiveRunState state = activeRun.get();
         if (state == null) {
             return null;
         }
@@ -64,7 +60,7 @@ public class PollingLiveService {
     }
 
     public PollLiveView snapshotFor(AppUser viewer) {
-        RunState state = activeRun.get();
+        PollingLiveRunState state = activeRun.get();
         if (state == null) {
             return new PollLiveView(false, null, "IDLE", null, null, false, null, null, null, List.of());
         }
@@ -118,7 +114,7 @@ public class PollingLiveService {
 
     public boolean requestPause(AppUser actor) {
         synchronized (lock) {
-            RunState state = requireControllableRun(actor);
+            PollingLiveRunState state = requireControllableRun(actor);
             if (state == null || state.pauseRequested || "PAUSED".equals(state.state)) {
                 return false;
             }
@@ -133,7 +129,7 @@ public class PollingLiveService {
 
     public boolean requestResume(AppUser actor) {
         synchronized (lock) {
-            RunState state = requireControllableRun(actor);
+            PollingLiveRunState state = requireControllableRun(actor);
             if (state == null || (!state.pauseRequested && !"PAUSED".equals(state.state) && !"PAUSING".equals(state.state))) {
                 return false;
             }
@@ -150,7 +146,7 @@ public class PollingLiveService {
     public boolean requestStop(AppUser actor) {
         List<Runnable> cancellationActions = List.of();
         synchronized (lock) {
-            RunState state = requireControllableRun(actor);
+            PollingLiveRunState state = requireControllableRun(actor);
             if (state == null || state.stopRequested) {
                 return false;
             }
@@ -169,11 +165,11 @@ public class PollingLiveService {
 
     public boolean moveSourceToFront(AppUser actor, String sourceId) {
         synchronized (lock) {
-            RunState state = requireControllableRun(actor);
+            PollingLiveRunState state = requireControllableRun(actor);
             if (state == null) {
                 return false;
             }
-            SourceState source = state.sourcesById.get(sourceId);
+            PollingLiveRunState.SourceState source = state.sourcesById.get(sourceId);
             if (source == null || !source.isQueued()) {
                 return false;
             }
@@ -188,11 +184,11 @@ public class PollingLiveService {
 
     public boolean retrySource(AppUser actor, String sourceId) {
         synchronized (lock) {
-            RunState state = requireControllableRun(actor);
+            PollingLiveRunState state = requireControllableRun(actor);
             if (state == null) {
                 return false;
             }
-            SourceState source = state.sourcesById.get(sourceId);
+            PollingLiveRunState.SourceState source = state.sourcesById.get(sourceId);
             if (source == null || "RUNNING".equals(source.state) || source.isQueued()) {
                 return false;
             }
@@ -221,7 +217,7 @@ public class PollingLiveService {
 
     public String nextSourceId(String runId) {
         synchronized (lock) {
-            RunState state = requireRun(runId);
+            PollingLiveRunState state = requireRun(runId);
             if (state == null) {
                 return null;
             }
@@ -245,7 +241,7 @@ public class PollingLiveService {
                 if (nextId == null) {
                     return null;
                 }
-                SourceState source = state.sourcesById.get(nextId);
+                PollingLiveRunState.SourceState source = state.sourcesById.get(nextId);
                 if (source == null || !source.isQueued()) {
                     continue;
                 }
@@ -263,7 +259,7 @@ public class PollingLiveService {
 
     public boolean awaitIfPausedOrStopped(String runId) {
         synchronized (lock) {
-            RunState state = requireRun(runId);
+            PollingLiveRunState state = requireRun(runId);
             if (state == null) {
                 return false;
             }
@@ -291,25 +287,25 @@ public class PollingLiveService {
 
     public boolean stopRequested(String runId) {
         synchronized (lock) {
-            RunState state = requireRun(runId);
+            PollingLiveRunState state = requireRun(runId);
             return state != null && state.stopRequested;
         }
     }
 
     public String stopRequestedByUsername(String runId) {
         synchronized (lock) {
-            RunState state = requireRun(runId);
+            PollingLiveRunState state = requireRun(runId);
             return state == null ? null : state.stopRequestedByUsername;
         }
     }
 
     public void markSourceFinished(String runId, String sourceId, int fetched, int imported, int duplicates, String error) {
         synchronized (lock) {
-            RunState state = requireRun(runId);
+            PollingLiveRunState state = requireRun(runId);
             if (state == null) {
                 return;
             }
-            SourceState source = state.sourcesById.get(sourceId);
+            PollingLiveRunState.SourceState source = state.sourcesById.get(sourceId);
             if (source == null) {
                 return;
             }
@@ -328,11 +324,11 @@ public class PollingLiveService {
 
     public void updateSourceProgress(String runId, String sourceId, int totalMessages, long totalBytes, long processedBytes, int fetched, int imported, int duplicates) {
         synchronized (lock) {
-            RunState state = requireRun(runId);
+            PollingLiveRunState state = requireRun(runId);
             if (state == null) {
                 return;
             }
-            SourceState source = state.sourcesById.get(sourceId);
+            PollingLiveRunState.SourceState source = state.sourcesById.get(sourceId);
             if (source == null) {
                 return;
             }
@@ -351,11 +347,11 @@ public class PollingLiveService {
 
     public void markSourceStopped(String runId, String sourceId, int fetched, int imported, int duplicates) {
         synchronized (lock) {
-            RunState state = requireRun(runId);
+            PollingLiveRunState state = requireRun(runId);
             if (state == null) {
                 return;
             }
-            SourceState source = state.sourcesById.get(sourceId);
+            PollingLiveRunState.SourceState source = state.sourcesById.get(sourceId);
             if (source == null) {
                 return;
             }
@@ -373,14 +369,14 @@ public class PollingLiveService {
 
     public void finishRun(String runId, String finalState) {
         synchronized (lock) {
-            RunState state = requireRun(runId);
+            PollingLiveRunState state = requireRun(runId);
             if (state == null) {
                 return;
             }
             state.activeSourceIds.clear();
             if ("STOPPED".equals(finalState)) {
                 Instant stoppedAt = Instant.now();
-                for (SourceState source : state.sourcesById.values()) {
+                for (PollingLiveRunState.SourceState source : state.sourcesById.values()) {
                     if (source.isQueued() || "RUNNING".equals(source.state)) {
                         source.state = "STOPPED";
                         source.finishedAt = stoppedAt;
@@ -395,8 +391,8 @@ public class PollingLiveService {
         }
     }
 
-    private RunState requireControllableRun(AppUser actor) {
-        RunState state = activeRun.get();
+    private PollingLiveRunState requireControllableRun(AppUser actor) {
+        PollingLiveRunState state = activeRun.get();
         if (state == null) {
             return null;
         }
@@ -409,15 +405,15 @@ public class PollingLiveService {
         return null;
     }
 
-    private RunState requireRun(String runId) {
-        RunState state = activeRun.get();
+    private PollingLiveRunState requireRun(String runId) {
+        PollingLiveRunState state = activeRun.get();
         if (state == null || !state.runId.equals(runId)) {
             return null;
         }
         return state;
     }
 
-    private void publishPollEvent(String type, RunState state) {
+    private void publishPollEvent(String type, PollingLiveRunState state) {
         Instant timestamp = Instant.now();
         for (Subscriber subscriber : subscribers) {
             PollLiveView view = buildView(state, subscriber.viewerId, subscriber.admin);
@@ -433,7 +429,7 @@ public class PollingLiveService {
             return;
         }
         Instant timestamp = Instant.now();
-        RunState state = activeRun.get();
+        PollingLiveRunState state = activeRun.get();
         for (Subscriber subscriber : subscribers) {
             PollLiveView view = state == null ? null : buildView(state, subscriber.viewerId, subscriber.admin);
             if (state != null && view == null && !subscriber.admin) {
@@ -448,7 +444,7 @@ public class PollingLiveService {
             return;
         }
         Instant timestamp = Instant.now();
-        RunState state = activeRun.get();
+        PollingLiveRunState state = activeRun.get();
         for (Subscriber subscriber : subscribers) {
             if (!viewerId.equals(subscriber.viewerId)) {
                 continue;
@@ -482,15 +478,15 @@ public class PollingLiveService {
                         : Map.of("location", assessment.locationLabel())));
     }
 
-    private PollLiveView buildView(RunState state, AppUser viewer) {
+    private PollLiveView buildView(PollingLiveRunState state, AppUser viewer) {
         return buildView(state, viewer.id, viewer.role == AppUser.Role.ADMIN);
     }
 
-    private PollLiveView buildView(RunState state, Long viewerId, boolean admin) {
+    private PollLiveView buildView(PollingLiveRunState state, Long viewerId, boolean admin) {
         List<PollLiveSourceView> sources = state.sourcesById.values().stream()
                 .filter(source -> admin || (source.ownerUserId != null && source.ownerUserId.equals(viewerId)))
                 .sorted(Comparator
-                        .comparingInt((SourceState source) -> source.position(state.queue, state.activeSourceIds))
+                        .comparingInt((PollingLiveRunState.SourceState source) -> source.position(state.queue, state.activeSourceIds))
                         .thenComparing(source -> source.label))
                 .map(source -> new PollLiveSourceView(
                         source.sourceId,
@@ -528,9 +524,9 @@ public class PollingLiveService {
                 sources);
     }
 
-    private String activeVisibleSourceId(RunState state, Long viewerId) {
+    private String activeVisibleSourceId(PollingLiveRunState state, Long viewerId) {
         for (String activeSourceId : state.activeSourceIds) {
-            SourceState source = state.sourcesById.get(activeSourceId);
+            PollingLiveRunState.SourceState source = state.sourcesById.get(activeSourceId);
             if (source == null) {
                 continue;
             }
@@ -547,7 +543,7 @@ public class PollingLiveService {
         }
         boolean runImmediately = false;
         synchronized (lock) {
-            RunState state = requireRun(runId);
+            PollingLiveRunState state = requireRun(runId);
             if (state == null) {
                 return;
             }
@@ -570,7 +566,7 @@ public class PollingLiveService {
         }
     }
 
-    private LiveNotificationView notificationForRunStarted(RunState state) {
+    private LiveNotificationView notificationForRunStarted(PollingLiveRunState state) {
         if (!shouldNotifyForRun(state)) {
             return null;
         }
@@ -579,7 +575,7 @@ public class PollingLiveService {
         return notification(key, "warning", state.actorAdmin ? "global-poll" : "user-poll", targetId);
     }
 
-    private LiveNotificationView notificationForRunFinished(RunState state) {
+    private LiveNotificationView notificationForRunFinished(PollingLiveRunState state) {
         if (!shouldNotifyForRun(state)) {
             return null;
         }
@@ -591,7 +587,7 @@ public class PollingLiveService {
         return notification(key, "success", state.actorAdmin ? "global-poll" : "user-poll", targetId, true);
     }
 
-    private LiveNotificationView notificationForSourceStarted(RunState state, SourceState source) {
+    private LiveNotificationView notificationForSourceStarted(PollingLiveRunState state, PollingLiveRunState.SourceState source) {
         if (!shouldNotifyForRun(state)) {
             return null;
         }
@@ -604,7 +600,7 @@ public class PollingLiveService {
                 Map.of("emailAccountId", source.sourceId));
     }
 
-    private LiveNotificationView notificationForSourceFinished(RunState state, SourceState source) {
+    private LiveNotificationView notificationForSourceFinished(PollingLiveRunState state, PollingLiveRunState.SourceState source) {
         if (!shouldNotifyForRun(state)) {
             return null;
         }
@@ -625,7 +621,7 @@ public class PollingLiveService {
                         "duplicates", String.valueOf(source.duplicates)));
     }
 
-    private boolean shouldNotifyForRun(RunState state) {
+    private boolean shouldNotifyForRun(PollingLiveRunState state) {
         return state != null && !"scheduler".equals(state.trigger);
     }
 
@@ -686,88 +682,4 @@ public class PollingLiveService {
         }
     }
 
-    private static final class RunState {
-        private final String runId = UUID.randomUUID().toString();
-        private final String trigger;
-        private final Instant startedAt = Instant.now();
-        private final Long actorUserId;
-        private final String actorUsername;
-        private final boolean actorAdmin;
-        private final LinkedHashMap<String, SourceState> sourcesById = new LinkedHashMap<>();
-        private final java.util.ArrayDeque<String> queue = new java.util.ArrayDeque<>();
-        private final LinkedHashSet<String> activeSourceIds = new LinkedHashSet<>();
-        private final List<Runnable> cancellationActions = new ArrayList<>();
-        private String state = "RUNNING";
-        private boolean pauseRequested;
-        private boolean stopRequested;
-        private String stopRequestedByUsername;
-        private Instant updatedAt = startedAt;
-
-        private RunState(String trigger, AppUser actor, List<RuntimeEmailAccount> emailAccounts) {
-            this.trigger = trigger;
-            this.actorUserId = actor == null ? null : actor.id;
-            this.actorUsername = actor == null ? "system" : actor.username;
-            this.actorAdmin = actor != null && actor.role == AppUser.Role.ADMIN;
-            for (RuntimeEmailAccount emailAccount : emailAccounts) {
-                SourceState source = new SourceState(emailAccount);
-                sourcesById.put(emailAccount.id(), source);
-                queue.addLast(emailAccount.id());
-            }
-        }
-
-        private String primaryActiveSourceId() {
-            return activeSourceIds.stream().findFirst().orElse(null);
-        }
-    }
-
-    private static final class SourceState {
-        private final String sourceId;
-        private final Long ownerUserId;
-        private final String ownerUsername;
-        private final String label;
-        private String state = "QUEUED";
-        private int attempt = 1;
-        private int totalMessages;
-        private long totalBytes;
-        private long processedBytes;
-        private int fetched;
-        private int imported;
-        private int duplicates;
-        private String error;
-        private Instant startedAt;
-        private Instant finishedAt;
-
-        private SourceState(RuntimeEmailAccount emailAccount) {
-            this.sourceId = emailAccount.id();
-            this.ownerUserId = emailAccount.ownerUserId();
-            this.ownerUsername = emailAccount.ownerUsername();
-            this.label = emailAccount.customLabel().orElse(emailAccount.id());
-        }
-
-        private boolean isQueued() {
-            return "QUEUED".equals(state) || "RETRY_QUEUED".equals(state);
-        }
-
-        private int position(java.util.ArrayDeque<String> queue, java.util.Set<String> activeSourceIds) {
-            if (activeSourceIds.contains(sourceId)) {
-                return 0;
-            }
-            int index = 1;
-            for (String queuedId : queue) {
-                if (sourceId.equals(queuedId)) {
-                    return index;
-                }
-                index += 1;
-            }
-            return Integer.MAX_VALUE;
-        }
-
-        private boolean actionable(boolean admin, Long viewerId, Long actorUserId) {
-            return admin || (actorUserId != null && actorUserId.equals(viewerId));
-        }
-
-        private int processedMessages() {
-            return Math.max(0, fetched);
-        }
-    }
 }
