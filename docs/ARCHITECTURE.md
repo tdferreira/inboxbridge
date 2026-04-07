@@ -57,6 +57,10 @@ infrastructure details:
   those mail-source collaborators, so focused unit tests and GreenMail-backed
   integration tests construct the same helper graph instead of each service
   re-creating its own ad-hoc fallback dependencies.
+- Inside that slice, the extracted helper services now also use explicit
+  constructor injection for their collaborator graph, which narrows the hidden
+  dependency surface and gives Quarkus component tests a clearer runtime wiring
+  seam than broad field injection.
 - With those helpers in place, `MailSourceClient` can stay focused on polling
   orchestration instead of re-implementing every protocol, OAuth, or source
   mutation detail itself.

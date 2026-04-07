@@ -273,6 +273,10 @@ class MailSourceFetchServiceTest {
     }
 
     private static final class FetchConnectionService extends MailSourceConnectionService {
+        private FetchConnectionService() {
+            super(null, null);
+        }
+
         @Override
         public void connectStore(Store store, RuntimeEmailAccount bridge) {
             // no-op

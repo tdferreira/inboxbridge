@@ -27,24 +27,13 @@ import jakarta.mail.search.FlagTerm;
 @ApplicationScoped
 public class MailSourceConnectionProbeService {
 
-    @Inject
-    MailSessionFactory mailSessionFactory;
+    private final MailSessionFactory mailSessionFactory;
+    private final MailSourceConnectionService mailSourceConnectionService;
+    private final MailSourceFolderService mailSourceFolderService;
+    private final MailSourceMessageMapper mailSourceMessageMapper;
+    private final PollCancellationService pollCancellationService;
 
     @Inject
-    MailSourceConnectionService mailSourceConnectionService;
-
-    @Inject
-    MailSourceFolderService mailSourceFolderService;
-
-    @Inject
-    MailSourceMessageMapper mailSourceMessageMapper;
-
-    @Inject
-    PollCancellationService pollCancellationService;
-
-    MailSourceConnectionProbeService() {
-    }
-
     MailSourceConnectionProbeService(
             MailSessionFactory mailSessionFactory,
             MailSourceConnectionService mailSourceConnectionService,

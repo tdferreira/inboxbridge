@@ -174,6 +174,10 @@ class MailSourcePostPollActionServiceTest {
     }
 
     private static final class TestMailSourceConnectionService extends MailSourceConnectionService {
+        private TestMailSourceConnectionService() {
+            super(null, null);
+        }
+
         @Override
         public void connectStore(Store store, RuntimeEmailAccount bridge) {
             ((TestStore) store).connected = true;

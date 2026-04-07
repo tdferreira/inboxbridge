@@ -26,27 +26,14 @@ import jakarta.mail.UIDFolder;
 @ApplicationScoped
 public class MailSourceFetchService {
 
-    @Inject
-    MailSessionFactory mailSessionFactory;
+    private final MailSessionFactory mailSessionFactory;
+    private final MailSourceConnectionService mailSourceConnectionService;
+    private final MailSourceCheckpointSelector mailSourceCheckpointSelector;
+    private final MailSourceMessageMapper mailSourceMessageMapper;
+    private final SourcePollingStateService sourcePollingStateService;
+    private final PollCancellationService pollCancellationService;
 
     @Inject
-    MailSourceConnectionService mailSourceConnectionService;
-
-    @Inject
-    MailSourceCheckpointSelector mailSourceCheckpointSelector;
-
-    @Inject
-    MailSourceMessageMapper mailSourceMessageMapper;
-
-    @Inject
-    SourcePollingStateService sourcePollingStateService;
-
-    @Inject
-    PollCancellationService pollCancellationService;
-
-    MailSourceFetchService() {
-    }
-
     MailSourceFetchService(
             MailSessionFactory mailSessionFactory,
             MailSourceConnectionService mailSourceConnectionService,

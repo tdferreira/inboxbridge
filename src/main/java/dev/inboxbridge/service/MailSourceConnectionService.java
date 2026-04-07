@@ -18,15 +18,10 @@ public class MailSourceConnectionService {
 
     private static final Logger LOG = Logger.getLogger(MailSourceConnectionService.class);
 
-    @Inject
-    MicrosoftOAuthService microsoftOAuthService;
+    private final MicrosoftOAuthService microsoftOAuthService;
+    private final GoogleOAuthService googleOAuthService;
 
     @Inject
-    GoogleOAuthService googleOAuthService;
-
-    MailSourceConnectionService() {
-    }
-
     MailSourceConnectionService(
             MicrosoftOAuthService microsoftOAuthService,
             GoogleOAuthService googleOAuthService) {

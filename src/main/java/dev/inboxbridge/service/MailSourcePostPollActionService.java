@@ -24,21 +24,12 @@ public class MailSourcePostPollActionService {
 
     private static final Logger LOG = Logger.getLogger(MailSourcePostPollActionService.class);
 
-    @Inject
-    MailSessionFactory mailSessionFactory;
+    private final MailSessionFactory mailSessionFactory;
+    private final MailSourceConnectionService mailSourceConnectionService;
+    private final MailSourceMessageMapper mailSourceMessageMapper;
+    private final PollCancellationService pollCancellationService;
 
     @Inject
-    MailSourceConnectionService mailSourceConnectionService;
-
-    @Inject
-    MailSourceMessageMapper mailSourceMessageMapper;
-
-    @Inject
-    PollCancellationService pollCancellationService;
-
-    MailSourcePostPollActionService() {
-    }
-
     MailSourcePostPollActionService(
             MailSessionFactory mailSessionFactory,
             MailSourceConnectionService mailSourceConnectionService,

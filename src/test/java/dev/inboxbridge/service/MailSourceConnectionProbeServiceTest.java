@@ -198,6 +198,10 @@ class MailSourceConnectionProbeServiceTest {
     }
 
     private static final class ProbeConnectionService extends MailSourceConnectionService {
+        private ProbeConnectionService() {
+            super(null, null);
+        }
+
         @Override
         public void connectStore(Store store, RuntimeEmailAccount bridge) {
             // no-op for fake store
