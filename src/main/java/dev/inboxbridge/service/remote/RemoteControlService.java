@@ -1,4 +1,4 @@
-package dev.inboxbridge.service;
+package dev.inboxbridge.service.remote;
 
 import dev.inboxbridge.service.polling.PollingService;
 import java.time.Instant;
@@ -22,6 +22,16 @@ import dev.inboxbridge.persistence.AppUser;
 import dev.inboxbridge.persistence.ImportedMessageRepository;
 import dev.inboxbridge.persistence.UserEmailAccount;
 import dev.inboxbridge.persistence.UserEmailAccountRepository;
+import dev.inboxbridge.service.AppUserService;
+import dev.inboxbridge.service.EnvSourceService;
+import dev.inboxbridge.service.PollingSettingsService;
+import dev.inboxbridge.service.RuntimeEmailAccountService;
+import dev.inboxbridge.service.SourcePollEventService;
+import dev.inboxbridge.service.SourcePollingSettingsService;
+import dev.inboxbridge.service.SourcePollingStateService;
+import dev.inboxbridge.service.UserEmailAccountService;
+import dev.inboxbridge.service.UserMailDestinationConfigService;
+import dev.inboxbridge.service.UserUiPreferenceService;
 import dev.inboxbridge.service.oauth.SystemOAuthAppSettingsService;
 import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.inject.Inject;

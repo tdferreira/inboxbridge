@@ -1,4 +1,4 @@
-package dev.inboxbridge.service;
+package dev.inboxbridge.service.remote;
 
 import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
@@ -8,6 +8,7 @@ import java.util.Optional;
 
 import dev.inboxbridge.config.InboxBridgeConfig;
 import dev.inboxbridge.persistence.AppUser;
+import dev.inboxbridge.service.AppUserService;
 import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.inject.Inject;
 

@@ -1,4 +1,4 @@
-package dev.inboxbridge.web;
+package dev.inboxbridge.web.remote;
 
 import dev.inboxbridge.dto.ApiError;
 import dev.inboxbridge.dto.FinishPasskeyCeremonyRequest;
@@ -19,9 +19,10 @@ import dev.inboxbridge.service.auth.AuthService;
 import dev.inboxbridge.service.GeoIpLocationService;
 import dev.inboxbridge.service.auth.PasskeyService;
 import dev.inboxbridge.service.polling.PollingLiveService;
-import dev.inboxbridge.service.RemoteSessionService;
+import dev.inboxbridge.service.remote.RemoteSessionService;
 import dev.inboxbridge.service.oauth.SystemOAuthAppSettingsService;
 import dev.inboxbridge.service.UserUiPreferenceService;
+import dev.inboxbridge.web.WebResourceSupport;
 import io.vertx.core.http.HttpServerRequest;
 import jakarta.inject.Inject;
 import jakarta.ws.rs.Consumes;

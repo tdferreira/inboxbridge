@@ -1,4 +1,4 @@
-package dev.inboxbridge.web;
+package dev.inboxbridge.web.remote;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
@@ -22,7 +22,7 @@ import dev.inboxbridge.service.auth.AuthService;
 import dev.inboxbridge.service.GeoIpLocationService;
 import dev.inboxbridge.service.auth.PasskeyService;
 import dev.inboxbridge.service.polling.PollingLiveService;
-import dev.inboxbridge.service.RemoteSessionService;
+import dev.inboxbridge.service.remote.RemoteSessionService;
 import dev.inboxbridge.service.oauth.SystemOAuthAppSettingsService;
 import dev.inboxbridge.service.UserUiPreferenceService;
 import io.vertx.core.http.HttpServerRequest;

@@ -1,4 +1,4 @@
-package dev.inboxbridge.web;
+package dev.inboxbridge.web.remote;
 
 import org.jboss.resteasy.reactive.RestStreamElementType;
 
@@ -10,7 +10,7 @@ import dev.inboxbridge.security.CurrentUserContext;
 import dev.inboxbridge.security.RequireRemoteControl;
 import dev.inboxbridge.service.auth.AuthClientAddressService;
 import dev.inboxbridge.service.polling.PollingLiveService;
-import dev.inboxbridge.service.RemoteControlService;
+import dev.inboxbridge.service.remote.RemoteControlService;
 import io.smallrye.common.annotation.Blocking;
 import io.smallrye.mutiny.Multi;
 import io.vertx.core.http.HttpServerRequest;
@@ -47,6 +47,18 @@ public class RemoteControlResource {
 
     @Context
     HttpServerRequest httpServerRequest;
+
+    public void setRemoteControlService(RemoteControlService remoteControlService) {
+        this.remoteControlService = remoteControlService;
+    }
+
+    public void setCurrentUserContext(CurrentUserContext currentUserContext) {
+        this.currentUserContext = currentUserContext;
+    }
+
+    public void setAuthClientAddressService(AuthClientAddressService authClientAddressService) {
+        this.authClientAddressService = authClientAddressService;
+    }
 
     @GET
     @Path("/control")

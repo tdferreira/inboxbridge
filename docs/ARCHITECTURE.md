@@ -15,6 +15,11 @@ The auth and browser-session services now also live behind
 per-session device/location formatting, and auth-security setting resolution
 can evolve together without leaking package-private test seams back into the
 older flat service namespace.
+The remote-control surface now also has explicit feature seams:
+`dev.inboxbridge.service.remote` owns remote sessions, remote service-token
+auth, remote run rate limiting, and the remote control/dashboard projection,
+while `dev.inboxbridge.web.remote` owns the remote auth and remote control REST
+resources that sit on top of that model.
 Within that still mostly layer-oriented backend, the provider OAuth web surface
 now also uses a narrower seam under `dev.inboxbridge.web.oauth`: the Google and
 Microsoft OAuth REST resources live alongside their callback-page renderers and
@@ -89,6 +94,13 @@ infrastructure details:
   `dev.inboxbridge.service.auth`, so sign-in flow, passkey ceremonies, browser
   session issuance, session-security presentation, and auth-hardening settings
   stay in one auth-focused backend slice.
+- `RemoteControlService`, `RemoteSessionService`,
+  `RemoteServiceTokenAuthService`, and `RemotePollRateLimitService` now live
+  together under `dev.inboxbridge.service.remote`, while
+  `RemoteAuthResource` and `RemoteControlResource` now live under
+  `dev.inboxbridge.web.remote`, so the remote-only auth/session/rate-limit
+  model evolves behind a dedicated feature boundary instead of staying split
+  across the flat service and web packages.
 - `GoogleOAuthCallbackPageRenderer` and
   `MicrosoftOAuthCallbackPageRenderer` now own the provider-specific browser
   callback pages, while `OAuthPageI18n` and `OAuthPageSupport` keep the shared

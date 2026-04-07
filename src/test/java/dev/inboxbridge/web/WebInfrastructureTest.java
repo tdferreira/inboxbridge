@@ -22,7 +22,8 @@ import dev.inboxbridge.security.CurrentUserContext;
 import dev.inboxbridge.service.auth.AuthClientAddressService;
 import dev.inboxbridge.service.polling.PollingLiveService;
 import dev.inboxbridge.service.polling.PollingService;
-import dev.inboxbridge.service.RemoteControlService;
+import dev.inboxbridge.service.remote.RemoteControlService;
+import dev.inboxbridge.web.remote.RemoteControlResource;
 import jakarta.ws.rs.BadRequestException;
 import jakarta.ws.rs.ForbiddenException;
 import jakarta.ws.rs.core.MediaType;
@@ -102,15 +103,15 @@ class WebInfrastructureTest {
                 3);
 
         RemoteControlResource resource = new RemoteControlResource();
-        resource.currentUserContext = currentUserContext(admin);
-        resource.authClientAddressService = new AuthClientAddressService() {
+        resource.setCurrentUserContext(currentUserContext(admin));
+        resource.setAuthClientAddressService(new AuthClientAddressService() {
             @Override
             public String resolveClientKey(jakarta.ws.rs.core.HttpHeaders headers, String directRemoteAddress) {
                 assertNull(directRemoteAddress);
                 return "203.0.113.9";
             }
-        };
-        resource.remoteControlService = new RemoteControlService() {
+        });
+        resource.setRemoteControlService(new RemoteControlService() {
             @Override
             public RemoteControlView viewFor(AppUser actor) {
                 assertEquals(admin, actor);
@@ -138,7 +139,7 @@ class WebInfrastructureTest {
                 assertEquals("remote-source:fetcher-1:11:203.0.113.9", actorKey);
                 return pollResult;
             }
-        };
+        });
 
         assertEquals(view, resource.control());
         assertEquals(pollResult, resource.runUserPoll());
@@ -151,19 +152,19 @@ class WebInfrastructureTest {
         AppUser user = user(8L, "alice", AppUser.Role.USER);
 
         RemoteControlResource resource = new RemoteControlResource();
-        resource.currentUserContext = currentUserContext(user);
-        resource.authClientAddressService = new AuthClientAddressService() {
+        resource.setCurrentUserContext(currentUserContext(user));
+        resource.setAuthClientAddressService(new AuthClientAddressService() {
             @Override
             public String resolveClientKey(jakarta.ws.rs.core.HttpHeaders headers, String directRemoteAddress) {
                 return "198.51.100.4";
             }
-        };
-        resource.remoteControlService = new RemoteControlService() {
+        });
+        resource.setRemoteControlService(new RemoteControlService() {
             @Override
             public PollRunResult runSourcePoll(AppUser actor, String sourceId, String actorKey) {
                 throw new IllegalArgumentException("Unknown mail fetcher id");
             }
-        };
+        });
 
         BadRequestException error = assertThrows(BadRequestException.class, () -> resource.runSourcePoll("missing"));
 

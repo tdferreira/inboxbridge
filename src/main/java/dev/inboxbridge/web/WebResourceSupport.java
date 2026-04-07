@@ -2,12 +2,12 @@ package dev.inboxbridge.web;
 
 import jakarta.ws.rs.BadRequestException;
 
-final class WebResourceSupport {
+public final class WebResourceSupport {
 
     private WebResourceSupport() {
     }
 
-    static <T> T badRequest(UnsafeSupplier<T> action) {
+    public static <T> T badRequest(UnsafeSupplier<T> action) {
         try {
             return action.get();
         } catch (IllegalArgumentException | IllegalStateException exception) {
@@ -15,7 +15,7 @@ final class WebResourceSupport {
         }
     }
 
-    static void badRequest(UnsafeRunnable action) {
+    public static void badRequest(UnsafeRunnable action) {
         try {
             action.run();
         } catch (IllegalArgumentException | IllegalStateException exception) {
@@ -23,17 +23,17 @@ final class WebResourceSupport {
         }
     }
 
-    static BadRequestException badRequest(RuntimeException exception) {
+    public static BadRequestException badRequest(RuntimeException exception) {
         return new BadRequestException(exception.getMessage(), exception);
     }
 
     @FunctionalInterface
-    interface UnsafeSupplier<T> {
+    public interface UnsafeSupplier<T> {
         T get();
     }
 
     @FunctionalInterface
-    interface UnsafeRunnable {
+    public interface UnsafeRunnable {
         void run();
     }
 }

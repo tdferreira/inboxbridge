@@ -33,7 +33,7 @@ import dev.inboxbridge.service.oauth.MicrosoftOAuthService;
 import dev.inboxbridge.service.oauth.OAuthProviderRegistryService;
 import dev.inboxbridge.service.auth.PasskeyService;
 import dev.inboxbridge.service.polling.PollingLiveService;
-import dev.inboxbridge.service.RemoteSessionService;
+import dev.inboxbridge.service.remote.RemoteSessionService;
 import dev.inboxbridge.service.auth.RegistrationChallengeService;
 import dev.inboxbridge.service.auth.SessionClientInfoService;
 import dev.inboxbridge.service.oauth.SystemOAuthAppSettingsService;

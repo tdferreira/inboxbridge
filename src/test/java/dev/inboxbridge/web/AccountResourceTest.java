@@ -14,7 +14,7 @@ import dev.inboxbridge.service.AppUserService;
 import dev.inboxbridge.service.polling.PollingLiveService;
 import dev.inboxbridge.service.auth.SessionClientInfoService;
 import dev.inboxbridge.service.auth.UserSessionService;
-import dev.inboxbridge.service.RemoteSessionService;
+import dev.inboxbridge.service.remote.RemoteSessionService;
 import dev.inboxbridge.service.oauth.UserGmailConfigService;
 import jakarta.enterprise.inject.Vetoed;
 import jakarta.ws.rs.BadRequestException;
