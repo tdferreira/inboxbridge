@@ -19,6 +19,7 @@ import dev.inboxbridge.persistence.UserEmailAccount;
 import dev.inboxbridge.persistence.UserEmailAccountRepository;
 import dev.inboxbridge.service.destination.DestinationIdentityKeys;
 import dev.inboxbridge.service.oauth.SystemOAuthAppSettingsService;
+import dev.inboxbridge.service.user.UserMailDestinationConfigService;
 import io.quarkus.runtime.StartupEvent;
 import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.enterprise.event.Observes;

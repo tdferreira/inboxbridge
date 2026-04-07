@@ -16,6 +16,7 @@ import dev.inboxbridge.domain.ImapAppendDestinationTarget;
 import dev.inboxbridge.dto.MailImportResponse;
 import dev.inboxbridge.persistence.ImportedMessage;
 import dev.inboxbridge.persistence.ImportedMessageRepository;
+import dev.inboxbridge.service.user.UserMailDestinationConfigService;
 
 class ImportDeduplicationServiceTest {
 

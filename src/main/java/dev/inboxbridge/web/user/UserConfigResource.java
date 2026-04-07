@@ -1,4 +1,4 @@
-package dev.inboxbridge.web;
+package dev.inboxbridge.web.user;
 
 import java.time.Instant;
 import java.time.ZoneId;
@@ -23,14 +23,15 @@ import dev.inboxbridge.dto.UserUiPreferenceView;
 import dev.inboxbridge.dto.PollRunResult;
 import dev.inboxbridge.security.CurrentUserContext;
 import dev.inboxbridge.security.RequireAuth;
-import dev.inboxbridge.service.polling.PollingService;
-import dev.inboxbridge.service.RuntimeEmailAccountService;
 import dev.inboxbridge.service.SourcePollingSettingsService;
-import dev.inboxbridge.service.UserEmailAccountService;
-import dev.inboxbridge.service.UserMailDestinationConfigService;
+import dev.inboxbridge.service.polling.PollingService;
 import dev.inboxbridge.service.polling.PollingStatsService;
-import dev.inboxbridge.service.UserPollingSettingsService;
-import dev.inboxbridge.service.UserUiPreferenceService;
+import dev.inboxbridge.service.user.RuntimeEmailAccountService;
+import dev.inboxbridge.service.user.UserEmailAccountService;
+import dev.inboxbridge.service.user.UserMailDestinationConfigService;
+import dev.inboxbridge.service.user.UserPollingSettingsService;
+import dev.inboxbridge.service.user.UserUiPreferenceService;
+import dev.inboxbridge.web.WebResourceSupport;
 import jakarta.inject.Inject;
 import jakarta.ws.rs.Consumes;
 import jakarta.ws.rs.DELETE;

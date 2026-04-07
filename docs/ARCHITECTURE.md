@@ -20,6 +20,12 @@ The remote-control surface now also has explicit feature seams:
 auth, remote run rate limiting, and the remote control/dashboard projection,
 while `dev.inboxbridge.web.remote` owns the remote auth and remote control REST
 resources that sit on top of that model.
+The per-user mailbox/config/preferences slice now also has an explicit feature
+boundary: `dev.inboxbridge.service.user` owns user-managed source mailboxes,
+user destination mailbox config, per-user polling overrides, UI preferences,
+and runtime resolution of user-accessible source bridges, while
+`dev.inboxbridge.web.user` owns the authenticated `/api/app` resource that
+exposes those per-user mailbox/config endpoints.
 Within that still mostly layer-oriented backend, the provider OAuth web surface
 now also uses a narrower seam under `dev.inboxbridge.web.oauth`: the Google and
 Microsoft OAuth REST resources live alongside their callback-page renderers and
@@ -101,6 +107,13 @@ infrastructure details:
   `dev.inboxbridge.web.remote`, so the remote-only auth/session/rate-limit
   model evolves behind a dedicated feature boundary instead of staying split
   across the flat service and web packages.
+- `UserEmailAccountService`, `UserMailDestinationConfigService`,
+  `UserPollingSettingsService`, `UserUiPreferenceService`, and
+  `RuntimeEmailAccountService` now live together under
+  `dev.inboxbridge.service.user`, while `UserConfigResource` now lives under
+  `dev.inboxbridge.web.user`, so the authenticated `/api/app` mailbox/config
+  surface evolves behind one per-user feature package instead of staying mixed
+  through the older flat service/web namespaces.
 - `GoogleOAuthCallbackPageRenderer` and
   `MicrosoftOAuthCallbackPageRenderer` now own the provider-specific browser
   callback pages, while `OAuthPageI18n` and `OAuthPageSupport` keep the shared
@@ -189,10 +202,10 @@ Runtime-level backend validation now has two intentionally different seams:
 That packaged smoke path runs the built Quarkus jar under the `%test` profile
 with an in-memory H2 datasource and no external TLS certificate requirement, so
 health, browser-auth session wiring, remote-session protection, OAuth callback
-rendering, and startup regressions can be caught without depending on the
-normal Docker/PostgreSQL runtime. Those packaged `verify` runs should be
-executed sequentially because concurrent Quarkus builds can corrupt the shared
-`target/quarkus-app` output.
+rendering, the authenticated `/api/app` protection surface, and startup
+regressions can be caught without depending on the normal Docker/PostgreSQL
+runtime. Those packaged `verify` runs should be executed sequentially because
+concurrent Quarkus builds can corrupt the shared `target/quarkus-app` output.
 
 The user-deletion and session-revocation cleanup path now also keeps
 transaction ownership at the service layer. Repository helpers in that slice

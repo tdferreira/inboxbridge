@@ -14,7 +14,7 @@ import dev.inboxbridge.security.CurrentUserContext;
 import dev.inboxbridge.security.RequireAuth;
 import dev.inboxbridge.service.EnvSourceService;
 import dev.inboxbridge.service.oauth.MicrosoftOAuthService;
-import dev.inboxbridge.service.UserEmailAccountService;
+import dev.inboxbridge.service.user.UserEmailAccountService;
 import dev.inboxbridge.web.ApiErrorCodes;
 import dev.inboxbridge.web.ApiErrorDetails;
 import jakarta.inject.Inject;

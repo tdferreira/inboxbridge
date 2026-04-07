@@ -22,6 +22,7 @@ import dev.inboxbridge.persistence.PollThrottleLease;
 import dev.inboxbridge.persistence.PollThrottleLeaseRepository;
 import dev.inboxbridge.persistence.PollThrottleState;
 import dev.inboxbridge.persistence.PollThrottleStateRepository;
+import dev.inboxbridge.service.user.UserMailDestinationConfigService;
 import dev.inboxbridge.testsupport.ScopedLogCapture;
 
 class PollThrottleServiceTest {

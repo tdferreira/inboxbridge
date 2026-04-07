@@ -24,7 +24,7 @@ import dev.inboxbridge.domain.GmailTarget;
 import dev.inboxbridge.service.oauth.GoogleOAuthService;
 import dev.inboxbridge.service.oauth.SystemOAuthAppSettingsService;
 import dev.inboxbridge.service.oauth.UserGmailConfigService;
-import dev.inboxbridge.service.UserMailDestinationConfigService;
+import dev.inboxbridge.service.user.UserMailDestinationConfigService;
 import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.inject.Inject;
 

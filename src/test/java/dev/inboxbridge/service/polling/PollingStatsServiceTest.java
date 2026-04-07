@@ -25,6 +25,7 @@ import dev.inboxbridge.persistence.SourcePollEvent;
 import dev.inboxbridge.persistence.ImportedMessageRepository;
 import dev.inboxbridge.persistence.UserEmailAccount;
 import dev.inboxbridge.persistence.UserEmailAccountRepository;
+import dev.inboxbridge.service.user.UserMailDestinationConfigService;
 
 class PollingStatsServiceTest {
 

@@ -29,6 +29,7 @@ import dev.inboxbridge.persistence.SourcePollingState;
 import dev.inboxbridge.persistence.SourcePollingStateRepository;
 import dev.inboxbridge.persistence.UserEmailAccount;
 import dev.inboxbridge.persistence.UserEmailAccountRepository;
+import dev.inboxbridge.service.user.UserMailDestinationConfigService;
 
 class DestinationIdentityUpgradeServiceTest {
 

@@ -1,5 +1,13 @@
-package dev.inboxbridge.service;
+package dev.inboxbridge.service.user;
 
+import dev.inboxbridge.service.EnvSourceService;
+import dev.inboxbridge.service.PollingSettingsService;
+import dev.inboxbridge.service.SecretEncryptionService;
+import dev.inboxbridge.service.SourceDiagnosticsService;
+import dev.inboxbridge.service.SourceMailboxConfigurationChanged;
+import dev.inboxbridge.service.SourcePollEventService;
+import dev.inboxbridge.service.SourcePollingSettingsService;
+import dev.inboxbridge.service.SourcePollingStateService;
 import dev.inboxbridge.service.oauth.OAuthCredentialService;
 import dev.inboxbridge.service.destination.*;
 
@@ -684,8 +692,8 @@ class UserEmailAccountServiceTest {
 
     private static final class FakeSecretEncryptionService extends SecretEncryptionService {
         private FakeSecretEncryptionService() {
-            tokenEncryptionKey = Base64.getEncoder().encodeToString("0123456789abcdef0123456789abcdef".getBytes());
-            tokenEncryptionKeyId = "v1";
+            setTokenEncryptionKey(Base64.getEncoder().encodeToString("0123456789abcdef0123456789abcdef".getBytes()));
+            setTokenEncryptionKeyId("v1");
         }
 
         @Override

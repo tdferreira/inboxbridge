@@ -18,12 +18,12 @@ import dev.inboxbridge.persistence.UserEmailAccount;
 import dev.inboxbridge.persistence.UserEmailAccountRepository;
 import dev.inboxbridge.service.AppUserService;
 import dev.inboxbridge.service.PollingSettingsService;
-import dev.inboxbridge.service.RuntimeEmailAccountService;
+import dev.inboxbridge.service.user.RuntimeEmailAccountService;
 import dev.inboxbridge.service.SourcePollEventService;
 import dev.inboxbridge.service.SourcePollingSettingsService;
 import dev.inboxbridge.service.SourcePollingStateService;
-import dev.inboxbridge.service.UserMailDestinationConfigService;
-import dev.inboxbridge.service.UserUiPreferenceService;
+import dev.inboxbridge.service.user.UserMailDestinationConfigService;
+import dev.inboxbridge.service.user.UserUiPreferenceService;
 import jakarta.enterprise.inject.Vetoed;
 
 class RemoteControlServiceTest {

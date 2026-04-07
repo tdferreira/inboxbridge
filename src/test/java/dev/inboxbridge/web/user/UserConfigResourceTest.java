@@ -1,4 +1,4 @@
-package dev.inboxbridge.web;
+package dev.inboxbridge.web.user;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
@@ -25,12 +25,12 @@ import dev.inboxbridge.dto.PollRunResult;
 import dev.inboxbridge.persistence.AppUser;
 import dev.inboxbridge.security.CurrentUserContext;
 import dev.inboxbridge.service.polling.PollingService;
-import dev.inboxbridge.service.RuntimeEmailAccountService;
+import dev.inboxbridge.service.user.RuntimeEmailAccountService;
 import dev.inboxbridge.service.SourcePollingSettingsService;
 import dev.inboxbridge.service.polling.PollingStatsService;
-import dev.inboxbridge.service.UserPollingSettingsService;
-import dev.inboxbridge.service.UserEmailAccountService;
-import dev.inboxbridge.service.UserMailDestinationConfigService;
+import dev.inboxbridge.service.user.UserPollingSettingsService;
+import dev.inboxbridge.service.user.UserEmailAccountService;
+import dev.inboxbridge.service.user.UserMailDestinationConfigService;
 import jakarta.ws.rs.BadRequestException;
 
 class UserConfigResourceTest {

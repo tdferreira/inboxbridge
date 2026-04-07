@@ -1,4 +1,4 @@
-package dev.inboxbridge.service;
+package dev.inboxbridge.service.user;
 
 import java.time.Instant;
 import java.util.List;
@@ -17,6 +17,7 @@ import dev.inboxbridge.dto.UserMailDestinationView;
 import dev.inboxbridge.persistence.AppUser;
 import dev.inboxbridge.persistence.UserMailDestinationConfig;
 import dev.inboxbridge.persistence.UserMailDestinationConfigRepository;
+import dev.inboxbridge.service.SecretEncryptionService;
 import dev.inboxbridge.service.destination.ImapAppendMailDestinationService;
 import dev.inboxbridge.service.destination.MailboxConflictService;
 import dev.inboxbridge.service.oauth.GoogleOAuthService;
@@ -69,10 +70,10 @@ public class UserMailDestinationConfigService {
             return new UserMailDestinationView(
                     PROVIDER_GMAIL,
                     "GMAIL_API",
-                config != null || gmailLinked,
+                    config != null || gmailLinked,
                 gmailLinked,
                     false,
-                gmailLinked,
+                    gmailLinked,
                     gmailView.sharedClientConfigured(),
                     systemOAuthAppSettingsService.microsoftClientConfigured(),
                     gmailView.defaultRedirectUri(),
@@ -94,7 +95,7 @@ public class UserMailDestinationConfigService {
         return new UserMailDestinationView(
                 config.provider,
                 "IMAP_APPEND",
-            true,
+                true,
                 passwordConfigured || oauthConnected,
                 passwordConfigured,
                 oauthConnected,

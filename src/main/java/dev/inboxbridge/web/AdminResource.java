@@ -24,7 +24,7 @@ import dev.inboxbridge.service.PollingSettingsService;
 import dev.inboxbridge.service.polling.PollingStatsService;
 import dev.inboxbridge.service.polling.PollingLiveService;
 import dev.inboxbridge.service.polling.PollingService;
-import dev.inboxbridge.service.RuntimeEmailAccountService;
+import dev.inboxbridge.service.user.RuntimeEmailAccountService;
 import dev.inboxbridge.service.SourcePollingSettingsService;
 import dev.inboxbridge.service.oauth.SystemOAuthAppSettingsService;
 import jakarta.inject.Inject;

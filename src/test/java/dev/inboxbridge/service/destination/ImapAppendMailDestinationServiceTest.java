@@ -25,6 +25,7 @@ import dev.inboxbridge.config.InboxBridgeConfig;
 import dev.inboxbridge.domain.FetchedMessage;
 import dev.inboxbridge.domain.ImapAppendDestinationTarget;
 import dev.inboxbridge.dto.EmailAccountConnectionTestResult;
+import dev.inboxbridge.service.user.UserMailDestinationConfigService;
 import jakarta.mail.Folder;
 import jakarta.mail.Message;
 import jakarta.mail.Session;

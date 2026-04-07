@@ -1,4 +1,4 @@
-package dev.inboxbridge.service;
+package dev.inboxbridge.service.user;
 
 import java.time.Instant;
 import java.time.ZoneId;

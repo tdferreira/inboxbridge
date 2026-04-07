@@ -10,6 +10,7 @@ import org.junit.jupiter.api.Test;
 import dev.inboxbridge.config.InboxBridgeConfig;
 import dev.inboxbridge.domain.GmailApiDestinationTarget;
 import dev.inboxbridge.domain.ImapAppendDestinationTarget;
+import dev.inboxbridge.service.user.UserMailDestinationConfigService;
 
 class DestinationIdentityKeysTest {
 

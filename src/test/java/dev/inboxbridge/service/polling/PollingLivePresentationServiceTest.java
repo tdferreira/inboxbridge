@@ -10,7 +10,7 @@ import dev.inboxbridge.config.InboxBridgeConfig;
 import dev.inboxbridge.domain.GmailApiDestinationTarget;
 import dev.inboxbridge.domain.RuntimeEmailAccount;
 import dev.inboxbridge.persistence.AppUser;
-import dev.inboxbridge.service.UserMailDestinationConfigService;
+import dev.inboxbridge.service.user.UserMailDestinationConfigService;
 import dev.inboxbridge.service.auth.SessionLocationAlertService;
 import java.util.List;
 import java.util.Optional;

@@ -1,4 +1,4 @@
-package dev.inboxbridge.service;
+package dev.inboxbridge.service.user;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
@@ -13,6 +13,7 @@ import dev.inboxbridge.dto.UpdateUserPollingSettingsRequest;
 import dev.inboxbridge.persistence.AppUser;
 import dev.inboxbridge.persistence.UserPollingSetting;
 import dev.inboxbridge.persistence.UserPollingSettingRepository;
+import dev.inboxbridge.service.PollingSettingsService;
 import jakarta.transaction.Transactional;
 
 class UserPollingSettingsServiceTest {

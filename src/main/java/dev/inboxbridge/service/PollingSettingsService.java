@@ -283,7 +283,7 @@ public class PollingSettingsService {
         return duration;
     }
 
-    Duration parseDuration(String rawValue) {
+    public Duration parseDuration(String rawValue) {
         if (rawValue == null || rawValue.isBlank()) {
             throw new IllegalArgumentException("Poll interval is required");
         }

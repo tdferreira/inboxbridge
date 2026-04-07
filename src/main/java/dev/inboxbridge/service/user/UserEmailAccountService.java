@@ -1,4 +1,4 @@
-package dev.inboxbridge.service;
+package dev.inboxbridge.service.user;
 
 import java.time.Instant;
 import java.util.Locale;
@@ -23,6 +23,14 @@ import dev.inboxbridge.persistence.ImportedMessageRepository;
 import dev.inboxbridge.persistence.UserEmailAccount;
 import dev.inboxbridge.persistence.UserEmailAccountRepository;
 import dev.inboxbridge.persistence.UserGmailConfigRepository;
+import dev.inboxbridge.service.EnvSourceService;
+import dev.inboxbridge.service.PollingSettingsService;
+import dev.inboxbridge.service.SecretEncryptionService;
+import dev.inboxbridge.service.SourceDiagnosticsService;
+import dev.inboxbridge.service.SourceMailboxConfigurationChanged;
+import dev.inboxbridge.service.SourcePollEventService;
+import dev.inboxbridge.service.SourcePollingSettingsService;
+import dev.inboxbridge.service.SourcePollingStateService;
 import dev.inboxbridge.service.destination.MailboxConflictService;
 import dev.inboxbridge.service.mail.MailSourceClient;
 import dev.inboxbridge.service.oauth.OAuthCredentialService;
@@ -35,7 +43,7 @@ import jakarta.transaction.Transactional;
 @ApplicationScoped
 public class UserEmailAccountService {
 
-        private static final String REVOKED_GMAIL_ACCESS_MESSAGE =
+    private static final String REVOKED_GMAIL_ACCESS_MESSAGE =
             "The linked Gmail account no longer grants InboxBridge access. The saved Gmail OAuth link was cleared. Reconnect it from My Destination Mailbox.";
 
     @Inject

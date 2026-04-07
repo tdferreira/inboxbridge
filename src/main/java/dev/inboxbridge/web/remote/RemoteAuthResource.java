@@ -21,7 +21,7 @@ import dev.inboxbridge.service.auth.PasskeyService;
 import dev.inboxbridge.service.polling.PollingLiveService;
 import dev.inboxbridge.service.remote.RemoteSessionService;
 import dev.inboxbridge.service.oauth.SystemOAuthAppSettingsService;
-import dev.inboxbridge.service.UserUiPreferenceService;
+import dev.inboxbridge.service.user.UserUiPreferenceService;
 import dev.inboxbridge.web.WebResourceSupport;
 import io.vertx.core.http.HttpServerRequest;
 import jakarta.inject.Inject;

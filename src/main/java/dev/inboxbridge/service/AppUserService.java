@@ -26,6 +26,7 @@ import dev.inboxbridge.persistence.UserUiPreferenceRepository;
 import dev.inboxbridge.service.auth.PasswordHashService;
 import dev.inboxbridge.service.auth.UserSessionService;
 import dev.inboxbridge.service.oauth.OAuthCredentialService;
+import dev.inboxbridge.service.user.UserMailDestinationConfigService;
 import io.quarkus.runtime.StartupEvent;
 import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.enterprise.event.Observes;

@@ -1,4 +1,4 @@
-package dev.inboxbridge.service;
+package dev.inboxbridge.service.user;
 
 import java.time.Instant;
 import java.util.Optional;
@@ -8,6 +8,7 @@ import dev.inboxbridge.dto.UserPollingSettingsView;
 import dev.inboxbridge.persistence.AppUser;
 import dev.inboxbridge.persistence.UserPollingSetting;
 import dev.inboxbridge.persistence.UserPollingSettingRepository;
+import dev.inboxbridge.service.PollingSettingsService;
 import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.inject.Inject;
 import jakarta.transaction.Transactional;

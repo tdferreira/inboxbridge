@@ -6,6 +6,9 @@ import dev.inboxbridge.service.*;
 import dev.inboxbridge.service.mail.MailSourceClient;
 import dev.inboxbridge.service.mail.MailSourceClient.MailboxCountProbe;
 import dev.inboxbridge.service.mail.MailSourceStandaloneFactory;
+import dev.inboxbridge.service.user.RuntimeEmailAccountService;
+import dev.inboxbridge.service.user.UserMailDestinationConfigService;
+import dev.inboxbridge.service.user.UserPollingSettingsService;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;

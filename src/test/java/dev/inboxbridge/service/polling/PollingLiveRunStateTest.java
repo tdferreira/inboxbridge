@@ -10,6 +10,7 @@ import dev.inboxbridge.config.InboxBridgeConfig;
 import dev.inboxbridge.domain.GmailApiDestinationTarget;
 import dev.inboxbridge.domain.RuntimeEmailAccount;
 import dev.inboxbridge.persistence.AppUser;
+import dev.inboxbridge.service.user.UserMailDestinationConfigService;
 import java.util.List;
 import java.util.Optional;
 import org.junit.jupiter.api.Test;

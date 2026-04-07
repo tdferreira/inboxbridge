@@ -20,7 +20,7 @@ import dev.inboxbridge.persistence.UserEmailAccount;
 import dev.inboxbridge.security.CurrentUserContext;
 import dev.inboxbridge.service.EnvSourceService;
 import dev.inboxbridge.service.oauth.MicrosoftOAuthService;
-import dev.inboxbridge.service.UserEmailAccountService;
+import dev.inboxbridge.service.user.UserEmailAccountService;
 import jakarta.ws.rs.BadRequestException;
 import jakarta.ws.rs.core.Response;
 

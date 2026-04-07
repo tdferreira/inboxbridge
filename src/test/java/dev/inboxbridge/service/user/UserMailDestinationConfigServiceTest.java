@@ -1,5 +1,6 @@
-package dev.inboxbridge.service;
+package dev.inboxbridge.service.user;
 
+import dev.inboxbridge.service.SecretEncryptionService;
 import dev.inboxbridge.service.oauth.MicrosoftOAuthService;
 import dev.inboxbridge.service.oauth.SystemOAuthAppSettingsService;
 import dev.inboxbridge.service.oauth.UserGmailConfigService;
@@ -518,8 +519,8 @@ class UserMailDestinationConfigServiceTest {
         private boolean configured = true;
 
         private FakeSecretEncryptionService() {
-            tokenEncryptionKey = Base64.getEncoder().encodeToString("0123456789abcdef0123456789abcdef".getBytes());
-            tokenEncryptionKeyId = "v1";
+            setTokenEncryptionKey(Base64.getEncoder().encodeToString("0123456789abcdef0123456789abcdef".getBytes()));
+            setTokenEncryptionKeyId("v1");
         }
 
         @Override
