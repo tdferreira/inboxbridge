@@ -188,8 +188,11 @@ Runtime-level backend validation now has two intentionally different seams:
 
 That packaged smoke path runs the built Quarkus jar under the `%test` profile
 with an in-memory H2 datasource and no external TLS certificate requirement, so
-health and startup regressions can be caught without depending on the normal
-Docker/PostgreSQL runtime.
+health, browser-auth session wiring, remote-session protection, OAuth callback
+rendering, and startup regressions can be caught without depending on the
+normal Docker/PostgreSQL runtime. Those packaged `verify` runs should be
+executed sequentially because concurrent Quarkus builds can corrupt the shared
+`target/quarkus-app` output.
 
 The user-deletion and session-revocation cleanup path now also keeps
 transaction ownership at the service layer. Repository helpers in that slice
