@@ -55,9 +55,13 @@ function PasskeyPanel({
           <div key={passkey.id} className="passkey-card">
             <div>
               <strong>{passkey.label}</strong><br />
-              {t('passkey.created', { value: formatDate(passkey.createdAt, locale) })}<br />
-              {t('passkey.lastUsed', { value: formatDate(passkey.lastUsedAt, locale) })}<br />
-              {t('passkey.discoverable', { value: t(passkey.discoverable ? 'common.yes' : 'common.no') })} · {t('passkey.backupEligible', { value: t(passkey.backupEligible ? 'common.yes' : 'common.no') })} · {t('passkey.backedUp', { value: t(passkey.backedUp ? 'common.yes' : 'common.no') })}
+              <div className="passkey-card-metadata">
+                <div>{t('passkey.created', { value: formatDate(passkey.createdAt, locale) })}</div>
+                <div>{t('passkey.lastUsed', { value: formatDate(passkey.lastUsedAt, locale) })}</div>
+                <div>{t('passkey.discoverable', { value: t(passkey.discoverable ? 'common.yes' : 'common.no') })}</div>
+                <div>{t('passkey.backupEligible', { value: t(passkey.backupEligible ? 'common.yes' : 'common.no') })}</div>
+                <div>{t('passkey.backedUp', { value: t(passkey.backedUp ? 'common.yes' : 'common.no') })}</div>
+              </div>
             </div>
             <LoadingButton
               className="secondary"

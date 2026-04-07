@@ -147,6 +147,75 @@ describe('usePollingControllers', () => {
     }))
   })
 
+  it('publishes only the final global poll notification after a successful run', async () => {
+    fetch.mockResolvedValue({
+      ok: true,
+      json: async () => ({
+        fetched: 2,
+        imported: 0,
+        duplicates: 2,
+        errors: [],
+        errorDetails: [],
+        spamJunkMessageCount: 1
+      })
+    })
+
+    const { result, openConfirmation, pushNotification } = renderController()
+
+    await act(async () => {
+      await result.current.runPoll()
+    })
+
+    const confirmationConfig = openConfirmation.mock.calls[0][0]
+    await act(async () => {
+      await confirmationConfig.onConfirm()
+    })
+
+    expect(pushNotification).toHaveBeenCalledTimes(1)
+    expect(pushNotification).toHaveBeenCalledWith(expect.objectContaining({
+      groupKey: 'global-poll',
+      message: expect.objectContaining({
+        kind: 'translation',
+        key: 'notifications.pollFinishedWithSpam'
+      }),
+      replaceGroup: true,
+      targetId: 'system-dashboard-section',
+      tone: 'success'
+    }))
+  })
+
+  it('publishes only the final user poll notification after a successful run', async () => {
+    fetch.mockResolvedValue({
+      ok: true,
+      json: async () => ({
+        fetched: 2,
+        imported: 0,
+        duplicates: 2,
+        errors: [],
+        errorDetails: [],
+        spamJunkMessageCount: 1
+      })
+    })
+
+    const { result, pushNotification } = renderController()
+
+    await act(async () => {
+      await result.current.runUserPoll()
+    })
+
+    expect(pushNotification).toHaveBeenCalledTimes(1)
+    expect(pushNotification).toHaveBeenCalledWith(expect.objectContaining({
+      groupKey: 'user-poll',
+      message: expect.objectContaining({
+        kind: 'translation',
+        key: 'notifications.userPollFinishedWithSpam'
+      }),
+      replaceGroup: true,
+      targetId: 'user-polling-section',
+      tone: 'success'
+    }))
+  })
+
   it('uses the authenticated live-poll endpoints for user pause and stop actions', async () => {
     fetch.mockResolvedValue({
       ok: true,

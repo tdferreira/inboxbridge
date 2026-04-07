@@ -23,6 +23,12 @@
   align-items: start;
 }
 
+.passkey-card-metadata {
+  display: grid;
+  gap: 4px;
+  margin-top: 6px;
+}
+
 @media (max-width: 760px) {
   .passkey-card {
     flex-direction: column;

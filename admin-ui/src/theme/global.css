@@ -267,6 +267,8 @@ code {
   border: 1px solid var(--line);
   border-radius: 24px;
   box-shadow: 0 20px 60px var(--shadow);
+  min-width: 0;
+  max-width: 100%;
 }
 
 .section-focus-highlight {
@@ -654,6 +656,9 @@ h2 {
   background: rgba(255, 255, 255, 0.78);
   padding: 14px 16px;
   color: var(--muted);
+  min-width: 0;
+  max-width: 100%;
+  overflow-wrap: anywhere;
 }
 
 .oauth-setup-steps {
@@ -676,6 +681,8 @@ h2 {
   padding: 18px;
   display: grid;
   gap: 14px;
+  min-width: 0;
+  max-width: 100%;
 }
 
 .oauth-app-card.expanded {
@@ -685,6 +692,7 @@ h2 {
 
 .oauth-app-card-summary {
   display: grid;
+  min-width: 0;
 }
 
 .oauth-app-card-main {
@@ -699,6 +707,20 @@ h2 {
   margin: 0;
   border-radius: 18px;
   box-shadow: none;
+  min-width: 0;
+  max-width: 100%;
+  overflow: visible;
+}
+
+.oauth-app-card-main > div,
+.oauth-app-card-title-row {
+  min-width: 0;
+}
+
+.oauth-app-card-copy {
+  display: block;
+  max-width: 100%;
+  white-space: normal;
 }
 
 .oauth-app-card-main:hover:not(:disabled),

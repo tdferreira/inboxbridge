@@ -31,7 +31,7 @@ function OAuthProviderCard({
             <div className="oauth-app-card-title-row">
               <strong>{title}</strong>
             </div>
-            <div className="section-copy">{summary}</div>
+            <div className="section-copy oauth-app-card-copy">{summary}</div>
           </div>
         </button>
       </div>

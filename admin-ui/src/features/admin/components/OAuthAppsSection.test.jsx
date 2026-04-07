@@ -25,12 +25,14 @@ describe('OAuthAppsSection', () => {
       />
     )
 
-    expect(screen.getByText(/Use this shared Google OAuth app when InboxBridge will import mail into Gmail as the destination mailbox./i)).toBeInTheDocument()
+    const googleSummary = screen.getByText(/Use this shared Google OAuth app when InboxBridge will import mail into Gmail as the destination mailbox./i)
+    expect(googleSummary).toBeInTheDocument()
+    expect(googleSummary).toHaveClass('oauth-app-card-copy')
     expect(screen.queryByText(/Administration only stores the shared Google OAuth client registration/i)).not.toBeInTheDocument()
     expect(screen.queryByText('Google Client Secret')).not.toBeInTheDocument()
     expect(screen.queryByText('Google Refresh Token')).not.toBeInTheDocument()
     expect(screen.queryByText('Gmail API User')).not.toBeInTheDocument()
-    expect(screen.getByText(/Use this shared Microsoft app when InboxBridge will append mail into Outlook as the destination mailbox./i)).toBeInTheDocument()
+    expect(screen.getByText(/Use this shared Microsoft app when InboxBridge will append mail into Outlook as the destination mailbox./i)).toHaveClass('oauth-app-card-copy')
     fireEvent.click(screen.getByTitle('Show or hide Google OAuth details'))
     expect(screen.getByText(/Administration only stores the shared Google OAuth client registration/i)).toBeInTheDocument()
     expect(screen.getByText('Google Client Secret')).toBeInTheDocument()

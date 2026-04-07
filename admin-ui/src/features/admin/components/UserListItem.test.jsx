@@ -115,6 +115,11 @@ describe('UserListItem', () => {
     expect(screen.getByText(/Provider: OUTLOOK_IMAP/i)).toBeInTheDocument()
     expect(screen.getByText(/armazenamento do token:/i)).toBeInTheDocument()
     expect(mailFetchersSectionTitle.closest('section')).toHaveTextContent('Armazenamento encriptado')
+    expect(screen.getAllByText('Admin · aprovado · ativo')).toHaveLength(2)
+    expect(screen.getByText(/Gmail configurado: Sim/i)).toBeInTheDocument()
+    expect(screen.getByText(/palavra-passe configurada: Sim/i)).toBeInTheDocument()
+    expect(screen.getByText(/mudança de palavra-passe obrigatória: Não/i)).toBeInTheDocument()
+    expect(screen.getByText(/passkeys: 1/i)).toBeInTheDocument()
   })
 
   it('renders fallback detail values without crashing when the admin payload is partial', () => {
@@ -385,5 +390,51 @@ describe('UserListItem', () => {
 
     expect(screen.getByText((value) => value.includes('2026-03-27 09:00:00'))).toBeInTheDocument()
     expect(screen.getByText((value) => value.includes('2026-03-27 10:00:00'))).toBeInTheDocument()
+  })
+
+  it('renders stacked summary and source account metadata rows', () => {
+    setCurrentFormattingDateFormat(DATE_FORMAT_YMD_24)
+    setCurrentFormattingTimeZone('UTC')
+
+    render(
+      <UserListItem
+        config={{
+          ...buildConfig(),
+          emailAccounts: [{
+            ...buildConfig().emailAccounts[0],
+            lastEvent: {
+              finishedAt: '2026-04-03T21:17:51Z'
+            }
+          }]
+        }}
+        isExpanded
+        isLoading={false}
+        locale="en"
+        onDeleteUser={vi.fn()}
+        onForcePasswordChange={vi.fn()}
+        onLoadCustomRange={vi.fn()}
+        onOpenResetPasswordDialog={vi.fn()}
+        onResetUserPasskeys={vi.fn()}
+        onToggleExpand={vi.fn()}
+        onToggleUserActive={vi.fn()}
+        onUpdateUser={vi.fn()}
+        session={{ id: 99, role: 'ADMIN' }}
+        t={(key, params) => translate('en', key, params)}
+        updatingPasskeysReset={false}
+        updatingUser={false}
+      />
+    )
+
+    expect(screen.getAllByText('Admin · approved · active')).toHaveLength(2)
+    expect(screen.getByText('1 source email accounts')).toBeInTheDocument()
+    expect(screen.getByText('Destination configured: Yes')).toBeInTheDocument()
+    expect(screen.getByText('password configured: Yes')).toBeInTheDocument()
+    expect(screen.getByText('must change password: No')).toBeInTheDocument()
+    expect(screen.getByText('passkeys: 1')).toBeInTheDocument()
+    expect(screen.getByText('outlook.office365.com:993')).toBeInTheDocument()
+    expect(screen.getByText('token storage: Encrypted storage')).toBeInTheDocument()
+    expect(screen.getByText('Poll interval: 5m')).toBeInTheDocument()
+    expect(screen.getByText('Fetch window: 50')).toBeInTheDocument()
+    expect(screen.getByText('last used 2026-04-03 21:17:51')).toBeInTheDocument()
   })
 })

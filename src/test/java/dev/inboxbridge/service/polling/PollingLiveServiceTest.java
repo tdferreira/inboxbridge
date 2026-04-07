@@ -251,6 +251,55 @@ class PollingLiveServiceTest {
     }
 
     @Test
+    void multiSourceUserRunsDoNotEmitPerSourceSuccessNotifications() {
+        PollingLiveService service = new PollingLiveService();
+        AppUser alice = actor(7L, "alice", AppUser.Role.USER);
+        PollingLiveService.PollRunHandle handle = service.startRun(
+                "user-ui",
+                List.of(source("alpha", 7L, "alice")),
+                alice);
+        List<String> notificationKeys = new CopyOnWriteArrayList<>();
+
+        assertNotNull(handle);
+        service.subscribe(alice, PollingLiveService.SessionStreamKind.BROWSER, 11L)
+                .subscribe().with(event -> {
+                    if ("notification-created".equals(event.type()) && event.notification() != null) {
+                        notificationKeys.add(event.notification().message().key());
+                    }
+                });
+
+        service.markSourceFinished(handle.runId(), "alpha", 1, 1, 0, null);
+
+        assertFalse(notificationKeys.contains("notifications.fetcherPollStarted"));
+        assertFalse(notificationKeys.contains("notifications.livePollSourceFinished"));
+    }
+
+    @Test
+    void singleSourceRunsEmitPerSourceStartAndSuccessNotifications() {
+        PollingLiveService service = new PollingLiveService();
+        AppUser alice = actor(7L, "alice", AppUser.Role.USER);
+        PollingLiveService.PollRunHandle handle = service.startRun(
+                "app-fetcher",
+                List.of(source("alpha", 7L, "alice")),
+                alice);
+        List<String> notificationKeys = new CopyOnWriteArrayList<>();
+
+        assertNotNull(handle);
+        service.subscribe(alice, PollingLiveService.SessionStreamKind.BROWSER, 11L)
+                .subscribe().with(event -> {
+                    if ("notification-created".equals(event.type()) && event.notification() != null) {
+                        notificationKeys.add(event.notification().message().key());
+                    }
+                });
+
+        assertEquals("alpha", service.nextSourceId(handle.runId()));
+        service.markSourceFinished(handle.runId(), "alpha", 1, 1, 0, null);
+
+        assertTrue(notificationKeys.contains("notifications.fetcherPollStarted"));
+        assertTrue(notificationKeys.contains("notifications.livePollSourceFinished"));
+    }
+
+    @Test
     void schedulerRunsDoNotEmitUserFacingPollNotifications() {
         PollingLiveService service = new PollingLiveService();
         AppUser system = actor(-1L, "system", AppUser.Role.ADMIN);
@@ -272,6 +321,30 @@ class PollingLiveServiceTest {
         assertTrue(eventTypes.contains("poll-source-started"));
         assertTrue(eventTypes.contains("poll-source-finished"));
         assertFalse(eventTypes.contains("notification-created"));
+    }
+
+    @Test
+    void adminActorRunningPollFromUserWorkspaceUsesUserScopedNotifications() {
+        PollingLiveService service = new PollingLiveService();
+        AppUser admin = actor(1L, "admin", AppUser.Role.ADMIN);
+        AtomicReference<dev.inboxbridge.dto.LiveEventView> eventRef = new AtomicReference<>();
+
+        service.subscribe(admin, PollingLiveService.SessionStreamKind.BROWSER, 11L)
+                .subscribe().with(event -> {
+                    if ("notification-created".equals(event.type())) {
+                        eventRef.set(event);
+                    }
+                });
+
+        PollingLiveService.PollRunHandle handle = service.startRun(
+                "user-ui",
+                List.of(source("alpha", 1L, "admin")),
+                admin);
+
+        assertNotNull(handle);
+        assertEquals("notifications.userPollStarted", eventRef.get().notification().message().key());
+        assertEquals("user-polling-section", eventRef.get().notification().targetId());
+        assertEquals("user-poll", eventRef.get().notification().groupKey());
     }
 
     private static void waitFor(java.util.concurrent.Callable<Boolean> condition) throws Exception {

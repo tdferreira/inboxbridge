@@ -22,6 +22,10 @@ function hasMeaningfulStats(stats) {
     || (stats.providerBreakdown?.length || 0) > 0
 }
 
+function MetadataRow({ children, className = '' }) {
+  return <div className={`metadata-row${className ? ` ${className}` : ''}`}>{children}</div>
+}
+
 function UserListItem({
   config,
   isExpanded,
@@ -98,8 +102,9 @@ function UserListItem({
             <div className="user-list-entry-title-row">
               <strong>{user.username}</strong>
             </div>
-            <div className="section-copy">
-              {roleLabel(user.role, locale)} · {user.approved ? t('users.approved') : t('users.pending')} · {user.active ? t('users.active') : t('users.inactive')} · {t('users.mailFetchers', { count: user.emailAccountCount })}
+            <div className="section-copy user-list-entry-copy">
+              <MetadataRow>{roleLabel(user.role, locale)} · {user.approved ? t('users.approved') : t('users.pending')} · {user.active ? t('users.active') : t('users.inactive')}</MetadataRow>
+              <MetadataRow>{t('users.mailFetchers', { count: user.emailAccountCount })}</MetadataRow>
               {isLoading ? (
                 <span className="user-list-inline-loading">
                   <span aria-hidden="true" className="user-list-inline-spinner" />
@@ -149,8 +154,11 @@ function UserListItem({
           <section className="user-detail-section">
             <div className="user-detail-section-title">{t('users.accountSection')}</div>
             <div className="muted-box">
-            {roleLabel(user.role, locale)} · {user.approved ? t('users.approved') : t('users.pendingApproval')} · {user.active ? t('users.active') : t('users.inactive')}<br />
-            {t('users.gmailConfigured', { value: t(user.gmailConfigured ? 'common.yes' : 'common.no') })} · {t('users.passwordConfigured', { value: t(user.passwordConfigured ? 'common.yes' : 'common.no') })} · {t('users.mustChangePassword', { value: t(user.mustChangePassword ? 'common.yes' : 'common.no') })} · {t('users.passkeys', { value: user.passkeyCount })}
+              <MetadataRow>{roleLabel(user.role, locale)} · {user.approved ? t('users.approved') : t('users.pendingApproval')} · {user.active ? t('users.active') : t('users.inactive')}</MetadataRow>
+              <MetadataRow>{t('users.gmailConfigured', { value: t(user.gmailConfigured ? 'common.yes' : 'common.no') })}</MetadataRow>
+              <MetadataRow>{t('users.passwordConfigured', { value: t(user.passwordConfigured ? 'common.yes' : 'common.no') })}</MetadataRow>
+              <MetadataRow>{t('users.mustChangePassword', { value: t(user.mustChangePassword ? 'common.yes' : 'common.no') })}</MetadataRow>
+              <MetadataRow>{t('users.passkeys', { value: user.passkeyCount })}</MetadataRow>
             </div>
 
             <div className="action-row">
@@ -210,8 +218,9 @@ function UserListItem({
                 className="muted-box"
               >
                 <strong>{passkey.label || t('users.notSet')}</strong><br />
-                {t('users.discoverable', { value: t(passkey.discoverable ? 'common.yes' : 'common.no').toLowerCase() })} · {t('users.backedUp', { value: t(passkey.backedUp ? 'common.yes' : 'common.no').toLowerCase() })}<br />
-                {t('users.created', { value: formatDate(passkey.createdAt, locale) })} · {t('users.lastUsed', { value: formatDate(passkey.lastUsedAt, locale) })}
+                <MetadataRow>{t('users.discoverable', { value: t(passkey.discoverable ? 'common.yes' : 'common.no').toLowerCase() })} · {t('users.backedUp', { value: t(passkey.backedUp ? 'common.yes' : 'common.no').toLowerCase() })}</MetadataRow>
+                <MetadataRow>{t('users.created', { value: formatDate(passkey.createdAt, locale) })}</MetadataRow>
+                <MetadataRow>{t('users.lastUsed', { value: formatDate(passkey.lastUsedAt, locale) })}</MetadataRow>
               </div>
             )) : <div className="muted-box">{t('users.noPasskeys')}</div>}
             </div>
@@ -226,11 +235,18 @@ function UserListItem({
               return (
               <div key={emailAccountId} className="muted-box">
                 <strong>{emailAccount?.emailAccountId || emailAccount?.emailAccountId || t('users.notSet')}</strong><br />
-                {protocolLabel(emailAccount?.protocol, locale)} {t('users.via')} {authMethodLabel(emailAccount?.authMethod, locale)}{emailAccount?.oauthProvider && emailAccount.oauthProvider !== 'NONE' ? ` / ${oauthProviderLabel(emailAccount.oauthProvider, locale)}` : ''}<br />
-                {emailAccount?.host || t('users.notSet')}:{emailAccount?.port ?? t('users.notSet')} · {t('users.tokenStorageLabel')} {tokenStorageLabel(emailAccount?.tokenStorageMode, locale)}<br />
-                {t('users.pollIntervalValue', { value: emailAccount?.effectivePollInterval || t('users.notSet') })} · {t('users.fetchWindowValue', { value: emailAccount?.effectiveFetchWindow ?? t('users.notSet') })}<br />
-                {emailAccount?.pollingState?.cooldownUntil ? `${t('users.cooldownUntil', { value: formatDate(emailAccount.pollingState.cooldownUntil, locale) })} · ` : ''}{t('users.lastUsed', { value: formatDate(emailAccount?.lastEvent?.finishedAt, locale) })}
-                {emailAccount?.pollingState?.lastFailureReason ? <><br />{t('users.lastFailure', { value: formatPollError(emailAccount.pollingState.lastFailureReason, locale) })}</> : null}
+                <MetadataRow>{protocolLabel(emailAccount?.protocol, locale)} {t('users.via')} {authMethodLabel(emailAccount?.authMethod, locale)}{emailAccount?.oauthProvider && emailAccount.oauthProvider !== 'NONE' ? ` / ${oauthProviderLabel(emailAccount.oauthProvider, locale)}` : ''}</MetadataRow>
+                <MetadataRow>{emailAccount?.host || t('users.notSet')}:{emailAccount?.port ?? t('users.notSet')}</MetadataRow>
+                <MetadataRow>{t('users.tokenStorageLabel')} {tokenStorageLabel(emailAccount?.tokenStorageMode, locale)}</MetadataRow>
+                <MetadataRow>{t('users.pollIntervalValue', { value: emailAccount?.effectivePollInterval || t('users.notSet') })}</MetadataRow>
+                <MetadataRow>{t('users.fetchWindowValue', { value: emailAccount?.effectiveFetchWindow ?? t('users.notSet') })}</MetadataRow>
+                {emailAccount?.pollingState?.cooldownUntil ? (
+                  <MetadataRow>{t('users.cooldownUntil', { value: formatDate(emailAccount.pollingState.cooldownUntil, locale) })}</MetadataRow>
+                ) : null}
+                <MetadataRow>{t('users.lastUsed', { value: formatDate(emailAccount?.lastEvent?.finishedAt, locale) })}</MetadataRow>
+                {emailAccount?.pollingState?.lastFailureReason ? (
+                  <MetadataRow>{t('users.lastFailure', { value: formatPollError(emailAccount.pollingState.lastFailureReason, locale) })}</MetadataRow>
+                ) : null}
               </div>
             )}) : <div className="muted-box">{t('users.noMailFetchers')}</div>}
             </div>

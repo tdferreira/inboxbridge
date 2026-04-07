@@ -61,11 +61,30 @@ class PollingLivePresentationServiceTest {
         assertEquals("notifications.livePollSourceFailed", failure.message().key());
         assertEquals("2", failure.message().params().get("duplicates"));
 
+        PollingLiveRunState singleSourceState = new PollingLiveRunState("app-fetcher", alice, List.of(source("alpha", 7L, "alice")));
+        PollingLiveRunState.SourceState singleSource = singleSourceState.sourcesById.get("alpha");
+        singleSource.fetched = 5;
+        singleSource.imported = 3;
+        singleSource.duplicates = 2;
         source.error = null;
-        var success = service.notificationForSourceFinished(state, source);
+        var success = service.notificationForSourceFinished(singleSourceState, singleSource);
         assertNotNull(success);
         assertEquals("notifications.livePollSourceFinished", success.message().key());
         assertEquals("success", success.tone());
+    }
+
+    @Test
+    void runNotificationsReplaceExistingRunGroupAndSkipFinishedToast() {
+        AppUser admin = actor(1L, "admin", AppUser.Role.ADMIN);
+        PollingLiveRunState globalState = new PollingLiveRunState("admin-ui", admin, List.of(source("alpha", 7L, "alice")));
+
+        var started = service.notificationForRunStarted(globalState);
+
+        assertNotNull(started);
+        assertEquals("notifications.pollStarted", started.message().key());
+        assertTrue(started.replaceGroup());
+        assertEquals("global-poll", started.groupKey());
+        assertNull(service.notificationForRunFinished(globalState));
     }
 
     @Test

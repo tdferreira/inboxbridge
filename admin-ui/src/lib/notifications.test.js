@@ -38,12 +38,32 @@ describe('notifications helpers', () => {
     })
   })
 
-  it('resolves live polling notification aliases in every locale', () => {
+  it('resolves live polling source and finish notification aliases in every locale', () => {
     languageOptions.forEach((locale) => {
       expect(resolveNotificationContent(
-        translatedNotification('notifications.livePollFinished'),
+        translatedNotification('notifications.livePollPauseRequested'),
         locale
-      ), `${locale} is missing notifications.livePollFinished`).toBeTruthy()
+      ), `${locale} is missing notifications.livePollPauseRequested`).toBeTruthy()
+
+      expect(resolveNotificationContent(
+        translatedNotification('notifications.livePollResumed'),
+        locale
+      ), `${locale} is missing notifications.livePollResumed`).toBeTruthy()
+
+      expect(resolveNotificationContent(
+        translatedNotification('notifications.livePollStopRequested'),
+        locale
+      ), `${locale} is missing notifications.livePollStopRequested`).toBeTruthy()
+
+      expect(resolveNotificationContent(
+        translatedNotification('notifications.liveUserPollFinished', {
+          fetched: 7,
+          imported: 4,
+          duplicates: 1,
+          errors: 0
+        }),
+        locale
+      ), `${locale} is missing notifications.liveUserPollFinished`).toBeTruthy()
 
       expect(resolveNotificationContent(
         translatedNotification('notifications.livePollSourceFailed', {
@@ -54,6 +74,16 @@ describe('notifications helpers', () => {
         }),
         locale
       ), `${locale} is missing notifications.livePollSourceFailed`).toBeTruthy()
+
+      expect(resolveNotificationContent(
+        translatedNotification('notifications.pollFinished', {
+          fetched: 7,
+          imported: 4,
+          duplicates: 1,
+          errors: 0
+        }),
+        locale
+      ), `${locale} is missing notifications.pollFinished`).toBeTruthy()
     })
   })
 

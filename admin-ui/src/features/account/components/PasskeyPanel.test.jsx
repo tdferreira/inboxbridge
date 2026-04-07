@@ -33,6 +33,9 @@ describe('PasskeyPanel', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Register Passkey' }))
     fireEvent.click(screen.getByRole('button', { name: 'Remove' }))
 
+    expect(screen.getByText('Discoverable: Yes')).toBeInTheDocument()
+    expect(screen.getByText('Backup eligible: Yes')).toBeInTheDocument()
+    expect(screen.getByText('Backed up: Yes')).toBeInTheDocument()
     expect(onOpenRegistrationDialog).toHaveBeenCalled()
     expect(onDeletePasskey).toHaveBeenCalledWith(9)
   })

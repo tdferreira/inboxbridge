@@ -93,4 +93,15 @@
   .polling-statistics-section {
     padding: 1rem;
   }
+
+  .polling-statistics-breakdown > div {
+    align-items: flex-start;
+    flex-wrap: wrap;
+  }
+
+  .polling-statistics-breakdown strong {
+    flex-shrink: 1;
+    max-width: 100%;
+    overflow-wrap: anywhere;
+  }
 }

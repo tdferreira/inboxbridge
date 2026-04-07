@@ -2,12 +2,15 @@
   padding: 24px;
   display: grid;
   gap: 18px;
+  min-width: 0;
 }
 
 .user-list-entry {
   padding: 18px;
   display: grid;
   gap: 14px;
+  min-width: 0;
+  max-width: 100%;
 }
 
 .user-detail-section {
@@ -33,6 +36,8 @@
   grid-template-columns: minmax(0, 1fr) auto;
   gap: 12px;
   align-items: start;
+  position: relative;
+  min-width: 0;
 }
 
 .user-list-entry-main {
@@ -44,9 +49,21 @@
   background: transparent;
   border: none;
   padding: 8px 10px;
-  margin: -8px -10px;
+  margin: 0;
   border-radius: 18px;
   box-shadow: none;
+  min-width: 0;
+  max-width: 100%;
+  overflow: visible;
+}
+
+.user-list-entry-main > div,
+.user-list-entry-title-row {
+  min-width: 0;
+}
+
+.user-list-entry-main > div {
+  padding-right: 3rem;
 }
 
 .user-list-entry-main:hover:not(:disabled),
@@ -68,8 +85,21 @@
   margin-bottom: 6px;
 }
 
+.user-list-entry-copy,
+.metadata-row {
+  display: grid;
+  gap: 4px;
+}
+
+.metadata-row + .metadata-row {
+  margin-top: 2px;
+}
+
 .user-list-entry-menu {
-  position: relative;
+  position: absolute;
+  top: 8px;
+  right: 10px;
+  z-index: 2;
 }
 
 .user-list-entry-menu .fetcher-menu-button {
@@ -138,7 +168,7 @@
     flex-direction: column;
   }
 
-  .user-list-entry-menu {
-    justify-self: end;
+  .user-list-entry-main > div {
+    padding-right: 3.25rem;
   }
 }

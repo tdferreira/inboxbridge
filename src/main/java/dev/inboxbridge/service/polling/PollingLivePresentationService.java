@@ -64,22 +64,17 @@ public class PollingLivePresentationService {
         if (!shouldNotifyForRun(state)) {
             return null;
         }
-        String key = state.actorAdmin ? "notifications.pollStarted" : "notifications.userPollStarted";
-        String targetId = state.actorAdmin ? "system-dashboard-section" : "user-polling-section";
-        return notification(key, "warning", state.actorAdmin ? "global-poll" : "user-poll", targetId);
+        String key = isGlobalRun(state) ? "notifications.pollStarted" : "notifications.userPollStarted";
+        String targetId = isGlobalRun(state) ? "system-dashboard-section" : "user-polling-section";
+        return notification(key, "warning", isGlobalRun(state) ? "global-poll" : "user-poll", targetId, true);
     }
 
     public LiveNotificationView notificationForRunFinished(PollingLiveRunState state) {
-        if (!shouldNotifyForRun(state) || "STOPPED".equals(state.state)) {
-            return null;
-        }
-        String key = state.actorAdmin ? "notifications.livePollFinished" : "notifications.liveUserPollFinished";
-        String targetId = state.actorAdmin ? "system-dashboard-section" : "user-polling-section";
-        return notification(key, "success", state.actorAdmin ? "global-poll" : "user-poll", targetId, true);
+        return null;
     }
 
     public LiveNotificationView notificationForSourceStarted(PollingLiveRunState state, PollingLiveRunState.SourceState source) {
-        if (!shouldNotifyForRun(state)) {
+        if (!shouldNotifyForRun(state) || !isSingleSourceRun(state)) {
             return null;
         }
         return notification(
@@ -93,6 +88,9 @@ public class PollingLivePresentationService {
 
     public LiveNotificationView notificationForSourceFinished(PollingLiveRunState state, PollingLiveRunState.SourceState source) {
         if (!shouldNotifyForRun(state) || isSkipReason(source.error)) {
+            return null;
+        }
+        if (source.error == null && !isSingleSourceRun(state)) {
             return null;
         }
         String key = source.error == null ? "notifications.livePollSourceFinished" : "notifications.livePollSourceFailed";
@@ -136,6 +134,19 @@ public class PollingLivePresentationService {
 
     private boolean shouldNotifyForRun(PollingLiveRunState state) {
         return state != null && !"scheduler".equals(state.trigger);
+    }
+
+    private boolean isGlobalRun(PollingLiveRunState state) {
+        return state != null && "admin-ui".equals(state.trigger);
+    }
+
+    private boolean isSingleSourceRun(PollingLiveRunState state) {
+        if (state == null || state.trigger == null) {
+            return false;
+        }
+        return "app-fetcher".equals(state.trigger)
+                || "admin-fetcher".equals(state.trigger)
+                || state.trigger.startsWith("remote-source");
     }
 
     private boolean isSkipReason(String error) {

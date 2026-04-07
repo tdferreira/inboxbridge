@@ -144,7 +144,6 @@ export function usePollingControllers({
         await withPending('runPoll', async () => {
           try {
             const notificationGroup = 'global-poll'
-            pushNotification({ groupKey: notificationGroup, message: translatedNotification('notifications.pollStarted'), targetId: 'system-dashboard-section', tone: 'warning' })
             const response = await fetch('/api/admin/poll/run', { method: 'POST' })
             if (!response.ok) {
               throw new Error(await apiErrorText(response, errorText('runPoll')))
@@ -207,7 +206,6 @@ export function usePollingControllers({
     await withPending('runUserPoll', async () => {
       try {
         const notificationGroup = 'user-poll'
-        pushNotification({ groupKey: notificationGroup, message: translatedNotification('notifications.userPollStarted'), targetId: 'user-polling-section', tone: 'warning' })
         const response = await fetch('/api/app/poll/run', { method: 'POST' })
         if (!response.ok) {
           throw new Error(await apiErrorText(response, errorText('runUserPoll')))
