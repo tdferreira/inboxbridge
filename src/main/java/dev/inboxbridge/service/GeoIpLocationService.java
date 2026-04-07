@@ -25,6 +25,7 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import dev.inboxbridge.config.InboxBridgeConfig;
 import dev.inboxbridge.persistence.GeoIpCacheEntry;
 import dev.inboxbridge.persistence.GeoIpCacheEntryRepository;
+import dev.inboxbridge.service.auth.AuthSecuritySettingsService;
 import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.inject.Inject;
 import jakarta.transaction.Transactional;
@@ -339,7 +340,7 @@ public class GeoIpLocationService {
                 effective.geoIpIpinfoToken());
     }
 
-    enum GeoIpProvider {
+    public enum GeoIpProvider {
         NONE,
         IPWHOIS,
         IPAPI_CO,

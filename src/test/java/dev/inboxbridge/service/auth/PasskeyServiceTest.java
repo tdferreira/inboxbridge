@@ -1,4 +1,4 @@
-package dev.inboxbridge.service;
+package dev.inboxbridge.service.auth;
 
 import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -12,6 +12,7 @@ import org.junit.jupiter.api.Test;
 import dev.inboxbridge.persistence.AppUser;
 import dev.inboxbridge.persistence.UserPasskey;
 import dev.inboxbridge.persistence.UserPasskeyRepository;
+import dev.inboxbridge.service.AppUserService;
 
 class PasskeyServiceTest {
 

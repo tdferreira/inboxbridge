@@ -11,7 +11,7 @@ import dev.inboxbridge.dto.RemoteControlView;
 import dev.inboxbridge.dto.RemoteSessionUserResponse;
 import dev.inboxbridge.persistence.AppUser;
 import dev.inboxbridge.security.CurrentUserContext;
-import dev.inboxbridge.service.AuthClientAddressService;
+import dev.inboxbridge.service.auth.AuthClientAddressService;
 import dev.inboxbridge.service.polling.PollingLiveService;
 import dev.inboxbridge.service.RemoteControlService;
 import io.smallrye.common.annotation.Blocking;

@@ -1,4 +1,4 @@
-package dev.inboxbridge.service;
+package dev.inboxbridge.service.auth;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNull;
@@ -16,6 +16,7 @@ import dev.inboxbridge.dto.AuthSecuritySettingsView;
 import dev.inboxbridge.dto.UpdateAuthSecuritySettingsRequest;
 import dev.inboxbridge.persistence.SystemAuthSecuritySetting;
 import dev.inboxbridge.persistence.SystemAuthSecuritySettingRepository;
+import dev.inboxbridge.service.SecretEncryptionService;
 
 class AuthSecuritySettingsServiceTest {
 
@@ -158,16 +159,16 @@ class AuthSecuritySettingsServiceTest {
 
     private AuthSecuritySettingsService service(InboxBridgeConfig config, SystemAuthSecuritySettingRepository repository) {
         AuthSecuritySettingsService service = new AuthSecuritySettingsService();
-        service.inboxBridgeConfig = config;
-        service.repository = repository;
-        service.secretEncryptionService = configuredSecretEncryptionService();
+        service.setConfig(config);
+        service.setRepository(repository);
+        service.setSecretEncryptionService(configuredSecretEncryptionService());
         return service;
     }
 
     private SecretEncryptionService configuredSecretEncryptionService() {
         SecretEncryptionService service = new SecretEncryptionService();
-        service.tokenEncryptionKey = Base64.getEncoder().encodeToString("0123456789abcdef0123456789abcdef".getBytes());
-        service.tokenEncryptionKeyId = "test-key";
+        service.setTokenEncryptionKey(Base64.getEncoder().encodeToString("0123456789abcdef0123456789abcdef".getBytes()));
+        service.setTokenEncryptionKeyId("test-key");
         return service;
     }
 

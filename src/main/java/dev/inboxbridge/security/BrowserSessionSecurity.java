@@ -3,7 +3,7 @@ package dev.inboxbridge.security;
 import java.net.URI;
 
 import dev.inboxbridge.persistence.UserSession;
-import dev.inboxbridge.service.UserSessionService;
+import dev.inboxbridge.service.auth.UserSessionService;
 import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.inject.Inject;
 import jakarta.ws.rs.ForbiddenException;

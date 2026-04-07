@@ -19,7 +19,7 @@ import dev.inboxbridge.dto.RemoteSessionUserResponse;
 import dev.inboxbridge.persistence.AppUser;
 import dev.inboxbridge.persistence.ImportedMessageRepository;
 import dev.inboxbridge.security.CurrentUserContext;
-import dev.inboxbridge.service.AuthClientAddressService;
+import dev.inboxbridge.service.auth.AuthClientAddressService;
 import dev.inboxbridge.service.polling.PollingLiveService;
 import dev.inboxbridge.service.polling.PollingService;
 import dev.inboxbridge.service.RemoteControlService;

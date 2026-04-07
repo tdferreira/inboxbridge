@@ -8,7 +8,7 @@ import dev.inboxbridge.dto.PollRunResult;
 import dev.inboxbridge.dto.RemoteControlView;
 import dev.inboxbridge.security.CurrentUserContext;
 import dev.inboxbridge.security.RequireRemoteControl;
-import dev.inboxbridge.service.AuthClientAddressService;
+import dev.inboxbridge.service.auth.AuthClientAddressService;
 import dev.inboxbridge.service.polling.PollingLiveService;
 import dev.inboxbridge.service.RemoteControlService;
 import io.smallrye.common.annotation.Blocking;

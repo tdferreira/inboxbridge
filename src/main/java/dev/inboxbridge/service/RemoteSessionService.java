@@ -14,6 +14,7 @@ import dev.inboxbridge.persistence.AppUser;
 import dev.inboxbridge.persistence.RemoteSession;
 import dev.inboxbridge.persistence.RemoteSessionRepository;
 import dev.inboxbridge.persistence.UserSession;
+import dev.inboxbridge.service.auth.SessionDeviceLocationFormatter;
 import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.inject.Inject;
 import jakarta.transaction.Transactional;

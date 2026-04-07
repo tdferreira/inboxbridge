@@ -10,6 +10,11 @@ live together under `dev.inboxbridge.service.mail`, and the destination import
 coordinator, live-run, stats, source-mailbox protocol, and destination-delivery
 classes that evolve together no longer have to keep growing in the flat
 top-level `service` package.
+The auth and browser-session services now also live behind
+`dev.inboxbridge.service.auth`, so login, passkeys, session issuance,
+per-session device/location formatting, and auth-security setting resolution
+can evolve together without leaking package-private test seams back into the
+older flat service namespace.
 Within that still mostly layer-oriented backend, the provider OAuth web surface
 now also uses a narrower seam under `dev.inboxbridge.web.oauth`: the Google and
 Microsoft OAuth REST resources live alongside their callback-page renderers and
@@ -76,6 +81,14 @@ infrastructure details:
   `dev.inboxbridge.service.destination`, so destination identity, mailbox-link
   checks, Gmail import, label resolution, and IMAP APPEND delivery evolve
   inside one delivery-focused backend slice.
+- `AuthService`, `PasskeyService`, `UserSessionService`,
+  `AuthSecuritySettingsService`, `AuthClientAddressService`,
+  `AuthLoginProtectionService`, `RegistrationChallengeService`,
+  `SessionClientInfoService`, `SessionDeviceLocationFormatter`, and
+  `SessionLocationAlertService` now live together under
+  `dev.inboxbridge.service.auth`, so sign-in flow, passkey ceremonies, browser
+  session issuance, session-security presentation, and auth-hardening settings
+  stay in one auth-focused backend slice.
 - `GoogleOAuthCallbackPageRenderer` and
   `MicrosoftOAuthCallbackPageRenderer` now own the provider-specific browser
   callback pages, while `OAuthPageI18n` and `OAuthPageSupport` keep the shared

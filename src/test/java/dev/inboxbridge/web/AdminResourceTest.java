@@ -26,7 +26,7 @@ import dev.inboxbridge.service.PollingSettingsService;
 import dev.inboxbridge.service.polling.PollingStatsService;
 import dev.inboxbridge.service.RuntimeEmailAccountService;
 import dev.inboxbridge.service.SourcePollingSettingsService;
-import dev.inboxbridge.service.AuthSecuritySettingsService;
+import dev.inboxbridge.service.auth.AuthSecuritySettingsService;
 import io.smallrye.common.annotation.Blocking;
 import jakarta.ws.rs.BadRequestException;
 

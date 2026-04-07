@@ -1,13 +1,13 @@
-package dev.inboxbridge.service;
+package dev.inboxbridge.service.auth;
 
 import java.util.Locale;
 
-final class SessionDeviceLocationFormatter {
+public final class SessionDeviceLocationFormatter {
 
     private SessionDeviceLocationFormatter() {
     }
 
-    static String format(Double latitude, Double longitude, Double accuracyMeters) {
+    public static String format(Double latitude, Double longitude, Double accuracyMeters) {
         if (latitude == null || longitude == null) {
             return null;
         }

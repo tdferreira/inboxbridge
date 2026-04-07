@@ -13,8 +13,8 @@ import org.junit.jupiter.api.Test;
 
 import dev.inboxbridge.persistence.AppUser;
 import dev.inboxbridge.persistence.UserSession;
-import dev.inboxbridge.service.AuthService;
-import dev.inboxbridge.service.UserSessionService;
+import dev.inboxbridge.service.auth.AuthService;
+import dev.inboxbridge.service.auth.UserSessionService;
 import jakarta.ws.rs.ForbiddenException;
 import jakarta.ws.rs.NotAuthorizedException;
 import jakarta.ws.rs.container.ContainerRequestContext;

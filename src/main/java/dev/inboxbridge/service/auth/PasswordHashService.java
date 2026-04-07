@@ -1,4 +1,4 @@
-package dev.inboxbridge.service;
+package dev.inboxbridge.service.auth;
 
 import java.security.NoSuchAlgorithmException;
 import java.security.SecureRandom;

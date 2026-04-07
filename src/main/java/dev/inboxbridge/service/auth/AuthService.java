@@ -1,7 +1,9 @@
-package dev.inboxbridge.service;
+package dev.inboxbridge.service.auth;
 
 import dev.inboxbridge.persistence.AppUser;
 import dev.inboxbridge.persistence.UserSession;
+import dev.inboxbridge.service.AppUserService;
+import dev.inboxbridge.service.GeoIpLocationService;
 import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.inject.Inject;
 

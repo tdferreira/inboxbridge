@@ -1,4 +1,4 @@
-package dev.inboxbridge.service;
+package dev.inboxbridge.service.auth;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
@@ -12,6 +12,8 @@ import org.junit.jupiter.api.Test;
 
 import dev.inboxbridge.persistence.AppUser;
 import dev.inboxbridge.persistence.UserSession;
+import dev.inboxbridge.service.AppUserService;
+import dev.inboxbridge.service.GeoIpLocationService;
 
 class AuthServiceTest {
 
@@ -122,10 +124,6 @@ class AuthServiceTest {
         user.updatedAt = user.createdAt;
 
         return new AppUserService() {
-            {
-                this.passwordHashService = hasher;
-            }
-
             @Override
             public Optional<AppUser> findByUsername(String candidate) {
                 return username.equals(candidate) ? Optional.of(user) : Optional.empty();

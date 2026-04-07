@@ -12,7 +12,8 @@ import dev.inboxbridge.persistence.RemoteSession;
 import dev.inboxbridge.security.CurrentUserContext;
 import dev.inboxbridge.service.AppUserService;
 import dev.inboxbridge.service.polling.PollingLiveService;
-import dev.inboxbridge.service.SessionClientInfoService;
+import dev.inboxbridge.service.auth.SessionClientInfoService;
+import dev.inboxbridge.service.auth.UserSessionService;
 import dev.inboxbridge.service.RemoteSessionService;
 import dev.inboxbridge.service.oauth.UserGmailConfigService;
 import jakarta.enterprise.inject.Vetoed;
@@ -228,7 +229,7 @@ class AccountResourceTest {
         }
     }
 
-    private static class FakeAppUserSessionService extends dev.inboxbridge.service.UserSessionService {
+    private static class FakeAppUserSessionService extends UserSessionService {
         @Override
         public java.util.List<dev.inboxbridge.persistence.UserSession> listRecentSessions(Long userId, int limit) {
             dev.inboxbridge.persistence.UserSession session = new dev.inboxbridge.persistence.UserSession();

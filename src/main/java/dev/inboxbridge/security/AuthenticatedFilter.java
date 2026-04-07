@@ -1,7 +1,7 @@
 package dev.inboxbridge.security;
 
 import dev.inboxbridge.persistence.AppUser;
-import dev.inboxbridge.service.AuthService;
+import dev.inboxbridge.service.auth.AuthService;
 import jakarta.annotation.Priority;
 import jakarta.inject.Inject;
 import jakarta.ws.rs.NotAuthorizedException;

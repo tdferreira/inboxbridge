@@ -1,4 +1,4 @@
-package dev.inboxbridge.service;
+package dev.inboxbridge.service.auth;
 
 import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
@@ -79,6 +79,10 @@ public class UserSessionService {
 
     public List<UserSession> listActiveSessions(Long userId) {
         return repository.listActiveByUserId(userId, Instant.now());
+    }
+
+    public void setRepository(UserSessionRepository repository) {
+        this.repository = repository;
     }
 
     @Transactional

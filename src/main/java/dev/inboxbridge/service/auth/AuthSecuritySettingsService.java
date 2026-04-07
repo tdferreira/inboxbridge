@@ -1,4 +1,4 @@
-package dev.inboxbridge.service;
+package dev.inboxbridge.service.auth;
 
 import java.time.Duration;
 import java.time.Instant;
@@ -13,6 +13,8 @@ import dev.inboxbridge.dto.AuthSecuritySettingsView;
 import dev.inboxbridge.dto.UpdateAuthSecuritySettingsRequest;
 import dev.inboxbridge.persistence.SystemAuthSecuritySetting;
 import dev.inboxbridge.persistence.SystemAuthSecuritySettingRepository;
+import dev.inboxbridge.service.GeoIpLocationService;
+import dev.inboxbridge.service.SecretEncryptionService;
 import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.inject.Inject;
 import jakarta.transaction.Transactional;
@@ -28,6 +30,18 @@ public class AuthSecuritySettingsService {
 
     @Inject
     SecretEncryptionService secretEncryptionService;
+
+    public void setConfig(InboxBridgeConfig inboxBridgeConfig) {
+        this.inboxBridgeConfig = inboxBridgeConfig;
+    }
+
+    public void setRepository(SystemAuthSecuritySettingRepository repository) {
+        this.repository = repository;
+    }
+
+    public void setSecretEncryptionService(SecretEncryptionService secretEncryptionService) {
+        this.secretEncryptionService = secretEncryptionService;
+    }
 
     public EffectiveAuthSecuritySettings effectiveSettings() {
         SystemAuthSecuritySetting setting = repository.findSingleton().orElse(null);

@@ -22,7 +22,7 @@ import dev.inboxbridge.persistence.AppUser;
 import dev.inboxbridge.security.CurrentUserContext;
 import dev.inboxbridge.service.AppUserService;
 import dev.inboxbridge.service.ApplicationModeService;
-import dev.inboxbridge.service.PasskeyService;
+import dev.inboxbridge.service.auth.PasskeyService;
 import dev.inboxbridge.service.polling.PollingStatsService;
 import dev.inboxbridge.service.UserEmailAccountService;
 import dev.inboxbridge.service.oauth.UserGmailConfigService;

@@ -1,4 +1,4 @@
-package dev.inboxbridge.service;
+package dev.inboxbridge.service.auth;
 
 import java.net.Inet6Address;
 import java.net.InetAddress;

@@ -28,6 +28,8 @@ import dev.inboxbridge.persistence.UserPasskeyRepository;
 import dev.inboxbridge.persistence.UserPollingSettingRepository;
 import dev.inboxbridge.persistence.UserSessionRepository;
 import dev.inboxbridge.persistence.UserUiPreferenceRepository;
+import dev.inboxbridge.service.auth.PasswordHashService;
+import dev.inboxbridge.service.auth.UserSessionService;
 import dev.inboxbridge.service.oauth.OAuthCredentialService;
 
 class AppUserServiceTest {
@@ -249,7 +251,7 @@ class AppUserServiceTest {
         service.oAuthCredentialService = new OAuthCredentialService();
         service.oAuthCredentialService.setRepository(new InMemoryOAuthCredentialRepository());
         service.userSessionService = new UserSessionService();
-        service.userSessionService.repository = new InMemoryUserSessionRepository();
+        service.userSessionService.setRepository(new InMemoryUserSessionRepository());
         return service;
     }
 

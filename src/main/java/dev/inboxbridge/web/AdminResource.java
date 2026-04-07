@@ -19,7 +19,7 @@ import dev.inboxbridge.dto.UpdateSystemOAuthAppSettingsRequest;
 import dev.inboxbridge.security.RequireAdmin;
 import dev.inboxbridge.security.CurrentUserContext;
 import dev.inboxbridge.service.AdminDashboardService;
-import dev.inboxbridge.service.AuthSecuritySettingsService;
+import dev.inboxbridge.service.auth.AuthSecuritySettingsService;
 import dev.inboxbridge.service.PollingSettingsService;
 import dev.inboxbridge.service.polling.PollingStatsService;
 import dev.inboxbridge.service.polling.PollingLiveService;

@@ -31,6 +31,8 @@ import dev.inboxbridge.config.InboxBridgeConfig;
 import dev.inboxbridge.config.InboxBridgeConfig.Security.Auth;
 import dev.inboxbridge.persistence.GeoIpCacheEntry;
 import dev.inboxbridge.persistence.GeoIpCacheEntryRepository;
+import dev.inboxbridge.service.auth.AuthSecuritySettingsService;
+import dev.inboxbridge.service.auth.AuthSecuritySettingsService.EffectiveAuthSecuritySettings;
 
 class GeoIpLocationServiceTest {
 
@@ -53,8 +55,9 @@ class GeoIpLocationServiceTest {
     void fallsBackWhenPrimaryProviderIsRateLimited() {
         InMemoryGeoIpCacheEntryRepository repository = new InMemoryGeoIpCacheEntryRepository();
         GeoIpLocationService service = service(repository);
-        service.authSecuritySettingsService = authSecuritySettingsService(true, "IPWHOIS", "IPINFO_LITE", Duration.ofDays(30), Duration.ofMinutes(5), Duration.ofSeconds(3), Optional.of("test-token"));
-        service.inboxBridgeConfig = service.authSecuritySettingsService.inboxBridgeConfig;
+        InboxBridgeConfig config = config(true, "IPWHOIS", "IPINFO_LITE", Duration.ofDays(30), Duration.ofMinutes(5), Duration.ofSeconds(3), Optional.of("test-token"));
+        service.authSecuritySettingsService = authSecuritySettingsService(true, "IPWHOIS", "IPINFO_LITE", Duration.ofDays(30), Duration.ofMinutes(5), Duration.ofSeconds(3), Optional.of("test-token"), config);
+        service.inboxBridgeConfig = config;
         service.httpClient = new FakeHttpClient(
                 new FakeHttpResponse(429, "{\"success\":false}"),
                 new FakeHttpResponse(200, "{\"country\":\"France\"}"));
@@ -68,8 +71,9 @@ class GeoIpLocationServiceTest {
     @Test
     void skipsGeoLookupForPrivateAddressesAndWhenDisabled() {
         GeoIpLocationService disabled = service(new InMemoryGeoIpCacheEntryRepository());
-        disabled.authSecuritySettingsService = authSecuritySettingsService(false, "IPWHOIS", "IPAPI_CO,IP_API,IPINFO_LITE", Duration.ofDays(30), Duration.ofMinutes(5), Duration.ofSeconds(3), Optional.empty());
-        disabled.inboxBridgeConfig = disabled.authSecuritySettingsService.inboxBridgeConfig;
+        InboxBridgeConfig disabledConfig = config(false, "IPWHOIS", "IPAPI_CO,IP_API,IPINFO_LITE", Duration.ofDays(30), Duration.ofMinutes(5), Duration.ofSeconds(3), Optional.empty());
+        disabled.authSecuritySettingsService = authSecuritySettingsService(false, "IPWHOIS", "IPAPI_CO,IP_API,IPINFO_LITE", Duration.ofDays(30), Duration.ofMinutes(5), Duration.ofSeconds(3), Optional.empty(), disabledConfig);
+        disabled.inboxBridgeConfig = disabledConfig;
         assertFalse(disabled.isConfigured());
         assertEquals(Optional.empty(), disabled.resolveLocation("203.0.113.10"));
 
@@ -83,8 +87,9 @@ class GeoIpLocationServiceTest {
     void usesIpapiCoFallbackWithoutToken() {
         InMemoryGeoIpCacheEntryRepository repository = new InMemoryGeoIpCacheEntryRepository();
         GeoIpLocationService service = service(repository);
-        service.authSecuritySettingsService = authSecuritySettingsService(true, "IPWHOIS", "IPAPI_CO,IP_API", Duration.ofDays(30), Duration.ofMinutes(5), Duration.ofSeconds(3), Optional.empty());
-        service.inboxBridgeConfig = service.authSecuritySettingsService.inboxBridgeConfig;
+        InboxBridgeConfig config = config(true, "IPWHOIS", "IPAPI_CO,IP_API", Duration.ofDays(30), Duration.ofMinutes(5), Duration.ofSeconds(3), Optional.empty());
+        service.authSecuritySettingsService = authSecuritySettingsService(true, "IPWHOIS", "IPAPI_CO,IP_API", Duration.ofDays(30), Duration.ofMinutes(5), Duration.ofSeconds(3), Optional.empty(), config);
+        service.inboxBridgeConfig = config;
         service.httpClient = new FakeHttpClient(
                 new FakeHttpResponse(503, "{\"success\":false}"),
                 new FakeHttpResponse(200, "{\"city\":\"Porto\",\"region\":\"Porto\",\"country_name\":\"Portugal\"}"));
@@ -98,8 +103,9 @@ class GeoIpLocationServiceTest {
         GeoIpLocationService service = new GeoIpLocationService();
         service.repository = repository;
         service.objectMapper = new ObjectMapper();
-        service.authSecuritySettingsService = authSecuritySettingsService(true, "IPWHOIS", "IPAPI_CO,IP_API,IPINFO_LITE", Duration.ofDays(30), Duration.ofMinutes(5), Duration.ofSeconds(3), Optional.empty());
-        service.inboxBridgeConfig = service.authSecuritySettingsService.inboxBridgeConfig;
+        InboxBridgeConfig config = config(true, "IPWHOIS", "IPAPI_CO,IP_API,IPINFO_LITE", Duration.ofDays(30), Duration.ofMinutes(5), Duration.ofSeconds(3), Optional.empty());
+        service.authSecuritySettingsService = authSecuritySettingsService(true, "IPWHOIS", "IPAPI_CO,IP_API,IPINFO_LITE", Duration.ofDays(30), Duration.ofMinutes(5), Duration.ofSeconds(3), Optional.empty(), config);
+        service.inboxBridgeConfig = config;
         return service;
     }
 
@@ -110,7 +116,8 @@ class GeoIpLocationServiceTest {
             Duration cacheTtl,
             Duration providerCooldown,
             Duration requestTimeout,
-            Optional<String> ipinfoToken) {
+            Optional<String> ipinfoToken,
+            InboxBridgeConfig config) {
         AuthSecuritySettingsService service = new AuthSecuritySettingsService() {
             @Override
             public EffectiveAuthSecuritySettings effectiveSettings() {
@@ -134,7 +141,19 @@ class GeoIpLocationServiceTest {
                         ipinfoToken.orElse(""));
             }
         };
-        service.inboxBridgeConfig = new dev.inboxbridge.config.InboxBridgeConfig() {
+        service.setConfig(config);
+        return service;
+    }
+
+    private InboxBridgeConfig config(
+            boolean enabled,
+            String primaryProvider,
+            String fallbackProviders,
+            Duration cacheTtl,
+            Duration providerCooldown,
+            Duration requestTimeout,
+            Optional<String> ipinfoToken) {
+        return new dev.inboxbridge.config.InboxBridgeConfig() {
             @Override
             public boolean pollEnabled() {
                 return true;
@@ -388,7 +407,6 @@ class GeoIpLocationServiceTest {
                 };
             }
         };
-        return service;
     }
 
     private static final class InMemoryGeoIpCacheEntryRepository extends GeoIpCacheEntryRepository {
