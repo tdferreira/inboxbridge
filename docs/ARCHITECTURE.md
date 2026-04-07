@@ -10,6 +10,10 @@ live together under `dev.inboxbridge.service.mail`, and the destination import
 coordinator, live-run, stats, source-mailbox protocol, and destination-delivery
 classes that evolve together no longer have to keep growing in the flat
 top-level `service` package.
+The browser polling REST surface now also lives under
+`dev.inboxbridge.web.polling`, so the authenticated `/api/poll` endpoints sit
+next to the polling model they expose instead of staying in the flat top-level
+`web` package.
 The auth and browser-session services now also live behind
 `dev.inboxbridge.service.auth`, so login, passkeys, session issuance,
 per-session device/location formatting, and auth-security setting resolution
@@ -143,6 +147,17 @@ infrastructure details:
   probes, dedupe-vs-import decisions, source/destination throttle accounting,
   source checkpoints, live per-message progress updates, and persisted
   poll-event/cooldown recording now evolve behind one narrower seam.
+- `PollingSettingsService`, `SourcePollingSettingsService`,
+  `SourcePollingStateService`, `SourcePollEventService`,
+  `ImportDeduplicationService`, `ManualPollRateLimitService`,
+  `PollThrottleService`, `PollThrottleKeys`, `PollDecisionSnapshot`, and
+  `PollCancellationService` now live under `dev.inboxbridge.service.polling`,
+  so the broader scheduler/rate-limit/checkpoint/dedupe infrastructure evolves
+  inside the polling feature package instead of staying split between the
+  feature slice and the old flat service namespace.
+- `PollingResource` now lives under `dev.inboxbridge.web.polling`, and it
+  exposes explicit setter-based test wiring for focused non-CDI tests instead
+  of relying on package-private field access from the older flat web package.
 - `MailSourceStandaloneFactory` now centralizes the non-CDI assembly path for
   that `dev.inboxbridge.service.mail` slice, so focused unit tests and
   GreenMail-backed integration tests construct the same helper graph instead of
@@ -222,11 +237,11 @@ That packaged smoke path runs the built Quarkus jar under the `%test` profile
 with an in-memory H2 datasource and no external TLS certificate requirement, so
 health, browser-auth session wiring, remote-session protection, OAuth callback
 rendering, the authenticated `/api/app` protection surface, the admin-only
-`/api/admin` surface, the browser `/api/auth` session/account surface, and
-startup regressions can be caught without depending on the normal
-Docker/PostgreSQL runtime. Those packaged `verify` runs should be executed
-sequentially because concurrent Quarkus builds can corrupt the shared
-`target/quarkus-app` output.
+`/api/admin` surface, the browser `/api/auth` session/account surface, the
+authenticated `/api/poll` surface, and startup regressions can be caught
+without depending on the normal Docker/PostgreSQL runtime. Those packaged
+`verify` runs should be executed sequentially because concurrent Quarkus
+builds can corrupt the shared `target/quarkus-app` output.
 
 The user-deletion and session-revocation cleanup path now also keeps
 transaction ownership at the service layer. Repository helpers in that slice

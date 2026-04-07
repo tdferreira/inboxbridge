@@ -1,4 +1,4 @@
-package dev.inboxbridge.service;
+package dev.inboxbridge.service.polling;
 
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
@@ -16,6 +16,7 @@ import dev.inboxbridge.domain.ImapAppendDestinationTarget;
 import dev.inboxbridge.dto.MailImportResponse;
 import dev.inboxbridge.persistence.ImportedMessage;
 import dev.inboxbridge.persistence.ImportedMessageRepository;
+import dev.inboxbridge.service.MimeHashService;
 import dev.inboxbridge.service.user.UserMailDestinationConfigService;
 
 class ImportDeduplicationServiceTest {

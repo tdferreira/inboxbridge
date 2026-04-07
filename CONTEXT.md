@@ -37,13 +37,16 @@ Dialog-style overlays in the admin UI should keep working as scrollable surfaces
 UI-managed OAuth2 source accounts now also save disabled first when they do not yet have a working refresh token, while persisting the user's intent to enable them later. Once the OAuth browser flow finishes and InboxBridge can immediately validate the source mailbox with the stored provider credential, the source enables automatically; if that post-OAuth validation still fails, the source remains disabled instead of being left enabled with invalid credentials.
 The backend service layout is now less flat than before: the extracted
 source-mail protocol helpers live under `dev.inboxbridge.service.mail`,
-polling/live/stats code lives under `dev.inboxbridge.service.polling`,
+polling/live/stats plus polling settings, source polling state/event,
+deduplication, throttle, cancellation, and manual-run rate-limit code live
+under `dev.inboxbridge.service.polling`,
 destination-delivery code lives under `dev.inboxbridge.service.destination`,
 OAuth browser resources live under `dev.inboxbridge.web.oauth`, backend OAuth
 provider/config services live under `dev.inboxbridge.service.oauth`, and the
 login/passkey/session/auth-security slice now lives under
 `dev.inboxbridge.service.auth`. The browser auth/account REST surface now also
-lives under `dev.inboxbridge.web.auth`. The remote-control surface now also has
+lives under `dev.inboxbridge.web.auth`, and the browser polling REST surface
+now lives under `dev.inboxbridge.web.polling`. The remote-control surface now also has
 dedicated feature packages: `dev.inboxbridge.service.remote` owns remote
 sessions, remote service-token auth, remote poll rate limiting, and the remote
 dashboard/control projection, while `dev.inboxbridge.web.remote` owns the
@@ -866,8 +869,9 @@ Validated on 2026-04-01:
 
 - full backend Maven suite passes with `mvn -q test` when run in an environment that allows the GreenMail integration tests to bind local ports
 - the expected failure-path unit tests now capture and assert their intentionally induced warning/error records through a scoped test logger helper, so `mvn -q test` stays free of warning/error log lines without silently hiding unexpected extra records from those same logger paths
-- packaged Quarkus runtime smoke coverage now passes with `mvn -q -Dit.test=HealthResourceQuarkusIT verify`, `mvn -q -Dit.test=AuthSessionEndpointsQuarkusIT verify`, `mvn -q -Dit.test=RemoteEndpointsQuarkusIT verify`, and `mvn -q -Dit.test=OAuthCallbackPagesQuarkusIT verify`
+- packaged Quarkus runtime smoke coverage now passes with `mvn -q -Dit.test=HealthResourceQuarkusIT verify`, `mvn -q -Dit.test=AuthSessionEndpointsQuarkusIT verify`, `mvn -q -Dit.test=RemoteEndpointsQuarkusIT verify`, `mvn -q -Dit.test=OAuthCallbackPagesQuarkusIT verify`, and `mvn -q -Dit.test=PollingEndpointsQuarkusIT verify`
 - the browser auth/account REST surface now also lives under `dev.inboxbridge.web.auth`: `AuthResource`, `AccountResource`, and the packaged `AuthSessionEndpointsQuarkusIT` smoke test moved there so `/api/auth` and `/api/account` evolve behind one narrower web feature boundary instead of staying in the flat top-level `web` package
+- the broader polling infrastructure now also lives under `dev.inboxbridge.service.polling`: `PollingSettingsService`, `SourcePollingSettingsService`, `SourcePollingStateService`, `SourcePollEventService`, `ImportDeduplicationService`, `ManualPollRateLimitService`, `PollThrottleService`, `PollThrottleKeys`, `PollDecisionSnapshot`, and `PollCancellationService` moved there, while `PollingResource` and the packaged `PollingEndpointsQuarkusIT` smoke test now live under `dev.inboxbridge.web.polling`
 - packaged `verify` jobs must still run sequentially in this repository: concurrent Quarkus builds can corrupt the shared `target/quarkus-app` output and produce false failures such as `ZipException: zip END header not found`
 - focused backend polling coverage also passes with `mvn -q -Dtest=PollingSettingsServiceTest,UserPollingSettingsServiceTest,SourcePollingSettingsServiceTest,SourcePollingStateServiceTest,PollingServiceTest,PollingServiceGreenMailIntegrationTest test`
 - full frontend Vitest suite passes with `cd admin-ui && npm run test:run`

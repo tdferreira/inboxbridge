@@ -4,7 +4,7 @@ import dev.inboxbridge.config.InboxBridgeConfig;
 import dev.inboxbridge.domain.FetchedMessage;
 import dev.inboxbridge.domain.RuntimeEmailAccount;
 import dev.inboxbridge.dto.EmailAccountConnectionTestResult;
-import dev.inboxbridge.service.PollingSettingsService;
+import dev.inboxbridge.service.polling.PollingSettingsService;
 import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.inject.Inject;
 import java.util.List;

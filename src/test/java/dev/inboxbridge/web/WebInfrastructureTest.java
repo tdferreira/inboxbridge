@@ -23,6 +23,7 @@ import dev.inboxbridge.service.auth.AuthClientAddressService;
 import dev.inboxbridge.service.polling.PollingLiveService;
 import dev.inboxbridge.service.polling.PollingService;
 import dev.inboxbridge.service.remote.RemoteControlService;
+import dev.inboxbridge.web.polling.PollingResource;
 import dev.inboxbridge.web.remote.RemoteControlResource;
 import jakarta.ws.rs.BadRequestException;
 import jakarta.ws.rs.ForbiddenException;
@@ -53,15 +54,15 @@ class WebInfrastructureTest {
         PollRunResult result = finishedResult(2, 1);
 
         PollingResource resource = new PollingResource();
-        resource.currentUserContext = currentUserContext(user);
-        resource.pollingService = new PollingService() {
+        resource.setCurrentUserContext(currentUserContext(user));
+        resource.setPollingService(new PollingService() {
             @Override
             public PollRunResult runPollForUser(AppUser actor, String trigger) {
                 assertEquals(user, actor);
                 assertEquals("manual-api", trigger);
                 return result;
             }
-        };
+        });
 
         PollRunResult response = resource.runNow();
 
@@ -77,8 +78,8 @@ class WebInfrastructureTest {
         TrackingPollingLiveService liveService = new TrackingPollingLiveService(view);
 
         PollingResource resource = new PollingResource();
-        resource.currentUserContext = currentUserContext(user);
-        resource.pollingLiveService = liveService;
+        resource.setCurrentUserContext(currentUserContext(user));
+        resource.setPollingLiveService(liveService);
 
         assertEquals(view, resource.live());
         assertEquals(view, resource.pause());

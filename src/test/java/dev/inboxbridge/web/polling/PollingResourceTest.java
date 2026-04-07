@@ -1,4 +1,4 @@
-package dev.inboxbridge.web;
+package dev.inboxbridge.web.polling;
 
 import static org.junit.jupiter.api.Assertions.assertTrue;
 

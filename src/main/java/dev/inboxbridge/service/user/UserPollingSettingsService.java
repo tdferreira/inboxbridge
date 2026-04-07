@@ -8,7 +8,7 @@ import dev.inboxbridge.dto.UserPollingSettingsView;
 import dev.inboxbridge.persistence.AppUser;
 import dev.inboxbridge.persistence.UserPollingSetting;
 import dev.inboxbridge.persistence.UserPollingSettingRepository;
-import dev.inboxbridge.service.PollingSettingsService;
+import dev.inboxbridge.service.polling.PollingSettingsService;
 import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.inject.Inject;
 import jakarta.transaction.Transactional;

@@ -13,7 +13,7 @@ import dev.inboxbridge.dto.UpdateUserPollingSettingsRequest;
 import dev.inboxbridge.persistence.AppUser;
 import dev.inboxbridge.persistence.UserPollingSetting;
 import dev.inboxbridge.persistence.UserPollingSettingRepository;
-import dev.inboxbridge.service.PollingSettingsService;
+import dev.inboxbridge.service.polling.PollingSettingsService;
 import jakarta.transaction.Transactional;
 
 class UserPollingSettingsServiceTest {

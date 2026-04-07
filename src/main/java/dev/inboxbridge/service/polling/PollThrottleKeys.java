@@ -1,4 +1,4 @@
-package dev.inboxbridge.service;
+package dev.inboxbridge.service.polling;
 
 import java.util.Locale;
 import java.util.Optional;
@@ -12,18 +12,18 @@ import dev.inboxbridge.domain.RuntimeEmailAccount;
  * Shared throttle-key derivation so diagnostics can read the same persisted
  * throttle buckets that the live poller updates.
  */
-final class PollThrottleKeys {
+public final class PollThrottleKeys {
 
     private PollThrottleKeys() {
     }
 
-    static String sourceMailbox(RuntimeEmailAccount emailAccount) {
+    public static String sourceMailbox(RuntimeEmailAccount emailAccount) {
         return normalizeHost(emailAccount == null ? null : emailAccount.host())
                 .map(host -> "source-host:" + host)
                 .orElse(null);
     }
 
-    static String destination(MailDestinationTarget target) {
+    public static String destination(MailDestinationTarget target) {
         if (target instanceof GmailApiDestinationTarget gmailTarget) {
             return "destination-provider:" + gmailTarget.deliveryMode().toLowerCase(Locale.ROOT);
         }
@@ -35,7 +35,7 @@ final class PollThrottleKeys {
         return null;
     }
 
-    static String destinationKind(MailDestinationTarget target) {
+    public static String destinationKind(MailDestinationTarget target) {
         if (target instanceof GmailApiDestinationTarget) {
             return "DESTINATION_PROVIDER";
         }

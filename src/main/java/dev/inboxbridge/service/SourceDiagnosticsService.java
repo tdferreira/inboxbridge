@@ -19,6 +19,7 @@ import dev.inboxbridge.persistence.SourceImapCheckpoint;
 import dev.inboxbridge.persistence.SourceImapCheckpointRepository;
 import dev.inboxbridge.persistence.SourcePollingState;
 import dev.inboxbridge.service.destination.DestinationIdentityKeys;
+import dev.inboxbridge.service.polling.PollThrottleKeys;
 import dev.inboxbridge.persistence.SourcePollingStateRepository;
 import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.inject.Inject;

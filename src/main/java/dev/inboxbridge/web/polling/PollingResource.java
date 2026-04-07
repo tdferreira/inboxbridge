@@ -1,4 +1,4 @@
-package dev.inboxbridge.web;
+package dev.inboxbridge.web.polling;
 
 import org.jboss.resteasy.reactive.RestStreamElementType;
 
@@ -32,6 +32,18 @@ public class PollingResource {
 
     @Inject
     PollingLiveService pollingLiveService;
+
+    public void setPollingService(PollingService pollingService) {
+        this.pollingService = pollingService;
+    }
+
+    public void setCurrentUserContext(CurrentUserContext currentUserContext) {
+        this.currentUserContext = currentUserContext;
+    }
+
+    public void setPollingLiveService(PollingLiveService pollingLiveService) {
+        this.pollingLiveService = pollingLiveService;
+    }
 
     @POST
     @Path("/run")

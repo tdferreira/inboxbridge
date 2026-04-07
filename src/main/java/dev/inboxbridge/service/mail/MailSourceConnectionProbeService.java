@@ -7,7 +7,7 @@ import java.util.Optional;
 import dev.inboxbridge.config.InboxBridgeConfig;
 import dev.inboxbridge.domain.RuntimeEmailAccount;
 import dev.inboxbridge.dto.EmailAccountConnectionTestResult;
-import dev.inboxbridge.service.PollCancellationService;
+import dev.inboxbridge.service.polling.PollCancellationService;
 import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.inject.Inject;
 import jakarta.mail.Flags;

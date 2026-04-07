@@ -1,4 +1,4 @@
-package dev.inboxbridge.service;
+package dev.inboxbridge.service.polling;
 
 import java.util.List;
 import java.util.Set;

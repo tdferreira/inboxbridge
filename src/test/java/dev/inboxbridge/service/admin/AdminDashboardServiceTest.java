@@ -26,14 +26,14 @@ import dev.inboxbridge.dto.SourcePollingStateView;
 import dev.inboxbridge.persistence.ImportedMessageRepository;
 import dev.inboxbridge.persistence.SourcePollEvent;
 import dev.inboxbridge.service.EnvSourceService;
-import dev.inboxbridge.service.PollingSettingsService;
 import dev.inboxbridge.service.SecretEncryptionService;
 import dev.inboxbridge.service.SourceDiagnosticsService;
-import dev.inboxbridge.service.SourcePollEventService;
-import dev.inboxbridge.service.SourcePollingSettingsService;
-import dev.inboxbridge.service.SourcePollingStateService;
 import dev.inboxbridge.service.oauth.OAuthCredentialService;
 import dev.inboxbridge.service.oauth.SystemOAuthAppSettingsService;
+import dev.inboxbridge.service.polling.PollingSettingsService;
+import dev.inboxbridge.service.polling.SourcePollEventService;
+import dev.inboxbridge.service.polling.SourcePollingSettingsService;
+import dev.inboxbridge.service.polling.SourcePollingStateService;
 import dev.inboxbridge.service.user.RuntimeEmailAccountService;
 
 class AdminDashboardServiceTest {
