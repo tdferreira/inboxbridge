@@ -15,6 +15,7 @@ import dev.inboxbridge.persistence.AppUser;
 import dev.inboxbridge.persistence.ImportedMessageRepository;
 import dev.inboxbridge.persistence.UserEmailAccount;
 import dev.inboxbridge.persistence.UserEmailAccountRepository;
+import jakarta.enterprise.inject.Vetoed;
 
 class RemoteControlServiceTest {
 
@@ -296,6 +297,7 @@ class RemoteControlServiceTest {
         }
     }
 
+    @Vetoed
     private static final class FakeAppUserService extends AppUserService {
         private final AppUser owner;
 

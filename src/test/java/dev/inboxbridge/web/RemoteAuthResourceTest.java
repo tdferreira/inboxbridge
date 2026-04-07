@@ -27,6 +27,7 @@ import dev.inboxbridge.service.SystemOAuthAppSettingsService;
 import dev.inboxbridge.service.UserUiPreferenceService;
 import io.vertx.core.http.HttpServerRequest;
 import io.vertx.core.net.SocketAddress;
+import jakarta.enterprise.inject.Vetoed;
 import jakarta.ws.rs.core.HttpHeaders;
 import jakarta.ws.rs.core.NewCookie;
 import jakarta.ws.rs.core.Response;
@@ -227,6 +228,7 @@ class RemoteAuthResourceTest {
         }
     }
 
+    @Vetoed
     private static final class FakeAppUserService extends AppUserService {
         @Override
         public java.util.Optional<AppUser> findByUsername(String username) {

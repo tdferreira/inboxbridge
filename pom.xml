@@ -19,6 +19,7 @@
         <compiler-plugin.version>3.15.0</compiler-plugin.version>
         <jacoco-plugin.version>0.8.14</jacoco-plugin.version>
         <surefire-plugin.version>3.5.5</surefire-plugin.version>
+        <failsafe-plugin.version>3.5.5</failsafe-plugin.version>
         <angus-mail.version>2.0.5</angus-mail.version>
     </properties>
 
@@ -58,6 +59,10 @@
         <dependency>
             <groupId>io.quarkus</groupId>
             <artifactId>quarkus-jdbc-postgresql</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>io.quarkus</groupId>
+            <artifactId>quarkus-jdbc-h2</artifactId>
         </dependency>
         <dependency>
             <groupId>io.quarkus</groupId>
@@ -140,6 +145,27 @@
                 </configuration>
             </plugin>
             <plugin>
+                <artifactId>maven-failsafe-plugin</artifactId>
+                <version>${failsafe-plugin.version}</version>
+                <executions>
+                    <execution>
+                        <goals>
+                            <goal>integration-test</goal>
+                            <goal>verify</goal>
+                        </goals>
+                        <configuration>
+                            <systemPropertyVariables>
+                                <native.image.path>${project.build.directory}/${project.build.finalName}-runner</native.image.path>
+                                <java.util.logging.manager>org.jboss.logmanager.LogManager</java.util.logging.manager>
+                                <maven.home>${maven.home}</maven.home>
+                                <quarkus.test.integration-test-profile>test</quarkus.test.integration-test-profile>
+                                <quarkus.http.ssl-port>0</quarkus.http.ssl-port>
+                            </systemPropertyVariables>
+                        </configuration>
+                    </execution>
+                </executions>
+            </plugin>
+            <plugin>
                 <groupId>org.jacoco</groupId>
                 <artifactId>jacoco-maven-plugin</artifactId>
                 <version>${jacoco-plugin.version}</version>
@@ -162,6 +188,27 @@
     </build>
 
     <profiles>
+        <profile>
+            <id>packaged-it-h2</id>
+            <activation>
+                <property>
+                    <name>it.test</name>
+                </property>
+            </activation>
+            <build>
+                <plugins>
+                    <plugin>
+                        <groupId>io.quarkus</groupId>
+                        <artifactId>quarkus-maven-plugin</artifactId>
+                        <configuration>
+                            <systemProperties>
+                                <quarkus.datasource.db-kind>h2</quarkus.datasource.db-kind>
+                            </systemProperties>
+                        </configuration>
+                    </plugin>
+                </plugins>
+            </build>
+        </profile>
         <profile>
             <id>native</id>
             <activation>

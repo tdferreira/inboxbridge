@@ -21,6 +21,7 @@ import dev.inboxbridge.persistence.PollThrottleLease;
 import dev.inboxbridge.persistence.PollThrottleLeaseRepository;
 import dev.inboxbridge.persistence.PollThrottleState;
 import dev.inboxbridge.persistence.PollThrottleStateRepository;
+import dev.inboxbridge.testsupport.ScopedLogSilencer;
 
 class PollThrottleServiceTest {
 
@@ -69,7 +70,9 @@ class PollThrottleServiceTest {
 
         PollThrottleService.ThrottleLease lease = service.acquireSourceMailboxPermit(source("imap.example.com"));
 
-        assertDoesNotThrow(() -> service.release(lease));
+        try (ScopedLogSilencer ignored = ScopedLogSilencer.suppressWarnings(PollThrottleService.class)) {
+            assertDoesNotThrow(() -> service.release(lease));
+        }
         assertFalse(service.inMemoryLeaseRepository.leases.isEmpty());
     }
 

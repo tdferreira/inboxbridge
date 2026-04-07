@@ -15,6 +15,7 @@ import dev.inboxbridge.service.polling.PollingLiveService;
 import dev.inboxbridge.service.SessionClientInfoService;
 import dev.inboxbridge.service.RemoteSessionService;
 import dev.inboxbridge.service.UserGmailConfigService;
+import jakarta.enterprise.inject.Vetoed;
 import jakarta.ws.rs.BadRequestException;
 
 class AccountResourceTest {
@@ -196,6 +197,7 @@ class AccountResourceTest {
                 "REMOTE:202"), pollingLiveService.publishedRevocations);
     }
 
+    @Vetoed
     private static final class FakeAppUserService extends AppUserService {
         private final String errorMessage;
 
@@ -218,6 +220,7 @@ class AccountResourceTest {
         }
     }
 
+    @Vetoed
     private static final class RemovePasswordErrorAppUserService extends AppUserService {
         @Override
         public void removePassword(AppUser user, String currentPassword) {

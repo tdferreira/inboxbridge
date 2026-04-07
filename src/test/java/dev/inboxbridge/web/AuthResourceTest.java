@@ -40,6 +40,7 @@ import dev.inboxbridge.service.SystemOAuthAppSettingsService;
 import dev.inboxbridge.service.UserSessionService;
 import io.vertx.core.http.HttpServerRequest;
 import io.vertx.core.net.SocketAddress;
+import jakarta.enterprise.inject.Vetoed;
 import jakarta.ws.rs.BadRequestException;
 import jakarta.ws.rs.core.HttpHeaders;
 import jakarta.ws.rs.core.MultivaluedHashMap;
@@ -491,6 +492,7 @@ class AuthResourceTest {
         }
     }
 
+    @Vetoed
     private static final class FakeAppUserService extends AppUserService {
         private final boolean bootstrapPrefillEnabled;
 

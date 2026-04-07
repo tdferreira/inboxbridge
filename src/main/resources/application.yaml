@@ -14,8 +14,8 @@ quarkus:
     username: ${JDBC_USERNAME:inboxbridge}
     password: ${JDBC_PASSWORD:inboxbridge}
   hibernate-orm:
-    database:
-      generation: validate
+    schema-management:
+      strategy: validate
     log:
       sql: false
   flyway:
@@ -117,3 +117,23 @@ inboxbridge:
 security:
   token-encryption-key: ${SECURITY_TOKEN_ENCRYPTION_KEY:replace-me}
   token-encryption-key-id: ${SECURITY_TOKEN_ENCRYPTION_KEY_ID:v1}
+
+"%test":
+  quarkus:
+    http:
+      ssl-port: 0
+      ssl:
+        certificate:
+          files: ""
+          key-files: ""
+    datasource:
+      db-kind: h2
+      jdbc:
+        url: jdbc:h2:mem:inboxbridge;MODE=PostgreSQL;DB_CLOSE_DELAY=-1;DATABASE_TO_LOWER=TRUE
+      username: sa
+      password: sa
+    hibernate-orm:
+      schema-management:
+        strategy: drop-and-create
+    flyway:
+      migrate-at-start: false

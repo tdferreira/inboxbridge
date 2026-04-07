@@ -18,6 +18,7 @@ import java.util.Properties;
 import org.junit.jupiter.api.Test;
 
 import dev.inboxbridge.domain.FetchedMessage;
+import dev.inboxbridge.testsupport.ScopedLogSilencer;
 import jakarta.mail.Address;
 import jakarta.mail.Flags;
 import jakarta.mail.Folder;
@@ -75,9 +76,12 @@ class MailSourceClientTest {
         folder.setMessage(message);
         folder.forceClosed();
 
-        IllegalStateException error = assertThrows(
-                IllegalStateException.class,
-                () -> mapper.toFetchedMessages("source-1", folder, new Message[] { message }));
+        IllegalStateException error;
+        try (ScopedLogSilencer ignored = ScopedLogSilencer.suppressWarnings(MailSourceMessageMapper.class)) {
+            error = assertThrows(
+                    IllegalStateException.class,
+                    () -> mapper.toFetchedMessages("source-1", folder, new Message[] { message }));
+        }
 
         assertTrue(error.getCause() instanceof FolderClosedException);
     }

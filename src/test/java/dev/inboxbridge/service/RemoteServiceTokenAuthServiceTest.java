@@ -11,6 +11,7 @@ import org.junit.jupiter.api.Test;
 
 import dev.inboxbridge.config.InboxBridgeConfig;
 import dev.inboxbridge.persistence.AppUser;
+import jakarta.enterprise.inject.Vetoed;
 
 class RemoteServiceTokenAuthServiceTest {
 
@@ -78,6 +79,7 @@ class RemoteServiceTokenAuthServiceTest {
         return user;
     }
 
+    @Vetoed
     private static final class FakeAppUserService extends AppUserService {
         private final AppUser user;
 

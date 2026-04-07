@@ -29,6 +29,7 @@ import dev.inboxbridge.service.UserGmailConfigService;
 import dev.inboxbridge.service.UserMailDestinationConfigService;
 import dev.inboxbridge.service.UserPollingSettingsService;
 import dev.inboxbridge.service.SystemOAuthAppSettingsService;
+import jakarta.enterprise.inject.Vetoed;
 import jakarta.ws.rs.BadRequestException;
 
 class UserManagementResourceTest {
@@ -140,6 +141,7 @@ class UserManagementResourceTest {
         return resource;
     }
 
+    @Vetoed
     private static final class FakeAppUserService extends AppUserService {
         private final String updateError;
         private Long deletedUserId;

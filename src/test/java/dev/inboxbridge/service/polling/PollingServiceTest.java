@@ -25,6 +25,7 @@ import dev.inboxbridge.domain.RuntimeEmailAccount;
 import dev.inboxbridge.domain.SourceFetchMode;
 import dev.inboxbridge.dto.MailImportResponse;
 import dev.inboxbridge.dto.PollRunResult;
+import dev.inboxbridge.testsupport.ScopedLogSilencer;
 import jakarta.enterprise.inject.Instance;
 import jakarta.enterprise.util.TypeLiteral;
 
@@ -67,7 +68,10 @@ class PollingServiceTest {
         service.sourcePollingStateService = sourcePollingStateService;
         service.manualPollRateLimitService = new ManualPollRateLimitService();
 
-        PollRunResult result = service.runPoll("manual-api");
+        PollRunResult result;
+        try (ScopedLogSilencer ignored = ScopedLogSilencer.suppressAll(PollingSourceExecutionService.class)) {
+            result = service.runPoll("manual-api");
+        }
 
         assertEquals(33, mailSourceClient.lastFetchWindow);
         assertEquals("user-fetcher", sourcePollingStateService.lastRecordedSuccessSourceId);
@@ -128,7 +132,10 @@ class PollingServiceTest {
         service.sourcePollingStateService = sourcePollingStateService;
         service.manualPollRateLimitService = new ManualPollRateLimitService();
 
-        PollRunResult result = service.runPoll("manual-api");
+        PollRunResult result;
+        try (ScopedLogSilencer ignored = ScopedLogSilencer.suppressAll(PollingSourceExecutionService.class)) {
+            result = service.runPoll("manual-api");
+        }
 
         assertEquals(0, result.getErrors().size());
         assertEquals("legacy-pop", sourcePollingStateService.lastRecordedSuccessSourceId);
@@ -154,7 +161,10 @@ class PollingServiceTest {
         service.sourcePollingStateService = sourcePollingStateService;
         service.manualPollRateLimitService = new ManualPollRateLimitService();
 
-        PollRunResult result = service.runPoll("manual-api");
+        PollRunResult result;
+        try (ScopedLogSilencer ignored = ScopedLogSilencer.suppressWarnings(PollingSourceExecutionService.class)) {
+            result = service.runPoll("manual-api");
+        }
 
         assertEquals(0, result.getErrors().size());
         assertEquals("user-fetcher", sourcePollingStateService.lastRecordedSuccessSourceId);
@@ -203,7 +213,10 @@ class PollingServiceTest {
         service.pollThrottleService = pollThrottleService;
         service.manualPollRateLimitService = new ManualPollRateLimitService();
 
-        PollRunResult result = service.runPoll("manual-api");
+        PollRunResult result;
+        try (ScopedLogSilencer ignored = ScopedLogSilencer.suppressAll(PollingSourceExecutionService.class)) {
+            result = service.runPoll("manual-api");
+        }
 
         assertEquals(1, result.getErrors().size());
         assertEquals("RATE_LIMIT", sourcePollEventService.lastFailureCategory);
@@ -301,7 +314,10 @@ class PollingServiceTest {
         service.sourcePollingStateService = sourcePollingStateService;
         service.manualPollRateLimitService = new ManualPollRateLimitService();
 
-        PollRunResult result = service.runPoll("manual-api");
+        PollRunResult result;
+        try (ScopedLogSilencer ignored = ScopedLogSilencer.suppressAll(PollingSourceExecutionService.class)) {
+            result = service.runPoll("manual-api");
+        }
 
         assertEquals(1, result.getErrors().size());
         assertEquals(List.of("enabled-fetcher"), mailSourceClient.fetchedSourceIds);

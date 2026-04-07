@@ -133,6 +133,18 @@ The broader REST layer now also keeps one repeated concern centralized:
 `BadRequestException`, so resource classes can stay thinner without each method
 repeating the same `try/catch` boilerplate.
 
+Runtime-level backend validation now has two intentionally different seams:
+
+- fast CDI-backed component checks through `@QuarkusTest` for shared helper
+  wiring
+- a small packaged-runtime smoke layer through `@QuarkusIntegrationTest`
+  backed by Maven Failsafe
+
+That packaged smoke path runs the built Quarkus jar under the `%test` profile
+with an in-memory H2 datasource and no external TLS certificate requirement, so
+health and startup regressions can be caught without depending on the normal
+Docker/PostgreSQL runtime.
+
 The user-deletion and session-revocation cleanup path now also keeps
 transaction ownership at the service layer. Repository helpers in that slice
 remain thin data-access methods, while `AppUserService`, `PasskeyService`, and

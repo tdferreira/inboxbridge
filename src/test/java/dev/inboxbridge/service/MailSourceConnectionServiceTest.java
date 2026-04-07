@@ -13,6 +13,7 @@ import dev.inboxbridge.config.InboxBridgeConfig;
 import dev.inboxbridge.domain.RuntimeEmailAccount;
 import dev.inboxbridge.domain.SourceFetchMode;
 import dev.inboxbridge.domain.SourcePostPollSettings;
+import dev.inboxbridge.testsupport.ScopedLogSilencer;
 import jakarta.mail.Folder;
 import jakarta.mail.MessagingException;
 import jakarta.mail.Session;
@@ -28,7 +29,9 @@ class MailSourceConnectionServiceTest {
         RecordingStore store = new RecordingStore();
         store.failFirst("* BYE Session invalidated - Invalid");
 
-        service.connectStore(store, runtimeAccount(InboxBridgeConfig.OAuthProvider.MICROSOFT));
+        try (ScopedLogSilencer ignored = ScopedLogSilencer.suppressWarnings(MailSourceConnectionService.class)) {
+            service.connectStore(store, runtimeAccount(InboxBridgeConfig.OAuthProvider.MICROSOFT));
+        }
 
         assertEquals(2, store.connectAttempts);
         assertEquals("source-1", microsoft.invalidatedSourceId);
@@ -42,7 +45,9 @@ class MailSourceConnectionServiceTest {
         RecordingStore store = new RecordingStore();
         store.failFirst("* BYE Session invalidated - Invalid");
 
-        service.connectStore(store, runtimeAccount(InboxBridgeConfig.OAuthProvider.GOOGLE));
+        try (ScopedLogSilencer ignored = ScopedLogSilencer.suppressWarnings(MailSourceConnectionService.class)) {
+            service.connectStore(store, runtimeAccount(InboxBridgeConfig.OAuthProvider.GOOGLE));
+        }
 
         assertEquals(2, store.connectAttempts);
         assertEquals("source-google:source-1", google.clearedSubjectKey);
