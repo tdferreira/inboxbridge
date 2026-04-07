@@ -9,8 +9,6 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.io.ByteArrayOutputStream;
 import java.io.InputStream;
-import java.lang.reflect.InvocationTargetException;
-import java.lang.reflect.Method;
 import java.util.ArrayList;
 import java.util.Date;
 import java.util.List;
@@ -57,32 +55,36 @@ class MailSourceClientTest {
 
     @Test
     void toRawBytesRetriesAfterFolderClosedException() throws Exception {
-        MailSourceClient client = new MailSourceClient();
+        MailSourceMessageMapper mapper = new MailSourceMessageMapper();
         FakeFolder folder = new FakeFolder();
         FakeMessage message = new FakeMessage(folder, "hello world".getBytes());
         folder.setMessage(message);
         folder.forceClosed();
 
-        byte[] raw = invokeToRawBytes(client, message);
+        byte[] raw = mapper.toFetchedMessages("source-1", folder, new Message[] { message }).get(0).rawMessage();
 
         assertArrayEquals("hello world".getBytes(), raw);
     }
 
     @Test
     void toRawBytesFailsWhenFolderCannotBeReopened() {
-        MailSourceClient client = new MailSourceClient();
+        MailSourceMessageMapper mapper = new MailSourceMessageMapper();
         FakeFolder folder = new FakeFolder();
         folder.failOnOpen = true;
         FakeMessage message = new FakeMessage(folder, "hello world".getBytes());
         folder.setMessage(message);
         folder.forceClosed();
 
-        assertThrows(FolderClosedException.class, () -> invokeToRawBytes(client, message));
+        IllegalStateException error = assertThrows(
+                IllegalStateException.class,
+                () -> mapper.toFetchedMessages("source-1", folder, new Message[] { message }));
+
+        assertTrue(error.getCause() instanceof FolderClosedException);
     }
 
     @Test
     void locateSpamOrJunkFolderPrefersImapSpecialUseAttributes() throws Exception {
-        MailSourceClient client = new MailSourceClient();
+        MailSourceFolderService service = new MailSourceFolderService();
         Folder root = new TreeFolder("", List.of(
                 new SpecialUseFolder("Trash", List.of("\\Trash")),
                 new SpecialUseFolder("Whatever", List.of("\\Junk")),
@@ -90,7 +92,7 @@ class MailSourceClientTest {
         ));
         FakeTreeStore store = new FakeTreeStore(root);
 
-        Folder folder = invokeLocateSpamOrJunkFolder(client, store);
+        Folder folder = service.locateSpamOrJunkFolder(store);
 
         assertTrue(folder instanceof SpecialUseFolder);
         assertTrue("Whatever".equals(folder.getFullName()));
@@ -98,14 +100,14 @@ class MailSourceClientTest {
 
     @Test
     void locateSpamOrJunkFolderFallsBackToLocalizedNameMatching() throws Exception {
-        MailSourceClient client = new MailSourceClient();
+        MailSourceFolderService service = new MailSourceFolderService();
         Folder root = new TreeFolder("", List.of(
                 new TreeFolder("Arquivo", List.of()),
                 new TreeFolder("Correo no deseado", List.of())
         ));
         FakeTreeStore store = new FakeTreeStore(root);
 
-        Folder folder = invokeLocateSpamOrJunkFolder(client, store);
+        Folder folder = service.locateSpamOrJunkFolder(store);
 
         assertTrue(folder instanceof TreeFolder);
         assertTrue("Correo no deseado".equals(folder.getFullName()));
@@ -116,7 +118,7 @@ class MailSourceClientTest {
         Flags permanentFlags = new Flags();
         permanentFlags.add("$Forwarded");
 
-        assertTrue(MailSourceClient.resolveForwardedMarkerSupport(new PermanentFlagsFolder(permanentFlags)));
+        assertTrue(MailSourceFolderService.resolveForwardedMarkerSupport(new PermanentFlagsFolder(permanentFlags)));
     }
 
     @Test
@@ -124,26 +126,26 @@ class MailSourceClientTest {
         Flags permanentFlags = new Flags();
         permanentFlags.add(Flags.Flag.USER);
 
-        assertTrue(MailSourceClient.resolveForwardedMarkerSupport(new PermanentFlagsFolder(permanentFlags)));
+        assertTrue(MailSourceFolderService.resolveForwardedMarkerSupport(new PermanentFlagsFolder(permanentFlags)));
     }
 
     @Test
     void resolveForwardedMarkerSupportReturnsFalseWhenUserFlagsAreUnavailable() {
-        assertFalse(MailSourceClient.resolveForwardedMarkerSupport(new PermanentFlagsFolder(new Flags())));
+        assertFalse(MailSourceFolderService.resolveForwardedMarkerSupport(new PermanentFlagsFolder(new Flags())));
     }
 
     @Test
     void imapSourceMessageKeyIncludesUidValidityWhenAvailable() throws Exception {
-        MailSourceClient client = new MailSourceClient();
+        MailSourceMessageMapper mapper = new MailSourceMessageMapper();
 
-        String sourceMessageKey = invokeImapSourceMessageKey(client, "source-1", "Projects/2026", 44L, 200L);
+        String sourceMessageKey = mapper.imapSourceMessageKey("source-1", "Projects/2026", 44L, 200L);
 
         assertEquals("source-1:imap-folder-uid:UHJvamVjdHMvMjAyNg:44:200", sourceMessageKey);
     }
 
     @Test
     void extractImapUidFromSourceKeySupportsDestinationAwareImapKeys() throws Exception {
-        MailSourceClient client = new MailSourceClient();
+        MailSourceMessageMapper mapper = new MailSourceMessageMapper();
         FetchedMessage message = new FetchedMessage(
                 "source-1",
                 "source-1:imap-uid:44:200",
@@ -151,12 +153,12 @@ class MailSourceClientTest {
                 java.time.Instant.parse("2026-04-06T00:00:00Z"),
                 "raw".getBytes());
 
-        assertEquals(200L, invokeExtractImapUidFromSourceKey(client, message));
+        assertEquals(200L, mapper.extractImapUidFromSourceKey(message));
     }
 
     @Test
     void extractImapUidFromSourceKeyKeepsLegacyUidKeysReadable() throws Exception {
-        MailSourceClient client = new MailSourceClient();
+        MailSourceMessageMapper mapper = new MailSourceMessageMapper();
         FetchedMessage message = new FetchedMessage(
                 "source-1",
                 "source-1:uid:200",
@@ -164,12 +166,12 @@ class MailSourceClientTest {
                 java.time.Instant.parse("2026-04-06T00:00:00Z"),
                 "raw".getBytes());
 
-        assertEquals(200L, invokeExtractImapUidFromSourceKey(client, message));
+        assertEquals(200L, mapper.extractImapUidFromSourceKey(message));
     }
 
     @Test
     void extractImapUidFromSourceKeyIgnoresMalformedKeys() throws Exception {
-        MailSourceClient client = new MailSourceClient();
+        MailSourceMessageMapper mapper = new MailSourceMessageMapper();
         FetchedMessage message = new FetchedMessage(
                 "source-1",
                 "source-1:imap-uid:not-a-number",
@@ -177,59 +179,7 @@ class MailSourceClientTest {
                 java.time.Instant.parse("2026-04-06T00:00:00Z"),
                 "raw".getBytes());
 
-        assertNull(invokeExtractImapUidFromSourceKey(client, message));
-    }
-
-    private byte[] invokeToRawBytes(MailSourceClient client, Message message) throws Exception {
-        Method method = MailSourceClient.class.getDeclaredMethod("toRawBytes", Message.class);
-        method.setAccessible(true);
-        try {
-            return (byte[]) method.invoke(client, message);
-        } catch (InvocationTargetException e) {
-            if (e.getCause() instanceof Exception exception) {
-                throw exception;
-            }
-            throw e;
-        }
-    }
-
-    private Folder invokeLocateSpamOrJunkFolder(MailSourceClient client, Store store) throws Exception {
-        Method method = MailSourceClient.class.getDeclaredMethod("locateSpamOrJunkFolder", Store.class);
-        method.setAccessible(true);
-        try {
-            return (Folder) method.invoke(client, store);
-        } catch (InvocationTargetException e) {
-            if (e.getCause() instanceof Exception exception) {
-                throw exception;
-            }
-            throw e;
-        }
-    }
-
-    private String invokeImapSourceMessageKey(MailSourceClient client, String sourceId, String folderName, Long uidValidity, long uid) throws Exception {
-        Method method = MailSourceClient.class.getDeclaredMethod("imapSourceMessageKey", String.class, String.class, Long.class, long.class);
-        method.setAccessible(true);
-        try {
-            return (String) method.invoke(client, sourceId, folderName, uidValidity, uid);
-        } catch (InvocationTargetException e) {
-            if (e.getCause() instanceof Exception exception) {
-                throw exception;
-            }
-            throw e;
-        }
-    }
-
-    private Long invokeExtractImapUidFromSourceKey(MailSourceClient client, FetchedMessage message) throws Exception {
-        Method method = MailSourceClient.class.getDeclaredMethod("extractImapUidFromSourceKey", FetchedMessage.class);
-        method.setAccessible(true);
-        try {
-            return (Long) method.invoke(client, message);
-        } catch (InvocationTargetException e) {
-            if (e.getCause() instanceof Exception exception) {
-                throw exception;
-            }
-            throw e;
-        }
+        assertNull(mapper.extractImapUidFromSourceKey(message));
     }
 
     private static final class FakeFolder extends Folder {

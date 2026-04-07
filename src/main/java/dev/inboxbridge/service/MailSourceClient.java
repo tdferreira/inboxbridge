@@ -6,14 +6,9 @@ import java.nio.charset.StandardCharsets;
 import java.time.Instant;
 import java.util.ArrayList;
 import java.util.Arrays;
-import java.util.Base64;
 import java.util.Comparator;
-import java.util.HashSet;
-import java.util.LinkedHashSet;
 import java.util.List;
-import java.util.Locale;
 import java.util.Optional;
-import java.util.Set;
 
 import org.jboss.logging.Logger;
 import org.eclipse.angus.mail.imap.IMAPFolder;
@@ -64,6 +59,12 @@ public class MailSourceClient {
 
     @Inject
     MailSessionFactory mailSessionFactory;
+
+    @Inject
+    MailSourceFolderService mailSourceFolderService;
+
+    @Inject
+    MailSourceMessageMapper mailSourceMessageMapper;
 
     public List<FetchedMessage> fetch(InboxBridgeConfig.Source source) {
         return fetch(source, pollingSettingsService.effectiveSettings().fetchWindow());
@@ -217,9 +218,9 @@ public class MailSourceClient {
             Boolean sampleMessageMaterialized = null;
             if (sampleMessageAvailable) {
                 prefetchMessageMetadata(candidateFolder, candidateMessages);
-                sampleMessageMaterialized = !toFetchedMessages(bridge.id(), candidateFolder, candidateMessages).isEmpty();
+                sampleMessageMaterialized = !mailSourceMessageMapper().toFetchedMessages(bridge.id(), candidateFolder, candidateMessages).isEmpty();
             }
-            Boolean forwardedMarkerSupported = resolveForwardedMarkerSupport(candidateFolder);
+            Boolean forwardedMarkerSupported = MailSourceFolderService.resolveForwardedMarkerSupport(candidateFolder);
             return buildProbeResult(
                     bridge,
                     targetFolder,
@@ -248,13 +249,13 @@ public class MailSourceClient {
             store = session.getStore(mailSessionFactory().imapStoreProtocol(bridge.tls()));
             registerStore(store);
             connectStore(store, bridge);
-            folder = locateSpamOrJunkFolder(store);
-            if (folder == null || !folder.exists()) {
+            Optional<MailboxCountProbe> probe = mailSourceFolderService().probeSpamOrJunkFolder(store);
+            if (probe.isEmpty()) {
                 return Optional.empty();
             }
+            folder = store.getFolder(probe.get().folderName());
             registerFolder(folder);
-            folder.open(Folder.READ_ONLY);
-            return Optional.of(new MailboxCountProbe(folder.getFullName(), folder.getMessageCount()));
+            return probe;
         } catch (MessagingException e) {
             throw new IllegalStateException("Failed to inspect spam or junk mailbox for source " + bridge.id(), e);
         } finally {
@@ -271,23 +272,7 @@ public class MailSourceClient {
             store = session.getStore(mailSessionFactory().imapStoreProtocol(bridge.tls()));
             registerStore(store);
             connectStore(store, bridge);
-
-            LinkedHashSet<String> folderNames = new LinkedHashSet<>();
-            Folder inbox = store.getFolder("INBOX");
-            if (inbox != null && inbox.exists()) {
-                folderNames.add(inbox.getFullName());
-            }
-
-            Folder defaultFolder = store.getDefaultFolder();
-            if (defaultFolder != null) {
-                collectFolderNames(defaultFolder.list("*"), folderNames);
-            }
-
-            List<String> folders = new ArrayList<>(folderNames);
-            folders.sort(Comparator
-                    .comparing((String folderName) -> !"INBOX".equalsIgnoreCase(folderName))
-                    .thenComparing(String.CASE_INSENSITIVE_ORDER));
-            return folders;
+            return mailSourceFolderService().listFolders(store);
         } catch (MessagingException e) {
             throw new IllegalStateException("Failed to list folders for source " + bridge.id(), e);
         } finally {
@@ -368,7 +353,7 @@ public class MailSourceClient {
                         fetchWindow,
                         folder);
                 prefetchMessageMetadata(folder, candidateMessages);
-                fetchedMessages.addAll(toFetchedMessages(sourceId, folder, candidateMessages));
+                fetchedMessages.addAll(mailSourceMessageMapper().toFetchedMessages(sourceId, folder, candidateMessages));
             } finally {
                 closeQuietly(folder);
             }
@@ -390,7 +375,7 @@ public class MailSourceClient {
             registerFolder(folder);
             folder.open(Folder.READ_ONLY);
             Message[] candidateMessages = selectPop3CandidateMessages(source.id(), null, fetchWindow, folder);
-            return toFetchedMessages(source, candidateMessages);
+            return mailSourceMessageMapper().toFetchedMessages(source.id(), candidateMessages);
         } catch (MessagingException e) {
             throw new IllegalStateException("Failed to fetch POP3 mail for source " + source.id(), e);
         } finally {
@@ -412,7 +397,7 @@ public class MailSourceClient {
             registerFolder(folder);
             folder.open(Folder.READ_ONLY);
             Message[] candidateMessages = selectPop3CandidateMessages(bridge.id(), destinationKeyFor(bridge), fetchWindow, folder);
-            return toFetchedMessages(bridge.id(), candidateMessages);
+            return mailSourceMessageMapper().toFetchedMessages(bridge.id(), candidateMessages);
         } catch (MessagingException e) {
             throw new IllegalStateException("Failed to fetch POP3 mail for source " + bridge.id(), e);
         } finally {
@@ -438,7 +423,7 @@ public class MailSourceClient {
             boolean sampleMessageAvailable = candidateMessages.length > 0;
             Boolean sampleMessageMaterialized = null;
             if (sampleMessageAvailable) {
-                sampleMessageMaterialized = !toFetchedMessages(bridge.id(), candidateMessages).isEmpty();
+                sampleMessageMaterialized = !mailSourceMessageMapper().toFetchedMessages(bridge.id(), candidateMessages).isEmpty();
             }
             return buildProbeResult(
                     bridge,
@@ -510,28 +495,6 @@ public class MailSourceClient {
                 forwardedMarkerSupported);
     }
 
-    static Boolean resolveForwardedMarkerSupport(Folder folder) {
-        if (folder == null) {
-            return null;
-        }
-        Flags permanentFlags = folder.getPermanentFlags();
-        if (permanentFlags == null) {
-            return null;
-        }
-        String[] userFlags = permanentFlags.getUserFlags();
-        if (userFlags != null) {
-            for (String userFlag : userFlags) {
-                if ("$forwarded".equalsIgnoreCase(userFlag)) {
-                    return Boolean.TRUE;
-                }
-            }
-        }
-        if (permanentFlags.contains(Flags.Flag.USER)) {
-            return Boolean.TRUE;
-        }
-        return Boolean.FALSE;
-    }
-
     private Message[] selectTailMessages(Folder folder, int fetchWindow) throws MessagingException {
         int count = folder.getMessageCount();
         if (count == 0) {
@@ -548,132 +511,6 @@ public class MailSourceClient {
             return messages;
         }
         return Arrays.copyOfRange(messages, messages.length - normalizedFetchWindow, messages.length);
-    }
-
-    private List<FetchedMessage> toFetchedMessages(String sourceId, Folder folder, Message[] messages) {
-        List<Message> sorted = new ArrayList<>(Arrays.asList(messages));
-        if (!(folder instanceof POP3Folder)) {
-            sorted.sort(Comparator.comparing(this::messageInstant));
-        }
-
-        List<FetchedMessage> fetchedMessages = new ArrayList<>();
-        Exception firstFailure = null;
-        int failedMessages = 0;
-        String folderName = safeFolderName(folder);
-        Long uidValidity = resolveUidValidity(folder);
-        for (Message message : sorted) {
-            try {
-                MessageMetadata metadata = captureMetadata(message);
-                byte[] raw = toRawBytes(message);
-                String sha = mimeHashService.sha256Hex(raw);
-                String sourceMessageKey = resolveSourceMessageKey(sourceId, metadata, sha);
-                Optional<String> messageId = Optional.ofNullable(metadata.messageId());
-                fetchedMessages.add(new FetchedMessage(
-                        sourceId,
-                        sourceMessageKey,
-                        messageId,
-                        metadata.instant(),
-                        Optional.ofNullable(folderName),
-                        uidValidity,
-                        metadata.uid(),
-                        metadata.popUidl(),
-                        raw));
-            } catch (MessagingException | IOException e) {
-                failedMessages++;
-                if (firstFailure == null) {
-                    firstFailure = e;
-                }
-                LOG.warnf(e,
-                        "Skipping message %s from source %s after materialization failure",
-                        safeMessageNumber(message),
-                        sourceId);
-            }
-        }
-        if (failedMessages > 0 && fetchedMessages.isEmpty() && firstFailure != null) {
-            throw new IllegalStateException("Failed to materialize message from source " + sourceId, firstFailure);
-        }
-        if (failedMessages > 0) {
-            LOG.warnf(
-                    "Skipped %d message(s) from source %s because they could not be materialized",
-                    failedMessages,
-                    sourceId);
-        }
-        return fetchedMessages;
-    }
-
-    private List<FetchedMessage> toFetchedMessages(InboxBridgeConfig.Source source, Message[] messages) {
-        return toFetchedMessages(source.id(), source.protocol() == InboxBridgeConfig.Protocol.IMAP ? inferredFolder(messages) : null, messages);
-    }
-
-    private List<FetchedMessage> toFetchedMessages(String sourceId, Message[] messages) {
-        return toFetchedMessages(sourceId, inferredFolder(messages), messages);
-    }
-
-    private Folder inferredFolder(Message[] messages) {
-        if (messages == null || messages.length == 0) {
-            return null;
-        }
-        return messages[0].getFolder();
-    }
-
-    private String resolveSourceMessageKey(InboxBridgeConfig.Source source, Message message, String sha) throws MessagingException {
-        return resolveSourceMessageKey(source.id(), message, sha);
-    }
-
-    private String resolveSourceMessageKey(String sourceId, Message message, String sha) throws MessagingException {
-        if (message.getFolder() instanceof UIDFolder uidFolder) {
-            long uid = uidFolder.getUID(message);
-            if (uid > 0) {
-                return imapSourceMessageKey(sourceId, safeFolderName(message.getFolder()), resolveUidValidity(message.getFolder()), uid);
-            }
-        }
-        String messageIdHeader = firstHeader(message, "Message-ID");
-        if (messageIdHeader != null && !messageIdHeader.isBlank()) {
-            return sourceId + ":message-id:" + messageIdHeader;
-        }
-        return mimeHashService.fallbackMessageKey(sourceId, sha);
-    }
-
-    private String resolveSourceMessageKey(String sourceId, MessageMetadata metadata, String sha) {
-        if (metadata.uid() != null && metadata.uid() > 0) {
-            return imapSourceMessageKey(sourceId, metadata.folderName(), metadata.uidValidity(), metadata.uid());
-        }
-        if (metadata.popUidl() != null && !metadata.popUidl().isBlank()) {
-            return sourceId + ":uidl:" + metadata.popUidl();
-        }
-        if (metadata.messageId() != null && !metadata.messageId().isBlank()) {
-            return sourceId + ":message-id:" + metadata.messageId();
-        }
-        return mimeHashService.fallbackMessageKey(sourceId, sha);
-    }
-
-    private MessageMetadata captureMetadata(Message message) {
-        Long uid = null;
-        String popUidl = null;
-        String messageId = null;
-        try {
-            if (message.getFolder() instanceof UIDFolder uidFolder) {
-                long resolved = uidFolder.getUID(message);
-                if (resolved > 0) {
-                    uid = resolved;
-                }
-            }
-        } catch (MessagingException e) {
-            LOG.debugf(e, "Unable to resolve UID for message %s", safeMessageNumber(message));
-        }
-        try {
-            if (message.getFolder() instanceof POP3Folder pop3Folder) {
-                popUidl = pop3Folder.getUID(message);
-            }
-        } catch (MessagingException e) {
-            LOG.debugf(e, "Unable to resolve POP UIDL for message %s", safeMessageNumber(message));
-        }
-        try {
-            messageId = firstHeader(message, "Message-ID");
-        } catch (MessagingException e) {
-            LOG.debugf(e, "Unable to resolve Message-ID for message %s", safeMessageNumber(message));
-        }
-        return new MessageMetadata(uid, resolveUidValidity(message.getFolder()), popUidl, messageId, messageInstant(message), safeFolderName(message.getFolder()));
     }
 
     private Message[] selectImapCandidateMessages(
@@ -798,108 +635,7 @@ public class MailSourceClient {
     }
 
     private Message resolveSourceMessage(Folder folder, FetchedMessage message) throws MessagingException {
-        String sourceMessageKey = message.sourceMessageKey();
-        Long imapUid = extractImapUidFromSourceKey(message);
-        if (imapUid != null && folder instanceof UIDFolder uidFolder) {
-            long uid = imapUid.longValue();
-            return uidFolder.getMessageByUID(uid);
-        }
-        Optional<String> messageId = message.messageIdHeader()
-                .filter(header -> !header.isBlank())
-                .or(() -> extractMessageIdFromSourceKey(message));
-        if (messageId.isEmpty()) {
-            return null;
-        }
-        Message[] matches = folder.search(new HeaderTerm("Message-ID", messageId.get()));
-        if (matches.length == 0) {
-            return null;
-        }
-        prefetchMessageMetadata(folder, matches);
-        return matches[matches.length - 1];
-    }
-
-    private Optional<String> extractMessageIdFromSourceKey(FetchedMessage message) {
-        String sourceMessageKey = message.sourceMessageKey();
-        String messageIdPrefix = message.sourceAccountId() + ":message-id:";
-        if (sourceMessageKey == null || !sourceMessageKey.startsWith(messageIdPrefix)) {
-            return Optional.empty();
-        }
-        return Optional.of(sourceMessageKey.substring(messageIdPrefix.length()));
-    }
-
-    private String imapSourceMessageKey(String sourceId, Long uidValidity, long uid) {
-        return imapSourceMessageKey(sourceId, null, uidValidity, uid);
-    }
-
-    private String imapSourceMessageKey(String sourceId, String folderName, Long uidValidity, long uid) {
-        if (folderName != null && !folderName.isBlank() && uidValidity != null && uidValidity > 0L) {
-            return sourceId + ":imap-folder-uid:" + encodeFolderName(folderName) + ":" + uidValidity + ":" + uid;
-        }
-        if (uidValidity != null && uidValidity > 0L) {
-            return sourceId + ":imap-uid:" + uidValidity + ":" + uid;
-        }
-        return sourceId + ":uid:" + uid;
-    }
-
-    private Long extractImapUidFromSourceKey(FetchedMessage message) {
-        String sourceMessageKey = message.sourceMessageKey();
-        if (sourceMessageKey == null) {
-            return null;
-        }
-        String imapFolderUidPrefix = message.sourceAccountId() + ":imap-folder-uid:";
-        if (sourceMessageKey.startsWith(imapFolderUidPrefix)) {
-            int separatorIndex = sourceMessageKey.lastIndexOf(':');
-            if (separatorIndex > imapFolderUidPrefix.length()) {
-                try {
-                    return Long.parseLong(sourceMessageKey.substring(separatorIndex + 1));
-                } catch (NumberFormatException ignored) {
-                    return null;
-                }
-            }
-            return null;
-        }
-        String imapUidPrefix = message.sourceAccountId() + ":imap-uid:";
-        if (sourceMessageKey.startsWith(imapUidPrefix)) {
-            int separatorIndex = sourceMessageKey.lastIndexOf(':');
-            if (separatorIndex > imapUidPrefix.length()) {
-                try {
-                    return Long.parseLong(sourceMessageKey.substring(separatorIndex + 1));
-                } catch (NumberFormatException ignored) {
-                    return null;
-                }
-            }
-            return null;
-        }
-        String legacyUidPrefix = message.sourceAccountId() + ":uid:";
-        if (!sourceMessageKey.startsWith(legacyUidPrefix)) {
-            return null;
-        }
-        try {
-            return Long.parseLong(sourceMessageKey.substring(legacyUidPrefix.length()));
-        } catch (NumberFormatException ignored) {
-            return null;
-        }
-    }
-
-    private String encodeFolderName(String folderName) {
-        return Base64.getUrlEncoder()
-                .withoutPadding()
-                .encodeToString(folderName.getBytes(StandardCharsets.UTF_8));
-    }
-
-    private byte[] toRawBytes(Message message) throws MessagingException, IOException {
-        ByteArrayOutputStream outputStream = new ByteArrayOutputStream();
-        try {
-            message.writeTo(outputStream);
-        } catch (FolderClosedException closed) {
-            Message reopenedMessage = reopenMessage(message);
-            if (reopenedMessage == null) {
-                throw closed;
-            }
-            outputStream.reset();
-            reopenedMessage.writeTo(outputStream);
-        }
-        return outputStream.toByteArray();
+        return mailSourceMessageMapper().resolveSourceMessage(folder, message);
     }
 
     private void prefetchMessageMetadata(Folder folder, Message[] messages) throws MessagingException {
@@ -912,26 +648,6 @@ public class MailSourceClient {
         fetchProfile.add(UIDFolder.FetchProfileItem.UID);
         fetchProfile.add("Message-ID");
         folder.fetch(messages, fetchProfile);
-    }
-
-    private Message reopenMessage(Message originalMessage) {
-        try {
-            Folder folder = originalMessage.getFolder();
-            if (folder == null) {
-                return null;
-            }
-            if (!folder.isOpen()) {
-                folder.open(Folder.READ_ONLY);
-            }
-            int messageNumber = originalMessage.getMessageNumber();
-            if (messageNumber <= 0 || messageNumber > folder.getMessageCount()) {
-                return null;
-            }
-            return folder.getMessage(messageNumber);
-        } catch (MessagingException reopenFailure) {
-            LOG.warn("Unable to reopen IMAP folder after a message materialization failure", reopenFailure);
-            return null;
-        }
     }
 
     private int safeMessageNumber(Message message) {
@@ -1000,26 +716,6 @@ public class MailSourceClient {
             return;
         }
         pollCancellationService.register(() -> closeQuietly(folder));
-    }
-
-    private void collectFolderNames(Folder[] folders, LinkedHashSet<String> names) throws MessagingException {
-        if (folders == null) {
-            return;
-        }
-        for (Folder folder : folders) {
-            if (folder == null) {
-                continue;
-            }
-            if (folder.exists()) {
-                String fullName = folder.getFullName();
-                if (fullName != null && !fullName.isBlank()) {
-                    names.add(fullName);
-                }
-            }
-            if ((folder.getType() & Folder.HOLDS_FOLDERS) != 0) {
-                collectFolderNames(folder.list("*"), names);
-            }
-        }
     }
 
     private void connectStore(Store store, InboxBridgeConfig.Source source) throws MessagingException {
@@ -1144,86 +840,6 @@ public class MailSourceClient {
         }
     }
 
-    private Folder locateSpamOrJunkFolder(Store store) throws MessagingException {
-        Folder defaultFolder = store.getDefaultFolder();
-        if (defaultFolder == null) {
-            return null;
-        }
-        List<Folder> folders = new ArrayList<>();
-        collectFolders(defaultFolder, folders, new HashSet<>());
-        for (Folder folder : folders) {
-            if (hasSpamOrJunkSpecialUse(folder)) {
-                return folder;
-            }
-        }
-        for (Folder folder : folders) {
-            if (isLikelySpamOrJunkFolder(folder)) {
-                return folder;
-            }
-        }
-        return null;
-    }
-
-    private void collectFolders(Folder folder, List<Folder> collected, Set<String> visited) throws MessagingException {
-        String fullName = folder.getFullName();
-        if (fullName != null && !fullName.isBlank()) {
-            if (!visited.add(fullName)) {
-                return;
-            }
-            collected.add(folder);
-        }
-        for (Folder child : folder.list("*")) {
-            collectFolders(child, collected, visited);
-        }
-    }
-
-    private boolean isLikelySpamOrJunkFolder(Folder folder) {
-        char separator;
-        try {
-            separator = folder.getSeparator();
-        } catch (MessagingException e) {
-            separator = '/';
-        }
-        List<String> candidates = new ArrayList<>();
-        if (folder.getFullName() != null) {
-            candidates.add(folder.getFullName());
-            if (separator != 0) {
-                candidates.addAll(Arrays.asList(folder.getFullName().split(java.util.regex.Pattern.quote(String.valueOf(separator)))));
-            }
-        }
-        if (folder.getName() != null) {
-            candidates.add(folder.getName());
-        }
-        return candidates.stream()
-                .map(this::normalizeFolderToken)
-                .anyMatch(SPAM_OR_JUNK_FOLDER_NAMES::contains);
-    }
-
-    private boolean hasSpamOrJunkSpecialUse(Folder folder) {
-        try {
-            java.lang.reflect.Method method = folder.getClass().getMethod("getAttributes");
-            Object result = method.invoke(folder);
-            if (!(result instanceof String[] attributes)) {
-                return false;
-            }
-            for (String attribute : attributes) {
-                String normalized = String.valueOf(attribute).trim().toLowerCase(Locale.ROOT);
-                if (SPAM_OR_JUNK_SPECIAL_USE_ATTRIBUTES.contains(normalized)) {
-                    return true;
-                }
-            }
-        } catch (ReflectiveOperationException | RuntimeException ignored) {
-            return false;
-        }
-        return false;
-    }
-
-    private String normalizeFolderToken(String value) {
-        return value == null
-                ? ""
-                : value.toLowerCase(Locale.ROOT).replaceAll("[^a-z0-9]", "");
-    }
-
     private MailSessionFactory mailSessionFactory() {
         if (mailSessionFactory != null) {
             return mailSessionFactory;
@@ -1249,30 +865,28 @@ public class MailSourceClient {
         return mailSessionFactory;
     }
 
+    private MailSourceFolderService mailSourceFolderService() {
+        if (mailSourceFolderService == null) {
+            mailSourceFolderService = new MailSourceFolderService();
+        }
+        return mailSourceFolderService;
+    }
+
+    private MailSourceMessageMapper mailSourceMessageMapper() {
+        if (mailSourceMessageMapper != null) {
+            return mailSourceMessageMapper;
+        }
+        MailSourceMessageMapper fallback = new MailSourceMessageMapper();
+        fallback.mimeHashService = mimeHashService == null ? new MimeHashService() : mimeHashService;
+        mailSourceMessageMapper = fallback;
+        return mailSourceMessageMapper;
+    }
+
     @FunctionalInterface
     private interface TokenSupplier {
         String get();
     }
 
-    private record MessageMetadata(Long uid, Long uidValidity, String popUidl, String messageId, Instant instant, String folderName) {
-    }
-
     public record MailboxCountProbe(String folderName, int messageCount) {
     }
-
-    private static final Set<String> SPAM_OR_JUNK_FOLDER_NAMES = Set.of(
-            "spam",
-            "junk",
-            "junkemail",
-            "junkeemail",
-            "junkmail",
-            "bulkmail",
-            "correonodeseado",
-            "correoindeseado",
-            "indesejados");
-
-    private static final Set<String> SPAM_OR_JUNK_SPECIAL_USE_ATTRIBUTES = Set.of(
-            "\\junk",
-            "\\spam");
-
 }

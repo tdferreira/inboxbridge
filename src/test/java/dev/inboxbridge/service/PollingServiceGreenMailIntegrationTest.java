@@ -73,6 +73,31 @@ class PollingServiceGreenMailIntegrationTest {
     }
 
     @Test
+    void listFoldersReturnsInboxFirstAndIncludesNestedSourceFolders() throws Exception {
+        appendMessage(sourceMail, SOURCE_USERNAME, SOURCE_PASSWORD, "Projects/2026", "project-alpha", "Stored in nested folder", "<folders-alpha@example.com>");
+
+        MailSourceClient client = new MailSourceClient();
+
+        List<String> folders = client.listFolders(runtimeAccount());
+
+        assertEquals(List.of("INBOX", "Projects/2026"), folders);
+    }
+
+    @Test
+    void probeSpamOrJunkFolderFindsLocalizedSpamFolderAndCountsMessages() throws Exception {
+        appendMessage(sourceMail, SOURCE_USERNAME, SOURCE_PASSWORD, "Correo no deseado", "spam-alpha", "Localized spam folder message", "<spam-alpha@example.com>");
+        appendMessage(sourceMail, SOURCE_USERNAME, SOURCE_PASSWORD, "Correo no deseado", "spam-beta", "Second localized spam folder message", "<spam-beta@example.com>");
+
+        MailSourceClient client = new MailSourceClient();
+
+        Optional<MailSourceClient.MailboxCountProbe> probe = client.probeSpamOrJunkFolder(runtimeAccount());
+
+        assertTrue(probe.isPresent());
+        assertEquals("Correo no deseado", probe.get().folderName());
+        assertEquals(2, probe.get().messageCount());
+    }
+
+    @Test
     void pop3PollingUsesPersistedUidlCheckpointToResumeOnlyNewMail() throws Exception {
         appendMessage(sourceMail, SOURCE_USERNAME, SOURCE_PASSWORD, "INBOX", "alpha", "First imported message", "<alpha-pop@example.com>");
         appendMessage(sourceMail, SOURCE_USERNAME, SOURCE_PASSWORD, "INBOX", "beta", "Second imported message", "<beta-pop@example.com>");

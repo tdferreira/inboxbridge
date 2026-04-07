@@ -33,6 +33,10 @@ infrastructure details:
   stay aligned across source fetch, source post-poll actions, destination
   append, and long-lived IDLE watches instead of being hard-coded in each
   service.
+- `MailSourceFolderService` and `MailSourceMessageMapper` now keep source-folder
+  discovery/spam probing and fetched-message materialization/source-key logic
+  out of `MailSourceClient`, so the polling coordinator can focus on mailbox
+  connection flow, checkpoint selection, and post-poll orchestration.
 
 ## Remote control flow
 
