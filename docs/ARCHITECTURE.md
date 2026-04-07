@@ -7,6 +7,10 @@ anchors the first feature-oriented backend subpackage under
 `dev.inboxbridge.service.polling`. The coordinator, live-run, and stats classes
 that evolve together now live there instead of continuing to grow in the flat
 top-level `service` package.
+Within that still mostly layer-oriented backend, the provider OAuth callback
+pages now also use a narrower seam under `dev.inboxbridge.web.oauth`, so the
+large browser callback HTML/JS stays out of the REST resource classes
+themselves.
 
 1. `PollingService` runs on schedule or manually via REST
 2. `PollingService` resolves the eligible sources and lets a bounded set of virtual-thread workers claim them just in time
@@ -60,6 +64,11 @@ infrastructure details:
   successful import or duplicate match, including mark-as-read, move, delete,
   and best-effort `$Forwarded` handling against the fetched message's actual
   source folder.
+- `GoogleOAuthCallbackPageRenderer` and
+  `MicrosoftOAuthCallbackPageRenderer` now own the provider-specific browser
+  callback pages, while `OAuthPageI18n` and `OAuthPageSupport` keep the shared
+  callback-page localization, escaping, and tiny formatting helpers out of the
+  OAuth REST resources.
 - `PollingSourceExecutionService` now owns the per-source polling pipeline that
   used to sit inside `PollingService`: destination-link checks, spam/junk
   probes, dedupe-vs-import decisions, source/destination throttle accounting,

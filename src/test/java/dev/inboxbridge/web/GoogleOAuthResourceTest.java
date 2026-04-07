@@ -11,14 +11,14 @@ import org.junit.jupiter.api.Test;
 
 import dev.inboxbridge.dto.GoogleTokenExchangeResponse;
 import dev.inboxbridge.service.GoogleOAuthService;
+import dev.inboxbridge.web.oauth.GoogleOAuthCallbackPageRenderer;
 import jakarta.ws.rs.core.Response;
 
 class GoogleOAuthResourceTest {
 
     @Test
     void startRedirectsBrowserToGoogleAuthorizationUrl() {
-        GoogleOAuthResource resource = new GoogleOAuthResource();
-        resource.googleOAuthService = new FakeGoogleOAuthService();
+        GoogleOAuthResource resource = newResource(new FakeGoogleOAuthService());
 
         Response response = resource.startSystem(null);
 
@@ -28,8 +28,7 @@ class GoogleOAuthResourceTest {
 
     @Test
     void callbackRendersBrowserExchangeHtml() {
-        GoogleOAuthResource resource = new GoogleOAuthResource();
-        resource.googleOAuthService = new FakeGoogleOAuthService();
+        GoogleOAuthResource resource = newResource(new FakeGoogleOAuthService());
 
         String html = resource.callback("code-123", "state-1", null, null);
 
@@ -53,8 +52,7 @@ class GoogleOAuthResourceTest {
 
     @Test
     void callbackShowsConsentRetryGuidanceWhenGoogleConsentIsDenied() {
-        GoogleOAuthResource resource = new GoogleOAuthResource();
-        resource.googleOAuthService = new FakeGoogleOAuthService();
+        GoogleOAuthResource resource = newResource(new FakeGoogleOAuthService());
 
         String html = resource.callback(null, null, "access_denied", "user denied");
 
@@ -65,8 +63,7 @@ class GoogleOAuthResourceTest {
 
     @Test
     void callbackRendersPortugueseWhenStateLanguageIsPortuguese() {
-        GoogleOAuthResource resource = new GoogleOAuthResource();
-        resource.googleOAuthService = new FakeGoogleOAuthService() {
+        GoogleOAuthResource resource = newResource(new FakeGoogleOAuthService() {
             @Override
             public CallbackValidation validateCallback(String state) {
                 return new CallbackValidation(
@@ -75,7 +72,7 @@ class GoogleOAuthResourceTest {
                         "https://localhost:3000/api/google-oauth/callback",
                         "pt");
             }
-        };
+        });
 
         String html = resource.callback("code-123", "state-1", null, null);
 
@@ -83,6 +80,13 @@ class GoogleOAuthResourceTest {
         assertTrue(html.contains("Copiar codigo"));
         assertTrue(html.contains("Trocar codigo no browser"));
         assertTrue(html.contains("Voltar ao InboxBridge"));
+    }
+
+    private GoogleOAuthResource newResource(GoogleOAuthService oauthService) {
+        GoogleOAuthResource resource = new GoogleOAuthResource();
+        resource.googleOAuthService = oauthService;
+        resource.callbackPageRenderer = new GoogleOAuthCallbackPageRenderer();
+        return resource;
     }
 
     private static class FakeGoogleOAuthService extends GoogleOAuthService {

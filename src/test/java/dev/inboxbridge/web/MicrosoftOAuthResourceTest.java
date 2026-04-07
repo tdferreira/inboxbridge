@@ -21,6 +21,7 @@ import dev.inboxbridge.security.CurrentUserContext;
 import dev.inboxbridge.service.EnvSourceService;
 import dev.inboxbridge.service.MicrosoftOAuthService;
 import dev.inboxbridge.service.UserEmailAccountService;
+import dev.inboxbridge.web.oauth.MicrosoftOAuthCallbackPageRenderer;
 import jakarta.ws.rs.BadRequestException;
 import jakarta.ws.rs.core.Response;
 
@@ -28,11 +29,7 @@ class MicrosoftOAuthResourceTest {
 
     @Test
     void startRedirectsBrowserToAuthorizationUrl() {
-        MicrosoftOAuthResource resource = new MicrosoftOAuthResource();
-        resource.microsoftOAuthService = new FakeMicrosoftOAuthService();
-        resource.currentUserContext = adminContext();
-        resource.envSourceService = envSourceService();
-        resource.userEmailAccountService = new FakeUserEmailAccountService();
+        MicrosoftOAuthResource resource = newResource(new FakeMicrosoftOAuthService());
 
         Response response = resource.start("outlook-main-imap", null);
 
@@ -44,8 +41,7 @@ class MicrosoftOAuthResourceTest {
 
     @Test
     void callbackRendersHelpfulHtmlForSuccessfulBrowserFlow() {
-        MicrosoftOAuthResource resource = new MicrosoftOAuthResource();
-        resource.microsoftOAuthService = new FakeMicrosoftOAuthService();
+        MicrosoftOAuthResource resource = newResource(new FakeMicrosoftOAuthService());
 
         Response response = resource.callback("abc123", "state-1", null, null);
         String html = (String) response.getEntity();
@@ -83,13 +79,12 @@ class MicrosoftOAuthResourceTest {
 
     @Test
     void callbackShowsEnvRefreshTokenKeyWhenSecureStorageIsDisabled() {
-        MicrosoftOAuthResource resource = new MicrosoftOAuthResource();
-        resource.microsoftOAuthService = new FakeMicrosoftOAuthService() {
+        MicrosoftOAuthResource resource = newResource(new FakeMicrosoftOAuthService() {
             @Override
             public boolean secureStorageConfigured() {
                 return false;
             }
-        };
+        });
 
         Response response = resource.callback("abc123", "state-1", null, null);
         String html = (String) response.getEntity();
@@ -102,13 +97,12 @@ class MicrosoftOAuthResourceTest {
 
     @Test
     void callbackShowsErrorPageForInvalidState() {
-        MicrosoftOAuthResource resource = new MicrosoftOAuthResource();
-        resource.microsoftOAuthService = new FakeMicrosoftOAuthService() {
+        MicrosoftOAuthResource resource = newResource(new FakeMicrosoftOAuthService() {
             @Override
             public BrowserCallbackValidation validateBrowserCallback(String state) {
                 throw new IllegalArgumentException("Invalid or expired OAuth state");
             }
-        };
+        });
 
         Response response = resource.callback("abc123", "bad-state", null, null);
         String html = (String) response.getEntity();
@@ -120,8 +114,7 @@ class MicrosoftOAuthResourceTest {
 
     @Test
     void callbackShowsConsentRetryGuidanceWhenMicrosoftConsentIsDenied() {
-        MicrosoftOAuthResource resource = new MicrosoftOAuthResource();
-        resource.microsoftOAuthService = new FakeMicrosoftOAuthService();
+        MicrosoftOAuthResource resource = newResource(new FakeMicrosoftOAuthService());
 
         Response response = resource.callback(null, null, "access_denied", "user denied");
         String html = (String) response.getEntity();
@@ -134,13 +127,12 @@ class MicrosoftOAuthResourceTest {
 
     @Test
     void callbackRendersPortugueseWhenStateLanguageIsPortuguese() {
-        MicrosoftOAuthResource resource = new MicrosoftOAuthResource();
-        resource.microsoftOAuthService = new FakeMicrosoftOAuthService() {
+        MicrosoftOAuthResource resource = newResource(new FakeMicrosoftOAuthService() {
             @Override
             public BrowserCallbackValidation validateBrowserCallback(String state) {
                 return new BrowserCallbackValidation("outlook-main-imap", "MAIL_ACCOUNT_0__OAUTH_REFRESH_TOKEN", "pt", "Mail account outlook-main-imap");
             }
-        };
+        });
 
         Response response = resource.callback("abc123", "state-1", null, null);
         String html = (String) response.getEntity();
@@ -152,13 +144,12 @@ class MicrosoftOAuthResourceTest {
 
     @Test
     void callbackHidesEnvRefreshTokenKeyForUserManagedSources() {
-        MicrosoftOAuthResource resource = new MicrosoftOAuthResource();
-        resource.microsoftOAuthService = new FakeMicrosoftOAuthService() {
+        MicrosoftOAuthResource resource = newResource(new FakeMicrosoftOAuthService() {
             @Override
             public BrowserCallbackValidation validateBrowserCallback(String state) {
                 return new BrowserCallbackValidation("outlook-user", "", "en", "Mail account outlook-user");
             }
-        };
+        });
 
         Response response = resource.callback("abc123", "state-1", null, null);
         String html = (String) response.getEntity();
@@ -172,16 +163,12 @@ class MicrosoftOAuthResourceTest {
 
     @Test
     void startMapsConfigurationErrorsToBadRequest() {
-        MicrosoftOAuthResource resource = new MicrosoftOAuthResource();
-        resource.microsoftOAuthService = new FakeMicrosoftOAuthService() {
+        MicrosoftOAuthResource resource = newResource(new FakeMicrosoftOAuthService() {
             @Override
             public String buildAuthorizationUrl(String sourceId, String language) {
                 throw new IllegalStateException("Microsoft OAuth client id is not configured");
             }
-        };
-        resource.currentUserContext = adminContext();
-        resource.envSourceService = envSourceService();
-        resource.userEmailAccountService = new FakeUserEmailAccountService();
+        });
 
         BadRequestException error = org.junit.jupiter.api.Assertions.assertThrows(
                 BadRequestException.class,
@@ -192,11 +179,7 @@ class MicrosoftOAuthResourceTest {
 
     @Test
     void sourcesReturnsConfiguredMicrosoftOAuthSources() {
-        MicrosoftOAuthResource resource = new MicrosoftOAuthResource();
-        resource.microsoftOAuthService = new FakeMicrosoftOAuthService();
-        resource.currentUserContext = adminContext();
-        resource.envSourceService = envSourceService();
-        resource.userEmailAccountService = new FakeUserEmailAccountService();
+        MicrosoftOAuthResource resource = newResource(new FakeMicrosoftOAuthService());
 
         List<MicrosoftOAuthSourceOption> sources = resource.sources();
 
@@ -207,13 +190,12 @@ class MicrosoftOAuthResourceTest {
 
     @Test
     void exchangeReturnsJsonErrorBodyForBrowserCallbackFailures() throws Exception {
-        MicrosoftOAuthResource resource = new MicrosoftOAuthResource();
-        resource.microsoftOAuthService = new FakeMicrosoftOAuthService() {
+        MicrosoftOAuthResource resource = newResource(new FakeMicrosoftOAuthService() {
             @Override
             public dev.inboxbridge.dto.MicrosoftTokenExchangeResponse exchangeAuthorizationCodeByState(String state, String code) {
                 throw new IllegalStateException("Invalid or expired OAuth state");
             }
-        };
+        });
 
         Response response = resource.exchange(new dev.inboxbridge.dto.MicrosoftOAuthCodeRequest(null, "code-1", "state-1"));
 
@@ -231,6 +213,16 @@ class MicrosoftOAuthResourceTest {
         user.role = AppUser.Role.ADMIN;
         context.setUser(user);
         return context;
+    }
+
+    private MicrosoftOAuthResource newResource(MicrosoftOAuthService oauthService) {
+        MicrosoftOAuthResource resource = new MicrosoftOAuthResource();
+        resource.microsoftOAuthService = oauthService;
+        resource.currentUserContext = adminContext();
+        resource.envSourceService = envSourceService();
+        resource.userEmailAccountService = new FakeUserEmailAccountService();
+        resource.callbackPageRenderer = new MicrosoftOAuthCallbackPageRenderer();
+        return resource;
     }
 
     private InboxBridgeConfig testConfig() {
