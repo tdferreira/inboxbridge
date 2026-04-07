@@ -4,12 +4,13 @@
 
 1. `PollingService` runs on schedule or manually via REST
 2. `PollingService` resolves the eligible sources and lets a bounded set of virtual-thread workers claim them just in time
-3. Each worker binds the current live-run/source scope, so mailbox and destination resources can register cancellation handles for that source
-4. `MailSourceClient` orchestrates source fetches and delegates protocol I/O to `MailSourceFetchService`
-5. `ImportDeduplicationService` checks whether a message was already imported
-6. The configured destination implementation prepares the append/import target
-7. `MailDestinationService` dispatches to the active destination provider, such as Gmail API import or IMAP APPEND
-8. Import metadata is stored in PostgreSQL
+3. `PollingService` delegates one eligible source at a time into `PollingSourceExecutionService`, which owns the per-source execution path
+4. Each source execution binds the current live-run/source scope, so mailbox and destination resources can register cancellation handles for that source
+5. `MailSourceClient` orchestrates source fetches and delegates protocol I/O to `MailSourceFetchService`
+6. `ImportDeduplicationService` checks whether a message was already imported
+7. The configured destination implementation prepares the append/import target
+8. `MailDestinationService` dispatches to the active destination provider, such as Gmail API import or IMAP APPEND
+9. Import metadata is stored in PostgreSQL
 
 The worker count is intentionally bounded, so InboxBridge can overlap unrelated
 mailboxes without abandoning the existing provider-throttle rules that protect
@@ -53,6 +54,11 @@ infrastructure details:
   successful import or duplicate match, including mark-as-read, move, delete,
   and best-effort `$Forwarded` handling against the fetched message's actual
   source folder.
+- `PollingSourceExecutionService` now owns the per-source polling pipeline that
+  used to sit inside `PollingService`: destination-link checks, spam/junk
+  probes, dedupe-vs-import decisions, source/destination throttle accounting,
+  source checkpoints, live per-message progress updates, and persisted
+  poll-event/cooldown recording now evolve behind one narrower seam.
 - `MailSourceStandaloneFactory` now centralizes the non-CDI assembly path for
   those mail-source collaborators, so focused unit tests and GreenMail-backed
   integration tests construct the same helper graph instead of each service
@@ -64,6 +70,10 @@ infrastructure details:
 - With those helpers in place, `MailSourceClient` can stay focused on polling
   orchestration instead of re-implementing every protocol, OAuth, or source
   mutation detail itself.
+- `PollingService` can now stay focused on run-level coordination such as
+  scheduler eligibility, manual rate limits, live-run lifecycle, and
+  concurrent worker orchestration instead of also carrying the full source
+  execution pipeline inline.
 
 ## Remote control flow
 
