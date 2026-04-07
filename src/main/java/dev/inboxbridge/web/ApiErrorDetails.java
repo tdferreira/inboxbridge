@@ -1,11 +1,11 @@
 package dev.inboxbridge.web;
 
-final class ApiErrorDetails {
+public final class ApiErrorDetails {
 
     private ApiErrorDetails() {
     }
 
-    static String deepestMessage(Throwable throwable) {
+    public static String deepestMessage(Throwable throwable) {
         if (throwable == null) {
             return "";
         }

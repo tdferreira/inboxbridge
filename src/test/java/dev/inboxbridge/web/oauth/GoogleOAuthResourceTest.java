@@ -1,4 +1,4 @@
-package dev.inboxbridge.web;
+package dev.inboxbridge.web.oauth;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
@@ -11,7 +11,6 @@ import org.junit.jupiter.api.Test;
 
 import dev.inboxbridge.dto.GoogleTokenExchangeResponse;
 import dev.inboxbridge.service.GoogleOAuthService;
-import dev.inboxbridge.web.oauth.GoogleOAuthCallbackPageRenderer;
 import jakarta.ws.rs.core.Response;
 
 class GoogleOAuthResourceTest {

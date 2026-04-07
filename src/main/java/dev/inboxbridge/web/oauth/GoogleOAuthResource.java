@@ -1,4 +1,4 @@
-package dev.inboxbridge.web;
+package dev.inboxbridge.web.oauth;
 
 import dev.inboxbridge.dto.GoogleOAuthCodeRequest;
 import dev.inboxbridge.dto.GoogleTokenExchangeResponse;
@@ -11,7 +11,6 @@ import dev.inboxbridge.service.EnvSourceService;
 import dev.inboxbridge.service.GoogleOAuthService;
 import dev.inboxbridge.service.UserEmailAccountService;
 import dev.inboxbridge.service.UserGmailConfigService;
-import dev.inboxbridge.web.oauth.GoogleOAuthCallbackPageRenderer;
 import jakarta.inject.Inject;
 import jakarta.ws.rs.Consumes;
 import jakarta.ws.rs.GET;
@@ -100,7 +99,7 @@ public class GoogleOAuthResource {
             @QueryParam("error") String error,
             @QueryParam("error_description") String errorDescription) {
         String language = resolveCallbackLanguage(state);
-      boolean secureStorageConfigured = googleOAuthService.secureStorageConfigured();
+        boolean secureStorageConfigured = googleOAuthService.secureStorageConfigured();
         if (error != null && !error.isBlank()) {
             return callbackPageRenderer.renderErrorPage(
                     language,
@@ -111,27 +110,27 @@ public class GoogleOAuthResource {
         }
         GoogleOAuthService.CallbackValidation callbackValidation = null;
         String statusMessage = localized(language,
-          secureStorageConfigured
-            ? "Secure token storage is enabled. Use the button below to exchange the code and InboxBridge will store the token securely and renew access automatically."
-            : "Secure token storage is required before exchanging this authorization code. Set SECURITY_TOKEN_ENCRYPTION_KEY to a base64-encoded 32-byte key, restart InboxBridge, and then retry the OAuth flow.",
-          secureStorageConfigured
-            ? "O armazenamento seguro de tokens esta ativo. Use o botao abaixo para trocar o codigo e o InboxBridge vai guardar o token de forma segura e renovar o acesso automaticamente."
-            : "O armazenamento seguro de tokens e obrigatorio antes de trocar este codigo de autorizacao. Defina SECURITY_TOKEN_ENCRYPTION_KEY com uma chave base64 de 32 bytes, reinicie o InboxBridge e repita o fluxo OAuth.");
+                secureStorageConfigured
+                        ? "Secure token storage is enabled. Use the button below to exchange the code and InboxBridge will store the token securely and renew access automatically."
+                        : "Secure token storage is required before exchanging this authorization code. Set SECURITY_TOKEN_ENCRYPTION_KEY to a base64-encoded 32-byte key, restart InboxBridge, and then retry the OAuth flow.",
+                secureStorageConfigured
+                        ? "O armazenamento seguro de tokens esta ativo. Use o botao abaixo para trocar o codigo e o InboxBridge vai guardar o token de forma segura e renovar o acesso automaticamente."
+                        : "O armazenamento seguro de tokens e obrigatorio antes de trocar este codigo de autorizacao. Defina SECURITY_TOKEN_ENCRYPTION_KEY com uma chave base64 de 32 bytes, reinicie o InboxBridge e repita o fluxo OAuth.");
         if (state != null && !state.isBlank()) {
             try {
                 callbackValidation = googleOAuthService.validateCallback(state);
                 language = callbackValidation.language();
                 statusMessage = localized(language,
-            secureStorageConfigured
-              ? "Secure token storage is enabled for " + callbackValidation.targetLabel() + ". Use the button below to exchange the code and InboxBridge will store the token securely and renew access automatically."
-              : "Secure token storage is required before exchanging the authorization code for " + callbackValidation.targetLabel() + ". Set SECURITY_TOKEN_ENCRYPTION_KEY to a base64-encoded 32-byte key, restart InboxBridge, and then retry the OAuth flow.",
-            secureStorageConfigured
-              ? "O armazenamento seguro de tokens esta ativo para " + callbackValidation.targetLabel() + ". Use o botao abaixo para trocar o codigo e o InboxBridge vai guardar o token de forma segura e renovar o acesso automaticamente."
-              : "O armazenamento seguro de tokens e obrigatorio antes de trocar o codigo de autorizacao para " + callbackValidation.targetLabel() + ". Defina SECURITY_TOKEN_ENCRYPTION_KEY com uma chave base64 de 32 bytes, reinicie o InboxBridge e repita o fluxo OAuth.");
+                        secureStorageConfigured
+                                ? "Secure token storage is enabled for " + callbackValidation.targetLabel() + ". Use the button below to exchange the code and InboxBridge will store the token securely and renew access automatically."
+                                : "Secure token storage is required before exchanging the authorization code for " + callbackValidation.targetLabel() + ". Set SECURITY_TOKEN_ENCRYPTION_KEY to a base64-encoded 32-byte key, restart InboxBridge, and then retry the OAuth flow.",
+                        secureStorageConfigured
+                                ? "O armazenamento seguro de tokens esta ativo para " + callbackValidation.targetLabel() + ". Use o botao abaixo para trocar o codigo e o InboxBridge vai guardar o token de forma segura e renovar o acesso automaticamente."
+                                : "O armazenamento seguro de tokens e obrigatorio antes de trocar o codigo de autorizacao para " + callbackValidation.targetLabel() + ". Defina SECURITY_TOKEN_ENCRYPTION_KEY com uma chave base64 de 32 bytes, reinicie o InboxBridge e repita o fluxo OAuth.");
             } catch (IllegalArgumentException e) {
                 statusMessage = localized(language,
-                  "The Google OAuth state is missing or expired. Start the flow again from InboxBridge.",
-                  "O estado do Google OAuth esta em falta ou expirou. Inicie novamente o fluxo a partir do InboxBridge.");
+                        "The Google OAuth state is missing or expired. Start the flow again from InboxBridge.",
+                        "O estado do Google OAuth esta em falta ou expirou. Inicie novamente o fluxo a partir do InboxBridge.");
             }
         }
         return callbackPageRenderer.renderCallbackPage(language, statusMessage, code, state, error, errorDescription);
@@ -196,7 +195,7 @@ public class GoogleOAuthResource {
     }
 
     private String localized(String language, String english, String portuguese) {
-        return dev.inboxbridge.web.oauth.OAuthPageSupport.localized(language, english, portuguese);
+        return OAuthPageSupport.localized(language, english, portuguese);
     }
 
     private String resolveCallbackLanguage(String state) {
@@ -206,5 +205,4 @@ public class GoogleOAuthResource {
             return "en";
         }
     }
-
 }

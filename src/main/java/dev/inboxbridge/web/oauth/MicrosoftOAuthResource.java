@@ -1,23 +1,22 @@
-package dev.inboxbridge.web;
+package dev.inboxbridge.web.oauth;
 
 import java.net.URI;
-import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 
+import dev.inboxbridge.dto.ApiError;
 import dev.inboxbridge.dto.MicrosoftOAuthCodeRequest;
 import dev.inboxbridge.dto.MicrosoftOAuthSourceOption;
 import dev.inboxbridge.dto.OAuthUrlResponse;
-import dev.inboxbridge.dto.ApiError;
 import dev.inboxbridge.persistence.AppUser;
 import dev.inboxbridge.persistence.UserEmailAccount;
 import dev.inboxbridge.security.CurrentUserContext;
 import dev.inboxbridge.security.RequireAuth;
-import dev.inboxbridge.web.oauth.MicrosoftOAuthCallbackPageRenderer;
-import dev.inboxbridge.web.oauth.OAuthPageI18n;
+import dev.inboxbridge.service.EnvSourceService;
 import dev.inboxbridge.service.MicrosoftOAuthService;
 import dev.inboxbridge.service.UserEmailAccountService;
-import dev.inboxbridge.service.EnvSourceService;
+import dev.inboxbridge.web.ApiErrorCodes;
+import dev.inboxbridge.web.ApiErrorDetails;
 import jakarta.inject.Inject;
 import jakarta.ws.rs.BadRequestException;
 import jakarta.ws.rs.Consumes;
@@ -77,11 +76,11 @@ public class MicrosoftOAuthResource {
     @Path("/start/destination")
     @RequireAuth
     public Response startDestination(@QueryParam("lang") String language) {
-      try {
-        return Response.seeOther(URI.create(microsoftOAuthService.buildDestinationAuthorizationUrl(currentUserContext.user().id, language))).build();
-      } catch (IllegalArgumentException | IllegalStateException e) {
-        throw new BadRequestException(e.getMessage(), e);
-      }
+        try {
+            return Response.seeOther(URI.create(microsoftOAuthService.buildDestinationAuthorizationUrl(currentUserContext.user().id, language))).build();
+        } catch (IllegalArgumentException | IllegalStateException e) {
+            throw new BadRequestException(e.getMessage(), e);
+        }
     }
 
     @GET
@@ -128,7 +127,7 @@ public class MicrosoftOAuthResource {
             @QueryParam("error") String error,
             @QueryParam("error_description") String errorDescription) {
         String language = callbackLanguage(state);
-      boolean secureStorageConfigured = microsoftOAuthService.secureStorageConfigured();
+        boolean secureStorageConfigured = microsoftOAuthService.secureStorageConfigured();
         if (error != null && !error.isBlank()) {
             return Response.ok(callbackPageRenderer.renderPage(
                     language,
@@ -146,7 +145,7 @@ public class MicrosoftOAuthResource {
 
         MicrosoftOAuthService.BrowserCallbackValidation callbackValidation;
         try {
-          callbackValidation = microsoftOAuthService.validateBrowserCallback(state);
+            callbackValidation = microsoftOAuthService.validateBrowserCallback(state);
         } catch (IllegalArgumentException e) {
             return Response.ok(callbackPageRenderer.renderPage(
                     language,
@@ -164,7 +163,7 @@ public class MicrosoftOAuthResource {
                     null), MediaType.TEXT_HTML).build();
         }
 
-        Map<String, String> fields = orderedFields(
+        Map<String, String> fields = OAuthPageSupport.orderedFields(
                 localized(callbackValidation.language(), "Source ID", "ID da conta"), callbackValidation.subjectId(),
                 localized(callbackValidation.language(), "Authorization Code", "Codigo de autorizacao"), code == null ? "" : code,
                 localized(callbackValidation.language(), "Exchange Endpoint", "Endpoint de troca"), "POST /api/microsoft-oauth/exchange");
@@ -211,10 +210,6 @@ public class MicrosoftOAuthResource {
             return "O passo de autorizacao da Microsoft falhou. Repita o processo depois de corrigir o consentimento Microsoft ou a configuracao da aplicacao.";
         }
         return "O passo de autorizacao da Microsoft falhou. Repita o processo e aceite todas as permissoes pedidas.";
-    }
-
-    private Map<String, String> orderedFields(String... values) {
-        return dev.inboxbridge.web.oauth.OAuthPageSupport.orderedFields(values);
     }
 
     private void authorizeSource(String sourceId) {

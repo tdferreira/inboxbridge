@@ -1,4 +1,4 @@
-package dev.inboxbridge.web;
+package dev.inboxbridge.web.oauth;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
@@ -11,8 +11,8 @@ import java.util.Optional;
 import org.junit.jupiter.api.Test;
 
 import dev.inboxbridge.config.InboxBridgeConfig;
-import dev.inboxbridge.domain.SourceFetchMode;
 import dev.inboxbridge.config.InboxBridgeConfig.Security.Auth;
+import dev.inboxbridge.domain.SourceFetchMode;
 import dev.inboxbridge.dto.ApiError;
 import dev.inboxbridge.dto.MicrosoftOAuthSourceOption;
 import dev.inboxbridge.persistence.AppUser;
@@ -21,7 +21,6 @@ import dev.inboxbridge.security.CurrentUserContext;
 import dev.inboxbridge.service.EnvSourceService;
 import dev.inboxbridge.service.MicrosoftOAuthService;
 import dev.inboxbridge.service.UserEmailAccountService;
-import dev.inboxbridge.web.oauth.MicrosoftOAuthCallbackPageRenderer;
 import jakarta.ws.rs.BadRequestException;
 import jakarta.ws.rs.core.Response;
 

@@ -7,10 +7,12 @@ anchors the first feature-oriented backend subpackage under
 `dev.inboxbridge.service.polling`. The coordinator, live-run, and stats classes
 that evolve together now live there instead of continuing to grow in the flat
 top-level `service` package.
-Within that still mostly layer-oriented backend, the provider OAuth callback
-pages now also use a narrower seam under `dev.inboxbridge.web.oauth`, so the
-large browser callback HTML/JS stays out of the REST resource classes
-themselves.
+Within that still mostly layer-oriented backend, the provider OAuth web surface
+now also uses a narrower seam under `dev.inboxbridge.web.oauth`: the Google and
+Microsoft OAuth REST resources live alongside their callback-page renderers and
+shared callback helpers there, so the large browser callback HTML/JS stays out
+of the resource classes and the provider-specific web flow evolves behind one
+feature package.
 
 1. `PollingService` runs on schedule or manually via REST
 2. `PollingService` resolves the eligible sources and lets a bounded set of virtual-thread workers claim them just in time

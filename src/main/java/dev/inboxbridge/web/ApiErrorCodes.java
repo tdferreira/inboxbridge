@@ -1,11 +1,11 @@
 package dev.inboxbridge.web;
 
-final class ApiErrorCodes {
+public final class ApiErrorCodes {
 
     private ApiErrorCodes() {
     }
 
-    static String resolve(String message, int status) {
+    public static String resolve(String message, int status) {
         if (message == null || message.isBlank()) {
             return status == 403 ? "forbidden" : "bad_request";
         }
