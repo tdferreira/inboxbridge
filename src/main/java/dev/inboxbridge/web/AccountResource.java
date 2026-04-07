@@ -22,7 +22,6 @@ import dev.inboxbridge.service.UserSessionService;
 import dev.inboxbridge.service.UserGmailConfigService;
 import dev.inboxbridge.service.UserMailDestinationConfigService;
 import jakarta.inject.Inject;
-import jakarta.ws.rs.BadRequestException;
 import jakarta.ws.rs.Consumes;
 import jakarta.ws.rs.DELETE;
 import jakarta.ws.rs.GET;
@@ -80,26 +79,20 @@ public class AccountResource {
     @Path("/password")
     @Consumes(MediaType.APPLICATION_JSON)
     public void changePassword(ChangePasswordRequest request) {
-        try {
+        WebResourceSupport.badRequest(() ->
             appUserService.changePassword(
                     currentUserContext.user(),
                     request.currentPassword(),
                     request.newPassword(),
-                    request.confirmNewPassword());
-        } catch (IllegalArgumentException e) {
-            throw new BadRequestException(e.getMessage(), e);
-        }
+                    request.confirmNewPassword()));
     }
 
     @DELETE
     @Path("/password")
     @Consumes(MediaType.APPLICATION_JSON)
     public void removePassword(RemovePasswordRequest request) {
-        try {
-            appUserService.removePassword(currentUserContext.user(), request == null ? null : request.currentPassword());
-        } catch (IllegalArgumentException e) {
-            throw new BadRequestException(e.getMessage(), e);
-        }
+        WebResourceSupport.badRequest(() ->
+                appUserService.removePassword(currentUserContext.user(), request == null ? null : request.currentPassword()));
     }
 
     @GET
@@ -112,32 +105,20 @@ public class AccountResource {
     @Path("/passkeys/options")
     @Consumes(MediaType.APPLICATION_JSON)
     public StartPasskeyCeremonyResponse startPasskeyRegistration(StartPasskeyRegistrationRequest request) {
-        try {
-            return passkeyService.startRegistration(currentUserContext.user(), request);
-        } catch (IllegalArgumentException | IllegalStateException e) {
-            throw new BadRequestException(e.getMessage(), e);
-        }
+        return WebResourceSupport.badRequest(() -> passkeyService.startRegistration(currentUserContext.user(), request));
     }
 
     @POST
     @Path("/passkeys/verify")
     @Consumes(MediaType.APPLICATION_JSON)
     public PasskeyView finishPasskeyRegistration(FinishPasskeyCeremonyRequest request) {
-        try {
-            return passkeyService.finishRegistration(currentUserContext.user(), request);
-        } catch (IllegalArgumentException | IllegalStateException e) {
-            throw new BadRequestException(e.getMessage(), e);
-        }
+        return WebResourceSupport.badRequest(() -> passkeyService.finishRegistration(currentUserContext.user(), request));
     }
 
     @DELETE
     @Path("/passkeys/{passkeyId}")
     public void deletePasskey(@PathParam("passkeyId") Long passkeyId) {
-        try {
-            passkeyService.deleteForUser(currentUserContext.user(), passkeyId);
-        } catch (IllegalArgumentException e) {
-            throw new BadRequestException(e.getMessage(), e);
-        }
+        WebResourceSupport.badRequest(() -> passkeyService.deleteForUser(currentUserContext.user(), passkeyId));
     }
 
     @DELETE
@@ -182,7 +163,7 @@ public class AccountResource {
     @POST
     @Path("/sessions/{sessionId}/revoke")
     public void revokeSession(@PathParam("sessionId") Long sessionId, @QueryParam("type") String type) {
-        try {
+        WebResourceSupport.badRequest(() -> {
             if ("REMOTE".equalsIgnoreCase(type)) {
                 remoteSessionService.invalidateSessionForUser(currentUserContext.user().id, sessionId);
                 pollingLiveService.publishSessionRevoked(currentUserContext.user().id, PollingLiveService.SessionStreamKind.REMOTE, sessionId);
@@ -190,9 +171,7 @@ public class AccountResource {
                 userSessionService.invalidateSessionForUser(currentUserContext.user().id, sessionId);
                 pollingLiveService.publishSessionRevoked(currentUserContext.user().id, PollingLiveService.SessionStreamKind.BROWSER, sessionId);
             }
-        } catch (IllegalArgumentException e) {
-            throw new BadRequestException(e.getMessage(), e);
-        }
+        });
     }
 
     @POST

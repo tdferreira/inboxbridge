@@ -32,7 +32,6 @@ import dev.inboxbridge.service.PollingStatsService;
 import dev.inboxbridge.service.UserPollingSettingsService;
 import dev.inboxbridge.service.UserUiPreferenceService;
 import jakarta.inject.Inject;
-import jakarta.ws.rs.BadRequestException;
 import jakarta.ws.rs.Consumes;
 import jakarta.ws.rs.DELETE;
 import jakarta.ws.rs.GET;
@@ -88,32 +87,21 @@ public class UserConfigResource {
     @Path("/destination-config")
     @Consumes(MediaType.APPLICATION_JSON)
     public UserMailDestinationView updateDestinationConfig(UpdateUserMailDestinationRequest request) {
-        try {
-            return userMailDestinationConfigService.update(currentUserContext.user(), request);
-        } catch (IllegalArgumentException | IllegalStateException e) {
-            throw new BadRequestException(e.getMessage(), e);
-        }
+        return WebResourceSupport.badRequest(() -> userMailDestinationConfigService.update(currentUserContext.user(), request));
     }
 
     @GET
     @Path("/destination-config/folders")
     public DestinationMailboxFolderOptionsView destinationFolders() {
-        try {
-            return userMailDestinationConfigService.listFoldersForUser(currentUserContext.user().id, currentUserContext.user().username);
-        } catch (IllegalArgumentException | IllegalStateException e) {
-            throw new BadRequestException(e.getMessage(), e);
-        }
+        return WebResourceSupport.badRequest(() ->
+                userMailDestinationConfigService.listFoldersForUser(currentUserContext.user().id, currentUserContext.user().username));
     }
 
     @POST
     @Path("/destination-config/test-connection")
     @Consumes(MediaType.APPLICATION_JSON)
     public EmailAccountConnectionTestResult testDestinationConnection(UpdateUserMailDestinationRequest request) {
-        try {
-            return userMailDestinationConfigService.testConnectionForUser(currentUserContext.user(), request);
-        } catch (IllegalArgumentException | IllegalStateException e) {
-            throw new BadRequestException(e.getMessage(), e);
-        }
+        return WebResourceSupport.badRequest(() -> userMailDestinationConfigService.testConnectionForUser(currentUserContext.user(), request));
     }
 
     @GET
@@ -141,15 +129,11 @@ public class UserConfigResource {
             @jakarta.ws.rs.HeaderParam(TIMEZONE_HEADER) String timezone,
             @QueryParam("from") String from,
             @QueryParam("to") String to) {
-        try {
-            return pollingStatsService.userTimelineBundle(
-                    currentUserContext.user().id,
-                    parseInstant(from, true),
-                    parseInstant(to, false),
-                    resolveZoneId(timezone));
-        } catch (IllegalArgumentException e) {
-            throw new BadRequestException(e.getMessage(), e);
-        }
+        return WebResourceSupport.badRequest(() -> pollingStatsService.userTimelineBundle(
+                currentUserContext.user().id,
+                parseInstant(from, true),
+                parseInstant(to, false),
+                resolveZoneId(timezone)));
     }
 
     @GET
@@ -157,14 +141,11 @@ public class UserConfigResource {
     public SourcePollingStatsView emailAccountPollingStats(
             @PathParam("emailAccountId") String emailAccountId,
             @jakarta.ws.rs.HeaderParam(TIMEZONE_HEADER) String timezone) {
-        try {
-            return pollingStatsService.sourceStats(
-                    runtimeEmailAccountService.findAccessibleForUser(currentUserContext.user(), emailAccountId)
-                            .orElseThrow(() -> new IllegalArgumentException("Unknown mail fetcher id")),
-                    resolveZoneId(timezone));
-        } catch (IllegalArgumentException e) {
-            throw new BadRequestException(e.getMessage(), e);
-        }
+        return WebResourceSupport.badRequest(() ->
+                pollingStatsService.sourceStats(
+                        runtimeEmailAccountService.findAccessibleForUser(currentUserContext.user(), emailAccountId)
+                                .orElseThrow(() -> new IllegalArgumentException("Unknown mail fetcher id")),
+                        resolveZoneId(timezone)));
     }
 
     @GET
@@ -174,27 +155,20 @@ public class UserConfigResource {
             @jakarta.ws.rs.HeaderParam(TIMEZONE_HEADER) String timezone,
             @QueryParam("from") String from,
             @QueryParam("to") String to) {
-        try {
-            return pollingStatsService.sourceTimelineBundle(
-                runtimeEmailAccountService.findAccessibleForUser(currentUserContext.user(), emailAccountId)
-                            .orElseThrow(() -> new IllegalArgumentException("Unknown mail fetcher id")),
-                    parseInstant(from, true),
-                    parseInstant(to, false),
-                    resolveZoneId(timezone));
-        } catch (IllegalArgumentException e) {
-            throw new BadRequestException(e.getMessage(), e);
-        }
+        return WebResourceSupport.badRequest(() ->
+                pollingStatsService.sourceTimelineBundle(
+                        runtimeEmailAccountService.findAccessibleForUser(currentUserContext.user(), emailAccountId)
+                                .orElseThrow(() -> new IllegalArgumentException("Unknown mail fetcher id")),
+                        parseInstant(from, true),
+                        parseInstant(to, false),
+                        resolveZoneId(timezone)));
     }
 
     @PUT
     @Path("/polling-settings")
     @Consumes(MediaType.APPLICATION_JSON)
     public UserPollingSettingsView updatePollingSettings(UpdateUserPollingSettingsRequest request) {
-        try {
-            return userPollingSettingsService.update(currentUserContext.user(), request);
-        } catch (IllegalArgumentException e) {
-            throw new BadRequestException(e.getMessage(), e);
-        }
+        return WebResourceSupport.badRequest(() -> userPollingSettingsService.update(currentUserContext.user(), request));
     }
 
     @GET
@@ -215,54 +189,35 @@ public class UserConfigResource {
     @Path("/email-accounts")
     @Consumes(MediaType.APPLICATION_JSON)
     public UserEmailAccountView upsertEmailAccount(UpdateUserEmailAccountRequest request) {
-        try {
-            return userEmailAccountService.upsert(currentUserContext.user(), request);
-        } catch (IllegalArgumentException | IllegalStateException e) {
-            throw new BadRequestException(e.getMessage(), e);
-        }
+        return WebResourceSupport.badRequest(() -> userEmailAccountService.upsert(currentUserContext.user(), request));
     }
 
     @POST
     @Path("/email-accounts/folders")
     @Consumes(MediaType.APPLICATION_JSON)
     public DestinationMailboxFolderOptionsView emailAccountFolders(UpdateUserEmailAccountRequest request) {
-        try {
-            return userEmailAccountService.listFolders(currentUserContext.user(), request);
-        } catch (IllegalArgumentException | IllegalStateException e) {
-            throw new BadRequestException(e.getMessage(), e);
-        }
+        return WebResourceSupport.badRequest(() -> userEmailAccountService.listFolders(currentUserContext.user(), request));
     }
 
     @POST
     @Path("/email-accounts/test-connection")
     @Consumes(MediaType.APPLICATION_JSON)
     public EmailAccountConnectionTestResult testEmailAccountConnection(UpdateUserEmailAccountRequest request) {
-        try {
-            return userEmailAccountService.testConnection(currentUserContext.user(), request);
-        } catch (IllegalArgumentException | IllegalStateException e) {
-            throw new BadRequestException(e.getMessage(), e);
-        }
+        return WebResourceSupport.badRequest(() -> userEmailAccountService.testConnection(currentUserContext.user(), request));
     }
 
     @DELETE
     @Path("/email-accounts/{emailAccountId}")
     public void deleteEmailAccount(@PathParam("emailAccountId") String emailAccountId) {
-        try {
-            userEmailAccountService.delete(currentUserContext.user(), emailAccountId);
-        } catch (IllegalArgumentException e) {
-            throw new BadRequestException(e.getMessage(), e);
-        }
+        WebResourceSupport.badRequest(() -> userEmailAccountService.delete(currentUserContext.user(), emailAccountId));
     }
 
     @GET
     @Path("/email-accounts/{emailAccountId}/polling-settings")
     public SourcePollingSettingsView emailAccountPollingSettings(@PathParam("emailAccountId") String emailAccountId) {
-        try {
-            return sourcePollingSettingsService.viewForSource(currentUserContext.user(), emailAccountId)
-                    .orElseThrow(() -> new IllegalArgumentException("Unknown mail fetcher id"));
-        } catch (IllegalArgumentException e) {
-            throw new BadRequestException(e.getMessage(), e);
-        }
+        return WebResourceSupport.badRequest(() ->
+                sourcePollingSettingsService.viewForSource(currentUserContext.user(), emailAccountId)
+                        .orElseThrow(() -> new IllegalArgumentException("Unknown mail fetcher id")));
     }
 
     @PUT
@@ -271,11 +226,8 @@ public class UserConfigResource {
     public SourcePollingSettingsView updateEmailAccountPollingSettings(
             @PathParam("emailAccountId") String emailAccountId,
             UpdateSourcePollingSettingsRequest request) {
-        try {
-            return sourcePollingSettingsService.updateForSource(currentUserContext.user(), emailAccountId, request);
-        } catch (IllegalArgumentException e) {
-            throw new BadRequestException(e.getMessage(), e);
-        }
+        return WebResourceSupport.badRequest(() ->
+                sourcePollingSettingsService.updateForSource(currentUserContext.user(), emailAccountId, request));
     }
 
     @POST
@@ -287,16 +239,13 @@ public class UserConfigResource {
     @POST
     @Path("/email-accounts/{emailAccountId}/poll/run")
     public PollRunResult runEmailAccountPoll(@PathParam("emailAccountId") String emailAccountId) {
-        try {
-            return pollingService.runPollForSource(
-                    runtimeEmailAccountService.findAccessibleForUser(currentUserContext.user(), emailAccountId)
-                            .orElseThrow(() -> new IllegalArgumentException("Unknown mail fetcher id")),
-                    "app-fetcher",
-                    currentUserContext.user(),
-                    currentUserContext.user().role + ":" + currentUserContext.user().id);
-        } catch (IllegalArgumentException e) {
-            throw new BadRequestException(e.getMessage(), e);
-        }
+        return WebResourceSupport.badRequest(() ->
+                pollingService.runPollForSource(
+                        runtimeEmailAccountService.findAccessibleForUser(currentUserContext.user(), emailAccountId)
+                                .orElseThrow(() -> new IllegalArgumentException("Unknown mail fetcher id")),
+                        "app-fetcher",
+                        currentUserContext.user(),
+                        currentUserContext.user().role + ":" + currentUserContext.user().id));
     }
 
     private Instant parseInstant(String value, boolean required) {

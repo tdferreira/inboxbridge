@@ -31,7 +31,6 @@ import dev.inboxbridge.service.SystemOAuthAppSettingsService;
 import dev.inboxbridge.service.UserSessionService;
 import io.vertx.core.http.HttpServerRequest;
 import jakarta.inject.Inject;
-import jakarta.ws.rs.BadRequestException;
 import jakarta.ws.rs.Consumes;
 import jakarta.ws.rs.GET;
 import jakarta.ws.rs.POST;
@@ -151,7 +150,7 @@ public class AuthResource {
             if (failure.blocked()) {
                 return loginBlockedResponse(failure.blockedUntil());
             }
-            throw new BadRequestException(e.getMessage(), e);
+            throw WebResourceSupport.badRequest(e);
         }
     }
 
@@ -159,7 +158,7 @@ public class AuthResource {
     @Path("/register")
     @Consumes(MediaType.APPLICATION_JSON)
     public Response register(RegisterUserRequest request) {
-        try {
+        return WebResourceSupport.badRequest(() -> {
             applicationModeService.requireMultiUserMode();
             registrationChallengeService.validateAndConsume(
                     request.captchaToken(),
@@ -170,27 +169,21 @@ public class AuthResource {
                             "username", user.username,
                             "message", "Registration received. An admin must approve this account before it can sign in."))
                     .build();
-        } catch (IllegalArgumentException e) {
-            throw new BadRequestException(e.getMessage(), e);
-        }
+        });
     }
 
     @POST
     @Path("/passkey/options")
     @Consumes(MediaType.APPLICATION_JSON)
     public StartPasskeyCeremonyResponse startPasskeyLogin(StartPasskeyLoginRequest request) {
-        try {
-            return passkeyService.startAuthentication();
-        } catch (IllegalArgumentException | IllegalStateException e) {
-            throw new BadRequestException(e.getMessage(), e);
-        }
+        return WebResourceSupport.badRequest(passkeyService::startAuthentication);
     }
 
     @POST
     @Path("/passkey/verify")
     @Consumes(MediaType.APPLICATION_JSON)
     public Response finishPasskeyLogin(FinishPasskeyCeremonyRequest request) {
-        try {
+        return WebResourceSupport.badRequest(() -> {
             String clientKey = authClientAddressService.resolveClientKey(httpHeaders, directRemoteAddress());
             String userAgent = httpHeaders == null ? null : httpHeaders.getHeaderString("User-Agent");
             PasskeyService.PasskeyAuthenticationResult authResult = passkeyService.finishAuthentication(request);
@@ -203,9 +196,7 @@ public class AuthResource {
                     .cookie(sessionCookie(session.token()))
                     .cookie(csrfCookie(session.csrfToken()))
                     .build();
-        } catch (IllegalArgumentException | IllegalStateException e) {
-            throw new BadRequestException(e.getMessage(), e);
-        }
+        });
     }
 
     @POST
@@ -228,16 +219,14 @@ public class AuthResource {
     @RequireAuth
     @Consumes(MediaType.APPLICATION_JSON)
     public Response recordDeviceLocation(SessionDeviceLocationRequest request) {
-        try {
+        return WebResourceSupport.badRequest(() -> {
             userSessionService.recordDeviceLocation(
                     currentUserContext.session() == null ? null : currentUserContext.session().id,
                     request == null ? null : request.latitude(),
                     request == null ? null : request.longitude(),
                     request == null ? null : request.accuracyMeters());
             return Response.noContent().build();
-        } catch (IllegalArgumentException e) {
-            throw new BadRequestException(e.getMessage(), e);
-        }
+        });
     }
 
     private SessionUserResponse toResponse(AppUser user) {

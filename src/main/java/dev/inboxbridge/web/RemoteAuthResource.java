@@ -24,7 +24,6 @@ import dev.inboxbridge.service.SystemOAuthAppSettingsService;
 import dev.inboxbridge.service.UserUiPreferenceService;
 import io.vertx.core.http.HttpServerRequest;
 import jakarta.inject.Inject;
-import jakarta.ws.rs.BadRequestException;
 import jakarta.ws.rs.Consumes;
 import jakarta.ws.rs.CookieParam;
 import jakarta.ws.rs.GET;
@@ -106,7 +105,7 @@ public class RemoteAuthResource {
             if (failure.blocked()) {
                 return loginBlockedResponse(failure.blockedUntil());
             }
-            throw new BadRequestException(e.getMessage(), e);
+            throw WebResourceSupport.badRequest(e);
         }
     }
 
@@ -115,11 +114,7 @@ public class RemoteAuthResource {
     @Consumes(MediaType.APPLICATION_JSON)
     public dev.inboxbridge.dto.StartPasskeyCeremonyResponse startPasskeyLogin(dev.inboxbridge.dto.StartPasskeyLoginRequest request) {
         requireRemoteEnabled();
-        try {
-            return passkeyService.startAuthentication();
-        } catch (IllegalArgumentException | IllegalStateException e) {
-            throw new BadRequestException(e.getMessage(), e);
-        }
+        return WebResourceSupport.badRequest(passkeyService::startAuthentication);
     }
 
     @POST
@@ -127,15 +122,13 @@ public class RemoteAuthResource {
     @Consumes(MediaType.APPLICATION_JSON)
     public Response finishPasskeyLogin(FinishPasskeyCeremonyRequest request) {
         requireRemoteEnabled();
-        try {
+        return WebResourceSupport.badRequest(() -> {
             String clientKey = authClientAddressService.resolveClientKey(httpHeaders, directRemoteAddress());
             String userAgent = httpHeaders == null ? null : httpHeaders.getHeaderString("User-Agent");
             PasskeyService.PasskeyAuthenticationResult authResult = passkeyService.finishAuthentication(request);
             AuthService.AuthenticationResult result = authService.authenticateWithPasskey(authResult);
             return authenticated(result.user(), result.loginMethod(), clientKey, userAgent);
-        } catch (IllegalArgumentException | IllegalStateException e) {
-            throw new BadRequestException(e.getMessage(), e);
-        }
+        });
     }
 
     @GET
@@ -161,16 +154,14 @@ public class RemoteAuthResource {
     @RequireRemoteControl
     @Consumes(MediaType.APPLICATION_JSON)
     public Response recordDeviceLocation(SessionDeviceLocationRequest request) {
-        try {
+        return WebResourceSupport.badRequest(() -> {
             remoteSessionService.recordDeviceLocation(
                     currentUserContext.remoteSession() == null ? null : currentUserContext.remoteSession().id,
                     request == null ? null : request.latitude(),
                     request == null ? null : request.longitude(),
                     request == null ? null : request.accuracyMeters());
             return Response.noContent().build();
-        } catch (IllegalArgumentException e) {
-            throw new BadRequestException(e.getMessage(), e);
-        }
+        });
     }
 
     private Response authenticated(AppUser user, UserSession.LoginMethod loginMethod, String clientIp, String userAgent) {

@@ -121,6 +121,12 @@ service owns coordination, permissions, SSE fan-out, and control flow, while
 position helpers. That keeps the live service from mixing transport/control
 behavior with the mutable state model.
 
+The broader REST layer now also keeps one repeated concern centralized:
+`WebResourceSupport` owns the standard translation of validation-style
+`IllegalArgumentException` and `IllegalStateException` failures into
+`BadRequestException`, so resource classes can stay thinner without each method
+repeating the same `try/catch` boilerplate.
+
 The lightweight `/remote` surface now reuses that same live model through its own remote-scoped `/api/remote/poll/live`, `/api/remote/poll/events`, and `/api/remote/poll/live/...` endpoints, so phones and quick-access devices can follow the active source and issue live pause/resume/stop/reprioritize/retry commands without opening the full workspace. Those remote SSE streams can also push targeted `session-revoked` events for remote-session sign-outs. The remote UI now folds that live state back into the existing source cards instead of maintaining a second live-progress source list.
 
 For compatibility, the live DTO still exposes a single `activeSourceId`, but

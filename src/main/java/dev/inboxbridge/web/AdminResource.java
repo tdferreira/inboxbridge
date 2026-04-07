@@ -28,7 +28,6 @@ import dev.inboxbridge.service.RuntimeEmailAccountService;
 import dev.inboxbridge.service.SourcePollingSettingsService;
 import dev.inboxbridge.service.SystemOAuthAppSettingsService;
 import jakarta.inject.Inject;
-import jakarta.ws.rs.BadRequestException;
 import jakarta.ws.rs.Consumes;
 import jakarta.ws.rs.GET;
 import jakarta.ws.rs.POST;
@@ -96,11 +95,7 @@ public class AdminResource {
     @Path("/oauth-app-settings")
     @Consumes(MediaType.APPLICATION_JSON)
     public SystemOAuthAppSettingsView updateOauthAppSettings(UpdateSystemOAuthAppSettingsRequest request) {
-        try {
-            return systemOAuthAppSettingsService.update(request);
-        } catch (IllegalArgumentException | IllegalStateException e) {
-            throw new BadRequestException(e.getMessage(), e);
-        }
+        return WebResourceSupport.badRequest(() -> systemOAuthAppSettingsService.update(request));
     }
 
     @GET
@@ -113,11 +108,7 @@ public class AdminResource {
     @Path("/auth-security-settings")
     @Consumes(MediaType.APPLICATION_JSON)
     public AuthSecuritySettingsView updateAuthSecuritySettings(UpdateAuthSecuritySettingsRequest request) {
-        try {
-            return authSecuritySettingsService.update(request);
-        } catch (IllegalArgumentException e) {
-            throw new BadRequestException(e.getMessage(), e);
-        }
+        return WebResourceSupport.badRequest(() -> authSecuritySettingsService.update(request));
     }
 
     @POST
@@ -191,36 +182,25 @@ public class AdminResource {
             @jakarta.ws.rs.HeaderParam(TIMEZONE_HEADER) String timezone,
             @QueryParam("from") String from,
             @QueryParam("to") String to) {
-        try {
-            return pollingStatsService.globalTimelineBundle(
-                    parseInstant(from, true),
-                    parseInstant(to, false),
-                    resolveZoneId(timezone));
-        } catch (IllegalArgumentException e) {
-            throw new BadRequestException(e.getMessage(), e);
-        }
+        return WebResourceSupport.badRequest(() -> pollingStatsService.globalTimelineBundle(
+                parseInstant(from, true),
+                parseInstant(to, false),
+                resolveZoneId(timezone)));
     }
 
     @PUT
     @Path("/polling-settings")
     @Consumes(MediaType.APPLICATION_JSON)
     public AdminPollingSettingsView updatePollingSettings(UpdateAdminPollingSettingsRequest request) {
-        try {
-            return pollingSettingsService.update(request);
-        } catch (IllegalArgumentException e) {
-            throw new BadRequestException(e.getMessage(), e);
-        }
+        return WebResourceSupport.badRequest(() -> pollingSettingsService.update(request));
     }
 
     @GET
     @Path("/email-accounts/{emailAccountId}/polling-settings")
     public SourcePollingSettingsView emailAccountPollingSettings(@jakarta.ws.rs.PathParam("emailAccountId") String emailAccountId) {
-        try {
-            return sourcePollingSettingsService.viewForSystemSource(emailAccountId)
-                    .orElseThrow(() -> new IllegalArgumentException("Unknown mail fetcher id"));
-        } catch (IllegalArgumentException e) {
-            throw new BadRequestException(e.getMessage(), e);
-        }
+        return WebResourceSupport.badRequest(() ->
+                sourcePollingSettingsService.viewForSystemSource(emailAccountId)
+                        .orElseThrow(() -> new IllegalArgumentException("Unknown mail fetcher id")));
     }
 
     @GET
@@ -228,14 +208,11 @@ public class AdminResource {
     public SourcePollingStatsView emailAccountPollingStats(
             @jakarta.ws.rs.PathParam("emailAccountId") String emailAccountId,
             @jakarta.ws.rs.HeaderParam(TIMEZONE_HEADER) String timezone) {
-        try {
-            return pollingStatsService.sourceStats(
-                    runtimeEmailAccountService.findSystemBridge(emailAccountId)
-                            .orElseThrow(() -> new IllegalArgumentException("Unknown mail fetcher id")),
-                    resolveZoneId(timezone));
-        } catch (IllegalArgumentException e) {
-            throw new BadRequestException(e.getMessage(), e);
-        }
+        return WebResourceSupport.badRequest(() ->
+                pollingStatsService.sourceStats(
+                        runtimeEmailAccountService.findSystemBridge(emailAccountId)
+                                .orElseThrow(() -> new IllegalArgumentException("Unknown mail fetcher id")),
+                        resolveZoneId(timezone)));
     }
 
     @GET
@@ -245,16 +222,13 @@ public class AdminResource {
             @jakarta.ws.rs.HeaderParam(TIMEZONE_HEADER) String timezone,
             @QueryParam("from") String from,
             @QueryParam("to") String to) {
-        try {
-            return pollingStatsService.sourceTimelineBundle(
-                runtimeEmailAccountService.findSystemBridge(emailAccountId)
-                            .orElseThrow(() -> new IllegalArgumentException("Unknown mail fetcher id")),
-                    parseInstant(from, true),
-                    parseInstant(to, false),
-                    resolveZoneId(timezone));
-        } catch (IllegalArgumentException e) {
-            throw new BadRequestException(e.getMessage(), e);
-        }
+        return WebResourceSupport.badRequest(() ->
+                pollingStatsService.sourceTimelineBundle(
+                        runtimeEmailAccountService.findSystemBridge(emailAccountId)
+                                .orElseThrow(() -> new IllegalArgumentException("Unknown mail fetcher id")),
+                        parseInstant(from, true),
+                        parseInstant(to, false),
+                        resolveZoneId(timezone)));
     }
 
     @PUT
@@ -263,26 +237,19 @@ public class AdminResource {
     public SourcePollingSettingsView updateEmailAccountPollingSettings(
             @jakarta.ws.rs.PathParam("emailAccountId") String emailAccountId,
             UpdateSourcePollingSettingsRequest request) {
-        try {
-            return sourcePollingSettingsService.updateForSystemSource(emailAccountId, request);
-        } catch (IllegalArgumentException e) {
-            throw new BadRequestException(e.getMessage(), e);
-        }
+        return WebResourceSupport.badRequest(() -> sourcePollingSettingsService.updateForSystemSource(emailAccountId, request));
     }
 
     @POST
     @Path("/email-accounts/{emailAccountId}/poll/run")
     public PollRunResult runEmailAccountPoll(@jakarta.ws.rs.PathParam("emailAccountId") String emailAccountId) {
-        try {
-            return pollingService.runPollForSource(
-                    runtimeEmailAccountService.findSystemBridge(emailAccountId)
-                            .orElseThrow(() -> new IllegalArgumentException("Unknown mail fetcher id")),
-                    "admin-fetcher",
-                    currentUserContext.user(),
-                    currentUserContext.user().role + ":" + currentUserContext.user().id);
-        } catch (IllegalArgumentException e) {
-            throw new BadRequestException(e.getMessage(), e);
-        }
+        return WebResourceSupport.badRequest(() ->
+                pollingService.runPollForSource(
+                        runtimeEmailAccountService.findSystemBridge(emailAccountId)
+                                .orElseThrow(() -> new IllegalArgumentException("Unknown mail fetcher id")),
+                        "admin-fetcher",
+                        currentUserContext.user(),
+                        currentUserContext.user().role + ":" + currentUserContext.user().id));
     }
 
     private Instant parseInstant(String value, boolean required) {

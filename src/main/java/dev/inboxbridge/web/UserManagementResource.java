@@ -81,83 +81,69 @@ public class UserManagementResource {
 
     @GET
     public List<UserSummaryResponse> listUsers() {
-        try {
+        return WebResourceSupport.badRequest(() -> {
             applicationModeService.requireMultiUserMode();
             return appUserService.listUsers();
-        } catch (IllegalArgumentException e) {
-            throw new BadRequestException(e.getMessage(), e);
-        }
+        });
     }
 
     @POST
     @Consumes(MediaType.APPLICATION_JSON)
     public UserSummaryResponse createUser(CreateUserRequest request) {
-        try {
+        return WebResourceSupport.badRequest(() -> {
             applicationModeService.requireMultiUserMode();
             return appUserService.toSummary(appUserService.createUser(request));
-        } catch (IllegalArgumentException e) {
-            throw new BadRequestException(e.getMessage(), e);
-        }
+        });
     }
 
     @PUT
     @Path("/mode")
     @Consumes(MediaType.APPLICATION_JSON)
     public SystemOAuthAppSettingsView updateMode(UpdateApplicationModeRequest request) {
-        try {
+        return WebResourceSupport.badRequest(() -> {
             applicationModeService.setMultiUserEnabled(currentUserContext.user(), request.multiUserEnabled());
             return systemOAuthAppSettingsService.view();
-        } catch (IllegalArgumentException e) {
-            throw new BadRequestException(e.getMessage(), e);
-        }
+        });
     }
 
     @PUT
     @Path("/{userId}")
     @Consumes(MediaType.APPLICATION_JSON)
     public UserSummaryResponse updateUser(@PathParam("userId") Long userId, UpdateUserRequest request) {
-        try {
+        return WebResourceSupport.badRequest(() -> {
             applicationModeService.requireMultiUserMode();
             return appUserService.toSummary(appUserService.updateUser(currentUserContext.user(), userId, request));
-        } catch (IllegalArgumentException e) {
-            throw new BadRequestException(e.getMessage(), e);
-        }
+        });
     }
 
     @POST
     @Path("/{userId}/password-reset")
     @Consumes(MediaType.APPLICATION_JSON)
     public UserSummaryResponse resetPassword(@PathParam("userId") Long userId, AdminResetPasswordRequest request) {
-        try {
+        return WebResourceSupport.badRequest(() -> {
             applicationModeService.requireMultiUserMode();
             return appUserService.toSummary(appUserService.adminResetPassword(currentUserContext.user(), userId, request));
-        } catch (IllegalArgumentException e) {
-            throw new BadRequestException(e.getMessage(), e);
-        }
+        });
     }
 
     @DELETE
     @Path("/{userId}")
     public java.util.Map<String, Object> deleteUser(@PathParam("userId") Long userId) {
-        try {
+        return WebResourceSupport.badRequest(() -> {
             applicationModeService.requireMultiUserMode();
             appUserService.deleteUser(currentUserContext.user(), userId);
             return java.util.Map.of("deleted", Boolean.TRUE);
-        } catch (IllegalArgumentException e) {
-            throw new BadRequestException(e.getMessage(), e);
-        }
+        });
     }
 
     @DELETE
     @Path("/{userId}/passkeys")
     public java.util.Map<String, Object> resetPasskeys(@PathParam("userId") Long userId) {
-        try {
+        return WebResourceSupport.badRequest(() -> {
             applicationModeService.requireMultiUserMode();
             long deleted = passkeyService.resetForUser(userId);
             return java.util.Map.of("deleted", deleted);
-        } catch (IllegalArgumentException e) {
-            throw new BadRequestException(e.getMessage(), e);
-        }
+        });
     }
 
     @GET
@@ -165,7 +151,7 @@ public class UserManagementResource {
     public AdminUserConfigurationResponse configuration(
             @PathParam("userId") Long userId,
             @jakarta.ws.rs.HeaderParam(TIMEZONE_HEADER) String timezone) {
-        try {
+        return WebResourceSupport.badRequest(() -> {
             applicationModeService.requireMultiUserMode();
             return appUserService.findById(userId)
                     .map(user -> new AdminUserConfigurationResponse(
@@ -177,9 +163,7 @@ public class UserManagementResource {
                             userEmailAccountService.listForUser(user.id),
                             passkeyService.listForUser(user.id)))
                     .orElseThrow(() -> new BadRequestException("Unknown user id"));
-        } catch (IllegalArgumentException e) {
-            throw new BadRequestException(e.getMessage(), e);
-        }
+        });
     }
 
     @GET
@@ -189,7 +173,7 @@ public class UserManagementResource {
             @jakarta.ws.rs.HeaderParam(TIMEZONE_HEADER) String timezone,
             @QueryParam("from") String from,
             @QueryParam("to") String to) {
-        try {
+        return WebResourceSupport.badRequest(() -> {
             applicationModeService.requireMultiUserMode();
             appUserService.findById(userId).orElseThrow(() -> new IllegalArgumentException("Unknown user id"));
             return pollingStatsService.userTimelineBundle(
@@ -197,9 +181,7 @@ public class UserManagementResource {
                     parseInstant(from, true),
                     parseInstant(to, false),
                     resolveZoneId(timezone));
-        } catch (IllegalArgumentException e) {
-            throw new BadRequestException(e.getMessage(), e);
-        }
+        });
     }
 
     private Instant parseInstant(String value, boolean required) {
