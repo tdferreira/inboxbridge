@@ -38,6 +38,10 @@ inboxbridge:
   success-jitter-ratio: ${SUCCESS_JITTER_RATIO:0.2}
   max-success-jitter: ${MAX_SUCCESS_JITTER:PT30S}
   multi-user-enabled: ${MULTI_USER_ENABLED:true}
+  mail:
+    connection-timeout: ${MAIL_CONNECTION_TIMEOUT:PT20S}
+    operation-timeout: ${MAIL_OPERATION_TIMEOUT:PT20S}
+    idle-operation-timeout: ${MAIL_IDLE_OPERATION_TIMEOUT:PT0S}
   security:
     auth:
       login-failure-threshold: ${SECURITY_AUTH_LOGIN_FAILURE_THRESHOLD:5}
@@ -109,3 +113,7 @@ inboxbridge:
       unread-only: ${MAIL_ACCOUNT_0__UNREAD_ONLY:false}
       fetch-mode: ${MAIL_ACCOUNT_0__FETCH_MODE:POLLING}
       custom-label: ${MAIL_ACCOUNT_0__CUSTOM_LABEL:Imported/Source0}
+
+security:
+  token-encryption-key: ${SECURITY_TOKEN_ENCRYPTION_KEY:replace-me}
+  token-encryption-key-id: ${SECURITY_TOKEN_ENCRYPTION_KEY_ID:v1}

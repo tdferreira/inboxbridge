@@ -5,6 +5,7 @@ import dev.inboxbridge.persistence.RemoteSession;
 import dev.inboxbridge.service.AppUserService;
 import dev.inboxbridge.service.RemoteServiceTokenAuthService;
 import dev.inboxbridge.service.RemoteSessionService;
+import org.eclipse.microprofile.config.inject.ConfigProperty;
 import jakarta.annotation.Priority;
 import jakarta.inject.Inject;
 import jakarta.ws.rs.ForbiddenException;
@@ -15,7 +16,6 @@ import jakarta.ws.rs.container.ContainerRequestFilter;
 import jakarta.ws.rs.core.Cookie;
 import jakarta.ws.rs.core.HttpHeaders;
 import jakarta.ws.rs.ext.Provider;
-import org.eclipse.microprofile.config.inject.ConfigProperty;
 
 @Provider
 @RequireRemoteControl
@@ -46,7 +46,7 @@ public class RemoteControlFilter implements ContainerRequestFilter {
 
     @Override
     public void filter(ContainerRequestContext requestContext) {
-        if (!remoteControlEnabled) {
+        if (!remoteControlIsEnabled()) {
             throw new ForbiddenException("Remote control is disabled");
         }
         AppUser serviceTokenUser = remoteServiceTokenAuthService.authenticate(requestContext.getHeaderString(HttpHeaders.AUTHORIZATION))
@@ -88,5 +88,9 @@ public class RemoteControlFilter implements ContainerRequestFilter {
         } catch (ForbiddenException forbidden) {
             throw new ForbiddenException("Remote session origin validation failed", forbidden);
         }
+    }
+
+    private boolean remoteControlIsEnabled() {
+        return remoteControlEnabled;
     }
 }

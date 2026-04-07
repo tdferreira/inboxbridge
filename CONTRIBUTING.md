@@ -68,6 +68,12 @@ Backend:
 mvn test
 ```
 
+The backend suite intentionally mixes plain unit tests, GreenMail-backed
+integration tests for protocol-facing mailflow behavior, and a small
+Quarkus-managed component-test layer for shared CDI/config helpers. Prefer the
+lightest test style that still covers the behavior you changed, but keep
+protocol-facing mailbox changes covered by GreenMail.
+
 Frontend:
 
 ```bash

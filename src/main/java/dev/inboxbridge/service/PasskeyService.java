@@ -11,8 +11,6 @@ import java.util.Set;
 import java.util.UUID;
 import java.util.stream.Collectors;
 
-import org.eclipse.microprofile.config.inject.ConfigProperty;
-
 import com.yubico.webauthn.AssertionRequest;
 import com.yubico.webauthn.CredentialRepository;
 import com.yubico.webauthn.FinishAssertionOptions;
@@ -33,6 +31,7 @@ import com.yubico.webauthn.data.UserIdentity;
 import com.yubico.webauthn.data.UserVerificationRequirement;
 import com.yubico.webauthn.data.exception.Base64UrlException;
 
+import dev.inboxbridge.config.InboxBridgeConfig;
 import dev.inboxbridge.dto.FinishPasskeyCeremonyRequest;
 import dev.inboxbridge.dto.PasskeyView;
 import dev.inboxbridge.dto.StartPasskeyCeremonyResponse;
@@ -70,23 +69,11 @@ public class PasskeyService {
     @Inject
     PasskeyCeremonyRepository passkeyCeremonyRepository;
 
-    @ConfigProperty(name = "inboxbridge.security.passkeys.enabled", defaultValue = "true")
-    boolean enabled;
-
-    @ConfigProperty(name = "inboxbridge.security.passkeys.rp-id", defaultValue = "localhost")
-    String relyingPartyId;
-
-    @ConfigProperty(name = "inboxbridge.security.passkeys.rp-name", defaultValue = "InboxBridge")
-    String relyingPartyName;
-
-    @ConfigProperty(name = "inboxbridge.security.passkeys.origins", defaultValue = "https://localhost:3000")
-    String relyingPartyOrigins;
-
-    @ConfigProperty(name = "inboxbridge.security.passkeys.challenge-ttl", defaultValue = "PT5M")
-    Duration challengeTtl;
+    @Inject
+    InboxBridgeConfig inboxBridgeConfig;
 
     public boolean isEnabled() {
-        return enabled;
+        return inboxBridgeConfig.security().passkeys().enabled();
     }
 
     public List<PasskeyView> listForUser(Long userId) {
@@ -127,7 +114,7 @@ public class PasskeyService {
             ceremony.requestJson = options.toJson();
             ceremony.label = label;
             ceremony.createdAt = Instant.now();
-            ceremony.expiresAt = ceremony.createdAt.plus(challengeTtl);
+            ceremony.expiresAt = ceremony.createdAt.plus(challengeTtl());
             passkeyCeremonyRepository.persist(ceremony);
 
             return new StartPasskeyCeremonyResponse(ceremony.id, options.toCredentialsCreateJson());
@@ -190,7 +177,7 @@ public class PasskeyService {
             ceremony.requestJson = request.toJson();
             ceremony.passwordVerified = false;
             ceremony.createdAt = Instant.now();
-            ceremony.expiresAt = ceremony.createdAt.plus(challengeTtl);
+            ceremony.expiresAt = ceremony.createdAt.plus(challengeTtl());
             passkeyCeremonyRepository.persist(ceremony);
             return new StartPasskeyCeremonyResponse(ceremony.id, request.toCredentialsGetJson());
         } catch (Exception e) {
@@ -217,7 +204,7 @@ public class PasskeyService {
             ceremony.requestJson = request.toJson();
             ceremony.passwordVerified = passwordVerified;
             ceremony.createdAt = Instant.now();
-            ceremony.expiresAt = ceremony.createdAt.plus(challengeTtl);
+            ceremony.expiresAt = ceremony.createdAt.plus(challengeTtl());
             passkeyCeremonyRepository.persist(ceremony);
             return new StartPasskeyCeremonyResponse(ceremony.id, request.toCredentialsGetJson());
         } catch (Exception e) {
@@ -310,8 +297,8 @@ public class PasskeyService {
     private RelyingParty relyingParty() {
         return RelyingParty.builder()
                 .identity(RelyingPartyIdentity.builder()
-                        .id(relyingPartyId.trim())
-                        .name(relyingPartyName.trim())
+                        .id(inboxBridgeConfig.security().passkeys().rpId().trim())
+                        .name(inboxBridgeConfig.security().passkeys().rpName().trim())
                         .build())
                 .credentialRepository(new InboxBridgeCredentialRepository())
                 .origins(allowedOrigins())
@@ -319,7 +306,7 @@ public class PasskeyService {
     }
 
     private Set<String> allowedOrigins() {
-        return Arrays.stream(relyingPartyOrigins.split(","))
+        return Arrays.stream(inboxBridgeConfig.security().passkeys().origins().split(","))
                 .map(String::trim)
                 .filter(origin -> !origin.isBlank())
                 .collect(Collectors.toCollection(LinkedHashSet::new));
@@ -341,9 +328,13 @@ public class PasskeyService {
     }
 
     private void requireEnabled() {
-        if (!enabled) {
+        if (!isEnabled()) {
             throw new IllegalStateException("Passkeys are disabled for this InboxBridge deployment.");
         }
+    }
+
+    private Duration challengeTtl() {
+        return Duration.parse(inboxBridgeConfig.security().passkeys().challengeTtl());
     }
 
     private String rootMessage(Throwable throwable) {

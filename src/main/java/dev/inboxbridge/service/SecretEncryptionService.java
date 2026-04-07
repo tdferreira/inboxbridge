@@ -10,9 +10,9 @@ import javax.crypto.Cipher;
 import javax.crypto.spec.GCMParameterSpec;
 import javax.crypto.spec.SecretKeySpec;
 
-import org.eclipse.microprofile.config.inject.ConfigProperty;
-
+import dev.inboxbridge.config.SecurityTokenConfig;
 import jakarta.enterprise.context.ApplicationScoped;
+import jakarta.inject.Inject;
 
 /**
  * Encrypts and decrypts OAuth secrets for durable storage.
@@ -27,21 +27,23 @@ public class SecretEncryptionService {
     private static final int GCM_TAG_BITS = 128;
     private static final int NONCE_BYTES = 12;
 
-    @ConfigProperty(name = "security.token-encryption-key", defaultValue = "replace-me")
+    @Inject
+    SecurityTokenConfig securityTokenConfig;
+
     String tokenEncryptionKey;
 
-    @ConfigProperty(name = "security.token-encryption-key-id", defaultValue = "v1")
     String tokenEncryptionKeyId;
 
     private final SecureRandom secureRandom = new SecureRandom();
 
     public boolean isConfigured() {
-        return !tokenEncryptionKey.isBlank() && !"replace-me".equals(tokenEncryptionKey);
+        String configuredKey = configuredTokenEncryptionKey();
+        return !configuredKey.isBlank() && !"replace-me".equals(configuredKey);
     }
 
     public String keyVersion() {
         requireConfigured();
-        return tokenEncryptionKeyId;
+        return configuredTokenEncryptionKeyId();
     }
 
     public EncryptedValue encrypt(String value, String context) {
@@ -67,7 +69,7 @@ public class SecretEncryptionService {
 
     public String decrypt(String ciphertextBase64, String nonceBase64, String keyVersion, String context) {
         requireConfigured();
-        if (!tokenEncryptionKeyId.equals(keyVersion)) {
+        if (!configuredTokenEncryptionKeyId().equals(keyVersion)) {
             throw new IllegalStateException("Stored secret was encrypted with a different key version");
         }
 
@@ -83,7 +85,7 @@ public class SecretEncryptionService {
     }
 
     private SecretKeySpec secretKey() {
-        byte[] keyBytes = Base64.getDecoder().decode(tokenEncryptionKey);
+        byte[] keyBytes = Base64.getDecoder().decode(configuredTokenEncryptionKey());
         if (keyBytes.length != 32) {
             throw new IllegalStateException("SECURITY_TOKEN_ENCRYPTION_KEY must be a base64-encoded 32-byte key");
         }
@@ -102,6 +104,20 @@ public class SecretEncryptionService {
         if (!isConfigured()) {
             throw new IllegalStateException("Secure token storage is not configured. Set SECURITY_TOKEN_ENCRYPTION_KEY.");
         }
+    }
+
+    private String configuredTokenEncryptionKey() {
+        if (tokenEncryptionKey != null) {
+            return tokenEncryptionKey;
+        }
+        return securityTokenConfig.tokenEncryptionKey();
+    }
+
+    private String configuredTokenEncryptionKeyId() {
+        if (tokenEncryptionKeyId != null) {
+            return tokenEncryptionKeyId;
+        }
+        return securityTokenConfig.tokenEncryptionKeyId();
     }
 
     public record EncryptedValue(String ciphertextBase64, String nonceBase64) {

@@ -3,8 +3,6 @@ package dev.inboxbridge.service;
 import java.time.Instant;
 import java.util.Optional;
 
-import org.eclipse.microprofile.config.inject.ConfigProperty;
-
 import dev.inboxbridge.config.InboxBridgeConfig;
 import dev.inboxbridge.dto.UpdateUserGmailConfigRequest;
 import dev.inboxbridge.dto.UserGmailConfigView;
@@ -38,13 +36,13 @@ public class UserGmailConfigService {
     @Inject
     GoogleOAuthService googleOAuthService;
 
-    @ConfigProperty(name = "PUBLIC_BASE_URL")
+    @Inject
+    PublicUrlService publicUrlService;
+
     Optional<String> publicBaseUrl;
 
-    @ConfigProperty(name = "PUBLIC_HOSTNAME", defaultValue = "localhost")
     String publicHostname;
 
-    @ConfigProperty(name = "PUBLIC_PORT", defaultValue = "3000")
     String publicPort;
 
     public Optional<UserGmailConfigView> viewForUser(Long userId) {
@@ -285,10 +283,14 @@ public class UserGmailConfigService {
     }
 
     private String defaultPublicBaseUrl() {
-        return (publicBaseUrl == null ? Optional.<String>empty() : publicBaseUrl)
-                .map(String::trim)
-                .filter(value -> !value.isBlank())
-                .orElse("https://" + nonBlankOrDefault(publicHostname, "localhost") + ":" + nonBlankOrDefault(publicPort, "3000"));
+        if (publicBaseUrl != null || publicHostname != null || publicPort != null) {
+            return Optional.ofNullable(publicBaseUrl)
+                    .flatMap(value -> value)
+                    .map(String::trim)
+                    .filter(value -> !value.isBlank())
+                    .orElse("https://" + nonBlankOrDefault(publicHostname, "localhost") + ":" + nonBlankOrDefault(publicPort, "3000"));
+        }
+        return publicUrlService.publicBaseUrl();
     }
 
     private String decrypt(String ciphertext, String nonce, String keyVersion, String context) {

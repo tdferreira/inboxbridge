@@ -6,7 +6,6 @@ import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.LinkedHashSet;
 import java.util.List;
-import java.util.Properties;
 import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentMap;
@@ -42,6 +41,9 @@ public class ImapAppendMailDestinationService implements MailDestinationService 
     @Inject
     PollCancellationService pollCancellationService;
 
+    @Inject
+    MailSessionFactory mailSessionFactory;
+
     @Override
     public boolean supports(MailDestinationTarget target) {
         return target instanceof ImapAppendDestinationTarget;
@@ -72,11 +74,11 @@ public class ImapAppendMailDestinationService implements MailDestinationService 
     @Override
     public MailImportResponse importMessage(MailDestinationTarget target, RuntimeEmailAccount bridge, FetchedMessage message) {
         ImapAppendDestinationTarget imapTarget = (ImapAppendDestinationTarget) target;
-        Session session = Session.getInstance(sessionProperties(imapTarget));
+        Session session = mailSessionFactory().destinationImapSession(imapTarget);
         Store store = null;
         Folder folder = null;
         try {
-            store = session.getStore(imapTarget.tls() ? "imaps" : "imap");
+            store = session.getStore(mailSessionFactory().imapStoreProtocol(imapTarget.tls()));
             registerStore(store);
             store.connect(imapTarget.host(), imapTarget.port(), imapTarget.username(), resolveSecret(imapTarget));
             folder = store.getFolder(imapTarget.folder());
@@ -98,10 +100,10 @@ public class ImapAppendMailDestinationService implements MailDestinationService 
     }
 
     public List<String> listFolders(ImapAppendDestinationTarget target) {
-        Session session = Session.getInstance(sessionProperties(target));
+        Session session = mailSessionFactory().destinationImapSession(target);
         Store store = null;
         try {
-            store = session.getStore(target.tls() ? "imaps" : "imap");
+            store = session.getStore(mailSessionFactory().imapStoreProtocol(target.tls()));
             store.connect(target.host(), target.port(), target.username(), resolveSecret(target));
 
             LinkedHashSet<String> folderNames = new LinkedHashSet<>();
@@ -132,11 +134,11 @@ public class ImapAppendMailDestinationService implements MailDestinationService 
     }
 
     public EmailAccountConnectionTestResult testConnection(ImapAppendDestinationTarget target) {
-        Session session = Session.getInstance(sessionProperties(target));
+        Session session = mailSessionFactory().destinationImapSession(target);
         Store store = null;
         Folder folder = null;
         try {
-            store = session.getStore(target.tls() ? "imaps" : "imap");
+            store = session.getStore(mailSessionFactory().imapStoreProtocol(target.tls()));
             store.connect(target.host(), target.port(), target.username(), resolveSecret(target));
             folder = store.getFolder(target.folder());
             if (!folder.exists()) {
@@ -174,28 +176,6 @@ public class ImapAppendMailDestinationService implements MailDestinationService 
             closeQuietly(folder);
             closeQuietly(store);
         }
-    }
-
-    private Properties sessionProperties(ImapAppendDestinationTarget target) {
-        Properties properties = new Properties();
-        properties.put("mail.store.protocol", target.tls() ? "imaps" : "imap");
-        properties.put("mail.imap.ssl.enable", target.tls());
-        properties.put("mail.imaps.ssl.enable", target.tls());
-        properties.put("mail.imap.ssl.checkserveridentity", "true");
-        properties.put("mail.imaps.ssl.checkserveridentity", "true");
-        properties.put("mail.imap.timeout", "20000");
-        properties.put("mail.imaps.timeout", "20000");
-        properties.put("mail.imap.connectiontimeout", "20000");
-        properties.put("mail.imaps.connectiontimeout", "20000");
-        if (target.authMethod() == InboxBridgeConfig.AuthMethod.OAUTH2) {
-            properties.put("mail.imap.auth.mechanisms", "XOAUTH2");
-            properties.put("mail.imap.auth.login.disable", "true");
-            properties.put("mail.imap.auth.plain.disable", "true");
-            properties.put("mail.imaps.auth.mechanisms", "XOAUTH2");
-            properties.put("mail.imaps.auth.login.disable", "true");
-            properties.put("mail.imaps.auth.plain.disable", "true");
-        }
-        return properties;
     }
 
     private void collectFolderNames(Folder[] folders, LinkedHashSet<String> names) throws MessagingException {
@@ -293,5 +273,30 @@ public class ImapAppendMailDestinationService implements MailDestinationService 
             return;
         }
         pollCancellationService.register(() -> closeQuietly(folder));
+    }
+
+    private MailSessionFactory mailSessionFactory() {
+        if (mailSessionFactory != null) {
+            return mailSessionFactory;
+        }
+        MailSessionFactory fallback = new MailSessionFactory();
+        fallback.mailClientConfig = new dev.inboxbridge.config.MailClientConfig() {
+            @Override
+            public java.time.Duration connectionTimeout() {
+                return java.time.Duration.ofSeconds(20);
+            }
+
+            @Override
+            public java.time.Duration operationTimeout() {
+                return java.time.Duration.ofSeconds(20);
+            }
+
+            @Override
+            public java.time.Duration idleOperationTimeout() {
+                return java.time.Duration.ZERO;
+            }
+        };
+        mailSessionFactory = fallback;
+        return mailSessionFactory;
     }
 }

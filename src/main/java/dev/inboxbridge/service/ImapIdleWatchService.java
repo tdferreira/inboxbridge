@@ -5,7 +5,6 @@ import java.time.Instant;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
-import java.util.Properties;
 import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.atomic.AtomicBoolean;
@@ -55,6 +54,9 @@ public class ImapIdleWatchService {
 
     @Inject
     ImapIdleHealthService imapIdleHealthService;
+
+    @Inject
+    MailSessionFactory mailSessionFactory;
 
     private final Map<String, IdleWatchHandle> handles = new ConcurrentHashMap<>();
     private final Set<String> pendingSources = ConcurrentHashMap.newKeySet();
@@ -234,8 +236,8 @@ public class ImapIdleWatchService {
         private void watchUntilInterrupted() {
             String folderName = watchedFolderName;
             try {
-                Session session = Session.getInstance(idleProperties(source));
-                store = session.getStore(source.tls() ? "imaps" : "imap");
+                Session session = mailSessionFactory().idleImapSession(source);
+                store = session.getStore(mailSessionFactory().imapStoreProtocol(source.tls()));
                 connectStore(store, source);
                 folder = store.getFolder(folderName);
                 if (folder == null || !folder.exists()) {
@@ -332,32 +334,6 @@ public class ImapIdleWatchService {
     private record WatchTarget(String watchKey, RuntimeEmailAccount source, String folderName) {
     }
 
-    private Properties idleProperties(RuntimeEmailAccount source) {
-        Properties properties = new Properties();
-        properties.put("mail.store.protocol", source.tls() ? "imaps" : "imap");
-        properties.put("mail.imap.ssl.enable", source.tls());
-        properties.put("mail.imaps.ssl.enable", source.tls());
-        properties.put("mail.imap.ssl.checkserveridentity", "true");
-        properties.put("mail.imaps.ssl.checkserveridentity", "true");
-        properties.put("mail.imap.connectiontimeout", "20000");
-        properties.put("mail.imaps.connectiontimeout", "20000");
-        properties.put("mail.imap.timeout", "0");
-        properties.put("mail.imaps.timeout", "0");
-        properties.put("mail.imap.closefoldersonstorefailure", "false");
-        properties.put("mail.imaps.closefoldersonstorefailure", "false");
-        if (source.authMethod() == InboxBridgeConfig.AuthMethod.OAUTH2) {
-            properties.put("mail.imap.auth.mechanisms", "XOAUTH2");
-            properties.put("mail.imaps.auth.mechanisms", "XOAUTH2");
-            properties.put("mail.imap.auth.login.disable", "true");
-            properties.put("mail.imaps.auth.login.disable", "true");
-            properties.put("mail.imap.auth.plain.disable", "true");
-            properties.put("mail.imaps.auth.plain.disable", "true");
-            properties.put("mail.imap.auth.xoauth2.disable", "false");
-            properties.put("mail.imaps.auth.xoauth2.disable", "false");
-        }
-        return properties;
-    }
-
     private void connectStore(Store store, RuntimeEmailAccount source) throws MessagingException {
         if (source.authMethod() == InboxBridgeConfig.AuthMethod.OAUTH2
                 && source.oauthProvider() == InboxBridgeConfig.OAuthProvider.MICROSOFT) {
@@ -402,5 +378,30 @@ public class ImapIdleWatchService {
         } catch (InterruptedException interrupted) {
             Thread.currentThread().interrupt();
         }
+    }
+
+    private MailSessionFactory mailSessionFactory() {
+        if (mailSessionFactory != null) {
+            return mailSessionFactory;
+        }
+        MailSessionFactory fallback = new MailSessionFactory();
+        fallback.mailClientConfig = new dev.inboxbridge.config.MailClientConfig() {
+            @Override
+            public java.time.Duration connectionTimeout() {
+                return java.time.Duration.ofSeconds(20);
+            }
+
+            @Override
+            public java.time.Duration operationTimeout() {
+                return java.time.Duration.ofSeconds(20);
+            }
+
+            @Override
+            public java.time.Duration idleOperationTimeout() {
+                return java.time.Duration.ZERO;
+            }
+        };
+        mailSessionFactory = fallback;
+        return mailSessionFactory;
     }
 }

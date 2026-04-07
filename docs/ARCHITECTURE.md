@@ -20,6 +20,20 @@ the original request context with them, so any repository-backed helper they
 call must open its own short `@Transactional` read/write boundary instead of
 depending on ambient request-scope entity access.
 
+Two shared backend helpers now keep that flow from drifting into copy-pasted
+infrastructure details:
+
+- `PublicUrlService` resolves the canonical browser-facing base URL from
+  `PUBLIC_BASE_URL` or the derived `PUBLIC_HOSTNAME` / `PUBLIC_PORT`
+  combination, so OAuth redirect defaults and other externally visible links do
+  not each rebuild that precedence logic.
+- `MailSessionFactory` builds the Jakarta Mail `Session` instances for source
+  IMAP, source POP3, IMAP IDLE, and destination IMAP APPEND traffic from one
+  typed `MailClientConfig` mapping. Connection and operation timeouts therefore
+  stay aligned across source fetch, source post-poll actions, destination
+  append, and long-lived IDLE watches instead of being hard-coded in each
+  service.
+
 ## Remote control flow
 
 The `/remote` surface now sits beside the full admin UI:
@@ -195,6 +209,11 @@ That is still deliberately simpler than a full mailbox-sync engine. The next evo
 - `persistence`: database entities and repositories
 - `service`: fetch, import, dedupe, label, and OAuth logic
 - `web`: REST resources
+
+Within those packages, the current preference is to keep protocol/session
+construction, browser-URL derivation, and similar cross-cutting infrastructure
+in narrowly scoped shared services instead of rebuilding them inside large
+feature services or REST resources.
 
 ## Admin UI layout
 

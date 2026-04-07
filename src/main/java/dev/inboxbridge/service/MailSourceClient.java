@@ -13,7 +13,6 @@ import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Locale;
 import java.util.Optional;
-import java.util.Properties;
 import java.util.Set;
 
 import org.jboss.logging.Logger;
@@ -46,9 +45,6 @@ public class MailSourceClient {
     private static final Logger LOG = Logger.getLogger(MailSourceClient.class);
 
     @Inject
-    InboxBridgeConfig inboxBridgeConfig;
-
-    @Inject
     PollingSettingsService pollingSettingsService;
 
     @Inject
@@ -65,6 +61,9 @@ public class MailSourceClient {
 
     @Inject
     PollCancellationService pollCancellationService;
+
+    @Inject
+    MailSessionFactory mailSessionFactory;
 
     public List<FetchedMessage> fetch(InboxBridgeConfig.Source source) {
         return fetch(source, pollingSettingsService.effectiveSettings().fetchWindow());
@@ -117,29 +116,14 @@ public class MailSourceClient {
             throw new IllegalStateException("Source-side message actions are only supported for IMAP accounts");
         }
 
-        Properties properties = new Properties();
-        properties.put("mail.store.protocol", bridge.tls() ? "imaps" : "imap");
-        properties.put("mail.imap.ssl.enable", bridge.tls());
-        properties.put("mail.imaps.ssl.enable", bridge.tls());
-        properties.put("mail.imap.ssl.checkserveridentity", "true");
-        properties.put("mail.imaps.ssl.checkserveridentity", "true");
-        properties.put("mail.imap.timeout", "20000");
-        properties.put("mail.imaps.timeout", "20000");
-        properties.put("mail.imap.connectiontimeout", "20000");
-        properties.put("mail.imaps.connectiontimeout", "20000");
-        if (usesOAuth(bridge)) {
-            configureImapOAuth(properties);
-        } else {
-            requireSupportedAuth(bridge);
-        }
-
-        Session session = Session.getInstance(properties);
+        requireSupportedAuth(bridge);
+        Session session = mailSessionFactory().sourceImapSession(bridge);
         Store store = null;
         Folder sourceFolder = null;
         Folder targetFolder = null;
         boolean expunge = false;
         try {
-            store = session.getStore(bridge.tls() ? "imaps" : "imap");
+            store = session.getStore(mailSessionFactory().imapStoreProtocol(bridge.tls()));
             registerStore(store);
             connectStore(store, bridge);
             sourceFolder = store.getFolder(message.folderName().orElse(bridge.primaryFolder()));
@@ -193,27 +177,12 @@ public class MailSourceClient {
     }
 
     private EmailAccountConnectionTestResult testImapConnection(RuntimeEmailAccount bridge) {
-        Properties properties = new Properties();
-        properties.put("mail.store.protocol", bridge.tls() ? "imaps" : "imap");
-        properties.put("mail.imap.ssl.enable", bridge.tls());
-        properties.put("mail.imaps.ssl.enable", bridge.tls());
-        properties.put("mail.imap.ssl.checkserveridentity", "true");
-        properties.put("mail.imaps.ssl.checkserveridentity", "true");
-        properties.put("mail.imap.timeout", "20000");
-        properties.put("mail.imaps.timeout", "20000");
-        properties.put("mail.imap.connectiontimeout", "20000");
-        properties.put("mail.imaps.connectiontimeout", "20000");
-        if (usesOAuth(bridge)) {
-            configureImapOAuth(properties);
-        } else {
-            requireSupportedAuth(bridge);
-        }
-
-        Session session = Session.getInstance(properties);
+        requireSupportedAuth(bridge);
+        Session session = mailSessionFactory().sourceImapSession(bridge);
         Store store = null;
         Folder folder = null;
         try {
-            store = session.getStore(bridge.tls() ? "imaps" : "imap");
+            store = session.getStore(mailSessionFactory().imapStoreProtocol(bridge.tls()));
             registerStore(store);
             connectStore(store, bridge);
             List<String> targetFolders = bridge.sourceFolders();
@@ -271,27 +240,12 @@ public class MailSourceClient {
     }
 
     private Optional<MailboxCountProbe> probeImapSpamOrJunkFolder(RuntimeEmailAccount bridge) {
-        Properties properties = new Properties();
-        properties.put("mail.store.protocol", bridge.tls() ? "imaps" : "imap");
-        properties.put("mail.imap.ssl.enable", bridge.tls());
-        properties.put("mail.imaps.ssl.enable", bridge.tls());
-        properties.put("mail.imap.ssl.checkserveridentity", "true");
-        properties.put("mail.imaps.ssl.checkserveridentity", "true");
-        properties.put("mail.imap.timeout", "20000");
-        properties.put("mail.imaps.timeout", "20000");
-        properties.put("mail.imap.connectiontimeout", "20000");
-        properties.put("mail.imaps.connectiontimeout", "20000");
-        if (usesOAuth(bridge)) {
-            configureImapOAuth(properties);
-        } else {
-            requireSupportedAuth(bridge);
-        }
-
-        Session session = Session.getInstance(properties);
+        requireSupportedAuth(bridge);
+        Session session = mailSessionFactory().sourceImapSession(bridge);
         Store store = null;
         Folder folder = null;
         try {
-            store = session.getStore(bridge.tls() ? "imaps" : "imap");
+            store = session.getStore(mailSessionFactory().imapStoreProtocol(bridge.tls()));
             registerStore(store);
             connectStore(store, bridge);
             folder = locateSpamOrJunkFolder(store);
@@ -310,26 +264,11 @@ public class MailSourceClient {
     }
 
     private List<String> listImapFolders(RuntimeEmailAccount bridge) {
-        Properties properties = new Properties();
-        properties.put("mail.store.protocol", bridge.tls() ? "imaps" : "imap");
-        properties.put("mail.imap.ssl.enable", bridge.tls());
-        properties.put("mail.imaps.ssl.enable", bridge.tls());
-        properties.put("mail.imap.ssl.checkserveridentity", "true");
-        properties.put("mail.imaps.ssl.checkserveridentity", "true");
-        properties.put("mail.imap.timeout", "20000");
-        properties.put("mail.imaps.timeout", "20000");
-        properties.put("mail.imap.connectiontimeout", "20000");
-        properties.put("mail.imaps.connectiontimeout", "20000");
-        if (usesOAuth(bridge)) {
-            configureImapOAuth(properties);
-        } else {
-            requireSupportedAuth(bridge);
-        }
-
-        Session session = Session.getInstance(properties);
+        requireSupportedAuth(bridge);
+        Session session = mailSessionFactory().sourceImapSession(bridge);
         Store store = null;
         try {
-            store = session.getStore(bridge.tls() ? "imaps" : "imap");
+            store = session.getStore(mailSessionFactory().imapStoreProtocol(bridge.tls()));
             registerStore(store);
             connectStore(store, bridge);
 
@@ -357,26 +296,11 @@ public class MailSourceClient {
     }
 
     private List<FetchedMessage> fetchImap(InboxBridgeConfig.Source source, int fetchWindow) {
-        Properties properties = new Properties();
-        properties.put("mail.store.protocol", source.tls() ? "imaps" : "imap");
-        properties.put("mail.imap.ssl.enable", source.tls());
-        properties.put("mail.imaps.ssl.enable", source.tls());
-        properties.put("mail.imap.ssl.checkserveridentity", "true");
-        properties.put("mail.imaps.ssl.checkserveridentity", "true");
-        properties.put("mail.imap.timeout", "20000");
-        properties.put("mail.imaps.timeout", "20000");
-        properties.put("mail.imap.connectiontimeout", "20000");
-        properties.put("mail.imaps.connectiontimeout", "20000");
-        if (usesOAuth(source)) {
-            configureImapOAuth(properties);
-        } else {
-            requireSupportedAuth(source);
-        }
-
-        Session session = Session.getInstance(properties);
+        requireSupportedAuth(source);
+        Session session = mailSessionFactory().sourceImapSession(source);
         Store store = null;
         try {
-            store = session.getStore(source.tls() ? "imaps" : "imap");
+            store = session.getStore(mailSessionFactory().imapStoreProtocol(source.tls()));
             registerStore(store);
             connectStore(store, source);
             return fetchImapMessages(
@@ -394,26 +318,11 @@ public class MailSourceClient {
     }
 
     private List<FetchedMessage> fetchImap(RuntimeEmailAccount bridge, int fetchWindow) {
-        Properties properties = new Properties();
-        properties.put("mail.store.protocol", bridge.tls() ? "imaps" : "imap");
-        properties.put("mail.imap.ssl.enable", bridge.tls());
-        properties.put("mail.imaps.ssl.enable", bridge.tls());
-        properties.put("mail.imap.ssl.checkserveridentity", "true");
-        properties.put("mail.imaps.ssl.checkserveridentity", "true");
-        properties.put("mail.imap.timeout", "20000");
-        properties.put("mail.imaps.timeout", "20000");
-        properties.put("mail.imap.connectiontimeout", "20000");
-        properties.put("mail.imaps.connectiontimeout", "20000");
-        if (usesOAuth(bridge)) {
-            configureImapOAuth(properties);
-        } else {
-            requireSupportedAuth(bridge);
-        }
-
-        Session session = Session.getInstance(properties);
+        requireSupportedAuth(bridge);
+        Session session = mailSessionFactory().sourceImapSession(bridge);
         Store store = null;
         try {
-            store = session.getStore(bridge.tls() ? "imaps" : "imap");
+            store = session.getStore(mailSessionFactory().imapStoreProtocol(bridge.tls()));
             registerStore(store);
             connectStore(store, bridge);
             return fetchImapMessages(
@@ -469,27 +378,12 @@ public class MailSourceClient {
     }
 
     private List<FetchedMessage> fetchPop3(InboxBridgeConfig.Source source, int fetchWindow) {
-        Properties properties = new Properties();
-        properties.put("mail.store.protocol", source.tls() ? "pop3s" : "pop3");
-        properties.put("mail.pop3.ssl.enable", source.tls());
-        properties.put("mail.pop3s.ssl.enable", source.tls());
-        properties.put("mail.pop3.ssl.checkserveridentity", "true");
-        properties.put("mail.pop3s.ssl.checkserveridentity", "true");
-        properties.put("mail.pop3.timeout", "20000");
-        properties.put("mail.pop3.connectiontimeout", "20000");
-        properties.put("mail.pop3s.timeout", "20000");
-        properties.put("mail.pop3s.connectiontimeout", "20000");
-        if (usesOAuth(source)) {
-            configurePop3OAuth(properties);
-        } else {
-            requireSupportedAuth(source);
-        }
-
-        Session session = Session.getInstance(properties);
+        requireSupportedAuth(source);
+        Session session = mailSessionFactory().sourcePop3Session(source);
         Store store = null;
         Folder folder = null;
         try {
-            store = session.getStore(source.tls() ? "pop3s" : "pop3");
+            store = session.getStore(mailSessionFactory().pop3StoreProtocol(source.tls()));
             registerStore(store);
             connectStore(store, source);
             folder = store.getFolder("INBOX");
@@ -506,27 +400,12 @@ public class MailSourceClient {
     }
 
     private List<FetchedMessage> fetchPop3(RuntimeEmailAccount bridge, int fetchWindow) {
-        Properties properties = new Properties();
-        properties.put("mail.store.protocol", bridge.tls() ? "pop3s" : "pop3");
-        properties.put("mail.pop3.ssl.enable", bridge.tls());
-        properties.put("mail.pop3s.ssl.enable", bridge.tls());
-        properties.put("mail.pop3.ssl.checkserveridentity", "true");
-        properties.put("mail.pop3s.ssl.checkserveridentity", "true");
-        properties.put("mail.pop3.timeout", "20000");
-        properties.put("mail.pop3.connectiontimeout", "20000");
-        properties.put("mail.pop3s.timeout", "20000");
-        properties.put("mail.pop3s.connectiontimeout", "20000");
-        if (usesOAuth(bridge)) {
-            configurePop3OAuth(properties);
-        } else {
-            requireSupportedAuth(bridge);
-        }
-
-        Session session = Session.getInstance(properties);
+        requireSupportedAuth(bridge);
+        Session session = mailSessionFactory().sourcePop3Session(bridge);
         Store store = null;
         Folder folder = null;
         try {
-            store = session.getStore(bridge.tls() ? "pop3s" : "pop3");
+            store = session.getStore(mailSessionFactory().pop3StoreProtocol(bridge.tls()));
             registerStore(store);
             connectStore(store, bridge);
             folder = store.getFolder("INBOX");
@@ -543,27 +422,12 @@ public class MailSourceClient {
     }
 
     private EmailAccountConnectionTestResult testPop3Connection(RuntimeEmailAccount bridge) {
-        Properties properties = new Properties();
-        properties.put("mail.store.protocol", bridge.tls() ? "pop3s" : "pop3");
-        properties.put("mail.pop3.ssl.enable", bridge.tls());
-        properties.put("mail.pop3s.ssl.enable", bridge.tls());
-        properties.put("mail.pop3.ssl.checkserveridentity", "true");
-        properties.put("mail.pop3s.ssl.checkserveridentity", "true");
-        properties.put("mail.pop3.timeout", "20000");
-        properties.put("mail.pop3.connectiontimeout", "20000");
-        properties.put("mail.pop3s.timeout", "20000");
-        properties.put("mail.pop3s.connectiontimeout", "20000");
-        if (usesOAuth(bridge)) {
-            configurePop3OAuth(properties);
-        } else {
-            requireSupportedAuth(bridge);
-        }
-
-        Session session = Session.getInstance(properties);
+        requireSupportedAuth(bridge);
+        Session session = mailSessionFactory().sourcePop3Session(bridge);
         Store store = null;
         Folder folder = null;
         try {
-            store = session.getStore(bridge.tls() ? "pop3s" : "pop3");
+            store = session.getStore(mailSessionFactory().pop3StoreProtocol(bridge.tls()));
             registerStore(store);
             connectStore(store, bridge);
             folder = store.getFolder("INBOX");
@@ -1237,10 +1101,6 @@ public class MailSourceClient {
                 && source.oauthProvider() == InboxBridgeConfig.OAuthProvider.GOOGLE;
     }
 
-    private boolean usesOAuth(InboxBridgeConfig.Source source) {
-        return usesMicrosoftOAuth(source) || usesGoogleOAuth(source);
-    }
-
     private boolean usesMicrosoftOAuth(RuntimeEmailAccount bridge) {
         return bridge.authMethod() == InboxBridgeConfig.AuthMethod.OAUTH2
                 && bridge.oauthProvider() == InboxBridgeConfig.OAuthProvider.MICROSOFT;
@@ -1249,10 +1109,6 @@ public class MailSourceClient {
     private boolean usesGoogleOAuth(RuntimeEmailAccount bridge) {
         return bridge.authMethod() == InboxBridgeConfig.AuthMethod.OAUTH2
                 && bridge.oauthProvider() == InboxBridgeConfig.OAuthProvider.GOOGLE;
-    }
-
-    private boolean usesOAuth(RuntimeEmailAccount bridge) {
-        return usesMicrosoftOAuth(bridge) || usesGoogleOAuth(bridge);
     }
 
     private void requireSupportedAuth(InboxBridgeConfig.Source source) {
@@ -1265,30 +1121,6 @@ public class MailSourceClient {
         if (bridge.authMethod() == InboxBridgeConfig.AuthMethod.OAUTH2) {
             throw new IllegalStateException("OAuth2 is only implemented for configured Google or Microsoft source providers at the moment");
         }
-    }
-
-    private void configureImapOAuth(Properties properties) {
-        properties.put("mail.imap.auth.mechanisms", "XOAUTH2");
-        properties.put("mail.imaps.auth.mechanisms", "XOAUTH2");
-        properties.put("mail.imap.auth.login.disable", "true");
-        properties.put("mail.imaps.auth.login.disable", "true");
-        properties.put("mail.imap.auth.plain.disable", "true");
-        properties.put("mail.imaps.auth.plain.disable", "true");
-        properties.put("mail.imap.auth.xoauth2.disable", "false");
-        properties.put("mail.imaps.auth.xoauth2.disable", "false");
-    }
-
-    private void configurePop3OAuth(Properties properties) {
-        properties.put("mail.pop3.auth.mechanisms", "XOAUTH2");
-        properties.put("mail.pop3s.auth.mechanisms", "XOAUTH2");
-        properties.put("mail.pop3.auth.login.disable", "true");
-        properties.put("mail.pop3s.auth.login.disable", "true");
-        properties.put("mail.pop3.auth.plain.disable", "true");
-        properties.put("mail.pop3s.auth.plain.disable", "true");
-        properties.put("mail.pop3.auth.xoauth2.disable", "false");
-        properties.put("mail.pop3s.auth.xoauth2.disable", "false");
-        properties.put("mail.pop3.auth.xoauth2.two.line.authentication.format", "true");
-        properties.put("mail.pop3s.auth.xoauth2.two.line.authentication.format", "true");
     }
 
     private void connectStoreWithGoogleOAuthRetry(
@@ -1390,6 +1222,31 @@ public class MailSourceClient {
         return value == null
                 ? ""
                 : value.toLowerCase(Locale.ROOT).replaceAll("[^a-z0-9]", "");
+    }
+
+    private MailSessionFactory mailSessionFactory() {
+        if (mailSessionFactory != null) {
+            return mailSessionFactory;
+        }
+        MailSessionFactory fallback = new MailSessionFactory();
+        fallback.mailClientConfig = new dev.inboxbridge.config.MailClientConfig() {
+            @Override
+            public java.time.Duration connectionTimeout() {
+                return java.time.Duration.ofSeconds(20);
+            }
+
+            @Override
+            public java.time.Duration operationTimeout() {
+                return java.time.Duration.ofSeconds(20);
+            }
+
+            @Override
+            public java.time.Duration idleOperationTimeout() {
+                return java.time.Duration.ZERO;
+            }
+        };
+        mailSessionFactory = fallback;
+        return mailSessionFactory;
     }
 
     @FunctionalInterface
