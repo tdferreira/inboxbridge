@@ -1,21 +1,12 @@
 package dev.inboxbridge.service;
 
-import java.io.ByteArrayOutputStream;
-import java.io.IOException;
-import java.nio.charset.StandardCharsets;
-import java.time.Instant;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Comparator;
 import java.util.List;
 import java.util.Optional;
 
-import org.jboss.logging.Logger;
-import org.eclipse.angus.mail.imap.IMAPFolder;
-import org.eclipse.angus.mail.pop3.POP3Folder;
-
 import dev.inboxbridge.config.InboxBridgeConfig;
-import dev.inboxbridge.domain.ImapCheckpoint;
 import dev.inboxbridge.dto.EmailAccountConnectionTestResult;
 import dev.inboxbridge.domain.FetchedMessage;
 import dev.inboxbridge.domain.RuntimeEmailAccount;
@@ -24,7 +15,6 @@ import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.inject.Inject;
 import jakarta.mail.Flags;
 import jakarta.mail.Folder;
-import jakarta.mail.FolderClosedException;
 import jakarta.mail.FetchProfile;
 import jakarta.mail.Message;
 import jakarta.mail.MessagingException;
@@ -36,8 +26,6 @@ import jakarta.mail.search.HeaderTerm;
 
 @ApplicationScoped
 public class MailSourceClient {
-
-    private static final Logger LOG = Logger.getLogger(MailSourceClient.class);
 
     @Inject
     PollingSettingsService pollingSettingsService;
@@ -71,6 +59,9 @@ public class MailSourceClient {
 
     @Inject
     MailSourceConnectionService mailSourceConnectionService;
+
+    @Inject
+    MailSourcePostPollActionService mailSourcePostPollActionService;
 
     public List<FetchedMessage> fetch(InboxBridgeConfig.Source source) {
         return fetch(source, pollingSettingsService.effectiveSettings().fetchWindow());
@@ -116,71 +107,7 @@ public class MailSourceClient {
     }
 
     public void applyPostPollSettings(RuntimeEmailAccount bridge, FetchedMessage message) {
-        if (!bridge.postPollSettings().hasAnyAction()) {
-            return;
-        }
-        if (bridge.protocol() != InboxBridgeConfig.Protocol.IMAP) {
-            throw new IllegalStateException("Source-side message actions are only supported for IMAP accounts");
-        }
-
-        requireSupportedAuth(bridge);
-        Session session = mailSessionFactory().sourceImapSession(bridge);
-        Store store = null;
-        Folder sourceFolder = null;
-        Folder targetFolder = null;
-        boolean expunge = false;
-        try {
-            store = session.getStore(mailSessionFactory().imapStoreProtocol(bridge.tls()));
-            registerStore(store);
-            mailSourceConnectionService().connectStore(store, bridge);
-            sourceFolder = store.getFolder(message.folderName().orElse(bridge.primaryFolder()));
-            registerFolder(sourceFolder);
-            if (!sourceFolder.exists()) {
-                throw new IllegalStateException("The mailbox path " + sourceFolder.getFullName() + " does not exist on " + bridge.host() + ".");
-            }
-            sourceFolder.open(Folder.READ_WRITE);
-            Message sourceMessage = resolveSourceMessage(sourceFolder, message);
-            if (sourceMessage == null) {
-                throw new IllegalStateException("Unable to find the source message to apply post-poll actions for " + bridge.id());
-            }
-
-            if (bridge.postPollSettings().markAsRead()) {
-                sourceMessage.setFlag(Flags.Flag.SEEN, true);
-            }
-            if (bridge.postPollSettings().action() == dev.inboxbridge.domain.SourcePostPollAction.MOVE) {
-                String targetFolderName = bridge.postPollSettings().targetFolder()
-                        .orElseThrow(() -> new IllegalStateException("A target folder is required when moving source messages after polling"));
-                targetFolder = store.getFolder(targetFolderName);
-                registerFolder(targetFolder);
-                if (!targetFolder.exists()) {
-                    throw new IllegalStateException("The mailbox path " + targetFolderName + " does not exist on " + bridge.host() + ".");
-                }
-                sourceFolder.copyMessages(new Message[] { sourceMessage }, targetFolder);
-                sourceMessage.setFlag(Flags.Flag.DELETED, true);
-                expunge = true;
-            } else if (bridge.postPollSettings().action() == dev.inboxbridge.domain.SourcePostPollAction.FORWARDED) {
-                applyForwardedFlag(sourceMessage, bridge);
-            } else if (bridge.postPollSettings().action() == dev.inboxbridge.domain.SourcePostPollAction.DELETE) {
-                sourceMessage.setFlag(Flags.Flag.DELETED, true);
-                expunge = true;
-            }
-        } catch (MessagingException e) {
-            throw new IllegalStateException("Failed to apply post-poll actions for source " + bridge.id(), e);
-        } finally {
-            closeQuietly(sourceFolder, expunge);
-            closeQuietly(targetFolder);
-            closeQuietly(store);
-        }
-    }
-
-    private void applyForwardedFlag(Message sourceMessage, RuntimeEmailAccount bridge) throws MessagingException {
-        Flags forwarded = new Flags();
-        forwarded.add("$Forwarded");
-        try {
-            sourceMessage.setFlags(forwarded, true);
-        } catch (MessagingException unsupportedFlag) {
-            LOG.warnf(unsupportedFlag, "Unable to set $Forwarded on source %s; continuing without that marker", bridge.id());
-        }
+        mailSourcePostPollActionService().apply(bridge, message);
     }
 
     private EmailAccountConnectionTestResult testImapConnection(RuntimeEmailAccount bridge) {
@@ -531,36 +458,6 @@ public class MailSourceClient {
         return bridge == null ? null : DestinationIdentityKeys.forTarget(bridge.destination());
     }
 
-    private String safeFolderName(Folder folder) {
-        if (folder == null) {
-            return null;
-        }
-        return folder.getFullName();
-    }
-
-    private Long resolveUidValidity(Folder folder) {
-        if (folder instanceof IMAPFolder imapFolder) {
-            try {
-                return imapFolder.getUIDValidity();
-            } catch (MessagingException ignored) {
-                return null;
-            }
-        }
-        return null;
-    }
-
-    private String firstHeader(Message message, String name) throws MessagingException {
-        String[] values = message.getHeader(name);
-        if (values == null || values.length == 0) {
-            return null;
-        }
-        return values[0];
-    }
-
-    private Message resolveSourceMessage(Folder folder, FetchedMessage message) throws MessagingException {
-        return mailSourceMessageMapper().resolveSourceMessage(folder, message);
-    }
-
     private void prefetchMessageMetadata(Folder folder, Message[] messages) throws MessagingException {
         if (messages.length == 0) {
             return;
@@ -573,30 +470,8 @@ public class MailSourceClient {
         folder.fetch(messages, fetchProfile);
     }
 
-    private int safeMessageNumber(Message message) {
-        try {
-            return message.getMessageNumber();
-        } catch (RuntimeException ignored) {
-            return -1;
-        }
-    }
-
     static boolean isRetryableMicrosoftOAuthFailure(Throwable error) {
         return MailFailureClassifier.classify(error).retryableOAuthSessionFailure();
-    }
-
-    private Instant messageInstant(Message message) {
-        try {
-            if (message.getReceivedDate() != null) {
-                return message.getReceivedDate().toInstant();
-            }
-            if (message.getSentDate() != null) {
-                return message.getSentDate().toInstant();
-            }
-            return Instant.EPOCH;
-        } catch (MessagingException e) {
-            return Instant.EPOCH;
-        }
     }
 
     private void closeQuietly(Folder folder) {
@@ -711,6 +586,19 @@ public class MailSourceClient {
         fallback.googleOAuthService = googleOAuthService;
         mailSourceConnectionService = fallback;
         return mailSourceConnectionService;
+    }
+
+    private MailSourcePostPollActionService mailSourcePostPollActionService() {
+        if (mailSourcePostPollActionService != null) {
+            return mailSourcePostPollActionService;
+        }
+        MailSourcePostPollActionService fallback = new MailSourcePostPollActionService();
+        fallback.mailSessionFactory = mailSessionFactory();
+        fallback.mailSourceConnectionService = mailSourceConnectionService();
+        fallback.mailSourceMessageMapper = mailSourceMessageMapper();
+        fallback.pollCancellationService = pollCancellationService;
+        mailSourcePostPollActionService = fallback;
+        return mailSourcePostPollActionService;
     }
 
     public record MailboxCountProbe(String folderName, int messageCount) {

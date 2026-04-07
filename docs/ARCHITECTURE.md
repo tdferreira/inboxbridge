@@ -42,9 +42,13 @@ infrastructure details:
 - `MailSourceConnectionService` now owns mailbox-store connection plus the
   retry-once OAuth token invalidation/refresh path for Microsoft and Google
   source sessions.
+- `MailSourcePostPollActionService` now owns source-side IMAP mutations after a
+  successful import or duplicate match, including mark-as-read, move, delete,
+  and best-effort `$Forwarded` handling against the fetched message's actual
+  source folder.
 - With those helpers in place, `MailSourceClient` can stay focused on polling
-  orchestration and source-side post-poll actions instead of re-implementing
-  every protocol or OAuth detail itself.
+  orchestration instead of re-implementing every protocol, OAuth, or source
+  mutation detail itself.
 
 ## Remote control flow
 
