@@ -1,10 +1,7 @@
 package dev.inboxbridge.service;
 
 import java.time.Instant;
-import java.util.ArrayList;
-import java.util.Comparator;
 import java.util.List;
-import java.util.Map;
 import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.concurrent.Executors;
 import java.util.concurrent.ScheduledExecutorService;
@@ -15,7 +12,6 @@ import dev.inboxbridge.domain.RuntimeEmailAccount;
 import dev.inboxbridge.dto.LiveEventView;
 import dev.inboxbridge.dto.LiveNotificationContentView;
 import dev.inboxbridge.dto.LiveNotificationView;
-import dev.inboxbridge.dto.PollLiveSourceView;
 import dev.inboxbridge.dto.PollLiveView;
 import dev.inboxbridge.persistence.AppUser;
 import io.smallrye.mutiny.Multi;
@@ -36,6 +32,9 @@ public class PollingLiveService {
     @Inject
     SessionLocationAlertService sessionLocationAlertService;
 
+    @Inject
+    PollingLivePresentationService pollingLivePresentationService;
+
     public PollRunHandle startRun(String trigger, List<RuntimeEmailAccount> emailAccounts, AppUser actor) {
         synchronized (lock) {
             if (activeRun.get() != null) {
@@ -44,7 +43,7 @@ public class PollingLiveService {
             PollingLiveRunState state = new PollingLiveRunState(trigger, actor, emailAccounts);
             activeRun.set(state);
             publishPollEvent("poll-run-started", state);
-            publishNotification(notificationForRunStarted(state));
+            publishNotification(presentationService().notificationForRunStarted(state));
             return new PollRunHandle(state.runId);
         }
     }
@@ -122,7 +121,7 @@ public class PollingLiveService {
             state.updatedAt = Instant.now();
             state.state = "PAUSING";
             publishPollEvent("poll-run-pausing", state);
-            publishNotification(notification("notifications.livePollPauseRequested", "warning", "live-poll"));
+            publishNotification(simpleNotification("notifications.livePollPauseRequested", "warning", "live-poll"));
             return true;
         }
     }
@@ -138,7 +137,7 @@ public class PollingLiveService {
             state.updatedAt = Instant.now();
             lock.notifyAll();
             publishPollEvent("poll-run-resumed", state);
-            publishNotification(notification("notifications.livePollResumed", "success", "live-poll"));
+            publishNotification(simpleNotification("notifications.livePollResumed", "success", "live-poll"));
             return true;
         }
     }
@@ -157,7 +156,7 @@ public class PollingLiveService {
             lock.notifyAll();
             cancellationActions = List.copyOf(state.cancellationActions);
             publishPollEvent("poll-run-stopping", state);
-            publishNotification(notification("notifications.livePollStopRequested", "warning", "live-poll"));
+            publishNotification(simpleNotification("notifications.livePollStopRequested", "warning", "live-poll"));
         }
         cancellationActions.forEach(this::runCancellationAction);
         return true;
@@ -177,7 +176,7 @@ public class PollingLiveService {
             state.queue.addFirst(sourceId);
             state.updatedAt = Instant.now();
             publishPollEvent("poll-source-reprioritized", state);
-            publishNotification(notification("notifications.livePollSourceMovedNext", "success", "live-poll"));
+            publishNotification(simpleNotification("notifications.livePollSourceMovedNext", "success", "live-poll"));
             return true;
         }
     }
@@ -210,7 +209,7 @@ public class PollingLiveService {
                 state.state = "RUNNING";
             }
             publishPollEvent("poll-source-retry-queued", state);
-            publishNotification(notification("notifications.livePollSourceRetryQueued", "warning", "live-poll"));
+            publishNotification(simpleNotification("notifications.livePollSourceRetryQueued", "warning", "live-poll"));
             return true;
         }
     }
@@ -251,7 +250,7 @@ public class PollingLiveService {
                 source.startedAt = Instant.now();
                 state.updatedAt = source.startedAt;
                 publishPollEvent("poll-source-started", state);
-                publishNotification(notificationForSourceStarted(state, source));
+                publishNotification(presentationService().notificationForSourceStarted(state, source));
                 return nextId;
             }
         }
@@ -318,7 +317,7 @@ public class PollingLiveService {
             state.activeSourceIds.remove(sourceId);
             state.updatedAt = source.finishedAt;
             publishPollEvent("poll-source-finished", state);
-            publishNotification(notificationForSourceFinished(state, source));
+            publishNotification(presentationService().notificationForSourceFinished(state, source));
         }
     }
 
@@ -386,7 +385,7 @@ public class PollingLiveService {
             state.state = finalState;
             state.updatedAt = Instant.now();
             publishPollEvent("poll-run-finished", state);
-            publishNotification(notificationForRunFinished(state));
+            publishNotification(presentationService().notificationForRunFinished(state));
             activeRun.set(null);
         }
     }
@@ -416,7 +415,7 @@ public class PollingLiveService {
     private void publishPollEvent(String type, PollingLiveRunState state) {
         Instant timestamp = Instant.now();
         for (Subscriber subscriber : subscribers) {
-            PollLiveView view = buildView(state, subscriber.viewerId, subscriber.admin);
+            PollLiveView view = presentationService().buildView(state, subscriber.viewerId, subscriber.admin);
             if (view == null) {
                 continue;
             }
@@ -431,7 +430,7 @@ public class PollingLiveService {
         Instant timestamp = Instant.now();
         PollingLiveRunState state = activeRun.get();
         for (Subscriber subscriber : subscribers) {
-            PollLiveView view = state == null ? null : buildView(state, subscriber.viewerId, subscriber.admin);
+            PollLiveView view = state == null ? null : presentationService().buildView(state, subscriber.viewerId, subscriber.admin);
             if (state != null && view == null && !subscriber.admin) {
                 continue;
             }
@@ -449,7 +448,7 @@ public class PollingLiveService {
             if (!viewerId.equals(subscriber.viewerId)) {
                 continue;
             }
-            PollLiveView view = state == null ? null : buildView(state, subscriber.viewerId, subscriber.admin);
+            PollLiveView view = state == null ? null : presentationService().buildView(state, subscriber.viewerId, subscriber.admin);
             subscriber.emit(new LiveEventView("notification-created", timestamp, view, notification, null));
         }
     }
@@ -461,80 +460,7 @@ public class PollingLiveService {
         SessionLocationAlertService.SessionLocationAssessment assessment = sessionLocationAlertService == null
                 ? new SessionLocationAlertService.SessionLocationAssessment(null, false)
                 : sessionLocationAlertService.assessNewSession(viewerId, streamKind.name(), sessionId, null);
-        String notificationKey = "notifications.newSessionDetected";
-        if (assessment.locationLabel() != null && assessment.unusualLocation()) {
-            notificationKey = "notifications.newSessionDetectedFromUnusualLocation";
-        } else if (assessment.locationLabel() != null) {
-            notificationKey = "notifications.newSessionDetectedFromLocation";
-        }
-        publishNotificationToUser(viewerId, notification(
-                notificationKey,
-                "warning",
-                "session-activity",
-                buildRecentSessionTargetId(streamKind, sessionId),
-                false,
-                assessment.locationLabel() == null
-                        ? Map.of()
-                        : Map.of("location", assessment.locationLabel())));
-    }
-
-    private PollLiveView buildView(PollingLiveRunState state, AppUser viewer) {
-        return buildView(state, viewer.id, viewer.role == AppUser.Role.ADMIN);
-    }
-
-    private PollLiveView buildView(PollingLiveRunState state, Long viewerId, boolean admin) {
-        List<PollLiveSourceView> sources = state.sourcesById.values().stream()
-                .filter(source -> admin || (source.ownerUserId != null && source.ownerUserId.equals(viewerId)))
-                .sorted(Comparator
-                        .comparingInt((PollingLiveRunState.SourceState source) -> source.position(state.queue, state.activeSourceIds))
-                        .thenComparing(source -> source.label))
-                .map(source -> new PollLiveSourceView(
-                        source.sourceId,
-                        source.ownerUsername,
-                        source.label,
-                        source.state,
-                        source.actionable(admin, viewerId, state.actorUserId),
-                        source.position(state.queue, state.activeSourceIds),
-                        source.attempt,
-                        source.totalMessages,
-                        source.processedMessages(),
-                        source.totalBytes,
-                        source.processedBytes,
-                        source.fetched,
-                        source.imported,
-                        source.duplicates,
-                        source.error,
-                        source.startedAt,
-                        source.finishedAt))
-                .toList();
-        if (!admin && sources.isEmpty()) {
-            return null;
-        }
-        boolean viewerCanControl = admin || (state.actorUserId != null && state.actorUserId.equals(viewerId));
-        return new PollLiveView(
-                true,
-                state.runId,
-                state.state,
-                state.trigger,
-                state.actorUsername,
-                viewerCanControl,
-                admin ? state.primaryActiveSourceId() : activeVisibleSourceId(state, viewerId),
-                state.startedAt,
-                state.updatedAt,
-                sources);
-    }
-
-    private String activeVisibleSourceId(PollingLiveRunState state, Long viewerId) {
-        for (String activeSourceId : state.activeSourceIds) {
-            PollingLiveRunState.SourceState source = state.sourcesById.get(activeSourceId);
-            if (source == null) {
-                continue;
-            }
-            if (source.ownerUserId != null && source.ownerUserId.equals(viewerId)) {
-                return source.sourceId;
-            }
-        }
-        return null;
+        publishNotificationToUser(viewerId, presentationService().newSignInNotification(assessment, streamKind, sessionId));
     }
 
     public void registerCancellationAction(String runId, Runnable action) {
@@ -566,97 +492,17 @@ public class PollingLiveService {
         }
     }
 
-    private LiveNotificationView notificationForRunStarted(PollingLiveRunState state) {
-        if (!shouldNotifyForRun(state)) {
-            return null;
-        }
-        String key = state.actorAdmin ? "notifications.pollStarted" : "notifications.userPollStarted";
-        String targetId = state.actorAdmin ? "system-dashboard-section" : "user-polling-section";
-        return notification(key, "warning", state.actorAdmin ? "global-poll" : "user-poll", targetId);
+    private PollingLivePresentationService presentationService() {
+        return pollingLivePresentationService == null ? new PollingLivePresentationService() : pollingLivePresentationService;
     }
 
-    private LiveNotificationView notificationForRunFinished(PollingLiveRunState state) {
-        if (!shouldNotifyForRun(state)) {
-            return null;
-        }
-        if ("STOPPED".equals(state.state)) {
-            return null;
-        }
-        String key = state.actorAdmin ? "notifications.livePollFinished" : "notifications.liveUserPollFinished";
-        String targetId = state.actorAdmin ? "system-dashboard-section" : "user-polling-section";
-        return notification(key, "success", state.actorAdmin ? "global-poll" : "user-poll", targetId, true);
+    private PollLiveView buildView(PollingLiveRunState state, AppUser viewer) {
+        return presentationService().buildView(state, viewer.id, viewer.role == AppUser.Role.ADMIN);
     }
 
-    private LiveNotificationView notificationForSourceStarted(PollingLiveRunState state, PollingLiveRunState.SourceState source) {
-        if (!shouldNotifyForRun(state)) {
-            return null;
-        }
-        return notification(
-                "notifications.fetcherPollStarted",
-                "warning",
-                "fetcher-poll:" + source.sourceId,
-                "source-email-accounts-section",
-                false,
-                Map.of("emailAccountId", source.sourceId));
-    }
-
-    private LiveNotificationView notificationForSourceFinished(PollingLiveRunState state, PollingLiveRunState.SourceState source) {
-        if (!shouldNotifyForRun(state)) {
-            return null;
-        }
-        if (isSkipReason(source.error)) {
-            return null;
-        }
-        String key = source.error == null ? "notifications.livePollSourceFinished" : "notifications.livePollSourceFailed";
-        return notification(
-                key,
-                source.error == null ? "success" : "error",
-                "fetcher-poll:" + source.sourceId,
-                "source-email-accounts-section",
-                true,
-                Map.of(
-                        "emailAccountId", source.sourceId,
-                        "fetched", String.valueOf(source.fetched),
-                        "imported", String.valueOf(source.imported),
-                        "duplicates", String.valueOf(source.duplicates)));
-    }
-
-    private boolean shouldNotifyForRun(PollingLiveRunState state) {
-        return state != null && !"scheduler".equals(state.trigger);
-    }
-
-    private boolean isSkipReason(String error) {
-        return "disabled".equals(error)
-                || "DISABLED".equals(error)
-                || "COOLDOWN".equals(error)
-                || "INTERVAL".equals(error);
-    }
-
-    private LiveNotificationView notification(String key, String tone, String groupKey) {
-        return notification(key, tone, groupKey, null, false, Map.of());
-    }
-
-    private LiveNotificationView notification(String key, String tone, String groupKey, String targetId) {
-        return notification(key, tone, groupKey, targetId, false, Map.of());
-    }
-
-    private LiveNotificationView notification(String key, String tone, String groupKey, String targetId, boolean replaceGroup) {
-        return notification(key, tone, groupKey, targetId, replaceGroup, Map.of());
-    }
-
-    private LiveNotificationView notification(
-            String key,
-            String tone,
-            String groupKey,
-            String targetId,
-            boolean replaceGroup,
-            Map<String, String> params) {
-        LiveNotificationContentView content = new LiveNotificationContentView("translation", key, params);
-        return new LiveNotificationView(null, content, groupKey, content, replaceGroup, List.of(), targetId, tone);
-    }
-
-    private String buildRecentSessionTargetId(SessionStreamKind streamKind, Long sessionId) {
-        return "recent-session-" + streamKind.name() + "-" + sessionId;
+    private LiveNotificationView simpleNotification(String key, String tone, String groupKey) {
+        LiveNotificationContentView content = new LiveNotificationContentView("translation", key, java.util.Map.of());
+        return new LiveNotificationView(null, content, groupKey, content, false, List.of(), null, tone);
     }
 
     public record PollRunHandle(String runId) {

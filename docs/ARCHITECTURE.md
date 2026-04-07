@@ -78,6 +78,10 @@ infrastructure details:
   bucket generation used by polling statistics, so `PollingStatsService` can
   focus on repository scoping and event aggregation instead of also embedding
   the timeline-bucketing implementation.
+- `PollingLivePresentationService` now owns viewer-scoped live snapshot shaping
+  plus live notification assembly, so `PollingLiveService` can focus on state
+  transitions, permissions, cancellation, and subscriber fan-out instead of
+  also embedding the presentation policy for every live event.
 
 ## Remote control flow
 
@@ -100,13 +104,14 @@ InboxBridge now exposes authenticated live polling state for both the main app a
 
 1. `PollingService` starts a run through `PollingLiveService`
 2. `PollingLiveService` coordinates the active run while the mutable queued/running/completed source model now lives in `PollingLiveRunState`
-3. `GET /api/poll/live` and `GET /api/admin/poll/live` return an immediate snapshot so a browser can hydrate mid-run without waiting for the next event
-4. `GET /api/poll/events` and `GET /api/admin/poll/events` stream SSE updates plus live notifications as the run changes, and they can also push targeted `session-revoked` events so a browser session signed out elsewhere leaves immediately
-5. authenticated `POST` controls call the live service to pause, resume, stop, move one queued source to the front, or retry a completed/failed source
-6. `PollingService` now asks `PollingLiveService` for the next source just in time instead of precomputing the full queue, so reprioritize controls affect the remaining queue order while a run is active
-7. several workers may therefore dequeue and run different sources concurrently, and the live snapshot's per-source `state` is the authoritative UI signal for row-level running indicators
-8. the active source path now checks the live pause/stop state between fetched messages, so pause/stop requests take effect during the current source rather than only after it finishes
-9. a stop request also runs the registered cancellation actions for that run, which closes active mailbox sessions and interrupts worker threads so blocking I/O has a better chance to unwind promptly
+3. `PollingLivePresentationService` turns that state into viewer-scoped snapshots and notification payloads
+4. `GET /api/poll/live` and `GET /api/admin/poll/live` return an immediate snapshot so a browser can hydrate mid-run without waiting for the next event
+5. `GET /api/poll/events` and `GET /api/admin/poll/events` stream SSE updates plus live notifications as the run changes, and they can also push targeted `session-revoked` events so a browser session signed out elsewhere leaves immediately
+6. authenticated `POST` controls call the live service to pause, resume, stop, move one queued source to the front, or retry a completed/failed source
+7. `PollingService` now asks `PollingLiveService` for the next source just in time instead of precomputing the full queue, so reprioritize controls affect the remaining queue order while a run is active
+8. several workers may therefore dequeue and run different sources concurrently, and the live snapshot's per-source `state` is the authoritative UI signal for row-level running indicators
+9. the active source path now checks the live pause/stop state between fetched messages, so pause/stop requests take effect during the current source rather than only after it finishes
+10. a stop request also runs the registered cancellation actions for that run, which closes active mailbox sessions and interrupts worker threads so blocking I/O has a better chance to unwind promptly
 
 That keeps the poll engine authoritative in the backend while letting the UI show real-time progress without hammering every row with its own polling loop.
 
