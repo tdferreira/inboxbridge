@@ -8,28 +8,32 @@ The frontend dependency set is intentionally kept on current stable major versio
 
 ```text
 admin-ui/src
-├── App.jsx
-├── components
+├── app
+├── features
 │   ├── account
 │   ├── admin
 │   ├── auth
-│   ├── common
 │   ├── destination
-│   ├── emailAccounts
-│   ├── gmail
+│   ├── email-accounts
 │   ├── layout
 │   ├── polling
 │   └── stats
 ├── lib
+├── shared
 └── test
 ```
 
 Key design choices:
 
-- `App.jsx` owns shared data loading and top-level workspace composition.
-- Imperative UI slices are being moved into controller hooks under `src/lib/...`, including auth and security flows, source email account orchestration, destination mailbox actions, polling flows, and admin user-management actions.
-- Reusable presentational components live under `src/components/...`.
-- `src/components/layout/SetupGuidePanel.jsx` gives users a first-run checklist inside the app itself.
+- `src/app/App.jsx` owns shared data loading and top-level workspace composition, while `src/app/RemoteApp.jsx` keeps the `/remote` surface bootstrapping isolated from the main workspace.
+- `src/features/<feature>/components/...` owns feature UI, colocated tests, and feature-local CSS.
+- `src/features/<feature>/hooks/...` owns feature orchestration hooks such as auth security, destination, email-account, polling, and workspace-preferences flows.
+- `src/shared/components/...` contains reusable UI primitives and shared utility cards that are used across features.
+- `src/shared/hooks/...` contains reusable browser/workflow hooks shared across app shells or features.
+- `src/lib/...` is reserved for cross-feature pure utilities, formatting helpers, API clients, and translation/runtime helpers.
+- `src/lib/i18n/...` keeps translation catalogs split per locale; the app preloads the active locale before boot and loads additional locale bundles on demand instead of shipping one monolithic translation chunk.
+- `src/theme/global.css` owns the small set of app-wide visual rules that truly need to span features.
+- `src/features/layout/components/SetupGuidePanel.jsx` gives users a first-run checklist inside the app itself.
 - the setup guide entries are clickable links that focus the corresponding working section
 - the setup guide uses neutral / green / red state styling to reflect pending, complete, and error conditions
 - the setup guide auto-collapses once every tracked step is complete
@@ -279,13 +283,13 @@ Key design choices:
 - collapse buttons expose native hover hints and stay pinned to the top-right corner of the card
 - shared button styles now include clearer hover, focus, and pressed states so actions feel more obviously interactive across the UI
 - Each component imports its own CSS file for local structure and appearance.
-- Shared visual tokens and generic form/layout helpers live in `src/styles.css`.
+- Shared global rules live in `src/theme/global.css`; feature and primitive styling should stay beside the owning component instead of drifting into one large stylesheet.
 - shared layout/action primitives now also include reusable `SectionCard`, `CollapsibleSection`, `ButtonLink`, `FormField`, `FloatingActionMenu`, and `AutocompleteInput` components so new dashboard sections, labeled form rows, contextual menus, autocomplete pickers, and navigational CTA actions do not need one-off structure or styling
 - Formatting and API helpers live in `src/lib/...`.
 
 ## UI primitives
 
-When building or updating UI in `admin-ui`, prefer the shared primitives under `src/components/common` before introducing a new bespoke component or local layout pattern.
+When building or updating UI in `admin-ui`, prefer the shared primitives under `src/shared/components` before introducing a new bespoke component or local layout pattern.
 
 Current design-system foundation includes:
 

@@ -1,4 +1,4 @@
-import { findEmailProviderPreset, isOutlookSourceConfig } from './emailProviderPresets'
+import { findEmailProviderPreset, isOutlookSourceConfig } from '@/lib/emailProviderPresets'
 
 export const DEFAULT_EMAIL_ACCOUNT_FORM = {
   originalEmailAccountId: '',

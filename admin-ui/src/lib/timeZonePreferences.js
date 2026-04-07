@@ -3,6 +3,10 @@ export const TIMEZONE_MODE_MANUAL = 'MANUAL'
 
 let currentFormattingTimeZone = null
 
+/**
+ * Central timezone normalization and storage helpers used by both app shells
+ * and by formatter utilities that need a stable current formatting zone.
+ */
 function normalizeTimeZoneText(value) {
   if (value == null) {
     return ''

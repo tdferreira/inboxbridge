@@ -1,5 +1,5 @@
-import { translate } from './i18n'
-import { getCurrentFormattingTimeZone } from './timeZonePreferences'
+import { translate } from '@/lib/i18n'
+import { getCurrentFormattingTimeZone } from '@/lib/timeZonePreferences'
 
 export const DATE_FORMAT_AUTO = 'AUTO'
 export const DATE_FORMAT_YMD_24 = 'YMD_24'

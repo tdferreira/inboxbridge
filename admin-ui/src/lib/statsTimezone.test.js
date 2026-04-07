@@ -1,5 +1,5 @@
 import { describe, expect, it, vi, afterEach } from 'vitest'
-import { statsTimezoneHeader } from './statsTimezone'
+import { statsTimezoneHeader } from '@/lib/statsTimezone'
 
 describe('statsTimezoneHeader', () => {
   afterEach(() => {

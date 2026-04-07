@@ -1,5 +1,5 @@
-import { formatPollError } from './formatters'
-import { translate } from './i18n'
+import { formatPollError } from '@/lib/formatters'
+import { translate } from '@/lib/i18n'
 
 export function translatedNotification(key, params = {}) {
   return { kind: 'translation', key, params }

@@ -5,7 +5,7 @@ import {
   findEmailProviderPreset,
   inferEmailProviderPresetId,
   normalizeDestinationProviderConfig
-} from './emailProviderPresets'
+} from '@/lib/emailProviderPresets'
 
 describe('emailProviderPresets', () => {
   it('returns the matching source email account preset', () => {

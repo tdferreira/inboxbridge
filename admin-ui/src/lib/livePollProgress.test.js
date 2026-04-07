@@ -1,5 +1,5 @@
 import { formatLiveProgressLabel, formatLiveProgressSummary, isLiveSourceFinalizing } from './livePollProgress'
-import { translate } from './i18n'
+import { translate } from '@/lib/i18n'
 
 describe('livePollProgress', () => {
   const t = (key, params) => translate('en', key, params)

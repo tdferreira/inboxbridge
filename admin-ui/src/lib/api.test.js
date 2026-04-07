@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { apiErrorText, AUTH_EXPIRED_EVENT } from './api'
+import { apiErrorText, AUTH_EXPIRED_EVENT } from '@/lib/api'
 
 describe('apiErrorText', () => {
   beforeEach(() => {

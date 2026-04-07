@@ -1,4 +1,4 @@
-import { languageOptions, translationCatalog } from './i18n'
+import { languageOptions, translationCatalog } from '@/lib/i18n'
 
 describe('i18n catalog', () => {
   it('defines the critical UI labels for every supported locale', () => {

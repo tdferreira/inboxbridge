@@ -1,4 +1,4 @@
-import { formatBytes } from './formatters'
+import { formatBytes } from '@/lib/formatters'
 
 export function processedMessagesForLiveSource(source) {
   if (!source) {

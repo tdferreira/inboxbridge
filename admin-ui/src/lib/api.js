@@ -1,5 +1,5 @@
-import { normalizeLocale, translate } from './i18n'
-import { formatDate } from './formatters'
+import { normalizeLocale, translate } from '@/lib/i18n'
+import { formatDate } from '@/lib/formatters'
 
 export const AUTH_EXPIRED_EVENT = 'inboxbridge:auth-expired'
 const APP_CSRF_COOKIE = 'inboxbridge_csrf'

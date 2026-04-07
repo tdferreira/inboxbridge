@@ -1,4 +1,4 @@
-import { normalizeLocale } from './i18n'
+import { normalizeLocale } from '@/lib/i18n'
 
 export const WORKSPACE_ROUTE_SEGMENTS = Object.freeze({
   en: Object.freeze({ user: 'user', admin: 'admin' }),

@@ -1,4 +1,4 @@
-import { hostSupportsPasskeys, normalizePasskeyError, parseCreateOptions, parseGetOptions, serializeCredential } from './passkeys'
+import { hostSupportsPasskeys, normalizePasskeyError, parseCreateOptions, parseGetOptions, serializeCredential } from '@/lib/passkeys'
 
 describe('passkeys helpers', () => {
   it('hydrates wrapped WebAuthn option payloads and serializes credentials', () => {

@@ -4,7 +4,7 @@ import {
   extractSourceEmailAccountId,
   isRecentSessionTargetId,
   isSourceEmailAccountTargetId
-} from './sectionTargets'
+} from '@/lib/sectionTargets'
 
 describe('sectionTargets', () => {
   it('builds stable target ids for source email accounts', () => {

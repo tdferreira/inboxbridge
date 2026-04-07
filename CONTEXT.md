@@ -66,7 +66,7 @@ The repository now also includes project-local Codex skills under `.codex/skills
 
 The React admin UI lives in `admin-ui/` and runs in its own container/server. It communicates with the Quarkus backend through proxied REST endpoints under `/api/...`.
 
-`admin-ui/src/App.jsx` still owns bootstrap data loading and top-level workspace composition, but larger imperative slices are now split into focused controller hooks under `admin-ui/src/lib/`, including auth/security flows, source email accounts, destination mailbox flows, polling flows, and admin user management.
+The frontend now follows a feature-first layout: `admin-ui/src/app` owns the main and remote app shells, `admin-ui/src/features/<feature>` owns feature components plus feature-local hooks/tests/styles, `admin-ui/src/shared` owns reusable UI primitives and shared hooks, `admin-ui/src/lib` is reserved for cross-feature pure utilities and API helpers, and `admin-ui/src/theme/global.css` holds the small global style layer.
 
 Why:
 
@@ -558,11 +558,12 @@ Currently bundled locales:
 
 Design choices:
 
-- translations are stored in `admin-ui/src/lib/i18n.js`
+- translations are routed through `admin-ui/src/lib/i18n.js`, while the locale catalogs themselves now live in `admin-ui/src/lib/i18n/locales`
 - the backend persists the selected language in `user_ui_preference.language`
 - the browser also mirrors the last selected language in local storage so the login screen can reuse it before session data is loaded
 - the unauthenticated login screen now exposes that language selector directly, and the self-registration modal mirrors it so users can switch locales before authentication
 - visible labels now route through the translation helper instead of mixing translated and raw JSX text
+- the React boot path now preloads the active locale before rendering, and additional locale catalogs load on demand so production builds do not ship one oversized translation chunk up front
 - expanded user-management entries are grouped into explicit subsections for user configuration, Gmail account, poller settings, passkeys, and source email accounts
 - the most prominent labels inside those subsection bodies now follow the selected language too instead of remaining in English
 - quick-setup guidance, Gmail account controls, poller-setting forms, and source-email-account forms/lists now have broader locale coverage so changing language updates section bodies as well as headings
@@ -834,15 +835,17 @@ Validated on 2026-04-01:
 - Flyway migrations `V1` through `V40` apply successfully
 - direct backend startup works with the current polling pacing defaults because `DESTINATION_PROVIDER_MIN_SPACING` now uses the valid ISO-8601 duration `PT0.25S`
 
-Admin UI frontend structure now follows a controller-and-components split:
+Admin UI frontend structure now follows a feature-first split:
 
-- `App.jsx` owns session state and shared data loading
-- `src/lib/useEmailAccountsController.js` owns source email account orchestration
-- `src/lib/useAuthSecurityController.js` owns session auth, password, and passkey flows
-- `src/lib/useDestinationController.js` owns destination mailbox actions
-- `src/lib/usePollingControllers.js` owns user/global polling dialog and run flows
-- `src/components/...` contains reusable UI sections with independent CSS files
-- `src/lib/...` contains formatting and API helper utilities
+- `src/app/App.jsx` owns main-workspace session state and shared data loading
+- `src/app/RemoteApp.jsx` owns the `/remote` boot path and remote-specific orchestration
+- `src/features/email-accounts/hooks/useEmailAccountsController.js` owns source email account orchestration
+- `src/features/admin/hooks/useAuthSecurityController.js` owns session auth, password, and passkey flows
+- `src/features/destination/hooks/useDestinationController.js` owns destination mailbox actions
+- `src/features/polling/hooks/usePollingControllers.js` owns user/global polling dialog and run flows
+- `src/features/<feature>/components/...` contains feature-owned UI sections with colocated CSS/tests
+- `src/shared/components/...` contains reusable primitives such as `SectionCard`, `CollapsibleSection`, and form/menu helpers
+- `src/lib/...` contains formatting, translation, runtime, and API helper utilities
 - `admin-ui/README.md` documents the frontend layout and test workflow
 - the Google and Microsoft OAuth callback pages now support navigating back to InboxBridge after in-browser code exchange
 - the Google and Microsoft OAuth callback pages support copying the raw code, automatically attempt the exchange on load, warn before navigating away without exchange, and auto-redirect to InboxBridge after a 5-second countdown once exchange succeeds unless the user cancels that automatic redirect

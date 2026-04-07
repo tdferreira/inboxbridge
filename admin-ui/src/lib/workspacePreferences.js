@@ -1,4 +1,4 @@
-import { normalizeDateFormatPreference } from './formatters'
+import { normalizeDateFormatPreference } from '@/lib/formatters'
 
 export const DEFAULT_UI_PREFERENCES = {
   persistLayout: false,

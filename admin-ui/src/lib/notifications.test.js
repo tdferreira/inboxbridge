@@ -5,8 +5,8 @@ import {
   pollErrorNotification,
   resolveNotificationContent,
   translatedNotification
-} from './notifications'
-import { languageOptions, translationCatalog } from './i18n'
+} from '@/lib/notifications'
+import { languageOptions, translationCatalog } from '@/lib/i18n'
 
 describe('notifications helpers', () => {
   it('resolves translated notification descriptors in the active locale', () => {

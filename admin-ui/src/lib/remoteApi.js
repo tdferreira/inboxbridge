@@ -1,4 +1,4 @@
-import { apiErrorText } from './api'
+import { apiErrorText } from '@/lib/api'
 
 export class RemoteUnauthorizedError extends Error {
   constructor(message = 'Remote session expired') {
@@ -7,6 +7,11 @@ export class RemoteUnauthorizedError extends Error {
   }
 }
 
+/**
+ * Narrow request wrapper for the `/api/remote/...` surface.
+ * It keeps the remote UI on cookie-based auth, injects the remote CSRF token
+ * for unsafe methods, and normalizes expired-session behavior for callers.
+ */
 function csrfToken() {
   if (typeof document === 'undefined') return ''
   return document.cookie

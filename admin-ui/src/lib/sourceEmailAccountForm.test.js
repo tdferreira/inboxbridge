@@ -1,4 +1,4 @@
-import { applyEmailAccountPreset, DEFAULT_EMAIL_ACCOUNT_FORM, normalizeEmailAccountForm } from './sourceEmailAccountForm'
+import { applyEmailAccountPreset, DEFAULT_EMAIL_ACCOUNT_FORM, normalizeEmailAccountForm } from '@/lib/sourceEmailAccountForm'
 
 describe('sourceEmailAccountForm', () => {
   it('clears OAuth fields when password auth is selected', () => {
