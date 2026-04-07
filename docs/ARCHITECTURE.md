@@ -5,7 +5,7 @@
 1. `PollingService` runs on schedule or manually via REST
 2. `PollingService` resolves the eligible sources and lets a bounded set of virtual-thread workers claim them just in time
 3. Each worker binds the current live-run/source scope, so mailbox and destination resources can register cancellation handles for that source
-4. `MailSourceClient` fetches recent messages over IMAP or POP3
+4. `MailSourceClient` orchestrates source fetches and delegates protocol I/O to `MailSourceFetchService`
 5. `ImportDeduplicationService` checks whether a message was already imported
 6. The configured destination implementation prepares the append/import target
 7. `MailDestinationService` dispatches to the active destination provider, such as Gmail API import or IMAP APPEND
@@ -45,6 +45,10 @@ infrastructure details:
 - `MailSourceConnectionProbeService` now owns source mailbox connection probes,
   folder listing, and spam-folder inspection so connection-test behavior can
   evolve separately from the polling pipeline itself.
+- `MailSourceFetchService` now owns IMAP and POP3 fetch execution, including
+  destination-aware checkpoint lookups, per-folder IMAP iteration, metadata
+  prefetch, and chronological cross-folder ordering before messages re-enter
+  the higher-level polling pipeline.
 - `MailSourcePostPollActionService` now owns source-side IMAP mutations after a
   successful import or duplicate match, including mark-as-read, move, delete,
   and best-effort `$Forwarded` handling against the fetched message's actual
