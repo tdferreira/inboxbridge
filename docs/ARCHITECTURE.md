@@ -35,8 +35,16 @@ infrastructure details:
   service.
 - `MailSourceFolderService` and `MailSourceMessageMapper` now keep source-folder
   discovery/spam probing and fetched-message materialization/source-key logic
-  out of `MailSourceClient`, so the polling coordinator can focus on mailbox
-  connection flow, checkpoint selection, and post-poll orchestration.
+  out of `MailSourceClient`.
+- `MailSourceCheckpointSelector` now owns checkpoint-aware IMAP and POP3
+  candidate selection, including resume-vs-tail-window fallback behavior when
+  stored mailbox checkpoints are missing or no longer trustworthy.
+- `MailSourceConnectionService` now owns mailbox-store connection plus the
+  retry-once OAuth token invalidation/refresh path for Microsoft and Google
+  source sessions.
+- With those helpers in place, `MailSourceClient` can stay focused on polling
+  orchestration and source-side post-poll actions instead of re-implementing
+  every protocol or OAuth detail itself.
 
 ## Remote control flow
 

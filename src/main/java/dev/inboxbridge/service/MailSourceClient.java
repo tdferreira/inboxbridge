@@ -66,6 +66,12 @@ public class MailSourceClient {
     @Inject
     MailSourceMessageMapper mailSourceMessageMapper;
 
+    @Inject
+    MailSourceCheckpointSelector mailSourceCheckpointSelector;
+
+    @Inject
+    MailSourceConnectionService mailSourceConnectionService;
+
     public List<FetchedMessage> fetch(InboxBridgeConfig.Source source) {
         return fetch(source, pollingSettingsService.effectiveSettings().fetchWindow());
     }
@@ -126,7 +132,7 @@ public class MailSourceClient {
         try {
             store = session.getStore(mailSessionFactory().imapStoreProtocol(bridge.tls()));
             registerStore(store);
-            connectStore(store, bridge);
+            mailSourceConnectionService().connectStore(store, bridge);
             sourceFolder = store.getFolder(message.folderName().orElse(bridge.primaryFolder()));
             registerFolder(sourceFolder);
             if (!sourceFolder.exists()) {
@@ -185,7 +191,7 @@ public class MailSourceClient {
         try {
             store = session.getStore(mailSessionFactory().imapStoreProtocol(bridge.tls()));
             registerStore(store);
-            connectStore(store, bridge);
+            mailSourceConnectionService().connectStore(store, bridge);
             List<String> targetFolders = bridge.sourceFolders();
             String targetFolder = String.join(", ", targetFolders);
             int visibleMessageCount = 0;
@@ -248,7 +254,7 @@ public class MailSourceClient {
         try {
             store = session.getStore(mailSessionFactory().imapStoreProtocol(bridge.tls()));
             registerStore(store);
-            connectStore(store, bridge);
+            mailSourceConnectionService().connectStore(store, bridge);
             Optional<MailboxCountProbe> probe = mailSourceFolderService().probeSpamOrJunkFolder(store);
             if (probe.isEmpty()) {
                 return Optional.empty();
@@ -271,7 +277,7 @@ public class MailSourceClient {
         try {
             store = session.getStore(mailSessionFactory().imapStoreProtocol(bridge.tls()));
             registerStore(store);
-            connectStore(store, bridge);
+            mailSourceConnectionService().connectStore(store, bridge);
             return mailSourceFolderService().listFolders(store);
         } catch (MessagingException e) {
             throw new IllegalStateException("Failed to list folders for source " + bridge.id(), e);
@@ -287,7 +293,7 @@ public class MailSourceClient {
         try {
             store = session.getStore(mailSessionFactory().imapStoreProtocol(source.tls()));
             registerStore(store);
-            connectStore(store, source);
+            mailSourceConnectionService().connectStore(store, source);
             return fetchImapMessages(
                     source.id(),
                     null,
@@ -309,7 +315,7 @@ public class MailSourceClient {
         try {
             store = session.getStore(mailSessionFactory().imapStoreProtocol(bridge.tls()));
             registerStore(store);
-            connectStore(store, bridge);
+            mailSourceConnectionService().connectStore(store, bridge);
             return fetchImapMessages(
                     bridge.id(),
                     destinationKeyFor(bridge),
@@ -345,10 +351,10 @@ public class MailSourceClient {
                     throw new IllegalStateException("The mailbox path " + folderName + " does not exist on " + store.getURLName().getHost() + ".");
                 }
                 folder.open(Folder.READ_ONLY);
-                Message[] candidateMessages = selectImapCandidateMessages(
-                        sourceId,
-                        destinationKey,
-                        folderName,
+                Message[] candidateMessages = mailSourceCheckpointSelector().selectImapCandidateMessages(
+                        sourcePollingStateService == null
+                                ? Optional.empty()
+                                : sourcePollingStateService.imapCheckpoint(sourceId, destinationKey, folderName),
                         unreadOnly,
                         fetchWindow,
                         folder);
@@ -370,11 +376,14 @@ public class MailSourceClient {
         try {
             store = session.getStore(mailSessionFactory().pop3StoreProtocol(source.tls()));
             registerStore(store);
-            connectStore(store, source);
+            mailSourceConnectionService().connectStore(store, source);
             folder = store.getFolder("INBOX");
             registerFolder(folder);
             folder.open(Folder.READ_ONLY);
-            Message[] candidateMessages = selectPop3CandidateMessages(source.id(), null, fetchWindow, folder);
+            Message[] candidateMessages = mailSourceCheckpointSelector().selectPop3CandidateMessages(
+                    sourcePollingStateService == null ? Optional.empty() : sourcePollingStateService.popCheckpoint(source.id(), null),
+                    fetchWindow,
+                    folder);
             return mailSourceMessageMapper().toFetchedMessages(source.id(), candidateMessages);
         } catch (MessagingException e) {
             throw new IllegalStateException("Failed to fetch POP3 mail for source " + source.id(), e);
@@ -392,11 +401,16 @@ public class MailSourceClient {
         try {
             store = session.getStore(mailSessionFactory().pop3StoreProtocol(bridge.tls()));
             registerStore(store);
-            connectStore(store, bridge);
+            mailSourceConnectionService().connectStore(store, bridge);
             folder = store.getFolder("INBOX");
             registerFolder(folder);
             folder.open(Folder.READ_ONLY);
-            Message[] candidateMessages = selectPop3CandidateMessages(bridge.id(), destinationKeyFor(bridge), fetchWindow, folder);
+            Message[] candidateMessages = mailSourceCheckpointSelector().selectPop3CandidateMessages(
+                    sourcePollingStateService == null
+                            ? Optional.empty()
+                            : sourcePollingStateService.popCheckpoint(bridge.id(), destinationKeyFor(bridge)),
+                    fetchWindow,
+                    folder);
             return mailSourceMessageMapper().toFetchedMessages(bridge.id(), candidateMessages);
         } catch (MessagingException e) {
             throw new IllegalStateException("Failed to fetch POP3 mail for source " + bridge.id(), e);
@@ -414,7 +428,7 @@ public class MailSourceClient {
         try {
             store = session.getStore(mailSessionFactory().pop3StoreProtocol(bridge.tls()));
             registerStore(store);
-            connectStore(store, bridge);
+            mailSourceConnectionService().connectStore(store, bridge);
             folder = store.getFolder("INBOX");
             registerFolder(folder);
             folder.open(Folder.READ_ONLY);
@@ -511,97 +525,6 @@ public class MailSourceClient {
             return messages;
         }
         return Arrays.copyOfRange(messages, messages.length - normalizedFetchWindow, messages.length);
-    }
-
-    private Message[] selectImapCandidateMessages(
-            String sourceId,
-            String destinationKey,
-            String folderName,
-            boolean unreadOnly,
-            int fetchWindow,
-            Folder folder) throws MessagingException {
-        Optional<ImapCheckpoint> checkpoint = sourcePollingStateService == null
-                ? Optional.empty()
-                : sourcePollingStateService.imapCheckpoint(sourceId, destinationKey, folderName);
-        Message[] checkpointMessages = selectMessagesFromCheckpoint(folder, checkpoint, unreadOnly);
-        if (checkpointMessages != null) {
-            return checkpointMessages;
-        }
-        return unreadOnly
-                ? trimTailMessages(folder.search(new FlagTerm(new Flags(Flags.Flag.SEEN), false)), fetchWindow)
-                : selectTailMessages(folder, fetchWindow);
-    }
-
-    private Message[] selectPop3CandidateMessages(String sourceId, String destinationKey, int fetchWindow, Folder folder) throws MessagingException {
-        Optional<String> checkpoint = sourcePollingStateService == null
-                ? Optional.empty()
-                : sourcePollingStateService.popCheckpoint(sourceId, destinationKey);
-        Message[] checkpointMessages = selectMessagesFromPopCheckpoint(folder, checkpoint);
-        if (checkpointMessages != null) {
-            return checkpointMessages;
-        }
-        return selectTailMessages(folder, fetchWindow);
-    }
-
-    private Message[] selectMessagesFromCheckpoint(
-            Folder folder,
-            Optional<ImapCheckpoint> checkpoint,
-            boolean unreadOnly) throws MessagingException {
-        if (checkpoint.isEmpty()) {
-            return null;
-        }
-        if (!(folder instanceof UIDFolder uidFolder)) {
-            return null;
-        }
-        Long uidValidity = resolveUidValidity(folder);
-        if (uidValidity == null || !uidValidity.equals(checkpoint.get().uidValidity())) {
-            return null;
-        }
-        long startUid = checkpoint.get().lastSeenUid() == null ? -1L : checkpoint.get().lastSeenUid();
-        if (startUid < 0L) {
-            return null;
-        }
-        Message[] messages = uidFolder.getMessagesByUID(startUid + 1L, UIDFolder.LASTUID);
-        if (!unreadOnly || messages.length == 0) {
-            return messages;
-        }
-        List<Message> unreadMessages = new ArrayList<>();
-        for (Message message : messages) {
-            if (!message.isSet(Flags.Flag.SEEN)) {
-                unreadMessages.add(message);
-            }
-        }
-        return unreadMessages.toArray(Message[]::new);
-    }
-
-    private Message[] selectMessagesFromPopCheckpoint(Folder folder, Optional<String> checkpoint) throws MessagingException {
-        if (checkpoint.isEmpty() || !(folder instanceof POP3Folder pop3Folder)) {
-            return null;
-        }
-        int count = folder.getMessageCount();
-        if (count <= 0) {
-            return new Message[0];
-        }
-        Message[] messages = folder.getMessages(1, count);
-        for (int index = messages.length - 1; index >= 0; index--) {
-            String uidl = resolvePopUidl(pop3Folder, messages[index]);
-            if (checkpoint.get().equals(uidl)) {
-                if (index + 1 >= messages.length) {
-                    return new Message[0];
-                }
-                return Arrays.copyOfRange(messages, index + 1, messages.length);
-            }
-        }
-        return null;
-    }
-
-    private String resolvePopUidl(POP3Folder folder, Message message) {
-        try {
-            return folder.getUID(message);
-        } catch (MessagingException e) {
-            LOG.debugf(e, "Unable to resolve POP UIDL for message %s", safeMessageNumber(message));
-            return null;
-        }
     }
 
     private String destinationKeyFor(RuntimeEmailAccount bridge) {
@@ -718,95 +641,6 @@ public class MailSourceClient {
         pollCancellationService.register(() -> closeQuietly(folder));
     }
 
-    private void connectStore(Store store, InboxBridgeConfig.Source source) throws MessagingException {
-        if (usesMicrosoftOAuth(source)) {
-            connectStoreWithMicrosoftOAuthRetry(
-                    store,
-                    source.id(),
-                    source.host(),
-                    source.port(),
-                    source.username(),
-                    () -> microsoftOAuthService.getAccessToken(source));
-            return;
-        }
-        if (usesGoogleOAuth(source)) {
-            connectStoreWithGoogleOAuthRetry(
-                    store,
-                    source.id(),
-                    source.host(),
-                    source.port(),
-                    source.username(),
-                    () -> googleOAuthService.getAccessToken(source));
-            return;
-        }
-        store.connect(source.host(), source.port(), source.username(), source.password());
-    }
-
-    private void connectStore(Store store, RuntimeEmailAccount bridge) throws MessagingException {
-        if (usesMicrosoftOAuth(bridge)) {
-            connectStoreWithMicrosoftOAuthRetry(
-                    store,
-                    bridge.id(),
-                    bridge.host(),
-                    bridge.port(),
-                    bridge.username(),
-                    () -> microsoftOAuthService.getAccessToken(bridge));
-            return;
-        }
-        if (usesGoogleOAuth(bridge)) {
-            connectStoreWithGoogleOAuthRetry(
-                    store,
-                    bridge.id(),
-                    bridge.host(),
-                    bridge.port(),
-                    bridge.username(),
-                    () -> googleOAuthService.getAccessToken(bridge));
-            return;
-        }
-        store.connect(bridge.host(), bridge.port(), bridge.username(), bridge.password());
-    }
-
-    private void connectStoreWithMicrosoftOAuthRetry(
-            Store store,
-            String sourceId,
-            String host,
-            int port,
-            String username,
-            TokenSupplier tokenSupplier) throws MessagingException {
-        try {
-            store.connect(host, port, username, tokenSupplier.get());
-        } catch (MessagingException firstFailure) {
-            if (!isRetryableMicrosoftOAuthFailure(firstFailure)) {
-                throw firstFailure;
-            }
-            LOG.warnf(firstFailure,
-                    "Microsoft session for %s was rejected; invalidating the cached token and retrying once",
-                    sourceId);
-            microsoftOAuthService.invalidateCachedToken(sourceId);
-            store.connect(host, port, username, tokenSupplier.get());
-        }
-    }
-
-    private boolean usesMicrosoftOAuth(InboxBridgeConfig.Source source) {
-        return source.authMethod() == InboxBridgeConfig.AuthMethod.OAUTH2
-                && source.oauthProvider() == InboxBridgeConfig.OAuthProvider.MICROSOFT;
-    }
-
-    private boolean usesGoogleOAuth(InboxBridgeConfig.Source source) {
-        return source.authMethod() == InboxBridgeConfig.AuthMethod.OAUTH2
-                && source.oauthProvider() == InboxBridgeConfig.OAuthProvider.GOOGLE;
-    }
-
-    private boolean usesMicrosoftOAuth(RuntimeEmailAccount bridge) {
-        return bridge.authMethod() == InboxBridgeConfig.AuthMethod.OAUTH2
-                && bridge.oauthProvider() == InboxBridgeConfig.OAuthProvider.MICROSOFT;
-    }
-
-    private boolean usesGoogleOAuth(RuntimeEmailAccount bridge) {
-        return bridge.authMethod() == InboxBridgeConfig.AuthMethod.OAUTH2
-                && bridge.oauthProvider() == InboxBridgeConfig.OAuthProvider.GOOGLE;
-    }
-
     private void requireSupportedAuth(InboxBridgeConfig.Source source) {
         if (source.authMethod() == InboxBridgeConfig.AuthMethod.OAUTH2) {
             throw new IllegalStateException("OAuth2 is only implemented for configured Google or Microsoft source providers at the moment");
@@ -816,27 +650,6 @@ public class MailSourceClient {
     private void requireSupportedAuth(RuntimeEmailAccount bridge) {
         if (bridge.authMethod() == InboxBridgeConfig.AuthMethod.OAUTH2) {
             throw new IllegalStateException("OAuth2 is only implemented for configured Google or Microsoft source providers at the moment");
-        }
-    }
-
-    private void connectStoreWithGoogleOAuthRetry(
-            Store store,
-            String sourceId,
-            String host,
-            int port,
-            String username,
-            TokenSupplier tokenSupplier) throws MessagingException {
-        try {
-            store.connect(host, port, username, tokenSupplier.get());
-        } catch (MessagingException firstFailure) {
-            if (!isRetryableMicrosoftOAuthFailure(firstFailure)) {
-                throw firstFailure;
-            }
-            LOG.warnf(firstFailure,
-                    "Google session for %s was rejected; invalidating the cached token and retrying once",
-                    sourceId);
-            googleOAuthService.clearCachedToken("source-google:" + sourceId);
-            store.connect(host, port, username, tokenSupplier.get());
         }
     }
 
@@ -882,9 +695,22 @@ public class MailSourceClient {
         return mailSourceMessageMapper;
     }
 
-    @FunctionalInterface
-    private interface TokenSupplier {
-        String get();
+    private MailSourceCheckpointSelector mailSourceCheckpointSelector() {
+        if (mailSourceCheckpointSelector == null) {
+            mailSourceCheckpointSelector = new MailSourceCheckpointSelector();
+        }
+        return mailSourceCheckpointSelector;
+    }
+
+    private MailSourceConnectionService mailSourceConnectionService() {
+        if (mailSourceConnectionService != null) {
+            return mailSourceConnectionService;
+        }
+        MailSourceConnectionService fallback = new MailSourceConnectionService();
+        fallback.microsoftOAuthService = microsoftOAuthService;
+        fallback.googleOAuthService = googleOAuthService;
+        mailSourceConnectionService = fallback;
+        return mailSourceConnectionService;
     }
 
     public record MailboxCountProbe(String folderName, int messageCount) {
