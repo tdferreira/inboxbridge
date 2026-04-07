@@ -42,6 +42,9 @@ infrastructure details:
 - `MailSourceConnectionService` now owns mailbox-store connection plus the
   retry-once OAuth token invalidation/refresh path for Microsoft and Google
   source sessions.
+- `MailSourceConnectionProbeService` now owns source mailbox connection probes,
+  folder listing, and spam-folder inspection so connection-test behavior can
+  evolve separately from the polling pipeline itself.
 - `MailSourcePostPollActionService` now owns source-side IMAP mutations after a
   successful import or duplicate match, including mark-as-read, move, delete,
   and best-effort `$Forwarded` handling against the fetched message's actual

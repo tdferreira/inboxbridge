@@ -1,7 +1,6 @@
 package dev.inboxbridge.service;
 
 import java.util.ArrayList;
-import java.util.Arrays;
 import java.util.Comparator;
 import java.util.List;
 import java.util.Optional;
@@ -22,7 +21,6 @@ import jakarta.mail.Session;
 import jakarta.mail.Store;
 import jakarta.mail.UIDFolder;
 import jakarta.mail.search.FlagTerm;
-import jakarta.mail.search.HeaderTerm;
 
 @ApplicationScoped
 public class MailSourceClient {
@@ -63,6 +61,9 @@ public class MailSourceClient {
     @Inject
     MailSourcePostPollActionService mailSourcePostPollActionService;
 
+    @Inject
+    MailSourceConnectionProbeService mailSourceConnectionProbeService;
+
     public List<FetchedMessage> fetch(InboxBridgeConfig.Source source) {
         return fetch(source, pollingSettingsService.effectiveSettings().fetchWindow());
     }
@@ -86,131 +87,19 @@ public class MailSourceClient {
     }
 
     public EmailAccountConnectionTestResult testConnection(RuntimeEmailAccount bridge) {
-        return switch (bridge.protocol()) {
-            case IMAP -> testImapConnection(bridge);
-            case POP3 -> testPop3Connection(bridge);
-        };
+        return mailSourceConnectionProbeService().testConnection(bridge);
     }
 
     public List<String> listFolders(RuntimeEmailAccount bridge) {
-        return switch (bridge.protocol()) {
-            case IMAP -> listImapFolders(bridge);
-            case POP3 -> List.of();
-        };
+        return mailSourceConnectionProbeService().listFolders(bridge);
     }
 
     public Optional<MailboxCountProbe> probeSpamOrJunkFolder(RuntimeEmailAccount bridge) {
-        return switch (bridge.protocol()) {
-            case IMAP -> probeImapSpamOrJunkFolder(bridge);
-            case POP3 -> Optional.empty();
-        };
+        return mailSourceConnectionProbeService().probeSpamOrJunkFolder(bridge);
     }
 
     public void applyPostPollSettings(RuntimeEmailAccount bridge, FetchedMessage message) {
         mailSourcePostPollActionService().apply(bridge, message);
-    }
-
-    private EmailAccountConnectionTestResult testImapConnection(RuntimeEmailAccount bridge) {
-        requireSupportedAuth(bridge);
-        Session session = mailSessionFactory().sourceImapSession(bridge);
-        Store store = null;
-        Folder folder = null;
-        try {
-            store = session.getStore(mailSessionFactory().imapStoreProtocol(bridge.tls()));
-            registerStore(store);
-            mailSourceConnectionService().connectStore(store, bridge);
-            List<String> targetFolders = bridge.sourceFolders();
-            String targetFolder = String.join(", ", targetFolders);
-            int visibleMessageCount = 0;
-            int unreadMessageCount = 0;
-            Message[] candidateMessages = new Message[0];
-            Folder candidateFolder = null;
-            for (String folderName : targetFolders) {
-                folder = store.getFolder(folderName);
-                registerFolder(folder);
-                if (!folder.exists()) {
-                    throw new IllegalStateException("The mailbox path " + folderName + " does not exist on " + bridge.host() + ".");
-                }
-                folder.open(Folder.READ_ONLY);
-                visibleMessageCount += folder.getMessageCount();
-                Message[] unreadMessages = folder.search(new FlagTerm(new Flags(Flags.Flag.SEEN), false));
-                unreadMessageCount += unreadMessages.length;
-                Message[] folderCandidateMessages = bridge.unreadOnly()
-                        ? trimTailMessages(unreadMessages, 1)
-                        : selectTailMessages(folder, 1);
-                if (folderCandidateMessages.length > 0) {
-                    candidateMessages = folderCandidateMessages;
-                    candidateFolder = folder;
-                    folder = null;
-                    break;
-                }
-                closeQuietly(folder);
-                folder = null;
-            }
-            boolean sampleMessageAvailable = candidateMessages.length > 0;
-            Boolean sampleMessageMaterialized = null;
-            if (sampleMessageAvailable) {
-                prefetchMessageMetadata(candidateFolder, candidateMessages);
-                sampleMessageMaterialized = !mailSourceMessageMapper().toFetchedMessages(bridge.id(), candidateFolder, candidateMessages).isEmpty();
-            }
-            Boolean forwardedMarkerSupported = MailSourceFolderService.resolveForwardedMarkerSupport(candidateFolder);
-            return buildProbeResult(
-                    bridge,
-                    targetFolder,
-                    true,
-                    Boolean.TRUE,
-                    bridge.unreadOnly() ? Boolean.TRUE : null,
-                    visibleMessageCount,
-                    unreadMessageCount,
-                    sampleMessageAvailable,
-                    sampleMessageMaterialized,
-                    forwardedMarkerSupported);
-        } catch (MessagingException e) {
-            throw new IllegalStateException("Failed to connect to IMAP mail fetcher " + bridge.id(), e);
-        } finally {
-            closeQuietly(folder);
-            closeQuietly(store);
-        }
-    }
-
-    private Optional<MailboxCountProbe> probeImapSpamOrJunkFolder(RuntimeEmailAccount bridge) {
-        requireSupportedAuth(bridge);
-        Session session = mailSessionFactory().sourceImapSession(bridge);
-        Store store = null;
-        Folder folder = null;
-        try {
-            store = session.getStore(mailSessionFactory().imapStoreProtocol(bridge.tls()));
-            registerStore(store);
-            mailSourceConnectionService().connectStore(store, bridge);
-            Optional<MailboxCountProbe> probe = mailSourceFolderService().probeSpamOrJunkFolder(store);
-            if (probe.isEmpty()) {
-                return Optional.empty();
-            }
-            folder = store.getFolder(probe.get().folderName());
-            registerFolder(folder);
-            return probe;
-        } catch (MessagingException e) {
-            throw new IllegalStateException("Failed to inspect spam or junk mailbox for source " + bridge.id(), e);
-        } finally {
-            closeQuietly(folder);
-            closeQuietly(store);
-        }
-    }
-
-    private List<String> listImapFolders(RuntimeEmailAccount bridge) {
-        requireSupportedAuth(bridge);
-        Session session = mailSessionFactory().sourceImapSession(bridge);
-        Store store = null;
-        try {
-            store = session.getStore(mailSessionFactory().imapStoreProtocol(bridge.tls()));
-            registerStore(store);
-            mailSourceConnectionService().connectStore(store, bridge);
-            return mailSourceFolderService().listFolders(store);
-        } catch (MessagingException e) {
-            throw new IllegalStateException("Failed to list folders for source " + bridge.id(), e);
-        } finally {
-            closeQuietly(store);
-        }
     }
 
     private List<FetchedMessage> fetchImap(InboxBridgeConfig.Source source, int fetchWindow) {
@@ -345,113 +234,6 @@ public class MailSourceClient {
             closeQuietly(folder);
             closeQuietly(store);
         }
-    }
-
-    private EmailAccountConnectionTestResult testPop3Connection(RuntimeEmailAccount bridge) {
-        requireSupportedAuth(bridge);
-        Session session = mailSessionFactory().sourcePop3Session(bridge);
-        Store store = null;
-        Folder folder = null;
-        try {
-            store = session.getStore(mailSessionFactory().pop3StoreProtocol(bridge.tls()));
-            registerStore(store);
-            mailSourceConnectionService().connectStore(store, bridge);
-            folder = store.getFolder("INBOX");
-            registerFolder(folder);
-            folder.open(Folder.READ_ONLY);
-            int visibleMessageCount = folder.getMessageCount();
-            Message[] candidateMessages = selectTailMessages(folder, 1);
-            boolean sampleMessageAvailable = candidateMessages.length > 0;
-            Boolean sampleMessageMaterialized = null;
-            if (sampleMessageAvailable) {
-                sampleMessageMaterialized = !mailSourceMessageMapper().toFetchedMessages(bridge.id(), candidateMessages).isEmpty();
-            }
-            return buildProbeResult(
-                    bridge,
-                    "INBOX",
-                    true,
-                    Boolean.FALSE,
-                    bridge.unreadOnly() ? Boolean.FALSE : null,
-                    visibleMessageCount,
-                    null,
-                    sampleMessageAvailable,
-                    sampleMessageMaterialized,
-                    null);
-        } catch (MessagingException e) {
-            throw new IllegalStateException("Failed to connect to POP3 mail fetcher " + bridge.id(), e);
-        } finally {
-            closeQuietly(folder);
-            closeQuietly(store);
-        }
-    }
-
-    private EmailAccountConnectionTestResult buildProbeResult(
-            RuntimeEmailAccount bridge,
-            String targetFolder,
-            boolean folderAccessible,
-            Boolean unreadFilterSupported,
-            Boolean unreadFilterValidated,
-            Integer visibleMessageCount,
-            Integer unreadMessageCount,
-            Boolean sampleMessageAvailable,
-            Boolean sampleMessageMaterialized,
-            Boolean forwardedMarkerSupported) {
-        StringBuilder message = new StringBuilder("Connection test succeeded.");
-        message.append(" Mailbox path ").append(targetFolder).append(" is reachable.");
-        if (Boolean.TRUE.equals(unreadFilterSupported)) {
-            message.append(" Unread filter probing is supported");
-            if (Boolean.TRUE.equals(unreadFilterValidated)) {
-                message.append(" and validated");
-            }
-            message.append('.');
-        } else if (bridge.unreadOnly()) {
-            message.append(" Server-side unread filtering is not supported for this protocol.");
-        }
-        if (Boolean.TRUE.equals(sampleMessageAvailable) && Boolean.TRUE.equals(sampleMessageMaterialized)) {
-            message.append(" A sample message was materialized successfully.");
-        } else if (Boolean.TRUE.equals(sampleMessageAvailable)) {
-            message.append(" A sample message was found but could not be materialized.");
-        } else {
-            message.append(" No sample message was available to materialize.");
-        }
-        return new EmailAccountConnectionTestResult(
-                true,
-                message.toString(),
-                bridge.protocol().name(),
-                bridge.host(),
-                bridge.port(),
-                bridge.tls(),
-                bridge.authMethod().name(),
-                bridge.oauthProvider().name(),
-                true,
-                targetFolder,
-                folderAccessible,
-                bridge.unreadOnly(),
-                unreadFilterSupported,
-                unreadFilterValidated,
-                visibleMessageCount,
-                unreadMessageCount,
-                sampleMessageAvailable,
-                sampleMessageMaterialized,
-                forwardedMarkerSupported);
-    }
-
-    private Message[] selectTailMessages(Folder folder, int fetchWindow) throws MessagingException {
-        int count = folder.getMessageCount();
-        if (count == 0) {
-            return new Message[0];
-        }
-        int normalizedFetchWindow = Math.max(1, fetchWindow);
-        int start = Math.max(1, count - normalizedFetchWindow + 1);
-        return folder.getMessages(start, count);
-    }
-
-    private Message[] trimTailMessages(Message[] messages, int fetchWindow) {
-        int normalizedFetchWindow = Math.max(1, fetchWindow);
-        if (messages.length <= normalizedFetchWindow) {
-            return messages;
-        }
-        return Arrays.copyOfRange(messages, messages.length - normalizedFetchWindow, messages.length);
     }
 
     private String destinationKeyFor(RuntimeEmailAccount bridge) {
@@ -599,6 +381,20 @@ public class MailSourceClient {
         fallback.pollCancellationService = pollCancellationService;
         mailSourcePostPollActionService = fallback;
         return mailSourcePostPollActionService;
+    }
+
+    private MailSourceConnectionProbeService mailSourceConnectionProbeService() {
+        if (mailSourceConnectionProbeService != null) {
+            return mailSourceConnectionProbeService;
+        }
+        MailSourceConnectionProbeService fallback = new MailSourceConnectionProbeService();
+        fallback.mailSessionFactory = mailSessionFactory();
+        fallback.mailSourceConnectionService = mailSourceConnectionService();
+        fallback.mailSourceFolderService = mailSourceFolderService();
+        fallback.mailSourceMessageMapper = mailSourceMessageMapper();
+        fallback.pollCancellationService = pollCancellationService;
+        mailSourceConnectionProbeService = fallback;
+        return mailSourceConnectionProbeService;
     }
 
     public record MailboxCountProbe(String folderName, int messageCount) {
