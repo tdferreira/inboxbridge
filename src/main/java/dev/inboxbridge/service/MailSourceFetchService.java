@@ -44,6 +44,24 @@ public class MailSourceFetchService {
     @Inject
     PollCancellationService pollCancellationService;
 
+    MailSourceFetchService() {
+    }
+
+    MailSourceFetchService(
+            MailSessionFactory mailSessionFactory,
+            MailSourceConnectionService mailSourceConnectionService,
+            MailSourceCheckpointSelector mailSourceCheckpointSelector,
+            MailSourceMessageMapper mailSourceMessageMapper,
+            SourcePollingStateService sourcePollingStateService,
+            PollCancellationService pollCancellationService) {
+        this.mailSessionFactory = mailSessionFactory;
+        this.mailSourceConnectionService = mailSourceConnectionService;
+        this.mailSourceCheckpointSelector = mailSourceCheckpointSelector;
+        this.mailSourceMessageMapper = mailSourceMessageMapper;
+        this.sourcePollingStateService = sourcePollingStateService;
+        this.pollCancellationService = pollCancellationService;
+    }
+
     public List<FetchedMessage> fetch(InboxBridgeConfig.Source source, int fetchWindow) {
         return switch (source.protocol()) {
             case IMAP -> fetchImap(source, fetchWindow);
@@ -60,12 +78,12 @@ public class MailSourceFetchService {
 
     private List<FetchedMessage> fetchImap(InboxBridgeConfig.Source source, int fetchWindow) {
         requireSupportedAuth(source);
-        Session session = mailSessionFactory().sourceImapSession(source);
+        Session session = mailSessionFactory.sourceImapSession(source);
         Store store = null;
         try {
-            store = session.getStore(mailSessionFactory().imapStoreProtocol(source.tls()));
+            store = session.getStore(mailSessionFactory.imapStoreProtocol(source.tls()));
             registerStore(store);
-            mailSourceConnectionService().connectStore(store, source);
+            mailSourceConnectionService.connectStore(store, source);
             return fetchImapMessages(
                     source.id(),
                     null,
@@ -82,12 +100,12 @@ public class MailSourceFetchService {
 
     private List<FetchedMessage> fetchImap(RuntimeEmailAccount bridge, int fetchWindow) {
         requireSupportedAuth(bridge);
-        Session session = mailSessionFactory().sourceImapSession(bridge);
+        Session session = mailSessionFactory.sourceImapSession(bridge);
         Store store = null;
         try {
-            store = session.getStore(mailSessionFactory().imapStoreProtocol(bridge.tls()));
+            store = session.getStore(mailSessionFactory.imapStoreProtocol(bridge.tls()));
             registerStore(store);
-            mailSourceConnectionService().connectStore(store, bridge);
+            mailSourceConnectionService.connectStore(store, bridge);
             return fetchImapMessages(
                     bridge.id(),
                     destinationKeyFor(bridge),
@@ -119,7 +137,7 @@ public class MailSourceFetchService {
                     throw new IllegalStateException("The mailbox path " + folderName + " does not exist on " + store.getURLName().getHost() + ".");
                 }
                 folder.open(Folder.READ_ONLY);
-                Message[] candidateMessages = mailSourceCheckpointSelector().selectImapCandidateMessages(
+                Message[] candidateMessages = mailSourceCheckpointSelector.selectImapCandidateMessages(
                         sourcePollingStateService == null
                                 ? Optional.empty()
                                 : sourcePollingStateService.imapCheckpoint(sourceId, destinationKey, folderName),
@@ -127,7 +145,7 @@ public class MailSourceFetchService {
                         fetchWindow,
                         folder);
                 prefetchMessageMetadata(folder, candidateMessages);
-                fetchedMessages.addAll(mailSourceMessageMapper().toFetchedMessages(sourceId, folder, candidateMessages));
+                fetchedMessages.addAll(mailSourceMessageMapper.toFetchedMessages(sourceId, folder, candidateMessages));
             } finally {
                 closeQuietly(folder);
             }
@@ -138,21 +156,21 @@ public class MailSourceFetchService {
 
     private List<FetchedMessage> fetchPop3(InboxBridgeConfig.Source source, int fetchWindow) {
         requireSupportedAuth(source);
-        Session session = mailSessionFactory().sourcePop3Session(source);
+        Session session = mailSessionFactory.sourcePop3Session(source);
         Store store = null;
         Folder folder = null;
         try {
-            store = session.getStore(mailSessionFactory().pop3StoreProtocol(source.tls()));
+            store = session.getStore(mailSessionFactory.pop3StoreProtocol(source.tls()));
             registerStore(store);
-            mailSourceConnectionService().connectStore(store, source);
+            mailSourceConnectionService.connectStore(store, source);
             folder = store.getFolder("INBOX");
             registerFolder(folder);
             folder.open(Folder.READ_ONLY);
-            Message[] candidateMessages = mailSourceCheckpointSelector().selectPop3CandidateMessages(
+            Message[] candidateMessages = mailSourceCheckpointSelector.selectPop3CandidateMessages(
                     sourcePollingStateService == null ? Optional.empty() : sourcePollingStateService.popCheckpoint(source.id(), null),
                     fetchWindow,
                     folder);
-            return mailSourceMessageMapper().toFetchedMessages(source.id(), candidateMessages);
+            return mailSourceMessageMapper.toFetchedMessages(source.id(), candidateMessages);
         } catch (MessagingException e) {
             throw new IllegalStateException("Failed to fetch POP3 mail for source " + source.id(), e);
         } finally {
@@ -163,23 +181,23 @@ public class MailSourceFetchService {
 
     private List<FetchedMessage> fetchPop3(RuntimeEmailAccount bridge, int fetchWindow) {
         requireSupportedAuth(bridge);
-        Session session = mailSessionFactory().sourcePop3Session(bridge);
+        Session session = mailSessionFactory.sourcePop3Session(bridge);
         Store store = null;
         Folder folder = null;
         try {
-            store = session.getStore(mailSessionFactory().pop3StoreProtocol(bridge.tls()));
+            store = session.getStore(mailSessionFactory.pop3StoreProtocol(bridge.tls()));
             registerStore(store);
-            mailSourceConnectionService().connectStore(store, bridge);
+            mailSourceConnectionService.connectStore(store, bridge);
             folder = store.getFolder("INBOX");
             registerFolder(folder);
             folder.open(Folder.READ_ONLY);
-            Message[] candidateMessages = mailSourceCheckpointSelector().selectPop3CandidateMessages(
+            Message[] candidateMessages = mailSourceCheckpointSelector.selectPop3CandidateMessages(
                     sourcePollingStateService == null
                             ? Optional.empty()
                             : sourcePollingStateService.popCheckpoint(bridge.id(), destinationKeyFor(bridge)),
                     fetchWindow,
                     folder);
-            return mailSourceMessageMapper().toFetchedMessages(bridge.id(), candidateMessages);
+            return mailSourceMessageMapper.toFetchedMessages(bridge.id(), candidateMessages);
         } catch (MessagingException e) {
             throw new IllegalStateException("Failed to fetch POP3 mail for source " + bridge.id(), e);
         } finally {
@@ -254,53 +272,4 @@ public class MailSourceFetchService {
         }
     }
 
-    private MailSessionFactory mailSessionFactory() {
-        if (mailSessionFactory != null) {
-            return mailSessionFactory;
-        }
-        MailSessionFactory fallback = new MailSessionFactory();
-        fallback.mailClientConfig = new dev.inboxbridge.config.MailClientConfig() {
-            @Override
-            public java.time.Duration connectionTimeout() {
-                return java.time.Duration.ofSeconds(20);
-            }
-
-            @Override
-            public java.time.Duration operationTimeout() {
-                return java.time.Duration.ofSeconds(20);
-            }
-
-            @Override
-            public java.time.Duration idleOperationTimeout() {
-                return java.time.Duration.ZERO;
-            }
-        };
-        mailSessionFactory = fallback;
-        return mailSessionFactory;
-    }
-
-    private MailSourceConnectionService mailSourceConnectionService() {
-        if (mailSourceConnectionService != null) {
-            return mailSourceConnectionService;
-        }
-        mailSourceConnectionService = new MailSourceConnectionService();
-        return mailSourceConnectionService;
-    }
-
-    private MailSourceCheckpointSelector mailSourceCheckpointSelector() {
-        if (mailSourceCheckpointSelector == null) {
-            mailSourceCheckpointSelector = new MailSourceCheckpointSelector();
-        }
-        return mailSourceCheckpointSelector;
-    }
-
-    private MailSourceMessageMapper mailSourceMessageMapper() {
-        if (mailSourceMessageMapper != null) {
-            return mailSourceMessageMapper;
-        }
-        MailSourceMessageMapper fallback = new MailSourceMessageMapper();
-        fallback.mimeHashService = new MimeHashService();
-        mailSourceMessageMapper = fallback;
-        return mailSourceMessageMapper;
-    }
 }

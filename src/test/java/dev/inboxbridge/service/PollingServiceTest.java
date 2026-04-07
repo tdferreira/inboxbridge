@@ -1385,6 +1385,7 @@ class PollingServiceTest {
     private static final class BlockingCancelableMailSourceClient extends RecordingMailSourceClient {
         private final CountDownLatch fetchStarted = new CountDownLatch(1);
         private final AtomicBoolean cancelled = new AtomicBoolean(false);
+        private PollCancellationService pollCancellationService;
 
         @Override
         public List<FetchedMessage> fetch(RuntimeEmailAccount bridge, int fetchWindow) {

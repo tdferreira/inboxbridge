@@ -53,6 +53,10 @@ infrastructure details:
   successful import or duplicate match, including mark-as-read, move, delete,
   and best-effort `$Forwarded` handling against the fetched message's actual
   source folder.
+- `MailSourceStandaloneFactory` now centralizes the non-CDI assembly path for
+  those mail-source collaborators, so focused unit tests and GreenMail-backed
+  integration tests construct the same helper graph instead of each service
+  re-creating its own ad-hoc fallback dependencies.
 - With those helpers in place, `MailSourceClient` can stay focused on polling
   orchestration instead of re-implementing every protocol, OAuth, or source
   mutation detail itself.

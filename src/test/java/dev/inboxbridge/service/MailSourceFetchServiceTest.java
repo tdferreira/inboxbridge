@@ -80,13 +80,13 @@ class MailSourceFetchServiceTest {
             FetchStoreState state,
             RecordingSourcePollingStateService pollingStateService,
             RecordingCheckpointSelector checkpointSelector) {
-        MailSourceFetchService service = new MailSourceFetchService();
-        service.mailSessionFactory = new FetchMailSessionFactory(state);
-        service.mailSourceConnectionService = new FetchConnectionService();
-        service.mailSourceCheckpointSelector = checkpointSelector;
-        service.mailSourceMessageMapper = new FetchMessageMapper();
-        service.sourcePollingStateService = pollingStateService;
-        return service;
+        return new MailSourceFetchService(
+                new FetchMailSessionFactory(state),
+                new FetchConnectionService(),
+                checkpointSelector,
+                new FetchMessageMapper(),
+                pollingStateService,
+                null);
     }
 
     private static List<String> subjects(List<FetchedMessage> messages) {

@@ -36,6 +36,20 @@ public class MailSourcePostPollActionService {
     @Inject
     PollCancellationService pollCancellationService;
 
+    MailSourcePostPollActionService() {
+    }
+
+    MailSourcePostPollActionService(
+            MailSessionFactory mailSessionFactory,
+            MailSourceConnectionService mailSourceConnectionService,
+            MailSourceMessageMapper mailSourceMessageMapper,
+            PollCancellationService pollCancellationService) {
+        this.mailSessionFactory = mailSessionFactory;
+        this.mailSourceConnectionService = mailSourceConnectionService;
+        this.mailSourceMessageMapper = mailSourceMessageMapper;
+        this.pollCancellationService = pollCancellationService;
+    }
+
     public void apply(RuntimeEmailAccount bridge, FetchedMessage message) {
         if (!bridge.postPollSettings().hasAnyAction()) {
             return;
@@ -44,22 +58,22 @@ public class MailSourcePostPollActionService {
             throw new IllegalStateException("Source-side message actions are only supported for IMAP accounts");
         }
 
-        Session session = mailSessionFactory().sourceImapSession(bridge);
+        Session session = mailSessionFactory.sourceImapSession(bridge);
         Store store = null;
         Folder sourceFolder = null;
         Folder targetFolder = null;
         boolean expunge = false;
         try {
-            store = session.getStore(mailSessionFactory().imapStoreProtocol(bridge.tls()));
+            store = session.getStore(mailSessionFactory.imapStoreProtocol(bridge.tls()));
             registerStore(store);
-            mailSourceConnectionService().connectStore(store, bridge);
+            mailSourceConnectionService.connectStore(store, bridge);
             sourceFolder = store.getFolder(message.folderName().orElse(bridge.primaryFolder()));
             registerFolder(sourceFolder);
             if (!sourceFolder.exists()) {
                 throw new IllegalStateException("The mailbox path " + sourceFolder.getFullName() + " does not exist on " + bridge.host() + ".");
             }
             sourceFolder.open(Folder.READ_WRITE);
-            Message sourceMessage = mailSourceMessageMapper().resolveSourceMessage(sourceFolder, message);
+            Message sourceMessage = mailSourceMessageMapper.resolveSourceMessage(sourceFolder, message);
             if (sourceMessage == null) {
                 throw new IllegalStateException("Unable to find the source message to apply post-poll actions for " + bridge.id());
             }
@@ -145,46 +159,4 @@ public class MailSourcePostPollActionService {
         pollCancellationService.register(() -> closeQuietly(folder));
     }
 
-    private MailSourceMessageMapper mailSourceMessageMapper() {
-        if (mailSourceMessageMapper != null) {
-            return mailSourceMessageMapper;
-        }
-        MailSourceMessageMapper fallback = new MailSourceMessageMapper();
-        fallback.mimeHashService = new MimeHashService();
-        mailSourceMessageMapper = fallback;
-        return mailSourceMessageMapper;
-    }
-
-    private MailSessionFactory mailSessionFactory() {
-        if (mailSessionFactory != null) {
-            return mailSessionFactory;
-        }
-        MailSessionFactory fallback = new MailSessionFactory();
-        fallback.mailClientConfig = new dev.inboxbridge.config.MailClientConfig() {
-            @Override
-            public java.time.Duration connectionTimeout() {
-                return java.time.Duration.ofSeconds(20);
-            }
-
-            @Override
-            public java.time.Duration operationTimeout() {
-                return java.time.Duration.ofSeconds(20);
-            }
-
-            @Override
-            public java.time.Duration idleOperationTimeout() {
-                return java.time.Duration.ZERO;
-            }
-        };
-        mailSessionFactory = fallback;
-        return mailSessionFactory;
-    }
-
-    private MailSourceConnectionService mailSourceConnectionService() {
-        if (mailSourceConnectionService != null) {
-            return mailSourceConnectionService;
-        }
-        mailSourceConnectionService = new MailSourceConnectionService();
-        return mailSourceConnectionService;
-    }
 }

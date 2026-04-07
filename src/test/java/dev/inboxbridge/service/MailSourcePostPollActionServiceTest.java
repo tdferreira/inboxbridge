@@ -83,11 +83,11 @@ class MailSourcePostPollActionServiceTest {
     }
 
     private static MailSourcePostPollActionService service(TestStoreState state, Message resolvedMessage) {
-        MailSourcePostPollActionService service = new MailSourcePostPollActionService();
-        service.mailSessionFactory = new TestMailSessionFactory(state);
-        service.mailSourceConnectionService = new TestMailSourceConnectionService();
-        service.mailSourceMessageMapper = new TestMailSourceMessageMapper(resolvedMessage);
-        return service;
+        return new MailSourcePostPollActionService(
+                new TestMailSessionFactory(state),
+                new TestMailSourceConnectionService(),
+                new TestMailSourceMessageMapper(resolvedMessage),
+                null);
     }
 
     private static RuntimeEmailAccount runtimeAccount(SourcePostPollSettings postPollSettings) {

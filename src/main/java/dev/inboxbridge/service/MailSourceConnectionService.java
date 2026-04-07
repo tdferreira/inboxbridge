@@ -24,6 +24,16 @@ public class MailSourceConnectionService {
     @Inject
     GoogleOAuthService googleOAuthService;
 
+    MailSourceConnectionService() {
+    }
+
+    MailSourceConnectionService(
+            MicrosoftOAuthService microsoftOAuthService,
+            GoogleOAuthService googleOAuthService) {
+        this.microsoftOAuthService = microsoftOAuthService;
+        this.googleOAuthService = googleOAuthService;
+    }
+
     public void connectStore(Store store, InboxBridgeConfig.Source source) throws MessagingException {
         if (usesMicrosoftOAuth(source)) {
             connectStoreWithMicrosoftOAuthRetry(

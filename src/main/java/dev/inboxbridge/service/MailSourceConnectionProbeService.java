@@ -42,6 +42,22 @@ public class MailSourceConnectionProbeService {
     @Inject
     PollCancellationService pollCancellationService;
 
+    MailSourceConnectionProbeService() {
+    }
+
+    MailSourceConnectionProbeService(
+            MailSessionFactory mailSessionFactory,
+            MailSourceConnectionService mailSourceConnectionService,
+            MailSourceFolderService mailSourceFolderService,
+            MailSourceMessageMapper mailSourceMessageMapper,
+            PollCancellationService pollCancellationService) {
+        this.mailSessionFactory = mailSessionFactory;
+        this.mailSourceConnectionService = mailSourceConnectionService;
+        this.mailSourceFolderService = mailSourceFolderService;
+        this.mailSourceMessageMapper = mailSourceMessageMapper;
+        this.pollCancellationService = pollCancellationService;
+    }
+
     public EmailAccountConnectionTestResult testConnection(RuntimeEmailAccount bridge) {
         return switch (bridge.protocol()) {
             case IMAP -> testImapConnection(bridge);
@@ -65,13 +81,13 @@ public class MailSourceConnectionProbeService {
 
     private EmailAccountConnectionTestResult testImapConnection(RuntimeEmailAccount bridge) {
         requireSupportedAuth(bridge);
-        Session session = mailSessionFactory().sourceImapSession(bridge);
+        Session session = mailSessionFactory.sourceImapSession(bridge);
         Store store = null;
         Folder folder = null;
         try {
-            store = session.getStore(mailSessionFactory().imapStoreProtocol(bridge.tls()));
+            store = session.getStore(mailSessionFactory.imapStoreProtocol(bridge.tls()));
             registerStore(store);
-            mailSourceConnectionService().connectStore(store, bridge);
+            mailSourceConnectionService.connectStore(store, bridge);
             List<String> targetFolders = bridge.sourceFolders();
             String targetFolder = String.join(", ", targetFolders);
             int visibleMessageCount = 0;
@@ -104,7 +120,7 @@ public class MailSourceConnectionProbeService {
             Boolean sampleMessageMaterialized = null;
             if (sampleMessageAvailable) {
                 prefetchMessageMetadata(candidateFolder, candidateMessages);
-                sampleMessageMaterialized = !mailSourceMessageMapper().toFetchedMessages(bridge.id(), candidateFolder, candidateMessages).isEmpty();
+                sampleMessageMaterialized = !mailSourceMessageMapper.toFetchedMessages(bridge.id(), candidateFolder, candidateMessages).isEmpty();
             }
             Boolean forwardedMarkerSupported = MailSourceFolderService.resolveForwardedMarkerSupport(candidateFolder);
             return buildProbeResult(
@@ -128,13 +144,13 @@ public class MailSourceConnectionProbeService {
 
     private EmailAccountConnectionTestResult testPop3Connection(RuntimeEmailAccount bridge) {
         requireSupportedAuth(bridge);
-        Session session = mailSessionFactory().sourcePop3Session(bridge);
+        Session session = mailSessionFactory.sourcePop3Session(bridge);
         Store store = null;
         Folder folder = null;
         try {
-            store = session.getStore(mailSessionFactory().pop3StoreProtocol(bridge.tls()));
+            store = session.getStore(mailSessionFactory.pop3StoreProtocol(bridge.tls()));
             registerStore(store);
-            mailSourceConnectionService().connectStore(store, bridge);
+            mailSourceConnectionService.connectStore(store, bridge);
             folder = store.getFolder("INBOX");
             registerFolder(folder);
             folder.open(Folder.READ_ONLY);
@@ -143,7 +159,7 @@ public class MailSourceConnectionProbeService {
             boolean sampleMessageAvailable = candidateMessages.length > 0;
             Boolean sampleMessageMaterialized = null;
             if (sampleMessageAvailable) {
-                sampleMessageMaterialized = !mailSourceMessageMapper().toFetchedMessages(bridge.id(), candidateMessages).isEmpty();
+                sampleMessageMaterialized = !mailSourceMessageMapper.toFetchedMessages(bridge.id(), candidateMessages).isEmpty();
             }
             return buildProbeResult(
                     bridge,
@@ -166,13 +182,13 @@ public class MailSourceConnectionProbeService {
 
     private List<String> listImapFolders(RuntimeEmailAccount bridge) {
         requireSupportedAuth(bridge);
-        Session session = mailSessionFactory().sourceImapSession(bridge);
+        Session session = mailSessionFactory.sourceImapSession(bridge);
         Store store = null;
         try {
-            store = session.getStore(mailSessionFactory().imapStoreProtocol(bridge.tls()));
+            store = session.getStore(mailSessionFactory.imapStoreProtocol(bridge.tls()));
             registerStore(store);
-            mailSourceConnectionService().connectStore(store, bridge);
-            return mailSourceFolderService().listFolders(store);
+            mailSourceConnectionService.connectStore(store, bridge);
+            return mailSourceFolderService.listFolders(store);
         } catch (MessagingException e) {
             throw new IllegalStateException("Failed to list folders for source " + bridge.id(), e);
         } finally {
@@ -182,14 +198,14 @@ public class MailSourceConnectionProbeService {
 
     private Optional<MailSourceClient.MailboxCountProbe> probeImapSpamOrJunkFolder(RuntimeEmailAccount bridge) {
         requireSupportedAuth(bridge);
-        Session session = mailSessionFactory().sourceImapSession(bridge);
+        Session session = mailSessionFactory.sourceImapSession(bridge);
         Store store = null;
         Folder folder = null;
         try {
-            store = session.getStore(mailSessionFactory().imapStoreProtocol(bridge.tls()));
+            store = session.getStore(mailSessionFactory.imapStoreProtocol(bridge.tls()));
             registerStore(store);
-            mailSourceConnectionService().connectStore(store, bridge);
-            Optional<MailSourceClient.MailboxCountProbe> probe = mailSourceFolderService().probeSpamOrJunkFolder(store);
+            mailSourceConnectionService.connectStore(store, bridge);
+            Optional<MailSourceClient.MailboxCountProbe> probe = mailSourceFolderService.probeSpamOrJunkFolder(store);
             if (probe.isEmpty()) {
                 return Optional.empty();
             }
@@ -329,53 +345,4 @@ public class MailSourceConnectionProbeService {
         }
     }
 
-    private MailSessionFactory mailSessionFactory() {
-        if (mailSessionFactory != null) {
-            return mailSessionFactory;
-        }
-        MailSessionFactory fallback = new MailSessionFactory();
-        fallback.mailClientConfig = new dev.inboxbridge.config.MailClientConfig() {
-            @Override
-            public java.time.Duration connectionTimeout() {
-                return java.time.Duration.ofSeconds(20);
-            }
-
-            @Override
-            public java.time.Duration operationTimeout() {
-                return java.time.Duration.ofSeconds(20);
-            }
-
-            @Override
-            public java.time.Duration idleOperationTimeout() {
-                return java.time.Duration.ZERO;
-            }
-        };
-        mailSessionFactory = fallback;
-        return mailSessionFactory;
-    }
-
-    private MailSourceConnectionService mailSourceConnectionService() {
-        if (mailSourceConnectionService != null) {
-            return mailSourceConnectionService;
-        }
-        mailSourceConnectionService = new MailSourceConnectionService();
-        return mailSourceConnectionService;
-    }
-
-    private MailSourceFolderService mailSourceFolderService() {
-        if (mailSourceFolderService == null) {
-            mailSourceFolderService = new MailSourceFolderService();
-        }
-        return mailSourceFolderService;
-    }
-
-    private MailSourceMessageMapper mailSourceMessageMapper() {
-        if (mailSourceMessageMapper != null) {
-            return mailSourceMessageMapper;
-        }
-        MailSourceMessageMapper fallback = new MailSourceMessageMapper();
-        fallback.mimeHashService = new MimeHashService();
-        mailSourceMessageMapper = fallback;
-        return mailSourceMessageMapper;
-    }
 }

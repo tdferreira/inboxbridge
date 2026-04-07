@@ -76,7 +76,7 @@ class PollingServiceGreenMailIntegrationTest {
     void listFoldersReturnsInboxFirstAndIncludesNestedSourceFolders() throws Exception {
         appendMessage(sourceMail, SOURCE_USERNAME, SOURCE_PASSWORD, "Projects/2026", "project-alpha", "Stored in nested folder", "<folders-alpha@example.com>");
 
-        MailSourceClient client = new MailSourceClient();
+        MailSourceClient client = standaloneMailSourceClient();
 
         List<String> folders = client.listFolders(runtimeAccount());
 
@@ -88,7 +88,7 @@ class PollingServiceGreenMailIntegrationTest {
         appendMessage(sourceMail, SOURCE_USERNAME, SOURCE_PASSWORD, "Correo no deseado", "spam-alpha", "Localized spam folder message", "<spam-alpha@example.com>");
         appendMessage(sourceMail, SOURCE_USERNAME, SOURCE_PASSWORD, "Correo no deseado", "spam-beta", "Second localized spam folder message", "<spam-beta@example.com>");
 
-        MailSourceClient client = new MailSourceClient();
+        MailSourceClient client = standaloneMailSourceClient();
 
         Optional<MailSourceClient.MailboxCountProbe> probe = client.probeSpamOrJunkFolder(runtimeAccount());
 
@@ -253,8 +253,7 @@ class PollingServiceGreenMailIntegrationTest {
         appendMessage(sourceMail, SOURCE_USERNAME, SOURCE_PASSWORD, "INBOX", "beta", "Second imported message", "<beta@example.com>");
 
         PollingService service = new PollingService();
-        MailSourceClient mailSourceClient = new MailSourceClient();
-        mailSourceClient.mimeHashService = new MimeHashService();
+        MailSourceClient mailSourceClient = standaloneMailSourceClient();
         ImapAppendMailDestinationService destinationService = new ImapAppendMailDestinationService();
         RecordingImportedMessageRepository importedMessageRepository = new RecordingImportedMessageRepository();
         ImportDeduplicationService deduplicationService = new ImportDeduplicationService();
@@ -302,8 +301,7 @@ class PollingServiceGreenMailIntegrationTest {
         appendMessage(sourceMail, SOURCE_USERNAME, SOURCE_PASSWORD, "Projects/2026", "project-beta", "Should also be imported from the custom source folder", "<project-beta@example.com>");
 
         PollingService service = new PollingService();
-        MailSourceClient mailSourceClient = new MailSourceClient();
-        mailSourceClient.mimeHashService = new MimeHashService();
+        MailSourceClient mailSourceClient = standaloneMailSourceClient();
         ImapAppendMailDestinationService destinationService = new ImapAppendMailDestinationService();
         RecordingImportedMessageRepository importedMessageRepository = new RecordingImportedMessageRepository();
         ImportDeduplicationService deduplicationService = new ImportDeduplicationService();
@@ -507,8 +505,7 @@ class PollingServiceGreenMailIntegrationTest {
         appendMessage(sourceMail, bobSourceTwo, sharedSourcePassword, "INBOX", "bob-two-1", "Bob source two message", "<bob-two-1@example.com>");
 
         PollingService service = new PollingService();
-        MailSourceClient mailSourceClient = new MailSourceClient();
-        mailSourceClient.mimeHashService = new MimeHashService();
+        MailSourceClient mailSourceClient = standaloneMailSourceClient();
         ImapAppendMailDestinationService destinationService = new ImapAppendMailDestinationService();
         RecordingImportedMessageRepository importedMessageRepository = new RecordingImportedMessageRepository();
         ImportDeduplicationService deduplicationService = new ImportDeduplicationService();
@@ -829,9 +826,7 @@ class PollingServiceGreenMailIntegrationTest {
             RecordingImportedMessageRepository importedMessageRepository,
             SourcePollingStateService sourcePollingStateService) {
         PollingService service = new PollingService();
-        MailSourceClient mailSourceClient = new MailSourceClient();
-        mailSourceClient.mimeHashService = new MimeHashService();
-        mailSourceClient.sourcePollingStateService = sourcePollingStateService;
+        MailSourceClient mailSourceClient = standaloneMailSourceClient(sourcePollingStateService);
         ImapAppendMailDestinationService destinationService = new ImapAppendMailDestinationService();
         ImportDeduplicationService deduplicationService = new ImportDeduplicationService();
         deduplicationService.importedMessageRepository = importedMessageRepository;
@@ -1296,6 +1291,20 @@ class PollingServiceGreenMailIntegrationTest {
             closeQuietly(folder);
             closeQuietly(store);
         }
+    }
+
+    private static MailSourceClient standaloneMailSourceClient() {
+        return standaloneMailSourceClient(new ReadySourcePollingStateService());
+    }
+
+    private static MailSourceClient standaloneMailSourceClient(SourcePollingStateService sourcePollingStateService) {
+        return MailSourceStandaloneFactory.client(
+                new FixedPollingSettingsService(),
+                sourcePollingStateService,
+                new MimeHashService(),
+                null,
+                null,
+                null);
     }
 
     private static List<String> sortedSubjects(List<String> subjects) {

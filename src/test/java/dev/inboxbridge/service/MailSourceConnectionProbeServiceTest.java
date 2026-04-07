@@ -77,12 +77,12 @@ class MailSourceConnectionProbeServiceTest {
     }
 
     private static MailSourceConnectionProbeService service(ProbeStoreState state, boolean materializeMessages) {
-        MailSourceConnectionProbeService service = new MailSourceConnectionProbeService();
-        service.mailSessionFactory = new ProbeMailSessionFactory(state);
-        service.mailSourceConnectionService = new ProbeConnectionService();
-        service.mailSourceFolderService = new MailSourceFolderService();
-        service.mailSourceMessageMapper = new ProbeMessageMapper(materializeMessages);
-        return service;
+        return new MailSourceConnectionProbeService(
+                new ProbeMailSessionFactory(state),
+                new ProbeConnectionService(),
+                new MailSourceFolderService(),
+                new ProbeMessageMapper(materializeMessages),
+                null);
     }
 
     private static RuntimeEmailAccount runtimeImapAccount(boolean unreadOnly) {

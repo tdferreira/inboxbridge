@@ -23,10 +23,8 @@ class MailSourceConnectionServiceTest {
 
     @Test
     void runtimeMicrosoftOAuthRetriesOnceAndInvalidatesCachedToken() throws Exception {
-        MailSourceConnectionService service = new MailSourceConnectionService();
         FakeMicrosoftOAuthService microsoft = new FakeMicrosoftOAuthService("stale-token", "fresh-token");
-        service.microsoftOAuthService = microsoft;
-        service.googleOAuthService = new FakeGoogleOAuthService();
+        MailSourceConnectionService service = new MailSourceConnectionService(microsoft, new FakeGoogleOAuthService());
         RecordingStore store = new RecordingStore();
         store.failFirst("* BYE Session invalidated - Invalid");
 
@@ -39,10 +37,8 @@ class MailSourceConnectionServiceTest {
 
     @Test
     void runtimeGoogleOAuthRetriesOnceAndClearsCachedToken() throws Exception {
-        MailSourceConnectionService service = new MailSourceConnectionService();
-        service.microsoftOAuthService = new FakeMicrosoftOAuthService();
         FakeGoogleOAuthService google = new FakeGoogleOAuthService("stale-token", "fresh-token");
-        service.googleOAuthService = google;
+        MailSourceConnectionService service = new MailSourceConnectionService(new FakeMicrosoftOAuthService(), google);
         RecordingStore store = new RecordingStore();
         store.failFirst("* BYE Session invalidated - Invalid");
 
@@ -55,11 +51,9 @@ class MailSourceConnectionServiceTest {
 
     @Test
     void sourcePasswordConnectionDoesNotRetryOrTouchOauthServices() throws Exception {
-        MailSourceConnectionService service = new MailSourceConnectionService();
         FakeMicrosoftOAuthService microsoft = new FakeMicrosoftOAuthService();
         FakeGoogleOAuthService google = new FakeGoogleOAuthService();
-        service.microsoftOAuthService = microsoft;
-        service.googleOAuthService = google;
+        MailSourceConnectionService service = new MailSourceConnectionService(microsoft, google);
         RecordingStore store = new RecordingStore();
 
         service.connectStore(store, configSource());
@@ -72,10 +66,8 @@ class MailSourceConnectionServiceTest {
 
     @Test
     void nonRetryableOauthFailureIsPropagatedWithoutInvalidation() {
-        MailSourceConnectionService service = new MailSourceConnectionService();
         FakeMicrosoftOAuthService microsoft = new FakeMicrosoftOAuthService("stale-token");
-        service.microsoftOAuthService = microsoft;
-        service.googleOAuthService = new FakeGoogleOAuthService();
+        MailSourceConnectionService service = new MailSourceConnectionService(microsoft, new FakeGoogleOAuthService());
         RecordingStore store = new RecordingStore();
         store.failFirst(new MessagingException("unexpected protocol failure"));
 
