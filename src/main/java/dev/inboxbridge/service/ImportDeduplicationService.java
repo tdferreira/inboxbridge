@@ -20,6 +20,16 @@ public class ImportDeduplicationService {
     @Inject
     MimeHashService mimeHashService;
 
+    public ImportDeduplicationService() {
+    }
+
+    public ImportDeduplicationService(
+            ImportedMessageRepository importedMessageRepository,
+            MimeHashService mimeHashService) {
+        this.importedMessageRepository = importedMessageRepository;
+        this.mimeHashService = mimeHashService;
+    }
+
     @Transactional
     public boolean alreadyImported(FetchedMessage message, MailDestinationTarget target) {
         String destinationIdentityKey = DestinationIdentityKeys.forTarget(target);

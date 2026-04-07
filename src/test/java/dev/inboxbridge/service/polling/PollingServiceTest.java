@@ -1,4 +1,6 @@
-package dev.inboxbridge.service;
+package dev.inboxbridge.service.polling;
+
+import dev.inboxbridge.service.*;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
@@ -1738,7 +1740,7 @@ class PollingServiceTest {
             return;
         }
         java.lang.reflect.Constructor<?> constructor = Class
-                .forName("dev.inboxbridge.service.PollingService$ActivePoll")
+                .forName("dev.inboxbridge.service.polling.PollingService$ActivePoll")
                 .getDeclaredConstructors()[0];
         constructor.setAccessible(true);
         activePoll.set(constructor.newInstance(trigger, sourceId, startedAt));

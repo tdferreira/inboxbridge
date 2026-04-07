@@ -24,10 +24,10 @@ public class MailSourceClient {
     @Inject
     MailSourceFetchService mailSourceFetchService;
 
-    MailSourceClient() {
+    public MailSourceClient() {
     }
 
-    MailSourceClient(
+    public MailSourceClient(
             PollingSettingsService pollingSettingsService,
             MailSourcePostPollActionService mailSourcePostPollActionService,
             MailSourceConnectionProbeService mailSourceConnectionProbeService,

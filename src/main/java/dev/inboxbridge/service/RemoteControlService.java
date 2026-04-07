@@ -1,5 +1,6 @@
 package dev.inboxbridge.service;
 
+import dev.inboxbridge.service.polling.PollingService;
 import java.time.Instant;
 import java.util.ArrayList;
 import java.util.HashMap;

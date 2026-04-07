@@ -35,6 +35,18 @@ public class SourcePollingStateService {
     @Inject
     PollingSettingsService pollingSettingsService;
 
+    public SourcePollingStateService() {
+    }
+
+    public SourcePollingStateService(
+            SourcePollingStateRepository repository,
+            SourceImapCheckpointRepository imapCheckpointRepository,
+            PollingSettingsService pollingSettingsService) {
+        this.repository = repository;
+        this.imapCheckpointRepository = imapCheckpointRepository;
+        this.pollingSettingsService = pollingSettingsService;
+    }
+
     public Optional<SourcePollingStateView> viewForSource(String sourceId) {
         if (repository == null) {
             return Optional.empty();

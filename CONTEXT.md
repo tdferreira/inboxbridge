@@ -287,6 +287,7 @@ System polling behavior:
 - live pause/stop requests now apply during the active source as well as between queued sources because `PollingService` no longer precomputes the whole live queue up front, checks the live-control state between fetched messages, and now registers cancellation hooks that close active mailbox sessions when a stop is requested
 - the live-poll backend state model now lives in `PollingLiveRunState` instead of being embedded directly inside `PollingLiveService`, so the live service can stay focused on permissions, SSE fan-out, notifications, and control flow while the mutable queued/running/completed source model evolves behind one dedicated in-memory state type
 - live-poll snapshot shaping and live notification assembly now live in `PollingLivePresentationService` instead of being embedded directly inside `PollingLiveService`, so the live service can stay focused on state transitions, permissions, cancellation, and subscriber fan-out while the viewer-scoped presentation policy is regression-tested directly
+- the backend now treats polling as the first feature-oriented service subpackage: `PollingService`, `PollingSourceExecutionService`, `PollingLiveService`, `PollingLiveRunState`, `PollingLivePresentationService`, `PollingStatsService`, and `PollingTimelineService` now live under `dev.inboxbridge.service.polling`, while the rest of the backend still uses the broader layer-oriented package layout
 - the main REST resources now centralize the common validation-error translation in `WebResourceSupport`, so endpoints that only need to turn `IllegalArgumentException` or `IllegalStateException` into the normal `400` API response no longer repeat the same local `try/catch` wrapper in every method
 - the user-deletion and session-revocation cleanup path now keeps transaction ownership in the surrounding services (`AppUserService`, `PasskeyService`, `UserSessionService`) instead of on the thin repository delete helpers, which makes the repository layer closer to plain data access and keeps cleanup orchestration boundaries explicit
 - destination mailbox preset descriptions, destination test-connection actions, and admin destination-section labels are localized across the supported admin-ui locales instead of falling back to English strings from preset metadata
@@ -737,6 +738,7 @@ src/main/java/dev/inboxbridge
 ├── persistence
 ├── security
 ├── service
+│   └── polling
 └── web
 ```
 
@@ -751,7 +753,9 @@ Notable backend areas:
 - `service/RuntimeEmailAccountService.java`
 - `service/GoogleOAuthService.java`
 - `service/MicrosoftOAuthService.java`
-- `service/PollingService.java`
+- `service/polling/PollingService.java`
+- `service/polling/PollingLiveService.java`
+- `service/polling/PollingStatsService.java`
 - `web/AuthResource.java`
 - `web/AccountResource.java`
 - `web/UserConfigResource.java`

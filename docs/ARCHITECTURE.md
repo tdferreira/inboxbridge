@@ -2,6 +2,12 @@
 
 ## Main flow
 
+The backend is still primarily organized by layer, but the polling slice now
+anchors the first feature-oriented backend subpackage under
+`dev.inboxbridge.service.polling`. The coordinator, live-run, and stats classes
+that evolve together now live there instead of continuing to grow in the flat
+top-level `service` package.
+
 1. `PollingService` runs on schedule or manually via REST
 2. `PollingService` resolves the eligible sources and lets a bounded set of virtual-thread workers claim them just in time
 3. `PollingService` delegates one eligible source at a time into `PollingSourceExecutionService`, which owns the per-source execution path

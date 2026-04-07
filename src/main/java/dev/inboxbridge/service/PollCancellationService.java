@@ -87,7 +87,7 @@ public class PollCancellationService {
             this.previous = previous;
         }
 
-        static Scope noop() {
+        public static Scope noop() {
             return NOOP;
         }
 

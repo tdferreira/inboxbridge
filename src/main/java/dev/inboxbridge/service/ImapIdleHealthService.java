@@ -12,7 +12,7 @@ import jakarta.enterprise.context.ApplicationScoped;
 @ApplicationScoped
 public class ImapIdleHealthService {
 
-    static final Duration SCHEDULER_FALLBACK_THRESHOLD = Duration.ofMinutes(2);
+    public static final Duration SCHEDULER_FALLBACK_THRESHOLD = Duration.ofMinutes(2);
 
     private final Map<String, Map<String, IdleHealthState>> states = new ConcurrentHashMap<>();
 

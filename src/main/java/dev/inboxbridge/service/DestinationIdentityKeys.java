@@ -8,7 +8,7 @@ import dev.inboxbridge.domain.GmailApiDestinationTarget;
 import dev.inboxbridge.domain.ImapAppendDestinationTarget;
 import dev.inboxbridge.domain.MailDestinationTarget;
 
-final class DestinationIdentityKeys {
+public final class DestinationIdentityKeys {
 
     private DestinationIdentityKeys() {
     }
@@ -22,7 +22,7 @@ final class DestinationIdentityKeys {
      * destination mailbox or folder, while still treating unchanged configurations
      * as the same mailbox identity across polls and restarts.
      */
-    static String forTarget(MailDestinationTarget target) {
+    public static String forTarget(MailDestinationTarget target) {
         if (target == null) {
             return null;
         }

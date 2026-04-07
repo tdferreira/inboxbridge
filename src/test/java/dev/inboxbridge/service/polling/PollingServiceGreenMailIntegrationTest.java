@@ -1,4 +1,6 @@
-package dev.inboxbridge.service;
+package dev.inboxbridge.service.polling;
+
+import dev.inboxbridge.service.*;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
@@ -256,9 +258,9 @@ class PollingServiceGreenMailIntegrationTest {
         MailSourceClient mailSourceClient = standaloneMailSourceClient();
         ImapAppendMailDestinationService destinationService = new ImapAppendMailDestinationService();
         RecordingImportedMessageRepository importedMessageRepository = new RecordingImportedMessageRepository();
-        ImportDeduplicationService deduplicationService = new ImportDeduplicationService();
-        deduplicationService.importedMessageRepository = importedMessageRepository;
-        deduplicationService.mimeHashService = new MimeHashService();
+        ImportDeduplicationService deduplicationService = new ImportDeduplicationService(
+                importedMessageRepository,
+                new MimeHashService());
 
         service.mailSourceClient = mailSourceClient;
         service.importDeduplicationService = deduplicationService;
@@ -304,9 +306,9 @@ class PollingServiceGreenMailIntegrationTest {
         MailSourceClient mailSourceClient = standaloneMailSourceClient();
         ImapAppendMailDestinationService destinationService = new ImapAppendMailDestinationService();
         RecordingImportedMessageRepository importedMessageRepository = new RecordingImportedMessageRepository();
-        ImportDeduplicationService deduplicationService = new ImportDeduplicationService();
-        deduplicationService.importedMessageRepository = importedMessageRepository;
-        deduplicationService.mimeHashService = new MimeHashService();
+        ImportDeduplicationService deduplicationService = new ImportDeduplicationService(
+                importedMessageRepository,
+                new MimeHashService());
 
         service.mailSourceClient = mailSourceClient;
         service.importDeduplicationService = deduplicationService;
@@ -508,9 +510,9 @@ class PollingServiceGreenMailIntegrationTest {
         MailSourceClient mailSourceClient = standaloneMailSourceClient();
         ImapAppendMailDestinationService destinationService = new ImapAppendMailDestinationService();
         RecordingImportedMessageRepository importedMessageRepository = new RecordingImportedMessageRepository();
-        ImportDeduplicationService deduplicationService = new ImportDeduplicationService();
-        deduplicationService.importedMessageRepository = importedMessageRepository;
-        deduplicationService.mimeHashService = new MimeHashService();
+        ImportDeduplicationService deduplicationService = new ImportDeduplicationService(
+                importedMessageRepository,
+                new MimeHashService());
 
         service.mailSourceClient = mailSourceClient;
         service.importDeduplicationService = deduplicationService;
@@ -828,9 +830,9 @@ class PollingServiceGreenMailIntegrationTest {
         PollingService service = new PollingService();
         MailSourceClient mailSourceClient = standaloneMailSourceClient(sourcePollingStateService);
         ImapAppendMailDestinationService destinationService = new ImapAppendMailDestinationService();
-        ImportDeduplicationService deduplicationService = new ImportDeduplicationService();
-        deduplicationService.importedMessageRepository = importedMessageRepository;
-        deduplicationService.mimeHashService = new MimeHashService();
+        ImportDeduplicationService deduplicationService = new ImportDeduplicationService(
+                importedMessageRepository,
+                new MimeHashService());
 
         service.mailSourceClient = mailSourceClient;
         service.importDeduplicationService = deduplicationService;
@@ -1436,9 +1438,10 @@ class PollingServiceGreenMailIntegrationTest {
 
     private static final class InMemoryReadyCheckpointSourcePollingStateService extends SourcePollingStateService {
         private InMemoryReadyCheckpointSourcePollingStateService() {
-            this.repository = new InMemorySourcePollingStateRepository();
-            this.imapCheckpointRepository = new InMemorySourceImapCheckpointRepository();
-            this.pollingSettingsService = new FixedPollingSettingsService();
+            super(
+                    new InMemorySourcePollingStateRepository(),
+                    new InMemorySourceImapCheckpointRepository(),
+                    new FixedPollingSettingsService());
         }
 
         @Override

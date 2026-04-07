@@ -1,4 +1,6 @@
-package dev.inboxbridge.service;
+package dev.inboxbridge.service.polling;
+
+import dev.inboxbridge.service.*;
 
 import dev.inboxbridge.domain.RuntimeEmailAccount;
 import dev.inboxbridge.persistence.AppUser;

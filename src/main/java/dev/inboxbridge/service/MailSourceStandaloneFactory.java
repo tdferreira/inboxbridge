@@ -8,12 +8,12 @@ import dev.inboxbridge.config.MailClientConfig;
  * Builds mail-source collaborators for plain JVM callers such as focused unit
  * tests and GreenMail-backed integration tests where CDI is not bootstrapped.
  */
-final class MailSourceStandaloneFactory {
+public final class MailSourceStandaloneFactory {
 
     private MailSourceStandaloneFactory() {
     }
 
-    static MailSourceClient client(
+    public static MailSourceClient client(
             PollingSettingsService pollingSettingsService,
             SourcePollingStateService sourcePollingStateService,
             MimeHashService mimeHashService,
@@ -53,7 +53,7 @@ final class MailSourceStandaloneFactory {
                 fetchService);
     }
 
-    static MailSessionFactory mailSessionFactory() {
+    public static MailSessionFactory mailSessionFactory() {
         MailSessionFactory mailSessionFactory = new MailSessionFactory();
         mailSessionFactory.mailClientConfig = defaultMailClientConfig();
         return mailSessionFactory;

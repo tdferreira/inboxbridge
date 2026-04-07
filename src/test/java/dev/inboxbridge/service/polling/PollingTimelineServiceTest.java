@@ -1,4 +1,6 @@
-package dev.inboxbridge.service;
+package dev.inboxbridge.service.polling;
+
+import dev.inboxbridge.service.*;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 

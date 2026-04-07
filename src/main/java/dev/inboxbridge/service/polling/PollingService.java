@@ -1,4 +1,6 @@
-package dev.inboxbridge.service;
+package dev.inboxbridge.service.polling;
+
+import dev.inboxbridge.service.*;
 
 import java.time.Instant;
 import java.util.ArrayList;

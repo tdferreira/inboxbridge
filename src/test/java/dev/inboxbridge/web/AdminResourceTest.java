@@ -21,9 +21,9 @@ import dev.inboxbridge.dto.UpdateSourcePollingSettingsRequest;
 import dev.inboxbridge.domain.RuntimeEmailAccount;
 import dev.inboxbridge.persistence.AppUser;
 import dev.inboxbridge.security.CurrentUserContext;
-import dev.inboxbridge.service.PollingService;
+import dev.inboxbridge.service.polling.PollingService;
 import dev.inboxbridge.service.PollingSettingsService;
-import dev.inboxbridge.service.PollingStatsService;
+import dev.inboxbridge.service.polling.PollingStatsService;
 import dev.inboxbridge.service.RuntimeEmailAccountService;
 import dev.inboxbridge.service.SourcePollingSettingsService;
 import dev.inboxbridge.service.AuthSecuritySettingsService;
@@ -372,7 +372,7 @@ class AdminResourceTest {
         }
     }
 
-    private static final class TrackingPollingLiveService extends dev.inboxbridge.service.PollingLiveService {
+    private static final class TrackingPollingLiveService extends dev.inboxbridge.service.polling.PollingLiveService {
         private final java.util.List<String> actions = new java.util.ArrayList<>();
 
         @Override

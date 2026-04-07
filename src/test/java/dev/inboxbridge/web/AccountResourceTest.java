@@ -11,7 +11,7 @@ import dev.inboxbridge.persistence.AppUser;
 import dev.inboxbridge.persistence.RemoteSession;
 import dev.inboxbridge.security.CurrentUserContext;
 import dev.inboxbridge.service.AppUserService;
-import dev.inboxbridge.service.PollingLiveService;
+import dev.inboxbridge.service.polling.PollingLiveService;
 import dev.inboxbridge.service.SessionClientInfoService;
 import dev.inboxbridge.service.RemoteSessionService;
 import dev.inboxbridge.service.UserGmailConfigService;

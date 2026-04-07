@@ -1,5 +1,7 @@
 package dev.inboxbridge.service;
 
+import dev.inboxbridge.service.polling.PollingStatsService;
+import dev.inboxbridge.service.polling.PollingTimelineService;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
@@ -288,28 +290,29 @@ class AdminDashboardServiceTest {
             ImportedMessageRepository importedMessageRepository,
             SourcePollEventService sourcePollEventService,
             EnvSourceService envSourceService) {
-        PollingStatsService service = new PollingStatsService();
-        service.importedMessageRepository = importedMessageRepository;
-        service.sourcePollEventService = sourcePollEventService;
-        service.envSourceService = envSourceService;
-        service.userEmailAccountRepository = new dev.inboxbridge.persistence.UserEmailAccountRepository() {
-            @Override
-            public long count() {
-                return 0L;
-            }
+        return new PollingStatsService(
+                importedMessageRepository,
+                new dev.inboxbridge.persistence.UserEmailAccountRepository() {
+                    @Override
+                    public long count() {
+                        return 0L;
+                    }
 
-            @Override
-            public long count(String query, Object... params) {
-                return 0L;
-            }
+                    @Override
+                    public long count(String query, Object... params) {
+                        return 0L;
+                    }
 
-            @Override
-            public List<dev.inboxbridge.persistence.UserEmailAccount> listAll() {
-                return List.of();
-            }
-        };
-        service.sourcePollingStateService = new FakeSourcePollingStateService();
-        return service;
+                    @Override
+                    public List<dev.inboxbridge.persistence.UserEmailAccount> listAll() {
+                        return List.of();
+                    }
+                },
+                new dev.inboxbridge.persistence.UserMailDestinationConfigRepository(),
+                sourcePollEventService,
+                envSourceService,
+                new FakeSourcePollingStateService(),
+                new PollingTimelineService());
     }
 
     private SystemOAuthAppSettingsService systemOAuthAppSettingsService(InboxBridgeConfig config) {

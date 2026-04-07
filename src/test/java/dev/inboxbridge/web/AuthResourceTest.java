@@ -32,7 +32,7 @@ import dev.inboxbridge.service.GeoIpLocationService;
 import dev.inboxbridge.service.MicrosoftOAuthService;
 import dev.inboxbridge.service.OAuthProviderRegistryService;
 import dev.inboxbridge.service.PasskeyService;
-import dev.inboxbridge.service.PollingLiveService;
+import dev.inboxbridge.service.polling.PollingLiveService;
 import dev.inboxbridge.service.RemoteSessionService;
 import dev.inboxbridge.service.RegistrationChallengeService;
 import dev.inboxbridge.service.SessionClientInfoService;

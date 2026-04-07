@@ -18,7 +18,7 @@ import dev.inboxbridge.service.AuthLoginProtectionService;
 import dev.inboxbridge.service.AuthService;
 import dev.inboxbridge.service.GeoIpLocationService;
 import dev.inboxbridge.service.PasskeyService;
-import dev.inboxbridge.service.PollingLiveService;
+import dev.inboxbridge.service.polling.PollingLiveService;
 import dev.inboxbridge.service.RemoteSessionService;
 import dev.inboxbridge.service.SystemOAuthAppSettingsService;
 import dev.inboxbridge.service.UserUiPreferenceService;

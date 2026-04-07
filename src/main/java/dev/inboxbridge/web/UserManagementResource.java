@@ -18,7 +18,7 @@ import dev.inboxbridge.security.RequireAdmin;
 import dev.inboxbridge.service.AppUserService;
 import dev.inboxbridge.service.ApplicationModeService;
 import dev.inboxbridge.service.PasskeyService;
-import dev.inboxbridge.service.PollingStatsService;
+import dev.inboxbridge.service.polling.PollingStatsService;
 import dev.inboxbridge.service.UserEmailAccountService;
 import dev.inboxbridge.service.UserGmailConfigService;
 import dev.inboxbridge.service.UserMailDestinationConfigService;

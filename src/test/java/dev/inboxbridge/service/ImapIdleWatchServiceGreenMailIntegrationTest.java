@@ -1,5 +1,6 @@
 package dev.inboxbridge.service;
 
+import dev.inboxbridge.service.polling.PollingService;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.fail;
 import static org.junit.jupiter.api.Assertions.assertTrue;

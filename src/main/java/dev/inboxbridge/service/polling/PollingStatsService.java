@@ -1,4 +1,6 @@
-package dev.inboxbridge.service;
+package dev.inboxbridge.service.polling;
+
+import dev.inboxbridge.service.*;
 
 import java.sql.Timestamp;
 import java.time.Instant;
@@ -63,6 +65,26 @@ public class PollingStatsService {
 
     @Inject
     PollingTimelineService pollingTimelineService;
+
+    public PollingStatsService() {
+    }
+
+    public PollingStatsService(
+            ImportedMessageRepository importedMessageRepository,
+            UserEmailAccountRepository userEmailAccountRepository,
+            UserMailDestinationConfigRepository userMailDestinationConfigRepository,
+            SourcePollEventService sourcePollEventService,
+            EnvSourceService envSourceService,
+            SourcePollingStateService sourcePollingStateService,
+            PollingTimelineService pollingTimelineService) {
+        this.importedMessageRepository = importedMessageRepository;
+        this.userEmailAccountRepository = userEmailAccountRepository;
+        this.userMailDestinationConfigRepository = userMailDestinationConfigRepository;
+        this.sourcePollEventService = sourcePollEventService;
+        this.envSourceService = envSourceService;
+        this.sourcePollingStateService = sourcePollingStateService;
+        this.pollingTimelineService = pollingTimelineService;
+    }
 
     public GlobalPollingStatsView globalStats(int sourcesWithErrors) {
         return globalStats(sourcesWithErrors, ZoneOffset.UTC);

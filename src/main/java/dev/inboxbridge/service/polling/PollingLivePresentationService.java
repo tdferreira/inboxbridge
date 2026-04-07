@@ -1,4 +1,6 @@
-package dev.inboxbridge.service;
+package dev.inboxbridge.service.polling;
+
+import dev.inboxbridge.service.*;
 
 import dev.inboxbridge.dto.LiveNotificationContentView;
 import dev.inboxbridge.dto.LiveNotificationView;
