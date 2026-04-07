@@ -74,6 +74,10 @@ infrastructure details:
   scheduler eligibility, manual rate limits, live-run lifecycle, and
   concurrent worker orchestration instead of also carrying the full source
   execution pipeline inline.
+- `PollingTimelineService` now owns the hourly/daily/weekly/monthly/custom
+  bucket generation used by polling statistics, so `PollingStatsService` can
+  focus on repository scoping and event aggregation instead of also embedding
+  the timeline-bucketing implementation.
 
 ## Remote control flow
 
