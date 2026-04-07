@@ -3,8 +3,8 @@ package dev.inboxbridge.service.mail;
 import java.time.Duration;
 
 import dev.inboxbridge.config.MailClientConfig;
-import dev.inboxbridge.service.GoogleOAuthService;
-import dev.inboxbridge.service.MicrosoftOAuthService;
+import dev.inboxbridge.service.oauth.GoogleOAuthService;
+import dev.inboxbridge.service.oauth.MicrosoftOAuthService;
 import dev.inboxbridge.service.MimeHashService;
 import dev.inboxbridge.service.PollCancellationService;
 import dev.inboxbridge.service.PollingSettingsService;

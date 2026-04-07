@@ -13,7 +13,7 @@ import dev.inboxbridge.persistence.UserEmailAccount;
 import dev.inboxbridge.security.CurrentUserContext;
 import dev.inboxbridge.security.RequireAuth;
 import dev.inboxbridge.service.EnvSourceService;
-import dev.inboxbridge.service.MicrosoftOAuthService;
+import dev.inboxbridge.service.oauth.MicrosoftOAuthService;
 import dev.inboxbridge.service.UserEmailAccountService;
 import dev.inboxbridge.web.ApiErrorCodes;
 import dev.inboxbridge.web.ApiErrorDetails;

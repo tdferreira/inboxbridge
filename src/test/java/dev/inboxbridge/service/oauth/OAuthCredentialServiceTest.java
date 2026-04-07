@@ -1,5 +1,6 @@
-package dev.inboxbridge.service;
+package dev.inboxbridge.service.oauth;
 
+import dev.inboxbridge.service.SecretEncryptionService;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
@@ -84,8 +85,8 @@ class OAuthCredentialServiceTest {
 
     private SecretEncryptionService configuredEncryptionService() {
         SecretEncryptionService service = new SecretEncryptionService();
-        service.tokenEncryptionKey = Base64.getEncoder().encodeToString("0123456789abcdef0123456789abcdef".getBytes());
-        service.tokenEncryptionKeyId = "v1";
+        service.setTokenEncryptionKey(Base64.getEncoder().encodeToString("0123456789abcdef0123456789abcdef".getBytes()));
+        service.setTokenEncryptionKeyId("v1");
         return service;
     }
 

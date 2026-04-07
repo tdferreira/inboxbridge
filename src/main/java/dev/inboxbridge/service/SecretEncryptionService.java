@@ -36,6 +36,14 @@ public class SecretEncryptionService {
 
     private final SecureRandom secureRandom = new SecureRandom();
 
+    public void setTokenEncryptionKey(String tokenEncryptionKey) {
+        this.tokenEncryptionKey = tokenEncryptionKey;
+    }
+
+    public void setTokenEncryptionKeyId(String tokenEncryptionKeyId) {
+        this.tokenEncryptionKeyId = tokenEncryptionKeyId;
+    }
+
     public boolean isConfigured() {
         String configuredKey = configuredTokenEncryptionKey();
         return !configuredKey.isBlank() && !"replace-me".equals(configuredKey);

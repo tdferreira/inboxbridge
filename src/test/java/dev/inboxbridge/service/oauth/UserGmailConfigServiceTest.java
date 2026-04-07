@@ -1,5 +1,6 @@
-package dev.inboxbridge.service;
+package dev.inboxbridge.service.oauth;
 
+import dev.inboxbridge.service.SecretEncryptionService;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertThrows;
@@ -368,15 +369,15 @@ class UserGmailConfigServiceTest {
 
     private SecretEncryptionService unconfiguredSecrets() {
         SecretEncryptionService service = new SecretEncryptionService();
-        service.tokenEncryptionKey = "replace-me";
-        service.tokenEncryptionKeyId = "v1";
+        service.setTokenEncryptionKey("replace-me");
+        service.setTokenEncryptionKeyId("v1");
         return service;
     }
 
     private SecretEncryptionService configuredSecrets() {
         SecretEncryptionService service = new SecretEncryptionService();
-        service.tokenEncryptionKey = java.util.Base64.getEncoder().encodeToString("0123456789abcdef0123456789abcdef".getBytes());
-        service.tokenEncryptionKeyId = "v1";
+        service.setTokenEncryptionKey(java.util.Base64.getEncoder().encodeToString("0123456789abcdef0123456789abcdef".getBytes()));
+        service.setTokenEncryptionKeyId("v1");
         return service;
     }
 

@@ -1,5 +1,8 @@
 package dev.inboxbridge.service;
 
+import dev.inboxbridge.service.oauth.MicrosoftOAuthService;
+import dev.inboxbridge.service.oauth.SystemOAuthAppSettingsService;
+import dev.inboxbridge.service.oauth.UserGmailConfigService;
 import dev.inboxbridge.service.destination.*;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;

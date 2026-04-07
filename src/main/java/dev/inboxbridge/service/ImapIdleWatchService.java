@@ -20,6 +20,8 @@ import dev.inboxbridge.domain.SourceFetchMode;
 import dev.inboxbridge.dto.PollRunError;
 import dev.inboxbridge.dto.PollRunResult;
 import dev.inboxbridge.service.mail.MailSessionFactory;
+import dev.inboxbridge.service.oauth.GoogleOAuthService;
+import dev.inboxbridge.service.oauth.MicrosoftOAuthService;
 import io.quarkus.runtime.StartupEvent;
 import io.quarkus.scheduler.Scheduled;
 import jakarta.annotation.PreDestroy;

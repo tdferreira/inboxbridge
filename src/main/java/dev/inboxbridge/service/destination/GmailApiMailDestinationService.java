@@ -9,7 +9,7 @@ import dev.inboxbridge.domain.MailDestinationTarget;
 import dev.inboxbridge.domain.RuntimeEmailAccount;
 import dev.inboxbridge.dto.GmailImportResponse;
 import dev.inboxbridge.dto.MailImportResponse;
-import dev.inboxbridge.service.OAuthCredentialService;
+import dev.inboxbridge.service.oauth.OAuthCredentialService;
 import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.inject.Inject;
 

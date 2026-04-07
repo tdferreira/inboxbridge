@@ -25,10 +25,10 @@ import dev.inboxbridge.service.ApplicationModeService;
 import dev.inboxbridge.service.PasskeyService;
 import dev.inboxbridge.service.polling.PollingStatsService;
 import dev.inboxbridge.service.UserEmailAccountService;
-import dev.inboxbridge.service.UserGmailConfigService;
+import dev.inboxbridge.service.oauth.UserGmailConfigService;
 import dev.inboxbridge.service.UserMailDestinationConfigService;
 import dev.inboxbridge.service.UserPollingSettingsService;
-import dev.inboxbridge.service.SystemOAuthAppSettingsService;
+import dev.inboxbridge.service.oauth.SystemOAuthAppSettingsService;
 import jakarta.enterprise.inject.Vetoed;
 import jakarta.ws.rs.BadRequestException;
 

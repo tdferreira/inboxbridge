@@ -23,7 +23,7 @@ import dev.inboxbridge.service.GeoIpLocationService;
 import dev.inboxbridge.service.PasskeyService;
 import dev.inboxbridge.service.polling.PollingLiveService;
 import dev.inboxbridge.service.RemoteSessionService;
-import dev.inboxbridge.service.SystemOAuthAppSettingsService;
+import dev.inboxbridge.service.oauth.SystemOAuthAppSettingsService;
 import dev.inboxbridge.service.UserUiPreferenceService;
 import io.vertx.core.http.HttpServerRequest;
 import io.vertx.core.net.SocketAddress;

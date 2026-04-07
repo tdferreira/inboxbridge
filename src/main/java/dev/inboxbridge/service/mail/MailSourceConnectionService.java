@@ -4,8 +4,8 @@ import org.jboss.logging.Logger;
 
 import dev.inboxbridge.config.InboxBridgeConfig;
 import dev.inboxbridge.domain.RuntimeEmailAccount;
-import dev.inboxbridge.service.GoogleOAuthService;
-import dev.inboxbridge.service.MicrosoftOAuthService;
+import dev.inboxbridge.service.oauth.GoogleOAuthService;
+import dev.inboxbridge.service.oauth.MicrosoftOAuthService;
 import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.inject.Inject;
 import jakarta.mail.MessagingException;

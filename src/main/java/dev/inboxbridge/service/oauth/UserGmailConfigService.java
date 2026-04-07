@@ -1,4 +1,4 @@
-package dev.inboxbridge.service;
+package dev.inboxbridge.service.oauth;
 
 import java.time.Instant;
 import java.util.Optional;
@@ -11,6 +11,8 @@ import dev.inboxbridge.domain.GmailTarget;
 import dev.inboxbridge.persistence.AppUser;
 import dev.inboxbridge.persistence.UserGmailConfig;
 import dev.inboxbridge.persistence.UserGmailConfigRepository;
+import dev.inboxbridge.service.PublicUrlService;
+import dev.inboxbridge.service.SecretEncryptionService;
 import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.inject.Inject;
 import jakarta.transaction.Transactional;

@@ -1,6 +1,6 @@
 package dev.inboxbridge.domain;
 
-import dev.inboxbridge.service.GoogleOAuthService;
+import dev.inboxbridge.service.oauth.GoogleOAuthService;
 
 public record GmailTarget(
         String subjectKey,

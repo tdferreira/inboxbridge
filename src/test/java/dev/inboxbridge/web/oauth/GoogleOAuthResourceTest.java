@@ -10,7 +10,7 @@ import java.time.Instant;
 import org.junit.jupiter.api.Test;
 
 import dev.inboxbridge.dto.GoogleTokenExchangeResponse;
-import dev.inboxbridge.service.GoogleOAuthService;
+import dev.inboxbridge.service.oauth.GoogleOAuthService;
 import jakarta.ws.rs.core.Response;
 
 class GoogleOAuthResourceTest {

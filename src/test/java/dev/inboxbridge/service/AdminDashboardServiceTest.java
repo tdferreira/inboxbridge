@@ -25,6 +25,8 @@ import dev.inboxbridge.dto.AdminPollEventSummary;
 import dev.inboxbridge.dto.SourcePollingStateView;
 import dev.inboxbridge.persistence.ImportedMessageRepository;
 import dev.inboxbridge.persistence.SourcePollEvent;
+import dev.inboxbridge.service.oauth.OAuthCredentialService;
+import dev.inboxbridge.service.oauth.SystemOAuthAppSettingsService;
 
 class AdminDashboardServiceTest {
 
@@ -321,9 +323,9 @@ class AdminDashboardServiceTest {
         secretEncryptionService.tokenEncryptionKeyId = "v1";
 
         SystemOAuthAppSettingsService service = new SystemOAuthAppSettingsService();
-        service.config = config;
-        service.secretEncryptionService = secretEncryptionService;
-        service.repository = new dev.inboxbridge.persistence.SystemOAuthAppSettingsRepository() {
+        service.setConfig(config);
+        service.setSecretEncryptionService(secretEncryptionService);
+        service.setRepository(new dev.inboxbridge.persistence.SystemOAuthAppSettingsRepository() {
             @Override
             public Optional<dev.inboxbridge.persistence.SystemOAuthAppSettings> findSingleton() {
                 return Optional.empty();
@@ -332,7 +334,7 @@ class AdminDashboardServiceTest {
             @Override
             public void persist(dev.inboxbridge.persistence.SystemOAuthAppSettings entity) {
             }
-        };
+        });
         return service;
     }
 

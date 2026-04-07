@@ -1,4 +1,4 @@
-package dev.inboxbridge.service;
+package dev.inboxbridge.service.oauth;
 
 import java.time.Instant;
 import java.util.List;
@@ -6,6 +6,7 @@ import java.util.Optional;
 
 import dev.inboxbridge.persistence.OAuthCredential;
 import dev.inboxbridge.persistence.OAuthCredentialRepository;
+import dev.inboxbridge.service.SecretEncryptionService;
 import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.inject.Inject;
 import jakarta.transaction.Transactional;
@@ -25,6 +26,14 @@ public class OAuthCredentialService {
 
     @Inject
     SecretEncryptionService secretEncryptionService;
+
+    public void setRepository(OAuthCredentialRepository repository) {
+        this.repository = repository;
+    }
+
+    public void setSecretEncryptionService(SecretEncryptionService secretEncryptionService) {
+        this.secretEncryptionService = secretEncryptionService;
+    }
 
     public boolean secureStorageConfigured() {
         return secretEncryptionService.isConfigured();

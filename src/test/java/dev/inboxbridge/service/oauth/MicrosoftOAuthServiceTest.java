@@ -1,5 +1,6 @@
-package dev.inboxbridge.service;
+package dev.inboxbridge.service.oauth;
 
+import dev.inboxbridge.service.EnvSourceService;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
@@ -136,7 +137,7 @@ class MicrosoftOAuthServiceTest {
         java.util.concurrent.ConcurrentMap<String, Object> cache =
                 (java.util.concurrent.ConcurrentMap<String, Object>) cacheField.get(service);
         java.lang.reflect.Constructor<?> constructor = Class
-                .forName("dev.inboxbridge.service.MicrosoftOAuthService$CachedToken")
+                .forName("dev.inboxbridge.service.oauth.MicrosoftOAuthService$CachedToken")
                 .getDeclaredConstructors()[0];
         constructor.setAccessible(true);
         cache.put("outlook-main-imap", constructor.newInstance("token", java.time.Instant.now().plusSeconds(300)));

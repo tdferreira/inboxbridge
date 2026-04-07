@@ -1,4 +1,4 @@
-package dev.inboxbridge.service;
+package dev.inboxbridge.service.oauth;
 
 import java.io.IOException;
 import java.net.URI;
@@ -23,6 +23,9 @@ import dev.inboxbridge.domain.SourceFetchMode;
 import dev.inboxbridge.dto.MicrosoftOAuthSourceOption;
 import dev.inboxbridge.dto.MicrosoftTokenExchangeResponse;
 import dev.inboxbridge.dto.MicrosoftTokenResponse;
+import dev.inboxbridge.service.EnvSourceService;
+import dev.inboxbridge.service.UserEmailAccountService;
+import dev.inboxbridge.service.UserMailDestinationConfigService;
 import dev.inboxbridge.service.destination.ImapAppendMailDestinationService;
 import dev.inboxbridge.service.destination.MailboxConflictService;
 import dev.inboxbridge.persistence.UserMailDestinationConfig;

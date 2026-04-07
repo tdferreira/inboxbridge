@@ -1,4 +1,4 @@
-package dev.inboxbridge.service;
+package dev.inboxbridge.service.oauth;
 
 import java.time.Instant;
 
@@ -7,6 +7,7 @@ import dev.inboxbridge.dto.SystemOAuthAppSettingsView;
 import dev.inboxbridge.dto.UpdateSystemOAuthAppSettingsRequest;
 import dev.inboxbridge.persistence.SystemOAuthAppSettings;
 import dev.inboxbridge.persistence.SystemOAuthAppSettingsRepository;
+import dev.inboxbridge.service.SecretEncryptionService;
 import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.inject.Inject;
 import jakarta.transaction.Transactional;
@@ -22,6 +23,18 @@ public class SystemOAuthAppSettingsService {
 
     @Inject
     SystemOAuthAppSettingsRepository repository;
+
+    public void setConfig(InboxBridgeConfig config) {
+        this.config = config;
+    }
+
+    public void setSecretEncryptionService(SecretEncryptionService secretEncryptionService) {
+        this.secretEncryptionService = secretEncryptionService;
+    }
+
+    public void setRepository(SystemOAuthAppSettingsRepository repository) {
+        this.repository = repository;
+    }
 
     @Transactional
     public SystemOAuthAppSettingsView view() {

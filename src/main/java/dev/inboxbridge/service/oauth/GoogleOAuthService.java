@@ -1,4 +1,4 @@
-package dev.inboxbridge.service;
+package dev.inboxbridge.service.oauth;
 
 import java.io.IOException;
 import java.net.URI;
@@ -23,6 +23,7 @@ import dev.inboxbridge.config.InboxBridgeConfig;
 import dev.inboxbridge.domain.RuntimeEmailAccount;
 import dev.inboxbridge.dto.GoogleTokenExchangeResponse;
 import dev.inboxbridge.dto.GoogleTokenResponse;
+import dev.inboxbridge.service.UserEmailAccountService;
 import dev.inboxbridge.service.destination.MailboxConflictService;
 import dev.inboxbridge.persistence.UserGmailConfigRepository;
 import jakarta.enterprise.context.ApplicationScoped;

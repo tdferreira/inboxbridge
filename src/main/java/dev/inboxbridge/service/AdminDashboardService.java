@@ -19,6 +19,8 @@ import dev.inboxbridge.dto.AdminPollEventSummary;
 import dev.inboxbridge.dto.GlobalPollingStatsView;
 import dev.inboxbridge.domain.RuntimeEmailAccount;
 import dev.inboxbridge.persistence.ImportedMessageRepository;
+import dev.inboxbridge.service.oauth.OAuthCredentialService;
+import dev.inboxbridge.service.oauth.SystemOAuthAppSettingsService;
 import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.inject.Inject;
 

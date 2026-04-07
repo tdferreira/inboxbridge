@@ -25,6 +25,7 @@ import dev.inboxbridge.persistence.UserEmailAccountRepository;
 import dev.inboxbridge.persistence.UserGmailConfigRepository;
 import dev.inboxbridge.service.destination.MailboxConflictService;
 import dev.inboxbridge.service.mail.MailSourceClient;
+import dev.inboxbridge.service.oauth.OAuthCredentialService;
 import dev.inboxbridge.domain.MailDestinationTarget;
 import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.enterprise.event.Event;

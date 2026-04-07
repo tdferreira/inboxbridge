@@ -19,7 +19,7 @@ import dev.inboxbridge.service.RemoteSessionService;
 import dev.inboxbridge.service.SessionLocationAlertService;
 import dev.inboxbridge.service.SessionClientInfoService;
 import dev.inboxbridge.service.UserSessionService;
-import dev.inboxbridge.service.UserGmailConfigService;
+import dev.inboxbridge.service.oauth.UserGmailConfigService;
 import dev.inboxbridge.service.UserMailDestinationConfigService;
 import jakarta.inject.Inject;
 import jakarta.ws.rs.Consumes;

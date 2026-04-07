@@ -2,6 +2,7 @@ package dev.inboxbridge.service;
 
 import dev.inboxbridge.config.InboxBridgeConfig;
 import dev.inboxbridge.persistence.AppUser;
+import dev.inboxbridge.service.oauth.SystemOAuthAppSettingsService;
 import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.inject.Inject;
 import jakarta.transaction.Transactional;

@@ -23,6 +23,7 @@ import dev.inboxbridge.persistence.UserMailDestinationConfigRepository;
 import dev.inboxbridge.persistence.UserPasskeyRepository;
 import dev.inboxbridge.persistence.UserPollingSettingRepository;
 import dev.inboxbridge.persistence.UserUiPreferenceRepository;
+import dev.inboxbridge.service.oauth.OAuthCredentialService;
 import io.quarkus.runtime.StartupEvent;
 import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.enterprise.event.Observes;

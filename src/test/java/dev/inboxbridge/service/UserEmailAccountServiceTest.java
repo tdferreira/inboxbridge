@@ -1,5 +1,6 @@
 package dev.inboxbridge.service;
 
+import dev.inboxbridge.service.oauth.OAuthCredentialService;
 import dev.inboxbridge.service.destination.*;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
