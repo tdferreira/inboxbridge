@@ -1,4 +1,4 @@
-package dev.inboxbridge.service;
+package dev.inboxbridge.service.mail;
 
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
@@ -16,6 +16,7 @@ import org.eclipse.angus.mail.pop3.POP3Folder;
 import org.jboss.logging.Logger;
 
 import dev.inboxbridge.domain.FetchedMessage;
+import dev.inboxbridge.service.MimeHashService;
 import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.inject.Inject;
 import jakarta.mail.FetchProfile;

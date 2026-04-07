@@ -19,6 +19,7 @@ import dev.inboxbridge.domain.SourceMailboxFolders;
 import dev.inboxbridge.domain.SourceFetchMode;
 import dev.inboxbridge.dto.PollRunError;
 import dev.inboxbridge.dto.PollRunResult;
+import dev.inboxbridge.service.mail.MailSessionFactory;
 import io.quarkus.runtime.StartupEvent;
 import io.quarkus.scheduler.Scheduled;
 import jakarta.annotation.PreDestroy;
@@ -386,7 +387,7 @@ public class ImapIdleWatchService {
             return mailSessionFactory;
         }
         MailSessionFactory fallback = new MailSessionFactory();
-        fallback.mailClientConfig = new dev.inboxbridge.config.MailClientConfig() {
+        fallback.setMailClientConfig(new dev.inboxbridge.config.MailClientConfig() {
             @Override
             public java.time.Duration connectionTimeout() {
                 return java.time.Duration.ofSeconds(20);
@@ -401,7 +402,7 @@ public class ImapIdleWatchService {
             public java.time.Duration idleOperationTimeout() {
                 return java.time.Duration.ZERO;
             }
-        };
+        });
         mailSessionFactory = fallback;
         return mailSessionFactory;
     }

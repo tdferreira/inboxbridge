@@ -4,9 +4,10 @@
 
 The backend is still primarily organized by layer, but the polling slice now
 anchors the first feature-oriented backend subpackage under
-`dev.inboxbridge.service.polling`. The coordinator, live-run, and stats classes
-that evolve together now live there instead of continuing to grow in the flat
-top-level `service` package.
+`dev.inboxbridge.service.polling`, and the extracted mail-source collaborators
+now live together under `dev.inboxbridge.service.mail`. The coordinator,
+live-run, stats, and source-mailbox protocol classes that evolve together no
+longer have to keep growing in the flat top-level `service` package.
 Within that still mostly layer-oriented backend, the provider OAuth web surface
 now also uses a narrower seam under `dev.inboxbridge.web.oauth`: the Google and
 Microsoft OAuth REST resources live alongside their callback-page renderers and
@@ -40,12 +41,12 @@ infrastructure details:
   `PUBLIC_BASE_URL` or the derived `PUBLIC_HOSTNAME` / `PUBLIC_PORT`
   combination, so OAuth redirect defaults and other externally visible links do
   not each rebuild that precedence logic.
-- `MailSessionFactory` builds the Jakarta Mail `Session` instances for source
-  IMAP, source POP3, IMAP IDLE, and destination IMAP APPEND traffic from one
-  typed `MailClientConfig` mapping. Connection and operation timeouts therefore
-  stay aligned across source fetch, source post-poll actions, destination
-  append, and long-lived IDLE watches instead of being hard-coded in each
-  service.
+- `MailSessionFactory` now lives under `dev.inboxbridge.service.mail` and
+  builds the Jakarta Mail `Session` instances for source IMAP, source POP3,
+  IMAP IDLE, and destination IMAP APPEND traffic from one typed
+  `MailClientConfig` mapping. Connection and operation timeouts therefore stay
+  aligned across source fetch, source post-poll actions, destination append,
+  and long-lived IDLE watches instead of being hard-coded in each service.
 - `MailSourceFolderService` and `MailSourceMessageMapper` now keep source-folder
   discovery/spam probing and fetched-message materialization/source-key logic
   out of `MailSourceClient`.
@@ -77,9 +78,9 @@ infrastructure details:
   source checkpoints, live per-message progress updates, and persisted
   poll-event/cooldown recording now evolve behind one narrower seam.
 - `MailSourceStandaloneFactory` now centralizes the non-CDI assembly path for
-  those mail-source collaborators, so focused unit tests and GreenMail-backed
-  integration tests construct the same helper graph instead of each service
-  re-creating its own ad-hoc fallback dependencies.
+  that `dev.inboxbridge.service.mail` slice, so focused unit tests and
+  GreenMail-backed integration tests construct the same helper graph instead of
+  each service re-creating its own ad-hoc fallback dependencies.
 - Inside that slice, the extracted helper services now also use explicit
   constructor injection for their collaborator graph, which narrows the hidden
   dependency surface and gives Quarkus component tests a clearer runtime wiring

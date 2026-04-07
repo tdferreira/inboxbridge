@@ -13,6 +13,7 @@ import dev.inboxbridge.persistence.SourceImapCheckpointRepository;
 import dev.inboxbridge.dto.SourcePollingStateView;
 import dev.inboxbridge.persistence.SourcePollingState;
 import dev.inboxbridge.persistence.SourcePollingStateRepository;
+import dev.inboxbridge.service.mail.MailFailureClassifier;
 import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.inject.Inject;
 import jakarta.transaction.Transactional;

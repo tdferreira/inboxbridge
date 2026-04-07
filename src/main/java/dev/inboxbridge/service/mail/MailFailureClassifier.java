@@ -1,9 +1,9 @@
-package dev.inboxbridge.service;
+package dev.inboxbridge.service.mail;
 
 import java.time.Duration;
 import java.util.Locale;
 
-final class MailFailureClassifier {
+public final class MailFailureClassifier {
 
     private static final Duration DEFAULT_FAILURE_BACKOFF = Duration.ofMinutes(2);
     private static final Duration TRANSIENT_FAILURE_BACKOFF = Duration.ofMinutes(5);
@@ -13,7 +13,7 @@ final class MailFailureClassifier {
     private MailFailureClassifier() {
     }
 
-    static Classification classify(String errorMessage) {
+    public static Classification classify(String errorMessage) {
         String normalized = normalize(errorMessage);
         if (normalized.isBlank()) {
             return new Classification(FailureCategory.UNKNOWN, normalized);
@@ -81,7 +81,7 @@ final class MailFailureClassifier {
         return new Classification(FailureCategory.UNKNOWN, normalized);
     }
 
-    static Classification classify(Throwable error) {
+    public static Classification classify(Throwable error) {
         return classify(normalize(error));
     }
 
@@ -114,7 +114,7 @@ final class MailFailureClassifier {
         return false;
     }
 
-    enum FailureCategory {
+    public enum FailureCategory {
         RATE_LIMIT,
         AUTHENTICATION,
         AUTHORIZATION,
@@ -124,9 +124,9 @@ final class MailFailureClassifier {
         UNKNOWN
     }
 
-    record Classification(FailureCategory category, String normalizedMessage) {
+    public record Classification(FailureCategory category, String normalizedMessage) {
 
-        Duration baseBackoff() {
+        public Duration baseBackoff() {
             return switch (category) {
                 case RATE_LIMIT -> RATE_LIMIT_BACKOFF;
                 case AUTHENTICATION, AUTHORIZATION -> AUTH_FAILURE_BACKOFF;
@@ -135,7 +135,7 @@ final class MailFailureClassifier {
             };
         }
 
-        int throttleSeverityDelta() {
+        public int throttleSeverityDelta() {
             return switch (category) {
                 case RATE_LIMIT -> 2;
                 case PROVIDER_UNAVAILABLE, TRANSIENT_NETWORK, MAILBOX_STATE -> 1;
@@ -143,7 +143,7 @@ final class MailFailureClassifier {
             };
         }
 
-        boolean retryableOAuthSessionFailure() {
+        public boolean retryableOAuthSessionFailure() {
             return category == FailureCategory.AUTHENTICATION || category == FailureCategory.AUTHORIZATION;
         }
     }

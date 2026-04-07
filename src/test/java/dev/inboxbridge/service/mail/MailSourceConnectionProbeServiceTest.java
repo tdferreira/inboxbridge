@@ -1,6 +1,10 @@
-package dev.inboxbridge.service;
+package dev.inboxbridge.service.mail;
+
+import dev.inboxbridge.service.*;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.time.Instant;
@@ -15,85 +19,75 @@ import org.junit.jupiter.api.Test;
 
 import dev.inboxbridge.config.InboxBridgeConfig;
 import dev.inboxbridge.domain.FetchedMessage;
-import dev.inboxbridge.domain.ImapCheckpoint;
-import dev.inboxbridge.domain.ImapAppendDestinationTarget;
 import dev.inboxbridge.domain.RuntimeEmailAccount;
 import dev.inboxbridge.domain.SourceFetchMode;
 import dev.inboxbridge.domain.SourcePostPollSettings;
+import dev.inboxbridge.dto.EmailAccountConnectionTestResult;
 import jakarta.mail.Address;
-import jakarta.mail.FetchProfile;
-import jakarta.mail.Folder;
 import jakarta.mail.Flags;
+import jakarta.mail.Folder;
+import jakarta.mail.FetchProfile;
 import jakarta.mail.Message;
 import jakarta.mail.Provider;
 import jakarta.mail.Session;
 import jakarta.mail.Store;
 import jakarta.mail.URLName;
 
-class MailSourceFetchServiceTest {
+class MailSourceConnectionProbeServiceTest {
 
     @Test
-    void runtimeImapFetchReadsDestinationScopedCheckpointsAndSortsMessagesAcrossFolders() {
-        FetchStoreState state = new FetchStoreState();
-        state.folder("INBOX").setMessages(List.of(
-                new FetchMessage("inbox-late", Instant.parse("2026-04-06T12:00:00Z")),
-                new FetchMessage("inbox-latest", Instant.parse("2026-04-06T13:00:00Z"))));
-        state.folder("Projects/2026").setMessages(List.of(
-                new FetchMessage("project-early", Instant.parse("2026-04-06T11:00:00Z"))));
+    void imapProbeAggregatesUnreadCountsAndMaterializesSampleMessage() {
+        ProbeStoreState state = new ProbeStoreState();
+        ProbeFolder inbox = state.folder("INBOX");
+        ProbeFolder projects = state.folder("Projects/2026");
+        inbox.setMessages(List.of(ProbeMessage.read("inbox-read")));
+        projects.setMessages(List.of(ProbeMessage.unread("project-unread")));
+        projects.permanentFlags = new Flags();
+        projects.permanentFlags.add("$Forwarded");
 
-        RecordingSourcePollingStateService pollingStateService = new RecordingSourcePollingStateService();
-        RecordingCheckpointSelector checkpointSelector = new RecordingCheckpointSelector();
-        MailSourceFetchService service = service(state, pollingStateService, checkpointSelector);
-        RuntimeEmailAccount account = runtimeImapAccount();
-        String destinationKey = DestinationIdentityKeys.forTarget(account.destination());
+        MailSourceConnectionProbeService service = service(state, true);
 
-        List<FetchedMessage> fetched = service.fetch(account, 10);
+        EmailAccountConnectionTestResult result = service.testConnection(runtimeImapAccount(true));
 
-        assertEquals(List.of("project-early", "inbox-late", "inbox-latest"), subjects(fetched));
-        assertEquals(
-                List.of("source-1|" + destinationKey + "|INBOX", "source-1|" + destinationKey + "|Projects/2026"),
-                pollingStateService.imapCheckpointRequests);
-        assertEquals(List.of("INBOX", "Projects/2026"), checkpointSelector.imapFolderRequests);
+        assertTrue(result.success());
+        assertEquals("INBOX, Projects/2026", result.folder());
+        assertEquals(2, result.visibleMessageCount());
+        assertEquals(1, result.unreadMessageCount());
+        assertTrue(result.sampleMessageAvailable());
+        assertTrue(result.sampleMessageMaterialized());
+        assertTrue(result.forwardedMarkerSupported());
+        assertTrue(result.message().contains("sample message was materialized successfully"));
     }
 
     @Test
-    void runtimePopFetchUsesDestinationScopedCheckpoint() {
-        FetchStoreState state = new FetchStoreState();
-        state.folder("INBOX").setMessages(List.of(
-                new FetchMessage("alpha", Instant.parse("2026-04-06T10:00:00Z")),
-                new FetchMessage("beta", Instant.parse("2026-04-06T11:00:00Z"))));
+    void pop3ProbeExplainsUnreadFilteringIsUnsupported() {
+        ProbeStoreState state = new ProbeStoreState();
+        state.folder("INBOX").setMessages(List.of());
 
-        RecordingSourcePollingStateService pollingStateService = new RecordingSourcePollingStateService();
-        RecordingCheckpointSelector checkpointSelector = new RecordingCheckpointSelector();
-        MailSourceFetchService service = service(state, pollingStateService, checkpointSelector);
-        RuntimeEmailAccount account = runtimePop3Account();
-        String destinationKey = DestinationIdentityKeys.forTarget(account.destination());
+        MailSourceConnectionProbeService service = service(state, false);
 
-        List<FetchedMessage> fetched = service.fetch(account, 10);
+        EmailAccountConnectionTestResult result = service.testConnection(runtimePop3Account(true));
 
-        assertEquals(List.of("alpha", "beta"), subjects(fetched));
-        assertEquals(List.of("source-pop|" + destinationKey), pollingStateService.popCheckpointRequests);
-        assertEquals(List.of(Optional.of("pop-checkpoint")), checkpointSelector.popCheckpoints);
+        assertTrue(result.success());
+        assertEquals("INBOX", result.folder());
+        assertEquals(0, result.visibleMessageCount());
+        assertFalse(result.sampleMessageAvailable());
+        assertNull(result.sampleMessageMaterialized());
+        assertEquals(Boolean.FALSE, result.unreadFilterSupported());
+        assertEquals(Boolean.FALSE, result.unreadFilterValidated());
+        assertTrue(result.message().contains("Server-side unread filtering is not supported for this protocol."));
     }
 
-    private static MailSourceFetchService service(
-            FetchStoreState state,
-            RecordingSourcePollingStateService pollingStateService,
-            RecordingCheckpointSelector checkpointSelector) {
-        return new MailSourceFetchService(
-                new FetchMailSessionFactory(state),
-                new FetchConnectionService(),
-                checkpointSelector,
-                new FetchMessageMapper(),
-                pollingStateService,
+    private static MailSourceConnectionProbeService service(ProbeStoreState state, boolean materializeMessages) {
+        return new MailSourceConnectionProbeService(
+                new ProbeMailSessionFactory(state),
+                new ProbeConnectionService(),
+                new MailSourceFolderService(),
+                new ProbeMessageMapper(materializeMessages),
                 null);
     }
 
-    private static List<String> subjects(List<FetchedMessage> messages) {
-        return messages.stream().map(message -> new String(message.rawMessage())).toList();
-    }
-
-    private static RuntimeEmailAccount runtimeImapAccount() {
+    private static RuntimeEmailAccount runtimeImapAccount(boolean unreadOnly) {
         return new RuntimeEmailAccount(
                 "source-1",
                 "USER",
@@ -110,19 +104,19 @@ class MailSourceFetchServiceTest {
                 "secret",
                 "",
                 Optional.of("INBOX, Projects/2026"),
-                false,
+                unreadOnly,
                 SourceFetchMode.POLLING,
                 Optional.empty(),
                 SourcePostPollSettings.none(),
-                destinationTarget("user-destination:7"));
+                null);
     }
 
-    private static RuntimeEmailAccount runtimePop3Account() {
+    private static RuntimeEmailAccount runtimePop3Account(boolean unreadOnly) {
         return new RuntimeEmailAccount(
-                "source-pop",
+                "source-1",
                 "USER",
-                8L,
-                "bob",
+                7L,
+                "alice",
                 true,
                 InboxBridgeConfig.Protocol.POP3,
                 "pop.example.test",
@@ -130,99 +124,32 @@ class MailSourceFetchServiceTest {
                 true,
                 InboxBridgeConfig.AuthMethod.PASSWORD,
                 InboxBridgeConfig.OAuthProvider.NONE,
-                "bob@example.test",
+                "alice@example.test",
                 "secret",
                 "",
                 Optional.of("INBOX"),
-                false,
+                unreadOnly,
                 SourceFetchMode.POLLING,
                 Optional.empty(),
                 SourcePostPollSettings.none(),
-                destinationTarget("user-destination:8"));
+                null);
     }
 
-    private static ImapAppendDestinationTarget destinationTarget(String subjectKey) {
-        return new ImapAppendDestinationTarget(
-                subjectKey,
-                99L,
-                "owner",
-                "provider",
-                "imap.destination.test",
-                993,
-                true,
-                InboxBridgeConfig.AuthMethod.PASSWORD,
-                InboxBridgeConfig.OAuthProvider.NONE,
-                "destination@example.test",
-                "secret",
-                "Imported");
-    }
+    private static final class ProbeMailSessionFactory extends MailSessionFactory {
+        private final ProbeStoreState state;
 
-    private static final class RecordingSourcePollingStateService extends SourcePollingStateService {
-        private final List<String> imapCheckpointRequests = new ArrayList<>();
-        private final List<String> popCheckpointRequests = new ArrayList<>();
-
-        @Override
-        public Optional<ImapCheckpoint> imapCheckpoint(String sourceId, String destinationKey, String folderName) {
-            imapCheckpointRequests.add(sourceId + "|" + destinationKey + "|" + folderName);
-            return Optional.of(new ImapCheckpoint(folderName, 44L, 20L));
-        }
-
-        @Override
-        public Optional<String> popCheckpoint(String sourceId, String destinationKey) {
-            popCheckpointRequests.add(sourceId + "|" + destinationKey);
-            return Optional.of("pop-checkpoint");
-        }
-    }
-
-    private static final class RecordingCheckpointSelector extends MailSourceCheckpointSelector {
-        private final List<String> imapFolderRequests = new ArrayList<>();
-        private final List<Optional<String>> popCheckpoints = new ArrayList<>();
-
-        @Override
-        public Message[] selectImapCandidateMessages(
-                Optional<ImapCheckpoint> checkpoint,
-                boolean unreadOnly,
-                int fetchWindow,
-                Folder folder) {
-            imapFolderRequests.add(folder.getFullName());
-            return ((FetchFolder) folder).messages.toArray(Message[]::new);
-        }
-
-        @Override
-        public Message[] selectPop3CandidateMessages(
-                Optional<String> checkpoint,
-                int fetchWindow,
-                Folder folder) {
-            popCheckpoints.add(checkpoint);
-            return ((FetchFolder) folder).messages.toArray(Message[]::new);
-        }
-    }
-
-    private static final class FetchMailSessionFactory extends MailSessionFactory {
-        private final FetchStoreState state;
-
-        private FetchMailSessionFactory(FetchStoreState state) {
+        private ProbeMailSessionFactory(ProbeStoreState state) {
             this.state = state;
         }
 
         @Override
         public Session sourceImapSession(RuntimeEmailAccount account) {
-            return sessionWithProvider("testimap", state);
+            return sessionWithProvider("testimap", ProbeStore.class, state);
         }
 
         @Override
         public Session sourcePop3Session(RuntimeEmailAccount account) {
-            return sessionWithProvider("testpop3", state);
-        }
-
-        @Override
-        public Session sourceImapSession(InboxBridgeConfig.Source source) {
-            return sessionWithProvider("testimap", state);
-        }
-
-        @Override
-        public Session sourcePop3Session(InboxBridgeConfig.Source source) {
-            return sessionWithProvider("testpop3", state);
+            return sessionWithProvider("testpop3", ProbeStore.class, state);
         }
 
         @Override
@@ -235,19 +162,19 @@ class MailSourceFetchServiceTest {
             return "testpop3";
         }
 
-        private Session sessionWithProvider(String protocol, FetchStoreState state) {
+        private Session sessionWithProvider(String protocol, Class<? extends Store> storeType, ProbeStoreState state) {
             Properties properties = new Properties();
             Session session = Session.getInstance(properties);
-            session.addProvider(new Provider(Provider.Type.STORE, protocol, FetchStore.class.getName(), "InboxBridge", "1.0"));
-            FetchStore.currentState = state;
+            session.addProvider(new Provider(Provider.Type.STORE, protocol, storeType.getName(), "InboxBridge", "1.0"));
+            ProbeStore.currentState = state;
             return session;
         }
     }
 
-    public static final class FetchStore extends Store {
-        private static FetchStoreState currentState;
+    public static final class ProbeStore extends Store {
+        private static ProbeStoreState currentState;
 
-        public FetchStore(Session session, URLName urlName) {
+        public ProbeStore(Session session, URLName urlName) {
             super(session, urlName);
         }
 
@@ -272,81 +199,79 @@ class MailSourceFetchServiceTest {
         }
     }
 
-    private static final class FetchConnectionService extends MailSourceConnectionService {
-        private FetchConnectionService() {
+    private static final class ProbeConnectionService extends MailSourceConnectionService {
+        private ProbeConnectionService() {
             super(null, null);
         }
 
         @Override
         public void connectStore(Store store, RuntimeEmailAccount bridge) {
-            // no-op
-        }
-
-        @Override
-        public void connectStore(Store store, InboxBridgeConfig.Source source) {
-            // no-op
+            // no-op for fake store
         }
     }
 
-    private static final class FetchMessageMapper extends MailSourceMessageMapper {
+    private static final class ProbeMessageMapper extends MailSourceMessageMapper {
+        private final boolean materializeMessages;
+
+        private ProbeMessageMapper(boolean materializeMessages) {
+            this.materializeMessages = materializeMessages;
+        }
+
         @Override
         public List<FetchedMessage> toFetchedMessages(String sourceId, Folder folder, Message[] messages) {
-            return java.util.Arrays.stream(messages)
-                    .map(message -> {
-                        FetchMessage fetchMessage = (FetchMessage) message;
-                        return new FetchedMessage(
-                                sourceId,
-                                sourceId + ":" + fetchMessage.subject,
-                                Optional.of("<" + fetchMessage.subject + "@example.com>"),
-                                fetchMessage.instant,
-                                Optional.of(folder.getFullName()),
-                                null,
-                                null,
-                                null,
-                                fetchMessage.subject.getBytes());
-                    })
-                    .toList();
+            if (!materializeMessages || messages.length == 0) {
+                return List.of();
+            }
+            return List.of(new FetchedMessage(
+                    sourceId,
+                    sourceId + ":probe",
+                    Optional.of("<probe@example.com>"),
+                    Instant.parse("2026-04-06T00:00:00Z"),
+                    Optional.of(folder.getFullName()),
+                    null,
+                    null,
+                    null,
+                    "raw".getBytes()));
         }
 
         @Override
         public List<FetchedMessage> toFetchedMessages(String sourceId, Message[] messages) {
-            return java.util.Arrays.stream(messages)
-                    .map(message -> {
-                        FetchMessage fetchMessage = (FetchMessage) message;
-                        return new FetchedMessage(
-                                sourceId,
-                                sourceId + ":" + fetchMessage.subject,
-                                Optional.of("<" + fetchMessage.subject + "@example.com>"),
-                                fetchMessage.instant,
-                                fetchMessage.subject.getBytes());
-                    })
-                    .toList();
+            if (!materializeMessages || messages.length == 0) {
+                return List.of();
+            }
+            return List.of(new FetchedMessage(
+                    sourceId,
+                    sourceId + ":probe",
+                    Optional.of("<probe@example.com>"),
+                    Instant.parse("2026-04-06T00:00:00Z"),
+                    "raw".getBytes()));
         }
     }
 
-    private static final class FetchStoreState {
+    private static final class ProbeStoreState {
         private final BareStore supportStore = new BareStore();
-        private final Map<String, FetchFolder> folders = new HashMap<>();
+        private final Map<String, ProbeFolder> folders = new HashMap<>();
 
-        private FetchFolder folder(String name) {
-            return folders.computeIfAbsent(name, folderName -> new FetchFolder(supportStore, folderName));
+        private ProbeFolder folder(String name) {
+            return folders.computeIfAbsent(name, folderName -> new ProbeFolder(supportStore, folderName));
         }
     }
 
-    private static final class FetchFolder extends Folder {
+    private static final class ProbeFolder extends Folder {
         private final String name;
         private final List<Message> messages = new ArrayList<>();
+        private Flags permanentFlags = new Flags();
         private boolean open;
 
-        private FetchFolder(Store store, String name) {
+        private ProbeFolder(Store store, String name) {
             super(store);
             this.name = name;
         }
 
-        private void setMessages(List<FetchMessage> messages) {
+        private void setMessages(List<ProbeMessage> messages) {
             this.messages.clear();
             for (int index = 0; index < messages.size(); index++) {
-                FetchMessage message = messages.get(index);
+                ProbeMessage message = messages.get(index);
                 message.bind(this, index + 1);
                 this.messages.add(message);
             }
@@ -430,7 +355,7 @@ class MailSourceFetchServiceTest {
 
         @Override
         public Flags getPermanentFlags() {
-            return new Flags();
+            return permanentFlags;
         }
 
         @Override
@@ -449,6 +374,11 @@ class MailSourceFetchServiceTest {
         }
 
         @Override
+        public Message[] search(jakarta.mail.search.SearchTerm term) {
+            return messages.stream().filter(term::match).toArray(Message[]::new);
+        }
+
+        @Override
         public void appendMessages(Message[] msgs) {
         }
 
@@ -462,13 +392,21 @@ class MailSourceFetchServiceTest {
         }
     }
 
-    private static final class FetchMessage extends Message {
+    private static final class ProbeMessage extends Message {
         private final String subject;
-        private final Instant instant;
+        private final boolean seen;
 
-        private FetchMessage(String subject, Instant instant) {
+        private ProbeMessage(String subject, boolean seen) {
             this.subject = subject;
-            this.instant = instant;
+            this.seen = seen;
+        }
+
+        private static ProbeMessage read(String subject) {
+            return new ProbeMessage(subject, true);
+        }
+
+        private static ProbeMessage unread(String subject) {
+            return new ProbeMessage(subject, false);
         }
 
         private void bind(Folder folder, int messageNumber) {
@@ -526,7 +464,7 @@ class MailSourceFetchServiceTest {
 
         @Override
         public java.util.Date getSentDate() {
-            return java.util.Date.from(instant);
+            return new java.util.Date();
         }
 
         @Override
@@ -535,12 +473,21 @@ class MailSourceFetchServiceTest {
 
         @Override
         public java.util.Date getReceivedDate() {
-            return java.util.Date.from(instant);
+            return new java.util.Date();
         }
 
         @Override
         public Flags getFlags() {
-            return new Flags();
+            Flags flags = new Flags();
+            if (seen) {
+                flags.add(Flags.Flag.SEEN);
+            }
+            return flags;
+        }
+
+        @Override
+        public boolean isSet(Flags.Flag flag) {
+            return flag == Flags.Flag.SEEN && seen;
         }
 
         @Override

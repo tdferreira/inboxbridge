@@ -1,6 +1,7 @@
 package dev.inboxbridge.service.polling;
 
 import dev.inboxbridge.service.*;
+import dev.inboxbridge.service.mail.MailSourceClient;
 
 import dev.inboxbridge.config.InboxBridgeConfig;
 import dev.inboxbridge.domain.FetchedMessage;

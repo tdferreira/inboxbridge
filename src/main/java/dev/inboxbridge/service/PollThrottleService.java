@@ -13,6 +13,7 @@ import dev.inboxbridge.persistence.PollThrottleLease;
 import dev.inboxbridge.persistence.PollThrottleLeaseRepository;
 import dev.inboxbridge.persistence.PollThrottleState;
 import dev.inboxbridge.persistence.PollThrottleStateRepository;
+import dev.inboxbridge.service.mail.MailFailureClassifier;
 import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.inject.Inject;
 import jakarta.transaction.Transactional;

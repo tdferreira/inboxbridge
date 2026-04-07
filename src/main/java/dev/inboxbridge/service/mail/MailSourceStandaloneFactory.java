@@ -1,8 +1,14 @@
-package dev.inboxbridge.service;
+package dev.inboxbridge.service.mail;
 
 import java.time.Duration;
 
 import dev.inboxbridge.config.MailClientConfig;
+import dev.inboxbridge.service.GoogleOAuthService;
+import dev.inboxbridge.service.MicrosoftOAuthService;
+import dev.inboxbridge.service.MimeHashService;
+import dev.inboxbridge.service.PollCancellationService;
+import dev.inboxbridge.service.PollingSettingsService;
+import dev.inboxbridge.service.SourcePollingStateService;
 
 /**
  * Builds mail-source collaborators for plain JVM callers such as focused unit

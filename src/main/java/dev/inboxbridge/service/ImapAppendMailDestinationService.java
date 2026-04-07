@@ -17,6 +17,8 @@ import dev.inboxbridge.domain.MailDestinationTarget;
 import dev.inboxbridge.domain.RuntimeEmailAccount;
 import dev.inboxbridge.dto.EmailAccountConnectionTestResult;
 import dev.inboxbridge.dto.MailImportResponse;
+import dev.inboxbridge.service.mail.MailSessionFactory;
+import dev.inboxbridge.service.mail.MailSourceClient;
 import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.inject.Inject;
 import jakarta.mail.Folder;
@@ -280,7 +282,7 @@ public class ImapAppendMailDestinationService implements MailDestinationService 
             return mailSessionFactory;
         }
         MailSessionFactory fallback = new MailSessionFactory();
-        fallback.mailClientConfig = new dev.inboxbridge.config.MailClientConfig() {
+        fallback.setMailClientConfig(new dev.inboxbridge.config.MailClientConfig() {
             @Override
             public java.time.Duration connectionTimeout() {
                 return java.time.Duration.ofSeconds(20);
@@ -295,7 +297,7 @@ public class ImapAppendMailDestinationService implements MailDestinationService 
             public java.time.Duration idleOperationTimeout() {
                 return java.time.Duration.ZERO;
             }
-        };
+        });
         mailSessionFactory = fallback;
         return mailSessionFactory;
     }

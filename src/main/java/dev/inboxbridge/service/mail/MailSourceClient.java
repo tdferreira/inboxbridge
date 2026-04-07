@@ -1,13 +1,14 @@
-package dev.inboxbridge.service;
+package dev.inboxbridge.service.mail;
 
 import dev.inboxbridge.config.InboxBridgeConfig;
 import dev.inboxbridge.domain.FetchedMessage;
 import dev.inboxbridge.domain.RuntimeEmailAccount;
+import dev.inboxbridge.dto.EmailAccountConnectionTestResult;
+import dev.inboxbridge.service.PollingSettingsService;
 import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.inject.Inject;
 import java.util.List;
 import java.util.Optional;
-import dev.inboxbridge.dto.EmailAccountConnectionTestResult;
 
 @ApplicationScoped
 public class MailSourceClient {
@@ -70,7 +71,7 @@ public class MailSourceClient {
         mailSourcePostPollActionService.apply(bridge, message);
     }
 
-    static boolean isRetryableMicrosoftOAuthFailure(Throwable error) {
+    public static boolean isRetryableMicrosoftOAuthFailure(Throwable error) {
         return MailFailureClassifier.classify(error).retryableOAuthSessionFailure();
     }
 

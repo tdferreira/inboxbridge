@@ -1,6 +1,8 @@
 package dev.inboxbridge.service.polling;
 
 import dev.inboxbridge.service.*;
+import dev.inboxbridge.service.mail.MailSourceClient;
+import dev.inboxbridge.service.mail.MailSourceClient.MailboxCountProbe;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;

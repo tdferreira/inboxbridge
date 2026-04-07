@@ -1,14 +1,13 @@
-package dev.inboxbridge.service;
+package dev.inboxbridge.service.mail;
+
+import dev.inboxbridge.service.*;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
-import static org.junit.jupiter.api.Assertions.assertNull;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
-import java.time.Instant;
-import java.util.ArrayList;
 import java.util.HashMap;
-import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.Properties;
@@ -19,73 +18,81 @@ import dev.inboxbridge.config.InboxBridgeConfig;
 import dev.inboxbridge.domain.FetchedMessage;
 import dev.inboxbridge.domain.RuntimeEmailAccount;
 import dev.inboxbridge.domain.SourceFetchMode;
+import dev.inboxbridge.domain.SourcePostPollAction;
 import dev.inboxbridge.domain.SourcePostPollSettings;
-import dev.inboxbridge.dto.EmailAccountConnectionTestResult;
 import jakarta.mail.Address;
 import jakarta.mail.Flags;
 import jakarta.mail.Folder;
-import jakarta.mail.FetchProfile;
 import jakarta.mail.Message;
+import jakarta.mail.MessagingException;
 import jakarta.mail.Provider;
 import jakarta.mail.Session;
 import jakarta.mail.Store;
 import jakarta.mail.URLName;
 
-class MailSourceConnectionProbeServiceTest {
+class MailSourcePostPollActionServiceTest {
 
     @Test
-    void imapProbeAggregatesUnreadCountsAndMaterializesSampleMessage() {
-        ProbeStoreState state = new ProbeStoreState();
-        ProbeFolder inbox = state.folder("INBOX");
-        ProbeFolder projects = state.folder("Projects/2026");
-        inbox.setMessages(List.of(ProbeMessage.read("inbox-read")));
-        projects.setMessages(List.of(ProbeMessage.unread("project-unread")));
-        projects.permanentFlags = new Flags();
-        projects.permanentFlags.add("$Forwarded");
+    void moveActionMarksAsReadCopiesToTargetAndExpungesSourceFolder() {
+        TestStoreState state = new TestStoreState();
+        TestFolder sourceFolder = state.folder("INBOX");
+        TestFolder archiveFolder = state.folder("Archive");
+        TestMessage sourceMessage = new TestMessage(sourceFolder);
+        sourceFolder.message = sourceMessage;
 
-        MailSourceConnectionProbeService service = service(state, true);
+        MailSourcePostPollActionService service = service(state, sourceMessage);
 
-        EmailAccountConnectionTestResult result = service.testConnection(runtimeImapAccount(true));
+        service.apply(
+                runtimeAccount(new SourcePostPollSettings(true, SourcePostPollAction.MOVE, Optional.of("Archive"))),
+                fetchedMessage("INBOX"));
 
-        assertTrue(result.success());
-        assertEquals("INBOX, Projects/2026", result.folder());
-        assertEquals(2, result.visibleMessageCount());
-        assertEquals(1, result.unreadMessageCount());
-        assertTrue(result.sampleMessageAvailable());
-        assertTrue(result.sampleMessageMaterialized());
-        assertTrue(result.forwardedMarkerSupported());
-        assertTrue(result.message().contains("sample message was materialized successfully"));
+        assertTrue(sourceMessage.seen);
+        assertTrue(sourceMessage.deleted);
+        assertEquals(1, sourceFolder.copyTargets.size());
+        assertEquals("Archive", sourceFolder.copyTargets.getFirst());
+        assertTrue(sourceFolder.closedWithExpunge);
+        assertFalse(archiveFolder.closedWithExpunge);
     }
 
     @Test
-    void pop3ProbeExplainsUnreadFilteringIsUnsupported() {
-        ProbeStoreState state = new ProbeStoreState();
-        state.folder("INBOX").setMessages(List.of());
+    void deleteActionMarksMessageDeletedAndExpungesSourceFolder() {
+        TestStoreState state = new TestStoreState();
+        TestFolder sourceFolder = state.folder("INBOX");
+        TestMessage sourceMessage = new TestMessage(sourceFolder);
+        sourceFolder.message = sourceMessage;
 
-        MailSourceConnectionProbeService service = service(state, false);
+        MailSourcePostPollActionService service = service(state, sourceMessage);
 
-        EmailAccountConnectionTestResult result = service.testConnection(runtimePop3Account(true));
+        service.apply(
+                runtimeAccount(new SourcePostPollSettings(false, SourcePostPollAction.DELETE, Optional.empty())),
+                fetchedMessage("INBOX"));
 
-        assertTrue(result.success());
-        assertEquals("INBOX", result.folder());
-        assertEquals(0, result.visibleMessageCount());
-        assertFalse(result.sampleMessageAvailable());
-        assertNull(result.sampleMessageMaterialized());
-        assertEquals(Boolean.FALSE, result.unreadFilterSupported());
-        assertEquals(Boolean.FALSE, result.unreadFilterValidated());
-        assertTrue(result.message().contains("Server-side unread filtering is not supported for this protocol."));
+        assertTrue(sourceMessage.deleted);
+        assertTrue(sourceFolder.closedWithExpunge);
+        assertTrue(sourceFolder.copyTargets.isEmpty());
     }
 
-    private static MailSourceConnectionProbeService service(ProbeStoreState state, boolean materializeMessages) {
-        return new MailSourceConnectionProbeService(
-                new ProbeMailSessionFactory(state),
-                new ProbeConnectionService(),
-                new MailSourceFolderService(),
-                new ProbeMessageMapper(materializeMessages),
+    @Test
+    void nonImapAccountsAreRejectedBeforeApplyingActions() {
+        TestStoreState state = new TestStoreState();
+        MailSourcePostPollActionService service = service(state, null);
+
+        IllegalStateException error = assertThrows(
+                IllegalStateException.class,
+                () -> service.apply(runtimePop3Account(), fetchedMessage("INBOX")));
+
+        assertEquals("Source-side message actions are only supported for IMAP accounts", error.getMessage());
+    }
+
+    private static MailSourcePostPollActionService service(TestStoreState state, Message resolvedMessage) {
+        return new MailSourcePostPollActionService(
+                new TestMailSessionFactory(state),
+                new TestMailSourceConnectionService(),
+                new TestMailSourceMessageMapper(resolvedMessage),
                 null);
     }
 
-    private static RuntimeEmailAccount runtimeImapAccount(boolean unreadOnly) {
+    private static RuntimeEmailAccount runtimeAccount(SourcePostPollSettings postPollSettings) {
         return new RuntimeEmailAccount(
                 "source-1",
                 "USER",
@@ -101,15 +108,15 @@ class MailSourceConnectionProbeServiceTest {
                 "alice@example.test",
                 "secret",
                 "",
-                Optional.of("INBOX, Projects/2026"),
-                unreadOnly,
+                Optional.of("INBOX"),
+                false,
                 SourceFetchMode.POLLING,
                 Optional.empty(),
-                SourcePostPollSettings.none(),
+                postPollSettings,
                 null);
     }
 
-    private static RuntimeEmailAccount runtimePop3Account(boolean unreadOnly) {
+    private static RuntimeEmailAccount runtimePop3Account() {
         return new RuntimeEmailAccount(
                 "source-1",
                 "USER",
@@ -126,53 +133,77 @@ class MailSourceConnectionProbeServiceTest {
                 "secret",
                 "",
                 Optional.of("INBOX"),
-                unreadOnly,
+                false,
                 SourceFetchMode.POLLING,
                 Optional.empty(),
-                SourcePostPollSettings.none(),
+                new SourcePostPollSettings(false, SourcePostPollAction.DELETE, Optional.empty()),
                 null);
     }
 
-    private static final class ProbeMailSessionFactory extends MailSessionFactory {
-        private final ProbeStoreState state;
+    private static FetchedMessage fetchedMessage(String folderName) {
+        return new FetchedMessage(
+                "source-1",
+                "source-key",
+                Optional.of("<message@example.com>"),
+                java.time.Instant.parse("2026-04-06T00:00:00Z"),
+                Optional.of(folderName),
+                null,
+                null,
+                null,
+                "raw".getBytes());
+    }
 
-        private ProbeMailSessionFactory(ProbeStoreState state) {
+    private static final class TestMailSessionFactory extends MailSessionFactory {
+        private final TestStoreState state;
+
+        private TestMailSessionFactory(TestStoreState state) {
             this.state = state;
         }
 
         @Override
         public Session sourceImapSession(RuntimeEmailAccount account) {
-            return sessionWithProvider("testimap", ProbeStore.class, state);
-        }
-
-        @Override
-        public Session sourcePop3Session(RuntimeEmailAccount account) {
-            return sessionWithProvider("testpop3", ProbeStore.class, state);
+            Properties properties = new Properties();
+            Session session = Session.getInstance(properties);
+            session.addProvider(new Provider(Provider.Type.STORE, "testimap", TestStore.class.getName(), "InboxBridge", "1.0"));
+            TestStore.currentState = state;
+            return session;
         }
 
         @Override
         public String imapStoreProtocol(boolean tls) {
             return "testimap";
         }
+    }
 
-        @Override
-        public String pop3StoreProtocol(boolean tls) {
-            return "testpop3";
+    private static final class TestMailSourceConnectionService extends MailSourceConnectionService {
+        private TestMailSourceConnectionService() {
+            super(null, null);
         }
 
-        private Session sessionWithProvider(String protocol, Class<? extends Store> storeType, ProbeStoreState state) {
-            Properties properties = new Properties();
-            Session session = Session.getInstance(properties);
-            session.addProvider(new Provider(Provider.Type.STORE, protocol, storeType.getName(), "InboxBridge", "1.0"));
-            ProbeStore.currentState = state;
-            return session;
+        @Override
+        public void connectStore(Store store, RuntimeEmailAccount bridge) {
+            ((TestStore) store).connected = true;
         }
     }
 
-    public static final class ProbeStore extends Store {
-        private static ProbeStoreState currentState;
+    private static final class TestMailSourceMessageMapper extends MailSourceMessageMapper {
+        private final Message resolvedMessage;
 
-        public ProbeStore(Session session, URLName urlName) {
+        private TestMailSourceMessageMapper(Message resolvedMessage) {
+            this.resolvedMessage = resolvedMessage;
+        }
+
+        @Override
+        public Message resolveSourceMessage(Folder folder, FetchedMessage message) {
+            return resolvedMessage;
+        }
+    }
+
+    public static final class TestStore extends Store {
+        private static TestStoreState currentState;
+        private boolean connected;
+
+        public TestStore(Session session, URLName urlName) {
             super(session, urlName);
         }
 
@@ -188,97 +219,40 @@ class MailSourceConnectionProbeServiceTest {
 
         @Override
         public Folder getFolder(URLName url) {
-            return currentState.folder(url.getFile());
+            return getFolder(url.getFile());
         }
 
         @Override
         protected boolean protocolConnect(String host, int port, String user, String password) {
+            connected = true;
             return true;
         }
     }
 
-    private static final class ProbeConnectionService extends MailSourceConnectionService {
-        private ProbeConnectionService() {
-            super(null, null);
-        }
-
-        @Override
-        public void connectStore(Store store, RuntimeEmailAccount bridge) {
-            // no-op for fake store
-        }
-    }
-
-    private static final class ProbeMessageMapper extends MailSourceMessageMapper {
-        private final boolean materializeMessages;
-
-        private ProbeMessageMapper(boolean materializeMessages) {
-            this.materializeMessages = materializeMessages;
-        }
-
-        @Override
-        public List<FetchedMessage> toFetchedMessages(String sourceId, Folder folder, Message[] messages) {
-            if (!materializeMessages || messages.length == 0) {
-                return List.of();
-            }
-            return List.of(new FetchedMessage(
-                    sourceId,
-                    sourceId + ":probe",
-                    Optional.of("<probe@example.com>"),
-                    Instant.parse("2026-04-06T00:00:00Z"),
-                    Optional.of(folder.getFullName()),
-                    null,
-                    null,
-                    null,
-                    "raw".getBytes()));
-        }
-
-        @Override
-        public List<FetchedMessage> toFetchedMessages(String sourceId, Message[] messages) {
-            if (!materializeMessages || messages.length == 0) {
-                return List.of();
-            }
-            return List.of(new FetchedMessage(
-                    sourceId,
-                    sourceId + ":probe",
-                    Optional.of("<probe@example.com>"),
-                    Instant.parse("2026-04-06T00:00:00Z"),
-                    "raw".getBytes()));
-        }
-    }
-
-    private static final class ProbeStoreState {
+    private static final class TestStoreState {
         private final BareStore supportStore = new BareStore();
-        private final Map<String, ProbeFolder> folders = new HashMap<>();
+        private final Map<String, TestFolder> folders = new HashMap<>();
 
-        private ProbeFolder folder(String name) {
-            return folders.computeIfAbsent(name, folderName -> new ProbeFolder(supportStore, folderName));
+        private TestFolder folder(String name) {
+            return folders.computeIfAbsent(name, folderName -> new TestFolder(supportStore, folderName));
         }
     }
 
-    private static final class ProbeFolder extends Folder {
+    private static final class TestFolder extends Folder {
         private final String name;
-        private final List<Message> messages = new ArrayList<>();
-        private Flags permanentFlags = new Flags();
         private boolean open;
+        private boolean closedWithExpunge;
+        private TestMessage message;
+        private final java.util.LinkedList<String> copyTargets = new java.util.LinkedList<>();
 
-        private ProbeFolder(Store store, String name) {
+        private TestFolder(Store store, String name) {
             super(store);
             this.name = name;
         }
 
-        private void setMessages(List<ProbeMessage> messages) {
-            this.messages.clear();
-            for (int index = 0; index < messages.size(); index++) {
-                ProbeMessage message = messages.get(index);
-                message.bind(this, index + 1);
-                this.messages.add(message);
-            }
-        }
-
         @Override
         public String getName() {
-            int slash = name.lastIndexOf('/');
-            return slash >= 0 ? name.substring(slash + 1) : name;
+            return name;
         }
 
         @Override
@@ -344,6 +318,7 @@ class MailSourceConnectionProbeServiceTest {
         @Override
         public void close(boolean expunge) {
             open = false;
+            closedWithExpunge = expunge;
         }
 
         @Override
@@ -353,27 +328,17 @@ class MailSourceConnectionProbeServiceTest {
 
         @Override
         public Flags getPermanentFlags() {
-            return permanentFlags;
+            return new Flags();
         }
 
         @Override
         public int getMessageCount() {
-            return messages.size();
+            return message == null ? 0 : 1;
         }
 
         @Override
         public Message getMessage(int msgnum) {
-            return messages.get(msgnum - 1);
-        }
-
-        @Override
-        public Message[] getMessages(int start, int end) {
-            return messages.subList(start - 1, end).toArray(Message[]::new);
-        }
-
-        @Override
-        public Message[] search(jakarta.mail.search.SearchTerm term) {
-            return messages.stream().filter(term::match).toArray(Message[]::new);
+            return message;
         }
 
         @Override
@@ -386,30 +351,44 @@ class MailSourceConnectionProbeServiceTest {
         }
 
         @Override
-        public void fetch(Message[] msgs, FetchProfile fp) {
+        public void copyMessages(Message[] msgs, Folder folder) {
+            copyTargets.add(folder.getFullName());
         }
     }
 
-    private static final class ProbeMessage extends Message {
-        private final String subject;
-        private final boolean seen;
-
-        private ProbeMessage(String subject, boolean seen) {
-            this.subject = subject;
-            this.seen = seen;
+    private static final class BareStore extends Store {
+        private BareStore() {
+            super(Session.getInstance(new Properties()), (URLName) null);
         }
 
-        private static ProbeMessage read(String subject) {
-            return new ProbeMessage(subject, true);
+        @Override
+        public Folder getDefaultFolder() {
+            return null;
         }
 
-        private static ProbeMessage unread(String subject) {
-            return new ProbeMessage(subject, false);
+        @Override
+        public Folder getFolder(String name) {
+            return null;
         }
 
-        private void bind(Folder folder, int messageNumber) {
+        @Override
+        public Folder getFolder(URLName url) {
+            return null;
+        }
+
+        @Override
+        protected boolean protocolConnect(String host, int port, String user, String password) {
+            return true;
+        }
+    }
+
+    private static final class TestMessage extends Message {
+        private final Folder folder;
+        private boolean seen;
+        private boolean deleted;
+
+        private TestMessage(Folder folder) {
             this.folder = folder;
-            this.msgnum = messageNumber;
         }
 
         @Override
@@ -453,7 +432,7 @@ class MailSourceConnectionProbeServiceTest {
 
         @Override
         public String getSubject() {
-            return subject;
+            return "subject";
         }
 
         @Override
@@ -480,16 +459,29 @@ class MailSourceConnectionProbeServiceTest {
             if (seen) {
                 flags.add(Flags.Flag.SEEN);
             }
+            if (deleted) {
+                flags.add(Flags.Flag.DELETED);
+            }
             return flags;
         }
 
         @Override
-        public boolean isSet(Flags.Flag flag) {
-            return flag == Flags.Flag.SEEN && seen;
+        public void setFlags(Flags flag, boolean set) {
+            if (flag.contains(Flags.Flag.SEEN)) {
+                seen = set;
+            }
+            if (flag.contains(Flags.Flag.DELETED)) {
+                deleted = set;
+            }
         }
 
         @Override
-        public void setFlags(Flags flag, boolean set) {
+        public void setFlag(Flags.Flag flag, boolean set) {
+            if (flag == Flags.Flag.SEEN) {
+                seen = set;
+            } else if (flag == Flags.Flag.DELETED) {
+                deleted = set;
+            }
         }
 
         @Override
@@ -503,12 +495,12 @@ class MailSourceConnectionProbeServiceTest {
 
         @Override
         public int getSize() {
-            return 1;
+            return 0;
         }
 
         @Override
         public int getLineCount() {
-            return 1;
+            return 0;
         }
 
         @Override
@@ -555,7 +547,7 @@ class MailSourceConnectionProbeServiceTest {
 
         @Override
         public Object getContent() {
-            return subject;
+            return "";
         }
 
         @Override
@@ -627,38 +619,11 @@ class MailSourceConnectionProbeServiceTest {
 
         @Override
         public int getMessageNumber() {
-            return msgnum;
+            return 1;
         }
 
         @Override
         public void setMessageNumber(int msgnum) {
-            this.msgnum = msgnum;
-        }
-    }
-
-    private static final class BareStore extends Store {
-        private BareStore() {
-            super(Session.getInstance(new Properties()), (URLName) null);
-        }
-
-        @Override
-        public Folder getDefaultFolder() {
-            return null;
-        }
-
-        @Override
-        public Folder getFolder(String name) {
-            return null;
-        }
-
-        @Override
-        public Folder getFolder(URLName url) {
-            return null;
-        }
-
-        @Override
-        protected boolean protocolConnect(String host, int port, String user, String password) {
-            return true;
         }
     }
 }

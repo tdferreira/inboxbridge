@@ -1,4 +1,4 @@
-package dev.inboxbridge.service;
+package dev.inboxbridge.service.mail;
 
 import java.util.Arrays;
 import java.util.List;
@@ -7,6 +7,7 @@ import java.util.Optional;
 import dev.inboxbridge.config.InboxBridgeConfig;
 import dev.inboxbridge.domain.RuntimeEmailAccount;
 import dev.inboxbridge.dto.EmailAccountConnectionTestResult;
+import dev.inboxbridge.service.PollCancellationService;
 import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.inject.Inject;
 import jakarta.mail.Flags;

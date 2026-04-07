@@ -35,6 +35,7 @@ import dev.inboxbridge.persistence.UserEmailAccount;
 import dev.inboxbridge.persistence.UserEmailAccountRepository;
 import dev.inboxbridge.persistence.UserGmailConfig;
 import dev.inboxbridge.persistence.UserGmailConfigRepository;
+import dev.inboxbridge.service.mail.MailSourceClient;
 import jakarta.enterprise.event.Event;
 import jakarta.enterprise.event.NotificationOptions;
 import jakarta.enterprise.util.TypeLiteral;

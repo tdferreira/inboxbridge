@@ -1,4 +1,4 @@
-package dev.inboxbridge.service;
+package dev.inboxbridge.service.mail;
 
 import java.util.Properties;
 
@@ -19,6 +19,10 @@ public class MailSessionFactory {
 
     @Inject
     MailClientConfig mailClientConfig;
+
+    public void setMailClientConfig(MailClientConfig mailClientConfig) {
+        this.mailClientConfig = mailClientConfig;
+    }
 
     public Session sourceImapSession(RuntimeEmailAccount account) {
         return Session.getInstance(imapProperties(account.tls(), usesOAuth(account), false));
