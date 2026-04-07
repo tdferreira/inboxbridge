@@ -11,7 +11,7 @@ import org.junit.jupiter.api.Test;
 
 import dev.inboxbridge.config.InboxBridgeConfig;
 import dev.inboxbridge.persistence.AppUser;
-import dev.inboxbridge.service.AppUserService;
+import dev.inboxbridge.service.admin.AppUserService;
 import jakarta.enterprise.inject.Vetoed;
 
 class RemoteServiceTokenAuthServiceTest {

@@ -1,4 +1,4 @@
-package dev.inboxbridge.web;
+package dev.inboxbridge.web.admin;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
@@ -20,8 +20,8 @@ import dev.inboxbridge.dto.UserSummaryResponse;
 import dev.inboxbridge.dto.UserPollingStatsView;
 import dev.inboxbridge.persistence.AppUser;
 import dev.inboxbridge.security.CurrentUserContext;
-import dev.inboxbridge.service.AppUserService;
-import dev.inboxbridge.service.ApplicationModeService;
+import dev.inboxbridge.service.admin.AppUserService;
+import dev.inboxbridge.service.admin.ApplicationModeService;
 import dev.inboxbridge.service.auth.PasskeyService;
 import dev.inboxbridge.service.polling.PollingStatsService;
 import dev.inboxbridge.service.user.UserEmailAccountService;
@@ -29,6 +29,7 @@ import dev.inboxbridge.service.oauth.UserGmailConfigService;
 import dev.inboxbridge.service.user.UserMailDestinationConfigService;
 import dev.inboxbridge.service.user.UserPollingSettingsService;
 import dev.inboxbridge.service.oauth.SystemOAuthAppSettingsService;
+import dev.inboxbridge.web.WebResourceSupport;
 import jakarta.enterprise.inject.Vetoed;
 import jakarta.ws.rs.BadRequestException;
 

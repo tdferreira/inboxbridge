@@ -12,7 +12,7 @@ import dev.inboxbridge.persistence.UserSession;
 import dev.inboxbridge.security.RequireRemoteControl;
 import dev.inboxbridge.security.RemoteControlFilter;
 import dev.inboxbridge.security.CurrentUserContext;
-import dev.inboxbridge.service.AppUserService;
+import dev.inboxbridge.service.admin.AppUserService;
 import dev.inboxbridge.service.auth.AuthClientAddressService;
 import dev.inboxbridge.service.auth.AuthLoginProtectionService;
 import dev.inboxbridge.service.auth.AuthService;

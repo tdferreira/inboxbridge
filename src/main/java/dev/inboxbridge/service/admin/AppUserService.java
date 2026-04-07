@@ -1,4 +1,4 @@
-package dev.inboxbridge.service;
+package dev.inboxbridge.service.admin;
 
 import java.time.Instant;
 import java.util.List;

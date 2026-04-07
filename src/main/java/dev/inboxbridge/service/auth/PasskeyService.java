@@ -42,7 +42,7 @@ import dev.inboxbridge.persistence.PasskeyCeremony;
 import dev.inboxbridge.persistence.PasskeyCeremonyRepository;
 import dev.inboxbridge.persistence.UserPasskey;
 import dev.inboxbridge.persistence.UserPasskeyRepository;
-import dev.inboxbridge.service.AppUserService;
+import dev.inboxbridge.service.admin.AppUserService;
 import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.inject.Inject;
 import jakarta.transaction.Transactional;

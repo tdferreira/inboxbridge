@@ -1,4 +1,4 @@
-package dev.inboxbridge.service;
+package dev.inboxbridge.service.admin;
 
 import dev.inboxbridge.service.polling.PollingStatsService;
 import dev.inboxbridge.service.polling.PollingTimelineService;
@@ -25,6 +25,13 @@ import dev.inboxbridge.dto.AdminPollEventSummary;
 import dev.inboxbridge.dto.SourcePollingStateView;
 import dev.inboxbridge.persistence.ImportedMessageRepository;
 import dev.inboxbridge.persistence.SourcePollEvent;
+import dev.inboxbridge.service.EnvSourceService;
+import dev.inboxbridge.service.PollingSettingsService;
+import dev.inboxbridge.service.SecretEncryptionService;
+import dev.inboxbridge.service.SourceDiagnosticsService;
+import dev.inboxbridge.service.SourcePollEventService;
+import dev.inboxbridge.service.SourcePollingSettingsService;
+import dev.inboxbridge.service.SourcePollingStateService;
 import dev.inboxbridge.service.oauth.OAuthCredentialService;
 import dev.inboxbridge.service.oauth.SystemOAuthAppSettingsService;
 import dev.inboxbridge.service.user.RuntimeEmailAccountService;
@@ -320,8 +327,8 @@ class AdminDashboardServiceTest {
 
     private SystemOAuthAppSettingsService systemOAuthAppSettingsService(InboxBridgeConfig config) {
         SecretEncryptionService secretEncryptionService = new SecretEncryptionService();
-        secretEncryptionService.tokenEncryptionKey = "replace-me";
-        secretEncryptionService.tokenEncryptionKeyId = "v1";
+        secretEncryptionService.setTokenEncryptionKey("replace-me");
+        secretEncryptionService.setTokenEncryptionKeyId("v1");
 
         SystemOAuthAppSettingsService service = new SystemOAuthAppSettingsService();
         service.setConfig(config);

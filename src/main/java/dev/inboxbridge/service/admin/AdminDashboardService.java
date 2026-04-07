@@ -1,6 +1,5 @@
-package dev.inboxbridge.service;
+package dev.inboxbridge.service.admin;
 
-import dev.inboxbridge.service.polling.PollingStatsService;
 import java.time.Instant;
 import java.time.ZoneId;
 import java.time.ZoneOffset;
@@ -19,8 +18,15 @@ import dev.inboxbridge.dto.AdminPollEventSummary;
 import dev.inboxbridge.dto.GlobalPollingStatsView;
 import dev.inboxbridge.domain.RuntimeEmailAccount;
 import dev.inboxbridge.persistence.ImportedMessageRepository;
+import dev.inboxbridge.service.EnvSourceService;
+import dev.inboxbridge.service.PollingSettingsService;
+import dev.inboxbridge.service.SourceDiagnosticsService;
+import dev.inboxbridge.service.SourcePollEventService;
+import dev.inboxbridge.service.SourcePollingSettingsService;
+import dev.inboxbridge.service.SourcePollingStateService;
 import dev.inboxbridge.service.oauth.OAuthCredentialService;
 import dev.inboxbridge.service.oauth.SystemOAuthAppSettingsService;
+import dev.inboxbridge.service.polling.PollingStatsService;
 import dev.inboxbridge.service.user.RuntimeEmailAccountService;
 import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.inject.Inject;

@@ -16,7 +16,7 @@ import dev.inboxbridge.persistence.AppUser;
 import dev.inboxbridge.persistence.ImportedMessageRepository;
 import dev.inboxbridge.persistence.UserEmailAccount;
 import dev.inboxbridge.persistence.UserEmailAccountRepository;
-import dev.inboxbridge.service.AppUserService;
+import dev.inboxbridge.service.admin.AppUserService;
 import dev.inboxbridge.service.PollingSettingsService;
 import dev.inboxbridge.service.user.RuntimeEmailAccountService;
 import dev.inboxbridge.service.SourcePollEventService;

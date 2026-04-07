@@ -1,4 +1,4 @@
-package dev.inboxbridge.service;
+package dev.inboxbridge.service.admin;
 
 import dev.inboxbridge.config.InboxBridgeConfig;
 import dev.inboxbridge.persistence.AppUser;

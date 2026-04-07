@@ -10,7 +10,7 @@ import dev.inboxbridge.dto.RemovePasswordRequest;
 import dev.inboxbridge.persistence.AppUser;
 import dev.inboxbridge.persistence.RemoteSession;
 import dev.inboxbridge.security.CurrentUserContext;
-import dev.inboxbridge.service.AppUserService;
+import dev.inboxbridge.service.admin.AppUserService;
 import dev.inboxbridge.service.polling.PollingLiveService;
 import dev.inboxbridge.service.auth.SessionClientInfoService;
 import dev.inboxbridge.service.auth.UserSessionService;

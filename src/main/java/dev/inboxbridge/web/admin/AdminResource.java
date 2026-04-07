@@ -1,4 +1,4 @@
-package dev.inboxbridge.web;
+package dev.inboxbridge.web.admin;
 
 import org.jboss.resteasy.reactive.RestStreamElementType;
 
@@ -18,15 +18,16 @@ import dev.inboxbridge.dto.UpdateAdminPollingSettingsRequest;
 import dev.inboxbridge.dto.UpdateSystemOAuthAppSettingsRequest;
 import dev.inboxbridge.security.RequireAdmin;
 import dev.inboxbridge.security.CurrentUserContext;
-import dev.inboxbridge.service.AdminDashboardService;
-import dev.inboxbridge.service.auth.AuthSecuritySettingsService;
 import dev.inboxbridge.service.PollingSettingsService;
+import dev.inboxbridge.service.SourcePollingSettingsService;
+import dev.inboxbridge.service.admin.AdminDashboardService;
+import dev.inboxbridge.service.auth.AuthSecuritySettingsService;
+import dev.inboxbridge.service.oauth.SystemOAuthAppSettingsService;
 import dev.inboxbridge.service.polling.PollingStatsService;
 import dev.inboxbridge.service.polling.PollingLiveService;
 import dev.inboxbridge.service.polling.PollingService;
 import dev.inboxbridge.service.user.RuntimeEmailAccountService;
-import dev.inboxbridge.service.SourcePollingSettingsService;
-import dev.inboxbridge.service.oauth.SystemOAuthAppSettingsService;
+import dev.inboxbridge.web.WebResourceSupport;
 import jakarta.inject.Inject;
 import jakarta.ws.rs.Consumes;
 import jakarta.ws.rs.GET;

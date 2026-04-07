@@ -12,7 +12,7 @@ import org.junit.jupiter.api.Test;
 
 import dev.inboxbridge.persistence.AppUser;
 import dev.inboxbridge.persistence.UserSession;
-import dev.inboxbridge.service.AppUserService;
+import dev.inboxbridge.service.admin.AppUserService;
 import dev.inboxbridge.service.GeoIpLocationService;
 
 class AuthServiceTest {

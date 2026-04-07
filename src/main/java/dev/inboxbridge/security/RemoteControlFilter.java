@@ -2,7 +2,7 @@ package dev.inboxbridge.security;
 
 import dev.inboxbridge.persistence.AppUser;
 import dev.inboxbridge.persistence.RemoteSession;
-import dev.inboxbridge.service.AppUserService;
+import dev.inboxbridge.service.admin.AppUserService;
 import dev.inboxbridge.service.remote.RemoteServiceTokenAuthService;
 import dev.inboxbridge.service.remote.RemoteSessionService;
 import org.eclipse.microprofile.config.inject.ConfigProperty;

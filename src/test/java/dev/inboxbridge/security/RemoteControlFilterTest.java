@@ -12,7 +12,7 @@ import org.junit.jupiter.api.Test;
 
 import dev.inboxbridge.persistence.AppUser;
 import dev.inboxbridge.persistence.RemoteSession;
-import dev.inboxbridge.service.AppUserService;
+import dev.inboxbridge.service.admin.AppUserService;
 import dev.inboxbridge.service.remote.RemoteServiceTokenAuthService;
 import dev.inboxbridge.service.remote.RemoteSessionService;
 import jakarta.ws.rs.ForbiddenException;

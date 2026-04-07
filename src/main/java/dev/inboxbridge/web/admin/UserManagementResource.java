@@ -1,4 +1,4 @@
-package dev.inboxbridge.web;
+package dev.inboxbridge.web.admin;
 
 import java.time.Instant;
 import java.time.ZoneId;
@@ -15,15 +15,16 @@ import dev.inboxbridge.dto.UpdateUserRequest;
 import dev.inboxbridge.dto.UserSummaryResponse;
 import dev.inboxbridge.security.CurrentUserContext;
 import dev.inboxbridge.security.RequireAdmin;
-import dev.inboxbridge.service.AppUserService;
-import dev.inboxbridge.service.ApplicationModeService;
+import dev.inboxbridge.service.admin.AppUserService;
+import dev.inboxbridge.service.admin.ApplicationModeService;
 import dev.inboxbridge.service.auth.PasskeyService;
+import dev.inboxbridge.service.oauth.SystemOAuthAppSettingsService;
+import dev.inboxbridge.service.oauth.UserGmailConfigService;
 import dev.inboxbridge.service.polling.PollingStatsService;
 import dev.inboxbridge.service.user.UserEmailAccountService;
-import dev.inboxbridge.service.oauth.UserGmailConfigService;
 import dev.inboxbridge.service.user.UserMailDestinationConfigService;
 import dev.inboxbridge.service.user.UserPollingSettingsService;
-import dev.inboxbridge.service.oauth.SystemOAuthAppSettingsService;
+import dev.inboxbridge.web.WebResourceSupport;
 import jakarta.inject.Inject;
 import jakarta.ws.rs.BadRequestException;
 import jakarta.ws.rs.Consumes;

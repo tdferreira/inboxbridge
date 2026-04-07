@@ -1,4 +1,4 @@
-package dev.inboxbridge.web;
+package dev.inboxbridge.web.admin;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
@@ -27,6 +27,7 @@ import dev.inboxbridge.service.polling.PollingStatsService;
 import dev.inboxbridge.service.user.RuntimeEmailAccountService;
 import dev.inboxbridge.service.SourcePollingSettingsService;
 import dev.inboxbridge.service.auth.AuthSecuritySettingsService;
+import dev.inboxbridge.web.WebResourceSupport;
 import io.smallrye.common.annotation.Blocking;
 import jakarta.ws.rs.BadRequestException;
 
