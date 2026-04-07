@@ -1,5 +1,7 @@
 package dev.inboxbridge.service.polling;
 
+import dev.inboxbridge.service.destination.*;
+
 import dev.inboxbridge.service.*;
 import dev.inboxbridge.service.mail.MailSourceClient;
 import dev.inboxbridge.service.mail.MailSourceClient.MailboxCountProbe;

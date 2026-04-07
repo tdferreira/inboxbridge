@@ -1,5 +1,7 @@
 package dev.inboxbridge.service;
 
+import dev.inboxbridge.service.destination.*;
+
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;

@@ -23,6 +23,7 @@ import dev.inboxbridge.persistence.ImportedMessageRepository;
 import dev.inboxbridge.persistence.UserEmailAccount;
 import dev.inboxbridge.persistence.UserEmailAccountRepository;
 import dev.inboxbridge.persistence.UserGmailConfigRepository;
+import dev.inboxbridge.service.destination.MailboxConflictService;
 import dev.inboxbridge.service.mail.MailSourceClient;
 import dev.inboxbridge.domain.MailDestinationTarget;
 import jakarta.enterprise.context.ApplicationScoped;

@@ -1,6 +1,9 @@
-package dev.inboxbridge.service;
+package dev.inboxbridge.service.destination;
+
+import dev.inboxbridge.service.*;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertIterableEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 
 import java.io.IOException;
@@ -29,24 +32,23 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 
 import dev.inboxbridge.domain.GmailApiDestinationTarget;
 import dev.inboxbridge.domain.GmailTarget;
-import dev.inboxbridge.dto.GmailImportResponse;
 
-class GmailImportServiceTest {
+class GmailLabelServiceTest {
 
     @Test
-    void importMessageRetriesOnceAfterUnauthorizedResponse() {
-        GmailImportService service = new GmailImportService();
-        service.googleOAuthService = new FakeGoogleOAuthService("expired-token", "fresh-token");
+    void resolveLabelIdsRetriesOnceAfterUnauthorizedResponse() {
+        GmailLabelService service = new GmailLabelService();
+        service.googleOAuthService = new FakeGoogleOAuthService("stale-token", "fresh-token");
         service.objectMapper = new ObjectMapper();
         service.userGmailConfigService = new FakeUserGmailConfigService();
         service.httpClient = new FakeHttpClient(
                 new FakeHttpResponse(401, "{\"error\":\"expired\"}"),
-                new FakeHttpResponse(200, "{\"id\":\"gmail-message-1\",\"threadId\":\"thread-1\"}"));
+                new FakeHttpResponse(200, "{\"labels\":[{\"name\":\"Imported/IMAP\",\"id\":\"Label_1\"}]}"));
 
-        GmailImportResponse response = service.importMessage(
+        List<String> labels = service.resolveLabelIds(
                 new GmailTarget(
-                        "user-gmail:8",
-                        8L,
+                        "user-gmail:7",
+                        7L,
                         "john-doe",
                         "me",
                         "client",
@@ -56,17 +58,16 @@ class GmailImportServiceTest {
                         true,
                         false,
                         false),
-                "hello".getBytes(),
-                List.of("INBOX"));
+                Optional.of("Imported/IMAP"));
 
-        assertEquals("gmail-message-1", response.id());
-        assertEquals("user-gmail:8", ((FakeGoogleOAuthService) service.googleOAuthService).clearedSubjectKey);
+        assertIterableEquals(List.of("INBOX", "UNREAD", "Label_1"), labels);
+        assertEquals("user-gmail:7", ((FakeGoogleOAuthService) service.googleOAuthService).clearedSubjectKey);
     }
 
     @Test
-    void importMessageMarksUserGmailLinkRevokedAfterRepeatedUnauthorizedResponses() {
-        GmailImportService service = new GmailImportService();
-        service.googleOAuthService = new FakeGoogleOAuthService("expired-token", "fresh-token");
+    void resolveLabelIdsMarksUserGmailLinkRevokedAfterRepeatedUnauthorizedResponses() {
+        GmailLabelService service = new GmailLabelService();
+        service.googleOAuthService = new FakeGoogleOAuthService("stale-token", "fresh-token");
         service.objectMapper = new ObjectMapper();
         FakeUserGmailConfigService userGmailConfigService = new FakeUserGmailConfigService();
         service.userGmailConfigService = userGmailConfigService;
@@ -74,10 +75,10 @@ class GmailImportServiceTest {
                 new FakeHttpResponse(401, "{\"error\":\"expired\"}"),
                 new FakeHttpResponse(401, "{\"error\":\"revoked\"}"));
 
-        IllegalStateException error = assertThrows(IllegalStateException.class, () -> service.importMessage(
+        IllegalStateException error = assertThrows(IllegalStateException.class, () -> service.resolveLabelIds(
                 new GmailTarget(
-                        "user-gmail:10",
-                        10L,
+                        "user-gmail:9",
+                        9L,
                         "john-doe",
                         "me",
                         "client",
@@ -87,11 +88,10 @@ class GmailImportServiceTest {
                         true,
                         false,
                         false),
-                "hello".getBytes(),
-                List.of("INBOX")));
+                Optional.of("Imported/IMAP")));
 
         assertEquals("The linked Gmail account no longer grants InboxBridge access. The saved Gmail OAuth link was cleared. Reconnect it from My Destination Mailbox.", error.getMessage());
-        assertEquals("user-gmail:10", userGmailConfigService.lastRevokedSubjectKey);
+        assertEquals("user-gmail:9", userGmailConfigService.lastRevokedSubjectKey);
     }
 
     private static final class FakeGoogleOAuthService extends GoogleOAuthService {

@@ -4,10 +4,12 @@
 
 The backend is still primarily organized by layer, but the polling slice now
 anchors the first feature-oriented backend subpackage under
-`dev.inboxbridge.service.polling`, and the extracted mail-source collaborators
-now live together under `dev.inboxbridge.service.mail`. The coordinator,
-live-run, stats, and source-mailbox protocol classes that evolve together no
-longer have to keep growing in the flat top-level `service` package.
+`dev.inboxbridge.service.polling`, the extracted mail-source collaborators now
+live together under `dev.inboxbridge.service.mail`, and the destination import
+/ delivery path now lives under `dev.inboxbridge.service.destination`. The
+coordinator, live-run, stats, source-mailbox protocol, and destination-delivery
+classes that evolve together no longer have to keep growing in the flat
+top-level `service` package.
 Within that still mostly layer-oriented backend, the provider OAuth web surface
 now also uses a narrower seam under `dev.inboxbridge.web.oauth`: the Google and
 Microsoft OAuth REST resources live alongside their callback-page renderers and
@@ -67,6 +69,13 @@ infrastructure details:
   successful import or duplicate match, including mark-as-read, move, delete,
   and best-effort `$Forwarded` handling against the fetched message's actual
   source folder.
+- `MailDestinationService`, `GmailApiMailDestinationService`,
+  `ImapAppendMailDestinationService`, `GmailImportService`,
+  `GmailLabelService`, `DestinationIdentityKeys`, and
+  `MailboxConflictService` now live together under
+  `dev.inboxbridge.service.destination`, so destination identity, mailbox-link
+  checks, Gmail import, label resolution, and IMAP APPEND delivery evolve
+  inside one delivery-focused backend slice.
 - `GoogleOAuthCallbackPageRenderer` and
   `MicrosoftOAuthCallbackPageRenderer` now own the provider-specific browser
   callback pages, while `OAuthPageI18n` and `OAuthPageSupport` keep the shared

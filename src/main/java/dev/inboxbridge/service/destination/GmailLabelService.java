@@ -1,4 +1,4 @@
-package dev.inboxbridge.service;
+package dev.inboxbridge.service.destination;
 
 import java.io.IOException;
 import java.net.URI;
@@ -8,23 +8,28 @@ import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
 import java.nio.charset.StandardCharsets;
 import java.time.Duration;
-import java.util.Base64;
+import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
+import java.util.Optional;
 
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
-import com.fasterxml.jackson.databind.node.ArrayNode;
 import com.fasterxml.jackson.databind.node.ObjectNode;
 
 import dev.inboxbridge.config.InboxBridgeConfig;
 import dev.inboxbridge.domain.GmailApiDestinationTarget;
 import dev.inboxbridge.domain.GmailTarget;
-import dev.inboxbridge.dto.GmailImportResponse;
+import dev.inboxbridge.service.GoogleOAuthService;
+import dev.inboxbridge.service.SystemOAuthAppSettingsService;
+import dev.inboxbridge.service.UserGmailConfigService;
+import dev.inboxbridge.service.UserMailDestinationConfigService;
 import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.inject.Inject;
 
 @ApplicationScoped
-public class GmailImportService {
+public class GmailLabelService {
 
     @FunctionalInterface
     interface AuthorizedRequestFactory {
@@ -50,46 +55,86 @@ public class GmailImportService {
             .connectTimeout(Duration.ofSeconds(20))
             .build();
 
-    public GmailImportResponse importMessage(byte[] rawMessage, List<String> labelIds) {
-        return importMessage(systemTarget(), rawMessage, labelIds);
+    public List<String> resolveLabelIds(Optional<String> customLabel) {
+        return resolveLabelIds(systemTarget(), customLabel);
     }
 
-    public GmailImportResponse importMessage(GmailApiDestinationTarget target, byte[] rawMessage, List<String> labelIds) {
-        String encodedMessage = Base64.getUrlEncoder().withoutPadding().encodeToString(rawMessage);
+    public List<String> resolveLabelIds(GmailApiDestinationTarget target, Optional<String> customLabel) {
+        List<String> labelIds = new ArrayList<>();
+        labelIds.add("INBOX");
+        labelIds.add("UNREAD");
 
-        ObjectNode payload = objectMapper.createObjectNode();
-        payload.put("raw", encodedMessage);
-        ArrayNode labelsNode = payload.putArray("labelIds");
-        labelIds.forEach(labelsNode::add);
+        customLabel.filter(label -> !label.isBlank())
+                .ifPresent(label -> labelIds.add(resolveCustomLabelId(target, label)));
+        return labelIds;
+    }
 
-        String uri = "https://gmail.googleapis.com/gmail/v1/users/" + urlEncode(target.destinationUser()) + "/messages/import"
-                + "?internalDateSource=dateHeader"
-                + "&neverMarkSpam=" + target.neverMarkSpam()
-                + "&processForCalendar=" + target.processForCalendar();
+    public List<String> resolveLabelIds(GmailTarget target, Optional<String> customLabel) {
+        return resolveLabelIds(asDestinationTarget(target), customLabel);
+    }
+
+    private String resolveCustomLabelId(GmailApiDestinationTarget target, String labelName) {
+        Map<String, String> labelsByName = listLabels(target);
+        if (labelsByName.containsKey(labelName)) {
+            return labelsByName.get(labelName);
+        }
+        if (!target.createMissingLabels()) {
+            throw new IllegalStateException("Custom label does not exist and auto-create is disabled: " + labelName);
+        }
+        return createLabel(target, labelName);
+    }
+
+    private Map<String, String> listLabels(GmailApiDestinationTarget target) {
         try {
             HttpResponse<String> response = sendAuthorizedRequestWithRetry(
                     target,
-                    accessToken -> HttpRequest.newBuilder(URI.create(uri))
-                            .timeout(Duration.ofSeconds(45))
+                    accessToken -> HttpRequest.newBuilder(URI.create("https://gmail.googleapis.com/gmail/v1/users/" + urlEncode(target.destinationUser()) + "/labels"))
+                            .timeout(Duration.ofSeconds(20))
+                            .header("Authorization", "Bearer " + accessToken)
+                            .GET()
+                            .build());
+            if (response.statusCode() / 100 != 2) {
+                throw new IllegalStateException("Failed to list Gmail labels: " + response.statusCode() + " - " + response.body());
+            }
+            JsonNode root = objectMapper.readTree(response.body());
+            Map<String, String> labels = new HashMap<>();
+            for (JsonNode label : root.withArray("labels")) {
+                labels.put(label.path("name").asText(), label.path("id").asText());
+            }
+            return labels;
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+            throw new IllegalStateException("Failed to list Gmail labels", e);
+        } catch (IOException e) {
+            throw new IllegalStateException("Failed to list Gmail labels", e);
+        }
+    }
+
+    private String createLabel(GmailApiDestinationTarget target, String labelName) {
+        ObjectNode payload = objectMapper.createObjectNode();
+        payload.put("name", labelName);
+        payload.put("labelListVisibility", "labelShow");
+        payload.put("messageListVisibility", "show");
+        try {
+            HttpResponse<String> response = sendAuthorizedRequestWithRetry(
+                    target,
+                    accessToken -> HttpRequest.newBuilder(URI.create("https://gmail.googleapis.com/gmail/v1/users/" + urlEncode(target.destinationUser()) + "/labels"))
+                            .timeout(Duration.ofSeconds(20))
                             .header("Authorization", "Bearer " + accessToken)
                             .header("Content-Type", "application/json")
                             .POST(HttpRequest.BodyPublishers.ofString(payload.toString(), StandardCharsets.UTF_8))
                             .build());
             if (response.statusCode() / 100 != 2) {
-                throw new IllegalStateException("Failed to import Gmail message: " + response.statusCode() + " - " + response.body());
+                throw new IllegalStateException("Failed to create Gmail label: " + response.statusCode() + " - " + response.body());
             }
             JsonNode root = objectMapper.readTree(response.body());
-            return new GmailImportResponse(root.path("id").asText(), root.path("threadId").asText(null));
+            return root.path("id").asText();
         } catch (InterruptedException e) {
             Thread.currentThread().interrupt();
-            throw new IllegalStateException("Failed to import Gmail message", e);
+            throw new IllegalStateException("Failed to create Gmail label", e);
         } catch (IOException e) {
-            throw new IllegalStateException("Failed to import Gmail message", e);
+            throw new IllegalStateException("Failed to create Gmail label", e);
         }
-    }
-
-    public GmailImportResponse importMessage(GmailTarget target, byte[] rawMessage, List<String> labelIds) {
-        return importMessage(asDestinationTarget(target), rawMessage, labelIds);
     }
 
     private HttpResponse<String> sendAuthorizedRequestWithRetry(

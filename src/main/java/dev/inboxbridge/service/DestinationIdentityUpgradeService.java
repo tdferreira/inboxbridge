@@ -17,6 +17,7 @@ import dev.inboxbridge.persistence.SourcePollingState;
 import dev.inboxbridge.persistence.SourcePollingStateRepository;
 import dev.inboxbridge.persistence.UserEmailAccount;
 import dev.inboxbridge.persistence.UserEmailAccountRepository;
+import dev.inboxbridge.service.destination.DestinationIdentityKeys;
 import io.quarkus.runtime.StartupEvent;
 import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.enterprise.event.Observes;

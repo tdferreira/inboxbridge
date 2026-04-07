@@ -1,4 +1,4 @@
-package dev.inboxbridge.service;
+package dev.inboxbridge.service.destination;
 
 import java.util.List;
 
@@ -9,6 +9,7 @@ import dev.inboxbridge.domain.MailDestinationTarget;
 import dev.inboxbridge.domain.RuntimeEmailAccount;
 import dev.inboxbridge.dto.GmailImportResponse;
 import dev.inboxbridge.dto.MailImportResponse;
+import dev.inboxbridge.service.OAuthCredentialService;
 import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.inject.Inject;
 

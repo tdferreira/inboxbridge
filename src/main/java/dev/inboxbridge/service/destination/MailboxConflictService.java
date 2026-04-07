@@ -1,4 +1,4 @@
-package dev.inboxbridge.service;
+package dev.inboxbridge.service.destination;
 
 import java.time.Instant;
 import java.util.ArrayList;
@@ -13,6 +13,7 @@ import dev.inboxbridge.persistence.UserEmailAccountRepository;
 import dev.inboxbridge.persistence.UserGmailConfigRepository;
 import dev.inboxbridge.persistence.UserMailDestinationConfig;
 import dev.inboxbridge.persistence.UserMailDestinationConfigRepository;
+import dev.inboxbridge.service.UserMailDestinationConfigService;
 import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.inject.Inject;
 

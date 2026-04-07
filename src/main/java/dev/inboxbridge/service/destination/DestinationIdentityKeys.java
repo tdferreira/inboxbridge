@@ -1,4 +1,4 @@
-package dev.inboxbridge.service;
+package dev.inboxbridge.service.destination;
 
 import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;

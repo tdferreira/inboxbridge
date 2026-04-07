@@ -7,6 +7,7 @@ import dev.inboxbridge.domain.MailDestinationTarget;
 import dev.inboxbridge.dto.MailImportResponse;
 import dev.inboxbridge.persistence.ImportedMessage;
 import dev.inboxbridge.persistence.ImportedMessageRepository;
+import dev.inboxbridge.service.destination.DestinationIdentityKeys;
 import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.inject.Inject;
 import jakarta.transaction.Transactional;

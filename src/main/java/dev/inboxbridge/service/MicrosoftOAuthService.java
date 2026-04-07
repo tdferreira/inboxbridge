@@ -23,6 +23,8 @@ import dev.inboxbridge.domain.SourceFetchMode;
 import dev.inboxbridge.dto.MicrosoftOAuthSourceOption;
 import dev.inboxbridge.dto.MicrosoftTokenExchangeResponse;
 import dev.inboxbridge.dto.MicrosoftTokenResponse;
+import dev.inboxbridge.service.destination.ImapAppendMailDestinationService;
+import dev.inboxbridge.service.destination.MailboxConflictService;
 import dev.inboxbridge.persistence.UserMailDestinationConfig;
 import dev.inboxbridge.persistence.UserEmailAccount;
 import dev.inboxbridge.persistence.UserEmailAccountRepository;

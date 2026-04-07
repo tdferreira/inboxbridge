@@ -1,6 +1,7 @@
 package dev.inboxbridge.service.polling;
 
 import dev.inboxbridge.service.*;
+import dev.inboxbridge.service.destination.MailDestinationService;
 import dev.inboxbridge.service.mail.MailSourceClient;
 
 import java.time.Instant;

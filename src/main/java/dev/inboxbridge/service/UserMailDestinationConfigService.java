@@ -17,6 +17,8 @@ import dev.inboxbridge.dto.UserMailDestinationView;
 import dev.inboxbridge.persistence.AppUser;
 import dev.inboxbridge.persistence.UserMailDestinationConfig;
 import dev.inboxbridge.persistence.UserMailDestinationConfigRepository;
+import dev.inboxbridge.service.destination.ImapAppendMailDestinationService;
+import dev.inboxbridge.service.destination.MailboxConflictService;
 import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.inject.Inject;
 import jakarta.transaction.Transactional;

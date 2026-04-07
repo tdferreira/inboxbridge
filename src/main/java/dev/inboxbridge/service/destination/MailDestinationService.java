@@ -1,4 +1,4 @@
-package dev.inboxbridge.service;
+package dev.inboxbridge.service.destination;
 
 import dev.inboxbridge.domain.FetchedMessage;
 import dev.inboxbridge.domain.MailDestinationTarget;

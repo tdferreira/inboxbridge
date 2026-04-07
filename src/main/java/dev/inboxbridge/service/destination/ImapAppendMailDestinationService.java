@@ -1,4 +1,4 @@
-package dev.inboxbridge.service;
+package dev.inboxbridge.service.destination;
 
 import java.io.ByteArrayInputStream;
 import java.time.Instant;
@@ -17,6 +17,8 @@ import dev.inboxbridge.domain.MailDestinationTarget;
 import dev.inboxbridge.domain.RuntimeEmailAccount;
 import dev.inboxbridge.dto.EmailAccountConnectionTestResult;
 import dev.inboxbridge.dto.MailImportResponse;
+import dev.inboxbridge.service.MicrosoftOAuthService;
+import dev.inboxbridge.service.PollCancellationService;
 import dev.inboxbridge.service.mail.MailSessionFactory;
 import dev.inboxbridge.service.mail.MailSourceClient;
 import jakarta.enterprise.context.ApplicationScoped;
