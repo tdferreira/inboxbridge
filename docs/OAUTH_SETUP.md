@@ -111,6 +111,36 @@ validation and token exchange.
 
 If the deployment already has a shared Google client configured, users can leave the per-user client ID and secret blank and still start the Gmail OAuth flow successfully.
 
+### Manual verification checklist
+
+After changing OAuth setup, callback handling, session policy, TLS hostname
+configuration, or callback UI behavior, verify the browser flow manually with
+at least the checks below.
+
+1. Success path
+   - Start the Gmail destination OAuth flow from the admin UI.
+   - Confirm Google redirects to `https://<hostname>:<port>/api/google-oauth/callback`.
+   - Confirm the backend redirects into the frontend `/oauth/google/callback`
+     route.
+   - Confirm the callback route exchanges automatically, shows the result, then
+     returns to InboxBridge after the countdown.
+2. Consent denied
+   - Cancel or deny consent at Google.
+   - Confirm the callback route shows a clear localized failure state instead of
+     a blank page or raw provider error.
+3. Popup or tab closed mid-flow
+   - Close the popup or callback tab before the exchange completes.
+   - Retry from the admin UI and confirm the next attempt still succeeds
+     cleanly.
+4. Expired or invalid state
+   - Reopen an old callback URL or tamper with the `state` query parameter.
+   - Confirm the backend rejects the callback and the frontend route surfaces a
+     safe failure state without linking the mailbox.
+5. Wrong hostname or trust problem
+   - Test from the real deployment hostname rather than only `localhost`.
+   - Confirm the browser trusts the certificate chain and the callback host
+     matches the configured Google redirect URI exactly.
+
 Example manual exchange:
 
 ```bash
@@ -258,6 +288,32 @@ Regardless of provider, each OAuth-backed source remains bound to its owning
 InboxBridge user and destination mailbox. Polling coverage now includes
 multi-user integration tests that verify one user's Google/Microsoft-linked
 source messages are never imported into another user's destination mailbox.
+
+### Manual verification checklist
+
+Use the same checklist as Gmail, adjusted for Microsoft:
+
+1. Success path
+   - Start the Outlook OAuth flow from either `My Destination Mailbox` or `My
+     Source Email Accounts`.
+   - Confirm Microsoft redirects to
+     `https://<hostname>:<port>/api/microsoft-oauth/callback`.
+   - Confirm the backend redirects into the frontend
+     `/oauth/microsoft/callback` route and the browser exchange completes.
+2. Consent denied
+   - Deny or cancel consent in Microsoft.
+   - Confirm the frontend callback route shows a localized failure state
+     without exposing raw provider details.
+3. Popup or tab closed mid-flow
+   - Close the popup or callback tab before the exchange completes.
+   - Confirm a new attempt from InboxBridge still succeeds cleanly.
+4. Expired or invalid state
+   - Reuse or tamper with the callback URL.
+   - Confirm the callback is rejected safely and no mailbox link is created or
+     replaced.
+5. Wrong hostname or trust problem
+   - Confirm the callback runs on the same trusted hostname configured as the
+     Microsoft redirect URI and that the browser accepts the certificate chain.
 
 1. Sign in to `https://localhost:3000`
 2. Use the Microsoft OAuth button on the relevant source email account or destination mailbox

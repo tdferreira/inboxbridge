@@ -774,6 +774,11 @@ The React admin UI shows:
 - UI-managed Microsoft source email accounts also reuse the encrypted OAuth credential store by email account ID, so their runtime token lookup no longer depends on a duplicated refresh token copy being present on the `user_email_account` row
 - both provider callback flows now surface consent-denied and missing-scope cases with retry guidance instead of leaving the user with a generic exchange failure
 - the frontend callback route now surfaces the Google post-exchange account outcome details again, including whether the same linked account was kept, whether a previous linked account was replaced, and whether the earlier Google grant was revoked successfully
+- `docs/OAUTH_SETUP.md` now also includes a concise manual verification
+  checklist for both Google and Microsoft covering success, consent denial,
+  popup closure, invalid state reuse, and wrong-hostname / certificate-trust
+  callback failures so operators have one high-signal regression checklist
+  after OAuth flow changes
 - the old env-managed email-account dashboard section has been reframed as admin-only `Global Poller Settings`, which now focuses on runtime polling controls plus health metrics instead of listing env-managed fetchers there
 
 ## Code structure
