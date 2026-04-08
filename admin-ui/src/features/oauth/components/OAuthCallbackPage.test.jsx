@@ -39,6 +39,9 @@ describe('OAuthCallbackPage', () => {
     })
     expect(await screen.findByText('A troca do Google OAuth terminou com sucesso. O InboxBridge está a levá-lo de volta à aplicação.')).toBeInTheDocument()
     expect(screen.getByText(/Armazenamento:\s+Armazenamento cifrado/)).toBeInTheDocument()
+    expect(screen.getByText(/Mesma conta ligada:\s+Sim/)).toBeInTheDocument()
+    expect(screen.getByText(/Conta ligada anterior substituída:\s+Não/)).toBeInTheDocument()
+    expect(screen.getByText(/Consentimento anterior revogado:\s+Não/)).toBeInTheDocument()
 
     fireEvent.click(screen.getByRole('button', { name: 'Cancelar regresso automático' }))
     expect(screen.getByText('O regresso automático foi cancelado. Pode permanecer nesta página e analisar o resultado da troca.')).toBeInTheDocument()

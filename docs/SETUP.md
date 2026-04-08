@@ -183,8 +183,8 @@ Notes:
 - `consumers` is usually right for Outlook.com / Hotmail / Live accounts.
 - one Microsoft app can usually be reused across many personal mailboxes and Outlook destination mailboxes
 - each mailbox still grants its own consent
-- `SECURITY_TOKEN_ENCRYPTION_KEY` must already be configured before the browser callback page can exchange Google or Microsoft OAuth authorization codes
-- the Microsoft callback page now surfaces the backend's structured exchange errors directly and returns to InboxBridge automatically after a successful in-browser exchange
+- `SECURITY_TOKEN_ENCRYPTION_KEY` must already be configured before the browser callback route can exchange Google or Microsoft OAuth authorization codes securely
+- the Microsoft frontend callback route now surfaces the backend's structured exchange errors directly and returns to InboxBridge automatically after a successful in-browser exchange
 
 ## Registration CAPTCHA And Authentication Security
 

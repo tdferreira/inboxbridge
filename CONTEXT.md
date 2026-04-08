@@ -289,7 +289,7 @@ System polling behavior:
 - mail-fetcher detail data is refreshed automatically after manual poll attempts and when the user expands a fetcher row, so the visible status no longer waits only for the periodic dashboard refresh
 - expanding any major collapsible admin-ui section now triggers a fresh reload for that section and shows an inline loading indicator while the refresh is happening
 - expanding an individual user entry now refreshes the latest user list/configuration data as part of that expansion flow, while the row shows loading feedback
-- user-facing storage labels in the admin UI and OAuth callback pages now stay technology-neutral, using wording like `Encrypted storage` instead of exposing backend implementation details such as PostgreSQL
+- user-facing storage labels in the admin UI and OAuth callback routes now stay technology-neutral, using wording like `Encrypted storage` instead of exposing backend implementation details such as PostgreSQL
 - broad manual polling runs now expose the backend's currently active source through `/api/poll/status`, so the admin UI can move the per-row running spinner from source to source as the batch progresses instead of lighting every eligible row at once
 - the live polling snapshot is now the authoritative source for row-level running state, because several sources may be `RUNNING` concurrently while bounded virtual-thread workers drain the queue
 - the admin UI installs a same-origin fetch wrapper at boot so unsafe browser writes automatically carry the current browser-session CSRF header, while cross-origin requests are left untouched
@@ -651,8 +651,8 @@ The browser-first flow is:
 
 1. start from the admin UI
 2. provider redirect
-3. callback page
-4. in-browser exchange button
+3. frontend callback route
+4. in-browser exchange
 5. encrypted DB storage when available
 
 Important current operator note:
@@ -773,7 +773,7 @@ The React admin UI shows:
 - when secure token storage is configured and a newer Microsoft refresh token has been stored successfully, the dashboard suppresses older stale `has no refresh token` source errors for that same source email account
 - UI-managed Microsoft source email accounts also reuse the encrypted OAuth credential store by email account ID, so their runtime token lookup no longer depends on a duplicated refresh token copy being present on the `user_email_account` row
 - both provider callback flows now surface consent-denied and missing-scope cases with retry guidance instead of leaving the user with a generic exchange failure
-- once the user confirms a `Return to InboxBridge` leave action before exchange, the callback page suppresses the browser's second generic unsaved-changes prompt so the user is not asked twice
+- the frontend callback route now surfaces the Google post-exchange account outcome details again, including whether the same linked account was kept, whether a previous linked account was replaced, and whether the earlier Google grant was revoked successfully
 - the old env-managed email-account dashboard section has been reframed as admin-only `Global Poller Settings`, which now focuses on runtime polling controls plus health metrics instead of listing env-managed fetchers there
 
 ## Code structure

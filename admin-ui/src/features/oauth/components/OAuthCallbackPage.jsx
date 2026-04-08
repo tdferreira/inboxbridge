@@ -59,6 +59,9 @@ function renderedErrorMessage(providerConfig, locale, error, errorDescription) {
 function linesForGoogleResult(payload, locale, providerConfig) {
   return [
     `${translate(locale, providerConfig.storageLabelKey)} ${payload.storedInDatabase ? translate(locale, 'oauth.storage.database') : translate(locale, 'oauth.storage.environment')}`,
+    `${translate(locale, 'oauth.google.sameLinkedAccount')} ${payload.sameLinkedAccount ? translate(locale, 'common.yes') : translate(locale, 'common.no')}`,
+    `${translate(locale, 'oauth.google.replacedExistingAccount')} ${payload.replacedExistingAccount ? translate(locale, 'common.yes') : translate(locale, 'common.no')}`,
+    `${translate(locale, 'oauth.google.previousGrantRevoked')} ${payload.previousGrantRevoked ? translate(locale, 'common.yes') : translate(locale, 'common.no')}`,
     `${translate(locale, 'oauth.result.credentialKey')} ${payload.credentialKey || translate(locale, 'common.unavailable')}`,
     `${translate(locale, 'oauth.result.scope')} ${payload.scope || translate(locale, 'common.unavailable')}`,
     `${translate(locale, 'oauth.result.tokenType')} ${payload.tokenType || translate(locale, 'common.unavailable')}`,

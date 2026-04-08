@@ -19,7 +19,7 @@ that pair unless you explicitly override `PUBLIC_BASE_URL`,
 For self-hosted LAN or Tailscale deployments that still use the generated local certificates:
 
 - make sure the callback hostname is covered by the generated SAN list (`PUBLIC_BASE_URL` or the derived `PUBLIC_HOSTNAME` / `PUBLIC_PORT` base URL, plus optional `TLS_FRONTEND_CERT_HOSTNAMES` / `TLS_BACKEND_CERT_HOSTNAMES`)
-- trust `certs/ca.crt` on the browser/device opening the callback page
+- trust `certs/ca.crt` on the browser/device opening the frontend callback route
 - prefer one canonical hostname if you also want passkeys/WebAuthn to work on the same deployment
 
 When you expose InboxBridge on a LAN, tailnet, or public host, make the callback origin a real hostname covered by your certificate whenever possible. OAuth callbacks can work on HTTPS IP origins more often than passkeys do, but InboxBridge's WebAuthn/passkey support intentionally assumes `localhost` or a real hostname configured through `SECURITY_PASSKEY_RP_ID` and `SECURITY_PASSKEY_ORIGINS`.
@@ -27,7 +27,7 @@ When you expose InboxBridge on a LAN, tailnet, or public host, make the callback
 Important runtime rule:
 
 - browser-based OAuth exchange now requires `SECURITY_TOKEN_ENCRYPTION_KEY`
-- if secure storage is missing, the callback page stops and tells the operator to configure the key and retry instead of offering a weaker fallback path
+- if secure storage is missing, the callback route stops and tells the operator to configure the key and retry instead of offering a weaker fallback path
 
 ## Gmail OAuth
 
