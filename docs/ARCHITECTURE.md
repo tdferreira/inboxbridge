@@ -104,13 +104,18 @@ infrastructure details:
   watcher-health fallback tracking, source diagnostics aggregation, and the
   mailbox-configuration change event stay in the same mail-protocol slice as
   the rest of the source mailbox runtime.
+- `EnvSourceService` and `MimeHashService` now also live under
+  `dev.inboxbridge.service.mail`, so env-managed source filtering and MIME
+  fallback-key generation stay with the rest of the source-mail runtime
+  instead of lingering in the flat top-level `service` namespace.
 - `MailDestinationService`, `GmailApiMailDestinationService`,
   `ImapAppendMailDestinationService`, `GmailImportService`,
   `GmailLabelService`, `DestinationIdentityKeys`, and
-  `MailboxConflictService` now live together under
+  `MailboxConflictService`, and `DestinationIdentityUpgradeService` now live together under
   `dev.inboxbridge.service.destination`, so destination identity, mailbox-link
-  checks, Gmail import, label resolution, and IMAP APPEND delivery evolve
-  inside one delivery-focused backend slice.
+  checks, Gmail import, label resolution, IMAP APPEND delivery, and the
+  legacy destination-identity upgrade backfill evolve inside one
+  delivery-focused backend slice.
 - `AuthService`, `PasskeyService`, `UserSessionService`,
   `AuthSecuritySettingsService`, `AuthClientAddressService`,
   `AuthLoginProtectionService`, `RegistrationChallengeService`,
@@ -119,6 +124,11 @@ infrastructure details:
   `dev.inboxbridge.service.auth`, so sign-in flow, passkey ceremonies, browser
   session issuance, session-security presentation, and auth-hardening settings
   stay in one auth-focused backend slice.
+- `SecretEncryptionService` now lives under
+  `dev.inboxbridge.service.security`, so the AES-GCM secret-storage primitive
+  shared by auth, OAuth, and user-managed mailbox configuration has an explicit
+  security-focused home instead of staying in the flat top-level `service`
+  package.
 - `RemoteControlService`, `RemoteSessionService`,
   `RemoteServiceTokenAuthService`, and `RemotePollRateLimitService` now live
   together under `dev.inboxbridge.service.remote`, while

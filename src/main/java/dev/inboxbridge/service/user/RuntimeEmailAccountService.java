@@ -14,7 +14,7 @@ import dev.inboxbridge.domain.SourcePostPollSettings;
 import dev.inboxbridge.persistence.AppUser;
 import dev.inboxbridge.persistence.AppUserRepository;
 import dev.inboxbridge.persistence.UserEmailAccount;
-import dev.inboxbridge.service.EnvSourceService;
+import dev.inboxbridge.service.mail.EnvSourceService;
 import dev.inboxbridge.service.oauth.OAuthCredentialService;
 import dev.inboxbridge.service.oauth.SystemOAuthAppSettingsService;
 import jakarta.enterprise.context.ApplicationScoped;

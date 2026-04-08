@@ -1,4 +1,4 @@
-package dev.inboxbridge.service;
+package dev.inboxbridge.service.destination;
 
 import java.util.HashMap;
 import java.util.List;
@@ -17,7 +17,7 @@ import dev.inboxbridge.persistence.SourcePollingState;
 import dev.inboxbridge.persistence.SourcePollingStateRepository;
 import dev.inboxbridge.persistence.UserEmailAccount;
 import dev.inboxbridge.persistence.UserEmailAccountRepository;
-import dev.inboxbridge.service.destination.DestinationIdentityKeys;
+import dev.inboxbridge.service.mail.EnvSourceService;
 import dev.inboxbridge.service.oauth.SystemOAuthAppSettingsService;
 import dev.inboxbridge.service.user.UserMailDestinationConfigService;
 import io.quarkus.runtime.StartupEvent;

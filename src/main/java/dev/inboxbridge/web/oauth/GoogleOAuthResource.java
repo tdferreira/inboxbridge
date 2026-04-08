@@ -7,7 +7,7 @@ import dev.inboxbridge.persistence.AppUser;
 import dev.inboxbridge.security.CurrentUserContext;
 import dev.inboxbridge.security.RequireAdmin;
 import dev.inboxbridge.security.RequireAuth;
-import dev.inboxbridge.service.EnvSourceService;
+import dev.inboxbridge.service.mail.EnvSourceService;
 import dev.inboxbridge.service.oauth.GoogleOAuthService;
 import dev.inboxbridge.service.user.UserEmailAccountService;
 import dev.inboxbridge.service.oauth.UserGmailConfigService;

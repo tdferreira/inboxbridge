@@ -44,7 +44,8 @@ destination-delivery code lives under `dev.inboxbridge.service.destination`,
 OAuth browser resources live under `dev.inboxbridge.web.oauth`, backend OAuth
 provider/config services live under `dev.inboxbridge.service.oauth`, and the
 login/passkey/session/auth-security plus GeoIP lookup slice now lives under
-`dev.inboxbridge.service.auth`. The browser auth/account REST surface now also
+`dev.inboxbridge.service.auth`. The shared secret-encryption primitive now also
+lives under `dev.inboxbridge.service.security`. The browser auth/account REST surface now also
 lives under `dev.inboxbridge.web.auth`, and the browser polling REST surface
 now lives under `dev.inboxbridge.web.polling`. The remote-control surface now also has
 dedicated feature packages: `dev.inboxbridge.service.remote` owns remote
@@ -53,6 +54,12 @@ dashboard/control projection, while `dev.inboxbridge.web.remote` owns the
 remote auth/control REST resources. Tests that wire those moved auth or remote
 resources/services outside CDI should use explicit setters or imports rather
 than package-private field reach-throughs.
+The remaining env-managed source normalization and MIME hashing helpers now
+also live under `dev.inboxbridge.service.mail`, and the legacy startup
+reconciliation for destination-aware dedupe/checkpoint rows now lives under
+`dev.inboxbridge.service.destination`, so the last source- and
+destination-specific helpers no longer linger in the flat top-level `service`
+package.
 The per-user mailbox/config/preferences slice now also has a dedicated feature
 boundary: `dev.inboxbridge.service.user` owns user-managed source mailboxes,
 user destination mailbox config, per-user polling overrides, UI preferences,
@@ -321,8 +328,8 @@ System polling behavior:
 - the live-poll backend state model now lives in `PollingLiveRunState` instead of being embedded directly inside `PollingLiveService`, so the live service can stay focused on permissions, SSE fan-out, notifications, and control flow while the mutable queued/running/completed source model evolves behind one dedicated in-memory state type
 - live-poll snapshot shaping and live notification assembly now live in `PollingLivePresentationService` instead of being embedded directly inside `PollingLiveService`, so the live service can stay focused on state transitions, permissions, cancellation, and subscriber fan-out while the viewer-scoped presentation policy is regression-tested directly
 - the backend now treats polling as the first feature-oriented service subpackage: `PollingService`, `PollingSourceExecutionService`, `PollingLiveService`, `PollingLiveRunState`, `PollingLivePresentationService`, `PollingStatsService`, and `PollingTimelineService` now live under `dev.inboxbridge.service.polling`, while the rest of the backend still uses the broader layer-oriented package layout
-- the extracted source-mailbox protocol slice now also lives under `dev.inboxbridge.service.mail`: `MailSourceClient`, `MailSessionFactory`, `MailSourceStandaloneFactory`, `MailSourceConnectionService`, `MailSourceConnectionProbeService`, `MailSourceCheckpointSelector`, `MailSourceFolderService`, `MailSourceMessageMapper`, `MailSourceFetchService`, `MailSourcePostPollActionService`, `ImapIdleWatchService`, `ImapIdleHealthService`, `SourceDiagnosticsService`, and `SourceMailboxConfigurationChanged` now evolve together there instead of staying mixed into the flat top-level `service` package
-- the destination-mailbox delivery slice now also lives under `dev.inboxbridge.service.destination`: `MailDestinationService`, `GmailApiMailDestinationService`, `ImapAppendMailDestinationService`, `GmailImportService`, `GmailLabelService`, `DestinationIdentityKeys`, and `MailboxConflictService` now evolve together there instead of staying mixed into the flat top-level `service` package
+- the extracted source-mailbox protocol slice now also lives under `dev.inboxbridge.service.mail`: `MailSourceClient`, `MailSessionFactory`, `MailSourceStandaloneFactory`, `MailSourceConnectionService`, `MailSourceConnectionProbeService`, `MailSourceCheckpointSelector`, `MailSourceFolderService`, `MailSourceMessageMapper`, `MailSourceFetchService`, `MailSourcePostPollActionService`, `ImapIdleWatchService`, `ImapIdleHealthService`, `SourceDiagnosticsService`, `SourceMailboxConfigurationChanged`, `EnvSourceService`, and `MimeHashService` now evolve together there instead of staying mixed into the flat top-level `service` package
+- the destination-mailbox delivery slice now also lives under `dev.inboxbridge.service.destination`: `MailDestinationService`, `GmailApiMailDestinationService`, `ImapAppendMailDestinationService`, `GmailImportService`, `GmailLabelService`, `DestinationIdentityKeys`, `MailboxConflictService`, and `DestinationIdentityUpgradeService` now evolve together there instead of staying mixed into the flat top-level `service` package
 - the backend now treats Google and Microsoft OAuth as a narrower web feature seam under `dev.inboxbridge.web.oauth`: `GoogleOAuthResource`, `MicrosoftOAuthResource`, `GoogleOAuthCallbackPageRenderer`, `MicrosoftOAuthCallbackPageRenderer`, `OAuthPageI18n`, and `OAuthPageSupport` now live together there so the provider callback routes, token-exchange flow, and callback-page rendering evolve inside one feature package instead of the flat top-level `web` package
 - the main REST resources now centralize the common validation-error translation in `WebResourceSupport`, so endpoints that only need to turn `IllegalArgumentException` or `IllegalStateException` into the normal `400` API response no longer repeat the same local `try/catch` wrapper in every method
 - the user-deletion and session-revocation cleanup path now keeps transaction ownership in the surrounding services (`AppUserService`, `PasskeyService`, `UserSessionService`) instead of on the thin repository delete helpers, which makes the repository layer closer to plain data access and keeps cleanup orchestration boundaries explicit

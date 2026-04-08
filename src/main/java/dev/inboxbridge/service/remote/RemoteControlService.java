@@ -23,7 +23,7 @@ import dev.inboxbridge.persistence.ImportedMessageRepository;
 import dev.inboxbridge.persistence.UserEmailAccount;
 import dev.inboxbridge.persistence.UserEmailAccountRepository;
 import dev.inboxbridge.service.admin.AppUserService;
-import dev.inboxbridge.service.EnvSourceService;
+import dev.inboxbridge.service.mail.EnvSourceService;
 import dev.inboxbridge.service.polling.PollingSettingsService;
 import dev.inboxbridge.service.user.RuntimeEmailAccountService;
 import dev.inboxbridge.service.polling.SourcePollEventService;

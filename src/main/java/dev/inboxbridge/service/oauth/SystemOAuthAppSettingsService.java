@@ -7,7 +7,7 @@ import dev.inboxbridge.dto.SystemOAuthAppSettingsView;
 import dev.inboxbridge.dto.UpdateSystemOAuthAppSettingsRequest;
 import dev.inboxbridge.persistence.SystemOAuthAppSettings;
 import dev.inboxbridge.persistence.SystemOAuthAppSettingsRepository;
-import dev.inboxbridge.service.SecretEncryptionService;
+import dev.inboxbridge.service.security.SecretEncryptionService;
 import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.inject.Inject;
 import jakarta.transaction.Transactional;

@@ -1,7 +1,5 @@
 package dev.inboxbridge.service.polling;
 
-import dev.inboxbridge.service.*;
-
 import static org.junit.jupiter.api.Assertions.assertEquals;
 
 import java.time.Instant;
@@ -25,6 +23,7 @@ import dev.inboxbridge.persistence.SourcePollEvent;
 import dev.inboxbridge.persistence.ImportedMessageRepository;
 import dev.inboxbridge.persistence.UserEmailAccount;
 import dev.inboxbridge.persistence.UserEmailAccountRepository;
+import dev.inboxbridge.service.mail.EnvSourceService;
 import dev.inboxbridge.service.user.UserMailDestinationConfigService;
 
 class PollingStatsServiceTest {

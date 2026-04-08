@@ -1,11 +1,10 @@
 package dev.inboxbridge.service.polling;
 
 import dev.inboxbridge.service.destination.*;
-
-import dev.inboxbridge.service.*;
 import dev.inboxbridge.service.mail.MailSourceClient;
 import dev.inboxbridge.service.mail.MailSourceClient.MailboxCountProbe;
 import dev.inboxbridge.service.mail.MailSourceStandaloneFactory;
+import dev.inboxbridge.service.mail.MimeHashService;
 import dev.inboxbridge.service.user.RuntimeEmailAccountService;
 import dev.inboxbridge.service.user.UserMailDestinationConfigService;
 import dev.inboxbridge.service.user.UserPollingSettingsService;

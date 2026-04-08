@@ -5,7 +5,6 @@ import java.time.Duration;
 import dev.inboxbridge.config.MailClientConfig;
 import dev.inboxbridge.service.oauth.GoogleOAuthService;
 import dev.inboxbridge.service.oauth.MicrosoftOAuthService;
-import dev.inboxbridge.service.MimeHashService;
 import dev.inboxbridge.service.polling.PollCancellationService;
 import dev.inboxbridge.service.polling.PollingSettingsService;
 import dev.inboxbridge.service.polling.SourcePollingStateService;

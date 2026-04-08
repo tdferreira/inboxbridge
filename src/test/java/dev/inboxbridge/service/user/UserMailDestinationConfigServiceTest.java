@@ -1,6 +1,6 @@
 package dev.inboxbridge.service.user;
 
-import dev.inboxbridge.service.SecretEncryptionService;
+import dev.inboxbridge.service.security.SecretEncryptionService;
 import dev.inboxbridge.service.oauth.MicrosoftOAuthService;
 import dev.inboxbridge.service.oauth.SystemOAuthAppSettingsService;
 import dev.inboxbridge.service.oauth.UserGmailConfigService;

@@ -1,7 +1,7 @@
 package dev.inboxbridge.service.user;
 
-import dev.inboxbridge.service.EnvSourceService;
-import dev.inboxbridge.service.SecretEncryptionService;
+import dev.inboxbridge.service.mail.EnvSourceService;
+import dev.inboxbridge.service.security.SecretEncryptionService;
 import dev.inboxbridge.service.oauth.OAuthCredentialService;
 import dev.inboxbridge.service.destination.*;
 import dev.inboxbridge.service.mail.SourceDiagnosticsService;

@@ -1,6 +1,6 @@
 package dev.inboxbridge.service.user;
 
-import dev.inboxbridge.service.EnvSourceService;
+import dev.inboxbridge.service.mail.EnvSourceService;
 import dev.inboxbridge.service.oauth.SystemOAuthAppSettingsService;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 

@@ -1,7 +1,4 @@
-package dev.inboxbridge.service;
-
-import dev.inboxbridge.service.oauth.SystemOAuthAppSettingsService;
-import dev.inboxbridge.service.destination.*;
+package dev.inboxbridge.service.destination;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
@@ -29,6 +26,8 @@ import dev.inboxbridge.persistence.SourcePollingState;
 import dev.inboxbridge.persistence.SourcePollingStateRepository;
 import dev.inboxbridge.persistence.UserEmailAccount;
 import dev.inboxbridge.persistence.UserEmailAccountRepository;
+import dev.inboxbridge.service.mail.EnvSourceService;
+import dev.inboxbridge.service.oauth.SystemOAuthAppSettingsService;
 import dev.inboxbridge.service.user.UserMailDestinationConfigService;
 
 class DestinationIdentityUpgradeServiceTest {

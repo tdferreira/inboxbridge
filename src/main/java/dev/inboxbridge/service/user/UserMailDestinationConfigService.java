@@ -17,7 +17,7 @@ import dev.inboxbridge.dto.UserMailDestinationView;
 import dev.inboxbridge.persistence.AppUser;
 import dev.inboxbridge.persistence.UserMailDestinationConfig;
 import dev.inboxbridge.persistence.UserMailDestinationConfigRepository;
-import dev.inboxbridge.service.SecretEncryptionService;
+import dev.inboxbridge.service.security.SecretEncryptionService;
 import dev.inboxbridge.service.destination.ImapAppendMailDestinationService;
 import dev.inboxbridge.service.destination.MailboxConflictService;
 import dev.inboxbridge.service.oauth.GoogleOAuthService;

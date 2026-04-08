@@ -1,4 +1,4 @@
-package dev.inboxbridge.service;
+package dev.inboxbridge.service.security;
 
 import java.nio.ByteBuffer;
 import java.nio.charset.StandardCharsets;

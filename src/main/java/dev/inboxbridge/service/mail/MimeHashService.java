@@ -1,6 +1,5 @@
-package dev.inboxbridge.service;
+package dev.inboxbridge.service.mail;
 
-import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
 

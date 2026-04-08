@@ -16,7 +16,7 @@ import dev.inboxbridge.dto.AuthSecuritySettingsView;
 import dev.inboxbridge.dto.UpdateAuthSecuritySettingsRequest;
 import dev.inboxbridge.persistence.SystemAuthSecuritySetting;
 import dev.inboxbridge.persistence.SystemAuthSecuritySettingRepository;
-import dev.inboxbridge.service.SecretEncryptionService;
+import dev.inboxbridge.service.security.SecretEncryptionService;
 
 class AuthSecuritySettingsServiceTest {
 

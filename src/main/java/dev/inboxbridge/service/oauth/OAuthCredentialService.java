@@ -6,7 +6,7 @@ import java.util.Optional;
 
 import dev.inboxbridge.persistence.OAuthCredential;
 import dev.inboxbridge.persistence.OAuthCredentialRepository;
-import dev.inboxbridge.service.SecretEncryptionService;
+import dev.inboxbridge.service.security.SecretEncryptionService;
 import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.inject.Inject;
 import jakarta.transaction.Transactional;
