@@ -1,4 +1,4 @@
-package dev.inboxbridge.service;
+package dev.inboxbridge.service.oauth;
 
 import java.util.Optional;
 

@@ -11,7 +11,6 @@ import dev.inboxbridge.domain.GmailTarget;
 import dev.inboxbridge.persistence.AppUser;
 import dev.inboxbridge.persistence.UserGmailConfig;
 import dev.inboxbridge.persistence.UserGmailConfigRepository;
-import dev.inboxbridge.service.PublicUrlService;
 import dev.inboxbridge.service.security.SecretEncryptionService;
 import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.inject.Inject;

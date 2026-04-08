@@ -1,4 +1,4 @@
-package dev.inboxbridge.service;
+package dev.inboxbridge.service.oauth;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 

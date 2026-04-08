@@ -71,7 +71,9 @@ infrastructure details:
 - `PublicUrlService` resolves the canonical browser-facing base URL from
   `PUBLIC_BASE_URL` or the derived `PUBLIC_HOSTNAME` / `PUBLIC_PORT`
   combination, so OAuth redirect defaults and other externally visible links do
-  not each rebuild that precedence logic.
+  not each rebuild that precedence logic. It now lives under
+  `dev.inboxbridge.service.oauth` with the rest of the provider/config OAuth
+  slice instead of staying as the last flat top-level backend service.
 - `MailSessionFactory` now lives under `dev.inboxbridge.service.mail` and
   builds the Jakarta Mail `Session` instances for source IMAP, source POP3,
   IMAP IDLE, and destination IMAP APPEND traffic from one typed

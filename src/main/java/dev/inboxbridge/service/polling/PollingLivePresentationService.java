@@ -1,6 +1,4 @@
 package dev.inboxbridge.service.polling;
-
-import dev.inboxbridge.service.*;
 import dev.inboxbridge.service.auth.SessionLocationAlertService;
 
 import dev.inboxbridge.dto.LiveNotificationContentView;

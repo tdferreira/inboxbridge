@@ -1,7 +1,5 @@
 package dev.inboxbridge.service.polling;
 
-import dev.inboxbridge.service.*;
-
 import dev.inboxbridge.dto.ImportTimelinePointView;
 import dev.inboxbridge.dto.PollingTimelineBundleView;
 import dev.inboxbridge.persistence.SourcePollEvent;

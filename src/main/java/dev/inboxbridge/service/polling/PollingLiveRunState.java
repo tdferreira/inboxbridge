@@ -1,7 +1,5 @@
 package dev.inboxbridge.service.polling;
 
-import dev.inboxbridge.service.*;
-
 import dev.inboxbridge.domain.RuntimeEmailAccount;
 import dev.inboxbridge.persistence.AppUser;
 import java.time.Instant;

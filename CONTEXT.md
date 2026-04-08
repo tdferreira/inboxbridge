@@ -60,6 +60,10 @@ reconciliation for destination-aware dedupe/checkpoint rows now lives under
 `dev.inboxbridge.service.destination`, so the last source- and
 destination-specific helpers no longer linger in the flat top-level `service`
 package.
+The canonical browser-facing URL derivation helper now also lives under
+`dev.inboxbridge.service.oauth`, so OAuth redirect-base resolution evolves with
+the rest of the provider/config OAuth slice instead of staying as the last
+flat top-level backend service.
 The per-user mailbox/config/preferences slice now also has a dedicated feature
 boundary: `dev.inboxbridge.service.user` owns user-managed source mailboxes,
 user destination mailbox config, per-user polling overrides, UI preferences,
@@ -331,6 +335,7 @@ System polling behavior:
 - the extracted source-mailbox protocol slice now also lives under `dev.inboxbridge.service.mail`: `MailSourceClient`, `MailSessionFactory`, `MailSourceStandaloneFactory`, `MailSourceConnectionService`, `MailSourceConnectionProbeService`, `MailSourceCheckpointSelector`, `MailSourceFolderService`, `MailSourceMessageMapper`, `MailSourceFetchService`, `MailSourcePostPollActionService`, `ImapIdleWatchService`, `ImapIdleHealthService`, `SourceDiagnosticsService`, `SourceMailboxConfigurationChanged`, `EnvSourceService`, and `MimeHashService` now evolve together there instead of staying mixed into the flat top-level `service` package
 - the destination-mailbox delivery slice now also lives under `dev.inboxbridge.service.destination`: `MailDestinationService`, `GmailApiMailDestinationService`, `ImapAppendMailDestinationService`, `GmailImportService`, `GmailLabelService`, `DestinationIdentityKeys`, `MailboxConflictService`, and `DestinationIdentityUpgradeService` now evolve together there instead of staying mixed into the flat top-level `service` package
 - the backend now treats Google and Microsoft OAuth as a narrower web feature seam under `dev.inboxbridge.web.oauth`: `GoogleOAuthResource`, `MicrosoftOAuthResource`, `GoogleOAuthCallbackPageRenderer`, `MicrosoftOAuthCallbackPageRenderer`, `OAuthPageI18n`, and `OAuthPageSupport` now live together there so the provider callback routes, token-exchange flow, and callback-page rendering evolve inside one feature package instead of the flat top-level `web` package
+- the backend OAuth provider/config slice now also owns `PublicUrlService`, so the canonical `PUBLIC_BASE_URL` / `PUBLIC_HOSTNAME` / `PUBLIC_PORT` redirect derivation lives next to the rest of the Google/Microsoft OAuth configuration model instead of lingering as the last flat top-level backend service
 - the main REST resources now centralize the common validation-error translation in `WebResourceSupport`, so endpoints that only need to turn `IllegalArgumentException` or `IllegalStateException` into the normal `400` API response no longer repeat the same local `try/catch` wrapper in every method
 - the user-deletion and session-revocation cleanup path now keeps transaction ownership in the surrounding services (`AppUserService`, `PasskeyService`, `UserSessionService`) instead of on the thin repository delete helpers, which makes the repository layer closer to plain data access and keeps cleanup orchestration boundaries explicit
 - destination mailbox preset descriptions, destination test-connection actions, and admin destination-section labels are localized across the supported admin-ui locales instead of falling back to English strings from preset metadata
