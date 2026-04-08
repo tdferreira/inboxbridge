@@ -334,7 +334,7 @@ System polling behavior:
 - the backend now treats polling as the first feature-oriented service subpackage: `PollingService`, `PollingSourceExecutionService`, `PollingLiveService`, `PollingLiveRunState`, `PollingLivePresentationService`, `PollingStatsService`, and `PollingTimelineService` now live under `dev.inboxbridge.service.polling`, while the rest of the backend still uses the broader layer-oriented package layout
 - the extracted source-mailbox protocol slice now also lives under `dev.inboxbridge.service.mail`: `MailSourceClient`, `MailSessionFactory`, `MailSourceStandaloneFactory`, `MailSourceConnectionService`, `MailSourceConnectionProbeService`, `MailSourceCheckpointSelector`, `MailSourceFolderService`, `MailSourceMessageMapper`, `MailSourceFetchService`, `MailSourcePostPollActionService`, `ImapIdleWatchService`, `ImapIdleHealthService`, `SourceDiagnosticsService`, `SourceMailboxConfigurationChanged`, `EnvSourceService`, and `MimeHashService` now evolve together there instead of staying mixed into the flat top-level `service` package
 - the destination-mailbox delivery slice now also lives under `dev.inboxbridge.service.destination`: `MailDestinationService`, `GmailApiMailDestinationService`, `ImapAppendMailDestinationService`, `GmailImportService`, `GmailLabelService`, `DestinationIdentityKeys`, `MailboxConflictService`, and `DestinationIdentityUpgradeService` now evolve together there instead of staying mixed into the flat top-level `service` package
-- the backend now treats Google and Microsoft OAuth as a narrower web feature seam under `dev.inboxbridge.web.oauth`: `GoogleOAuthResource`, `MicrosoftOAuthResource`, `GoogleOAuthCallbackPageRenderer`, `MicrosoftOAuthCallbackPageRenderer`, `OAuthPageI18n`, and `OAuthPageSupport` now live together there so the provider callback routes, token-exchange flow, and callback-page rendering evolve inside one feature package instead of the flat top-level `web` package
+- the backend now treats Google and Microsoft OAuth as a narrower web feature seam under `dev.inboxbridge.web.oauth`: `GoogleOAuthResource` and `MicrosoftOAuthResource` keep the real provider callback routes, OAuth state validation, and browser redirect handoff there, while the user-facing callback UI itself now lives in the React admin app under `/oauth/google/callback` and `/oauth/microsoft/callback`
 - the backend OAuth provider/config slice now also owns `PublicUrlService`, so the canonical `PUBLIC_BASE_URL` / `PUBLIC_HOSTNAME` / `PUBLIC_PORT` redirect derivation lives next to the rest of the Google/Microsoft OAuth configuration model instead of lingering as the last flat top-level backend service
 - the main REST resources now centralize the common validation-error translation in `WebResourceSupport`, so endpoints that only need to turn `IllegalArgumentException` or `IllegalStateException` into the normal `400` API response no longer repeat the same local `try/catch` wrapper in every method
 - the user-deletion and session-revocation cleanup path now keeps transaction ownership in the surrounding services (`AppUserService`, `PasskeyService`, `UserSessionService`) instead of on the thin repository delete helpers, which makes the repository layer closer to plain data access and keeps cleanup orchestration boundaries explicit
@@ -757,9 +757,17 @@ The React admin UI shows:
 - admin password-reset and passkey-wipe controls in the selected-user panel
 - the admin password-reset dialog now displays the temporary-password policy checklist inline instead of only validating silently on submit
 - admin actions that suspend/reactivate users or force password changes now also require confirmation modals so high-impact identity changes are never one-click
-- the Google and Microsoft OAuth callback pages now attempt the in-browser token exchange automatically on load, while still leaving the manual exchange button available for retry
-- the Google and Microsoft callback pages now also fall back to parsing `window.location.search` directly for `code` and `state`, which makes the browser flow more resilient when the callback HTML was rendered without those values
-- the Microsoft callback exchange endpoint now returns a structured JSON error body, so the callback page can display the real backend failure reason instead of a blank generic `Exchange failed:` message
+- the Google and Microsoft OAuth browser callback UI now lives in the React
+  admin app under `/oauth/google/callback` and `/oauth/microsoft/callback`,
+  while the backend keeps the real provider redirect URIs at
+  `/api/google-oauth/callback` and `/api/microsoft-oauth/callback`, validates
+  callback state there, and redirects into the frontend-owned callback routes
+- those frontend callback routes automatically attempt the in-browser exchange
+  on load, still leave a manual retry button available, and keep the callback
+  copy/i18n in the frontend translation catalog instead of in Java
+- the Microsoft callback exchange endpoint now returns a structured JSON error
+  body, so the frontend callback route can display the real backend failure
+  reason instead of a blank generic `Exchange failed:` message
 - Microsoft OAuth mailbox-scope validation now treats the protocol mailbox scope plus the returned refresh token as the real success signal, rather than requiring `offline_access` to appear in the echoed scope string
 - when secure token storage is not configured, a successful Microsoft OAuth exchange for an env-managed source still requires copying the returned `MAIL_ACCOUNT_<n>__OAUTH_REFRESH_TOKEN` value into `.env` and restarting before the poller can use it
 - when secure token storage is configured and a newer Microsoft refresh token has been stored successfully, the dashboard suppresses older stale `has no refresh token` source errors for that same source email account
@@ -914,9 +922,14 @@ Admin UI frontend structure now follows a feature-first split:
 - `src/shared/components/...` contains reusable primitives such as `SectionCard`, `CollapsibleSection`, and form/menu helpers
 - `src/lib/...` contains formatting, translation, runtime, and API helper utilities
 - `admin-ui/README.md` documents the frontend layout and test workflow
-- the Google and Microsoft OAuth callback pages now support navigating back to InboxBridge after in-browser code exchange
-- the Google and Microsoft OAuth callback pages support copying the raw code, automatically attempt the exchange on load, warn before navigating away without exchange, and auto-redirect to InboxBridge after a 5-second countdown once exchange succeeds unless the user cancels that automatic redirect
-- packaged runtime validation now also smoke-tests the Google and Microsoft OAuth callback error pages, so callback route/rendering regressions are caught against the built Quarkus artifact instead of only through plain unit tests
+- the frontend-owned Google and Microsoft OAuth callback routes support
+  navigating back to InboxBridge after in-browser code exchange, automatically
+  attempt the exchange on load, and auto-redirect to InboxBridge after a
+  5-second countdown once exchange succeeds unless the user cancels that
+  automatic return
+- packaged runtime validation now also smoke-tests the Google and Microsoft
+  backend callback redirect behavior, so callback-route regressions are caught
+  against the built Quarkus artifact instead of only through plain unit tests
 - admin-ui buttons that trigger backend work now show inline loading spinners so the user gets immediate feedback during authentication, saves, polling, refresh, and OAuth start flows
 - source-email-account notifications are now stored as structured descriptors and resolved at render time, so changing the UI language also re-translates existing notifications instead of leaving them in the previous language
 - source-specific notification links can now focus the matching source email account card in the user workspace, including OAuth-related error notifications such as a missing refresh token

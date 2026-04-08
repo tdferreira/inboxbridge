@@ -366,26 +366,26 @@ Current unit coverage focuses on:
 - language-aware setup guide generation and formatting helpers
 - the polling test suite now also covers global/per-user/per-source settings precedence and multi-user destination-isolation regressions on the backend side, with GreenMail integration tests reserved for real mailbox I/O paths
 
-The Google and Microsoft OAuth callback pages include a direct return path back to the admin UI after in-browser token exchange.
+The Google and Microsoft OAuth provider callbacks now land on the backend-owned
+`/api/.../callback` endpoints, which validate the callback state and then
+redirect the browser into frontend-owned `/oauth/...` routes for the user-facing
+callback UI.
 
-That callback flow now uses `Return to InboxBridge`, shows a red `Cancel automatic redirect` action during the 5-second countdown, and keeps the redirect wording product-neutral instead of tying it to the admin UI label.
-They also include:
+That frontend callback flow now uses `Return to InboxBridge`, shows a
+`Cancel automatic return` action during the 5-second countdown, and keeps the
+user-facing copy and localization in the React translation catalog instead of
+embedding large callback pages in Java. It also includes:
 
-- a one-click code copy button
-- if the browser blocks clipboard access, the callback page opens a manual copy dialog so the user can still copy the code or env assignment
-- an automatic in-browser exchange attempt as soon as the callback page loads
-- the Google and Microsoft callback pages also parse the browser query string directly as a fallback, so the page can still recover the OAuth code/state if they were not rendered into the initial HTML
-- both callback pages now show explicit retry guidance when the provider returns `access_denied` or the token exchange reveals missing required scopes
-- the Microsoft callback exchange now also returns structured JSON errors, so the callback page can show the actual backend failure reason
+- an automatic in-browser exchange attempt as soon as the callback route loads
+- explicit retry guidance when the provider returns `access_denied`, the
+  callback state is invalid, or the token exchange itself fails
+- the Microsoft callback exchange returning structured JSON errors so the
+  frontend callback route can show the real backend failure reason
 - Microsoft mailbox OAuth validation now treats the mailbox protocol scope plus the refresh token as the real success signal, rather than requiring `offline_access` to appear in the echoed scope string
 - if a Microsoft source previously failed with `has no refresh token`, that stale error is now hidden automatically once a newer encrypted refresh token has been stored for the same source
 - UI-managed Microsoft source email accounts now also read the encrypted refresh token stored for their email account ID, so a successful browser OAuth exchange is enough for the runtime even when the `user_email_account` row does not contain a duplicated token copy
 - when secure token storage is not configured, a successful Microsoft exchange for an env-managed source still requires copying the returned `MAIL_ACCOUNT_<n>__OAUTH_REFRESH_TOKEN` value into `.env` and restarting before polling can use it
-- a confirmation dialog if the user tries to leave before exchanging the code
-- once the user confirms that leave action, the page suppresses the browser's second generic unsaved-changes prompt
 - a cancelable 5-second auto-return countdown after a successful in-browser exchange
-- when secure token storage is enabled, the callback pages keep the flow fully in-browser and do not ask the user to copy an env assignment
-- guidance that leaving early means the code or token must be handled manually later
 
 API-facing error surfaces in the admin UI now include one-click clipboard actions so users can copy diagnostic payloads without manually selecting text.
 

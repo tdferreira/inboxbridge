@@ -155,11 +155,12 @@ infrastructure details:
   passkey, and own-account security endpoints evolve behind one narrower web
   feature package instead of staying mixed into the flat top-level `web`
   namespace.
-- `GoogleOAuthCallbackPageRenderer` and
-  `MicrosoftOAuthCallbackPageRenderer` now own the provider-specific browser
-  callback pages, while `OAuthPageI18n` and `OAuthPageSupport` keep the shared
-  callback-page localization, escaping, and tiny formatting helpers out of the
-  OAuth REST resources.
+- the provider callback UI now lives in the React admin app under
+  `/oauth/google/callback` and `/oauth/microsoft/callback`, while the backend
+  OAuth resources keep ownership of the real provider callback URLs under
+  `/api/.../callback`, validate callback state there, and redirect the browser
+  into the frontend-owned callback routes with only the minimal provider result
+  parameters needed for the browser exchange flow
 - `PollingSourceExecutionService` now owns the per-source polling pipeline that
   used to sit inside `PollingService`: destination-link checks, spam/junk
   probes, dedupe-vs-import decisions, source/destination throttle accounting,
@@ -254,7 +255,7 @@ Runtime-level backend validation now has two intentionally different seams:
 That packaged smoke path runs the built Quarkus jar under the `%test` profile
 with an in-memory H2 datasource and no external TLS certificate requirement, so
 health, browser-auth session wiring, remote-session protection, OAuth callback
-rendering, the authenticated `/api/app` protection surface, the admin-only
+redirect behavior, the authenticated `/api/app` protection surface, the admin-only
 `/api/admin` surface, the browser `/api/auth` session/account surface, the
 authenticated `/api/poll` surface, and startup regressions can be caught
 without depending on the normal Docker/PostgreSQL runtime. Those packaged

@@ -11,6 +11,10 @@ Start with [`admin-ui/README.md`](../../../admin-ui/README.md), [`CONTEXT.md`](.
 
 - Preserve the split between top-level composition in `App.jsx`, controller hooks in `src/lib`, and presentational components in `src/components`.
 - Keep visible copy routed through the translation dictionary. Avoid introducing raw English strings into authenticated UI or `/remote`.
+- OAuth callback UX belongs to the frontend-owned `/oauth/...` routes; keep the
+  backend-owned `/api/.../callback` endpoints focused on state validation,
+  token exchange authority, and redirecting the browser into the React
+  callback UI.
 - When changing localization or route behavior, keep the localized workspace-route model intact: `/` remains the user workspace, explicit admin routes localize per current language, and language changes should rewrite explicit admin slugs immediately rather than waiting on deferred UI-preferences hydration.
 - Preserve the lightweight `/remote` surface as a focused, mobile-first control plane rather than a copy of the full dashboard.
 - Respect the existing workspace/layout model: collapsible sections, section cards, persisted preferences, and quick-setup behavior.

@@ -14,6 +14,10 @@ best practices, folder structure, or package-boundary reviews, also load
 ## Backend invariants
 
 - Keep Quarkus as the system of record for auth, OAuth, sessions, secret handling, and polling state.
+- For provider OAuth callbacks, keep the backend as the secure callback and
+  state-validation authority, but prefer frontend-owned callback UI over
+  embedded Java HTML when the user-facing flow needs richer copy, translation,
+  or visual consistency.
 - Preserve the hard boundary that one user's source mail must never import into another user's destination mailbox.
 - Preserve the newer destination-aware runtime model: checkpoint reuse, dedupe visibility, and source diagnostics all key off the resolved destination mailbox identity rather than the source alone.
 - Preserve encrypted-at-rest handling for UI-managed passwords, refresh tokens, and related secrets.

@@ -45,9 +45,6 @@ public class MicrosoftOAuthResource {
     @Inject
     EnvSourceService envSourceService;
 
-    @Inject
-    MicrosoftOAuthCallbackPageRenderer callbackPageRenderer;
-
     @GET
     @Path("/url")
     @RequireAuth
@@ -120,96 +117,35 @@ public class MicrosoftOAuthResource {
 
     @GET
     @Path("/callback")
-    @Produces(MediaType.TEXT_HTML)
     public Response callback(
             @QueryParam("code") String code,
             @QueryParam("state") String state,
             @QueryParam("error") String error,
             @QueryParam("error_description") String errorDescription) {
         String language = callbackLanguage(state);
-        boolean secureStorageConfigured = microsoftOAuthService.secureStorageConfigured();
         if (error != null && !error.isBlank()) {
-            return Response.ok(callbackPageRenderer.renderPage(
-                    language,
-                    localized(language, microsoftErrorTitle(error), "access_denied".equalsIgnoreCase(error) ? "Permissao necessaria no Microsoft OAuth" : "Erro de Microsoft OAuth"),
-                    localized(language, microsoftErrorMessage(error, errorDescription), localizeMicrosoftErrorMessage(error, errorDescription)),
-                    Map.of(
-                            localized(language, "Error", "Erro"), error,
-                            localized(language, "Description", "Descricao"), errorDescription == null ? "" : errorDescription),
-                    false,
-                    null,
-                    null,
-                    null,
-                    null), MediaType.TEXT_HTML).build();
+            return redirectCallback(language, null, null, error, errorDescription);
         }
 
-        MicrosoftOAuthService.BrowserCallbackValidation callbackValidation;
         try {
-            callbackValidation = microsoftOAuthService.validateBrowserCallback(state);
+            language = microsoftOAuthService.validateBrowserCallback(state).language();
         } catch (IllegalArgumentException e) {
-            return Response.ok(callbackPageRenderer.renderPage(
+            return redirectCallback(
                     language,
-                    localized(language, "Invalid OAuth State", "Estado OAuth invalido"),
-                    localized(language,
-                            "The callback state was missing or expired. Start the Microsoft OAuth flow again from InboxBridge.",
-                            "O estado do retorno estava em falta ou expirou. Inicie novamente o fluxo Microsoft OAuth a partir do InboxBridge."),
-                    Map.of(
-                            localized(language, "Code", "Codigo"), code == null ? "" : code,
-                            localized(language, "Error", "Erro"), e.getMessage()),
-                    false,
                     null,
                     null,
+                    "invalid_state",
+                    "The callback state was missing or expired. Start the Microsoft OAuth flow again from InboxBridge.");
+        }
+        if (code == null || code.isBlank()) {
+            return redirectCallback(
+                    language,
                     null,
-                    null), MediaType.TEXT_HTML).build();
+                    state,
+                    "missing_code",
+                    "Microsoft OAuth returned without an authorization code. Start the flow again from InboxBridge.");
         }
-
-        Map<String, String> fields = OAuthPageSupport.orderedFields(
-                localized(callbackValidation.language(), "Source ID", "ID da conta"), callbackValidation.subjectId(),
-                localized(callbackValidation.language(), "Authorization Code", "Codigo de autorizacao"), code == null ? "" : code,
-                localized(callbackValidation.language(), "Exchange Endpoint", "Endpoint de troca"), "POST /api/microsoft-oauth/exchange");
-        return Response.ok(callbackPageRenderer.renderPage(
-                callbackValidation.language(),
-                localized(callbackValidation.language(), "Microsoft OAuth Code Received", "Codigo do Microsoft OAuth recebido"),
-                localized(callbackValidation.language(),
-                        secureStorageConfigured
-                                ? "Secure token storage is enabled. You can exchange this authorization code directly in the browser and InboxBridge will store it securely and renew access automatically."
-                                : "Secure token storage is required before exchanging this authorization code. Set SECURITY_TOKEN_ENCRYPTION_KEY to a base64-encoded 32-byte key, restart InboxBridge, and then retry the OAuth flow.",
-                        secureStorageConfigured
-                                ? "O armazenamento seguro de tokens esta ativo. Pode trocar este codigo de autorizacao diretamente no browser e o InboxBridge vai guarda-lo de forma segura e renovar o acesso automaticamente."
-                                : "O armazenamento seguro de tokens e obrigatorio antes de trocar este codigo de autorizacao. Defina SECURITY_TOKEN_ENCRYPTION_KEY com uma chave base64 de 32 bytes, reinicie o InboxBridge e repita o fluxo OAuth."),
-                fields,
-                true,
-                callbackValidation.subjectId(),
-                "",
-                state,
-                code == null ? "" : code), MediaType.TEXT_HTML).build();
-    }
-
-    private String microsoftErrorTitle(String error) {
-        if ("access_denied".equalsIgnoreCase(error)) {
-            return "Microsoft OAuth Permission Required";
-        }
-        return "Microsoft OAuth Error";
-    }
-
-    private String microsoftErrorMessage(String error, String errorDescription) {
-        if ("access_denied".equalsIgnoreCase(error)) {
-            return "Microsoft OAuth did not receive the required consent. Retry the flow and approve every requested mailbox permission so InboxBridge can refresh tokens and read the source mailbox.";
-        }
-        if (errorDescription != null && !errorDescription.isBlank()) {
-            return "The Microsoft authorization step failed. Retry the flow after correcting the Microsoft consent or app configuration.";
-        }
-        return "The Microsoft authorization step failed. Retry the flow and approve every requested permission.";
-    }
-
-    private String localizeMicrosoftErrorMessage(String error, String errorDescription) {
-        if ("access_denied".equalsIgnoreCase(error)) {
-            return "O Microsoft OAuth nao recebeu o consentimento necessario. Repita o processo e aceite todas as permissoes pedidas para a caixa de correio, para que o InboxBridge possa renovar tokens e ler a conta de origem.";
-        }
-        if (errorDescription != null && !errorDescription.isBlank()) {
-            return "O passo de autorizacao da Microsoft falhou. Repita o processo depois de corrigir o consentimento Microsoft ou a configuracao da aplicacao.";
-        }
-        return "O passo de autorizacao da Microsoft falhou. Repita o processo e aceite todas as permissoes pedidas.";
+        return redirectCallback(language, code, state, null, null);
     }
 
     private void authorizeSource(String sourceId) {
@@ -240,11 +176,9 @@ public class MicrosoftOAuthResource {
         }
     }
 
-    private String localized(String language, String english, String portuguese) {
-        String normalized = OAuthPageI18n.normalize(language);
-        if ("pt-PT".equals(normalized) || "pt-BR".equals(normalized)) {
-            return portuguese;
-        }
-        return OAuthPageI18n.text(language, english);
+    private Response redirectCallback(String language, String code, String state, String error, String errorDescription) {
+        return Response.seeOther(OAuthCallbackRedirectBuilder.build(
+                "/oauth/microsoft/callback",
+                OAuthCallbackRedirectBuilder.parameters(language, code, state, error, errorDescription))).build();
     }
 }

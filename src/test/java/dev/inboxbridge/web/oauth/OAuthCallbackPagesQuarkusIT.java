@@ -1,7 +1,7 @@
 package dev.inboxbridge.web.oauth;
 
 import static io.restassured.RestAssured.given;
-import static org.hamcrest.Matchers.containsString;
+import static org.hamcrest.Matchers.endsWith;
 
 import org.junit.jupiter.api.Test;
 
@@ -11,28 +11,26 @@ import io.quarkus.test.junit.QuarkusIntegrationTest;
 class OAuthCallbackPagesQuarkusIT {
 
     @Test
-    void googleCallbackErrorPageRendersAtRuntime() {
+    void googleCallbackRedirectsToFrontendAtRuntime() {
         given()
+                .redirects().follow(false)
                 .queryParam("error", "access_denied")
                 .queryParam("error_description", "user denied")
                 .when().get("/api/google-oauth/callback")
                 .then()
-                .statusCode(200)
-                .contentType(containsString("text/html"))
-                .body(containsString("Google OAuth Permission Required"))
-                .body(containsString("Return to InboxBridge"));
+                .statusCode(303)
+                .header("Location", endsWith("/oauth/google/callback?lang=en&error=access_denied&error_description=user+denied"));
     }
 
     @Test
-    void microsoftCallbackErrorPageRendersAtRuntime() {
+    void microsoftCallbackRedirectsToFrontendAtRuntime() {
         given()
+                .redirects().follow(false)
                 .queryParam("error", "access_denied")
                 .queryParam("error_description", "user denied")
                 .when().get("/api/microsoft-oauth/callback")
                 .then()
-                .statusCode(200)
-                .contentType(containsString("text/html"))
-                .body(containsString("Microsoft OAuth Permission Required"))
-                .body(containsString("Return to InboxBridge"));
+                .statusCode(303)
+                .header("Location", endsWith("/oauth/microsoft/callback?lang=en&error=access_denied&error_description=user+denied"));
     }
 }

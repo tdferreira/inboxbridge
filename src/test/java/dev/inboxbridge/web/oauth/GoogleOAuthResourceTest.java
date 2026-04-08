@@ -1,7 +1,6 @@
 package dev.inboxbridge.web.oauth;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.net.URI;
@@ -26,42 +25,31 @@ class GoogleOAuthResourceTest {
     }
 
     @Test
-    void callbackRendersBrowserExchangeHtml() {
+    void callbackRedirectsBrowserToFrontendCallbackRoute() {
         GoogleOAuthResource resource = newResource(new FakeGoogleOAuthService());
 
-        String html = resource.callback("code-123", "state-1", null, null);
+        Response response = resource.callback("code-123", "state-1", null, null);
 
-        assertTrue(html.contains("Google OAuth Code Received"));
-        assertTrue(html.contains("Copy Code"));
-        assertTrue(html.contains("Exchange Code In Browser"));
-        assertTrue(html.contains("Return to InboxBridge"));
-        assertTrue(html.contains("Leave this page without exchanging the code?"));
-        assertTrue(html.contains("Attempting automatic exchange"));
-        assertTrue(html.contains("Cancel automatic redirect"));
-        assertTrue(html.contains("window.setTimeout(() => {"));
-        assertTrue(html.contains("Redirecting to InboxBridge in"));
-        assertTrue(html.contains("new URLSearchParams(window.location.search)"));
-        assertTrue(html.contains("callbackParams.get('code')"));
-        assertTrue(html.contains("Google OAuth is still missing one or more required permissions"));
-        assertTrue(html.contains("Secure token storage is enabled"));
-        assertTrue(html.contains("id=\"copyStatus\""));
-        assertFalse(html.contains("PostgreSQL"));
-        assertTrue(html.contains("code-123"));
+        assertEquals(303, response.getStatus());
+        assertEquals(
+                URI.create("/oauth/google/callback?lang=en&code=code-123&state=state-1"),
+                response.getLocation());
     }
 
     @Test
-    void callbackShowsConsentRetryGuidanceWhenGoogleConsentIsDenied() {
+    void callbackRedirectsProviderErrorsToFrontendRoute() {
         GoogleOAuthResource resource = newResource(new FakeGoogleOAuthService());
 
-        String html = resource.callback(null, null, "access_denied", "user denied");
+        Response response = resource.callback(null, null, "access_denied", "user denied");
 
-        assertTrue(html.contains("Google OAuth Permission Required"));
-        assertTrue(html.contains("did not receive the required consent"));
-        assertTrue(html.contains("Return to InboxBridge"));
+        assertEquals(303, response.getStatus());
+        assertEquals(
+                URI.create("/oauth/google/callback?lang=en&error=access_denied&error_description=user+denied"),
+                response.getLocation());
     }
 
     @Test
-    void callbackRendersPortugueseWhenStateLanguageIsPortuguese() {
+    void callbackRedirectsPortugueseStateToFrontendRoute() {
         GoogleOAuthResource resource = newResource(new FakeGoogleOAuthService() {
             @Override
             public CallbackValidation validateCallback(String state) {
@@ -73,18 +61,17 @@ class GoogleOAuthResourceTest {
             }
         });
 
-        String html = resource.callback("code-123", "state-1", null, null);
+        Response response = resource.callback("code-123", "state-1", null, null);
 
-        assertTrue(html.contains("Codigo do Google OAuth recebido"));
-        assertTrue(html.contains("Copiar codigo"));
-        assertTrue(html.contains("Trocar codigo no browser"));
-        assertTrue(html.contains("Voltar ao InboxBridge"));
+        assertEquals(303, response.getStatus());
+        assertEquals(
+                URI.create("/oauth/google/callback?lang=pt-PT&code=code-123&state=state-1"),
+                response.getLocation());
     }
 
     private GoogleOAuthResource newResource(GoogleOAuthService oauthService) {
         GoogleOAuthResource resource = new GoogleOAuthResource();
         resource.googleOAuthService = oauthService;
-        resource.callbackPageRenderer = new GoogleOAuthCallbackPageRenderer();
         return resource;
     }
 

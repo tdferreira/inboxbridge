@@ -14,6 +14,7 @@ import AuthSecuritySettingsDialog from '@/features/admin/components/AuthSecurity
 import PasswordResetDialog from '@/features/admin/components/PasswordResetDialog'
 import HeroPanel from '@/features/layout/components/HeroPanel'
 import NotificationsDialog from '@/features/layout/components/NotificationsDialog'
+import OAuthCallbackPage from '@/features/oauth/components/OAuthCallbackPage'
 import PreferencesDialog from '@/features/layout/components/PreferencesDialog'
 import SystemOAuthAppsDialog from '@/features/admin/components/SystemOAuthAppsDialog'
 import SystemPollingSettingsDialog from '@/features/admin/components/SystemPollingSettingsDialog'
@@ -2091,9 +2092,21 @@ function App({ timingOverrides = null }) {
   )
   return (
     <BrowserRouter>
-      <AppContent timings={timings} />
+      <AppRouter timings={timings} />
     </BrowserRouter>
   )
+}
+
+function AppRouter({ timings }) {
+  const location = useLocation()
+
+  if (location.pathname === '/oauth/google/callback') {
+    return <OAuthCallbackPage provider="google" />
+  }
+  if (location.pathname === '/oauth/microsoft/callback') {
+    return <OAuthCallbackPage provider="microsoft" />
+  }
+  return <AppContent timings={timings} />
 }
 
 export default App

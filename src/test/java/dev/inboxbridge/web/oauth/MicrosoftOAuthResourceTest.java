@@ -1,7 +1,6 @@
 package dev.inboxbridge.web.oauth;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.net.URI;
@@ -39,45 +38,19 @@ class MicrosoftOAuthResourceTest {
     }
 
     @Test
-    void callbackRendersHelpfulHtmlForSuccessfulBrowserFlow() {
+    void callbackRedirectsSuccessfulBrowserFlowToFrontendRoute() {
         MicrosoftOAuthResource resource = newResource(new FakeMicrosoftOAuthService());
 
         Response response = resource.callback("abc123", "state-1", null, null);
-        String html = (String) response.getEntity();
 
-        assertEquals(200, response.getStatus());
-        assertTrue(html.contains("Microsoft OAuth Code Received"));
-        assertTrue(html.contains("outlook-main-imap"));
-        assertTrue(html.contains("abc123"));
-        assertTrue(html.contains("Exchange Code In Browser"));
-        assertTrue(html.contains("Cancel automatic redirect"));
-        assertTrue(html.contains("Return to InboxBridge"));
-        assertTrue(html.contains("Leave this page without exchanging the code?"));
-        assertTrue(html.contains("Attempting automatic exchange"));
-        assertTrue(html.contains("const callbackParams = new URLSearchParams(window.location.search);"));
-        assertTrue(html.contains("const oauthCode = callbackParams.get(\"code\") || serverRenderedCode;"));
-        assertTrue(html.contains("const oauthState = callbackParams.get(\"state\") || serverRenderedState;"));
-        assertTrue(html.contains("window.prompt(manualCopyPrompt, text);"));
-        assertTrue(html.contains("Copy the authorization code manually and press Cmd+C, then Enter."));
-        assertTrue(html.contains("let allowLeave = false;"));
-        assertTrue(html.contains("function clearAutoReturn()"));
-        assertTrue(html.contains("function cancelAutoReturn()"));
-        assertTrue(html.contains("cancelReturnButton?.addEventListener(\"click\""));
-        assertTrue(html.contains("Automatic redirect canceled. You can stay on this page and inspect the exchange details."));
-        assertTrue(html.contains("if (exchanged || allowLeave) {"));
-        assertTrue(html.contains("allowLeave = true;"));
-        assertTrue(html.contains("window.setTimeout(() => {"));
-        assertTrue(html.contains("Redirecting to InboxBridge in"));
-        assertTrue(html.contains("Secure token storage is enabled."));
-        assertTrue(html.contains("id=\"copyStatus\""));
-        assertFalse(html.contains("Env Refresh Token Key"));
-        assertFalse(html.contains("MAIL_ACCOUNT_0__OAUTH_REFRESH_TOKEN"));
-        assertFalse(html.contains("PostgreSQL"));
-        assertTrue(html.contains("Microsoft OAuth is still missing one or more required permissions"));
+        assertEquals(303, response.getStatus());
+        assertEquals(
+                URI.create("/oauth/microsoft/callback?lang=en&code=abc123&state=state-1"),
+                response.getLocation());
     }
 
     @Test
-    void callbackShowsEnvRefreshTokenKeyWhenSecureStorageIsDisabled() {
+    void callbackPreservesRedirectEvenWhenSecureStorageIsDisabled() {
         MicrosoftOAuthResource resource = newResource(new FakeMicrosoftOAuthService() {
             @Override
             public boolean secureStorageConfigured() {
@@ -86,16 +59,15 @@ class MicrosoftOAuthResourceTest {
         });
 
         Response response = resource.callback("abc123", "state-1", null, null);
-        String html = (String) response.getEntity();
 
-        assertFalse(html.contains("MAIL_ACCOUNT_0__OAUTH_REFRESH_TOKEN"));
-        assertFalse(html.contains("Env Refresh Token Key"));
-        assertTrue(html.contains("Secure token storage is required before exchanging this authorization code."));
-        assertTrue(html.contains("SECURITY_TOKEN_ENCRYPTION_KEY"));
+        assertEquals(303, response.getStatus());
+        assertEquals(
+                URI.create("/oauth/microsoft/callback?lang=en&code=abc123&state=state-1"),
+                response.getLocation());
     }
 
     @Test
-    void callbackShowsErrorPageForInvalidState() {
+    void callbackRedirectsInvalidStateToFrontendErrorRoute() {
         MicrosoftOAuthResource resource = newResource(new FakeMicrosoftOAuthService() {
             @Override
             public BrowserCallbackValidation validateBrowserCallback(String state) {
@@ -104,28 +76,27 @@ class MicrosoftOAuthResourceTest {
         });
 
         Response response = resource.callback("abc123", "bad-state", null, null);
-        String html = (String) response.getEntity();
 
-        assertEquals(200, response.getStatus());
-        assertTrue(html.contains("Invalid OAuth State"));
-        assertTrue(html.contains("Invalid or expired OAuth state"));
+        assertEquals(303, response.getStatus());
+        assertEquals(
+                URI.create("/oauth/microsoft/callback?lang=en&error=invalid_state&error_description=The+callback+state+was+missing+or+expired.+Start+the+Microsoft+OAuth+flow+again+from+InboxBridge."),
+                response.getLocation());
     }
 
     @Test
-    void callbackShowsConsentRetryGuidanceWhenMicrosoftConsentIsDenied() {
+    void callbackRedirectsConsentErrorsToFrontendRoute() {
         MicrosoftOAuthResource resource = newResource(new FakeMicrosoftOAuthService());
 
         Response response = resource.callback(null, null, "access_denied", "user denied");
-        String html = (String) response.getEntity();
 
-        assertEquals(200, response.getStatus());
-        assertTrue(html.contains("Microsoft OAuth Permission Required"));
-        assertTrue(html.contains("required consent"));
-        assertTrue(html.contains("Return to InboxBridge"));
+        assertEquals(303, response.getStatus());
+        assertEquals(
+                URI.create("/oauth/microsoft/callback?lang=en&error=access_denied&error_description=user+denied"),
+                response.getLocation());
     }
 
     @Test
-    void callbackRendersPortugueseWhenStateLanguageIsPortuguese() {
+    void callbackRedirectsPortugueseWhenStateLanguageIsPortuguese() {
         MicrosoftOAuthResource resource = newResource(new FakeMicrosoftOAuthService() {
             @Override
             public BrowserCallbackValidation validateBrowserCallback(String state) {
@@ -134,15 +105,14 @@ class MicrosoftOAuthResourceTest {
         });
 
         Response response = resource.callback("abc123", "state-1", null, null);
-        String html = (String) response.getEntity();
 
-        assertTrue(html.contains("Codigo do Microsoft OAuth recebido"));
-        assertTrue(html.contains("Trocar codigo no browser"));
-        assertTrue(html.contains("Voltar ao InboxBridge"));
+        assertEquals(
+                URI.create("/oauth/microsoft/callback?lang=pt-PT&code=abc123&state=state-1"),
+                response.getLocation());
     }
 
     @Test
-    void callbackHidesEnvRefreshTokenKeyForUserManagedSources() {
+    void callbackRedirectsUserManagedSourcesToFrontendRoute() {
         MicrosoftOAuthResource resource = newResource(new FakeMicrosoftOAuthService() {
             @Override
             public BrowserCallbackValidation validateBrowserCallback(String state) {
@@ -151,13 +121,11 @@ class MicrosoftOAuthResourceTest {
         });
 
         Response response = resource.callback("abc123", "state-1", null, null);
-        String html = (String) response.getEntity();
 
-        assertTrue(html.contains("outlook-user"));
-        assertTrue(html.contains("Authorization Code"));
-        assertTrue(html.contains("Exchange Endpoint"));
-        assertFalse(html.contains("Config Key"));
-        assertFalse(html.contains("Env Refresh Token Key"));
+        assertEquals(303, response.getStatus());
+        assertEquals(
+                URI.create("/oauth/microsoft/callback?lang=en&code=abc123&state=state-1"),
+                response.getLocation());
     }
 
     @Test
@@ -220,7 +188,6 @@ class MicrosoftOAuthResourceTest {
         resource.currentUserContext = adminContext();
         resource.envSourceService = envSourceService();
         resource.userEmailAccountService = new FakeUserEmailAccountService();
-        resource.callbackPageRenderer = new MicrosoftOAuthCallbackPageRenderer();
         return resource;
     }
 

@@ -426,7 +426,7 @@ const dictionary = {
   "setup.step4Title": "4. Provider-OAuth abschließen",
   "setup.step4Error": "Mindestens ein OAuth-basierter E-Mail-Abruf schlägt derzeit fehl.",
   "setup.step4Ready": "OAuth-basierte Abläufe sind konfiguriert und es liegen derzeit keine OAuth-Fehler vor.",
-  "setup.step4Pending": "Nutze die provider-spezifischen OAuth-Schaltflächen und schließe die Zustimmung ab.",
+  "setup.step4Pending": "Nutze die provider-spezifischen OAuth-Schaltflächen, schließe die Zustimmung ab und InboxBridge kehrt zur App zurück, um den Austausch abzuschließen.",
   "setup.step5Title": "5. Importe ausführen und prüfen",
   "setup.step5Error": "Es wurden aktuelle Fehler bei E-Mail-Abrufen aufgezeichnet.",
   "setup.step5Ready": "Importe wurden erfolgreich abgeschlossen und es liegen keine aktuellen Fehler vor.",

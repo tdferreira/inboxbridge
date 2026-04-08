@@ -440,7 +440,7 @@ const dictionary = {
   "setup.step4Title": "4. Completa el OAuth del proveedor",
   "setup.step4Error": "Al menos un captador de correo basado en OAuth está fallando actualmente.",
   "setup.step4Ready": "Los flujos basados en OAuth están configurados y no hay errores actuales registrados.",
-  "setup.step4Pending": "Usa los botones OAuth del proveedor y completa el consentimiento.",
+  "setup.step4Pending": "Usa los botones OAuth del proveedor, completa el consentimiento y InboxBridge volverá a la aplicación para terminar el intercambio.",
   "setup.step5Title": "5. Ejecuta y verifica las importaciones",
   "setup.step5Error": "Se registraron errores recientes en captadores de correo.",
   "setup.step5Ready": "Las importaciones se completaron correctamente y no hay errores actuales.",

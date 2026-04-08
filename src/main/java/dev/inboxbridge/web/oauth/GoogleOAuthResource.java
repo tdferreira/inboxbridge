@@ -40,9 +40,6 @@ public class GoogleOAuthResource {
     @Inject
     UserEmailAccountService userEmailAccountService;
 
-    @Inject
-    GoogleOAuthCallbackPageRenderer callbackPageRenderer;
-
     @GET
     @Path("/url")
     public OAuthUrlResponse authorizationUrl() {
@@ -92,48 +89,36 @@ public class GoogleOAuthResource {
 
     @GET
     @Path("/callback")
-    @Produces(MediaType.TEXT_HTML)
-    public String callback(
+    public Response callback(
             @QueryParam("code") String code,
             @QueryParam("state") String state,
             @QueryParam("error") String error,
             @QueryParam("error_description") String errorDescription) {
         String language = resolveCallbackLanguage(state);
-        boolean secureStorageConfigured = googleOAuthService.secureStorageConfigured();
         if (error != null && !error.isBlank()) {
-            return callbackPageRenderer.renderErrorPage(
-                    language,
-                    localized(language, googleErrorTitle(error), "access_denied".equalsIgnoreCase(error) ? "Permissao necessaria no Google OAuth" : "Erro de Google OAuth"),
-                    localized(language, googleErrorMessage(error, errorDescription), localizeGoogleErrorMessage(error, errorDescription)),
-                    error,
-                    errorDescription);
+            return redirectCallback(language, null, null, error, errorDescription);
         }
-        GoogleOAuthService.CallbackValidation callbackValidation = null;
-        String statusMessage = localized(language,
-                secureStorageConfigured
-                        ? "Secure token storage is enabled. Use the button below to exchange the code and InboxBridge will store the token securely and renew access automatically."
-                        : "Secure token storage is required before exchanging this authorization code. Set SECURITY_TOKEN_ENCRYPTION_KEY to a base64-encoded 32-byte key, restart InboxBridge, and then retry the OAuth flow.",
-                secureStorageConfigured
-                        ? "O armazenamento seguro de tokens esta ativo. Use o botao abaixo para trocar o codigo e o InboxBridge vai guardar o token de forma segura e renovar o acesso automaticamente."
-                        : "O armazenamento seguro de tokens e obrigatorio antes de trocar este codigo de autorizacao. Defina SECURITY_TOKEN_ENCRYPTION_KEY com uma chave base64 de 32 bytes, reinicie o InboxBridge e repita o fluxo OAuth.");
         if (state != null && !state.isBlank()) {
             try {
-                callbackValidation = googleOAuthService.validateCallback(state);
-                language = callbackValidation.language();
-                statusMessage = localized(language,
-                        secureStorageConfigured
-                                ? "Secure token storage is enabled for " + callbackValidation.targetLabel() + ". Use the button below to exchange the code and InboxBridge will store the token securely and renew access automatically."
-                                : "Secure token storage is required before exchanging the authorization code for " + callbackValidation.targetLabel() + ". Set SECURITY_TOKEN_ENCRYPTION_KEY to a base64-encoded 32-byte key, restart InboxBridge, and then retry the OAuth flow.",
-                        secureStorageConfigured
-                                ? "O armazenamento seguro de tokens esta ativo para " + callbackValidation.targetLabel() + ". Use o botao abaixo para trocar o codigo e o InboxBridge vai guardar o token de forma segura e renovar o acesso automaticamente."
-                                : "O armazenamento seguro de tokens e obrigatorio antes de trocar o codigo de autorizacao para " + callbackValidation.targetLabel() + ". Defina SECURITY_TOKEN_ENCRYPTION_KEY com uma chave base64 de 32 bytes, reinicie o InboxBridge e repita o fluxo OAuth.");
+                language = googleOAuthService.validateCallback(state).language();
             } catch (IllegalArgumentException e) {
-                statusMessage = localized(language,
-                        "The Google OAuth state is missing or expired. Start the flow again from InboxBridge.",
-                        "O estado do Google OAuth esta em falta ou expirou. Inicie novamente o fluxo a partir do InboxBridge.");
+                return redirectCallback(
+                        language,
+                        null,
+                        null,
+                        "invalid_state",
+                        "The Google OAuth state is missing or expired. Start the flow again from InboxBridge.");
             }
         }
-        return callbackPageRenderer.renderCallbackPage(language, statusMessage, code, state, error, errorDescription);
+        if (code == null || code.isBlank()) {
+            return redirectCallback(
+                    language,
+                    null,
+                    state,
+                    "missing_code",
+                    "Google OAuth returned without an authorization code. Start the flow again from InboxBridge.");
+        }
+        return redirectCallback(language, code, state, null, null);
     }
 
     private GoogleOAuthService.GoogleOAuthProfile authorizeGoogleSource(String sourceId) {
@@ -167,35 +152,10 @@ public class GoogleOAuthResource {
                         .orElseThrow(() -> new jakarta.ws.rs.BadRequestException("Unknown mail account id")));
     }
 
-    private String googleErrorTitle(String error) {
-        if ("access_denied".equalsIgnoreCase(error)) {
-            return "Google OAuth Permission Required";
-        }
-        return "Google OAuth Error";
-    }
-
-    private String googleErrorMessage(String error, String errorDescription) {
-        if ("access_denied".equalsIgnoreCase(error)) {
-            return "Google OAuth did not receive the required consent. Retry the flow and approve every requested Gmail permission so InboxBridge can write imported mail and labels.";
-        }
-        if (errorDescription != null && !errorDescription.isBlank()) {
-            return "Google OAuth returned an error. Retry the flow after correcting the Google consent or OAuth app configuration.";
-        }
-        return "Google OAuth returned an error. Retry the flow and make sure every requested permission is approved.";
-    }
-
-    private String localizeGoogleErrorMessage(String error, String errorDescription) {
-        if ("access_denied".equalsIgnoreCase(error)) {
-            return "O Google OAuth nao recebeu o consentimento necessario. Repita o processo e aceite todas as permissoes pedidas do Gmail para que o InboxBridge possa gravar emails importados e etiquetas.";
-        }
-        if (errorDescription != null && !errorDescription.isBlank()) {
-            return "O Google OAuth devolveu um erro. Repita o processo depois de corrigir o consentimento Google ou a configuracao da aplicacao OAuth.";
-        }
-        return "O Google OAuth devolveu um erro. Repita o processo e garanta que todas as permissoes pedidas sao aceites.";
-    }
-
-    private String localized(String language, String english, String portuguese) {
-        return OAuthPageSupport.localized(language, english, portuguese);
+    private Response redirectCallback(String language, String code, String state, String error, String errorDescription) {
+        return Response.seeOther(OAuthCallbackRedirectBuilder.build(
+                "/oauth/google/callback",
+                OAuthCallbackRedirectBuilder.parameters(language, code, state, error, errorDescription))).build();
     }
 
     private String resolveCallbackLanguage(String state) {

@@ -96,17 +96,18 @@ ${PUBLIC_BASE_URL}/api/google-oauth/callback
 2. If you are an admin, first configure the shared Google `Client ID` / `Client Secret` in `Administration -> OAuth Apps` using the values from the Google Cloud project
 3. Then use the destination-mailbox connect action from `My Destination Mailbox` for the mailbox that should receive imported mail
 4. Complete Google consent
-5. The callback page automatically tries to exchange the code in the browser as soon as it loads
-6. After exchange succeeds, the callback page starts a 5-second countdown and redirects to InboxBridge automatically
-7. If the automatic attempt fails, use the callback page button to retry the exchange manually
-8. Use `Return to InboxBridge` if you want to go back immediately instead of waiting for the countdown
-9. If you try to leave before exchanging, the callback page warns that you must handle the code or token manually later
+5. The backend callback validates the provider response and redirects to the
+   frontend-owned `/oauth/google/callback` route
+6. That frontend callback route automatically tries to exchange the code in the browser as soon as it loads
+7. After exchange succeeds, the callback route starts a 5-second countdown and redirects to InboxBridge automatically
+8. If the automatic attempt fails, use the callback route button to retry the exchange manually
+9. Use `Return to InboxBridge` if you want to go back immediately instead of waiting for the countdown
 10. If secure storage is enabled, InboxBridge stores the token securely and renews access automatically
 11. After sign-in, the resulting session can be reviewed from `Security -> Sessions`, where InboxBridge now records session type, browser/device hints, Geo-IP, and optional browser-reported location separately
 
-The callback page is fully localized through the frontend translation catalog,
-shows a direct `Return to InboxBridge` action, and uses a 5-second automatic
-redirect countdown after a successful exchange.
+The frontend callback route is fully localized through the admin-ui
+translation catalog, while the backend remains the authority for OAuth state
+validation and token exchange.
 
 If the deployment already has a shared Google client configured, users can leave the per-user client ID and secret blank and still start the Gmail OAuth flow successfully.
 
@@ -261,18 +262,20 @@ source messages are never imported into another user's destination mailbox.
 1. Sign in to `https://localhost:3000`
 2. Use the Microsoft OAuth button on the relevant source email account or destination mailbox
 3. Complete Microsoft consent
-4. The callback page automatically tries to exchange the code in the browser as soon as it loads
-5. After exchange succeeds, the callback page starts a 5-second countdown and redirects to InboxBridge automatically
-6. If the automatic attempt fails, use the callback page button to retry the exchange manually
-7. Use `Return to InboxBridge` if you want to go back immediately instead of waiting for the countdown
-8. If secure storage is missing, the callback page stops the exchange and tells you to configure `SECURITY_TOKEN_ENCRYPTION_KEY`, restart InboxBridge, and retry the OAuth flow
-9. When the exchange succeeds, InboxBridge stores the token securely and renews access automatically
-10. If you later unlink or replace a Microsoft destination connection, InboxBridge removes its stored tokens but you may still need to remove `InboxBridge` manually from your Microsoft account permissions or My Apps page
-11. Session history for the browser sign-in remains visible from `Security -> Sessions`, including session type, browser/device hints, Geo-IP, and any browser-reported location sample the user explicitly shares
+4. The backend callback validates the provider response and redirects to the
+   frontend-owned `/oauth/microsoft/callback` route
+5. That frontend callback route automatically tries to exchange the code in the browser as soon as it loads
+6. After exchange succeeds, the callback route starts a 5-second countdown and redirects to InboxBridge automatically
+7. If the automatic attempt fails, use the callback route button to retry the exchange manually
+8. Use `Return to InboxBridge` if you want to go back immediately instead of waiting for the countdown
+9. If secure storage is missing, the callback route stops the exchange and tells you to configure `SECURITY_TOKEN_ENCRYPTION_KEY`, restart InboxBridge, and retry the OAuth flow
+10. When the exchange succeeds, InboxBridge stores the token securely and renews access automatically
+11. If you later unlink or replace a Microsoft destination connection, InboxBridge removes its stored tokens but you may still need to remove `InboxBridge` manually from your Microsoft account permissions or My Apps page
+12. Session history for the browser sign-in remains visible from `Security -> Sessions`, including session type, browser/device hints, Geo-IP, and any browser-reported location sample the user explicitly shares
 
-The callback page is fully localized through the frontend translation catalog,
-shows a direct `Return to InboxBridge` action, and uses a 5-second automatic
-redirect countdown after a successful exchange.
+The frontend callback route is fully localized through the admin-ui
+translation catalog, while the backend remains the authority for OAuth state
+validation and token exchange.
 
 Example manual exchange:
 
