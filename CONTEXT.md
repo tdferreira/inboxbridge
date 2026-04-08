@@ -43,7 +43,7 @@ under `dev.inboxbridge.service.polling`,
 destination-delivery code lives under `dev.inboxbridge.service.destination`,
 OAuth browser resources live under `dev.inboxbridge.web.oauth`, backend OAuth
 provider/config services live under `dev.inboxbridge.service.oauth`, and the
-login/passkey/session/auth-security slice now lives under
+login/passkey/session/auth-security plus GeoIP lookup slice now lives under
 `dev.inboxbridge.service.auth`. The browser auth/account REST surface now also
 lives under `dev.inboxbridge.web.auth`, and the browser polling REST surface
 now lives under `dev.inboxbridge.web.polling`. The remote-control surface now also has

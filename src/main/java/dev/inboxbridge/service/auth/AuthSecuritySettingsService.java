@@ -13,7 +13,6 @@ import dev.inboxbridge.dto.AuthSecuritySettingsView;
 import dev.inboxbridge.dto.UpdateAuthSecuritySettingsRequest;
 import dev.inboxbridge.persistence.SystemAuthSecuritySetting;
 import dev.inboxbridge.persistence.SystemAuthSecuritySettingRepository;
-import dev.inboxbridge.service.GeoIpLocationService;
 import dev.inboxbridge.service.SecretEncryptionService;
 import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.inject.Inject;

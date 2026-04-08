@@ -28,7 +28,7 @@ import dev.inboxbridge.service.auth.AuthService;
 import dev.inboxbridge.service.auth.AuthClientAddressService;
 import dev.inboxbridge.service.auth.AuthLoginProtectionService;
 import dev.inboxbridge.service.auth.AuthSecuritySettingsService;
-import dev.inboxbridge.service.GeoIpLocationService;
+import dev.inboxbridge.service.auth.GeoIpLocationService;
 import dev.inboxbridge.service.oauth.MicrosoftOAuthService;
 import dev.inboxbridge.service.oauth.OAuthProviderRegistryService;
 import dev.inboxbridge.service.auth.PasskeyService;

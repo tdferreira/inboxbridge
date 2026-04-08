@@ -114,8 +114,8 @@ infrastructure details:
 - `AuthService`, `PasskeyService`, `UserSessionService`,
   `AuthSecuritySettingsService`, `AuthClientAddressService`,
   `AuthLoginProtectionService`, `RegistrationChallengeService`,
-  `SessionClientInfoService`, `SessionDeviceLocationFormatter`, and
-  `SessionLocationAlertService` now live together under
+  `SessionClientInfoService`, `SessionDeviceLocationFormatter`,
+  `SessionLocationAlertService`, and `GeoIpLocationService` now live together under
   `dev.inboxbridge.service.auth`, so sign-in flow, passkey ceremonies, browser
   session issuance, session-security presentation, and auth-hardening settings
   stay in one auth-focused backend slice.

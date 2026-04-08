@@ -12,7 +12,7 @@ import dev.inboxbridge.dto.StartPasskeyRegistrationRequest;
 import dev.inboxbridge.security.CurrentUserContext;
 import dev.inboxbridge.security.RequireAuth;
 import dev.inboxbridge.service.admin.AppUserService;
-import dev.inboxbridge.service.GeoIpLocationService;
+import dev.inboxbridge.service.auth.GeoIpLocationService;
 import dev.inboxbridge.service.auth.PasskeyService;
 import dev.inboxbridge.service.polling.PollingLiveService;
 import dev.inboxbridge.service.remote.RemoteSessionService;

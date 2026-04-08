@@ -19,7 +19,7 @@ import dev.inboxbridge.service.admin.AppUserService;
 import dev.inboxbridge.service.auth.AuthClientAddressService;
 import dev.inboxbridge.service.auth.AuthLoginProtectionService;
 import dev.inboxbridge.service.auth.AuthService;
-import dev.inboxbridge.service.GeoIpLocationService;
+import dev.inboxbridge.service.auth.GeoIpLocationService;
 import dev.inboxbridge.service.auth.PasskeyService;
 import dev.inboxbridge.service.polling.PollingLiveService;
 import dev.inboxbridge.service.remote.RemoteSessionService;

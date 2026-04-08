@@ -275,7 +275,7 @@ class AccountResourceTest {
         }
     }
 
-    private static final class FakeGeoIpLocationService extends dev.inboxbridge.service.GeoIpLocationService {
+    private static final class FakeGeoIpLocationService extends dev.inboxbridge.service.auth.GeoIpLocationService {
         private final boolean configured;
 
         private FakeGeoIpLocationService(boolean configured) {

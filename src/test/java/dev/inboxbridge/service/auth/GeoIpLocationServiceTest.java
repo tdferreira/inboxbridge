@@ -1,4 +1,4 @@
-package dev.inboxbridge.service;
+package dev.inboxbridge.service.auth;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
@@ -31,7 +31,6 @@ import dev.inboxbridge.config.InboxBridgeConfig;
 import dev.inboxbridge.config.InboxBridgeConfig.Security.Auth;
 import dev.inboxbridge.persistence.GeoIpCacheEntry;
 import dev.inboxbridge.persistence.GeoIpCacheEntryRepository;
-import dev.inboxbridge.service.auth.AuthSecuritySettingsService;
 import dev.inboxbridge.service.auth.AuthSecuritySettingsService.EffectiveAuthSecuritySettings;
 
 class GeoIpLocationServiceTest {

@@ -1,4 +1,4 @@
-package dev.inboxbridge.service;
+package dev.inboxbridge.service.auth;
 
 import java.io.IOException;
 import java.net.Inet4Address;
@@ -25,7 +25,6 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import dev.inboxbridge.config.InboxBridgeConfig;
 import dev.inboxbridge.persistence.GeoIpCacheEntry;
 import dev.inboxbridge.persistence.GeoIpCacheEntryRepository;
-import dev.inboxbridge.service.auth.AuthSecuritySettingsService;
 import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.inject.Inject;
 import jakarta.transaction.Transactional;
