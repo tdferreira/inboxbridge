@@ -7,6 +7,10 @@ description: Use when changing the Quarkus backend, Flyway schema, mailbox impor
 
 Start with [`docs/ARCHITECTURE.md`](../../../docs/ARCHITECTURE.md), [`CONTEXT.md`](../../../CONTEXT.md), and the affected packages under `src/main/java`.
 
+If the task is specifically about backend architecture quality, Quarkus / Java
+best practices, folder structure, or package-boundary reviews, also load
+[`../inboxbridge-quarkus-best-practices/SKILL.md`](../inboxbridge-quarkus-best-practices/SKILL.md).
+
 ## Backend invariants
 
 - Keep Quarkus as the system of record for auth, OAuth, sessions, secret handling, and polling state.
