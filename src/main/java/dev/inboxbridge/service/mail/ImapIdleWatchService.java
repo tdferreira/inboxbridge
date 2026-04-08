@@ -1,6 +1,4 @@
-package dev.inboxbridge.service;
-
-import dev.inboxbridge.service.polling.PollingService;
+package dev.inboxbridge.service.mail;
 import java.time.Duration;
 import java.time.Instant;
 import java.util.ArrayList;
@@ -19,9 +17,9 @@ import dev.inboxbridge.domain.SourceMailboxFolders;
 import dev.inboxbridge.domain.SourceFetchMode;
 import dev.inboxbridge.dto.PollRunError;
 import dev.inboxbridge.dto.PollRunResult;
-import dev.inboxbridge.service.mail.MailSessionFactory;
 import dev.inboxbridge.service.oauth.GoogleOAuthService;
 import dev.inboxbridge.service.oauth.MicrosoftOAuthService;
+import dev.inboxbridge.service.polling.PollingService;
 import dev.inboxbridge.service.user.RuntimeEmailAccountService;
 import io.quarkus.runtime.StartupEvent;
 import io.quarkus.scheduler.Scheduled;

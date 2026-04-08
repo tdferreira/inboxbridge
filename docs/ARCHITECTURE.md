@@ -98,6 +98,12 @@ infrastructure details:
   successful import or duplicate match, including mark-as-read, move, delete,
   and best-effort `$Forwarded` handling against the fetched message's actual
   source folder.
+- `ImapIdleWatchService`, `ImapIdleHealthService`,
+  `SourceDiagnosticsService`, and `SourceMailboxConfigurationChanged` now also
+  live under `dev.inboxbridge.service.mail`, so IMAP IDLE watch lifecycle,
+  watcher-health fallback tracking, source diagnostics aggregation, and the
+  mailbox-configuration change event stay in the same mail-protocol slice as
+  the rest of the source mailbox runtime.
 - `MailDestinationService`, `GmailApiMailDestinationService`,
   `ImapAppendMailDestinationService`, `GmailImportService`,
   `GmailLabelService`, `DestinationIdentityKeys`, and

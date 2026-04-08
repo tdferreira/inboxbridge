@@ -1,4 +1,4 @@
-package dev.inboxbridge.service;
+package dev.inboxbridge.service.mail;
 
 import java.time.Duration;
 import java.time.Instant;

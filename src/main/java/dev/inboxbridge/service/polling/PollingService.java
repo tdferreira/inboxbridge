@@ -1,7 +1,7 @@
 package dev.inboxbridge.service.polling;
 
-import dev.inboxbridge.service.*;
 import dev.inboxbridge.service.destination.MailDestinationService;
+import dev.inboxbridge.service.mail.ImapIdleHealthService;
 import dev.inboxbridge.service.mail.MailSourceClient;
 import dev.inboxbridge.service.user.RuntimeEmailAccountService;
 import dev.inboxbridge.service.user.UserPollingSettingsService;

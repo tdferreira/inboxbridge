@@ -1,9 +1,8 @@
-package dev.inboxbridge.service;
+package dev.inboxbridge.service.mail;
 
-import dev.inboxbridge.service.polling.PollingService;
 import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.junit.jupiter.api.Assertions.fail;
 import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.junit.jupiter.api.Assertions.fail;
 
 import java.nio.charset.StandardCharsets;
 import java.time.Instant;
@@ -23,6 +22,7 @@ import com.icegreen.greenmail.util.ServerSetup;
 import dev.inboxbridge.config.InboxBridgeConfig;
 import dev.inboxbridge.domain.RuntimeEmailAccount;
 import dev.inboxbridge.domain.SourceFetchMode;
+import dev.inboxbridge.service.polling.PollingService;
 import dev.inboxbridge.service.user.RuntimeEmailAccountService;
 import jakarta.mail.Folder;
 import jakarta.mail.Message;

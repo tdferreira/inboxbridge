@@ -27,7 +27,7 @@ import dev.inboxbridge.persistence.ImportedMessageRepository;
 import dev.inboxbridge.persistence.SourcePollEvent;
 import dev.inboxbridge.service.EnvSourceService;
 import dev.inboxbridge.service.SecretEncryptionService;
-import dev.inboxbridge.service.SourceDiagnosticsService;
+import dev.inboxbridge.service.mail.SourceDiagnosticsService;
 import dev.inboxbridge.service.oauth.OAuthCredentialService;
 import dev.inboxbridge.service.oauth.SystemOAuthAppSettingsService;
 import dev.inboxbridge.service.polling.PollingSettingsService;

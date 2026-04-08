@@ -1,4 +1,4 @@
-package dev.inboxbridge.service;
+package dev.inboxbridge.service.mail;
 
 public record SourceMailboxConfigurationChanged(
         String sourceId) {

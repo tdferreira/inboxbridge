@@ -3,6 +3,7 @@ package dev.inboxbridge.service.polling;
 import dev.inboxbridge.service.destination.*;
 
 import dev.inboxbridge.service.*;
+import dev.inboxbridge.service.mail.ImapIdleHealthService;
 import dev.inboxbridge.service.mail.MailSourceClient;
 import dev.inboxbridge.service.mail.MailSourceClient.MailboxCountProbe;
 import dev.inboxbridge.service.oauth.*;

@@ -2,10 +2,10 @@ package dev.inboxbridge.service.user;
 
 import dev.inboxbridge.service.EnvSourceService;
 import dev.inboxbridge.service.SecretEncryptionService;
-import dev.inboxbridge.service.SourceDiagnosticsService;
-import dev.inboxbridge.service.SourceMailboxConfigurationChanged;
 import dev.inboxbridge.service.oauth.OAuthCredentialService;
 import dev.inboxbridge.service.destination.*;
+import dev.inboxbridge.service.mail.SourceDiagnosticsService;
+import dev.inboxbridge.service.mail.SourceMailboxConfigurationChanged;
 import dev.inboxbridge.service.polling.PollingSettingsService;
 import dev.inboxbridge.service.polling.SourcePollEventService;
 import dev.inboxbridge.service.polling.SourcePollingSettingsService;
