@@ -29,7 +29,6 @@ InboxBridge can:
 - show live polling progress with pause, resume, stop, retry, and queue reprioritization controls
 - let IMAP sources opt into real-time IMAP IDLE watching with durable UID checkpoints and scheduler fallback if a watcher stays unhealthy
 - keep durable POP3 UIDL checkpoints so scheduled polling can resume from newer POP mail instead of always re-reading only the latest tail window
-- publish a lightweight GitHub Pages site that explains the project and can generate a starter `.env` snippet for env-managed deployments
 
 ## Who It Is For
 
@@ -162,42 +161,6 @@ After signing in:
 3. Open `My Source Email Accounts` and add at least one source mailbox.
 4. Run a poll and confirm the messages arrive in the destination mailbox.
 
-## GitHub Pages Site
-
-This repository also includes a static site under [`site/`](site) intended for GitHub Pages.
-
-It is meant to:
-
-- explain what InboxBridge is and how it works
-- show a top-level architecture view with animated moving mail icons so the source-to-core-to-destination direction is obvious at a glance
-- keep the animated-view note visually smaller than the main cards because it is explanatory copy rather than the main diagram
-- include an expandable lower-level runtime view with a real diagram, clearer separation from the animated note, and a deeper explanation of transport, runtime coordination, durable state, and provider boundaries
-- answer common operator questions in a production-ready FAQ section
-- expose the same language set as the admin UI through a top-level flag language selector so the public site can be read in the same supported locales
-- keep the full public-site copy translated across those locales so architecture, FAQ, generator, and footer text do not silently fall back to English
-- keep the language selector styled like the other topbar actions and grouped with the header controls so longer locale labels do not visually detach the picker from the navigation
-- keep the language selector pinned to the top-right corner on narrow mobile widths and make sure longer translated hero titles wrap without introducing horizontal overflow or a shifted-looking page background
-- make the privacy and self-hosting advantage explicit, including that
-  mailbox credentials stay under the owner’s control instead of being
-  handed to a third-party forwarding service
-- explain that InboxBridge is designed around encrypted IMAP, POP3, HTTPS, and provider-API communication, and that PostgreSQL stores operational metadata, dedupe identifiers, checkpoints, settings, notifications, and encrypted secrets rather than a shadow archive of mailbox content
-- highlight that the self-hosted deployment model fits personal computers, homelab servers, Raspberry Pi systems, VPS instances, and dedicated hosts, so the operator keeps control over the runtime boundary
-- highlight the main source and destination mailbox flows
-- advertise meaningful runtime differentiators such as POP3 UIDL checkpoints, multi-folder IMAP polling, and per-folder IMAP IDLE/checkpoint support
-- link operators back to the full setup docs
-- generate a starter `.env` snippet for env-managed deployments and shared OAuth app configuration
-- collect IMAP source folders in the generator through a pillbox-style free-text control that still writes the same comma-separated env value used by InboxBridge
-- explain the configurator fields with compact info-icon hints
-- generate the required base64 token-encryption key directly in the browser when Web Crypto is available
-- reuse the same InboxBridge icon family as the `/remote` PWA so the public site and installed surface feel related
-
-The generator is intentionally a convenience for operators. It does not replace the browser admin UI for normal UI-managed setup, and it does not replace the full operator docs in [`docs/SETUP.md`](docs/SETUP.md).
-The recommended path is to keep `.env` as small as possible for bootstrap settings so you avoid leaving mailbox passwords in plain text there, then complete destination and source mailbox configuration from the application web interface unless you intentionally want env-managed accounts.
-
-For GitHub Pages deployment, the repository's Pages feature still needs to be enabled once in GitHub settings and configured to use GitHub Actions. After that one-time setup, the workflow in [`.github/workflows/pages.yml`](.github/workflows/pages.yml) can publish the `site/` directory normally.
-
-The local Docker Compose stack does not publish that standalone GitHub Pages site by default. When you run InboxBridge locally, `https://localhost:3000/` serves the admin UI, not the contents of `site/`.
-
 ## Configuration Overview
 
 ### Minimum configuration to explore the app
@@ -327,6 +290,7 @@ AI assistance was used to help design, implement, refactor, test, and document p
 - Architecture: [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md)
 - Local certificate trust: [docs/TRUST_LOCAL_CA.md](docs/TRUST_LOCAL_CA.md)
 - Admin UI notes: [admin-ui/README.md](admin-ui/README.md)
+- Admin UI v2 experiment notes: [admin-ui-v2/README.md](admin-ui-v2/README.md)
 
 ## Community
 
@@ -334,12 +298,6 @@ AI assistance was used to help design, implement, refactor, test, and document p
 - Security policy: [SECURITY.md](SECURITY.md)
 - Code of conduct: [CODE_OF_CONDUCT.md](CODE_OF_CONDUCT.md)
 
-## Maintenance Automation
-
-- Dependabot is configured in [.github/dependabot.yml](.github/dependabot.yml) for GitHub Actions, Maven, npm, and Docker base-image updates.
-- GitHub Releases can be created automatically from tags matching `v*` through [.github/workflows/release.yml](.github/workflows/release.yml).
-- The release workflow can also be started manually from the GitHub Actions UI by providing a tag name such as `v0.5.0`.
-
 ## Current Version
 
-The repository currently declares version `0.5.0` in [`pom.xml`](pom.xml) and `0.5.0` in [`admin-ui/package.json`](admin-ui/package.json).
+The repository currently declares version `0.5.0` in [`pom.xml`](pom.xml), `0.5.0` in [`admin-ui/package.json`](admin-ui/package.json), and `0.5.0` in [`admin-ui-v2/package.json`](admin-ui-v2/package.json).
