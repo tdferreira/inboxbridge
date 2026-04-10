@@ -12,7 +12,7 @@
     "test:coverage": "mkdir -p coverage/.tmp && node ./scripts/run-vitest.mjs run --coverage --pool forks --maxWorkers=1"
   },
   "dependencies": {
-    "react": "^19.2.0",
+    "react": "^19.2.5",
     "react-dom": "^19.2.0",
     "react-router-dom": "^7.14.0",
     "recharts": "^3.8.1"
