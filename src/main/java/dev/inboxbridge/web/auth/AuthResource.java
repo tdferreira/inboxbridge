@@ -21,6 +21,7 @@ import dev.inboxbridge.service.admin.ApplicationModeService;
 import dev.inboxbridge.service.auth.AuthService;
 import dev.inboxbridge.service.auth.AuthClientAddressService;
 import dev.inboxbridge.service.auth.AuthLoginProtectionService;
+import dev.inboxbridge.service.auth.AuthRegistrationProtectionService;
 import dev.inboxbridge.service.auth.AuthSecuritySettingsService;
 import dev.inboxbridge.service.oauth.MicrosoftOAuthService;
 import dev.inboxbridge.service.oauth.OAuthProviderRegistryService;
@@ -81,6 +82,9 @@ public class AuthResource {
 
     @Inject
     AuthLoginProtectionService authLoginProtectionService;
+
+    @Inject
+    AuthRegistrationProtectionService authRegistrationProtectionService;
 
     @Inject
     RegistrationChallengeService registrationChallengeService;
@@ -159,18 +163,33 @@ public class AuthResource {
     @Path("/register")
     @Consumes(MediaType.APPLICATION_JSON)
     public Response register(RegisterUserRequest request) {
-        return WebResourceSupport.badRequest(() -> {
+        try {
             applicationModeService.requireMultiUserMode();
+        } catch (IllegalArgumentException | IllegalStateException e) {
+            throw WebResourceSupport.badRequest(e);
+        }
+        String clientKey = authClientAddressService.resolveClientKey(httpHeaders, directRemoteAddress());
+        try {
+            authRegistrationProtectionService.requireRegistrationAllowed(clientKey);
             registrationChallengeService.validateAndConsume(
                     request.captchaToken(),
-                    authClientAddressService.resolveClientKey(httpHeaders, directRemoteAddress()));
+                    clientKey);
             AppUser user = appUserService.registerUser(request);
+            authRegistrationProtectionService.recordSuccessfulRegistration(clientKey);
             return Response.status(Response.Status.ACCEPTED)
                     .entity(java.util.Map.of(
                             "username", user.username,
                             "message", "Registration received. An admin must approve this account before it can sign in."))
                     .build();
-        });
+        } catch (AuthRegistrationProtectionService.RegistrationBlockedException e) {
+            return registrationBlockedResponse(e.blockedUntil());
+        } catch (IllegalArgumentException | IllegalStateException e) {
+            AuthLoginProtectionService.FailureResult failure = authRegistrationProtectionService.recordFailedRegistration(clientKey);
+            if (failure.blocked()) {
+                return registrationBlockedResponse(failure.blockedUntil());
+            }
+            throw WebResourceSupport.badRequest(e);
+        }
     }
 
     @POST
@@ -295,6 +314,16 @@ public class AuthResource {
                         "auth_login_blocked",
                         "Too many failed sign-in attempts from this address.",
                         "Too many failed sign-in attempts from this address.",
+                        java.util.Map.of("blockedUntil", blockedUntil.toString())))
+                .build();
+    }
+
+    private Response registrationBlockedResponse(java.time.Instant blockedUntil) {
+        return Response.status(429)
+                .entity(new ApiError(
+                        "auth_registration_blocked",
+                        "Too many failed registration attempts from this address.",
+                        "Too many failed registration attempts from this address.",
                         java.util.Map.of("blockedUntil", blockedUntil.toString())))
                 .build();
     }

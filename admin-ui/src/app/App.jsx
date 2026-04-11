@@ -1696,6 +1696,7 @@ function AppContent({ timings = DEFAULT_APP_TIMINGS }) {
           authError={auth.authError}
           language={language}
           languageOptions={selectableLanguages}
+          loginCoolingDown={auth.loginCoolingDown}
           loginStage={auth.loginStage}
           loginLoading={isPending('login')}
           loginForm={auth.loginForm}
@@ -1715,6 +1716,7 @@ function AppContent({ timings = DEFAULT_APP_TIMINGS }) {
           onRegisterChange={auth.setRegisterForm}
           registerChallenge={auth.registerChallenge}
           registerChallengeLoading={auth.registerChallengeLoading}
+          registerCoolingDown={auth.registerCoolingDown}
           registerForm={auth.registerForm}
           t={t}
       />

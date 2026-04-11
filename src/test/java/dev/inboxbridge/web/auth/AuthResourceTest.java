@@ -27,6 +27,7 @@ import dev.inboxbridge.service.admin.ApplicationModeService;
 import dev.inboxbridge.service.auth.AuthService;
 import dev.inboxbridge.service.auth.AuthClientAddressService;
 import dev.inboxbridge.service.auth.AuthLoginProtectionService;
+import dev.inboxbridge.service.auth.AuthRegistrationProtectionService;
 import dev.inboxbridge.service.auth.AuthSecuritySettingsService;
 import dev.inboxbridge.service.auth.GeoIpLocationService;
 import dev.inboxbridge.service.oauth.MicrosoftOAuthService;
@@ -151,6 +152,7 @@ class AuthResourceTest {
         resource.applicationModeService = new FakeApplicationModeService(false);
         resource.appUserService = new AppUserService();
         resource.registrationChallengeService = new FakeRegistrationChallengeService(true);
+        resource.authRegistrationProtectionService = new FakeAuthRegistrationProtectionService(null);
         resource.authSecuritySettingsService = new FakeAuthSecuritySettingsService(true);
 
         BadRequestException error = assertThrows(
@@ -165,6 +167,7 @@ class AuthResourceTest {
         AuthResource resource = new AuthResource();
         resource.applicationModeService = new FakeApplicationModeService(true);
         resource.registrationChallengeService = new FakeRegistrationChallengeService(true);
+        resource.authRegistrationProtectionService = new FakeAuthRegistrationProtectionService(null);
         resource.authSecuritySettingsService = new FakeAuthSecuritySettingsService(true);
 
         RegistrationChallengeResponse response = resource.registrationChallenge();
@@ -190,6 +193,26 @@ class AuthResourceTest {
         ApiError error = (ApiError) response.getEntity();
         assertEquals("auth_login_blocked", error.code());
         assertEquals("2026-03-30T14:20:00Z", error.meta().get("blockedUntil"));
+    }
+
+    @Test
+    void registerReturnsTooManyRequestsWhenAddressIsBlocked() {
+        AuthResource resource = new AuthResource();
+        resource.applicationModeService = new FakeApplicationModeService(true);
+        resource.appUserService = new AppUserService();
+        resource.authClientAddressService = new AuthClientAddressService();
+        resource.registrationChallengeService = new FakeRegistrationChallengeService(true);
+        resource.authRegistrationProtectionService = new FakeAuthRegistrationProtectionService(Instant.parse("2026-03-30T15:20:00Z"));
+        resource.authSecuritySettingsService = new FakeAuthSecuritySettingsService(true);
+        resource.httpHeaders = new StaticHttpHeaders("203.0.113.4");
+        resource.httpServerRequest = staticHttpServerRequest("172.18.0.2");
+
+        Response response = resource.register(new dev.inboxbridge.dto.RegisterUserRequest("alice", "Secret#123", "Secret#123", "captcha-token"));
+
+        assertEquals(429, response.getStatus());
+        ApiError error = (ApiError) response.getEntity();
+        assertEquals("auth_registration_blocked", error.code());
+        assertEquals("2026-03-30T15:20:00Z", error.meta().get("blockedUntil"));
     }
 
     @Test
@@ -423,11 +446,15 @@ class AuthResourceTest {
                             null,
                             new RegistrationChallengeResponse.AltchaChallengeResponse(
                                     "challenge-1",
-                                    "SHA-256",
-                                    "challenge",
-                                    "salt",
-                                    "signature",
-                                    1000))
+                                    new RegistrationChallengeResponse.AltchaChallengeParametersResponse(
+                                            "PBKDF2/SHA-256",
+                                            "00112233445566778899aabbccddeeff",
+                                            "0f0e0d0c0b0a09080706050403020100",
+                                            5000,
+                                            32,
+                                            "00",
+                                            null),
+                                    "signature"))
                     : RegistrationChallengeResponse.disabled();
         }
 
@@ -542,6 +569,21 @@ class AuthResourceTest {
         @Override
         public void requireLoginAllowed(String clientKey) {
             throw new LoginBlockedException(blockedUntil);
+        }
+    }
+
+    private static final class FakeAuthRegistrationProtectionService extends AuthRegistrationProtectionService {
+        private final Instant blockedUntil;
+
+        private FakeAuthRegistrationProtectionService(Instant blockedUntil) {
+            this.blockedUntil = blockedUntil;
+        }
+
+        @Override
+        public void requireRegistrationAllowed(String clientKey) {
+            if (blockedUntil != null) {
+                throw new RegistrationBlockedException(blockedUntil);
+            }
         }
     }
 

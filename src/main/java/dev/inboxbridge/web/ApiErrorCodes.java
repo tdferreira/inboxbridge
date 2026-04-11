@@ -12,6 +12,7 @@ public final class ApiErrorCodes {
         String normalized = message.toLowerCase(java.util.Locale.ROOT);
         if (message.equals("Invalid username or password")) return "auth_invalid_credentials";
         if (message.equals("Too many failed sign-in attempts from this address.")) return "auth_login_blocked";
+        if (message.equals("Too many failed registration attempts from this address.")) return "auth_registration_blocked";
         if (message.equals("Not authenticated")) return "auth_not_authenticated";
         if (message.equals("Current password is incorrect")) return "account_current_password_incorrect";
         if (message.equals("This account does not have a password configured.")) return "account_password_not_configured";

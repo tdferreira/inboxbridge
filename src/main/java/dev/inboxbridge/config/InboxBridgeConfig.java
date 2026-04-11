@@ -115,8 +115,17 @@ public interface InboxBridgeConfig {
                 Hcaptcha hcaptcha();
 
                 interface Altcha {
-                    @WithDefault("100000")
-                    long maxNumber();
+                    @WithDefault("PBKDF2/SHA-256")
+                    String algorithm();
+
+                    @WithDefault("5000")
+                    int cost();
+
+                    @WithDefault("32")
+                    int keyLength();
+
+                    @WithDefault("00")
+                    String keyPrefix();
 
                     Optional<String> hmacKey();
                 }

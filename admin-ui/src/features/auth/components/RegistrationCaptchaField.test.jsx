@@ -16,11 +16,15 @@ function buildAltchaChallenge() {
     provider: 'ALTCHA',
     altcha: {
       challengeId: 'challenge-1',
-      algorithm: 'SHA-256',
-      challenge: 'abc',
-      salt: 'salt',
-      signature: 'sig',
-      maxNumber: 1000
+      parameters: {
+        algorithm: 'PBKDF2/SHA-256',
+        nonce: '00112233445566778899aabbccddeeff',
+        salt: '0f0e0d0c0b0a09080706050403020100',
+        cost: 5000,
+        keyLength: 32,
+        keyPrefix: '00'
+      },
+      signature: 'sig'
     }
   }
 }

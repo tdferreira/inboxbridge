@@ -12,11 +12,18 @@ public record RegistrationChallengeResponse(
 
     public record AltchaChallengeResponse(
             String challengeId,
+            AltchaChallengeParametersResponse parameters,
+            String signature) {
+    }
+
+    public record AltchaChallengeParametersResponse(
             String algorithm,
-            String challenge,
+            String nonce,
             String salt,
-            String signature,
-            long maxNumber) {
+            int cost,
+            int keyLength,
+            String keyPrefix,
+            Long expiresAt) {
     }
 
     public static RegistrationChallengeResponse disabled() {

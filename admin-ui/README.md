@@ -106,7 +106,7 @@ Key design choices:
 - live polling now hydrates an immediate snapshot after sign-in and keeps Pause/Resume/Stop controls visible in the polling section headers whenever the current viewer can control the active run, instead of making those controls depend only on the next SSE event or the inner progress panel
 - local HTTPS trust still matters for the browser UX: passkeys/WebAuthn, PWA installability, and some secure-context APIs require the browser/device to trust the local CA in `certs/ca.crt`, not only the generated leaf certificate
 - self-registration is launched from a dedicated `Register for access` button and uses a modal dialog instead of always rendering the full form
-- self-registration now also loads a real CAPTCHA challenge before the request can be submitted; the default path is a self-hosted ALTCHA proof-of-work flow that does not require any external registration or token
+- self-registration now also loads a real CAPTCHA challenge before the request can be submitted; the default path is a self-hosted ALTCHA v2 proof-of-work flow that does not require any external registration or token
 - the self-registration modal keeps its anti-robot wording generic and user-facing; provider and challenge implementation details stay in the admin configuration surface rather than the normal registration copy
 - the ALTCHA verification action now yields to the browser before solving so the shared loading-button spinner and `Verifying…` state stay visible while the proof-of-work challenge is processed locally
 - when the deployment sets `MULTI_USER_ENABLED=false`, the login screen hides self-registration and the post-login UI hides user-management features entirely

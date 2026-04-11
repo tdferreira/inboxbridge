@@ -52,7 +52,10 @@ inboxbridge:
       registration-challenge-provider: ${SECURITY_AUTH_REGISTRATION_CHALLENGE_PROVIDER:ALTCHA}
       registration-captcha:
         altcha:
-          max-number: ${SECURITY_AUTH_REGISTRATION_ALTCHA_MAX_NUMBER:100000}
+          algorithm: ${SECURITY_AUTH_REGISTRATION_ALTCHA_ALGORITHM:PBKDF2/SHA-256}
+          cost: ${SECURITY_AUTH_REGISTRATION_ALTCHA_COST:250}
+          key-length: ${SECURITY_AUTH_REGISTRATION_ALTCHA_KEY_LENGTH:32}
+          key-prefix: ${SECURITY_AUTH_REGISTRATION_ALTCHA_KEY_PREFIX:00}
           hmac-key: ${SECURITY_AUTH_REGISTRATION_ALTCHA_HMAC_KEY:}
         turnstile:
           site-key: ${SECURITY_AUTH_REGISTRATION_TURNSTILE_SITE_KEY:}

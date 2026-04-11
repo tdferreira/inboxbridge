@@ -13,9 +13,9 @@ import java.util.Map;
 import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
 
-import org.altcha.altcha.Altcha;
-import org.altcha.altcha.Altcha.Challenge;
-import org.altcha.altcha.Altcha.ChallengeOptions;
+import org.altcha.altcha.v2.Altcha;
+import org.altcha.altcha.v2.Altcha.Challenge;
+import org.altcha.altcha.v2.Altcha.CreateChallengeOptions;
 
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -81,10 +81,15 @@ public class RegistrationChallengeService {
     }
 
     private RegistrationChallengeResponse issueAltchaChallenge(AuthSecuritySettingsService.EffectiveAuthSecuritySettings settings) {
-        ChallengeOptions options = new ChallengeOptions()
-                .setHmacKey(effectiveAltchaHmacKey())
-                .setMaxNumber(inboxBridgeConfig.security().auth().registrationCaptcha().altcha().maxNumber())
-                .setExpiresInSeconds(Math.max(1L, settings.registrationChallengeTtl().toSeconds()));
+        InboxBridgeConfig.Security.Auth.RegistrationCaptcha.Altcha config =
+                inboxBridgeConfig.security().auth().registrationCaptcha().altcha();
+        CreateChallengeOptions options = new CreateChallengeOptions()
+                .algorithm(config.algorithm())
+                .cost(config.cost())
+                .keyLength(config.keyLength())
+                .keyPrefix(config.keyPrefix())
+                .hmacSignatureSecret(effectiveAltchaHmacKey())
+                .expiresInSeconds(Math.max(1L, settings.registrationChallengeTtl().toSeconds()));
         Challenge challenge;
         try {
             challenge = Altcha.createChallenge(options);
@@ -97,11 +102,15 @@ public class RegistrationChallengeService {
                 null,
                 new RegistrationChallengeResponse.AltchaChallengeResponse(
                         UUID.randomUUID().toString(),
-                        challenge.algorithm,
-                        challenge.challenge,
-                        challenge.salt,
-                        challenge.signature,
-                        challenge.maxnumber == null ? inboxBridgeConfig.security().auth().registrationCaptcha().altcha().maxNumber() : challenge.maxnumber));
+                        new RegistrationChallengeResponse.AltchaChallengeParametersResponse(
+                                challenge.parameters().algorithm(),
+                                challenge.parameters().nonce(),
+                                challenge.parameters().salt(),
+                                challenge.parameters().cost(),
+                                challenge.parameters().keyLength(),
+                                challenge.parameters().keyPrefix(),
+                                challenge.parameters().expiresAt()),
+                        challenge.signature()));
     }
 
     private void validateAltcha(String captchaToken, AuthSecuritySettingsService.EffectiveAuthSecuritySettings settings) {
@@ -112,7 +121,11 @@ public class RegistrationChallengeService {
         }
         boolean valid;
         try {
-            valid = Altcha.verifySolution(captchaToken, effectiveAltchaHmacKey(), true);
+            Altcha.VerifySolutionResult result = Altcha.verifySolution(
+                    captchaToken,
+                    effectiveAltchaHmacKey(),
+                    Altcha.kdf(inboxBridgeConfig.security().auth().registrationCaptcha().altcha().algorithm()));
+            valid = result.verified();
         } catch (Exception e) {
             usedCaptchaPayloads.remove(replayKey);
             throw new IllegalArgumentException("Registration CAPTCHA is invalid or expired", e);

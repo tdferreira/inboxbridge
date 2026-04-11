@@ -329,9 +329,13 @@ class GeoIpLocationServiceTest {
                     public Auth.RegistrationCaptcha.Altcha altcha() {
                         return new Auth.RegistrationCaptcha.Altcha() {
                             @Override
-                            public long maxNumber() {
-                                return 100000L;
-                            }
+                            public String algorithm() { return "PBKDF2/SHA-256"; }
+                            @Override
+                            public int cost() { return 5000; }
+                            @Override
+                            public int keyLength() { return 32; }
+                            @Override
+                            public String keyPrefix() { return "00"; }
 
                             @Override
                             public Optional<String> hmacKey() {

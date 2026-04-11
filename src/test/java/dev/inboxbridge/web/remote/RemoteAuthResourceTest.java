@@ -378,7 +378,13 @@ class RemoteAuthResourceTest {
                                 public Altcha altcha() {
                                     return new Altcha() {
                                         @Override
-                                        public long maxNumber() { return 100000L; }
+                                        public String algorithm() { return "PBKDF2/SHA-256"; }
+                                        @Override
+                                        public int cost() { return 5000; }
+                                        @Override
+                                        public int keyLength() { return 32; }
+                                        @Override
+                                        public String keyPrefix() { return "00"; }
                                         @Override
                                         public java.util.Optional<String> hmacKey() { return java.util.Optional.empty(); }
                                     };

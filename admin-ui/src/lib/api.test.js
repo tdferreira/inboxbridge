@@ -54,6 +54,20 @@ describe('apiErrorText', () => {
     await expect(apiErrorText(response, 'fallback')).resolves.toContain('30/03/2026')
   })
 
+  it('formats registration lockout errors with the blocked-until timestamp', async () => {
+    const response = {
+      text: vi.fn().mockResolvedValue(JSON.stringify({
+        code: 'auth_registration_blocked',
+        message: 'Too many failed registration attempts from this address.',
+        meta: {
+          blockedUntil: '2026-03-30T16:45:00Z'
+        }
+      }))
+    }
+
+    await expect(apiErrorText(response, 'fallback')).resolves.toContain('30/03/2026')
+  })
+
   it('dispatches the auth-expired event on 401 responses', async () => {
     const listener = vi.fn()
     window.addEventListener(AUTH_EXPIRED_EVENT, listener)

@@ -17,6 +17,7 @@ function AuthScreen({
   languageOptions = [],
   loginStage = 'username',
   loginLoading,
+  loginCoolingDown = false,
   loginForm,
   multiUserEnabled,
   notice,
@@ -34,6 +35,7 @@ function AuthScreen({
   onRegisterChange,
   registerChallenge,
   registerChallengeLoading,
+  registerCoolingDown = false,
   registerForm,
   t
 }) {
@@ -104,11 +106,11 @@ function AuthScreen({
               showLabel={t('common.showField', { label: t('auth.password') })}
             />
           ) : null}
-          <LoadingButton className="primary" disabled={!loginReady} isLoading={loginLoading} loadingLabel={t('auth.signInLoading')} type="submit">
+          <LoadingButton className="primary" disabled={!loginReady || loginCoolingDown} isLoading={loginLoading} loadingLabel={t('auth.signInLoading')} type="submit">
             {t('auth.signIn')}
           </LoadingButton>
           {showCredentialStep ? (
-            <LoadingButton className="secondary" disabled={!passkeysSupported || !loginReady} isLoading={passkeyLoading} loadingLabel={t('auth.signInWithPasskeyLoading')} onClick={onPasskeyLogin} type="button">
+            <LoadingButton className="secondary" disabled={!passkeysSupported || !loginReady || loginCoolingDown} isLoading={passkeyLoading} loadingLabel={t('auth.signInWithPasskeyLoading')} onClick={onPasskeyLogin} type="button">
               {t('auth.signInWithPasskey')}
             </LoadingButton>
           ) : null}
@@ -174,7 +176,7 @@ function AuthScreen({
             />
             {!registerPasswordsMatch && registerForm.confirmPassword !== '' ? <div className="auth-screen-hint">{t('auth.repeatPasswordHint')}</div> : null}
             <div className="action-row">
-              <LoadingButton className="primary" disabled={!registrationReady || registerChallengeLoading} isLoading={registerLoading} loadingLabel={t('auth.registerLoading')} type="submit">
+              <LoadingButton className="primary" disabled={!registrationReady || registerChallengeLoading || registerCoolingDown} isLoading={registerLoading} loadingLabel={t('auth.registerLoading')} type="submit">
                 {t('auth.register')}
               </LoadingButton>
               <button className="secondary" onClick={onCloseRegisterDialog} type="button">

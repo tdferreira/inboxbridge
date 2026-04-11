@@ -8,6 +8,7 @@ const BOOTSTRAP_LOGIN_FORM = { username: 'admin', password: 'nimda' }
 const EMPTY_LOGIN_FORM = { username: '', password: '' }
 const LOGIN_STAGE_USERNAME = 'username'
 const LOGIN_STAGE_CREDENTIALS = 'credentials'
+const SUBMISSION_COOLDOWN_MS = 1500
 const DEFAULT_REGISTER_FORM = { username: '', password: '', confirmPassword: '', captchaToken: '' }
 const DEFAULT_PASSWORD_FORM = { currentPassword: '', newPassword: '', confirmNewPassword: '' }
 const DEFAULT_SESSION_ACTIVITY = { recentLogins: [], activeSessions: [], geoIpConfigured: false }
@@ -46,6 +47,10 @@ export function useAuthSecurityController({
   const [sessionActivity, setSessionActivity] = useState(DEFAULT_SESSION_ACTIVITY)
   const latestRecentSessionKeyRef = useRef(null)
   const hasSessionActivityBaselineRef = useRef(false)
+  const loginCooldownTimeoutRef = useRef(null)
+  const registerCooldownTimeoutRef = useRef(null)
+  const [loginCoolingDown, setLoginCoolingDown] = useState(false)
+  const [registerCoolingDown, setRegisterCoolingDown] = useState(false)
 
   const securityDialogDirty = Boolean(
     passwordForm.currentPassword.trim()
@@ -89,6 +94,15 @@ export function useAuthSecurityController({
     window.addEventListener(AUTH_EXPIRED_EVENT, handleAuthExpired)
     return () => window.removeEventListener(AUTH_EXPIRED_EVENT, handleAuthExpired)
   }, [onLogoutReset, t])
+
+  useEffect(() => () => {
+    if (loginCooldownTimeoutRef.current) {
+      window.clearTimeout(loginCooldownTimeoutRef.current)
+    }
+    if (registerCooldownTimeoutRef.current) {
+      window.clearTimeout(registerCooldownTimeoutRef.current)
+    }
+  }, [])
 
   useEffect(() => {
     if (session) {
@@ -186,11 +200,16 @@ export function useAuthSecurityController({
       setLoginStage(LOGIN_STAGE_CREDENTIALS)
       return
     }
+    if (loginCoolingDown) {
+      return
+    }
     await withPending('login', async () => {
       try {
         await runLoginSubmission()
       } catch (err) {
         setAuthError(err.message || errorText('loginFailed'))
+      } finally {
+        activateSubmissionCooldown('login')
       }
     })
   }
@@ -198,6 +217,9 @@ export function useAuthSecurityController({
   async function handleRegister(event) {
     event.preventDefault()
     resetTransientMessages()
+    if (registerCoolingDown) {
+      return
+    }
     await withPending('register', async () => {
       try {
         const response = await fetch('/api/auth/register', {
@@ -224,6 +246,8 @@ export function useAuthSecurityController({
       } catch (err) {
         setAuthError(err.message || errorText('registrationFailed'))
         await loadRegistrationChallenge()
+      } finally {
+        activateSubmissionCooldown('register')
       }
     })
   }
@@ -329,6 +353,9 @@ export function useAuthSecurityController({
       return
     }
     const hasTypedPassword = loginForm.password.trim() !== ''
+    if (hasTypedPassword && loginCoolingDown) {
+      return
+    }
     const pendingKey = hasTypedPassword ? 'login' : 'passkeyLogin'
     await withPending(pendingKey, async () => {
       try {
@@ -351,8 +378,27 @@ export function useAuthSecurityController({
         await completePasskeyLogin(startPayload)
       } catch (err) {
         setAuthError(normalizePasskeyError(err, t, 'login'))
+      } finally {
+        if (hasTypedPassword) {
+          activateSubmissionCooldown('login')
+        }
       }
     })
+  }
+
+  function activateSubmissionCooldown(kind) {
+    const isLogin = kind === 'login'
+    const setCoolingDown = isLogin ? setLoginCoolingDown : setRegisterCoolingDown
+    const timeoutRef = isLogin ? loginCooldownTimeoutRef : registerCooldownTimeoutRef
+
+    setCoolingDown(true)
+    if (timeoutRef.current) {
+      window.clearTimeout(timeoutRef.current)
+    }
+    timeoutRef.current = window.setTimeout(() => {
+      setCoolingDown(false)
+      timeoutRef.current = null
+    }, SUBMISSION_COOLDOWN_MS)
   }
 
   async function handlePasskeyRegistration(event) {
@@ -646,6 +692,7 @@ export function useAuthSecurityController({
     handlePasswordChange,
     handlePasswordRemoval,
     handleRegister,
+    loginCoolingDown,
     loginStage,
     loadSession,
     loginForm,
@@ -665,6 +712,7 @@ export function useAuthSecurityController({
     registerForm,
     registerChallenge,
     registerChallengeLoading,
+    registerCoolingDown,
     registerOpen,
     securityDialogDirty,
     securityTab,

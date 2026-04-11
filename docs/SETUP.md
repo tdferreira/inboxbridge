@@ -193,7 +193,7 @@ the older arithmetic challenge.
 
 Current providers:
 
-- `ALTCHA`: default, self-hosted, privacy-friendlier, no external registration or token
+- `ALTCHA`: default, self-hosted, privacy-friendlier, no external registration or token; InboxBridge now uses ALTCHA's v2 signed proof-of-work challenge format and defaults the browser-side cost to a lighter `250` so the custom registration-modal solver stays responsive
 - `TURNSTILE`: optional Cloudflare Turnstile provider
 - `HCAPTCHA`: optional hCaptcha provider
 
@@ -207,9 +207,15 @@ That same admin section also controls:
 
 - login lockout thresholds and durations
 - registration challenge TTL
+- the backend registration lockout, which reuses the same per-client-IP threshold and exponential block timings as login attempts
 - Geo-IP provider order and timing
 - provider-specific credentials such as Turnstile, hCaptcha, and optional IPinfo Lite secrets
 - new-session notifications that now differentiate `Admin UI` vs `Remote control` sign-ins and can include approximate location details when available
+
+On the admin UI itself, the unauthenticated login and registration forms also
+apply a short client-side submit cooldown after each attempt so repeated button
+presses do not rapidly hammer the backend between those server-side lockout
+windows.
 
 ## Destination Mailbox Options
 

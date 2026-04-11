@@ -28,8 +28,8 @@ class RegistrationChallengeServiceTest {
         assertTrue(response.enabled());
         assertEquals("ALTCHA", response.provider());
         assertNotNull(response.altcha());
-        assertEquals("SHA-256", response.altcha().algorithm());
-        assertTrue(response.altcha().maxNumber() > 0);
+        assertEquals("PBKDF2/SHA-256", response.altcha().parameters().algorithm());
+        assertTrue(response.altcha().parameters().cost() > 0);
     }
 
     @Test
@@ -187,8 +187,23 @@ class RegistrationChallengeServiceTest {
                                 public Altcha altcha() {
                                     return new Altcha() {
                                         @Override
-                                        public long maxNumber() {
-                                            return 1000;
+                                        public String algorithm() {
+                                            return "PBKDF2/SHA-256";
+                                        }
+
+                                        @Override
+                                        public int cost() {
+                                            return 5000;
+                                        }
+
+                                        @Override
+                                        public int keyLength() {
+                                            return 32;
+                                        }
+
+                                        @Override
+                                        public String keyPrefix() {
+                                            return "00";
                                         }
 
                                         @Override

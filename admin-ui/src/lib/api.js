@@ -71,8 +71,8 @@ export function apiErrorText(response, fallback) {
     try {
       const parsed = JSON.parse(text)
       const locale = currentLocale()
-      if (parsed.code === 'auth_login_blocked' && parsed.meta?.blockedUntil) {
-        return translate(locale, 'api.auth_login_blocked', {
+      if ((parsed.code === 'auth_login_blocked' || parsed.code === 'auth_registration_blocked') && parsed.meta?.blockedUntil) {
+        return translate(locale, `api.${parsed.code}`, {
           value: formatDate(parsed.meta.blockedUntil, locale)
         })
       }

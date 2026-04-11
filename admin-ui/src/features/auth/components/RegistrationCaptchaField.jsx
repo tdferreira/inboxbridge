@@ -107,6 +107,7 @@ function ExternalCaptchaWidget({
 
 function AltchaCaptcha({
   altchaChallenge,
+  error,
   solving,
   t,
   token,
@@ -115,7 +116,6 @@ function AltchaCaptcha({
 }) {
   return (
     <div className="auth-captcha-block">
-      <div className="auth-screen-hint">{t('auth.altchaHelp')}</div>
       <div className="muted-box auth-altcha-box">
         <strong>{t('auth.altchaTitle')}</strong><br />
         {t('auth.altchaCopy')}
@@ -131,6 +131,7 @@ function AltchaCaptcha({
         ) : null}
       </div>
       {token ? <div className="auth-screen-hint">{t('auth.captchaVerified')}</div> : null}
+      {error ? <div className="auth-screen-hint">{error}</div> : null}
     </div>
   )
 }
@@ -143,6 +144,7 @@ function RegistrationCaptchaField({
   onRegisterChange
 }) {
   const [solving, setSolving] = useState(false)
+  const [altchaError, setAltchaError] = useState('')
   const token = registerForm.captchaToken || ''
 
   async function handleAltchaSolve() {
@@ -150,10 +152,15 @@ function RegistrationCaptchaField({
       return
     }
     setSolving(true)
+    setAltchaError('')
     try {
       await new Promise((resolve) => window.setTimeout(resolve, 0))
       const solvedToken = await solveAltchaChallenge(registerChallenge.altcha)
       onRegisterChange((current) => ({ ...current, captchaToken: solvedToken }))
+    } catch (error) {
+      console.error('ALTCHA solve failed', error)
+      onRegisterChange((current) => ({ ...current, captchaToken: '' }))
+      setAltchaError(t('auth.altchaSolveError'))
     } finally {
       setSolving(false)
     }
@@ -169,7 +176,11 @@ function RegistrationCaptchaField({
     return (
       <AltchaCaptcha
         altchaChallenge={registerChallenge.altcha}
-        onReset={() => onRegisterChange((current) => ({ ...current, captchaToken: '' }))}
+        error={altchaError}
+        onReset={() => {
+          setAltchaError('')
+          onRegisterChange((current) => ({ ...current, captchaToken: '' }))
+        }}
         onSolve={handleAltchaSolve}
         solving={solving}
         t={t}

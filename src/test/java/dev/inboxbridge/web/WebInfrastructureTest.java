@@ -221,6 +221,7 @@ class WebInfrastructureTest {
         assertEquals("forbidden", ApiErrorCodes.resolve(" ", 403));
         assertEquals("auth_invalid_credentials", ApiErrorCodes.resolve("Invalid username or password", 400));
         assertEquals("auth_login_blocked", ApiErrorCodes.resolve("Too many failed sign-in attempts from this address.", 429));
+        assertEquals("auth_registration_blocked", ApiErrorCodes.resolve("Too many failed registration attempts from this address.", 429));
         assertEquals("source_unknown", ApiErrorCodes.resolve("Unknown source id: fetcher-1", 400));
         assertEquals("poll_interval_format_invalid", ApiErrorCodes.resolve("Unsupported poll interval format. Value must use ISO-8601 duration syntax.", 400));
         assertEquals("poll_interval_unit_invalid", ApiErrorCodes.resolve("Unsupported poll interval unit. Use seconds, minutes, hours, or days.", 400));

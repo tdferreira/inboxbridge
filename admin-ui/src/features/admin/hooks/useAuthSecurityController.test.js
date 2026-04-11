@@ -9,6 +9,7 @@ describe('useAuthSecurityController', () => {
   })
 
   afterEach(() => {
+    vi.useRealTimers()
     vi.unstubAllGlobals()
   })
 
@@ -143,11 +144,15 @@ describe('useAuthSecurityController', () => {
         provider: 'ALTCHA',
         altcha: {
           challengeId: 'challenge-1',
-          algorithm: 'SHA-256',
-          challenge: 'abc',
-          salt: 'salt',
-          signature: 'sig',
-          maxNumber: 1000
+          parameters: {
+            algorithm: 'PBKDF2/SHA-256',
+            nonce: '00112233445566778899aabbccddeeff',
+            salt: '0f0e0d0c0b0a09080706050403020100',
+            cost: 5000,
+            keyLength: 32,
+            keyPrefix: '00'
+          },
+          signature: 'sig'
         }
       })
     })
@@ -164,11 +169,15 @@ describe('useAuthSecurityController', () => {
       provider: 'ALTCHA',
       altcha: {
         challengeId: 'challenge-1',
-        algorithm: 'SHA-256',
-        challenge: 'abc',
-        salt: 'salt',
-        signature: 'sig',
-        maxNumber: 1000
+        parameters: {
+          algorithm: 'PBKDF2/SHA-256',
+          nonce: '00112233445566778899aabbccddeeff',
+          salt: '0f0e0d0c0b0a09080706050403020100',
+          cost: 5000,
+          keyLength: 32,
+          keyPrefix: '00'
+        },
+        signature: 'sig'
       }
     })
     expect(result.current.registerForm.captchaToken).toBe('')
@@ -190,11 +199,15 @@ describe('useAuthSecurityController', () => {
           provider: 'ALTCHA',
           altcha: {
             challengeId: 'challenge-2',
-            algorithm: 'SHA-256',
-            challenge: 'def',
-            salt: 'salt-2',
-            signature: 'sig-2',
-            maxNumber: 1000
+            parameters: {
+              algorithm: 'PBKDF2/SHA-256',
+              nonce: 'ffeeddccbbaa99887766554433221100',
+              salt: '00112233445566778899aabbccddeeff',
+              cost: 5000,
+              keyLength: 32,
+              keyPrefix: '00'
+            },
+            signature: 'sig-2'
           }
         })
       })
@@ -216,6 +229,82 @@ describe('useAuthSecurityController', () => {
     expect(result.current.authError).toBe('The anti-robot check answer is incorrect. Try the new challenge again.')
     expect(result.current.registerChallenge?.altcha?.challengeId).toBe('challenge-2')
     expect(result.current.registerForm.captchaToken).toBe('')
+  })
+
+  it('briefly cools down repeated login submissions on the frontend', async () => {
+    vi.useFakeTimers()
+    fetch.mockResolvedValue({
+      ok: true,
+      json: vi.fn().mockResolvedValue({
+        user: { id: 1, username: 'admin', mustChangePassword: false }
+      })
+    })
+    const { result } = renderController()
+
+    await act(async () => {
+      result.current.setLoginForm({ username: 'admin', password: 'Secret#123' })
+    })
+
+    await act(async () => {
+      await result.current.handleLogin({ preventDefault() {} })
+    })
+
+    await act(async () => {
+      await result.current.handleLogin({ preventDefault() {} })
+    })
+
+    await act(async () => {
+      await result.current.handleLogin({ preventDefault() {} })
+    })
+
+    expect(fetch).toHaveBeenCalledTimes(1)
+    expect(result.current.loginCoolingDown).toBe(true)
+
+    await act(async () => {
+      vi.advanceTimersByTime(1500)
+    })
+
+    expect(result.current.loginCoolingDown).toBe(false)
+    vi.useRealTimers()
+  })
+
+  it('briefly cools down repeated registration submissions on the frontend', async () => {
+    vi.useFakeTimers()
+    fetch.mockResolvedValue({
+      ok: true,
+      json: vi.fn().mockResolvedValue({
+        username: 'alice',
+        message: 'Registration received.'
+      })
+    })
+    const { result } = renderController()
+
+    act(() => {
+      result.current.setRegisterForm({
+        username: 'alice',
+        password: 'Secret#123',
+        confirmPassword: 'Secret#123',
+        captchaToken: 'solved-token'
+      })
+    })
+
+    await act(async () => {
+      await result.current.handleRegister({ preventDefault() {} })
+    })
+
+    await act(async () => {
+      await result.current.handleRegister({ preventDefault() {} })
+    })
+
+    expect(fetch).toHaveBeenCalledTimes(1)
+    expect(result.current.registerCoolingDown).toBe(true)
+
+    await act(async () => {
+      vi.advanceTimersByTime(1500)
+    })
+
+    expect(result.current.registerCoolingDown).toBe(false)
+    vi.useRealTimers()
   })
 
   it('loads session activity when the sessions tab opens', async () => {
