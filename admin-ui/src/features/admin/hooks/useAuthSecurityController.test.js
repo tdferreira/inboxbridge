@@ -308,14 +308,21 @@ describe('useAuthSecurityController', () => {
   })
 
   it('loads session activity when the sessions tab opens', async () => {
-    fetch.mockResolvedValue({
-      ok: true,
-      json: vi.fn().mockResolvedValue({
-        recentLogins: [{ id: 1, ipAddress: '203.0.113.9' }],
-        activeSessions: [{ id: 1, current: true }],
-        geoIpConfigured: true
+    fetch
+      .mockResolvedValueOnce({
+        ok: true,
+        json: vi.fn().mockResolvedValue({
+          recentLogins: [{ id: 1, ipAddress: '203.0.113.9' }],
+          activeSessions: [{ id: 1, current: true }],
+          geoIpConfigured: true
+        })
       })
-    })
+      .mockResolvedValueOnce({
+        ok: true,
+        json: vi.fn().mockResolvedValue([
+          { id: 44, label: 'Laptop', tokenPrefix: 'ibx_123' }
+        ])
+      })
     const { result } = renderController()
 
     await act(async () => {
@@ -323,9 +330,105 @@ describe('useAuthSecurityController', () => {
     })
 
     expect(fetch).toHaveBeenCalledWith('/api/account/sessions')
+    expect(fetch).toHaveBeenCalledWith('/api/extension/sessions')
     expect(result.current.sessionActivity.recentLogins).toHaveLength(1)
     expect(result.current.sessionActivity.geoIpConfigured).toBe(true)
+    expect(result.current.extensionSessions).toEqual([
+      { id: 44, label: 'Laptop', tokenPrefix: 'ibx_123' }
+    ])
     expect(result.current.securityTab).toBe('sessions')
+  })
+
+  it('creates an extension session and keeps the newly minted token available for copy', async () => {
+    fetch
+      .mockResolvedValueOnce({
+        ok: true,
+        json: vi.fn().mockResolvedValue({
+          id: 77,
+          label: 'Work laptop',
+          browserFamily: 'chromium',
+          extensionVersion: 'manual-bootstrap',
+          token: 'ibx_secret_token',
+          tokenPrefix: 'ibx_secret_t',
+          createdAt: '2026-04-12T10:00:00Z',
+          lastUsedAt: null,
+          expiresAt: null,
+          revokedAt: null
+        })
+      })
+      .mockResolvedValueOnce({
+        ok: true,
+        json: vi.fn().mockResolvedValue([
+          {
+            id: 77,
+            label: 'Work laptop',
+            browserFamily: 'chromium',
+            extensionVersion: 'manual-bootstrap',
+            tokenPrefix: 'ibx_secret_t',
+            createdAt: '2026-04-12T10:00:00Z',
+            lastUsedAt: null,
+            expiresAt: null,
+            revokedAt: null
+          }
+        ])
+      })
+    const { result, pushNotification } = renderController()
+
+    await act(async () => {
+      await result.current.createExtensionSession({
+        browserFamily: 'chromium',
+        extensionVersion: 'manual-bootstrap',
+        label: 'Work laptop'
+      })
+    })
+
+    expect(fetch).toHaveBeenNthCalledWith(1, '/api/extension/sessions', expect.objectContaining({
+      method: 'POST'
+    }))
+    expect(result.current.latestCreatedExtensionSession?.token).toBe('ibx_secret_token')
+    expect(result.current.extensionSessions).toHaveLength(1)
+    expect(pushNotification).toHaveBeenCalledWith({
+      message: {
+        kind: 'translation',
+        key: 'notifications.extensionSessionCreated',
+        params: {}
+      },
+      targetId: 'security-extension-sessions-panel-section',
+      tone: 'success'
+    })
+  })
+
+  it('revokes an extension session after confirmation', async () => {
+    const openConfirmation = vi.fn()
+    fetch.mockResolvedValue({
+      ok: true,
+      status: 204,
+      text: vi.fn().mockResolvedValue(''),
+      json: vi.fn().mockResolvedValue(null)
+    })
+    const { result, pushNotification } = renderController({ openConfirmation })
+
+    await act(async () => {
+      await result.current.handleRevokeExtensionSession({ id: 88, label: 'Firefox profile' })
+    })
+
+    expect(openConfirmation).toHaveBeenCalledTimes(1)
+    const confirmation = openConfirmation.mock.calls[0][0]
+
+    await act(async () => {
+      await confirmation.onConfirm()
+    })
+
+    expect(fetch).toHaveBeenCalledWith('/api/extension/sessions/88', { method: 'DELETE' })
+    expect(pushNotification).toHaveBeenCalledWith({
+      message: {
+        kind: 'translation',
+        key: 'notifications.extensionSessionRevoked',
+        params: {}
+      },
+      targetId: 'security-extension-sessions-panel-section',
+      tone: 'success'
+    })
   })
 
   it('notifies when a newer non-current session is detected in the background', async () => {

@@ -15,7 +15,7 @@
   padding: 8px;
   border: 1px solid var(--line);
   border-radius: 12px;
-  background: rgba(255, 255, 255, 0.98);
+  background: var(--menu-bg);
   box-shadow: 0 18px 34px rgba(36, 26, 20, 0.12);
 }
 
@@ -44,5 +44,5 @@
 
 .autocomplete-input-suggestion:hover,
 .autocomplete-input-suggestion.is-active {
-  background: color-mix(in srgb, var(--accent-strong) 12%, white);
+  background: color-mix(in srgb, var(--accent-strong) 12%, var(--surface-elevated));
 }

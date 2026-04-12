@@ -31,6 +31,7 @@ function renderDialog(overrides = {}) {
       onQuickSetupVisibilityChange={vi.fn()}
       onResetLayout={vi.fn()}
       onStartLayoutEditing={vi.fn()}
+      onThemeModeChange={vi.fn()}
       onTimeZoneChange={vi.fn()}
       onTimeZoneModeChange={vi.fn()}
       persistLayout={false}
@@ -39,6 +40,7 @@ function renderDialog(overrides = {}) {
       selectableTimeZones={[{ value: 'Europe/Lisbon', label: 'Europe/Lisbon' }]}
       t={t}
       dateFormat="AUTO"
+      themeMode="SYSTEM"
       timezone=""
       timezoneMode="AUTO"
       {...overrides}
@@ -62,7 +64,18 @@ describe('PreferencesDialog', () => {
     expect(screen.getByText('Show Quick Setup Guide').closest('label')).toHaveClass('checkbox-row')
     expect(screen.getByText('Remember layout on this account').closest('label')).toHaveClass('checkbox-row')
     expect(screen.getByRole('button', { name: 'Language' })).toHaveTextContent('🇬🇧')
+    expect(screen.getByDisplayValue('Follow system')).toBeInTheDocument()
     expect(dateFormatSelect()).toHaveDisplayValue(automaticLabel)
+  })
+
+  it('lets the user switch the theme mode', () => {
+    const onThemeModeChange = vi.fn()
+
+    renderDialog({ onThemeModeChange, themeMode: 'SYSTEM' })
+
+    fireEvent.change(screen.getByDisplayValue('Follow system'), { target: { value: 'DARK_BLUE' } })
+
+    expect(onThemeModeChange).toHaveBeenCalledWith('DARK_BLUE')
   })
 
   it('changes the preferences language through the flag menu', () => {

@@ -91,6 +91,9 @@ public class UserUiPreference extends PanacheEntityBase {
     @Column(name = "language", nullable = false, length = 32)
     public String language;
 
+    @Column(name = "theme_mode", nullable = false, length = 16)
+    public String themeMode;
+
     @Column(name = "date_format", nullable = false, length = 64)
     public String dateFormat;
 

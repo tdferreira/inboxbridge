@@ -29,6 +29,7 @@ import jakarta.transaction.Transactional;
 public class UserUiPreferenceService {
 
     static final String DEFAULT_LANGUAGE = "en";
+    static final String DEFAULT_THEME_MODE = "SYSTEM";
     static final String DEFAULT_DATE_FORMAT = "AUTO";
     static final String DEFAULT_TIMEZONE_MODE = "AUTO";
     static final List<String> DEFAULT_USER_SECTION_ORDER = List.of("quickSetup", "destination", "sourceEmailAccounts", "userPolling", "remoteControl", "userStats");
@@ -70,6 +71,7 @@ public class UserUiPreferenceService {
                 DEFAULT_USER_SECTION_ORDER,
                 DEFAULT_ADMIN_SECTION_ORDER,
                 DEFAULT_LANGUAGE,
+                DEFAULT_THEME_MODE,
                 DEFAULT_DATE_FORMAT,
                 DEFAULT_TIMEZONE_MODE,
                 "",
@@ -101,6 +103,7 @@ public class UserUiPreferenceService {
         preference.userSectionOrder = joinSectionOrder(normalizeSectionOrder(request.userSectionOrder(), DEFAULT_USER_SECTION_ORDER));
         preference.adminSectionOrder = joinSectionOrder(normalizeSectionOrder(request.adminSectionOrder(), DEFAULT_ADMIN_SECTION_ORDER));
         preference.language = normalizeLanguage(request.language());
+        preference.themeMode = normalizeThemeMode(request.themeMode());
         preference.dateFormat = normalizeDateFormat(request.dateFormat());
         preference.timezoneMode = normalizeTimezoneMode(request.timezoneMode());
         preference.timezone = normalizeTimezone(preference.timezoneMode, request.timezone());
@@ -131,6 +134,7 @@ public class UserUiPreferenceService {
                 normalizeSectionOrder(splitSectionOrder(preference.userSectionOrder), DEFAULT_USER_SECTION_ORDER),
                 normalizeSectionOrder(splitSectionOrder(preference.adminSectionOrder), DEFAULT_ADMIN_SECTION_ORDER),
                 normalizeLanguage(preference.language),
+                normalizeThemeMode(preference.themeMode),
                 normalizeDateFormat(preference.dateFormat),
                 normalizeTimezoneMode(preference.timezoneMode),
                 normalizeTimezone(preference.timezoneMode, preference.timezone),
@@ -142,6 +146,20 @@ public class UserUiPreferenceService {
             return DEFAULT_LANGUAGE;
         }
         return language.trim();
+    }
+
+    private String normalizeThemeMode(String themeMode) {
+        String normalized = String.valueOf(themeMode).trim().toUpperCase();
+        if ("LIGHT".equals(normalized)) {
+            return "LIGHT_GREEN";
+        }
+        if ("DARK".equals(normalized)) {
+            return "DARK_BLUE";
+        }
+        return switch (normalized) {
+            case "LIGHT_GREEN", "LIGHT_BLUE", "DARK_GREEN", "DARK_BLUE" -> normalized;
+            default -> DEFAULT_THEME_MODE;
+        };
     }
 
     private String normalizeTimezoneMode(String timezoneMode) {

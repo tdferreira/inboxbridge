@@ -60,6 +60,7 @@ class RemoteAuthResourceTest {
         RemoteSessionUserResponse payload = (RemoteSessionUserResponse) response.getEntity();
         assertEquals("admin", payload.username());
         assertEquals("pt-PT", payload.language());
+        assertEquals("DARK_BLUE", payload.themeMode());
         NewCookie sessionCookie = response.getCookies().get("inboxbridge_remote_session");
         NewCookie csrfCookie = response.getCookies().get("inboxbridge_remote_csrf");
         assertNotNull(sessionCookie);
@@ -129,6 +130,7 @@ class RemoteAuthResourceTest {
         RemoteSessionUserResponse payload = (RemoteSessionUserResponse) response.getEntity();
         assertEquals("ADMIN", payload.role());
         assertEquals("pt-PT", payload.language());
+        assertEquals("DARK_BLUE", payload.themeMode());
         assertEquals(1L, payload.currentSessionId());
         assertEquals(7L, pollingLiveService.lastViewerId);
         assertEquals(PollingLiveService.SessionStreamKind.REMOTE, pollingLiveService.lastStreamKind);
@@ -279,6 +281,7 @@ class RemoteAuthResourceTest {
                     java.util.List.of("quickSetup", "destination", "sourceEmailAccounts", "userPolling", "remoteControl", "userStats"),
                     java.util.List.of("adminQuickSetup", "systemDashboard", "oauthApps", "userManagement", "authSecurity", "globalStats"),
                     "pt-PT",
+                    "DARK_BLUE",
                     "DMY_24",
                     "MANUAL",
                     "Europe/Lisbon",

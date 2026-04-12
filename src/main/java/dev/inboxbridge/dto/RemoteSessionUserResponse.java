@@ -10,6 +10,7 @@ public record RemoteSessionUserResponse(
         boolean multiUserEnabled,
         boolean deviceLocationCaptured,
         String language,
+        String themeMode,
         String dateFormat,
         String timezoneMode,
         String timezone) {

@@ -24,6 +24,14 @@ The remote-control surface now also has explicit feature seams:
 auth, remote run rate limiting, and the remote control/dashboard projection,
 while `dev.inboxbridge.web.remote` owns the remote auth and remote control REST
 resources that sit on top of that model.
+The browser-extension surface now also has its own narrow feature seam:
+`dev.inboxbridge.service.extension` owns extension-session token issuance,
+refresh-token rotation, and the compact extension status projection, while
+`dev.inboxbridge.web.extension` owns the extension auth/session resources plus
+the narrow extension status/poll REST endpoints. Extension requests
+intentionally do not reuse the main browser session cookie; they authenticate
+with revocable extension-scoped access tokens backed by persisted
+`extension_session` rows and rotated through hashed refresh tokens.
 The per-user mailbox/config/preferences slice now also has an explicit feature
 boundary: `dev.inboxbridge.service.user` owns user-managed source mailboxes,
 user destination mailbox config, per-user polling overrides, UI preferences,
@@ -213,6 +221,38 @@ The `/remote` surface now sits beside the full admin UI:
 6. Remote poll actions and live control actions call dedicated `/api/remote/...` endpoints, which still route into the normal `PollingService` and `PollingLiveService`
 
 This keeps the polling engine and hardening behavior shared, while reducing the privilege and blast radius of the public quick-access surface.
+
+## Browser extension flow
+
+The browser extension is intentionally thinner than either the main app or
+`/remote`:
+
+1. The extension signs in directly against `/api/extension/auth/...` using the
+   same password/passkey identity checks as the main app
+2. InboxBridge mints one short-lived access token plus one rotating refresh
+   token, stores only their hashes in `extension_session`, and returns the raw
+   values once
+3. The extension stores that local auth bundle encrypted in browser-managed
+   storage and refreshes the access token before it expires
+4. Later extension API requests authenticate through the dedicated
+   `@RequireExtensionAuth` filter instead of the browser-session cookie model
+5. `GET /api/extension/status` combines persisted per-source poll history with
+   the current `PollingLiveService` snapshot for that user
+6. `GET /api/extension/events` exposes the same live-poll event stream to the
+   extension, scoped to the current extension session
+7. The extension consumes that live stream with authenticated `fetch`-based
+   SSE parsing instead of browser `EventSource`, because the extension auth
+   model requires an `Authorization: Bearer ...` header and should not fall
+   back to query-token transport
+8. `POST /api/extension/poll` reuses the existing user-scoped manual poll path
+
+That design keeps the extension revocable, user-scoped, and useful even when
+poll failures happened while the user was offline, because the extension status
+comes from durable source poll events rather than transient toast history.
+
+Repository layout note: browser-extension code now lives under the dedicated
+`browser-extensions/` workspace, with `browser-extensions/shared/` for
+cross-browser modules plus concrete `chromium/` and `firefox/` targets.
 
 The remote page is also the only installable PWA surface in InboxBridge. The main `My InboxBridge` workspace remains a normal authenticated web app, while `/remote` can expose a browser install prompt when the origin is trusted and the browser considers it installable.
 

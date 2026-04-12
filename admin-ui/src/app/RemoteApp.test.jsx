@@ -306,6 +306,73 @@ describe('RemoteApp', () => {
     expect(await screen.findByLabelText('Password')).toHaveFocus()
   })
 
+  it('lets signed-in remote users change the theme from Preferences', async () => {
+    const fetchMock = vi.fn((url, options = {}) => {
+      if (url === '/api/remote/auth/me') {
+        return jsonResponse({
+          id: 7,
+          username: 'admin',
+          role: 'ADMIN',
+          canRunUserPoll: true,
+          canRunAllUsersPoll: true,
+          language: 'en',
+          themeMode: 'SYSTEM'
+        })
+      }
+      if (url === '/api/remote/control') {
+        return jsonResponse({
+          session: {
+            id: 7,
+            username: 'admin',
+            role: 'ADMIN',
+            canRunUserPoll: true,
+            canRunAllUsersPoll: true,
+            language: 'en',
+            themeMode: 'SYSTEM'
+          },
+          sources: [],
+          hasOwnSourceEmailAccounts: true,
+          hasReadyDestinationMailbox: true,
+          setupRequired: false,
+          remotePollRateLimitCount: 60,
+          remotePollRateLimitWindow: 'PT1M'
+        })
+      }
+      if (url === '/api/remote/poll/live') {
+        return jsonResponse({ running: false, sources: [] })
+      }
+      if (url === '/api/app/ui-preferences') {
+        return jsonResponse({
+          ...(options.body ? JSON.parse(options.body) : {}),
+          persistLayout: false,
+          language: 'en',
+          themeMode: 'DARK_BLUE',
+          dateFormat: 'AUTO',
+          timezoneMode: 'AUTO',
+          timezone: '',
+          notificationHistory: []
+        })
+      }
+      throw new Error(`Unexpected fetch: ${url}`)
+    })
+    vi.stubGlobal('fetch', fetchMock)
+
+    render(<RemoteApp />)
+
+    fireEvent.click(await screen.findByRole('button', { name: 'More actions' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Preferences' }))
+    fireEvent.change(await screen.findByLabelText('Theme'), { target: { value: 'DARK_BLUE' } })
+
+    await waitFor(() => {
+      expect(fetchMock).toHaveBeenCalledWith('/api/app/ui-preferences', expect.objectContaining({
+        method: 'PUT',
+        body: expect.stringContaining('"themeMode":"DARK_BLUE"')
+      }))
+    })
+    expect(window.localStorage.getItem('inboxbridge.themeMode')).toBe('DARK_BLUE')
+    expect(document.documentElement.dataset.theme).toBe('dark')
+  })
+
   it('runs a source poll from the remote dashboard', async () => {
     let controlRequests = 0
     const fetchMock = vi.fn((url) => {

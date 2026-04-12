@@ -11,6 +11,7 @@ import {
   TIMEZONE_MODE_MANUAL,
   writeStoredTimeZonePreference
 } from '@/lib/timeZonePreferences'
+import { normalizeThemeMode, writeStoredThemePreference } from '@/lib/themePreferences'
 import {
   applyLayoutPreferences,
   applyOrderedSectionIds,
@@ -40,6 +41,7 @@ export function useWorkspacePreferencesController({ language, pushNotification, 
     uiPreferencesRef.current = nextPreferences
     setUiPreferences(nextPreferences)
     writeStoredTimeZonePreference(session?.id, nextPreferences)
+    writeStoredThemePreference(nextPreferences)
   }
 
   function commitLayoutEditSnapshot(nextSnapshot) {
@@ -176,6 +178,7 @@ export function useWorkspacePreferencesController({ language, pushNotification, 
       ...DEFAULT_UI_PREFERENCES,
       persistLayout: currentPreferences.persistLayout,
       language,
+      themeMode: currentPreferences.themeMode,
       dateFormat: currentPreferences.dateFormat,
       timezoneMode: currentPreferences.timezoneMode,
       timezone: currentPreferences.timezone
@@ -298,6 +301,16 @@ export function useWorkspacePreferencesController({ language, pushNotification, 
     void persistUiPreferences(nextPreferences)
   }
 
+  function handleThemeModeChange(nextThemeMode) {
+    const currentPreferences = uiPreferencesRef.current
+    const nextPreferences = {
+      ...currentPreferences,
+      themeMode: normalizeThemeMode(nextThemeMode)
+    }
+    commitUiPreferences(nextPreferences)
+    void persistUiPreferences(nextPreferences)
+  }
+
   function handleTimeZoneModeChange(nextMode) {
     const normalizedMode = normalizeTimeZoneMode(nextMode)
     const currentPreferences = uiPreferencesRef.current
@@ -377,6 +390,7 @@ export function useWorkspacePreferencesController({ language, pushNotification, 
     handlePersistLayoutChange,
     handleQuickSetupVisibilityChange,
     handleDateFormatChange,
+    handleThemeModeChange,
     handleTimeZoneChange,
     handleTimeZoneModeChange,
     hasUnsavedLayoutEdits: hasLayoutPreferenceChanges(uiPreferences, layoutEditSnapshot),

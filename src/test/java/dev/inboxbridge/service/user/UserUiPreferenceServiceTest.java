@@ -48,6 +48,7 @@ class UserUiPreferenceServiceTest {
         assertEquals(UserUiPreferenceService.DEFAULT_USER_SECTION_ORDER, view.userSectionOrder());
         assertEquals(UserUiPreferenceService.DEFAULT_ADMIN_SECTION_ORDER, view.adminSectionOrder());
         assertEquals("en", view.language());
+        assertEquals("SYSTEM", view.themeMode());
         assertEquals("AUTO", view.dateFormat());
         assertEquals("AUTO", view.timezoneMode());
         assertEquals("", view.timezone());
@@ -83,6 +84,7 @@ class UserUiPreferenceServiceTest {
                 java.util.List.of("sourceEmailAccounts", "destination"),
                 java.util.List.of("userManagement", "authSecurity"),
                 "pt-PT",
+                "DARK_BLUE",
                 "YMD_12",
                 "MANUAL",
                 "Europe/Lisbon",
@@ -116,6 +118,7 @@ class UserUiPreferenceServiceTest {
         assertEquals(java.util.List.of("sourceEmailAccounts", "destination", "quickSetup", "userPolling", "remoteControl", "userStats"), updated.userSectionOrder());
         assertEquals(java.util.List.of("userManagement", "authSecurity", "adminQuickSetup", "systemDashboard", "oauthApps", "globalStats"), updated.adminSectionOrder());
         assertEquals("pt-PT", updated.language());
+        assertEquals("DARK_BLUE", updated.themeMode());
         assertEquals("YMD_12", updated.dateFormat());
         assertEquals("MANUAL", updated.timezoneMode());
         assertEquals("Europe/Lisbon", updated.timezone());
@@ -153,12 +156,14 @@ class UserUiPreferenceServiceTest {
                 null,
                 null,
                 "en",
+                "NOT_A_THEME",
                 "NOT_A_REAL_FORMAT",
                 "AUTO",
                 "",
                 List.of()));
 
         assertEquals("AUTO", updated.dateFormat());
+        assertEquals("SYSTEM", updated.themeMode());
     }
 
     @Test
@@ -190,12 +195,52 @@ class UserUiPreferenceServiceTest {
                 null,
                 null,
                 "en",
+                "LIGHT",
                 "ddd, MMM DD YY h:M:S A",
                 "AUTO",
                 "",
                 List.of()));
 
         assertEquals("ddd, MMM DD YY h:M:S A", updated.dateFormat());
+        assertEquals("LIGHT_GREEN", updated.themeMode());
+    }
+
+    @Test
+    void updateKeepsExplicitThemeVariants() {
+        UserUiPreferenceService service = new UserUiPreferenceService();
+        InMemoryUserUiPreferenceRepository repository = new InMemoryUserUiPreferenceRepository();
+        service.repository = repository;
+        service.objectMapper = new ObjectMapper();
+        AppUser user = new AppUser();
+        user.id = 41L;
+
+        UserUiPreferenceView updated = service.update(user, new UpdateUserUiPreferenceRequest(
+                false,
+                false,
+                false,
+                false,
+                false,
+                false,
+                false,
+                false,
+                false,
+                false,
+                false,
+                false,
+                false,
+                false,
+                false,
+                false,
+                null,
+                null,
+                "en",
+                "DARK_GREEN",
+                "AUTO",
+                "AUTO",
+                "",
+                List.of()));
+
+        assertEquals("DARK_GREEN", updated.themeMode());
     }
 
     private static final class InMemoryUserUiPreferenceRepository extends UserUiPreferenceRepository {

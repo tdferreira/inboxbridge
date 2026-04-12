@@ -35,6 +35,18 @@ class ApiSecurityHeadersFilterTest {
     }
 
     @Test
+    void filterAlsoDisablesProxyBufferingForExtensionSse() {
+        ApiSecurityHeadersFilter filter = new ApiSecurityHeadersFilter();
+        MultivaluedHashMap<String, Object> headers = new MultivaluedHashMap<>();
+
+        filter.filter(
+                requestContext(URI.create("https://app.example.com/api/extension/events"), "api/extension/events"),
+                responseContext(headers));
+
+        assertEquals("no", headers.getFirst("X-Accel-Buffering"));
+    }
+
+    @Test
     void filterIgnoresNonApiResponses() {
         ApiSecurityHeadersFilter filter = new ApiSecurityHeadersFilter();
         MultivaluedHashMap<String, Object> headers = new MultivaluedHashMap<>();

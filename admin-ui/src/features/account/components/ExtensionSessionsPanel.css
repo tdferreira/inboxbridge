@@ -1,0 +1,40 @@
+.extension-sessions-panel {
+  padding: 24px;
+}
+
+.extension-session-create-form {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+}
+
+.extension-session-token-card {
+  align-items: flex-start;
+  gap: 1rem;
+}
+
+.extension-session-token-actions {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  flex-wrap: wrap;
+}
+
+.extension-session-token-value {
+  display: inline-block;
+  margin-top: 0.75rem;
+  max-width: 100%;
+  overflow-wrap: anywhere;
+}
+
+.extension-session-card {
+  width: 100%;
+  align-items: flex-start;
+}
+
+@media (max-width: 760px) {
+  .extension-session-token-card,
+  .extension-session-card {
+    flex-direction: column;
+  }
+}

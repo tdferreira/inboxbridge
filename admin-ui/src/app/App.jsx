@@ -9,6 +9,7 @@ import ModalDialog from '@/shared/components/ModalDialog'
 import PasswordPanel from '@/features/account/components/PasswordPanel'
 import PasskeyPanel from '@/features/account/components/PasskeyPanel'
 import SessionsPanel from '@/features/account/components/SessionsPanel'
+import ExtensionSessionsPanel from '@/features/account/components/ExtensionSessionsPanel'
 import PasskeyRegistrationDialog from '@/features/account/components/PasskeyRegistrationDialog'
 import AuthSecuritySettingsDialog from '@/features/admin/components/AuthSecuritySettingsDialog'
 import PasswordResetDialog from '@/features/admin/components/PasswordResetDialog'
@@ -21,7 +22,7 @@ import SystemPollingSettingsDialog from '@/features/admin/components/SystemPolli
 import UserPollingSettingsDialog from '@/features/polling/components/UserPollingSettingsDialog'
 import WorkspaceSectionList from '@/features/layout/components/WorkspaceSectionList'
 import { buildAdminWorkspaceSections, buildUserWorkspaceSections } from '@/features/layout/components/workspaceSectionBuilders'
-import { AUTH_EXPIRED_EVENT, apiErrorText, installSecureApiFetch } from '@/lib/api'
+import { AUTH_EXPIRED_EVENT, apiErrorText, installSecureApiFetch, secureFetch } from '@/lib/api'
 import { requestSessionDeviceLocation } from '@/lib/api'
 import { buildSetupGuideState } from '@/lib/setupGuide'
 import { normalizeDestinationProviderConfig } from '@/lib/emailProviderPresets'
@@ -53,6 +54,7 @@ import { detectScheduledRunAnomaly } from '@/lib/pollingStatsAlerts'
 import { statsTimezoneHeader } from '@/lib/statsTimezone'
 import { readStoredTimeZonePreference, resolveEffectiveTimeZone, resetCurrentFormattingTimeZone, setCurrentFormattingTimeZone } from '@/lib/timeZonePreferences'
 import { DATE_FORMAT_AUTO, formatDate, resetCurrentFormattingDateFormat, setCurrentFormattingDateFormat } from '@/lib/formatters'
+import { applyDocumentTheme, readStoredThemePreference } from '@/lib/themePreferences'
 
 const DEFAULT_AUTH_SECURITY_FORM = {
   loginFailureThresholdOverride: '',
@@ -280,6 +282,8 @@ function AppContent({ timings = DEFAULT_APP_TIMINGS }) {
   const [showSystemOAuthAppsDialog, setShowSystemOAuthAppsDialog] = useState(false)
   const [showAuthSecurityDialog, setShowAuthSecurityDialog] = useState(false)
   const [globalStatsNeedsAttention, setGlobalStatsNeedsAttention] = useState(false)
+  const [extensionAuthBridge, setExtensionAuthBridge] = useState({ error: '', status: 'idle' })
+  const [extensionAuthCloseCountdown, setExtensionAuthCloseCountdown] = useState(5)
   const notificationTimersRef = useRef(new Map())
   const selectedUserLoaderRef = useRef(null)
   const sessionActivityPollerRef = useRef(null)
@@ -312,6 +316,10 @@ function AppContent({ timings = DEFAULT_APP_TIMINGS }) {
     withPending
   })
   const session = auth.session
+  const extensionAuthRequestId = useMemo(() => {
+    const value = new URLSearchParams(location.search).get('extensionAuthRequest')
+    return value ? value.trim() : ''
+  }, [location.search])
   const deviceLocation = useSessionDeviceLocation({
     captureLocation: async (payload) => {
       await requestSessionDeviceLocation(payload)
@@ -344,6 +352,7 @@ function AppContent({ timings = DEFAULT_APP_TIMINGS }) {
     handlePersistLayoutChange,
     handleQuickSetupVisibilityChange,
     handleDateFormatChange,
+    handleThemeModeChange,
     handleTimeZoneChange,
     handleTimeZoneModeChange,
     hasUnsavedLayoutEdits,
@@ -369,6 +378,10 @@ function AppContent({ timings = DEFAULT_APP_TIMINGS }) {
     () => readStoredTimeZonePreference(session?.id),
     [session?.id]
   )
+  const storedThemePreference = useMemo(
+    () => readStoredThemePreference(),
+    []
+  )
   const effectiveTimeZone = useMemo(() => {
     const timezoneMode = uiPreferencesLoadedForUserId === session?.id
       ? uiPreferences.timezoneMode
@@ -379,8 +392,19 @@ function AppContent({ timings = DEFAULT_APP_TIMINGS }) {
     return resolveEffectiveTimeZone(timezoneMode, timezone)
   }, [session?.id, storedTimeZonePreference?.timezone, storedTimeZonePreference?.timezoneMode, uiPreferences.timezone, uiPreferences.timezoneMode, uiPreferencesLoadedForUserId])
   const effectiveDateFormat = uiPreferencesLoadedForUserId === session?.id ? uiPreferences.dateFormat : DATE_FORMAT_AUTO
+  const effectiveThemeMode = uiPreferencesLoadedForUserId === session?.id ? uiPreferences.themeMode : storedThemePreference.themeMode
   setCurrentFormattingTimeZone(effectiveTimeZone)
   setCurrentFormattingDateFormat(effectiveDateFormat)
+
+  useEffect(() => {
+    const mediaQuery = typeof window.matchMedia === 'function' ? window.matchMedia('(prefers-color-scheme: dark)') : null
+    const applyTheme = () => applyDocumentTheme(effectiveThemeMode)
+    applyTheme()
+    mediaQuery?.addEventListener?.('change', applyTheme)
+    return () => {
+      mediaQuery?.removeEventListener?.('change', applyTheme)
+    }
+  }, [effectiveThemeMode])
 
   useEffect(() => {
     return () => {
@@ -833,6 +857,72 @@ function AppContent({ timings = DEFAULT_APP_TIMINGS }) {
       })
     }
   }
+
+  useEffect(() => {
+    setExtensionAuthBridge(extensionAuthRequestId
+      ? { error: '', status: 'idle' }
+      : { error: '', status: 'none' })
+    setExtensionAuthCloseCountdown(5)
+  }, [extensionAuthRequestId])
+
+  useEffect(() => {
+    if (!extensionAuthRequestId || !session) {
+      return
+    }
+    let cancelled = false
+
+    async function completeExtensionBrowserHandoff() {
+      setExtensionAuthBridge({ error: '', status: 'completing' })
+      try {
+        const response = await secureFetch('/api/extension/auth/browser-handoff/complete', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ requestId: extensionAuthRequestId })
+        })
+        if (!response.ok) {
+          throw new Error(await apiErrorText(response, t('extensionAuth.failed')))
+        }
+        if (!cancelled) {
+          setExtensionAuthBridge({ error: '', status: 'completed' })
+          setExtensionAuthCloseCountdown(5)
+        }
+      } catch (error) {
+        if (!cancelled) {
+          setExtensionAuthBridge({
+            error: error.message || t('extensionAuth.failed'),
+            status: 'error'
+          })
+        }
+      }
+    }
+
+    void completeExtensionBrowserHandoff()
+
+    return () => {
+      cancelled = true
+    }
+  }, [extensionAuthRequestId, session?.id])
+
+  useEffect(() => {
+    if (!extensionAuthRequestId || extensionAuthBridge.status !== 'completed') {
+      return
+    }
+    if (extensionAuthCloseCountdown <= 0) {
+      window.close()
+      return
+    }
+    const timer = window.setTimeout(() => {
+      setExtensionAuthCloseCountdown((current) => {
+        const next = current - 1
+        if (next <= 0) {
+          window.close()
+          return 0
+        }
+        return next
+      })
+    }, 1000)
+    return () => window.clearTimeout(timer)
+  }, [extensionAuthBridge.status, extensionAuthCloseCountdown, extensionAuthRequestId])
 
   useEffect(() => {
     installSecureApiFetch()
@@ -1701,7 +1791,7 @@ function AppContent({ timings = DEFAULT_APP_TIMINGS }) {
           loginLoading={isPending('login')}
           loginForm={auth.loginForm}
           multiUserEnabled={authOptions.multiUserEnabled}
-          notice=""
+          notice={extensionAuthRequestId ? t('extensionAuth.signInCopy') : ''}
           onLanguageChange={handleLanguageChange}
           onCloseRegisterDialog={auth.closeRegisterDialog}
           onLogin={auth.handleLogin}
@@ -1720,6 +1810,39 @@ function AppContent({ timings = DEFAULT_APP_TIMINGS }) {
           registerForm={auth.registerForm}
           t={t}
       />
+    )
+  }
+
+  if (extensionAuthRequestId) {
+    const bridgeMessage = extensionAuthBridge.status === 'completed'
+      ? t('extensionAuth.success')
+      : extensionAuthBridge.status === 'completing' || extensionAuthBridge.status === 'idle'
+        ? t('extensionAuth.completing')
+        : extensionAuthBridge.error || t('extensionAuth.failed')
+    const closeButtonLabel = extensionAuthBridge.status === 'completed'
+      ? t('extensionAuth.closeWindowCountdown', { count: extensionAuthCloseCountdown })
+      : t('extensionAuth.closeWindow')
+    return (
+      <div className="page-shell">
+        <main className="auth-screen-card">
+          <h1>{t('extensionAuth.signInTitle')}</h1>
+          <div className="muted-box auth-screen-note">{bridgeMessage}</div>
+          {extensionAuthBridge.status === 'error' ? (
+            <div className="action-row">
+              <button className="primary" onClick={() => window.location.reload()} type="button">
+                {t('extensionAuth.retry')}
+              </button>
+              <button className="secondary" onClick={() => window.close()} type="button">
+                {t('extensionAuth.closeWindow')}
+              </button>
+            </div>
+          ) : (
+            <button className="primary" onClick={() => window.close()} type="button">
+              {closeButtonLabel}
+            </button>
+          )}
+        </main>
+      </div>
     )
   }
 
@@ -1769,6 +1892,7 @@ function AppContent({ timings = DEFAULT_APP_TIMINGS }) {
             onPersistLayoutChange={handlePersistLayoutChange}
             onQuickSetupVisibilityChange={(visible) => handleQuickSetupVisibilityChange(activeWorkspaceKey, visible, activeCanHideQuickSetup)}
             onResetLayout={resetLayoutPreferences}
+            onThemeModeChange={handleThemeModeChange}
             onStartLayoutEditing={startLayoutEditingFromPreferences}
             onTimeZoneChange={handleTimeZoneChange}
             onTimeZoneModeChange={handleTimeZoneModeChange}
@@ -1778,6 +1902,7 @@ function AppContent({ timings = DEFAULT_APP_TIMINGS }) {
             savingLayout={isPending('uiPreferences')}
             t={t}
             dateFormat={uiPreferences.dateFormat}
+            themeMode={uiPreferences.themeMode}
             timezone={uiPreferences.timezone}
             timezoneMode={uiPreferences.timezoneMode}
           />
@@ -1925,6 +2050,17 @@ function AppContent({ timings = DEFAULT_APP_TIMINGS }) {
                     revokeLoadingId={auth.sessionActivity.activeSessions.find((sessionItem) => isPending(`sessionRevoke:${sessionItem.id}`))?.id || null}
                     revokeOthersLoading={isPending('sessionsRevokeOthers')}
                     requestCurrentDeviceLocationLoading={deviceLocation.saving}
+                    t={t}
+                  />
+                  <ExtensionSessionsPanel
+                    createLoading={isPending('extensionSessionCreate')}
+                    latestCreatedSession={auth.latestCreatedExtensionSession}
+                    locale={language}
+                    onClearLatestCreatedSession={auth.clearLatestCreatedExtensionSession}
+                    onCreateSession={auth.createExtensionSession}
+                    onRevokeSession={auth.handleRevokeExtensionSession}
+                    revokeLoadingId={auth.extensionSessions.find((sessionItem) => isPending(`extensionSessionRevoke:${sessionItem.id}`))?.id || null}
+                    sessions={auth.extensionSessions}
                     t={t}
                   />
                 </div>

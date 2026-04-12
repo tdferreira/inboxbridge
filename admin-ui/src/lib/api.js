@@ -31,6 +31,22 @@ function isSameOriginUrl(input) {
   return resolved.origin === window.location.origin
 }
 
+export function secureFetch(input, init = {}) {
+  const method = init.method || 'GET'
+  const headers = new Headers(init.headers || {})
+  if (isSameOriginUrl(input) && isUnsafeMethod(method) && !headers.has(APP_CSRF_HEADER)) {
+    const csrfToken = readCookie(APP_CSRF_COOKIE)
+    if (csrfToken) {
+      headers.set(APP_CSRF_HEADER, csrfToken)
+    }
+  }
+  return window.fetch(input, {
+    credentials: 'same-origin',
+    ...init,
+    headers
+  })
+}
+
 export function installSecureApiFetch() {
   if (secureFetchInstalled || typeof window === 'undefined' || typeof window.fetch !== 'function') {
     return

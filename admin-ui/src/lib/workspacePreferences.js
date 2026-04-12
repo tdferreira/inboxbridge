@@ -1,4 +1,5 @@
 import { normalizeDateFormatPreference } from '@/lib/formatters'
+import { normalizeThemeMode } from '@/lib/themePreferences'
 
 export const DEFAULT_UI_PREFERENCES = {
   persistLayout: false,
@@ -21,6 +22,7 @@ export const DEFAULT_UI_PREFERENCES = {
   userSectionOrder: ['quickSetup', 'destination', 'sourceEmailAccounts', 'userPolling', 'remoteControl', 'userStats'],
   adminSectionOrder: ['adminQuickSetup', 'systemDashboard', 'oauthApps', 'userManagement', 'authSecurity', 'globalStats'],
   language: 'en',
+  themeMode: 'SYSTEM',
   dateFormat: 'AUTO',
   timezoneMode: 'AUTO',
   timezone: '',
@@ -61,6 +63,7 @@ export function normalizeUiPreferences(payload) {
     adminQuickSetupDismissed: payload?.adminQuickSetupDismissed ?? false,
     adminQuickSetupPinnedVisible: payload?.adminQuickSetupPinnedVisible ?? false,
     userSectionOrder: normalizedUserSectionOrder,
+    themeMode: normalizeThemeMode(payload?.themeMode),
     dateFormat: normalizeDateFormatPreference(payload?.dateFormat),
     timezoneMode: payload?.timezoneMode === 'MANUAL' ? 'MANUAL' : 'AUTO',
     timezone: typeof payload?.timezone === 'string' ? payload.timezone : ''

@@ -10,3 +10,4 @@ certs/*
 admin-ui/node_modules/
 admin-ui/dist/
 admin-ui/coverage/
+browser-extensions/*/dist/

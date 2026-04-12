@@ -25,7 +25,10 @@ public class ApiSecurityHeadersFilter implements ContainerResponseFilter {
         if ("https".equalsIgnoreCase(requestContext.getUriInfo().getRequestUri().getScheme())) {
             responseContext.getHeaders().putSingle("Strict-Transport-Security", "max-age=31536000; includeSubDomains");
         }
-        if (path.startsWith("api/poll/events") || path.startsWith("api/admin/poll/events")) {
+        if (path.startsWith("api/poll/events")
+                || path.startsWith("api/admin/poll/events")
+                || path.startsWith("api/remote/poll/events")
+                || path.startsWith("api/extension/events")) {
             responseContext.getHeaders().putSingle("X-Accel-Buffering", "no");
         }
     }

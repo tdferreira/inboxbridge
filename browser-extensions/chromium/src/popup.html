@@ -1,0 +1,69 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>InboxBridge</title>
+    <link rel="stylesheet" href="./theme.css">
+  </head>
+  <body class="popup-page">
+    <main class="panel popup-panel">
+      <header class="popup-header">
+        <div class="brand-row compact">
+          <img alt="" class="brand-mark" src="./remote-icon.svg">
+          <div>
+            <h1>InboxBridge</h1>
+            <p id="connection-copy">Checking status…</p>
+          </div>
+        </div>
+        <button aria-label="Open settings" class="icon-button" id="open-settings" title="Open settings" type="button">⚙</button>
+      </header>
+
+      <section class="summary-card" id="summary-card">
+        <div class="summary-topline">
+          <span class="status-pill" id="status-pill">Loading</span>
+          <span class="muted" id="updated-at">Waiting for InboxBridge…</span>
+        </div>
+        <div class="summary-grid">
+          <div>
+            <span class="metric-label" id="metric-imported-label">Imported</span>
+            <strong id="metric-imported">-</strong>
+          </div>
+          <div>
+            <span class="metric-label" id="metric-fetched-label">Fetched</span>
+            <strong id="metric-fetched">-</strong>
+          </div>
+          <div>
+            <span class="metric-label" id="metric-duplicates-label">Duplicates</span>
+            <strong id="metric-duplicates">-</strong>
+          </div>
+          <div>
+            <span class="metric-label" id="metric-errors-label">Errors</span>
+            <strong id="metric-errors">-</strong>
+          </div>
+        </div>
+      </section>
+
+      <div class="actions-row">
+        <button class="primary" id="run-poll" type="button">Run poll now</button>
+        <button class="secondary" id="refresh-status" type="button">Refresh</button>
+      </div>
+
+      <section class="error-list-card">
+        <div class="section-heading">
+          <h2 id="needs-attention-heading">Needs attention</h2>
+          <span class="muted" id="attention-count"></span>
+        </div>
+        <div class="empty-state" id="healthy-state">No sources need attention.</div>
+        <ul class="error-list" hidden id="error-list"></ul>
+      </section>
+
+      <footer class="footer-links">
+        <button class="link-button" id="open-remote" type="button">Open InboxBridge Go</button>
+        <button class="link-button" id="open-app" type="button">Open InboxBridge</button>
+      </footer>
+      <div class="status-banner" hidden id="popup-status"></div>
+    </main>
+    <script src="./popup.js" type="module"></script>
+  </body>
+  </html>

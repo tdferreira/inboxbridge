@@ -103,6 +103,7 @@ class PollingLivePresentationServiceTest {
         assertEquals("notifications.newSessionDetectedFromUnusualLocation", unusualLocationNotification.message().key());
         assertEquals("Berlin, DE", unusualLocationNotification.message().params().get("location"));
         assertTrue(unusualLocationNotification.targetId().contains("BROWSER-11"));
+        assertEquals("recent-session-EXTENSION-99", service.buildRecentSessionTargetId(PollingLiveService.SessionStreamKind.EXTENSION, 99L));
     }
 
     private static AppUser actor(Long id, String username, AppUser.Role role) {

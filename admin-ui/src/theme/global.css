@@ -1,14 +1,107 @@
 :root {
+  color-scheme: light;
   --bg: #f4efe6;
   --panel: rgba(255, 252, 247, 0.92);
   --ink: #241a14;
   --muted: #67584c;
   --line: rgba(36, 26, 20, 0.12);
+  --line-soft: rgba(36, 26, 20, 0.08);
   --shadow: rgba(36, 26, 20, 0.14);
   --accent: #17654b;
   --accent-strong: #0f4c38;
   --warning: #8a5a12;
   --danger: #8b2d20;
+  --text: var(--ink);
+  --text-default: var(--ink);
+  --text-soft: color-mix(in srgb, var(--ink) 72%, white 28%);
+  --muted-text: var(--muted);
+  --surface-soft: rgba(255, 255, 255, 0.78);
+  --surface-strong: rgba(255, 255, 255, 0.9);
+  --surface-elevated: rgba(255, 252, 247, 0.98);
+  --surface-muted: rgba(255, 255, 255, 0.64);
+  --button-secondary-bg: rgba(255, 255, 255, 0.9);
+  --button-secondary-hover-bg: rgba(255, 255, 255, 0.98);
+  --button-secondary-text: var(--ink);
+  --control-bg: rgba(255, 255, 255, 0.88);
+  --control-border: var(--line);
+  --control-focus: rgba(23, 101, 75, 0.35);
+  --menu-bg: rgba(255, 252, 247, 0.98);
+  --chart-bg: linear-gradient(180deg, rgba(255, 255, 255, 0.96), rgba(248, 250, 253, 0.96));
+  --chart-border: rgba(15, 23, 42, 0.08);
+  --chart-tooltip-bg: rgba(255, 255, 255, 0.97);
+  --chart-tooltip-border: rgba(15, 23, 42, 0.1);
+  --success-strong: #166534;
+  --bg-glow-top: rgba(23, 101, 75, 0.16);
+  --bg-glow-bottom: rgba(194, 122, 46, 0.14);
+  --bg-gradient-start: #fbf4ea;
+  --bg-gradient-end: #efe4d3;
+}
+
+:root[data-theme='dark'] {
+  color-scheme: dark;
+  --bg: #18130f;
+  --panel: rgba(30, 24, 19, 0.92);
+  --ink: #f3ebe2;
+  --muted: #d0c1b2;
+  --line: rgba(243, 235, 226, 0.14);
+  --line-soft: rgba(243, 235, 226, 0.08);
+  --shadow: rgba(0, 0, 0, 0.34);
+  --accent: #7ab3ff;
+  --accent-strong: #4b86d9;
+  --warning: #f0b04a;
+  --danger: #ec7f72;
+  --text: var(--ink);
+  --text-default: var(--ink);
+  --text-soft: color-mix(in srgb, var(--ink) 76%, transparent);
+  --muted-text: var(--muted);
+  --surface-soft: rgba(28, 37, 52, 0.82);
+  --surface-strong: rgba(32, 43, 61, 0.92);
+  --surface-elevated: rgba(24, 34, 49, 0.97);
+  --surface-muted: rgba(44, 57, 79, 0.72);
+  --button-secondary-bg: rgba(39, 50, 70, 0.92);
+  --button-secondary-hover-bg: rgba(52, 67, 92, 0.96);
+  --button-secondary-text: #edf3fb;
+  --control-bg: rgba(17, 27, 41, 0.9);
+  --control-border: rgba(173, 192, 219, 0.18);
+  --control-focus: rgba(122, 179, 255, 0.42);
+  --menu-bg: rgba(20, 31, 47, 0.98);
+  --chart-bg: linear-gradient(180deg, rgba(19, 29, 44, 0.96), rgba(15, 24, 37, 0.98));
+  --chart-border: rgba(173, 192, 219, 0.14);
+  --chart-tooltip-bg: rgba(19, 29, 44, 0.98);
+  --chart-tooltip-border: rgba(173, 192, 219, 0.18);
+  --success-strong: #b8f1c9;
+  --bg-glow-top: rgba(72, 132, 227, 0.24);
+  --bg-glow-bottom: rgba(45, 88, 155, 0.18);
+  --bg-gradient-start: #131c2a;
+  --bg-gradient-end: #0b121d;
+}
+
+:root[data-theme='light'][data-theme-variant='blue'] {
+  --accent: #1d5fbf;
+  --accent-strong: #163970;
+  --bg-glow-top: rgba(29, 95, 191, 0.16);
+  --bg-glow-bottom: rgba(21, 150, 111, 0.1);
+  --bg-gradient-start: #f7fafc;
+  --bg-gradient-end: #eaf1f7;
+}
+
+:root[data-theme='dark'][data-theme-variant='green'] {
+  --accent: #3aa47c;
+  --accent-strong: #26785a;
+  --bg-glow-top: rgba(58, 164, 124, 0.18);
+  --bg-glow-bottom: rgba(138, 90, 18, 0.16);
+  --bg-gradient-start: #211913;
+  --bg-gradient-end: #120d0a;
+  --surface-soft: rgba(34, 29, 24, 0.82);
+  --surface-strong: rgba(43, 36, 30, 0.94);
+  --surface-elevated: rgba(35, 28, 23, 0.98);
+  --surface-muted: rgba(56, 47, 39, 0.72);
+  --button-secondary-bg: rgba(52, 44, 36, 0.94);
+  --button-secondary-hover-bg: rgba(64, 54, 45, 0.98);
+  --control-bg: rgba(33, 26, 20, 0.92);
+  --menu-bg: rgba(35, 28, 23, 0.98);
+  --chart-bg: linear-gradient(180deg, rgba(37, 30, 24, 0.96), rgba(27, 21, 17, 0.98));
+  --chart-tooltip-bg: rgba(39, 31, 25, 0.98);
 }
 
 * {
@@ -22,9 +115,9 @@ body {
   color: var(--ink);
   overflow-x: hidden;
   background:
-    radial-gradient(circle at top left, rgba(23, 101, 75, 0.16), transparent 28%),
-    radial-gradient(circle at bottom right, rgba(194, 122, 46, 0.14), transparent 34%),
-    linear-gradient(160deg, #fbf4ea, #efe4d3);
+    radial-gradient(circle at top left, var(--bg-glow-top), transparent 28%),
+    radial-gradient(circle at bottom right, var(--bg-glow-bottom), transparent 34%),
+    linear-gradient(160deg, var(--bg-gradient-start), var(--bg-gradient-end));
 }
 
 body.workspace-layout-dragging {
@@ -95,8 +188,8 @@ button.primary,
 
 button.secondary,
 .button-link.secondary {
-  color: var(--ink);
-  background: rgba(255, 255, 255, 0.9);
+  color: var(--button-secondary-text);
+  background: var(--button-secondary-bg);
   border: 1px solid var(--line);
 }
 
@@ -117,8 +210,8 @@ button.secondary:hover:not(:disabled),
 button.secondary:focus-visible:not(:disabled),
 .button-link.secondary:hover,
 .button-link.secondary:focus-visible {
-  background: rgba(255, 255, 255, 0.98);
-  border-color: rgba(23, 101, 75, 0.2);
+  background: var(--button-secondary-hover-bg);
+  border-color: color-mix(in srgb, var(--accent) 28%, var(--line));
 }
 
 .menu-icon-hamburger {
@@ -151,11 +244,10 @@ button.secondary:focus-visible:not(:disabled),
   min-height: 2.25rem;
   padding: 0;
   border: 1px solid rgba(36, 26, 20, 0.14);
-  background:
-    linear-gradient(180deg, rgba(255, 255, 255, 0.94), rgba(246, 239, 228, 0.92));
+  background: var(--surface-strong);
   color: var(--ink);
   box-shadow:
-    inset 0 1px 0 rgba(255, 255, 255, 0.72),
+    inset 0 1px 0 color-mix(in srgb, white 28%, transparent),
     0 8px 18px rgba(36, 26, 20, 0.08);
   display: inline-flex;
   align-items: center;
@@ -186,9 +278,8 @@ button.secondary:focus-visible:not(:disabled),
 .fetcher-menu-button:focus-visible,
 .modal-close-button:hover,
 .modal-close-button:focus-visible {
-  border-color: rgba(23, 101, 75, 0.32);
-  background:
-    linear-gradient(180deg, rgba(255, 255, 255, 0.98), rgba(250, 245, 238, 0.96));
+  border-color: color-mix(in srgb, var(--accent) 28%, var(--line));
+  background: var(--surface-elevated);
 }
 
 button.danger:hover:not(:disabled),
@@ -206,17 +297,17 @@ button:disabled {
 input,
 select {
   width: 100%;
-  border: 1px solid var(--line);
+  border: 1px solid var(--control-border);
   border-radius: 16px;
   padding: 14px 16px;
-  background: rgba(255, 255, 255, 0.88);
+  background: var(--control-bg);
   color: var(--ink);
 }
 
 input:focus,
 select:focus {
   outline: 2px solid rgba(23, 101, 75, 0.24);
-  border-color: rgba(23, 101, 75, 0.35);
+  border-color: var(--control-focus);
 }
 
 code {
@@ -322,8 +413,8 @@ code {
 
 .workspace-switcher-button:hover,
 .workspace-switcher-button:focus-visible {
-  background: rgba(255, 255, 255, 0.72);
-  border-color: rgba(15, 23, 42, 0.08);
+  background: var(--surface-strong);
+  border-color: var(--line);
   color: var(--text);
 }
 
@@ -332,8 +423,8 @@ code {
 }
 
 .workspace-switcher-button-active {
-  background: rgba(180, 83, 9, 0.12);
-  border-color: rgba(180, 83, 9, 0.22);
+  background: color-mix(in srgb, var(--accent) 16%, transparent);
+  border-color: color-mix(in srgb, var(--accent) 28%, var(--line));
   color: var(--accent);
 }
 
@@ -653,7 +744,7 @@ h2 {
 .event-box {
   border-radius: 16px;
   border: 1px solid var(--line);
-  background: rgba(255, 255, 255, 0.78);
+  background: var(--surface-soft);
   padding: 14px 16px;
   color: var(--muted);
   min-width: 0;
@@ -777,7 +868,7 @@ h2 {
   padding: 10px 12px;
   border-radius: 14px;
   border: 1px solid var(--line);
-  background: rgba(255, 255, 255, 0.9);
+  background: var(--surface-strong);
 }
 
 .oauth-setup-redirect-shell input {

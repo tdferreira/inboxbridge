@@ -8,6 +8,8 @@ import LanguageMenuButton from '@/shared/components/LanguageMenuButton'
 import LoadingButton from '@/shared/components/LoadingButton'
 import LoadingScreen from '@/shared/components/LoadingScreen'
 import PasswordField from '@/shared/components/PasswordField'
+import RemotePreferencesDialog from './RemotePreferencesDialog'
+import { apiErrorText } from '@/lib/api'
 import { normalizePasskeyError, parseGetOptions, passkeysSupported, serializeCredential } from '@/lib/passkeys'
 import {
   RemoteUnauthorizedError,
@@ -40,6 +42,7 @@ import {
 } from '@/lib/formatters'
 import { formatLiveProgressLabel, formatLiveProgressSummary, hasDeterminateLiveProgress, liveProgressPercent } from '@/lib/livePollProgress'
 import { normalizeManualTimeZone, normalizeTimeZoneMode, resetCurrentFormattingTimeZone, resolveEffectiveTimeZone, setCurrentFormattingTimeZone, TIMEZONE_MODE_AUTO } from '@/lib/timeZonePreferences'
+import { applyDocumentTheme, normalizeThemeMode, readStoredThemePreference, THEME_MODE_SYSTEM, writeStoredThemePreference } from '@/lib/themePreferences'
 import { usePwaInstallPrompt } from '@/shared/hooks/usePwaInstallPrompt'
 import { useSessionDeviceLocation } from '@/shared/hooks/useSessionDeviceLocation'
 import './RemoteApp.css'
@@ -73,6 +76,7 @@ function RemoteApp({ timingOverrides = null }) {
     [timingOverrides]
   )
   const [language, setLanguage] = useState(() => normalizeLocale(window.localStorage.getItem('inboxbridge.language') || navigator.language))
+  const [themeMode, setThemeMode] = useState(() => readStoredThemePreference().themeMode)
   const [timezonePreference, setTimezonePreference] = useState({ timezoneMode: TIMEZONE_MODE_AUTO, timezone: '' })
   const [dateFormatPreference, setDateFormatPreference] = useState(DATE_FORMAT_AUTO)
   const t = useMemo(() => (key, params) => translate(language, key, params), [language])
@@ -100,6 +104,8 @@ function RemoteApp({ timingOverrides = null }) {
   const [expandedSources, setExpandedSources] = useState(() => new Set())
   const [installLoading, setInstallLoading] = useState(false)
   const [installPromptDismissed, setInstallPromptDismissed] = useState(() => window.localStorage.getItem(REMOTE_INSTALL_PROMPT_DISMISSED_KEY) === 'true')
+  const [showPreferencesDialog, setShowPreferencesDialog] = useState(false)
+  const [savingPreferences, setSavingPreferences] = useState(false)
   const liveEventsRef = useRef(null)
   const lastLiveEventAtRef = useRef(0)
   const passwordInputRef = useRef(null)
@@ -142,6 +148,16 @@ function RemoteApp({ timingOverrides = null }) {
   useEffect(() => {
     window.localStorage.setItem('inboxbridge.language', language)
   }, [language])
+
+  useEffect(() => {
+    const mediaQuery = typeof window.matchMedia === 'function' ? window.matchMedia('(prefers-color-scheme: dark)') : null
+    const applyTheme = () => applyDocumentTheme(themeMode)
+    applyTheme()
+    mediaQuery?.addEventListener?.('change', applyTheme)
+    return () => {
+      mediaQuery?.removeEventListener?.('change', applyTheme)
+    }
+  }, [themeMode])
 
   useEffect(() => {
     return () => {
@@ -193,8 +209,11 @@ function RemoteApp({ timingOverrides = null }) {
     setLanguage(normalizedLanguage)
   }
 
-  async function applySessionPreferences(nextLanguage, timezoneMode, timezone, dateFormat) {
+  async function applySessionPreferences(nextLanguage, nextThemeMode, timezoneMode, timezone, dateFormat) {
     await updateLanguage(nextLanguage || language)
+    const normalizedThemeMode = nextThemeMode || THEME_MODE_SYSTEM
+    setThemeMode(normalizedThemeMode)
+    writeStoredThemePreference({ themeMode: normalizedThemeMode })
     setTimezonePreference({
       timezoneMode: normalizeTimeZoneMode(timezoneMode),
       timezone: normalizeManualTimeZone(timezone)
@@ -222,6 +241,72 @@ function RemoteApp({ timingOverrides = null }) {
     })
   }
 
+  async function persistRemotePreferences(nextPreferences) {
+    setSavingPreferences(true)
+    try {
+      const response = await fetch('/api/app/ui-preferences', {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(nextPreferences)
+      })
+      if (!response.ok) {
+        throw new Error(await apiErrorText(response, t('errors.saveLayoutPreference')))
+      }
+      const payload = await response.json()
+      await applySessionPreferences(
+        payload?.language,
+        payload?.themeMode,
+        payload?.timezoneMode,
+        payload?.timezone,
+        payload?.dateFormat
+      )
+      setSession((current) => current
+        ? {
+            ...current,
+            language: normalizeLocale(payload?.language || current.language),
+            themeMode: normalizeThemeMode(payload?.themeMode)
+          }
+        : current)
+      return payload
+    } finally {
+      setSavingPreferences(false)
+    }
+  }
+
+  async function handleRemoteLanguageChange(nextLanguage) {
+    const normalizedLanguage = normalizeLocale(nextLanguage || language)
+    await ensureLocaleLoaded(normalizedLanguage)
+    setLanguage(normalizedLanguage)
+    try {
+      await persistRemotePreferences({
+        language: normalizedLanguage,
+        themeMode,
+        timezoneMode: timezonePreference.timezoneMode,
+        timezone: timezonePreference.timezone,
+        dateFormat: dateFormatPreference
+      })
+    } catch (error) {
+      setActionError(formatRemoteMessage(error.message, normalizedLanguage))
+    }
+  }
+
+  async function handleRemoteThemeModeChange(nextThemeMode) {
+    const normalizedThemeMode = normalizeThemeMode(nextThemeMode)
+    setThemeMode(normalizedThemeMode)
+    writeStoredThemePreference({ themeMode: normalizedThemeMode })
+    try {
+      await persistRemotePreferences({
+        language,
+        themeMode: normalizedThemeMode,
+        timezoneMode: timezonePreference.timezoneMode,
+        timezone: timezonePreference.timezone,
+        dateFormat: dateFormatPreference
+      })
+    } catch (error) {
+      setActionError(formatRemoteMessage(error.message, language))
+    }
+  }
+
   async function loadRemoteState() {
     setLoading(true)
     setAuthError('')
@@ -232,7 +317,7 @@ function RemoteApp({ timingOverrides = null }) {
         remoteLivePoll().catch(() => null)
       ])
       setSession(sessionPayload)
-      await applySessionPreferences(sessionPayload?.language, sessionPayload?.timezoneMode, sessionPayload?.timezone, sessionPayload?.dateFormat)
+      await applySessionPreferences(sessionPayload?.language, sessionPayload?.themeMode, sessionPayload?.timezoneMode, sessionPayload?.timezone, sessionPayload?.dateFormat)
       setControl(controlPayload)
       applyLivePoll(livePollPayload)
       lastLiveEventAtRef.current = Date.now()
@@ -269,6 +354,7 @@ function RemoteApp({ timingOverrides = null }) {
     setPasskeyLoading(false)
     setActiveAuthAction(AUTH_ACTION_NONE)
     setExpandedSources(new Set())
+    setThemeMode(readStoredThemePreference().themeMode)
     setTimezonePreference({ timezoneMode: TIMEZONE_MODE_AUTO, timezone: '' })
     setDateFormatPreference(DATE_FORMAT_AUTO)
   }
@@ -297,7 +383,7 @@ function RemoteApp({ timingOverrides = null }) {
         return
       }
       setSession(payload)
-      await applySessionPreferences(payload?.language, payload?.timezoneMode, payload?.timezone, payload?.dateFormat)
+      await applySessionPreferences(payload?.language, payload?.themeMode, payload?.timezoneMode, payload?.timezone, payload?.dateFormat)
       setLoginForm(DEFAULT_LOGIN_FORM)
       const [controlPayload, livePollPayload] = await Promise.all([
         remoteControl(),
@@ -331,7 +417,7 @@ function RemoteApp({ timingOverrides = null }) {
         credentialJson: serializeCredential(credential)
       })
       setSession(payload)
-      await applySessionPreferences(payload?.language, payload?.timezoneMode, payload?.timezone, payload?.dateFormat)
+      await applySessionPreferences(payload?.language, payload?.themeMode, payload?.timezoneMode, payload?.timezone, payload?.dateFormat)
       setLoginForm(DEFAULT_LOGIN_FORM)
       const [controlPayload, livePollPayload] = await Promise.all([
         remoteControl(),
@@ -709,6 +795,7 @@ function RemoteApp({ timingOverrides = null }) {
                 deviceLocation={deviceLocation}
                 installPromptVisible={!installPrompt.installed}
                 onLogout={handleLogout}
+                onOpenPreferences={() => setShowPreferencesDialog(true)}
                 onShowInstallPrompt={focusInstallPrompt}
                 pollingKey={pollingKey}
                 t={t}
@@ -801,6 +888,7 @@ function RemoteApp({ timingOverrides = null }) {
               deviceLocation={deviceLocation}
               installPromptVisible={!installPrompt.installed}
               onLogout={handleLogout}
+              onOpenPreferences={() => setShowPreferencesDialog(true)}
               onShowInstallPrompt={focusInstallPrompt}
               pollingKey={pollingKey}
               t={t}
@@ -1014,6 +1102,22 @@ function RemoteApp({ timingOverrides = null }) {
           </div>
         </section>
       </main>
+      {showPreferencesDialog ? (
+        <RemotePreferencesDialog
+          language={language}
+          languageOptions={selectableLanguages}
+          onClose={() => setShowPreferencesDialog(false)}
+          onLanguageChange={(value) => {
+            void handleRemoteLanguageChange(value)
+          }}
+          onThemeModeChange={(value) => {
+            void handleRemoteThemeModeChange(value)
+          }}
+          saving={savingPreferences}
+          t={t}
+          themeMode={themeMode}
+        />
+      ) : null}
     </div>
   )
 }
@@ -1054,7 +1158,7 @@ function PollResultCard({ language, result, session, t }) {
   )
 }
 
-function RemoteHeroMenu({ deviceLocation, installPromptVisible, onLogout, onShowInstallPrompt, pollingKey, t }) {
+function RemoteHeroMenu({ deviceLocation, installPromptVisible, onLogout, onOpenPreferences, onShowInstallPrompt, pollingKey, t }) {
   return (
     <FloatingActionMenu
       buttonClassName="icon-button fetcher-menu-button remote-hero-menu-button"
@@ -1063,6 +1167,15 @@ function RemoteHeroMenu({ deviceLocation, installPromptVisible, onLogout, onShow
       menuClassName="fetcher-menu remote-hero-menu-panel"
       menuContent={({ closeMenu }) => (
         <>
+          <button
+            onClick={() => {
+              closeMenu()
+              onOpenPreferences()
+            }}
+            type="button"
+          >
+            {t('preferences.title')}
+          </button>
           {installPromptVisible ? (
             <button
               onClick={() => {

@@ -1,0 +1,94 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>InboxBridge Extension Settings</title>
+    <link rel="stylesheet" href="./theme.css">
+  </head>
+  <body class="settings-page">
+    <main class="panel settings-panel">
+      <div class="brand-row">
+        <img alt="" class="brand-mark" src="./remote-icon.svg">
+        <div>
+          <h1 id="settings-heading">InboxBridge</h1>
+          <p id="settings-description">Detect the InboxBridge URL, sign in here, and keep the saved extension auth encrypted in this browser.</p>
+        </div>
+      </div>
+      <form id="settings-form" class="settings-form">
+        <section class="notes-card" id="auth-summary-card" hidden>
+          <h2 id="settings-signed-in-heading">Signed in</h2>
+          <p id="settings-signed-in-copy">Logged in as InboxBridge.</p>
+        </section>
+        <label class="field" id="server-url-field">
+          <span id="settings-server-url-label">InboxBridge URL</span>
+          <input id="server-url" name="serverUrl" placeholder="https://mail.example.com" type="url">
+          <div class="field-hint" id="settings-detect-hint">Looks through the current browser window for an already open InboxBridge tab and copies its URL here. If several match, the most recently used InboxBridge tab wins.</div>
+        </label>
+        <label class="field" id="username-field">
+          <span id="settings-username-label">Username</span>
+          <input id="username" name="username" placeholder="alice" type="text" autocomplete="username">
+        </label>
+        <label class="field" id="password-field">
+          <span id="settings-password-label">Password</span>
+          <input id="password" name="password" placeholder="Enter your InboxBridge password" type="password" autocomplete="current-password">
+          <div class="field-hint" id="settings-password-hint">If this account uses passkeys, enter the username and continue. InboxBridge will finish sign-in in a browser window automatically when required.</div>
+        </label>
+        <label class="field">
+          <span id="settings-language-label">Language</span>
+          <select id="language" name="language">
+            <option value="user">Use InboxBridge preference</option>
+            <option value="en">English</option>
+            <option value="fr">Français</option>
+            <option value="de">Deutsch</option>
+            <option value="pt-PT">Português (Portugal)</option>
+            <option value="pt-BR">Português (Brasil)</option>
+            <option value="es">Español</option>
+          </select>
+          <div class="field-hint" id="settings-language-hint">Follow the signed-in InboxBridge language by default, or override it only for this extension.</div>
+        </label>
+        <label class="field">
+          <span id="settings-theme-label">Theme</span>
+          <select id="theme" name="theme">
+            <option value="user">Use InboxBridge preference</option>
+            <option value="system">System</option>
+            <option value="light-green">Light Green</option>
+            <option value="light-blue">Light Blue</option>
+            <option value="dark-green">Dark Green</option>
+            <option value="dark-blue">Dark Blue</option>
+          </select>
+          <div class="field-hint" id="settings-theme-hint">Follow the signed-in InboxBridge theme by default, or override it only for this extension.</div>
+        </label>
+        <section class="notes-card">
+          <h2 id="settings-notifications-heading">Browser notifications</h2>
+          <div class="field field-toggle">
+            <label class="checkbox-row" for="notify-errors">
+              <input id="notify-errors" name="notifyErrors" type="checkbox">
+              <span id="settings-notify-errors-label">Notify me when InboxBridge sources need attention</span>
+            </label>
+            <div class="field-hint" id="settings-notify-errors-hint">Shows a grouped browser notification when one or more mail sources report errors.</div>
+          </div>
+          <div class="field field-toggle">
+            <label class="checkbox-row" for="notify-manual-poll-success">
+              <input id="notify-manual-poll-success" name="notifyManualPollSuccess" type="checkbox">
+              <span id="settings-notify-manual-poll-label">Notify me when a manual poll started from this extension finishes</span>
+            </label>
+            <div class="field-hint" id="settings-notify-manual-poll-hint">Shows a browser notification with the imported/fetched summary after the run completes.</div>
+          </div>
+        </section>
+        <div class="settings-actions">
+          <button class="primary" id="save-button" type="submit">Sign in</button>
+          <button class="secondary" id="detect-button" type="button">Detect URL from active tabs</button>
+          <button class="secondary" id="test-button" type="button">Test connection</button>
+          <button class="ghost" id="clear-button" type="button">Clear</button>
+        </div>
+      </form>
+      <div class="status-banner" id="settings-status" hidden></div>
+      <section class="notes-card">
+        <h2 id="settings-notes-heading">This build</h2>
+        <p id="settings-notes-copy">You are using the manual-install extension build for this browser. Reload it from the local dist folder after rebuilding or repackaging.</p>
+      </section>
+    </main>
+    <script src="./options.js" type="module"></script>
+  </body>
+  </html>

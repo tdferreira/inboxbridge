@@ -1,0 +1,2 @@
+ALTER TABLE user_ui_preference
+    ADD COLUMN IF NOT EXISTS theme_mode VARCHAR(16) NOT NULL DEFAULT 'SYSTEM';

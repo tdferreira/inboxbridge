@@ -1,6 +1,7 @@
 package dev.inboxbridge.security;
 
 import dev.inboxbridge.persistence.AppUser;
+import dev.inboxbridge.persistence.ExtensionSession;
 import dev.inboxbridge.persistence.RemoteSession;
 import dev.inboxbridge.persistence.UserSession;
 import jakarta.enterprise.context.RequestScoped;
@@ -11,6 +12,7 @@ public class CurrentUserContext {
     private AppUser user;
     private UserSession session;
     private RemoteSession remoteSession;
+    private ExtensionSession extensionSession;
 
     public AppUser user() {
         return user;
@@ -34,5 +36,13 @@ public class CurrentUserContext {
 
     public void setRemoteSession(RemoteSession remoteSession) {
         this.remoteSession = remoteSession;
+    }
+
+    public ExtensionSession extensionSession() {
+        return extensionSession;
+    }
+
+    public void setExtensionSession(ExtensionSession extensionSession) {
+        this.extensionSession = extensionSession;
     }
 }

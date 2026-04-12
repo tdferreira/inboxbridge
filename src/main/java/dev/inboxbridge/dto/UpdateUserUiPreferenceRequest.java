@@ -25,6 +25,7 @@ public record UpdateUserUiPreferenceRequest(
         List<String> userSectionOrder,
         List<String> adminSectionOrder,
         String language,
+        String themeMode,
         String dateFormat,
         String timezoneMode,
         String timezone,

@@ -22,6 +22,12 @@ jobs:
       - name: Check out repository
         uses: actions/checkout@v6
 
+      - name: Resolve release metadata
+        id: release_meta
+        run: |
+          TAG_NAME="${{ github.event_name == 'workflow_dispatch' && inputs.tag_name || github.ref_name }}"
+          echo "tag_name=${TAG_NAME}" >> "$GITHUB_OUTPUT"
+
       - name: Set up Java
         uses: actions/setup-java@v5
         with:
@@ -34,7 +40,10 @@ jobs:
         with:
           node-version: '24'
           cache: npm
-          cache-dependency-path: admin-ui/package-lock.json
+          cache-dependency-path: |
+            admin-ui/package-lock.json
+            browser-extensions/chromium/package-lock.json
+            browser-extensions/firefox/package-lock.json
 
       - name: Build backend
         run: mvn -q -DskipTests package
@@ -47,14 +56,40 @@ jobs:
         working-directory: admin-ui
         run: npm run build
 
+      - name: Install Chromium extension dependencies
+        working-directory: browser-extensions/chromium
+        run: npm ci
+
+      - name: Test Chromium extension
+        working-directory: browser-extensions/chromium
+        run: npm test
+
+      - name: Package Chromium extension
+        working-directory: browser-extensions/chromium
+        run: npm run zip:chrome
+
+      - name: Install Firefox extension dependencies
+        working-directory: browser-extensions/firefox
+        run: npm ci
+
+      - name: Test Firefox extension
+        working-directory: browser-extensions/firefox
+        run: npm test
+
+      - name: Package Firefox extension
+        working-directory: browser-extensions/firefox
+        run: npm run zip:firefox
+
       - name: Prepare release assets
         run: |
-          TAG_NAME="${{ github.event_name == 'workflow_dispatch' && inputs.tag_name || github.ref_name }}"
+          TAG_NAME="${{ steps.release_meta.outputs.tag_name }}"
           mkdir -p release-assets
           cp README.md LICENSE docker-compose.yml .env.example release-assets/
           cp -R docs release-assets/docs
           cp -R target/quarkus-app "release-assets/inboxbridge-backend"
           cp -R admin-ui/dist "release-assets/inboxbridge-admin-ui"
+          cp browser-extensions/chromium/dist/packages/*.zip "release-assets/"
+          cp browser-extensions/firefox/dist/packages/*.xpi "release-assets/"
           cd release-assets
           zip -rq "../inboxbridge-${TAG_NAME}.zip" .
           cd ..
@@ -64,16 +99,135 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ github.token }}
         run: |
-          TAG_NAME="${{ github.event_name == 'workflow_dispatch' && inputs.tag_name || github.ref_name }}"
+          TAG_NAME="${{ steps.release_meta.outputs.tag_name }}"
           if gh release view "${TAG_NAME}" >/dev/null 2>&1; then
             gh release upload "${TAG_NAME}" \
               "inboxbridge-${TAG_NAME}.zip" \
               "inboxbridge-${TAG_NAME}.sha256" \
+              browser-extensions/chromium/dist/packages/*.zip \
+              browser-extensions/firefox/dist/packages/*.xpi \
               --clobber
           else
             gh release create "${TAG_NAME}" \
               "inboxbridge-${TAG_NAME}.zip" \
               "inboxbridge-${TAG_NAME}.sha256" \
+              browser-extensions/chromium/dist/packages/*.zip \
+              browser-extensions/firefox/dist/packages/*.xpi \
               --generate-notes \
               --title "${TAG_NAME}"
           fi
+
+      - name: Refresh packaged artifact metadata
+        id: packaged_artifacts
+        run: |
+          echo "chrome_package=$(find browser-extensions/chromium/dist/packages -maxdepth 1 -type f -name '*.zip' | head -n 1)" >> "$GITHUB_OUTPUT"
+          echo "firefox_package=$(find browser-extensions/firefox/dist/packages -maxdepth 1 -type f -name '*.xpi' | head -n 1)" >> "$GITHUB_OUTPUT"
+
+      - name: Submit Chromium package to Chrome Web Store
+        id: chrome_webstore
+        if: ${{ secrets.CHROME_WEBSTORE_CLIENT_ID != '' && secrets.CHROME_WEBSTORE_CLIENT_SECRET != '' && secrets.CHROME_WEBSTORE_EXTENSION_ID != '' && secrets.CHROME_WEBSTORE_PUBLISHER_ID != '' && secrets.CHROME_WEBSTORE_REFRESH_TOKEN != '' }}
+        env:
+          CHROME_EXTENSION_ID: ${{ secrets.CHROME_WEBSTORE_EXTENSION_ID }}
+          CHROME_PUBLISHER_ID: ${{ secrets.CHROME_WEBSTORE_PUBLISHER_ID }}
+          CHROME_REFRESH_TOKEN: ${{ secrets.CHROME_WEBSTORE_REFRESH_TOKEN }}
+          CHROME_CLIENT_ID: ${{ secrets.CHROME_WEBSTORE_CLIENT_ID }}
+          CHROME_CLIENT_SECRET: ${{ secrets.CHROME_WEBSTORE_CLIENT_SECRET }}
+          CHROME_PACKAGE: ${{ steps.packaged_artifacts.outputs.chrome_package }}
+        run: |
+          set -euo pipefail
+          TOKEN_RESPONSE="$(curl -fsS https://oauth2.googleapis.com/token \
+            -d "client_id=${CHROME_CLIENT_ID}" \
+            -d "client_secret=${CHROME_CLIENT_SECRET}" \
+            -d "refresh_token=${CHROME_REFRESH_TOKEN}" \
+            -d 'grant_type=refresh_token')"
+          ACCESS_TOKEN="$(printf '%s' "${TOKEN_RESPONSE}" | jq -r '.access_token')"
+          if [ -z "${ACCESS_TOKEN}" ] || [ "${ACCESS_TOKEN}" = "null" ]; then
+            echo "Chrome Web Store token exchange failed." >&2
+            printf '%s\n' "${TOKEN_RESPONSE}" >&2
+            exit 1
+          fi
+          ITEM_NAME="publishers/${CHROME_PUBLISHER_ID}/items/${CHROME_EXTENSION_ID}"
+          curl -fsS -X POST \
+            -H "Authorization: Bearer ${ACCESS_TOKEN}" \
+            -H "x-goog-api-version: 2" \
+            -H "Content-Type: application/zip" \
+            --data-binary @"${CHROME_PACKAGE}" \
+            "https://chromewebstore.googleapis.com/upload/v2/${ITEM_NAME}:upload" \
+            > chrome-upload-response.json
+          curl -fsS -X POST \
+            -H "Authorization: Bearer ${ACCESS_TOKEN}" \
+            -H "x-goog-api-version: 2" \
+            -H "Content-Type: application/json" \
+            -d '{"publishTarget":"default"}' \
+            "https://chromewebstore.googleapis.com/v2/${ITEM_NAME}:publish" \
+            > chrome-publish-response.json
+          jq . chrome-upload-response.json > /dev/null
+          jq . chrome-publish-response.json > /dev/null
+          echo "status=submitted" >> "$GITHUB_OUTPUT"
+
+      - name: Submit Chromium package to Microsoft Edge Add-ons
+        id: edge_addons
+        if: ${{ secrets.EDGE_ADDONS_API_KEY != '' && secrets.EDGE_ADDONS_CLIENT_ID != '' && secrets.EDGE_ADDONS_PRODUCT_ID != '' }}
+        env:
+          EDGE_API_KEY: ${{ secrets.EDGE_ADDONS_API_KEY }}
+          EDGE_CLIENT_ID: ${{ secrets.EDGE_ADDONS_CLIENT_ID }}
+          EDGE_PRODUCT_ID: ${{ secrets.EDGE_ADDONS_PRODUCT_ID }}
+          EDGE_PACKAGE: ${{ steps.packaged_artifacts.outputs.chrome_package }}
+        run: |
+          set -euo pipefail
+          curl -fsS -D edge-upload-headers.txt \
+            -H "Authorization: ApiKey ${EDGE_API_KEY}" \
+            -H "X-ClientID: ${EDGE_CLIENT_ID}" \
+            -H "Content-Type: application/zip" \
+            --data-binary @"${EDGE_PACKAGE}" \
+            "https://api.addons.microsoftedge.microsoft.com/v1/products/${EDGE_PRODUCT_ID}/submissions/draft/package" \
+            > edge-upload-response.json
+          curl -fsS -D edge-publish-headers.txt \
+            -H "Authorization: ApiKey ${EDGE_API_KEY}" \
+            -H "X-ClientID: ${EDGE_CLIENT_ID}" \
+            -H "Content-Type: application/json" \
+            -d "{\"notes\":\"Automated GitHub Actions submission for ${{ steps.release_meta.outputs.tag_name }}\"}" \
+            "https://api.addons.microsoftedge.microsoft.com/v1/products/${EDGE_PRODUCT_ID}/submissions" \
+            > edge-publish-response.json
+          jq . edge-upload-response.json > /dev/null || true
+          jq . edge-publish-response.json > /dev/null || true
+          echo "status=submitted" >> "$GITHUB_OUTPUT"
+
+      - name: Submit Firefox package to AMO
+        id: firefox_amo
+        if: ${{ secrets.FIREFOX_AMO_API_KEY != '' && secrets.FIREFOX_AMO_API_SECRET != '' }}
+        env:
+          FIREFOX_AMO_API_KEY: ${{ secrets.FIREFOX_AMO_API_KEY }}
+          FIREFOX_AMO_API_SECRET: ${{ secrets.FIREFOX_AMO_API_SECRET }}
+        run: |
+          set -euo pipefail
+          npx --yes web-ext sign \
+            --source-dir browser-extensions/firefox/dist/firefox \
+            --artifacts-dir browser-extensions/firefox/dist/amo-signed \
+            --api-key "${FIREFOX_AMO_API_KEY}" \
+            --api-secret "${FIREFOX_AMO_API_SECRET}" \
+            --channel listed
+          echo "status=submitted" >> "$GITHUB_OUTPUT"
+
+      - name: Summarize extension store submissions
+        if: always()
+        run: |
+          {
+            echo "## Browser extension store submissions"
+            echo
+            if [ -n "${{ steps.chrome_webstore.outputs.status }}" ]; then
+              echo "- Chrome Web Store: submitted"
+            else
+              echo "- Chrome Web Store: skipped (missing secrets or store setup)"
+            fi
+            if [ -n "${{ steps.edge_addons.outputs.status }}" ]; then
+              echo "- Microsoft Edge Add-ons: submitted"
+            else
+              echo "- Microsoft Edge Add-ons: skipped (missing secrets or store setup)"
+            fi
+            if [ -n "${{ steps.firefox_amo.outputs.status }}" ]; then
+              echo "- Firefox AMO: submitted"
+            else
+              echo "- Firefox AMO: skipped (missing secrets or store setup)"
+            fi
+          } >> "$GITHUB_STEP_SUMMARY"

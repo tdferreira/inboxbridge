@@ -4,6 +4,8 @@ import java.nio.charset.StandardCharsets;
 import java.time.Duration;
 import java.time.Instant;
 import java.util.Arrays;
+import java.util.Collection;
+import java.util.Collections;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Optional;
@@ -215,6 +217,13 @@ public class PasskeyService {
 
     @Transactional
     public PasskeyAuthenticationResult finishAuthentication(FinishPasskeyCeremonyRequest request) {
+        return finishAuthentication(request, Set.of());
+    }
+
+    @Transactional
+    public PasskeyAuthenticationResult finishAuthentication(
+            FinishPasskeyCeremonyRequest request,
+            Collection<String> additionalAllowedOrigins) {
         requireEnabled();
         cleanupExpiredCeremonies();
         PasskeyCeremony ceremony = requireCeremony(request.ceremonyId(), PasskeyCeremony.CeremonyType.AUTHENTICATION);
@@ -223,7 +232,7 @@ public class PasskeyService {
             AssertionRequest assertionRequest = AssertionRequest.fromJson(ceremony.requestJson);
             PublicKeyCredential<com.yubico.webauthn.data.AuthenticatorAssertionResponse, com.yubico.webauthn.data.ClientAssertionExtensionOutputs> credential = PublicKeyCredential
                     .parseAssertionResponseJson(request.credentialJson());
-            com.yubico.webauthn.AssertionResult result = relyingParty().finishAssertion(FinishAssertionOptions.builder()
+            com.yubico.webauthn.AssertionResult result = relyingParty(additionalAllowedOrigins).finishAssertion(FinishAssertionOptions.builder()
                     .request(assertionRequest)
                     .response(credential)
                     .build());
@@ -296,21 +305,48 @@ public class PasskeyService {
     }
 
     private RelyingParty relyingParty() {
+        return relyingParty(Set.of());
+    }
+
+    private RelyingParty relyingParty(Collection<String> additionalAllowedOrigins) {
         return RelyingParty.builder()
                 .identity(RelyingPartyIdentity.builder()
                         .id(inboxBridgeConfig.security().passkeys().rpId().trim())
                         .name(inboxBridgeConfig.security().passkeys().rpName().trim())
                         .build())
                 .credentialRepository(new InboxBridgeCredentialRepository())
-                .origins(allowedOrigins())
+                .origins(allowedOrigins(additionalAllowedOrigins))
                 .build();
     }
 
     private Set<String> allowedOrigins() {
-        return Arrays.stream(inboxBridgeConfig.security().passkeys().origins().split(","))
+        return allowedOrigins(Set.of());
+    }
+
+    private Set<String> allowedOrigins(Collection<String> additionalAllowedOrigins) {
+        LinkedHashSet<String> allowed = Arrays.stream(inboxBridgeConfig.security().passkeys().origins().split(","))
                 .map(String::trim)
                 .filter(origin -> !origin.isBlank())
                 .collect(Collectors.toCollection(LinkedHashSet::new));
+        normalizeAdditionalOrigins(additionalAllowedOrigins).forEach(allowed::add);
+        return allowed;
+    }
+
+    Set<String> normalizeAdditionalOrigins(Collection<String> additionalAllowedOrigins) {
+        if (additionalAllowedOrigins == null || additionalAllowedOrigins.isEmpty()) {
+            return Collections.emptySet();
+        }
+        return additionalAllowedOrigins.stream()
+                .map(origin -> origin == null ? "" : origin.trim())
+                .filter(origin -> !origin.isBlank())
+                .filter(this::isSupportedExtensionOrigin)
+                .collect(Collectors.toCollection(LinkedHashSet::new));
+    }
+
+    private boolean isSupportedExtensionOrigin(String origin) {
+        return origin.startsWith("chrome-extension://")
+                || origin.startsWith("moz-extension://")
+                || origin.startsWith("safari-web-extension://");
     }
 
     private ByteArray userHandle(AppUser user) {

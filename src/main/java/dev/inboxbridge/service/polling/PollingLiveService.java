@@ -511,7 +511,8 @@ public class PollingLiveService {
 
     public enum SessionStreamKind {
         BROWSER,
-        REMOTE
+        REMOTE,
+        EXTENSION
     }
 
     private record Subscriber(

@@ -1,0 +1,11 @@
+{
+  "name": "inboxbridge-browser-extension-chromium",
+  "private": true,
+  "version": "0.1.0",
+  "type": "module",
+  "scripts": {
+    "build:chrome": "node ./scripts/build-chrome.mjs",
+    "test": "node --test ./tests/**/*.test.mjs",
+    "zip:chrome": "node ./scripts/zip-chrome.mjs"
+  }
+}

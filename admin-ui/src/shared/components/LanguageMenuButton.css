@@ -8,18 +8,18 @@
   gap: 10px;
   min-height: 44px;
   padding: 10px 14px;
-  border: 1px solid rgba(20, 37, 63, 0.12);
+  border: 1px solid var(--line);
   border-radius: 14px;
-  background: rgba(255, 255, 255, 0.96);
-  color: #13233a;
+  background: var(--surface-elevated);
+  color: var(--ink);
   font: inherit;
   box-shadow: 0 10px 24px rgba(20, 37, 63, 0.08);
 }
 
 .language-menu-button:hover,
 .language-menu-button:focus-visible {
-  border-color: rgba(29, 95, 191, 0.28);
-  background: #fff;
+  border-color: color-mix(in srgb, var(--accent) 28%, var(--line));
+  background: var(--surface-strong);
 }
 
 .language-menu-button:disabled {
@@ -40,7 +40,7 @@
 
 .language-menu-button-caret {
   font-size: 0.8rem;
-  color: #61738f;
+  color: var(--muted);
 }
 
 .language-menu-panel {
@@ -56,18 +56,18 @@
   border: 0;
   border-radius: 12px;
   background: transparent;
-  color: #13233a;
+  color: var(--ink);
   font: inherit;
   text-align: left;
 }
 
 .language-menu-option:hover,
 .language-menu-option:focus-visible {
-  background: rgba(29, 95, 191, 0.08);
+  background: color-mix(in srgb, var(--accent) 10%, transparent);
 }
 
 .language-menu-option-selected {
-  background: rgba(29, 95, 191, 0.12);
+  background: color-mix(in srgb, var(--accent) 14%, transparent);
   font-weight: 600;
 }
 

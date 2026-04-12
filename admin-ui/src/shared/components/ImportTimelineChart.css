@@ -17,7 +17,7 @@
 
 .timeline-chart-select-label {
   align-items: center;
-  color: var(--muted-text);
+  color: var(--muted);
   display: flex;
   gap: 0.5rem;
   font-size: 0.85rem;
@@ -43,8 +43,8 @@
 }
 
 .timeline-chart-shell {
-  background: linear-gradient(180deg, rgba(255, 255, 255, 0.96), rgba(248, 250, 253, 0.96));
-  border: 1px solid rgba(15, 23, 42, 0.08);
+  background: var(--chart-bg);
+  border: 1px solid var(--chart-border);
   border-radius: 1rem;
   overflow: hidden;
   min-width: 0;
@@ -69,10 +69,10 @@
 }
 
 .timeline-chart-meta-pill {
-  background: rgba(79, 70, 229, 0.08);
-  border: 1px solid rgba(79, 70, 229, 0.14);
+  background: color-mix(in srgb, var(--accent) 12%, transparent);
+  border: 1px solid color-mix(in srgb, var(--accent) 22%, var(--chart-border));
   border-radius: 999px;
-  color: var(--muted-text);
+  color: var(--muted);
   display: inline-flex;
   font-size: 0.78rem;
   font-weight: 600;
@@ -109,13 +109,13 @@
 }
 
 .timeline-chart-legend-text {
-  color: var(--muted-text);
+  color: var(--muted);
   font-size: 0.85rem;
 }
 
 .timeline-chart-tooltip {
-  background: rgba(255, 255, 255, 0.97);
-  border: 1px solid rgba(15, 23, 42, 0.1);
+  background: var(--chart-tooltip-bg);
+  border: 1px solid var(--chart-tooltip-border);
   border-radius: 0.9rem;
   box-shadow: 0 14px 28px rgba(15, 23, 42, 0.12);
   padding: 0.7rem 0.8rem;
@@ -141,7 +141,7 @@
 
 .timeline-chart-tooltip-key {
   align-items: center;
-  color: var(--muted-text);
+  color: var(--muted);
   display: inline-flex;
   gap: 0.45rem;
   min-width: 0;

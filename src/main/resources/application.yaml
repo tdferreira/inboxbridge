@@ -3,6 +3,11 @@ quarkus:
     port: ${HTTP_PORT:8080}
     ssl-port: ${HTTPS_PORT:8443}
     insecure-requests: enabled
+    cors:
+      enabled: true
+      headers: Authorization,Content-Type
+      methods: GET,POST,DELETE,HEAD,OPTIONS
+      origins: /chrome-extension:\\/\\/.*/,/moz-extension:\\/\\/.*/,/safari-web-extension:\\/\\/.*/
     ssl:
       certificate:
         files: ${HTTPS_CERT_FILE:/etc/inboxbridge/certs/backend.crt}
@@ -84,6 +89,9 @@ inboxbridge:
       poll-rate-limit-window: ${SECURITY_REMOTE_POLL_RATE_LIMIT_WINDOW:PT1M}
       service-token: ${SECURITY_REMOTE_SERVICE_TOKEN:}
       service-username: ${SECURITY_REMOTE_SERVICE_USERNAME:}
+    extension:
+      access-token-ttl: ${SECURITY_EXTENSION_ACCESS_TOKEN_TTL:PT1H}
+      refresh-token-ttl: ${SECURITY_EXTENSION_REFRESH_TOKEN_TTL:PT720H}
   gmail:
     destination-user: ${GMAIL_DESTINATION_USER:me}
     client-id: ${GOOGLE_CLIENT_ID:replace-me}

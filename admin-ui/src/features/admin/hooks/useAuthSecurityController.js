@@ -12,6 +12,7 @@ const SUBMISSION_COOLDOWN_MS = 1500
 const DEFAULT_REGISTER_FORM = { username: '', password: '', confirmPassword: '', captchaToken: '' }
 const DEFAULT_PASSWORD_FORM = { currentPassword: '', newPassword: '', confirmNewPassword: '' }
 const DEFAULT_SESSION_ACTIVITY = { recentLogins: [], activeSessions: [], geoIpConfigured: false }
+const DEFAULT_EXTENSION_SESSIONS = []
 const SESSION_KIND_KEYS = Object.freeze({
   REMOTE: 'sessions.kindRemote',
   BROWSER: 'sessions.kindBrowser'
@@ -45,6 +46,8 @@ export function useAuthSecurityController({
   const [securityTab, setSecurityTab] = useState('password')
   const [showPasskeyRegistrationDialog, setShowPasskeyRegistrationDialog] = useState(false)
   const [sessionActivity, setSessionActivity] = useState(DEFAULT_SESSION_ACTIVITY)
+  const [extensionSessions, setExtensionSessions] = useState(DEFAULT_EXTENSION_SESSIONS)
+  const [latestCreatedExtensionSession, setLatestCreatedExtensionSession] = useState(null)
   const latestRecentSessionKeyRef = useRef(null)
   const hasSessionActivityBaselineRef = useRef(false)
   const loginCooldownTimeoutRef = useRef(null)
@@ -70,6 +73,8 @@ export function useAuthSecurityController({
     setPasswordForm(DEFAULT_PASSWORD_FORM)
     setMyPasskeys([])
     setSessionActivity(DEFAULT_SESSION_ACTIVITY)
+    setExtensionSessions(DEFAULT_EXTENSION_SESSIONS)
+    setLatestCreatedExtensionSession(null)
     setPasskeyLabel('')
     setShowSecurityPanel(false)
     setSecurityTab('password')
@@ -545,6 +550,103 @@ export function useAuthSecurityController({
     }
   }
 
+  async function loadExtensionSessions({ suppressErrors = false } = {}) {
+    try {
+      const response = await fetch('/api/extension/sessions')
+      if (!response.ok) {
+        throw new Error(await apiErrorText(response, errorText('loadExtensionSessions')))
+      }
+      const payload = await response.json()
+      setExtensionSessions(Array.isArray(payload) ? payload : [])
+    } catch (err) {
+      if (suppressErrors) {
+        return
+      }
+      pushNotification({
+        autoCloseMs: null,
+        copyText: err.message ? pollErrorNotification(err.message) : translatedNotification('errors.loadExtensionSessions'),
+        message: err.message ? pollErrorNotification(err.message) : translatedNotification('errors.loadExtensionSessions'),
+        targetId: 'security-extension-sessions-panel-section',
+        tone: 'error'
+      })
+    }
+  }
+
+  async function handleCreateExtensionSession({ browserFamily, extensionVersion, label }) {
+    await withPending('extensionSessionCreate', async () => {
+      try {
+        const response = await fetch('/api/extension/sessions', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            browserFamily,
+            extensionVersion,
+            label
+          })
+        })
+        if (!response.ok) {
+          throw new Error(await apiErrorText(response, errorText('createExtensionSession')))
+        }
+        const payload = await response.json()
+        setLatestCreatedExtensionSession(payload)
+        await loadExtensionSessions({ suppressErrors: true })
+        pushNotification({
+          message: translatedNotification('notifications.extensionSessionCreated'),
+          targetId: 'security-extension-sessions-panel-section',
+          tone: 'success'
+        })
+      } catch (err) {
+        pushNotification({
+          autoCloseMs: null,
+          copyText: err.message ? pollErrorNotification(err.message) : translatedNotification('errors.createExtensionSession'),
+          message: err.message ? pollErrorNotification(err.message) : translatedNotification('errors.createExtensionSession'),
+          targetId: 'security-extension-sessions-panel-section',
+          tone: 'error'
+        })
+      }
+    })
+  }
+
+  async function handleRevokeExtensionSession(extensionSession) {
+    const sessionId = extensionSession?.id
+    openConfirmation({
+      actionKey: `extensionSessionRevoke:${sessionId}`,
+      body: t('extensionSessions.revokeConfirmBody'),
+      confirmLabel: t('extensionSessions.revoke'),
+      confirmLoadingLabel: t('extensionSessions.revokeLoading'),
+      confirmTone: 'danger',
+      onConfirm: async () => {
+        await withPending(`extensionSessionRevoke:${sessionId}`, async () => {
+          try {
+            const response = await fetch(`/api/extension/sessions/${sessionId}`, { method: 'DELETE' })
+            if (!response.ok && response.status !== 404) {
+              throw new Error(await apiErrorText(response, errorText('revokeExtensionSession')))
+            }
+            closeConfirmation?.()
+            await loadExtensionSessions({ suppressErrors: true })
+            if (latestCreatedExtensionSession?.id === sessionId) {
+              setLatestCreatedExtensionSession(null)
+            }
+            pushNotification({
+              message: translatedNotification('notifications.extensionSessionRevoked'),
+              targetId: 'security-extension-sessions-panel-section',
+              tone: 'success'
+            })
+          } catch (err) {
+            pushNotification({
+              autoCloseMs: null,
+              copyText: err.message ? pollErrorNotification(err.message) : translatedNotification('errors.revokeExtensionSession'),
+              message: err.message ? pollErrorNotification(err.message) : translatedNotification('errors.revokeExtensionSession'),
+              targetId: 'security-extension-sessions-panel-section',
+              tone: 'error'
+            })
+          }
+        })
+      },
+      title: t('extensionSessions.revokeConfirmTitle')
+    })
+  }
+
   async function handleRevokeSession(session) {
     const sessionId = session?.id
     const sessionType = session?.sessionType || 'BROWSER'
@@ -615,7 +717,10 @@ export function useAuthSecurityController({
     setSecurityTab(tab)
     setShowSecurityPanel(true)
     if (tab === 'sessions') {
-      await loadSessionActivity()
+      await Promise.all([
+        loadSessionActivity(),
+        loadExtensionSessions()
+      ])
     }
   }
 
@@ -626,7 +731,10 @@ export function useAuthSecurityController({
   async function selectSecurityTab(tab) {
     setSecurityTab(tab)
     if (tab === 'sessions') {
-      await loadSessionActivity()
+      await Promise.all([
+        loadSessionActivity(),
+        loadExtensionSessions()
+      ])
     }
   }
 
@@ -678,12 +786,15 @@ export function useAuthSecurityController({
     authError,
     authLoading,
     closePasskeyRegistrationDialog,
+    clearLatestCreatedExtensionSession: () => setLatestCreatedExtensionSession(null),
     closeRegisterDialog: () => {
       setRegisterOpen(false)
       setRegisterChallenge(null)
       setRegisterForm(DEFAULT_REGISTER_FORM)
     },
     closeSecurityPanel,
+    createExtensionSession: handleCreateExtensionSession,
+    extensionSessions,
     handleDeletePasskey,
     handleLogin,
     handleLogout,
@@ -691,7 +802,9 @@ export function useAuthSecurityController({
     handlePasskeyRegistration,
     handlePasswordChange,
     handlePasswordRemoval,
+    handleRevokeExtensionSession,
     handleRegister,
+    latestCreatedExtensionSession,
     loginCoolingDown,
     loginStage,
     loadSession,
@@ -700,6 +813,7 @@ export function useAuthSecurityController({
     openPasskeyRegistrationDialog,
     handleRevokeOtherSessions,
     handleRevokeSession,
+    pollExtensionSessions: loadExtensionSessions,
     pollSessionActivity: loadSessionActivity,
     openRegisterDialog: async () => {
       setRegisterOpen(true)

@@ -186,6 +186,38 @@ describe('UserListItem', () => {
     expect(menuQueries.getByRole('button', { name: 'Eliminar utilizador' })).toBeInTheDocument()
   })
 
+  it('marks the active contextual menu wrapper so the open row can sit above sibling actions', () => {
+    render(
+      <UserListItem
+        config={buildConfig()}
+        isExpanded={false}
+        isLoading={false}
+        locale="en"
+        onDeleteUser={vi.fn()}
+        onForcePasswordChange={vi.fn()}
+        onOpenResetPasswordDialog={vi.fn()}
+        onResetUserPasskeys={vi.fn()}
+        onToggleExpand={vi.fn()}
+        onToggleUserActive={vi.fn()}
+        onUpdateUser={vi.fn()}
+        session={{ id: 99, role: 'ADMIN' }}
+        t={(key, params) => translate('en', key, params)}
+        updatingPasskeysReset={false}
+        updatingUser={false}
+      />
+    )
+
+    const trigger = screen.getByRole('button', { name: 'User actions' })
+    const wrapper = trigger.closest('.user-list-entry-menu')
+
+    expect(wrapper).toHaveAttribute('data-menu-open', 'false')
+
+    fireEvent.click(trigger)
+
+    expect(wrapper).toHaveAttribute('data-menu-open', 'true')
+    expect(within(wrapper).getByRole('button', { name: 'Suspend user' })).toBeInTheDocument()
+  })
+
   it('closes the contextual menu when the trigger scrolls out of view', async () => {
     const originalGetBoundingClientRect = HTMLElement.prototype.getBoundingClientRect
     const originalInnerWidth = window.innerWidth

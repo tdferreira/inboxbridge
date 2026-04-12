@@ -99,7 +99,11 @@
   position: absolute;
   top: 8px;
   right: 10px;
-  z-index: 2;
+  z-index: 3;
+}
+
+.user-list-entry-menu[data-menu-open='true'] {
+  z-index: 1200;
 }
 
 .user-list-entry-menu .fetcher-menu-button {
@@ -109,7 +113,7 @@
 
 .user-list-entry-menu .fetcher-menu {
   position: fixed;
-  z-index: 1000;
+  z-index: 1201;
   display: grid;
   gap: 8px;
   min-width: 220px;
@@ -117,7 +121,7 @@
   padding: 12px;
   border-radius: 16px;
   border: 1px solid var(--line);
-  background: rgba(255, 252, 247, 0.98);
+  background: var(--menu-bg);
   box-shadow: 0 16px 32px rgba(36, 26, 20, 0.16);
 }
 

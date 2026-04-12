@@ -174,6 +174,27 @@ class PollingLiveServiceTest {
     }
 
     @Test
+    void publishSessionRevokedSupportsExtensionSubscribers() {
+        PollingLiveService service = new PollingLiveService();
+        AppUser alice = actor(7L, "alice", AppUser.Role.USER);
+        AtomicReference<String> eventType = new AtomicReference<>();
+        AtomicBoolean completed = new AtomicBoolean(false);
+
+        service.subscribe(alice, PollingLiveService.SessionStreamKind.EXTENSION, 77L)
+                .subscribe().with(
+                        event -> eventType.set(event.type()),
+                        failure -> {
+                            throw new AssertionError(failure);
+                        },
+                        () -> completed.set(true));
+
+        service.publishSessionRevoked(alice.id, PollingLiveService.SessionStreamKind.EXTENSION, 77L);
+
+        assertEquals("session-revoked", eventType.get());
+        assertTrue(completed.get());
+    }
+
+    @Test
     void publishNewSignInDetectedNotifiesMatchingUserSubscribers() {
         PollingLiveService service = new PollingLiveService();
         AppUser alice = actor(7L, "alice", AppUser.Role.USER);

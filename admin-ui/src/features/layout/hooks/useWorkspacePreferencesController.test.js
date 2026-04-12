@@ -174,6 +174,23 @@ describe('useWorkspacePreferencesController', () => {
     }))
   })
 
+  it('persists a selected theme mode and stores it locally', async () => {
+    fetch.mockResolvedValue(createFetchResponse({ themeMode: 'DARK_BLUE' }))
+
+    const { result } = renderController()
+
+    await act(async () => {
+      await result.current.handleThemeModeChange('DARK_BLUE')
+    })
+
+    expect(result.current.uiPreferences.themeMode).toBe('DARK_BLUE')
+    expect(window.localStorage.getItem('inboxbridge.themeMode')).toBe('DARK_BLUE')
+    expect(fetch).toHaveBeenCalledWith('/api/app/ui-preferences', expect.objectContaining({
+      method: 'PUT',
+      body: expect.stringContaining('"themeMode":"DARK_BLUE"')
+    }))
+  })
+
   it('persists a valid custom date format in the single dateFormat preference', async () => {
     fetch.mockResolvedValue(createFetchResponse({ dateFormat: 'DD/MM/YYYY HH:mm:ss' }))
 

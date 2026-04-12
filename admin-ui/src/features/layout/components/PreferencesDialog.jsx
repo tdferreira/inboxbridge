@@ -41,6 +41,7 @@ function PreferencesDialog({
   onPersistLayoutChange,
   onQuickSetupVisibilityChange,
   onResetLayout,
+  onThemeModeChange,
   onTimeZoneChange,
   onTimeZoneModeChange,
   persistLayout,
@@ -49,6 +50,7 @@ function PreferencesDialog({
   selectableTimeZones,
   t,
   dateFormat,
+  themeMode,
   timezone,
   timezoneMode
 }) {
@@ -189,6 +191,20 @@ function PreferencesDialog({
               onChange={onLanguageChange}
               options={languageOptions}
             />
+          </label>
+          <label>
+            <span>{t('preferences.theme')}</span>
+            <select
+              disabled={savingLayout}
+              onChange={(event) => onThemeModeChange(event.target.value)}
+              value={themeMode}
+            >
+              <option value="SYSTEM">{t('preferences.themeSystem')}</option>
+              <option value="LIGHT_GREEN">{t('preferences.themeLightGreen')}</option>
+              <option value="LIGHT_BLUE">{t('preferences.themeLightBlue')}</option>
+              <option value="DARK_GREEN">{t('preferences.themeDarkGreen')}</option>
+              <option value="DARK_BLUE">{t('preferences.themeDarkBlue')}</option>
+            </select>
           </label>
           <label>
             <span>{t('preferences.timezoneMode')}</span>

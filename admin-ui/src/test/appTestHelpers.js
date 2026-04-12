@@ -37,9 +37,10 @@ export function clearLocalStorage() {
   })
 }
 
-export function createWorkspaceRouteFetch({ session, uiPreferences = {}, sessionActivityResponses = null, adminDashboard = null }) {
+export function createWorkspaceRouteFetch({ session, uiPreferences = {}, sessionActivityResponses = null, extensionSessions = [], adminDashboard = null }) {
   let storedUiPreferences = { ...uiPreferences }
   let sessionActivityIndex = 0
+  let storedExtensionSessions = [...extensionSessions]
 
   return vi.fn(async (input, init = {}) => {
     const url = String(input)
@@ -128,6 +129,43 @@ export function createWorkspaceRouteFetch({ session, uiPreferences = {}, session
         activeSessions: [],
         geoIpConfigured: false
       })
+    }
+    if (url === '/api/extension/sessions') {
+      if (method === 'POST') {
+        const payload = JSON.parse(init.body || '{}')
+        const created = {
+          id: storedExtensionSessions.length + 1,
+          label: payload.label || 'Browser extension',
+          browserFamily: payload.browserFamily || 'unknown',
+          extensionVersion: payload.extensionVersion || 'unknown',
+          token: 'ibx_generated_token',
+          tokenPrefix: 'ibx_generate',
+          createdAt: '2026-04-12T10:00:00Z',
+          lastUsedAt: null,
+          expiresAt: null,
+          revokedAt: null
+        }
+        storedExtensionSessions = [created, ...storedExtensionSessions]
+        return jsonResponse(created)
+      }
+      return jsonResponse(storedExtensionSessions)
+    }
+    if (url === '/api/extension/auth/browser-handoff/complete' && method === 'POST') {
+      return jsonResponse({ status: 'COMPLETED' })
+    }
+    if (url.startsWith('/api/extension/sessions/') && method === 'DELETE') {
+      const sessionId = Number(url.split('/').pop())
+      storedExtensionSessions = storedExtensionSessions.map((sessionItem) => (
+        sessionItem.id === sessionId
+          ? { ...sessionItem, revokedAt: sessionItem.revokedAt || '2026-04-12T10:05:00Z' }
+          : sessionItem
+      ))
+      return {
+        ok: true,
+        status: 204,
+        json: () => Promise.resolve(null),
+        text: () => Promise.resolve('')
+      }
     }
 
     if (session.role === 'ADMIN') {

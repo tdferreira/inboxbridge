@@ -91,7 +91,11 @@ function FloatingActionMenu({
   }, [menuOpen])
 
   return (
-    <div ref={containerRef} className={className}>
+    <div
+      ref={containerRef}
+      className={className}
+      data-menu-open={menuOpen ? 'true' : 'false'}
+    >
       <button
         aria-label={buttonLabel}
         className={buttonClassName}

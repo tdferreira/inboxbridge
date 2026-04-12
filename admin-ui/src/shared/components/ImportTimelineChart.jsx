@@ -1030,14 +1030,14 @@ function ImportTimelineChart({
                     axisLine={false}
                     dataKey="bucketLabel"
                     minTickGap={18}
-                    tick={{ fill: 'var(--muted-text)', fontSize: 12 }}
+                    tick={{ fill: 'var(--muted)', fontSize: 12 }}
                     tickLine={false}
                     tickFormatter={(_, index) => resolvedChartRows[index]?.label || ''}
                   />
                   <YAxis
                     allowDecimals={false}
                     axisLine={false}
-                    tick={{ fill: 'var(--muted-text)', fontSize: 12 }}
+                    tick={{ fill: 'var(--muted)', fontSize: 12 }}
                     tickLine={false}
                     width={34}
                   />

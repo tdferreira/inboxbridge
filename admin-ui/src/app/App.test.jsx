@@ -138,6 +138,59 @@ describe('App', () => {
     expect(screen.queryByText('Signed in with passkey.')).not.toBeInTheDocument()
   })
 
+  it('completes the extension browser sign-in handoff after a normal web session is present', async () => {
+    window.history.replaceState({}, '', '/?extensionAuthRequest=request-1')
+    const closeSpy = vi.spyOn(window, 'close').mockImplementation(() => {})
+    const fetchMock = createWorkspaceRouteFetch({
+      session: {
+        id: 1,
+        username: 'alice',
+        role: 'USER',
+        approved: true,
+        mustChangePassword: false,
+        passkeyCount: 1,
+        passwordConfigured: true
+      },
+      uiPreferences: {}
+    })
+    vi.stubGlobal('fetch', fetchMock)
+
+    render(<App />)
+
+    await screen.findByText('Connect your browser extension')
+    await screen.findByText('The browser extension is connected. You can close this window.')
+    await screen.findByRole('button', { name: 'Close window (5s)' })
+    expect(fetchMock).toHaveBeenCalledWith('/api/extension/auth/browser-handoff/complete', expect.objectContaining({
+      method: 'POST'
+    }))
+    expect(closeSpy).not.toHaveBeenCalled()
+  })
+
+  it('shows a five second close countdown for the completed extension sign-in popup', async () => {
+    window.history.replaceState({}, '', '/?extensionAuthRequest=request-1')
+    const closeSpy = vi.spyOn(window, 'close').mockImplementation(() => {})
+    const fetchMock = createWorkspaceRouteFetch({
+      session: {
+        id: 1,
+        username: 'alice',
+        role: 'USER',
+        approved: true,
+        mustChangePassword: false,
+        passkeyCount: 1,
+        passwordConfigured: true
+      },
+      uiPreferences: {}
+    })
+    vi.stubGlobal('fetch', fetchMock)
+
+    render(<App />)
+
+    await screen.findByRole('button', { name: 'Close window (5s)' })
+    await waitFor(() => {
+      expect(closeSpy).toHaveBeenCalled()
+    }, { timeout: 8000 })
+  }, 10000)
+
   it('uses the password-aware login flow when the passkey button is clicked with a typed password', async () => {
     Object.defineProperty(window, 'PublicKeyCredential', {
       configurable: true,
@@ -1075,6 +1128,44 @@ describe('App', () => {
     expect(await screen.findByText('InboxBridge Go')).toBeInTheDocument()
     expect(screen.getByText('Use InboxBridge Go to trigger inbox fetches quickly from phones, tablets, laptops, or shared devices without opening the full workspace.')).toBeInTheDocument()
     expect(screen.getByRole('link', { name: 'Open InboxBridge Go' })).toHaveAttribute('href', '/remote')
+  })
+
+  it('shows browser extension token management inside the security sessions tab', async () => {
+    const fetchMock = createWorkspaceRouteFetch({
+      session: {
+        id: 1,
+        username: 'alice',
+        role: 'USER',
+        approved: true,
+        mustChangePassword: false,
+        passkeyCount: 1,
+        passwordConfigured: true
+      },
+      extensionSessions: [
+        {
+          id: 41,
+          label: 'Firefox profile',
+          browserFamily: 'firefox',
+          extensionVersion: '0.1.0',
+          tokenPrefix: 'ibx_firefox',
+          createdAt: '2026-04-12T10:00:00Z',
+          lastUsedAt: '2026-04-12T10:05:00Z',
+          revokedAt: null
+        }
+      ]
+    })
+
+    vi.stubGlobal('fetch', fetchMock)
+
+    render(<App />)
+
+    await screen.findByText(/signed in as/i)
+    fireEvent.click(screen.getByRole('button', { name: 'Security' }))
+    fireEvent.click(await screen.findByRole('tab', { name: 'Sessions' }))
+
+    expect(await screen.findByText('Browser extensions')).toBeInTheDocument()
+    expect(screen.getByText('Firefox profile')).toBeInTheDocument()
+    expect(fetchMock.mock.calls.filter(([url]) => String(url) === '/api/extension/sessions').length).toBeGreaterThanOrEqual(1)
   })
 
   it('clears stale running source state from snapshot fallback when event streaming is unavailable', async () => {

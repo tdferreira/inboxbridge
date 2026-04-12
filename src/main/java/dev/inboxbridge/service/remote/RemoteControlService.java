@@ -102,6 +102,7 @@ public class RemoteControlService {
                         systemOAuthAppSettingsService.effectiveMultiUserEnabled(),
                         false,
                         uiPreference.language(),
+                        uiPreference.themeMode(),
                         uiPreference.dateFormat(),
                         uiPreference.timezoneMode(),
                         uiPreference.timezone()),
