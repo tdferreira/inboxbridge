@@ -290,7 +290,6 @@ AI assistance was used to help design, implement, refactor, test, and document p
 - Architecture: [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md)
 - Local certificate trust: [docs/TRUST_LOCAL_CA.md](docs/TRUST_LOCAL_CA.md)
 - Admin UI notes: [admin-ui/README.md](admin-ui/README.md)
-- Admin UI v2 experiment notes: [admin-ui-v2/README.md](admin-ui-v2/README.md)
 
 ## Community
 
@@ -300,4 +299,4 @@ AI assistance was used to help design, implement, refactor, test, and document p
 
 ## Current Version
 
-The repository currently declares version `0.5.0` in [`pom.xml`](pom.xml), `0.5.0` in [`admin-ui/package.json`](admin-ui/package.json), and `0.5.0` in [`admin-ui-v2/package.json`](admin-ui-v2/package.json).
+For the latest published InboxBridge version, see the [GitHub Releases page](https://github.com/tdferreira/inboxbridge/releases).
