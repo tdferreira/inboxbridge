@@ -40,10 +40,7 @@ jobs:
         with:
           node-version: '24'
           cache: npm
-          cache-dependency-path: |
-            admin-ui/package-lock.json
-            browser-extensions/chromium/package-lock.json
-            browser-extensions/firefox/package-lock.json
+          cache-dependency-path: admin-ui/package-lock.json
 
       - name: Build backend
         run: mvn -q -DskipTests package
@@ -56,10 +53,6 @@ jobs:
         working-directory: admin-ui
         run: npm run build
 
-      - name: Install Chromium extension dependencies
-        working-directory: browser-extensions/chromium
-        run: npm ci
-
       - name: Test Chromium extension
         working-directory: browser-extensions/chromium
         run: npm test
@@ -67,10 +60,6 @@ jobs:
       - name: Package Chromium extension
         working-directory: browser-extensions/chromium
         run: npm run zip:chrome
-
-      - name: Install Firefox extension dependencies
-        working-directory: browser-extensions/firefox
-        run: npm ci
 
       - name: Test Firefox extension
         working-directory: browser-extensions/firefox
