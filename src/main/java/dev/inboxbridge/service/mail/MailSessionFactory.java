@@ -25,31 +25,31 @@ public class MailSessionFactory {
     }
 
     public Session sourceImapSession(RuntimeEmailAccount account) {
-        return Session.getInstance(imapProperties(account.tls(), usesOAuth(account), false));
+        return Session.getInstance(imapProperties(account.port(), account.tls(), usesOAuth(account), false));
     }
 
     public Session sourceImapSession(InboxBridgeConfig.Source source) {
-        return Session.getInstance(imapProperties(source.tls(), usesOAuth(source), false));
+        return Session.getInstance(imapProperties(source.port(), source.tls(), usesOAuth(source), false));
     }
 
     public Session idleImapSession(RuntimeEmailAccount account) {
-        Properties properties = imapProperties(account.tls(), usesOAuth(account), true);
+        Properties properties = imapProperties(account.port(), account.tls(), usesOAuth(account), true);
         properties.put("mail.imap.closefoldersonstorefailure", "false");
         properties.put("mail.imaps.closefoldersonstorefailure", "false");
         return Session.getInstance(properties);
     }
 
     public Session sourcePop3Session(RuntimeEmailAccount account) {
-        return Session.getInstance(pop3Properties(account.tls(), usesOAuth(account)));
+        return Session.getInstance(pop3Properties(account.port(), account.tls(), usesOAuth(account)));
     }
 
     public Session sourcePop3Session(InboxBridgeConfig.Source source) {
-        return Session.getInstance(pop3Properties(source.tls(), usesOAuth(source)));
+        return Session.getInstance(pop3Properties(source.port(), source.tls(), usesOAuth(source)));
     }
 
     public Session destinationImapSession(ImapAppendDestinationTarget target) {
         requireTlsEnabled(target.tls());
-        return Session.getInstance(imapProperties(target.tls(), target.authMethod() == InboxBridgeConfig.AuthMethod.OAUTH2, false));
+        return Session.getInstance(imapProperties(target.port(), target.tls(), target.authMethod() == InboxBridgeConfig.AuthMethod.OAUTH2, false));
     }
 
     public String imapStoreProtocol(boolean tls) {
@@ -60,13 +60,33 @@ public class MailSessionFactory {
         return tls ? "pop3s" : "pop3";
     }
 
-    private Properties imapProperties(boolean tls, boolean oauth, boolean idleWatch) {
+    protected String imapStoreProtocol(boolean tls, int port) {
+        if (!tls) {
+            return "imap";
+        }
+        return usesImplicitTlsPort(InboxBridgeConfig.Protocol.IMAP, port) ? imapStoreProtocol(true) : "imap";
+    }
+
+    protected String pop3StoreProtocol(boolean tls, int port) {
+        if (!tls) {
+            return "pop3";
+        }
+        return usesImplicitTlsPort(InboxBridgeConfig.Protocol.POP3, port) ? pop3StoreProtocol(true) : "pop3";
+    }
+
+    private Properties imapProperties(int port, boolean tls, boolean oauth, boolean idleWatch) {
         Properties properties = new Properties();
-        properties.put("mail.store.protocol", imapStoreProtocol(tls));
-        properties.put("mail.imap.ssl.enable", tls);
-        properties.put("mail.imaps.ssl.enable", tls);
+        boolean implicitTls = tls && usesImplicitTlsPort(InboxBridgeConfig.Protocol.IMAP, port);
+        boolean startTls = tls && !implicitTls;
+        properties.put("mail.store.protocol", imapStoreProtocol(tls, port));
+        properties.put("mail.imap.ssl.enable", implicitTls);
+        properties.put("mail.imaps.ssl.enable", implicitTls);
         properties.put("mail.imap.ssl.checkserveridentity", "true");
         properties.put("mail.imaps.ssl.checkserveridentity", "true");
+        properties.put("mail.imap.starttls.enable", startTls);
+        properties.put("mail.imap.starttls.required", startTls);
+        properties.put("mail.imaps.starttls.enable", startTls);
+        properties.put("mail.imaps.starttls.required", startTls);
         properties.put("mail.imap.connectiontimeout", timeoutMillis(mailClientConfig.connectionTimeout()));
         properties.put("mail.imaps.connectiontimeout", timeoutMillis(mailClientConfig.connectionTimeout()));
         properties.put("mail.imap.timeout", timeoutMillis(idleWatch
@@ -81,13 +101,19 @@ public class MailSessionFactory {
         return properties;
     }
 
-    private Properties pop3Properties(boolean tls, boolean oauth) {
+    private Properties pop3Properties(int port, boolean tls, boolean oauth) {
         Properties properties = new Properties();
-        properties.put("mail.store.protocol", pop3StoreProtocol(tls));
-        properties.put("mail.pop3.ssl.enable", tls);
-        properties.put("mail.pop3s.ssl.enable", tls);
+        boolean implicitTls = tls && usesImplicitTlsPort(InboxBridgeConfig.Protocol.POP3, port);
+        boolean startTls = tls && !implicitTls;
+        properties.put("mail.store.protocol", pop3StoreProtocol(tls, port));
+        properties.put("mail.pop3.ssl.enable", implicitTls);
+        properties.put("mail.pop3s.ssl.enable", implicitTls);
         properties.put("mail.pop3.ssl.checkserveridentity", "true");
         properties.put("mail.pop3s.ssl.checkserveridentity", "true");
+        properties.put("mail.pop3.starttls.enable", startTls);
+        properties.put("mail.pop3.starttls.required", startTls);
+        properties.put("mail.pop3s.starttls.enable", startTls);
+        properties.put("mail.pop3s.starttls.required", startTls);
         properties.put("mail.pop3.connectiontimeout", timeoutMillis(mailClientConfig.connectionTimeout()));
         properties.put("mail.pop3s.connectiontimeout", timeoutMillis(mailClientConfig.connectionTimeout()));
         properties.put("mail.pop3.timeout", timeoutMillis(mailClientConfig.operationTimeout()));
@@ -132,6 +158,13 @@ public class MailSessionFactory {
         properties.put("mail.pop3s.auth.xoauth2.disable", "false");
         properties.put("mail.pop3.auth.xoauth2.two.line.authentication.format", "true");
         properties.put("mail.pop3s.auth.xoauth2.two.line.authentication.format", "true");
+    }
+
+    private boolean usesImplicitTlsPort(InboxBridgeConfig.Protocol protocol, int port) {
+        return switch (protocol) {
+            case IMAP -> port <= 0 || port == 993;
+            case POP3 -> port <= 0 || port == 995;
+        };
     }
 
     private void requireTlsEnabled(boolean tls) {

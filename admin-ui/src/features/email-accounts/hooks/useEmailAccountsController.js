@@ -128,6 +128,7 @@ export function useEmailAccountsController({
   const [emailAccountDuplicateError, setEmailAccountDuplicateError] = useState('')
   const [emailAccountFolders, setEmailAccountFolders] = useState([])
   const [emailAccountFoldersLoading, setEmailAccountFoldersLoading] = useState(false)
+  const [emailAccountFolderLoadError, setEmailAccountFolderLoadError] = useState('')
   const [emailAccountTestResult, setEmailAccountTestResult] = useState(null)
   const [userEmailAccounts, setUserEmailAccounts] = useState([])
   const [expandedFetcherLoadingId, setExpandedFetcherLoadingId] = useState(null)
@@ -233,6 +234,7 @@ export function useEmailAccountsController({
   function handleEmailAccountFormChange(updater) {
     setEmailAccountDuplicateError('')
     setEmailAccountTestResult(null)
+    setEmailAccountFolderLoadError('')
     setEmailAccountForm((current) => {
       const next = normalizeEmailAccountForm(typeof updater === 'function' ? updater(current) : updater, authOptions)
       if (sourceFolderSignature(current) !== sourceFolderSignature(next)) {
@@ -251,6 +253,7 @@ export function useEmailAccountsController({
   function openAddFetcherDialog() {
     setEmailAccountDuplicateError('')
     setEmailAccountFolders([])
+    setEmailAccountFolderLoadError('')
     setEmailAccountTestResult(null)
     folderFetchSuccessSignatureRef.current = ''
     folderFetchAttemptRef.current = { signature: '', startedAt: 0 }
@@ -260,6 +263,7 @@ export function useEmailAccountsController({
 
   function editEmailAccount(emailAccount) {
     setEmailAccountFolders([])
+    setEmailAccountFolderLoadError('')
     setEmailAccountTestResult(null)
     folderFetchSuccessSignatureRef.current = ''
     folderFetchAttemptRef.current = { signature: '', startedAt: 0 }
@@ -289,6 +293,7 @@ export function useEmailAccountsController({
 
   function closeFetcherDialog() {
     setEmailAccountFolders([])
+    setEmailAccountFolderLoadError('')
     setEmailAccountTestResult(null)
     folderFetchSuccessSignatureRef.current = ''
     folderFetchAttemptRef.current = { signature: '', startedAt: 0 }
@@ -300,6 +305,7 @@ export function useEmailAccountsController({
     const payload = buildEmailAccountRequestPayload(formOverride)
     if (payload.protocol !== 'IMAP') {
       setEmailAccountFolders([])
+      setEmailAccountFolderLoadError('')
       return []
     }
     setEmailAccountFoldersLoading(true)
@@ -317,10 +323,12 @@ export function useEmailAccountsController({
       const folderPayload = await response.json()
       const folders = Array.isArray(folderPayload?.folders) ? folderPayload.folders : []
       setEmailAccountFolders(folders)
+      setEmailAccountFolderLoadError('')
       folderFetchSuccessSignatureRef.current = signature
       return folders
     } catch (err) {
       setEmailAccountFolders([])
+      setEmailAccountFolderLoadError(t('errors.loadMailFetcherFolders'))
       if (!suppressErrors) {
         pushNotification({
           autoCloseMs: null,
@@ -557,6 +565,7 @@ export function useEmailAccountsController({
         if (tlsAutoApplied) {
           setEmailAccountForm(nextForm)
         }
+        setEmailAccountFolderLoadError('')
         const message = payload.message || t('emailAccounts.testSuccess')
         setEmailAccountTestResult({
           ...payload,
@@ -566,13 +575,8 @@ export function useEmailAccountsController({
           tone: 'success'
         })
         if (nextForm.protocol === 'IMAP') {
-          await loadEmailAccountFolders(nextForm, { suppressErrors: true })
+          void loadEmailAccountFolders(nextForm, { suppressErrors: true }).catch(() => {})
         }
-        pushNotification({
-          message,
-          targetId: 'source-email-accounts-section',
-          tone: tlsAutoApplied ? 'warning' : 'success'
-        })
       } catch (err) {
         const message = err.message || errorText('testMailFetcherConnection')
         setEmailAccountTestResult({ message, tone: 'error' })
@@ -870,6 +874,7 @@ export function useEmailAccountsController({
   useEffect(() => {
     if (!showFetcherDialog) {
       setEmailAccountDuplicateError('')
+      setEmailAccountFolderLoadError('')
     }
   }, [showFetcherDialog])
 
@@ -887,6 +892,7 @@ export function useEmailAccountsController({
     emailAccountForm,
     emailAccountFolders,
     emailAccountFoldersLoading,
+    emailAccountFolderLoadError,
     emailAccountTestResult,
     closeFetcherDialog,
     closeFetcherPollingDialog,

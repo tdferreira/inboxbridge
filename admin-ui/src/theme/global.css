@@ -752,6 +752,12 @@ h2 {
   overflow-wrap: anywhere;
 }
 
+.folder-load-error-card {
+  padding: 10px 12px;
+  font-size: 0.92rem;
+  line-height: 1.45;
+}
+
 .oauth-setup-steps {
   margin: 10px 0 0;
   padding-left: 18px;

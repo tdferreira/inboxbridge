@@ -16,6 +16,7 @@ function UserEmailAccountsSection({
   duplicateIdError,
   emailAccountFolders,
   emailAccountFoldersLoading,
+  emailAccountFolderLoadError = '',
   fetchers,
   fetcherDialogOpen,
   fetcherPollLoadingIds = [],
@@ -127,6 +128,7 @@ function UserEmailAccountsSection({
             emailAccountForm={emailAccountForm}
             emailAccountFolders={emailAccountFolders}
             emailAccountFoldersLoading={emailAccountFoldersLoading}
+            emailAccountFolderLoadError={emailAccountFolderLoadError}
             duplicateIdError={duplicateIdError}
             onApplyPreset={onApplyPreset}
             onEmailAccountFormChange={onEmailAccountFormChange}

@@ -1,3 +1,5 @@
+import { isInvalidExtensionAuthError } from './auth-errors.js'
+
 /**
  * Registers background listeners with injected browser/runtime dependencies so
  * the badge refresh behavior can be covered without a real extension runtime.
@@ -12,6 +14,7 @@ export function registerBackgroundController({
   const {
     applyBadge,
     applyIcon = async () => {},
+    clearConfig = async () => {},
     createNotification = async () => {},
     clearBadge,
     createContextMenu = async () => {},
@@ -159,6 +162,10 @@ export function registerBackgroundController({
       try {
         status = await fetchStatus(config.serverUrl, config.token)
       } catch (error) {
+        if (isInvalidExtensionAuthError(error)) {
+          await clearInvalidAuthState(config.serverUrl, error.message)
+          return null
+        }
         await applyToolbarState(null, {
           kind: 'transport',
           message: error.message
@@ -236,7 +243,16 @@ export function registerBackgroundController({
     }
     await primePendingManualPollOverlay(config.serverUrl)
     schedulePendingManualPollCheck()
-    const result = await runPoll(config.serverUrl, config.token)
+    let result
+    try {
+      result = await runPoll(config.serverUrl, config.token)
+    } catch (error) {
+      if (isInvalidExtensionAuthError(error)) {
+        await clearInvalidAuthState(config.serverUrl, error.message)
+        return { accepted: false, openedOptions: false, signedOut: true }
+      }
+      throw error
+    }
     if (result?.accepted && result?.started) {
       await refreshBadgeFromServer()
     } else {
@@ -421,6 +437,23 @@ export function registerBackgroundController({
         updatedAt: status.poll?.updatedAt || new Date(pendingManualPollNotification.requestedAt).toISOString()
       }
     }
+  }
+
+  async function clearInvalidAuthState(serverUrl, message) {
+    closeLiveSubscription()
+    lastStatus = null
+    lastErrorNotificationKey = ''
+    pendingManualPollNotification = null
+    clearPendingManualPollCheck()
+    statusPrimed = false
+    await clearConfig()
+    await clearBadge('InboxBridge is not configured')
+    await applyIcon(null, {
+      kind: 'signed-out',
+      message: 'Open Settings to sign in and connect this browser extension to InboxBridge.'
+    })
+    await broadcastStatus(null, message || 'The saved InboxBridge sign-in is no longer valid.', serverUrl || '')
+    await configureContextMenus()
   }
 
   void ensureLiveSubscription()

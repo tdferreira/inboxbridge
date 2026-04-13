@@ -72,6 +72,7 @@ export function buildUserWorkspaceSections({
           oauthLoading={isPending('googleOAuthSelf') || isPending('microsoftDestinationOAuth')}
           onCollapseToggle={() => toggleWorkspaceSection('destinationMailboxCollapsed')}
           onConnectOAuth={destination.startDestinationOAuth}
+          onLoadFolders={destination.loadDestinationFolders}
           onSave={destination.saveDestinationConfig}
           onSaveAndAuthenticate={destination.saveDestinationConfigAndAuthenticate}
           onTestConnection={destination.testDestinationConnection}

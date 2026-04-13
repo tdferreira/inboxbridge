@@ -99,6 +99,14 @@ public class UserConfigResource {
     }
 
     @POST
+    @Path("/destination-config/folders")
+    @Consumes(MediaType.APPLICATION_JSON)
+    public DestinationMailboxFolderOptionsView previewDestinationFolders(UpdateUserMailDestinationRequest request) {
+        return WebResourceSupport.badRequest(() ->
+                userMailDestinationConfigService.listFoldersForUser(currentUserContext.user(), request));
+    }
+
+    @POST
     @Path("/destination-config/test-connection")
     @Consumes(MediaType.APPLICATION_JSON)
     public EmailAccountConnectionTestResult testDestinationConnection(UpdateUserMailDestinationRequest request) {

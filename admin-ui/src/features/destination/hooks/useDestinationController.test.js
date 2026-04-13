@@ -200,6 +200,19 @@ describe('useDestinationController', () => {
     expect(fetch).toHaveBeenCalledWith('/api/app/destination-config/test-connection', expect.objectContaining({ method: 'POST' }))
   })
 
+  it('loads destination folders from the preview endpoint', async () => {
+    fetch.mockResolvedValue({ ok: true, json: async () => ({ folders: ['INBOX', 'Archive'] }) })
+    const { result } = renderController()
+
+    let folders
+    await act(async () => {
+      folders = await result.current.loadDestinationFolders()
+    })
+
+    expect(fetch).toHaveBeenCalledWith('/api/app/destination-config/folders', expect.objectContaining({ method: 'POST' }))
+    expect(folders).toEqual(['INBOX', 'Archive'])
+  })
+
   it('saves before authenticating a newly added Gmail destination from the modal flow', async () => {
     fetch.mockResolvedValue({ ok: true, json: async () => ({}) })
     const assign = vi.fn()

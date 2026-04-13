@@ -1,4 +1,4 @@
-import { fireEvent, render, screen } from '@testing-library/react'
+import { fireEvent, render, screen, waitFor } from '@testing-library/react'
 import EmailAccountDialog from './EmailAccountDialog'
 import { translate } from '@/lib/i18n'
 
@@ -146,6 +146,42 @@ describe('EmailAccountDialog', () => {
     )
 
     expect(screen.queryByLabelText('Custom Label')).not.toBeInTheDocument()
+  })
+
+  it('uses source-specific folder guidance and the updated TLS availability help', () => {
+    render(
+      <EmailAccountDialog
+        emailAccountForm={{
+          originalEmailAccountId: '',
+          emailAccountId: 'fetcher-a',
+          enabled: true,
+          protocol: 'IMAP',
+          host: 'imap.example.com',
+          port: 993,
+          tls: true,
+          authMethod: 'PASSWORD',
+          oauthProvider: 'NONE',
+          username: 'user@example.com',
+          password: 'secret',
+          oauthRefreshToken: '',
+          folder: 'INBOX',
+          unreadOnly: false,
+          customLabel: '',
+          markReadAfterPoll: false,
+          postPollAction: 'NONE',
+          postPollTargetFolder: ''
+        }}
+        onApplyPreset={vi.fn()}
+        onEmailAccountFormChange={vi.fn()}
+        onClose={vi.fn()}
+        onSave={vi.fn((event) => event.preventDefault())}
+        saveLoading={false}
+        t={(key, params) => translate('en', key, params)}
+      />
+    )
+
+    expect(screen.getByRole('note', { name: 'Choose one or more IMAP source folders for InboxBridge to poll, usually INBOX. Before the folder list has been loaded from the server you can type folder names directly; once the server folders are known, only those reported folders can be selected.' })).toBeInTheDocument()
+    expect(translate('en', 'emailAccounts.testTlsAvailableHelp')).toBe('Whether InboxBridge could verify an encrypted path for this source host, either through implicit TLS or STARTTLS/STLS on the configured port.')
   })
 
   it('hides OAuth2 choices when no source OAuth provider is configured', () => {
@@ -690,6 +726,113 @@ describe('EmailAccountDialog', () => {
     expect(screen.getByRole('button', { name: 'Test Connection' })).toBeDisabled()
   })
 
+  it('shows source folder loading failures inline under the folder field', () => {
+    render(
+      <EmailAccountDialog
+        emailAccountFolderLoadError="Unable to load mailbox folders"
+        emailAccountForm={{
+          originalEmailAccountId: 'fetcher-a',
+          emailAccountId: 'fetcher-a',
+          enabled: true,
+          protocol: 'IMAP',
+          host: 'imap.example.com',
+          port: 993,
+          tls: true,
+          authMethod: 'PASSWORD',
+          oauthProvider: 'NONE',
+          username: 'user@example.com',
+          password: '',
+          oauthRefreshToken: '',
+          folder: 'INBOX',
+          unreadOnly: false,
+          customLabel: ''
+        }}
+        onApplyPreset={vi.fn()}
+        onEmailAccountFormChange={vi.fn()}
+        onClose={vi.fn()}
+        onSave={vi.fn((event) => event.preventDefault())}
+        onTestEmailAccountConnection={vi.fn()}
+        saveLoading={false}
+        t={(key, params) => translate('en', key, params)}
+      />
+    )
+
+    expect(screen.getByText('Unable to load mailbox folders')).toBeInTheDocument()
+  })
+
+  it('shows the folder retrieval helper while loading IMAP folders', () => {
+    render(
+      <EmailAccountDialog
+        emailAccountFoldersLoading
+        emailAccountForm={{
+          originalEmailAccountId: 'fetcher-a',
+          emailAccountId: 'fetcher-a',
+          enabled: true,
+          protocol: 'IMAP',
+          host: 'imap.example.com',
+          port: 993,
+          tls: true,
+          authMethod: 'PASSWORD',
+          oauthProvider: 'NONE',
+          username: 'user@example.com',
+          password: '',
+          oauthRefreshToken: '',
+          folder: 'INBOX',
+          unreadOnly: false,
+          customLabel: ''
+        }}
+        onApplyPreset={vi.fn()}
+        onEmailAccountFormChange={vi.fn()}
+        onClose={vi.fn()}
+        onSave={vi.fn((event) => event.preventDefault())}
+        onTestEmailAccountConnection={vi.fn()}
+        saveLoading={false}
+        t={(key, params) => translate('en', key, params)}
+      />
+    )
+
+    expect(screen.getByText('Retrieving folders from server…')).toBeInTheDocument()
+  })
+
+  it('scrolls the latest test result card into view', () => {
+    const scrollIntoView = vi.fn()
+    window.HTMLElement.prototype.scrollIntoView = scrollIntoView
+
+    render(
+      <EmailAccountDialog
+        emailAccountForm={{
+          originalEmailAccountId: 'fetcher-a',
+          emailAccountId: 'fetcher-a',
+          enabled: true,
+          protocol: 'IMAP',
+          host: 'imap.example.com',
+          port: 993,
+          tls: true,
+          authMethod: 'PASSWORD',
+          oauthProvider: 'NONE',
+          username: 'user@example.com',
+          password: '',
+          oauthRefreshToken: '',
+          folder: 'INBOX',
+          unreadOnly: false,
+          customLabel: ''
+        }}
+        onApplyPreset={vi.fn()}
+        onEmailAccountFormChange={vi.fn()}
+        onClose={vi.fn()}
+        onSave={vi.fn((event) => event.preventDefault())}
+        onTestEmailAccountConnection={vi.fn()}
+        saveLoading={false}
+        testResult={{ tone: 'success', message: 'Connection test succeeded.' }}
+        t={(key, params) => translate('en', key, params)}
+      />
+    )
+
+    return waitFor(() => {
+      expect(scrollIntoView).toHaveBeenCalledWith({ behavior: 'smooth', block: 'nearest' })
+    })
+  })
+
   it('offers a save-and-connect OAuth action when a provider is selected', () => {
     const onSaveAndConnectOAuth = vi.fn()
 
@@ -1217,7 +1360,7 @@ describe('EmailAccountDialog', () => {
     )
 
     const fetchMode = screen.getByLabelText(/Source update mode/)
-    const tlsOnly = screen.getByLabelText(/TLS only/)
+    const tlsOnly = screen.getByRole('checkbox', { name: /^TLS/i })
     const unreadOnly = screen.getByLabelText(/Unread only/)
     const enabled = screen.getByRole('checkbox', { name: /Enabled/ })
 
@@ -1261,7 +1404,7 @@ describe('EmailAccountDialog', () => {
     )
 
     expect(screen.getByText('Unsafe source connection')).toBeInTheDocument()
-    expect(screen.getByLabelText(/TLS only/)).not.toBeChecked()
+    expect(screen.getByRole('checkbox', { name: /^TLS/i })).not.toBeChecked()
   })
 
   it('locks the TLS toggle after InboxBridge verifies a secure endpoint', () => {
@@ -1313,7 +1456,7 @@ describe('EmailAccountDialog', () => {
     )
 
     expect(screen.getByText('TLS was enforced automatically')).toBeInTheDocument()
-    expect(screen.getByLabelText(/TLS only/)).toBeDisabled()
+    expect(screen.getByRole('checkbox', { name: /^TLS/i })).toBeDisabled()
   })
 
   it('hides post-poll source actions for POP3 accounts', () => {

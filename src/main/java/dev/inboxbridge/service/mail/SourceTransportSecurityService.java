@@ -2,9 +2,11 @@ package dev.inboxbridge.service.mail;
 
 import java.net.InetSocketAddress;
 import java.net.Socket;
+import java.nio.charset.StandardCharsets;
 import java.security.SecureRandom;
 import java.security.cert.X509Certificate;
 import java.time.Duration;
+import java.util.Locale;
 import java.util.Optional;
 
 import javax.net.ssl.SSLContext;
@@ -59,11 +61,31 @@ public class SourceTransportSecurityService {
         return supportsImplicitTls(normalizedHost, securePort) ? Optional.of(securePort) : Optional.empty();
     }
 
+    public Optional<Integer> detectRecommendedTlsPort(
+            InboxBridgeConfig.Protocol protocol,
+            String host,
+            Integer currentPort) {
+        String normalizedHost = host == null ? "" : host.trim();
+        if (normalizedHost.isEmpty()) {
+            return Optional.empty();
+        }
+        Optional<Integer> implicitTlsPort = detectImplicitTlsPort(protocol, normalizedHost);
+        if (implicitTlsPort.isPresent()) {
+            return implicitTlsPort;
+        }
+        int startTlsPort = currentPort == null || currentPort <= 0
+                ? plainPort(protocol)
+                : currentPort;
+        return supportsStartTls(protocol, normalizedHost, startTlsPort)
+                ? Optional.of(startTlsPort)
+                : Optional.empty();
+    }
+
     public Optional<TlsUpgrade> detectRecommendedUpgrade(RuntimeEmailAccount account) {
         if (account == null || account.tls()) {
             return Optional.empty();
         }
-        return detectImplicitTlsPort(account.protocol(), account.host())
+        return detectRecommendedTlsPort(account.protocol(), account.host(), account.port())
                 .map(securePort -> new TlsUpgrade(
                         securePort,
                         upgradedAccount(account, securePort)));
@@ -72,6 +94,11 @@ public class SourceTransportSecurityService {
     public String insecureConnectionMessage(InboxBridgeConfig.Protocol protocol, int securePort) {
         return "This source mail server supports TLS on port " + securePort
                 + " for " + protocol.name() + ". Enable TLS instead of saving an unsafe plain-text connection.";
+    }
+
+    public String insecureDestinationConnectionMessage(int securePort) {
+        return "This destination mail server supports TLS on port " + securePort
+                + " for IMAP. Enable TLS instead of saving an unsafe plain-text connection.";
     }
 
     protected boolean supportsImplicitTls(String host, int securePort) {
@@ -94,6 +121,20 @@ public class SourceTransportSecurityService {
 
     protected int securePort(InboxBridgeConfig.Protocol protocol) {
         return protocol == InboxBridgeConfig.Protocol.IMAP ? 993 : 995;
+    }
+
+    protected int plainPort(InboxBridgeConfig.Protocol protocol) {
+        return protocol == InboxBridgeConfig.Protocol.IMAP ? 143 : 110;
+    }
+
+    protected boolean supportsStartTls(InboxBridgeConfig.Protocol protocol, String host, int port) {
+        if (port <= 0 || port == securePort(protocol)) {
+            return false;
+        }
+        return switch (protocol) {
+            case IMAP -> supportsImapStartTls(host, port);
+            case POP3 -> supportsPop3StartTls(host, port);
+        };
     }
 
     private RuntimeEmailAccount upgradedAccount(RuntimeEmailAccount account, int securePort) {
@@ -127,6 +168,39 @@ public class SourceTransportSecurityService {
         return (int) bounded;
     }
 
+    private boolean supportsImapStartTls(String host, int port) {
+        try (Socket socket = openPlainProbeSocket(host, port)) {
+            ProbeReader reader = new ProbeReader(socket);
+            reader.readLine();
+            reader.writeLine("a001 CAPABILITY");
+            return reader.readUntilTaggedResponse("a001")
+                    .toUpperCase(Locale.ROOT)
+                    .contains("STARTTLS");
+        } catch (Exception ignored) {
+            return false;
+        }
+    }
+
+    private boolean supportsPop3StartTls(String host, int port) {
+        try (Socket socket = openPlainProbeSocket(host, port)) {
+            ProbeReader reader = new ProbeReader(socket);
+            reader.readLine();
+            reader.writeLine("CAPA");
+            return reader.readMultilineResponse()
+                    .toUpperCase(Locale.ROOT)
+                    .contains("STLS");
+        } catch (Exception ignored) {
+            return false;
+        }
+    }
+
+    private Socket openPlainProbeSocket(String host, int port) throws Exception {
+        Socket socket = new Socket();
+        socket.connect(new InetSocketAddress(host, port), probeTimeoutMillis());
+        socket.setSoTimeout(probeTimeoutMillis());
+        return socket;
+    }
+
     private static SSLSocketFactory buildProbeSocketFactory() {
         try {
             SSLContext sslContext = SSLContext.getInstance("TLS");
@@ -134,6 +208,61 @@ public class SourceTransportSecurityService {
             return sslContext.getSocketFactory();
         } catch (Exception e) {
             throw new IllegalStateException("Unable to initialize the TLS probe socket factory.", e);
+        }
+    }
+
+    private static final class ProbeReader {
+        private final java.io.BufferedReader reader;
+        private final java.io.BufferedWriter writer;
+
+        private ProbeReader(Socket socket) throws Exception {
+            this.reader = new java.io.BufferedReader(new java.io.InputStreamReader(
+                    socket.getInputStream(),
+                    StandardCharsets.US_ASCII));
+            this.writer = new java.io.BufferedWriter(new java.io.OutputStreamWriter(
+                    socket.getOutputStream(),
+                    StandardCharsets.US_ASCII));
+        }
+
+        private String readLine() throws Exception {
+            String line = reader.readLine();
+            return line == null ? "" : line;
+        }
+
+        private void writeLine(String line) throws Exception {
+            writer.write(line);
+            writer.write("\r\n");
+            writer.flush();
+        }
+
+        private String readUntilTaggedResponse(String tag) throws Exception {
+            StringBuilder response = new StringBuilder();
+            for (int index = 0; index < 32; index += 1) {
+                String line = readLine();
+                if (line.isBlank()) {
+                    continue;
+                }
+                response.append(line).append('\n');
+                if (line.regionMatches(true, 0, tag, 0, tag.length())) {
+                    break;
+                }
+            }
+            return response.toString();
+        }
+
+        private String readMultilineResponse() throws Exception {
+            StringBuilder response = new StringBuilder();
+            for (int index = 0; index < 64; index += 1) {
+                String line = readLine();
+                if (line.isEmpty()) {
+                    continue;
+                }
+                response.append(line).append('\n');
+                if (".".equals(line)) {
+                    break;
+                }
+            }
+            return response.toString();
         }
     }
 

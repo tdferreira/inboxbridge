@@ -224,6 +224,25 @@ class UserConfigResourceTest {
     }
 
     @Test
+    void previewDestinationFoldersDelegatesToDestinationService() {
+        UserConfigResource resource = resource();
+        resource.userMailDestinationConfigService = new FakeUserMailDestinationConfigService();
+
+        DestinationMailboxFolderOptionsView response = resource.previewDestinationFolders(new UpdateUserMailDestinationRequest(
+                "CUSTOM_IMAP",
+                "imap.example.com",
+                993,
+                true,
+                "PASSWORD",
+                "NONE",
+                "alice@example.com",
+                "Secret#123",
+                "INBOX"));
+
+        assertEquals(List.of("INBOX", "Archive"), response.folders());
+    }
+
+    @Test
     void destinationFoldersMapsValidationErrorsToBadRequest() {
         UserConfigResource resource = resource();
         resource.userMailDestinationConfigService = new ErrorUserMailDestinationConfigService();
@@ -285,7 +304,7 @@ class UserConfigResourceTest {
         resource.userMailDestinationConfigService = new UserMailDestinationConfigService() {
             @Override
             public EmailAccountConnectionTestResult testConnectionForUser(AppUser user, UpdateUserMailDestinationRequest request) {
-                throw new IllegalArgumentException("InboxBridge requires TLS for every destination mailbox connection.");
+                throw new IllegalArgumentException("This destination mail server supports TLS on port 993 for IMAP. Enable TLS instead of saving an unsafe plain-text connection.");
             }
         };
 
@@ -302,7 +321,7 @@ class UserConfigResourceTest {
                         "Secret#123",
                         "INBOX")));
 
-        assertEquals("InboxBridge requires TLS for every destination mailbox connection.", error.getMessage());
+        assertEquals("This destination mail server supports TLS on port 993 for IMAP. Enable TLS instead of saving an unsafe plain-text connection.", error.getMessage());
     }
 
     private UserConfigResource resource() {
@@ -468,6 +487,11 @@ class UserConfigResourceTest {
     private static final class FakeUserMailDestinationConfigService extends UserMailDestinationConfigService {
         @Override
         public DestinationMailboxFolderOptionsView listFoldersForUser(Long userId, String ownerUsername) {
+            return new DestinationMailboxFolderOptionsView(List.of("INBOX", "Archive"));
+        }
+
+        @Override
+        public DestinationMailboxFolderOptionsView listFoldersForUser(AppUser user, UpdateUserMailDestinationRequest request) {
             return new DestinationMailboxFolderOptionsView(List.of("INBOX", "Archive"));
         }
 

@@ -1,3 +1,5 @@
+import { createInvalidExtensionAuthError } from './auth-errors.js'
+
 const STREAM_TIMEOUT_MS = 60_000
 
 /**
@@ -48,7 +50,7 @@ export function subscribeToJsonSse({
 
 async function parseEventStreamResponse(response, onEvent) {
   if (response.status === 401) {
-    throw new Error('The saved InboxBridge sign-in is no longer valid.')
+    throw createInvalidExtensionAuthError('The saved InboxBridge sign-in is no longer valid.')
   }
   if (!response.ok) {
     throw new Error(`InboxBridge returned ${response.status}.`)

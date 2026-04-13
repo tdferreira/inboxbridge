@@ -77,6 +77,13 @@
   margin: 0;
 }
 
+.fetcher-transport-warning {
+  border-color: color-mix(in srgb, var(--warning) 28%, var(--line));
+  background: color-mix(in srgb, var(--warning) 12%, var(--surface-soft));
+  color: var(--text);
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--warning) 10%, transparent);
+}
+
 @media (max-width: 760px) {
   .form-field-pair {
     grid-template-columns: 1fr;

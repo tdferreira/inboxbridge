@@ -1,3 +1,5 @@
+import { isInvalidExtensionAuthError } from './auth-errors.js'
+
 /**
  * Keeps the options page logic testable by isolating the imperative form wiring
  * from the shared config, passkey, and extension-auth dependencies.
@@ -278,7 +280,31 @@ export function createOptionsController({
       if (!config?.serverUrl || !config?.token) {
         throw new Error(t('status.signInFirst'))
       }
-      const status = await fetchStatus(config.serverUrl, config.token)
+      let status
+      try {
+        status = await fetchStatus(config.serverUrl, config.token)
+      } catch (error) {
+        if (isInvalidExtensionAuthError(error)) {
+          await clearConfig()
+          passwordInput.value = ''
+          clearRequiredFieldErrors()
+          applyConfigState({
+            language: currentConfig.language,
+            notifyErrors: currentConfig.notifyErrors,
+            notifyManualPollSuccess: currentConfig.notifyManualPollSuccess,
+            serverUrl: currentConfig.serverUrl,
+            theme: currentConfig.theme,
+            token: '',
+            refreshToken: '',
+            userLanguage: currentConfig.userLanguage,
+            userThemeMode: currentConfig.userThemeMode,
+            username: currentConfig.username
+          })
+          await sendMessage({ type: 'refresh-status' })
+          await sendMessage({ type: 'refresh-context-menus' })
+        }
+        throw error
+      }
       await saveUserPreferences?.(status.user)
       applyConfigState({
         ...config,

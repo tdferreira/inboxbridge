@@ -1,3 +1,5 @@
+import { isInvalidExtensionAuthError } from './auth-errors.js'
+
 /**
  * Wires the popup UI to the shared extension API without depending directly on
  * browser globals, which keeps the entrypoint small and the behavior easy to
@@ -9,6 +11,7 @@ export function createPopupController({
 }) {
   const {
     applyThemePreference,
+    clearConfig = async () => {},
     clearStatusBanner,
     deriveStatusView,
     disconnectedView,
@@ -121,6 +124,10 @@ export function createPopupController({
         showStatusBanner(popupStatus, 'success', t('popup.refreshSuccess'))
       }
     } catch (error) {
+      if (isInvalidExtensionAuthError(error)) {
+        await handleInvalidAuth(error)
+        return
+      }
       setPrimaryAction('poll')
       renderView(disconnectedView(error.message || t('errors.loadFailed'), t))
       showStatusBanner(popupStatus, 'error', error.message || t('errors.loadFailed'))
@@ -149,7 +156,16 @@ export function createPopupController({
         showRefreshingState()
       }
       await sendMessage({ type: 'manual-poll-triggered', serverUrl: config.serverUrl })
-      const result = await runPoll(config.serverUrl, config.token)
+      let result
+      try {
+        result = await runPoll(config.serverUrl, config.token)
+      } catch (error) {
+        if (isInvalidExtensionAuthError(error)) {
+          await handleInvalidAuth(error)
+          return
+        }
+        throw error
+      }
       if (!result.accepted || !result.started) {
         showStatusBanner(popupStatus, 'warning', result.message || 'InboxBridge could not start a poll right now.')
         await refreshPopup({ preserveBanner: true })
@@ -228,6 +244,16 @@ export function createPopupController({
       `
       errorList.appendChild(item)
     })
+  }
+
+  async function handleInvalidAuth(error) {
+    await clearConfig?.()
+    setPrimaryAction('signin')
+    lastRenderedStatus = null
+    renderView(disconnectedView(t('popup.openSettingsToSignIn'), t))
+    await sendMessage?.({ type: 'refresh-status' })
+    await sendMessage?.({ type: 'refresh-context-menus' })
+    showStatusBanner(popupStatus, 'warning', error.message || t('popup.openSettingsToSignIn'))
   }
 
   function initialize() {

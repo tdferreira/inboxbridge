@@ -5,6 +5,7 @@ import dev.inboxbridge.service.oauth.MicrosoftOAuthService;
 import dev.inboxbridge.service.oauth.SystemOAuthAppSettingsService;
 import dev.inboxbridge.service.oauth.UserGmailConfigService;
 import dev.inboxbridge.service.destination.*;
+import dev.inboxbridge.service.mail.SourceTransportSecurityService;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNull;
@@ -142,6 +143,7 @@ class UserMailDestinationConfigServiceTest {
     @Test
     void updateRejectsNonTlsDestinationConnections() {
         UserMailDestinationConfigService service = service();
+        ((FakeSourceTransportSecurityService) service.sourceTransportSecurityService).supportedTlsPort = 993;
 
         IllegalArgumentException error = assertThrows(
                 IllegalArgumentException.class,
@@ -156,7 +158,47 @@ class UserMailDestinationConfigServiceTest {
                         "Secret#123",
                         "INBOX")));
 
-        assertEquals("InboxBridge requires TLS for every destination mailbox connection.", error.getMessage());
+        assertEquals("This destination mail server supports TLS on port 993 for IMAP. Enable TLS instead of saving an unsafe plain-text connection.", error.getMessage());
+    }
+
+    @Test
+    void updateRejectsNonTlsDestinationConnectionsWhenStartTlsIsAvailableOnSamePort() {
+        UserMailDestinationConfigService service = service();
+        ((FakeSourceTransportSecurityService) service.sourceTransportSecurityService).supportedTlsPort = 143;
+
+        IllegalArgumentException error = assertThrows(
+                IllegalArgumentException.class,
+                () -> service.update(user(), new UpdateUserMailDestinationRequest(
+                        UserMailDestinationConfigService.PROVIDER_CUSTOM,
+                        "imap.example.com",
+                        143,
+                        false,
+                        InboxBridgeConfig.AuthMethod.PASSWORD.name(),
+                        InboxBridgeConfig.OAuthProvider.NONE.name(),
+                        "owner@example.com",
+                        "Secret#123",
+                        "INBOX")));
+
+        assertEquals("This destination mail server supports TLS on port 143 for IMAP. Enable TLS instead of saving an unsafe plain-text connection.", error.getMessage());
+    }
+
+    @Test
+    void updateAllowsNonTlsDestinationConnectionsWhenNoSecureEndpointIsAvailable() {
+        UserMailDestinationConfigService service = service();
+
+        UserMailDestinationView view = service.update(user(), new UpdateUserMailDestinationRequest(
+                UserMailDestinationConfigService.PROVIDER_CUSTOM,
+                "imap.example.com",
+                143,
+                false,
+                InboxBridgeConfig.AuthMethod.PASSWORD.name(),
+                InboxBridgeConfig.OAuthProvider.NONE.name(),
+                "owner@example.com",
+                "Secret#123",
+                "INBOX"));
+
+        assertEquals(UserMailDestinationConfigService.PROVIDER_CUSTOM, view.provider());
+        assertEquals(false, ((InMemoryUserMailDestinationConfigRepository) service.repository).stored.orElseThrow().tls);
     }
 
     @Test
@@ -268,6 +310,80 @@ class UserMailDestinationConfigServiceTest {
         assertEquals("Connection test succeeded.", result.message());
         assertEquals("owner@example.com", imapService.lastTarget.username());
         assertEquals(InboxBridgeConfig.AuthMethod.OAUTH2, imapService.lastTarget.authMethod());
+    }
+
+    @Test
+    void testConnectionForUserAutoUpgradesToTlsWhenSecureEndpointExists() {
+        UserMailDestinationConfigService service = service();
+        FakeImapAppendMailDestinationService imapService = (FakeImapAppendMailDestinationService) service.imapAppendMailDestinationService;
+        ((FakeSourceTransportSecurityService) service.sourceTransportSecurityService).supportedTlsPort = 993;
+        imapService.testResult = new EmailAccountConnectionTestResult(true, "Connection test succeeded.", "IMAP", "imap.example.com", 993, true, "PASSWORD", "NONE", true, "INBOX", true, false, null, null, 4, null, false, null, null);
+
+        EmailAccountConnectionTestResult result = service.testConnectionForUser(user(), new UpdateUserMailDestinationRequest(
+                UserMailDestinationConfigService.PROVIDER_CUSTOM,
+                "imap.example.com",
+                143,
+                false,
+                InboxBridgeConfig.AuthMethod.PASSWORD.name(),
+                InboxBridgeConfig.OAuthProvider.NONE.name(),
+                "owner@example.com",
+                "Secret#123",
+                "INBOX"));
+
+        assertEquals(true, result.tls());
+        assertEquals(993, result.port());
+        assertEquals(Boolean.TRUE, result.tlsRecommended());
+        assertEquals(993, imapService.lastTarget.port());
+        assertEquals(true, imapService.lastTarget.tls());
+    }
+
+    @Test
+    void previewFoldersAutoUpgradeToTlsWhenSecureEndpointExists() {
+        UserMailDestinationConfigService service = service();
+        FakeImapAppendMailDestinationService imapService = (FakeImapAppendMailDestinationService) service.imapAppendMailDestinationService;
+        ((FakeSourceTransportSecurityService) service.sourceTransportSecurityService).supportedTlsPort = 993;
+        imapService.folders = List.of("INBOX", "Archive");
+
+        DestinationMailboxFolderOptionsView view = service.listFoldersForUser(user(), new UpdateUserMailDestinationRequest(
+                UserMailDestinationConfigService.PROVIDER_CUSTOM,
+                "imap.example.com",
+                143,
+                false,
+                InboxBridgeConfig.AuthMethod.PASSWORD.name(),
+                InboxBridgeConfig.OAuthProvider.NONE.name(),
+                "owner@example.com",
+                "Secret#123",
+                "INBOX"));
+
+        assertEquals(List.of("INBOX", "Archive"), view.folders());
+        assertEquals(993, imapService.lastTarget.port());
+        assertEquals(true, imapService.lastTarget.tls());
+    }
+
+    @Test
+    void testConnectionForUserReportsTlsAvailabilityWhenTlsIsAlreadyEnabled() {
+        UserMailDestinationConfigService service = service();
+        FakeImapAppendMailDestinationService imapService = (FakeImapAppendMailDestinationService) service.imapAppendMailDestinationService;
+        ((FakeSourceTransportSecurityService) service.sourceTransportSecurityService).supportedTlsPort = 993;
+        imapService.testResult = new EmailAccountConnectionTestResult(true, "Connection test succeeded.", "IMAP", "imap.example.com", 993, true, "PASSWORD", "NONE", true, "INBOX", true, false, null, null, 4, null, false, null, null);
+
+        EmailAccountConnectionTestResult result = service.testConnectionForUser(user(), new UpdateUserMailDestinationRequest(
+                UserMailDestinationConfigService.PROVIDER_CUSTOM,
+                "imap.example.com",
+                993,
+                true,
+                InboxBridgeConfig.AuthMethod.PASSWORD.name(),
+                InboxBridgeConfig.OAuthProvider.NONE.name(),
+                "owner@example.com",
+                "Secret#123",
+                "INBOX"));
+
+        assertEquals(true, result.tls());
+        assertEquals(Boolean.TRUE, result.tlsAvailable());
+        assertEquals(Boolean.TRUE, result.tlsRecommended());
+        assertEquals(993, result.recommendedTlsPort());
+        assertEquals(993, imapService.lastTarget.port());
+        assertEquals(true, imapService.lastTarget.tls());
     }
 
     @Test
@@ -437,7 +553,17 @@ class UserMailDestinationConfigServiceTest {
         };
         service.microsoftOAuthService = new FakeMicrosoftOAuthService();
         service.imapAppendMailDestinationService = new FakeImapAppendMailDestinationService();
+        service.sourceTransportSecurityService = new FakeSourceTransportSecurityService();
         return service;
+    }
+
+    private static final class FakeSourceTransportSecurityService extends SourceTransportSecurityService {
+        private Integer supportedTlsPort;
+
+        @Override
+        public Optional<Integer> detectImplicitTlsPort(InboxBridgeConfig.Protocol protocol, String host) {
+            return Optional.ofNullable(supportedTlsPort);
+        }
     }
 
     private static final class TrackingMailboxConflictService extends MailboxConflictService {

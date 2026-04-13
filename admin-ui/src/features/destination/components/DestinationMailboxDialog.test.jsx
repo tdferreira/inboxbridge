@@ -34,6 +34,7 @@ function DestinationMailboxDialogHarness({
   destinationFolders = ['Archive', 'INBOX'],
   destinationMeta = baseMeta(),
   onClose = vi.fn(),
+  onLoadFolders = vi.fn(async () => ['INBOX', 'Archive']),
   onSave = vi.fn(async () => {}),
   onSaveAndAuthenticate = vi.fn(async () => {}),
   onTestConnection = vi.fn(async () => ({ message: 'Connection test succeeded.' })),
@@ -47,6 +48,7 @@ function DestinationMailboxDialogHarness({
       destinationFolders={destinationFolders}
       destinationMeta={destinationMeta}
       onClose={onClose}
+      onLoadFolders={onLoadFolders}
       onSave={onSave}
       onSaveAndAuthenticate={onSaveAndAuthenticate}
       onTestConnection={onTestConnection}
@@ -107,6 +109,187 @@ describe('DestinationMailboxDialog', () => {
 
     expect(onTestConnection).toHaveBeenCalledTimes(1)
     expect(await screen.findByText('Destination test failed')).toBeInTheDocument()
+  })
+
+  it('shows folder loading failures inline under the folder field', async () => {
+    const onLoadFolders = vi.fn(async () => {
+      throw new Error('Unable to load mailbox folders')
+    })
+    const onTestConnection = vi.fn(async () => ({
+      message: 'Connection test succeeded.',
+      protocol: 'IMAP',
+      host: 'imap.example.com',
+      port: 993,
+      tls: true,
+      authMethod: 'PASSWORD',
+      oauthProvider: 'NONE',
+      authenticated: true,
+      folder: 'INBOX',
+      folderAccessible: true
+    }))
+
+    render(
+      <DestinationMailboxDialogHarness
+        config={baseConfig({
+          provider: 'CUSTOM_IMAP',
+          host: 'imap.example.com',
+          port: 993,
+          tls: true,
+          authMethod: 'PASSWORD',
+          oauthProvider: 'NONE',
+          password: 'secret',
+          folder: 'INBOX'
+        })}
+        destinationFolders={[]}
+        destinationMeta={baseMeta({ linked: false, oauthConnected: false, passwordConfigured: true, provider: 'CUSTOM_IMAP' })}
+        onLoadFolders={onLoadFolders}
+        onTestConnection={onTestConnection}
+      />
+    )
+
+    fireEvent.click(screen.getByRole('button', { name: 'Test Connection' }))
+
+    expect(await screen.findByText('Unable to load mailbox folders')).toBeInTheDocument()
+  })
+
+  it('uses destination-specific tooltip copy instead of source-folder guidance', () => {
+    render(<DestinationMailboxDialogHarness />)
+
+    expect(screen.getByRole('note', { name: 'Choose the single IMAP destination folder where InboxBridge should append imported mail, usually INBOX. Before the folder list has been loaded from the server you can type the folder name directly; once the server folders are known, only those reported folders can be selected.' })).toBeInTheDocument()
+    expect(screen.queryByRole('note', { name: 'Choose one or more IMAP source folders for InboxBridge to poll, usually INBOX. Before the folder list has been loaded from the server you can type folder names directly; once the server folders are known, only those reported folders can be selected.' })).not.toBeInTheDocument()
+    expect(screen.getByRole('note', { name: 'Require a TLS-protected connection when talking to the destination mail server.' })).toBeInTheDocument()
+  })
+
+  it('shows the folder retrieval helper while loading destination folders', () => {
+    render(
+      <DestinationMailboxDialogHarness
+        config={baseConfig({
+          provider: 'CUSTOM_IMAP',
+          host: 'imap.example.com',
+          port: 993,
+          tls: true,
+          authMethod: 'PASSWORD',
+          oauthProvider: 'NONE',
+          password: 'secret',
+          folder: 'INBOX'
+        })}
+        destinationFoldersLoading
+        destinationFolders={[]}
+        destinationMeta={baseMeta({ linked: false, oauthConnected: false, passwordConfigured: true, provider: 'CUSTOM_IMAP' })}
+      />
+    )
+
+    expect(screen.getByText('Retrieving folders from server…')).toBeInTheDocument()
+  })
+
+  it('scrolls the destination test result card into view', () => {
+    const scrollIntoView = vi.fn()
+    window.HTMLElement.prototype.scrollIntoView = scrollIntoView
+
+    render(
+      <DestinationMailboxDialogHarness
+        config={baseConfig({
+          provider: 'CUSTOM_IMAP',
+          host: 'imap.example.com',
+          port: 993,
+          tls: true,
+          authMethod: 'PASSWORD',
+          oauthProvider: 'NONE',
+          password: 'secret',
+          folder: 'INBOX'
+        })}
+        destinationFolders={[]}
+        destinationMeta={baseMeta({ linked: false, oauthConnected: false, passwordConfigured: true, provider: 'CUSTOM_IMAP' })}
+        onTestConnection={vi.fn(async () => ({
+          message: 'Connection test succeeded.',
+          protocol: 'IMAP',
+          host: 'imap.example.com',
+          port: 993,
+          tls: true,
+          authMethod: 'PASSWORD',
+          oauthProvider: 'NONE',
+          authenticated: true,
+          folder: 'INBOX',
+          folderAccessible: true
+        }))}
+      />
+    )
+
+    fireEvent.click(screen.getByRole('button', { name: 'Test Connection' }))
+
+    return waitFor(() => {
+      expect(scrollIntoView).toHaveBeenCalledWith({ behavior: 'smooth', block: 'nearest' })
+    })
+  })
+
+  it('shows an unsafe transport warning when TLS is disabled', () => {
+    render(
+      <DestinationMailboxDialogHarness
+        config={baseConfig({
+          provider: 'CUSTOM_IMAP',
+          host: 'imap.example.com',
+          port: 143,
+          tls: false,
+          authMethod: 'PASSWORD',
+          oauthProvider: 'NONE',
+          password: 'secret',
+          folder: 'INBOX'
+        })}
+        destinationFolders={[]}
+        destinationMeta={baseMeta({ linked: false, oauthConnected: false, passwordConfigured: false, provider: 'CUSTOM_IMAP' })}
+      />
+    )
+
+    expect(screen.getByText('Unsafe destination connection')).toBeInTheDocument()
+    expect(screen.getByRole('checkbox', { name: /^TLS/i })).not.toBeChecked()
+  })
+
+  it('locks TLS and loads detected folders after a secure connection test upgrade', async () => {
+    const onLoadFolders = vi.fn(async () => ['INBOX', 'Archive'])
+    const onTestConnection = vi.fn(async () => ({
+      message: 'Connection test succeeded over TLS.',
+      protocol: 'IMAP',
+      host: 'imap.example.com',
+      port: 993,
+      tls: true,
+      tlsAvailable: true,
+      tlsRecommended: true,
+      recommendedTlsPort: 993,
+      authMethod: 'PASSWORD',
+      oauthProvider: 'NONE',
+      authenticated: true,
+      folder: 'INBOX',
+      folderAccessible: true
+    }))
+
+    render(
+      <DestinationMailboxDialogHarness
+        config={baseConfig({
+          provider: 'CUSTOM_IMAP',
+          host: 'imap.example.com',
+          port: 143,
+          tls: false,
+          authMethod: 'PASSWORD',
+          oauthProvider: 'NONE',
+          password: 'secret'
+        })}
+        destinationFolders={[]}
+        destinationMeta={baseMeta({ linked: false, oauthConnected: false, passwordConfigured: false, provider: 'CUSTOM_IMAP' })}
+        onLoadFolders={onLoadFolders}
+        onTestConnection={onTestConnection}
+      />
+    )
+
+    fireEvent.click(screen.getByRole('button', { name: 'Test Connection' }))
+
+    await waitFor(() => {
+      expect(screen.getByRole('checkbox', { name: /^TLS/i })).toBeChecked()
+    })
+    expect(screen.getByRole('checkbox', { name: /^TLS/i })).toBeDisabled()
+    await waitFor(() => {
+      expect(onLoadFolders).toHaveBeenCalledTimes(1)
+    })
+    expect(screen.getByLabelText('Port')).toHaveValue(993)
   })
 
   it('shows Save only for folder-only Outlook edits and saves through the plain path', async () => {

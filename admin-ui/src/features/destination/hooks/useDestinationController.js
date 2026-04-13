@@ -128,6 +128,33 @@ export function useDestinationController({
     })
   }
 
+  async function loadDestinationFolders(configOverride, options = {}) {
+    const { suppressErrors = true } = options
+    try {
+      const response = await fetch('/api/app/destination-config/folders', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(buildDestinationRequestBody(configOverride))
+      })
+      if (!response.ok) {
+        throw new Error(await errorText('loadDestinationFolders', response))
+      }
+      const payload = await response.json()
+      return Array.isArray(payload?.folders) ? payload.folders : []
+    } catch (err) {
+      if (!suppressErrors) {
+        pushNotification({
+          autoCloseMs: null,
+          copyText: err.message ? pollErrorNotification(err.message) : translatedNotification('errors.loadDestinationFolders'),
+          message: err.message ? pollErrorNotification(err.message) : translatedNotification('errors.loadDestinationFolders'),
+          targetId: 'destination-mailbox-section',
+          tone: 'error'
+        })
+      }
+      throw err
+    }
+  }
+
   async function performDestinationSave(fetchCall, fallbackKey) {
     const response = await fetchCall()
     if (!response.ok) {
@@ -310,6 +337,7 @@ export function useDestinationController({
   }
 
   return {
+    loadDestinationFolders,
     saveDestinationConfig,
     saveDestinationConfigAndAuthenticate,
     startDestinationOAuth,

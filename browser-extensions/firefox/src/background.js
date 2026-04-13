@@ -16,7 +16,7 @@ import {
 } from '../../shared/src/browser.js'
 import { badgeStateForStatus } from '../../shared/src/badge-state.js'
 import { registerBackgroundController } from '../../shared/src/background-controller.js'
-import { loadConfig, saveUserPreferences } from '../../shared/src/config.js'
+import { clearConfig, loadConfig, saveUserPreferences } from '../../shared/src/config.js'
 import { resolveLanguagePreference, translate } from '../../shared/src/i18n.js'
 import { runPoll } from '../../shared/src/api.js'
 import {
@@ -54,6 +54,7 @@ registerBackgroundController({
     createContextMenu,
     createNotification: showBrowserNotification,
     clearBadge,
+    clearConfig,
     createAlarm,
     fetchStatus,
     loadCachedStatus,

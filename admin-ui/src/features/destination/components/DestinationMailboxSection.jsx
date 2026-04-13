@@ -22,6 +22,7 @@ function DestinationMailboxSection({
   unlinkLoading,
   locale,
   onCollapseToggle,
+  onLoadFolders,
   onUnlinkOAuth,
   onSave,
   onSaveAndAuthenticate,
@@ -126,6 +127,7 @@ function DestinationMailboxSection({
                 destinationFoldersLoading={destinationFoldersLoading}
                 destinationMeta={destinationMeta}
                 onClose={closeDialog}
+                onLoadFolders={onLoadFolders ? (configOverride, options) => onLoadFolders(configOverride || dialogDraftConfig || destinationConfig, options) : undefined}
                 onSave={() => onSave(dialogDraftConfig || destinationConfig)}
                 onSaveAndAuthenticate={() => onSaveAndAuthenticate(dialogDraftConfig || destinationConfig)}
                 onTestConnection={() => onTestConnection(dialogDraftConfig || destinationConfig)}

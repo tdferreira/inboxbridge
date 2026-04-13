@@ -17,6 +17,7 @@ function DestinationMailboxDialog({
   destinationFolders = [],
   destinationFoldersLoading = false,
   destinationMeta,
+  onLoadFolders,
   oauthLoading = false,
   onClose,
   onSave,
@@ -37,14 +38,31 @@ function DestinationMailboxDialog({
   const usesMicrosoftOAuth = !isGmailProvider && resolvedDestinationConfig.authMethod === 'OAUTH2' && resolvedDestinationConfig.oauthProvider === 'MICROSOFT'
   const usesPassword = !isGmailProvider && !usesMicrosoftOAuth
   const savedProvider = destinationMeta?.provider || provider
-  const detectedFolders = !isGmailProvider && configured && destinationMeta?.linked && savedProvider === provider ? destinationFolders : []
+  const initialConfigRef = useRef(normalizeDestinationProviderConfig(destinationConfig))
+  const initialConfig = initialConfigRef.current
+  const savedDestinationStillMatchesDraft = savedProvider === provider
+    && initialConfig.host === resolvedDestinationConfig.host
+    && Number(initialConfig.port || 0) === Number(resolvedDestinationConfig.port || 0)
+    && Boolean(initialConfig.tls) === Boolean(resolvedDestinationConfig.tls)
+    && initialConfig.username === resolvedDestinationConfig.username
+    && initialConfig.authMethod === resolvedDestinationConfig.authMethod
+    && initialConfig.oauthProvider === resolvedDestinationConfig.oauthProvider
+  const [previewFolders, setPreviewFolders] = useState([])
+  const [previewFoldersLoading, setPreviewFoldersLoading] = useState(false)
+  const [tlsRecommendation, setTlsRecommendation] = useState(null)
+  const [folderLoadError, setFolderLoadError] = useState('')
+  const detectedFolders = !isGmailProvider
+    ? (previewFolders.length > 0
+        ? previewFolders
+        : (configured && destinationMeta?.linked && savedDestinationStillMatchesDraft ? destinationFolders : []))
+    : []
   const currentFolder = resolvedDestinationConfig.folder || ''
   const currentFolderDetected = detectedFolders.includes(currentFolder)
   const defaultDetectedFolder = detectedFolders.find((folder) => folder.toUpperCase() === 'INBOX') || detectedFolders[0] || ''
   const [manualFolderEntry, setManualFolderEntry] = useState(detectedFolders.length === 0)
   const [testResult, setTestResult] = useState(null)
-  const initialConfigRef = useRef(normalizeDestinationProviderConfig(destinationConfig))
-  const initialConfig = initialConfigRef.current
+  const preserveNextTestResultRef = useRef(false)
+  const testResultRef = useRef(null)
   const isDirty = JSON.stringify(initialConfig) !== JSON.stringify(resolvedDestinationConfig)
   const canLaunchOAuth = isGmailProvider || usesMicrosoftOAuth
   const showUnlinkButton = Boolean(destinationMeta?.linked) && savedProvider === provider
@@ -63,6 +81,9 @@ function DestinationMailboxDialog({
     || initialConfig.oauthProvider !== resolvedDestinationConfig.oauthProvider
   )
   const canPlainSave = !isGmailProvider && (!usesMicrosoftOAuth || (isDirty && !microsoftReauthRequired))
+  const effectiveTlsRecommendation = tlsRecommendation ?? testResult
+  const tlsLockedToSecure = Boolean(effectiveTlsRecommendation?.tlsRecommended && resolvedDestinationConfig.tls)
+  const effectiveFoldersLoading = destinationFoldersLoading || previewFoldersLoading
   const canTestConnection = useMemo(() => {
     if (isGmailProvider) {
       return false
@@ -92,6 +113,7 @@ function DestinationMailboxDialog({
     if (!detectedFolders.length || currentFolder || !defaultDetectedFolder) {
       return
     }
+    preserveNextTestResultRef.current = true
     setDestinationConfig((current) => {
       const normalizedCurrent = normalizeDestinationProviderConfig(current)
       if (normalizedCurrent.provider !== provider || (normalizedCurrent.folder || '') === defaultDetectedFolder) {
@@ -102,8 +124,23 @@ function DestinationMailboxDialog({
   }, [currentFolder, defaultDetectedFolder, detectedFolders, provider, setDestinationConfig])
 
   useEffect(() => {
+    if (preserveNextTestResultRef.current) {
+      preserveNextTestResultRef.current = false
+      return
+    }
     setTestResult(null)
-  }, [provider, resolvedDestinationConfig.host, resolvedDestinationConfig.port, resolvedDestinationConfig.username, resolvedDestinationConfig.folder, resolvedDestinationConfig.password, resolvedDestinationConfig.tls])
+    setTlsRecommendation(null)
+    setPreviewFolders([])
+    setPreviewFoldersLoading(false)
+    setFolderLoadError('')
+  }, [provider, resolvedDestinationConfig.host, resolvedDestinationConfig.port, resolvedDestinationConfig.username, resolvedDestinationConfig.folder, resolvedDestinationConfig.password, resolvedDestinationConfig.tls, resolvedDestinationConfig.authMethod, resolvedDestinationConfig.oauthProvider])
+
+  useEffect(() => {
+    if (!testResultRef.current || !testResult || typeof testResultRef.current.scrollIntoView !== 'function') {
+      return
+    }
+    testResultRef.current.scrollIntoView({ behavior: 'smooth', block: 'nearest' })
+  }, [testResult])
 
   function updateProvider(nextProvider) {
     const preset = findDestinationProviderPreset(nextProvider)
@@ -145,8 +182,47 @@ function DestinationMailboxDialog({
   async function handleTestConnection() {
     try {
       const result = await onTestConnection()
-      setTestResult({ ...result, tone: 'success' })
+      const tlsAutoApplied = Boolean(result.tlsRecommended && !resolvedDestinationConfig.tls)
+      const nextConfig = tlsAutoApplied
+        ? normalizeDestinationProviderConfig({
+          ...resolvedDestinationConfig,
+          tls: true,
+          port: result.recommendedTlsPort || resolvedDestinationConfig.port
+        })
+        : resolvedDestinationConfig
+      if (tlsAutoApplied) {
+        preserveNextTestResultRef.current = true
+        setDestinationConfig(nextConfig)
+      }
+      setFolderLoadError('')
+      setTestResult({
+        ...result,
+        port: tlsAutoApplied ? (result.recommendedTlsPort || result.port) : result.port,
+        tls: tlsAutoApplied ? true : result.tls,
+        message: result.message || t('destination.testSuccess'),
+        tone: 'success'
+      })
+      setTlsRecommendation(result.tlsRecommended ? {
+        recommendedTlsPort: result.recommendedTlsPort || result.port,
+        tlsRecommended: true
+      } : null)
+      if (!isGmailProvider && onLoadFolders) {
+        setPreviewFoldersLoading(true)
+        void onLoadFolders(nextConfig, { suppressErrors: true })
+          .then((folders) => {
+            setPreviewFolders(Array.isArray(folders) ? folders : [])
+            setFolderLoadError('')
+          })
+          .catch((error) => {
+            setPreviewFolders([])
+            setFolderLoadError(t('errors.loadDestinationFolders'))
+          })
+          .finally(() => {
+            setPreviewFoldersLoading(false)
+          })
+      }
     } catch (error) {
+      setTlsRecommendation(null)
       setTestResult({ tone: 'error', message: error.message || t('errors.testDestinationConnection') })
     }
   }
@@ -183,12 +259,12 @@ function DestinationMailboxDialog({
             <FormField helpText={t('destination.portHelp')} label={t('destination.port')}>
               <input aria-label={t('destination.port')} type="number" value={resolvedDestinationConfig.port} onChange={(event) => setDestinationConfig((current) => ({ ...current, port: Number(event.target.value) || '' }))} />
             </FormField>
-            <FormField helpText={t('emailAccounts.usernameHelp')} label={t('emailAccounts.username')}>
+            <FormField helpText={t('destination.usernameHelp')} label={t('emailAccounts.username')}>
               <input aria-label={t('emailAccounts.username')} value={resolvedDestinationConfig.username} onChange={(event) => setDestinationConfig((current) => ({ ...current, username: event.target.value }))} />
             </FormField>
             {usesPassword ? (
               <PasswordField
-                helpText={t('emailAccounts.passwordHelp')}
+                helpText={t('destination.passwordHelp')}
                 hideLabel={t('common.hideField', { label: t('emailAccounts.password') })}
                 label={t('emailAccounts.password')}
                 placeholder={configured && savedProvider === provider && destinationMeta?.passwordConfigured ? t('emailAccounts.keepExisting') : ''}
@@ -203,7 +279,7 @@ function DestinationMailboxDialog({
               <label>
                 <span className="field-label-row">
                   <span>{t('emailAccounts.folder')}</span>
-                  <InfoHint text={t('emailAccounts.folderHelp')} />
+                  <InfoHint text={t('destination.folderHelp')} />
                 </span>
                 {detectedFolders.length > 0 && !manualFolderEntry ? (
                   <select aria-label={t('emailAccounts.folder')} value={currentFolderDetected ? currentFolder : defaultDetectedFolder} onChange={(event) => setDestinationConfig((current) => ({ ...current, folder: event.target.value }))}>
@@ -216,8 +292,8 @@ function DestinationMailboxDialog({
                 )}
               </label>
               <div className="destination-folder-actions">
-                {destinationFoldersLoading && savedProvider === provider && destinationMeta?.linked ? (
-                  <span className="destination-folder-status">{t('common.refreshingSection')}</span>
+                {effectiveFoldersLoading && !isGmailProvider ? (
+                  <span className="destination-folder-status">{t('common.retrievingFoldersFromServer')}</span>
                 ) : null}
                 {detectedFolders.length > 0 ? (
                   <button className="destination-folder-toggle" onClick={manualFolderEntry ? useDetectedFolderOptions : () => setManualFolderEntry(true)} type="button">
@@ -225,12 +301,32 @@ function DestinationMailboxDialog({
                   </button>
                 ) : null}
               </div>
+              {folderLoadError ? (
+                <div className="muted-box fetcher-transport-warning folder-load-error-card">{folderLoadError}</div>
+              ) : null}
             </div>
+            {!resolvedDestinationConfig.tls ? (
+              <div className="muted-box full fetcher-transport-warning">
+                <strong>{t('destination.insecureTransportWarningTitle')}</strong><br />
+                {t('destination.insecureTransportWarningBody')}
+              </div>
+            ) : null}
+            {tlsLockedToSecure ? (
+              <div className="muted-box full">
+                <strong>{t('destination.tlsLockedTitle')}</strong><br />
+                {t('destination.tlsLockedBody', { port: effectiveTlsRecommendation?.recommendedTlsPort || resolvedDestinationConfig.port })}
+              </div>
+            ) : null}
             <label className="checkbox-row full destination-dialog-checkbox">
-              <input checked={true} disabled readOnly type="checkbox" />
+              <input
+                checked={resolvedDestinationConfig.tls}
+                disabled={tlsLockedToSecure}
+                onChange={(event) => setDestinationConfig((current) => ({ ...current, tls: event.target.checked }))}
+                type="checkbox"
+              />
               <span className="field-label-row">
                 <span>{t('emailAccounts.tlsOnly')}</span>
-                <InfoHint text={t('emailAccounts.tlsOnlyHelp')} />
+                <InfoHint text={t(tlsLockedToSecure ? 'destination.tlsOnlyLockedHelp' : 'destination.tlsOnlyHelp')} />
               </span>
             </label>
           </>
@@ -263,14 +359,17 @@ function DestinationMailboxDialog({
         </div>
 
         {testResult ? (
-          <div className={`full ${testResult.tone === 'error' ? 'banner-error' : 'muted-box'} fetcher-test-result`}>
+          <div ref={testResultRef} className={`full ${testResult.tone === 'error' ? 'banner-error' : 'muted-box'} fetcher-test-result`}>
             <strong>{testResult.message}</strong>
             {testResult.tone !== 'error' && testResult.protocol ? (
               <dl className="fetcher-test-result-grid">
                 <div><dt>{t('emailAccounts.testProtocol')}</dt><dd>{testResult.protocol}</dd></div>
                 <div><dt>{t('emailAccounts.testEndpoint')}</dt><dd>{testResult.host}:{testResult.port}</dd></div>
                 <div><dt>{t('emailAccounts.testTls')}</dt><dd>{testResult.tls ? t('common.yes') : t('common.no')}</dd></div>
+                <div><dt>{t('emailAccounts.testTlsAvailable')}</dt><dd>{testResult.tlsAvailable == null ? t('common.unavailable') : (testResult.tlsAvailable ? t('common.yes') : t('common.no'))}</dd></div>
+                <div><dt>{t('emailAccounts.testTlsRecommended')}</dt><dd>{testResult.tlsRecommended == null ? t('common.unavailable') : (testResult.tlsRecommended ? t('common.yes') : t('common.no'))}</dd></div>
                 <div><dt>{t('emailAccounts.testAuth')}</dt><dd>{t(`authMethod.${String(testResult.authMethod || '').toLowerCase()}`)}{testResult.oauthProvider && testResult.oauthProvider !== 'NONE' ? ` / ${t(`oauthProvider.${String(testResult.oauthProvider).toLowerCase()}`)}` : ''}</dd></div>
+                <div><dt>{t('emailAccounts.testRecommendedTlsPort')}</dt><dd>{testResult.recommendedTlsPort ?? t('common.unavailable')}</dd></div>
                 <div><dt>{t('emailAccounts.testAuthenticated')}</dt><dd>{testResult.authenticated ? t('common.yes') : t('common.no')}</dd></div>
                 <div><dt>{t('emailAccounts.testFolder')}</dt><dd>{testResult.folder || 'INBOX'}</dd></div>
                 <div><dt>{t('emailAccounts.testFolderAccessible')}</dt><dd>{testResult.folderAccessible ? t('common.yes') : t('common.no')}</dd></div>

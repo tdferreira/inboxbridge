@@ -21,6 +21,7 @@ public final class ApiErrorCodes {
         if (message.equals("Username already exists")) return "username_already_exists";
         if (message.equals("Unknown user id")) return "user_unknown";
         if (message.equals("Mail fetcher ID already exists")) return "mail_fetcher_id_exists";
+        if (message.equals("A source mailbox with the same server and credentials already exists.")) return "source_mailbox_duplicate";
         if (message.equals("A source mailbox cannot be the same as My Destination Mailbox. Choose a different mailbox or keep that source disabled.")) return "source_destination_mailbox_conflict";
         if (message.equals("Password is required")) return "password_required";
         if (message.equals("Registration challenge answer is required")) return "registration_challenge_required";

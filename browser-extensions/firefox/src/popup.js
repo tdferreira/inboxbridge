@@ -1,6 +1,6 @@
 import { runPoll, fetchStatus } from '../../shared/src/api.js'
 import { onMessage, openOptionsPage, openTab, sendMessage } from '../../shared/src/browser.js'
-import { loadConfig, saveUserPreferences } from '../../shared/src/config.js'
+import { clearConfig, loadConfig, saveUserPreferences } from '../../shared/src/config.js'
 import { localizePopupPage, resolveLanguagePreference, translate } from '../../shared/src/i18n.js'
 import { createPopupController } from '../../shared/src/popup-controller.js'
 import { deriveStatusView, disconnectedView, escapeHtml } from '../../shared/src/popup-view.js'
@@ -21,6 +21,7 @@ export function showStatusBanner(target, tone, text) {
 const controller = createPopupController({
   deps: {
     applyThemePreference,
+    clearConfig,
     clearStatusBanner,
     deriveStatusView,
     disconnectedView,

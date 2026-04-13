@@ -30,6 +30,7 @@ function EmailAccountDialog({
   emailAccountForm,
   emailAccountFolders = [],
   emailAccountFoldersLoading = false,
+  emailAccountFolderLoadError = '',
   duplicateIdError = '',
   microsoftOAuthAvailable = true,
   onApplyPreset,
@@ -91,6 +92,7 @@ function EmailAccountDialog({
   const [manualPostPollTargetEntry, setManualPostPollTargetEntry] = useState(detectedFolders.length === 0)
   const [showUntestedSaveDialog, setShowUntestedSaveDialog] = useState(false)
   const [showFolderErrorState, setShowFolderErrorState] = useState(false)
+  const testResultRef = useRef(null)
   const canSaveWithoutOAuth = !requiresMicrosoftOAuth || editingExistingAccount
   const canPersistEnabledSource = connectionValidated && invalidDetectedFolders.length === 0
   const folderValidationError = supportsFolder
@@ -139,6 +141,12 @@ function EmailAccountDialog({
       return { ...current, folder: defaultDetectedFolder }
     })
   }, [currentFolder, defaultDetectedFolder, detectedFolders, onEmailAccountFormChange])
+  useEffect(() => {
+    if (!testResultRef.current || !testResult || typeof testResultRef.current.scrollIntoView !== 'function') {
+      return
+    }
+    testResultRef.current.scrollIntoView({ behavior: 'smooth', block: 'nearest' })
+  }, [testResult])
 
   function applyPreset(presetId) {
     setSelectedPreset(presetId)
@@ -308,7 +316,7 @@ function EmailAccountDialog({
             <PillboxInput
               allowCustomValues={!folderSuggestionsLoaded}
               helperText={emailAccountFoldersLoading
-                ? t('common.refreshingSection')
+                ? t('common.retrievingFoldersFromServer')
                 : folderSuggestionsValidated
                   ? t('emailAccounts.folderValidationReady')
                   : ''}
@@ -329,6 +337,9 @@ function EmailAccountDialog({
                 : t('emailAccounts.folderMissing', { folder })}
               values={selectedFolderValues}
             />
+            {emailAccountFolderLoadError ? (
+              <div className="muted-box fetcher-transport-warning folder-load-error-card">{emailAccountFolderLoadError}</div>
+            ) : null}
           </div>
         ) : null}
         {supportsCustomLabel ? (
@@ -392,7 +403,7 @@ function EmailAccountDialog({
           </FormField>
         ) : null}
         {!emailAccountForm.tls ? (
-          <div className="banner-warning full">
+          <div className="muted-box full fetcher-transport-warning">
             <strong>{t('emailAccounts.insecureTransportWarningTitle')}</strong><br />
             {t('emailAccounts.insecureTransportWarningBody')}
           </div>
@@ -463,7 +474,7 @@ function EmailAccountDialog({
           </button>
         </div>
         {testResult ? (
-          <div className={`full ${testResult.tone === 'error' ? 'banner-error' : 'muted-box'} fetcher-test-result`}>
+          <div ref={testResultRef} className={`full ${testResult.tone === 'error' ? 'banner-error' : 'muted-box'} fetcher-test-result`}>
             <strong>{testResult.message}</strong>
             {testResult.tone !== 'error' && testResult.protocol ? (
               <dl className="fetcher-test-result-grid">

@@ -72,13 +72,120 @@ class UserEmailAccountServiceTest {
         UserEmailAccountService service = service();
         AppUser owner = user(1L);
         service.upsert(owner, request(null, "fetcher-a"));
-        service.upsert(owner, request(null, "fetcher-b"));
+        service.upsert(owner, new UpdateUserEmailAccountRequest(
+                null,
+                "fetcher-b",
+                true,
+                "IMAP",
+                "imap.example.com",
+                993,
+                true,
+                "PASSWORD",
+                "NONE",
+                "user@example.com",
+                "Different#456",
+                "",
+                "INBOX",
+                false,
+                "Imported/Test"));
 
         IllegalArgumentException error = assertThrows(
                 IllegalArgumentException.class,
                 () -> service.upsert(owner, request("fetcher-a", "fetcher-b")));
 
         assertEquals("Mail fetcher ID already exists", error.getMessage());
+    }
+
+    @Test
+    void createRejectsDuplicatePasswordSourceMailboxForSameUser() {
+        UserEmailAccountService service = service();
+        AppUser owner = user(1L);
+        service.upsert(owner, request(null, "fetcher-a"));
+
+        IllegalArgumentException error = assertThrows(
+                IllegalArgumentException.class,
+                () -> service.upsert(owner, new UpdateUserEmailAccountRequest(
+                        null,
+                        "fetcher-b",
+                        true,
+                        "IMAP",
+                        "IMAP.EXAMPLE.COM",
+                        993,
+                        true,
+                        "PASSWORD",
+                        "NONE",
+                        "USER@example.com",
+                        "Secret#123",
+                        "",
+                        "Archive",
+                        false,
+                        "Imported/Test")));
+
+        assertEquals("A source mailbox with the same server and credentials already exists.", error.getMessage());
+    }
+
+    @Test
+    void createAllowsSameSourceServerWhenPasswordDiffers() {
+        UserEmailAccountService service = service();
+        AppUser owner = user(1L);
+        service.upsert(owner, request(null, "fetcher-a"));
+
+        UserEmailAccountView view = service.upsert(owner, new UpdateUserEmailAccountRequest(
+                null,
+                "fetcher-b",
+                true,
+                "IMAP",
+                "imap.example.com",
+                993,
+                true,
+                "PASSWORD",
+                "NONE",
+                "user@example.com",
+                "Different#456",
+                "",
+                "Archive",
+                false,
+                "Imported/Test"));
+
+        assertEquals("fetcher-b", view.emailAccountId());
+    }
+
+    @Test
+    void createRejectsDuplicateOauthSourceMailboxForSameUser() {
+        UserEmailAccountService service = service();
+        AppUser owner = user(1L);
+        service.upsert(owner, oauthRequest("outlook-a"));
+
+        IllegalArgumentException error = assertThrows(
+                IllegalArgumentException.class,
+                () -> service.upsert(owner, new UpdateUserEmailAccountRequest(
+                        null,
+                        "outlook-b",
+                        true,
+                        "IMAP",
+                        "outlook.office365.com",
+                        993,
+                        true,
+                        "OAUTH2",
+                        "MICROSOFT",
+                        "user@example.com",
+                        "",
+                        "refresh-token",
+                        "Archive",
+                        false,
+                        "Imported/Test")));
+
+        assertEquals("A source mailbox with the same server and credentials already exists.", error.getMessage());
+    }
+
+    @Test
+    void createAllowsSameOauthMailboxForDifferentUsers() {
+        UserEmailAccountService service = service();
+        service.upsert(user(1L), oauthRequest("outlook-a"));
+
+        UserEmailAccountView view = service.upsert(user(2L), oauthRequest("outlook-b"));
+
+        assertEquals("outlook-b", view.emailAccountId());
     }
 
     @Test
@@ -264,6 +371,35 @@ class UserEmailAccountServiceTest {
     }
 
     @Test
+    void upsertRejectsNonTlsSourceConnectionsWhenStartTlsIsAvailableOnSamePort() {
+        UserEmailAccountService service = service();
+        ((FakeSourceTransportSecurityService) service.sourceTransportSecurityService).supportedTlsPort = 143;
+
+        IllegalArgumentException error = assertThrows(
+                IllegalArgumentException.class,
+                () -> service.upsert(user(1L), new UpdateUserEmailAccountRequest(
+                        null,
+                        "fetcher-a",
+                        true,
+                        "IMAP",
+                        "imap.example.com",
+                        143,
+                        false,
+                        "PASSWORD",
+                        "NONE",
+                        "user@example.com",
+                        "Secret#123",
+                        "",
+                        "INBOX",
+                        false,
+                        "Imported/Test")));
+
+        assertEquals(
+                "This source mail server supports TLS on port 143 for IMAP. Enable TLS instead of saving an unsafe plain-text connection.",
+                error.getMessage());
+    }
+
+    @Test
     void upsertAllowsNonTlsSourceConnectionsWhenNoSecureEndpointIsAvailable() {
         UserEmailAccountService service = service();
 
@@ -341,6 +477,36 @@ class UserEmailAccountServiceTest {
                 false,
                 "Imported/Test"));
 
+        assertEquals(993, ((FakeMailSourceClient) service.mailSourceClient).lastBridge.port());
+        assertTrue(((FakeMailSourceClient) service.mailSourceClient).lastBridge.tls());
+    }
+
+    @Test
+    void testConnectionReportsTlsAvailabilityWhenTlsIsAlreadyEnabled() {
+        UserEmailAccountService service = service();
+        ((FakeSourceTransportSecurityService) service.sourceTransportSecurityService).supportedTlsPort = 993;
+
+        EmailAccountConnectionTestResult result = service.testConnection(user(1L), new UpdateUserEmailAccountRequest(
+                null,
+                "fetcher-a",
+                true,
+                "IMAP",
+                "imap.example.com",
+                993,
+                true,
+                "PASSWORD",
+                "NONE",
+                "user@example.com",
+                "Secret#123",
+                "",
+                "INBOX",
+                false,
+                "Imported/Test"));
+
+        assertTrue(result.tls());
+        assertEquals(Boolean.TRUE, result.tlsAvailable());
+        assertEquals(Boolean.TRUE, result.tlsRecommended());
+        assertEquals(993, result.recommendedTlsPort());
         assertEquals(993, ((FakeMailSourceClient) service.mailSourceClient).lastBridge.port());
         assertTrue(((FakeMailSourceClient) service.mailSourceClient).lastBridge.tls());
     }

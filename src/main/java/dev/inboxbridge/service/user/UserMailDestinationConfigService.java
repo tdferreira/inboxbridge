@@ -20,6 +20,7 @@ import dev.inboxbridge.persistence.UserMailDestinationConfigRepository;
 import dev.inboxbridge.service.security.SecretEncryptionService;
 import dev.inboxbridge.service.destination.ImapAppendMailDestinationService;
 import dev.inboxbridge.service.destination.MailboxConflictService;
+import dev.inboxbridge.service.mail.SourceTransportSecurityService;
 import dev.inboxbridge.service.oauth.GoogleOAuthService;
 import dev.inboxbridge.service.oauth.MicrosoftOAuthService;
 import dev.inboxbridge.service.oauth.SystemOAuthAppSettingsService;
@@ -60,6 +61,9 @@ public class UserMailDestinationConfigService {
 
     @Inject
     MailboxConflictService mailboxConflictService;
+
+    @Inject
+    SourceTransportSecurityService sourceTransportSecurityService;
 
     public UserMailDestinationView viewForUser(Long userId) {
         UserMailDestinationConfig config = repository.findByUserId(userId).orElse(null);
@@ -176,18 +180,76 @@ public class UserMailDestinationConfigService {
         return new DestinationMailboxFolderOptionsView(folders);
     }
 
-    public EmailAccountConnectionTestResult testConnectionForUser(AppUser user, UpdateUserMailDestinationRequest request) {
-        requireTlsEnabled(request.tls());
+    public DestinationMailboxFolderOptionsView listFoldersForUser(AppUser user, UpdateUserMailDestinationRequest request) {
         ImapAppendDestinationTarget target = previewImapTarget(user, request);
-        if (target.authMethod() == InboxBridgeConfig.AuthMethod.OAUTH2 && !imapAppendMailDestinationService.isLinked(target)) {
+        ImapAppendDestinationTarget effectiveTarget = upgradeTargetToTlsIfRecommended(target).orElse(target);
+        if (effectiveTarget.authMethod() == InboxBridgeConfig.AuthMethod.OAUTH2
+                && !imapAppendMailDestinationService.isLinked(effectiveTarget)) {
+            throw new IllegalStateException("Save and connect the destination mailbox before loading folders.");
+        }
+        return new DestinationMailboxFolderOptionsView(imapAppendMailDestinationService.listFolders(effectiveTarget));
+    }
+
+    public EmailAccountConnectionTestResult testConnectionForUser(AppUser user, UpdateUserMailDestinationRequest request) {
+        ImapAppendDestinationTarget target = previewImapTarget(user, request);
+        Integer recommendedTlsPort = sourceTransportSecurityService.detectRecommendedTlsPort(
+                InboxBridgeConfig.Protocol.IMAP,
+                target.host(),
+                target.port()).orElse(null);
+        ImapAppendDestinationTarget effectiveTarget = !target.tls() && recommendedTlsPort != null
+                ? new ImapAppendDestinationTarget(
+                        target.subjectKey(),
+                        target.userId(),
+                        target.ownerUsername(),
+                        target.providerId(),
+                        target.host(),
+                        recommendedTlsPort,
+                        true,
+                        target.authMethod(),
+                        target.oauthProvider(),
+                        target.username(),
+                        target.password(),
+                        target.folder())
+                : target;
+        if (effectiveTarget.authMethod() == InboxBridgeConfig.AuthMethod.OAUTH2
+                && !imapAppendMailDestinationService.isLinked(effectiveTarget)) {
             throw new IllegalStateException("Save and connect the destination mailbox before testing it.");
         }
-        return imapAppendMailDestinationService.testConnection(target);
+        EmailAccountConnectionTestResult result = imapAppendMailDestinationService.testConnection(effectiveTarget);
+        return new EmailAccountConnectionTestResult(
+                result.success(),
+                effectiveTarget == target
+                        ? result.message()
+                        : "Connection test succeeded over TLS. InboxBridge verified a secure IMAP endpoint on port "
+                                + effectiveTarget.port() + " and switched this destination to TLS automatically.",
+                result.protocol(),
+                result.host(),
+                result.port(),
+                result.tls(),
+                result.authMethod(),
+                result.oauthProvider(),
+                result.authenticated(),
+                result.folder(),
+                result.folderAccessible(),
+                result.unreadFilterRequested(),
+                result.unreadFilterSupported(),
+                result.unreadFilterValidated(),
+                result.visibleMessageCount(),
+                result.unreadMessageCount(),
+                result.sampleMessageAvailable(),
+                result.sampleMessageMaterialized(),
+                result.forwardedMarkerSupported(),
+                recommendedTlsPort != null,
+                recommendedTlsPort != null,
+                recommendedTlsPort,
+                effectiveTarget == target
+                        ? result.transportSecurityWarning()
+                        : "Connection test succeeded over TLS. InboxBridge verified a secure IMAP endpoint on port "
+                                + effectiveTarget.port() + " and switched this destination to TLS automatically.");
     }
 
     @Transactional
     public UserMailDestinationView update(AppUser user, UpdateUserMailDestinationRequest request) {
-        requireTlsEnabled(request.tls());
         String provider = normalizeProvider(request.provider());
         UserMailDestinationConfig config = repository.findByUserId(user.id).orElseGet(UserMailDestinationConfig::new);
         String nextAuthMethod = PROVIDER_GMAIL.equals(provider)
@@ -238,6 +300,7 @@ public class UserMailDestinationConfigService {
             config.username = requireNonBlank(request.username(), "Destination username");
         }
 
+        enforceDestinationTransportSecurity(config);
         repository.persist(config);
         mailboxConflictService.disableSourcesMatchingCurrentDestination(user.id);
         return viewForUser(user.id);
@@ -371,12 +434,6 @@ public class UserMailDestinationConfigService {
         return value == null || value.isBlank() ? fallback : value.trim();
     }
 
-    private void requireTlsEnabled(Boolean tls) {
-        if (Boolean.FALSE.equals(tls)) {
-            throw new IllegalArgumentException("InboxBridge requires TLS for every destination mailbox connection.");
-        }
-    }
-
     private ImapAppendDestinationTarget previewImapTarget(AppUser user, UpdateUserMailDestinationRequest request) {
         String provider = normalizeProvider(request.provider());
         if (PROVIDER_GMAIL.equals(provider)) {
@@ -412,6 +469,43 @@ public class UserMailDestinationConfigService {
                 requireNonBlank(request.username(), "Destination username"),
                 password,
                 blankToDefault(request.folder(), "INBOX"));
+    }
+
+    private Optional<ImapAppendDestinationTarget> upgradeTargetToTlsIfRecommended(ImapAppendDestinationTarget target) {
+        if (target == null || target.tls()) {
+            return Optional.empty();
+        }
+        return sourceTransportSecurityService.detectRecommendedTlsPort(
+                        InboxBridgeConfig.Protocol.IMAP,
+                        target.host(),
+                        target.port())
+                .map(securePort -> new ImapAppendDestinationTarget(
+                        target.subjectKey(),
+                        target.userId(),
+                        target.ownerUsername(),
+                        target.providerId(),
+                        target.host(),
+                        securePort,
+                        true,
+                        target.authMethod(),
+                        target.oauthProvider(),
+                        target.username(),
+                        target.password(),
+                        target.folder()));
+    }
+
+    private void enforceDestinationTransportSecurity(UserMailDestinationConfig config) {
+        if (config == null || config.tls || config.host == null || config.host.isBlank()) {
+            return;
+        }
+        sourceTransportSecurityService.detectRecommendedTlsPort(
+                        InboxBridgeConfig.Protocol.IMAP,
+                        config.host,
+                        config.port)
+                .ifPresent(securePort -> {
+                    throw new IllegalArgumentException(
+                            sourceTransportSecurityService.insecureDestinationConnectionMessage(securePort));
+                });
     }
 
     private String previewPassword(Long userId, String requestPassword) {

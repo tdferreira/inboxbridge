@@ -1,6 +1,7 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
 import { registerBackgroundController } from '../../shared/src/background-controller.js'
+import { createInvalidExtensionAuthError } from '../../shared/src/auth-errors.js'
 
 test('background controller registers listeners and refreshes badge from server', async () => {
   let installedListener
@@ -267,6 +268,61 @@ test('background controller marks signed-out toolbar state when extension auth i
   await controller.refreshBadgeFromServer()
 
   assert.equal(clearedTitle, 'InboxBridge is not configured')
+  assert.deepEqual(iconState, {
+    kind: 'signed-out',
+    message: 'Open Settings to sign in and connect this browser extension to InboxBridge.'
+  })
+})
+
+test('background controller clears saved auth when a revoked token rejects polling', async () => {
+  let cleared = 0
+  let iconState = null
+
+  const controller = registerBackgroundController({
+    deps: {
+      applyBadge: async () => {},
+      applyIcon: async (_status, errorState = null) => {
+        iconState = errorState
+      },
+      clearBadge: async () => {},
+      clearConfig: async () => {
+        cleared += 1
+      },
+      createAlarm() {},
+      createContextMenu: async () => {},
+      createNotification: async () => {},
+      fetchStatus: async () => ({ summary: { errorSourceCount: 0 }, sources: [] }),
+      loadCachedStatus: async () => ({ status: null }),
+      loadConfig: async () => ({
+        serverUrl: 'https://mail.example.com',
+        token: 'ibx_token'
+      }),
+      mergeLivePollIntoStatus: (status) => status,
+      onAlarm() {},
+      onContextMenuClicked() {},
+      onInstalled() {},
+      onMessage() {},
+      openOptionsPage: async () => {},
+      removeAllContextMenus: async () => {},
+      runPoll: async () => {
+        throw createInvalidExtensionAuthError()
+      },
+      saveCachedStatus: async () => {},
+      saveUserPreferences: async () => {},
+      sendMessage: async () => {},
+      resolveLanguagePreference: () => 'en',
+      shouldOverlayLiveStatus: () => false,
+      shouldRefreshStatusFromLiveEvent: () => false,
+      subscribeExtensionEvents() {
+        return { close() {}, completed: Promise.resolve() }
+      },
+      translate: (_locale, key, params = {}) => key.replace('{count}', params.count ?? '')
+    }
+  })
+
+  await controller.triggerManualPollFromBackground()
+
+  assert.equal(cleared, 1)
   assert.deepEqual(iconState, {
     kind: 'signed-out',
     message: 'Open Settings to sign in and connect this browser extension to InboxBridge.'

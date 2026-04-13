@@ -1,3 +1,4 @@
+import { createInvalidExtensionAuthError, isInvalidExtensionAuthError } from './auth-errors.js'
 import { subscribeToJsonSse } from './fetch-sse.js'
 
 const DEFAULT_TIMEOUT_MS = 10_000
@@ -77,7 +78,7 @@ async function fetchJson(url, options = {}) {
 
     const payload = await parsePayload(response)
     if (response.status === 401) {
-      throw new Error(payload?.message || 'The saved InboxBridge sign-in is no longer valid.')
+      throw createInvalidExtensionAuthError(payload?.message || 'The saved InboxBridge sign-in is no longer valid.')
     }
 
     if (!response.ok) {

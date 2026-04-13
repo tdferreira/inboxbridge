@@ -46,6 +46,8 @@ public class UserEmailAccountService {
 
     private static final String REVOKED_GMAIL_ACCESS_MESSAGE =
             "The linked Gmail account no longer grants InboxBridge access. The saved Gmail OAuth link was cleared. Reconnect it from My Destination Mailbox.";
+    private static final String DUPLICATE_SOURCE_MAILBOX_MESSAGE =
+            "A source mailbox with the same server and credentials already exists.";
 
     @Inject
     UserEmailAccountRepository repository;
@@ -136,20 +138,43 @@ public class UserEmailAccountService {
 
     public EmailAccountConnectionTestResult testConnection(AppUser user, UpdateUserEmailAccountRequest request) {
         RuntimeEmailAccount candidate = preview(user, request);
-        SourceTransportSecurityService.TlsUpgrade tlsUpgrade = sourceTransportSecurityService
-                .detectRecommendedUpgrade(candidate)
+        Integer recommendedTlsPort = sourceTransportSecurityService
+                .detectRecommendedTlsPort(candidate.protocol(), candidate.host(), candidate.port())
                 .orElse(null);
+        SourceTransportSecurityService.TlsUpgrade tlsUpgrade = !candidate.tls() && recommendedTlsPort != null
+                ? new SourceTransportSecurityService.TlsUpgrade(
+                        recommendedTlsPort,
+                        new RuntimeEmailAccount(
+                                candidate.id(),
+                                candidate.ownerKind(),
+                                candidate.ownerUserId(),
+                                candidate.ownerUsername(),
+                                candidate.enabled(),
+                                candidate.protocol(),
+                                candidate.host(),
+                                recommendedTlsPort,
+                                true,
+                                candidate.authMethod(),
+                                candidate.oauthProvider(),
+                                candidate.username(),
+                                candidate.password(),
+                                candidate.oauthRefreshToken(),
+                                candidate.folder(),
+                                candidate.unreadOnly(),
+                                candidate.fetchMode(),
+                                candidate.customLabel(),
+                                candidate.postPollSettings(),
+                                candidate.destination()))
+                : null;
         RuntimeEmailAccount effectiveCandidate = tlsUpgrade == null ? candidate : tlsUpgrade.upgradedAccount();
         EmailAccountConnectionTestResult result = mailSourceClient.testConnection(effectiveCandidate);
-        if (tlsUpgrade == null) {
-            return result;
-        }
-        String message = "Connection test succeeded over TLS. InboxBridge verified a secure "
-                + candidate.protocol().name() + " endpoint on port " + tlsUpgrade.securePort()
-                + " and switched this source to TLS automatically.";
         return new EmailAccountConnectionTestResult(
                 result.success(),
-                message,
+                tlsUpgrade == null
+                        ? result.message()
+                        : "Connection test succeeded over TLS. InboxBridge verified a secure "
+                                + candidate.protocol().name() + " endpoint on port " + tlsUpgrade.securePort()
+                                + " and switched this source to TLS automatically.",
                 result.protocol(),
                 result.host(),
                 result.port(),
@@ -167,10 +192,14 @@ public class UserEmailAccountService {
                 result.sampleMessageAvailable(),
                 result.sampleMessageMaterialized(),
                 result.forwardedMarkerSupported(),
-                Boolean.TRUE,
-                Boolean.TRUE,
-                tlsUpgrade.securePort(),
-                message);
+                recommendedTlsPort != null,
+                recommendedTlsPort != null,
+                recommendedTlsPort,
+                tlsUpgrade == null
+                        ? result.transportSecurityWarning()
+                        : "Connection test succeeded over TLS. InboxBridge verified a secure "
+                                + candidate.protocol().name() + " endpoint on port " + tlsUpgrade.securePort()
+                                + " and switched this source to TLS automatically.");
     }
 
     public DestinationMailboxFolderOptionsView listFolders(AppUser user, UpdateUserEmailAccountRequest request) {
@@ -306,6 +335,7 @@ public class UserEmailAccountService {
                 Optional.ofNullable(emailAccount.customLabel),
                 postPollSettings,
                 null);
+        enforceUniqueSourceMailbox(user.id, emailAccount, candidate);
         enforceSourceTransportSecurity(candidate);
         if (candidate.enabled() && mailboxConflictService.conflictsWithCurrentDestination(user.id, candidate)) {
             throw new IllegalArgumentException(MailboxConflictService.SOURCE_DESTINATION_CONFLICT_MESSAGE);
@@ -802,11 +832,44 @@ public class UserEmailAccountService {
         return value.trim();
     }
 
+    private void enforceUniqueSourceMailbox(Long userId, UserEmailAccount editedAccount, RuntimeEmailAccount candidate) {
+        for (UserEmailAccount existingAccount : repository.listByUserId(userId)) {
+            if (editedAccount.id != null && editedAccount.id.equals(existingAccount.id)) {
+                continue;
+            }
+            if (matchesSameSourceMailbox(existingAccount, candidate)) {
+                throw new IllegalArgumentException(DUPLICATE_SOURCE_MAILBOX_MESSAGE);
+            }
+        }
+    }
+
+    private boolean matchesSameSourceMailbox(UserEmailAccount existingAccount, RuntimeEmailAccount candidate) {
+        if (existingAccount.authMethod != candidate.authMethod()
+                || existingAccount.protocol != candidate.protocol()
+                || existingAccount.port != candidate.port()
+                || !normalized(existingAccount.host).equals(normalized(candidate.host()))
+                || !normalized(existingAccount.username).equals(normalized(candidate.username()))) {
+            return false;
+        }
+        if (candidate.authMethod() == InboxBridgeConfig.AuthMethod.PASSWORD) {
+            return decryptPassword(existingAccount).equals(candidate.password());
+        }
+        if (existingAccount.oauthProvider != candidate.oauthProvider()) {
+            return false;
+        }
+        String existingRefreshToken = decryptRefreshToken(existingAccount);
+        String candidateRefreshToken = candidate.oauthRefreshToken();
+        if (!existingRefreshToken.isBlank() || !candidateRefreshToken.isBlank()) {
+            return existingRefreshToken.equals(candidateRefreshToken);
+        }
+        return true;
+    }
+
     private void enforceSourceTransportSecurity(RuntimeEmailAccount candidate) {
         if (candidate == null || candidate.tls()) {
             return;
         }
-        sourceTransportSecurityService.detectImplicitTlsPort(candidate.protocol(), candidate.host())
+        sourceTransportSecurityService.detectRecommendedTlsPort(candidate.protocol(), candidate.host(), candidate.port())
                 .ifPresent(securePort -> {
                     throw new IllegalArgumentException(
                             sourceTransportSecurityService.insecureConnectionMessage(candidate.protocol(), securePort));
@@ -815,6 +878,10 @@ public class UserEmailAccountService {
 
     private String blankToNull(String value) {
         return value == null || value.isBlank() ? null : value.trim();
+    }
+
+    private String normalized(String value) {
+        return value == null ? "" : value.trim().toLowerCase(Locale.ROOT);
     }
 
     private record ImportStats(long totalImported, Instant lastImportedAt) {

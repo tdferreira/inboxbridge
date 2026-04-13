@@ -193,8 +193,10 @@ describe('useEmailAccountsController', () => {
     })
 
     expect(global.fetch).toHaveBeenNthCalledWith(1, '/api/app/email-accounts/test-connection', expect.objectContaining({ method: 'POST' }))
-    expect(global.fetch).toHaveBeenNthCalledWith(2, '/api/app/email-accounts/folders', expect.objectContaining({ method: 'POST' }))
-    expect(result.current.emailAccountFolders).toEqual(['INBOX', 'Archive'])
+    await waitFor(() => {
+      expect(global.fetch).toHaveBeenNthCalledWith(2, '/api/app/email-accounts/folders', expect.objectContaining({ method: 'POST' }))
+      expect(result.current.emailAccountFolders).toEqual(['INBOX', 'Archive'])
+    })
 
     global.fetch = originalFetch
   })
@@ -246,9 +248,74 @@ describe('useEmailAccountsController', () => {
     expect(result.current.emailAccountForm.tls).toBe(true)
     expect(result.current.emailAccountForm.port).toBe(993)
     expect(result.current.emailAccountTestResult.tlsRecommended).toBe(true)
-    expect(pushNotification).toHaveBeenCalledWith(expect.objectContaining({
-      message: 'Connection test succeeded over TLS.',
-      tone: 'warning'
+    expect(pushNotification).not.toHaveBeenCalledWith(expect.objectContaining({
+      message: 'Connection test succeeded over TLS.'
+    }))
+
+    global.fetch = originalFetch
+  })
+
+  it('keeps a successful connection test visible when folder loading later fails', async () => {
+    const originalFetch = global.fetch
+    global.fetch = vi.fn()
+      .mockResolvedValueOnce({
+        ok: true,
+        json: async () => ({
+          message: 'Connection test succeeded.',
+          protocol: 'IMAP',
+          host: 'imap.example.com',
+          port: 993,
+          tls: true,
+          authMethod: 'PASSWORD',
+          oauthProvider: 'NONE',
+          authenticated: true,
+          folder: 'INBOX',
+          folderAccessible: true
+        })
+      })
+      .mockResolvedValueOnce({
+        ok: false,
+        status: 504,
+        text: async () => JSON.stringify({
+          code: 'bad_request',
+          message: 'Unable to load mail account folders (504 Gateway Time-out)'
+        }),
+        json: async () => ({
+          code: 'bad_request',
+          message: 'Unable to load mail account folders (504 Gateway Time-out)'
+        })
+      })
+
+    const { result, pushNotification } = renderController()
+
+    act(() => {
+      result.current.handleEmailAccountFormChange({
+        ...DEFAULT_EMAIL_ACCOUNT_FORM,
+        emailAccountId: 'fetcher-a',
+        host: 'imap.example.com',
+        username: 'user@example.com',
+        password: 'secret'
+      })
+    })
+
+    await act(async () => {
+      await result.current.testEmailAccountConnection()
+    })
+
+    expect(result.current.emailAccountTestResult).toEqual(expect.objectContaining({
+      message: 'Connection test succeeded.',
+      tone: 'success'
+    }))
+
+    await waitFor(() => {
+      expect(result.current.emailAccountFolderLoadError).toBe('errors.loadMailFetcherFolders')
+    })
+    expect(pushNotification).not.toHaveBeenCalledWith(expect.objectContaining({
+      tone: 'error'
+    }))
+    expect(result.current.emailAccountTestResult).toEqual(expect.objectContaining({
+      message: 'Connection test succeeded.',
+      tone: 'success'
     }))
 
     global.fetch = originalFetch

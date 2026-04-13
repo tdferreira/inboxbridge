@@ -1,6 +1,7 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
 import { createPopupController } from '../../shared/src/popup-controller.js'
+import { createInvalidExtensionAuthError } from '../../shared/src/auth-errors.js'
 import {
   createFakeBanner,
   createFakeButton,
@@ -333,4 +334,86 @@ test('popup controller marks extension-started manual polls for later browser no
   assert.equal(elements.statusPill.textContent, 'Polling')
   assert.equal(elements.updatedAt.textContent, 'Polling now')
   assert.equal(deriveCalls >= 2, true)
+})
+
+test('popup controller clears saved auth and shows sign-in state after a revoked token response', async () => {
+  const elements = createPopupElements()
+  let cleared = 0
+  const messages = []
+  const controller = createPopupController({
+    deps: {
+      applyThemePreference() {},
+      clearConfig: async () => {
+        cleared += 1
+      },
+      clearStatusBanner() {},
+      deriveStatusView() {
+        return {
+          attentionCount: '',
+          connectionCopy: 'Connected',
+          errorSources: [],
+          healthy: true,
+          metrics: { imported: '0', fetched: '0', duplicates: '0', errors: '0' },
+          runPollDisabled: false,
+          statusLabel: 'Healthy',
+          statusTone: 'success',
+          updatedText: 'just now'
+        }
+      },
+      disconnectedView(message) {
+        return {
+          attentionCount: '',
+          connectionCopy: message,
+          errorSources: [],
+          healthy: true,
+          metrics: { imported: '-', fetched: '-', duplicates: '-', errors: '-' },
+          runPollDisabled: true,
+          statusLabel: 'Disconnected',
+          statusTone: 'neutral',
+          updatedText: 'No InboxBridge status available'
+        }
+      },
+      escapeHtml(value) {
+        return value
+      },
+      fetchStatus: async () => {
+        throw createInvalidExtensionAuthError()
+      },
+      localizePopupPage() {},
+      loadConfig: async () => ({ serverUrl: 'https://mail.example.com', token: 'ibx_token' }),
+      onMessage() {},
+      openOptionsPage: async () => {},
+      openTab: async () => {},
+      resolveLanguagePreference: () => 'en',
+      runPoll: async () => ({ accepted: true, started: true }),
+      saveUserPreferences: async () => {},
+      sendMessage: async (message) => {
+        messages.push(message)
+      },
+      showStatusBanner(target, tone, text) {
+        target.hidden = false
+        target.className = `status-banner ${tone}`
+        target.textContent = text
+      },
+      targetDocument: {},
+      translate: (_locale, key) => {
+        if (key === 'popup.openSettingsToSignIn') return 'Open Settings to sign in and connect this browser extension to InboxBridge.'
+        if (key === 'popup.signIn') return 'Sign in'
+        return key
+      }
+    },
+    elements
+  })
+
+  controller.initialize()
+  await controller.refreshPopup()
+
+  assert.equal(cleared, 1)
+  assert.equal(elements.runPollButton.textContent, 'Sign in')
+  assert.equal(elements.connectionCopy.textContent, 'Open Settings to sign in and connect this browser extension to InboxBridge.')
+  assert.equal(elements.popupStatus.textContent, 'The saved InboxBridge sign-in is no longer valid.')
+  assert.deepEqual(messages, [
+    { type: 'refresh-status' },
+    { type: 'refresh-context-menus' }
+  ])
 })
