@@ -157,12 +157,12 @@ class UserConfigResourceTest {
     }
 
     @Test
-    void testEmailAccountConnectionMapsTlsValidationErrorsToBadRequest() {
+    void testEmailAccountConnectionMapsSourceTransportValidationErrorsToBadRequest() {
         UserConfigResource resource = resource();
         resource.userEmailAccountService = new UserEmailAccountService() {
             @Override
             public EmailAccountConnectionTestResult testConnection(AppUser user, UpdateUserEmailAccountRequest request) {
-                throw new IllegalArgumentException("InboxBridge requires TLS for every source mailbox connection.");
+                throw new IllegalArgumentException("This source mail server supports TLS on port 993 for IMAP. Enable TLS instead of saving an unsafe plain-text connection.");
             }
         };
 
@@ -185,7 +185,7 @@ class UserConfigResourceTest {
                         false,
                         "Imported/Test")));
 
-        assertEquals("InboxBridge requires TLS for every source mailbox connection.", error.getMessage());
+        assertEquals("This source mail server supports TLS on port 993 for IMAP. Enable TLS instead of saving an unsafe plain-text connection.", error.getMessage());
     }
 
     @Test

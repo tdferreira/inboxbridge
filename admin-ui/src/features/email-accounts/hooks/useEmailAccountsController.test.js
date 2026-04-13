@@ -199,6 +199,61 @@ describe('useEmailAccountsController', () => {
     global.fetch = originalFetch
   })
 
+  it('auto-enables TLS after the connection test verifies a secure endpoint', async () => {
+    const originalFetch = global.fetch
+    global.fetch = vi.fn()
+      .mockResolvedValueOnce({
+        ok: true,
+        json: async () => ({
+          message: 'Connection test succeeded over TLS.',
+          protocol: 'IMAP',
+          host: 'imap.example.com',
+          port: 993,
+          tls: true,
+          tlsAvailable: true,
+          tlsRecommended: true,
+          recommendedTlsPort: 993,
+          authMethod: 'PASSWORD',
+          oauthProvider: 'NONE',
+          authenticated: true,
+          folder: 'INBOX',
+          folderAccessible: true
+        })
+      })
+      .mockResolvedValueOnce({
+        ok: true,
+        json: async () => ({ folders: ['INBOX', 'Archive'] })
+      })
+
+    const { result, pushNotification } = renderController()
+
+    act(() => {
+      result.current.handleEmailAccountFormChange({
+        ...DEFAULT_EMAIL_ACCOUNT_FORM,
+        emailAccountId: 'fetcher-a',
+        host: 'imap.example.com',
+        port: 143,
+        tls: false,
+        username: 'user@example.com',
+        password: 'secret'
+      })
+    })
+
+    await act(async () => {
+      await result.current.testEmailAccountConnection()
+    })
+
+    expect(result.current.emailAccountForm.tls).toBe(true)
+    expect(result.current.emailAccountForm.port).toBe(993)
+    expect(result.current.emailAccountTestResult.tlsRecommended).toBe(true)
+    expect(pushNotification).toHaveBeenCalledWith(expect.objectContaining({
+      message: 'Connection test succeeded over TLS.',
+      tone: 'warning'
+    }))
+
+    global.fetch = originalFetch
+  })
+
   it('loads source folders when editing an existing IMAP account', async () => {
     const originalFetch = global.fetch
     global.fetch = vi.fn().mockResolvedValue({

@@ -73,6 +73,7 @@ function EmailAccountDialog({
   const currentFolder = emailAccountForm.folder || ''
   const selectedFolderValues = useMemo(() => parseFolderSelection(currentFolder), [currentFolder])
   const connectionValidated = testResult?.tone === 'success'
+  const tlsLockedToSecure = Boolean(testResult?.tlsRecommended && emailAccountForm.tls)
   const folderSuggestionsLoaded = supportsFolder && detectedFolders.length > 0
   const folderSuggestionsValidated = supportsFolder && connectionValidated && folderSuggestionsLoaded
   const invalidDetectedFolders = useMemo(
@@ -390,12 +391,29 @@ function EmailAccountDialog({
             </select>
           </FormField>
         ) : null}
+        {!emailAccountForm.tls ? (
+          <div className="banner-warning full">
+            <strong>{t('emailAccounts.insecureTransportWarningTitle')}</strong><br />
+            {t('emailAccounts.insecureTransportWarningBody')}
+          </div>
+        ) : null}
+        {tlsLockedToSecure ? (
+          <div className="muted-box full">
+            <strong>{t('emailAccounts.tlsLockedTitle')}</strong><br />
+            {t('emailAccounts.tlsLockedBody', { port: testResult?.recommendedTlsPort || emailAccountForm.port })}
+          </div>
+        ) : null}
         <div className="form-field-pair full fetcher-checkbox-pair">
           <label className="checkbox-row">
-            <input type="checkbox" checked={true} disabled readOnly />
+            <input
+              type="checkbox"
+              checked={emailAccountForm.tls}
+              disabled={tlsLockedToSecure}
+              onChange={(event) => onEmailAccountFormChange((current) => ({ ...current, tls: event.target.checked }))}
+            />
             <span className="field-label-row">
               <span>{t('emailAccounts.tlsOnly')}</span>
-              <InfoHint text={t('emailAccounts.tlsOnlyHelp')} />
+              <InfoHint text={t(tlsLockedToSecure ? 'emailAccounts.tlsOnlyLockedHelp' : 'emailAccounts.tlsOnlyHelp')} />
             </span>
           </label>
           <label className="checkbox-row">
@@ -452,6 +470,11 @@ function EmailAccountDialog({
                 {renderTestResultRow('emailAccounts.testProtocol', testResult.protocol, 'emailAccounts.testProtocolHelp')}
                 {renderTestResultRow('emailAccounts.testEndpoint', `${testResult.host}:${testResult.port}`, 'emailAccounts.testEndpointHelp')}
                 {renderTestResultRow('emailAccounts.testTls', testResult.tls ? t('common.yes') : t('common.no'), 'emailAccounts.testTlsHelp')}
+                {renderTestResultRow('emailAccounts.testTlsAvailable', testResult.tlsAvailable === null ? t('common.unavailable') : testResult.tlsAvailable ? t('common.yes') : t('common.no'), 'emailAccounts.testTlsAvailableHelp')}
+                {renderTestResultRow('emailAccounts.testTlsRecommended', testResult.tlsRecommended === null ? t('common.unavailable') : testResult.tlsRecommended ? t('common.yes') : t('common.no'), 'emailAccounts.testTlsRecommendedHelp')}
+                {testResult.recommendedTlsPort ? (
+                  renderTestResultRow('emailAccounts.testRecommendedTlsPort', testResult.recommendedTlsPort, 'emailAccounts.testRecommendedTlsPortHelp')
+                ) : null}
                 {renderTestResultRow(
                   'emailAccounts.testAuth',
                   `${t(`authMethod.${testResult.authMethod.toLowerCase()}`)}${testResult.oauthProvider && testResult.oauthProvider !== 'NONE' ? ` / ${t(`oauthProvider.${testResult.oauthProvider.toLowerCase()}`)}` : ''}`,

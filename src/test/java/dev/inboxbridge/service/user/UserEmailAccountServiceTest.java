@@ -6,6 +6,7 @@ import dev.inboxbridge.service.oauth.OAuthCredentialService;
 import dev.inboxbridge.service.destination.*;
 import dev.inboxbridge.service.mail.SourceDiagnosticsService;
 import dev.inboxbridge.service.mail.SourceMailboxConfigurationChanged;
+import dev.inboxbridge.service.mail.SourceTransportSecurityService;
 import dev.inboxbridge.service.polling.PollingSettingsService;
 import dev.inboxbridge.service.polling.SourcePollEventService;
 import dev.inboxbridge.service.polling.SourcePollingSettingsService;
@@ -236,6 +237,7 @@ class UserEmailAccountServiceTest {
     @Test
     void upsertRejectsNonTlsSourceConnections() {
         UserEmailAccountService service = service();
+        ((FakeSourceTransportSecurityService) service.sourceTransportSecurityService).supportedTlsPort = 993;
 
         IllegalArgumentException error = assertThrows(
                 IllegalArgumentException.class,
@@ -256,7 +258,91 @@ class UserEmailAccountServiceTest {
                         false,
                         "Imported/Test")));
 
-        assertEquals("InboxBridge requires TLS for every source mailbox connection.", error.getMessage());
+        assertEquals(
+                "This source mail server supports TLS on port 993 for IMAP. Enable TLS instead of saving an unsafe plain-text connection.",
+                error.getMessage());
+    }
+
+    @Test
+    void upsertAllowsNonTlsSourceConnectionsWhenNoSecureEndpointIsAvailable() {
+        UserEmailAccountService service = service();
+
+        UserEmailAccountView view = service.upsert(user(1L), new UpdateUserEmailAccountRequest(
+                null,
+                "fetcher-a",
+                true,
+                "IMAP",
+                "imap.example.com",
+                143,
+                false,
+                "PASSWORD",
+                "NONE",
+                "user@example.com",
+                "Secret#123",
+                "",
+                "INBOX",
+                false,
+                "Imported/Test"));
+
+        assertEquals("fetcher-a", view.emailAccountId());
+        assertFalse(service.repository.findByEmailAccountId("fetcher-a").orElseThrow().tls);
+    }
+
+    @Test
+    void testConnectionAutoUpgradesToTlsWhenSecureEndpointExists() {
+        UserEmailAccountService service = service();
+        ((FakeSourceTransportSecurityService) service.sourceTransportSecurityService).supportedTlsPort = 993;
+
+        EmailAccountConnectionTestResult result = service.testConnection(user(1L), new UpdateUserEmailAccountRequest(
+                null,
+                "fetcher-a",
+                true,
+                "IMAP",
+                "imap.example.com",
+                143,
+                false,
+                "PASSWORD",
+                "NONE",
+                "user@example.com",
+                "Secret#123",
+                "",
+                "INBOX",
+                false,
+                "Imported/Test"));
+
+        assertTrue(result.tls());
+        assertEquals(993, result.port());
+        assertEquals(Boolean.TRUE, result.tlsAvailable());
+        assertEquals(Boolean.TRUE, result.tlsRecommended());
+        assertEquals(993, result.recommendedTlsPort());
+        assertEquals(993, ((FakeMailSourceClient) service.mailSourceClient).lastBridge.port());
+        assertTrue(((FakeMailSourceClient) service.mailSourceClient).lastBridge.tls());
+    }
+
+    @Test
+    void listFoldersUsesTlsUpgradeWhenSecureEndpointExists() {
+        UserEmailAccountService service = service();
+        ((FakeSourceTransportSecurityService) service.sourceTransportSecurityService).supportedTlsPort = 993;
+
+        service.listFolders(user(1L), new UpdateUserEmailAccountRequest(
+                null,
+                "fetcher-a",
+                true,
+                "IMAP",
+                "imap.example.com",
+                143,
+                false,
+                "PASSWORD",
+                "NONE",
+                "user@example.com",
+                "Secret#123",
+                "",
+                "INBOX",
+                false,
+                "Imported/Test"));
+
+        assertEquals(993, ((FakeMailSourceClient) service.mailSourceClient).lastBridge.port());
+        assertTrue(((FakeMailSourceClient) service.mailSourceClient).lastBridge.tls());
     }
 
     @Test
@@ -658,6 +744,7 @@ class UserEmailAccountServiceTest {
         service.oAuthCredentialService = new FakeOAuthCredentialService(null);
         service.envSourceService = new FakeEnvSourceService();
         service.mailSourceClient = new FakeMailSourceClient();
+        service.sourceTransportSecurityService = new FakeSourceTransportSecurityService();
         service.sourceMailboxConfigurationChangedEvent = new FakeSourceMailboxConfigurationChangedEvent();
         service.appUserRepository = new FakeAppUserRepository();
         service.userMailDestinationConfigService = new FakeUserMailDestinationConfigService();
@@ -1018,6 +1105,15 @@ class UserEmailAccountServiceTest {
         public List<String> listFolders(RuntimeEmailAccount bridge) {
             this.lastBridge = bridge;
             return List.of("INBOX", "Archive");
+        }
+    }
+
+    private static final class FakeSourceTransportSecurityService extends SourceTransportSecurityService {
+        private Integer supportedTlsPort;
+
+        @Override
+        public Optional<Integer> detectImplicitTlsPort(InboxBridgeConfig.Protocol protocol, String host) {
+            return Optional.ofNullable(supportedTlsPort);
         }
     }
 

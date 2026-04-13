@@ -536,21 +536,43 @@ export function useEmailAccountsController({
   async function testEmailAccountConnection() {
     await withPending('bridgeConnectionTest', async () => {
       try {
+        const requestForm = emailAccountForm
         const response = await fetch('/api/app/email-accounts/test-connection', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify(buildEmailAccountRequestPayload(emailAccountForm))
+          body: JSON.stringify(buildEmailAccountRequestPayload(requestForm))
         })
         if (!response.ok) {
           throw new Error(await apiErrorText(response, errorText('testMailFetcherConnection')))
         }
         const payload = await response.json()
-        const message = payload.message || t('emailAccounts.testSuccess')
-        setEmailAccountTestResult({ ...payload, message, tone: 'success' })
-        if (emailAccountForm.protocol === 'IMAP') {
-          await loadEmailAccountFolders(emailAccountForm, { suppressErrors: true })
+        const tlsAutoApplied = Boolean(payload.tlsRecommended && !requestForm.tls)
+        const nextForm = tlsAutoApplied
+          ? normalizeEmailAccountForm({
+            ...requestForm,
+            tls: true,
+            port: payload.recommendedTlsPort || requestForm.port
+          }, authOptions)
+          : requestForm
+        if (tlsAutoApplied) {
+          setEmailAccountForm(nextForm)
         }
-        pushNotification({ message, targetId: 'source-email-accounts-section', tone: 'success' })
+        const message = payload.message || t('emailAccounts.testSuccess')
+        setEmailAccountTestResult({
+          ...payload,
+          port: tlsAutoApplied ? (payload.recommendedTlsPort || payload.port) : payload.port,
+          tls: tlsAutoApplied ? true : payload.tls,
+          message,
+          tone: 'success'
+        })
+        if (nextForm.protocol === 'IMAP') {
+          await loadEmailAccountFolders(nextForm, { suppressErrors: true })
+        }
+        pushNotification({
+          message,
+          targetId: 'source-email-accounts-section',
+          tone: tlsAutoApplied ? 'warning' : 'success'
+        })
       } catch (err) {
         const message = err.message || errorText('testMailFetcherConnection')
         setEmailAccountTestResult({ message, tone: 'error' })

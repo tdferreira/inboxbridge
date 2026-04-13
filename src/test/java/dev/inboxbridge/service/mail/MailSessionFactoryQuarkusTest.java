@@ -9,6 +9,7 @@ import java.util.Optional;
 import org.junit.jupiter.api.Test;
 
 import dev.inboxbridge.config.InboxBridgeConfig;
+import dev.inboxbridge.domain.ImapAppendDestinationTarget;
 import dev.inboxbridge.domain.RuntimeEmailAccount;
 import dev.inboxbridge.domain.SourceFetchMode;
 import dev.inboxbridge.domain.SourcePostPollSettings;
@@ -83,15 +84,70 @@ class MailSessionFactoryQuarkusTest {
     }
 
     @Test
-    void rejectsNonTlsMailboxSessions() {
-        IllegalArgumentException imapError = assertThrows(
-                IllegalArgumentException.class,
-                () -> mailSessionFactory.imapStoreProtocol(false));
-        IllegalArgumentException pop3Error = assertThrows(
-                IllegalArgumentException.class,
-                () -> mailSessionFactory.pop3StoreProtocol(false));
+    void allowsPlainSourceSessionsButRejectsPlainDestinationSessions() {
+        RuntimeEmailAccount plainImapSource = new RuntimeEmailAccount(
+                "source-1",
+                "USER",
+                7L,
+                "alice",
+                true,
+                InboxBridgeConfig.Protocol.IMAP,
+                "imap.example.test",
+                143,
+                false,
+                InboxBridgeConfig.AuthMethod.PASSWORD,
+                InboxBridgeConfig.OAuthProvider.NONE,
+                "alice@example.test",
+                "secret",
+                "",
+                Optional.of("INBOX"),
+                false,
+                SourceFetchMode.POLLING,
+                Optional.empty(),
+                SourcePostPollSettings.none(),
+                null);
+        RuntimeEmailAccount plainPopSource = new RuntimeEmailAccount(
+                "source-2",
+                "USER",
+                7L,
+                "alice",
+                true,
+                InboxBridgeConfig.Protocol.POP3,
+                "pop.example.test",
+                110,
+                false,
+                InboxBridgeConfig.AuthMethod.PASSWORD,
+                InboxBridgeConfig.OAuthProvider.NONE,
+                "alice@example.test",
+                "secret",
+                "",
+                Optional.empty(),
+                false,
+                SourceFetchMode.POLLING,
+                Optional.empty(),
+                SourcePostPollSettings.none(),
+                null);
+        ImapAppendDestinationTarget plainDestination = new ImapAppendDestinationTarget(
+                "destination-1",
+                7L,
+                "alice",
+                "CUSTOM_IMAP",
+                "imap.example.test",
+                143,
+                false,
+                InboxBridgeConfig.AuthMethod.PASSWORD,
+                InboxBridgeConfig.OAuthProvider.NONE,
+                "alice@example.test",
+                "secret",
+                "INBOX");
 
-        assertEquals("InboxBridge requires TLS for every mailbox connection.", imapError.getMessage());
-        assertEquals("InboxBridge requires TLS for every mailbox connection.", pop3Error.getMessage());
+        assertEquals("imap", mailSessionFactory.sourceImapSession(plainImapSource).getProperties().getProperty("mail.store.protocol"));
+        assertEquals("pop3", mailSessionFactory.sourcePop3Session(plainPopSource).getProperties().getProperty("mail.store.protocol"));
+
+        IllegalArgumentException destinationError = assertThrows(
+                IllegalArgumentException.class,
+                () -> mailSessionFactory.destinationImapSession(plainDestination));
+
+        assertEquals("InboxBridge requires TLS for every mailbox connection.", destinationError.getMessage());
     }
 }

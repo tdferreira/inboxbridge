@@ -48,21 +48,19 @@ public class MailSessionFactory {
     }
 
     public Session destinationImapSession(ImapAppendDestinationTarget target) {
+        requireTlsEnabled(target.tls());
         return Session.getInstance(imapProperties(target.tls(), target.authMethod() == InboxBridgeConfig.AuthMethod.OAUTH2, false));
     }
 
     public String imapStoreProtocol(boolean tls) {
-        requireTlsEnabled(tls);
         return tls ? "imaps" : "imap";
     }
 
     public String pop3StoreProtocol(boolean tls) {
-        requireTlsEnabled(tls);
         return tls ? "pop3s" : "pop3";
     }
 
     private Properties imapProperties(boolean tls, boolean oauth, boolean idleWatch) {
-        requireTlsEnabled(tls);
         Properties properties = new Properties();
         properties.put("mail.store.protocol", imapStoreProtocol(tls));
         properties.put("mail.imap.ssl.enable", tls);
@@ -84,7 +82,6 @@ public class MailSessionFactory {
     }
 
     private Properties pop3Properties(boolean tls, boolean oauth) {
-        requireTlsEnabled(tls);
         Properties properties = new Properties();
         properties.put("mail.store.protocol", pop3StoreProtocol(tls));
         properties.put("mail.pop3.ssl.enable", tls);

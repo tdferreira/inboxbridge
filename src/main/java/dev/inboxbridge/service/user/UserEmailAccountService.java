@@ -28,6 +28,7 @@ import dev.inboxbridge.service.security.SecretEncryptionService;
 import dev.inboxbridge.service.destination.MailboxConflictService;
 import dev.inboxbridge.service.mail.SourceDiagnosticsService;
 import dev.inboxbridge.service.mail.SourceMailboxConfigurationChanged;
+import dev.inboxbridge.service.mail.SourceTransportSecurityService;
 import dev.inboxbridge.service.mail.MailSourceClient;
 import dev.inboxbridge.service.oauth.OAuthCredentialService;
 import dev.inboxbridge.service.polling.PollingSettingsService;
@@ -94,6 +95,9 @@ public class UserEmailAccountService {
     @Inject
     SourceDiagnosticsService sourceDiagnosticsService;
 
+    @Inject
+    SourceTransportSecurityService sourceTransportSecurityService;
+
     public List<UserEmailAccountView> listForUser(Long userId) {
         Map<String, ImportStats> importStatsBySource = importStatsBySource();
         List<UserEmailAccount> emailAccounts = repository.listByUserId(userId);
@@ -131,18 +135,54 @@ public class UserEmailAccountService {
     }
 
     public EmailAccountConnectionTestResult testConnection(AppUser user, UpdateUserEmailAccountRequest request) {
-        requireTlsEnabled(request.tls());
         RuntimeEmailAccount candidate = preview(user, request);
-        return mailSourceClient.testConnection(candidate);
+        SourceTransportSecurityService.TlsUpgrade tlsUpgrade = sourceTransportSecurityService
+                .detectRecommendedUpgrade(candidate)
+                .orElse(null);
+        RuntimeEmailAccount effectiveCandidate = tlsUpgrade == null ? candidate : tlsUpgrade.upgradedAccount();
+        EmailAccountConnectionTestResult result = mailSourceClient.testConnection(effectiveCandidate);
+        if (tlsUpgrade == null) {
+            return result;
+        }
+        String message = "Connection test succeeded over TLS. InboxBridge verified a secure "
+                + candidate.protocol().name() + " endpoint on port " + tlsUpgrade.securePort()
+                + " and switched this source to TLS automatically.";
+        return new EmailAccountConnectionTestResult(
+                result.success(),
+                message,
+                result.protocol(),
+                result.host(),
+                result.port(),
+                result.tls(),
+                result.authMethod(),
+                result.oauthProvider(),
+                result.authenticated(),
+                result.folder(),
+                result.folderAccessible(),
+                result.unreadFilterRequested(),
+                result.unreadFilterSupported(),
+                result.unreadFilterValidated(),
+                result.visibleMessageCount(),
+                result.unreadMessageCount(),
+                result.sampleMessageAvailable(),
+                result.sampleMessageMaterialized(),
+                result.forwardedMarkerSupported(),
+                Boolean.TRUE,
+                Boolean.TRUE,
+                tlsUpgrade.securePort(),
+                message);
     }
 
     public DestinationMailboxFolderOptionsView listFolders(AppUser user, UpdateUserEmailAccountRequest request) {
-        requireTlsEnabled(request.tls());
         RuntimeEmailAccount candidate = preview(user, request);
-        if (candidate.protocol() != InboxBridgeConfig.Protocol.IMAP) {
+        RuntimeEmailAccount effectiveCandidate = sourceTransportSecurityService
+                .detectRecommendedUpgrade(candidate)
+                .map(SourceTransportSecurityService.TlsUpgrade::upgradedAccount)
+                .orElse(candidate);
+        if (effectiveCandidate.protocol() != InboxBridgeConfig.Protocol.IMAP) {
             return new DestinationMailboxFolderOptionsView(List.of());
         }
-        return new DestinationMailboxFolderOptionsView(mailSourceClient.listFolders(candidate));
+        return new DestinationMailboxFolderOptionsView(mailSourceClient.listFolders(effectiveCandidate));
     }
 
     public RuntimeEmailAccount preview(AppUser user, UpdateUserEmailAccountRequest request) {
@@ -206,7 +246,6 @@ public class UserEmailAccountService {
         }
         boolean isNew = emailAccount.id == null;
         String host = requireNonBlank(request.host(), "Host");
-        requireTlsEnabled(request.tls());
         InboxBridgeConfig.AuthMethod authMethod = parseAuthMethod(request.authMethod());
         InboxBridgeConfig.OAuthProvider oauthProvider = parseOAuthProvider(request.oauthProvider());
         if (requiresMicrosoftOAuth(host)) {
@@ -267,6 +306,7 @@ public class UserEmailAccountService {
                 Optional.ofNullable(emailAccount.customLabel),
                 postPollSettings,
                 null);
+        enforceSourceTransportSecurity(candidate);
         if (candidate.enabled() && mailboxConflictService.conflictsWithCurrentDestination(user.id, candidate)) {
             throw new IllegalArgumentException(MailboxConflictService.SOURCE_DESTINATION_CONFLICT_MESSAGE);
         }
@@ -762,10 +802,15 @@ public class UserEmailAccountService {
         return value.trim();
     }
 
-    private void requireTlsEnabled(Boolean tls) {
-        if (Boolean.FALSE.equals(tls)) {
-            throw new IllegalArgumentException("InboxBridge requires TLS for every source mailbox connection.");
+    private void enforceSourceTransportSecurity(RuntimeEmailAccount candidate) {
+        if (candidate == null || candidate.tls()) {
+            return;
         }
+        sourceTransportSecurityService.detectImplicitTlsPort(candidate.protocol(), candidate.host())
+                .ifPresent(securePort -> {
+                    throw new IllegalArgumentException(
+                            sourceTransportSecurityService.insecureConnectionMessage(candidate.protocol(), securePort));
+                });
     }
 
     private String blankToNull(String value) {

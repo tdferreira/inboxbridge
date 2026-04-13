@@ -1227,6 +1227,95 @@ describe('EmailAccountDialog', () => {
     expect(unreadOnly.compareDocumentPosition(enabled) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()
   })
 
+  it('shows an unsafe transport warning when TLS is disabled', () => {
+    render(
+      <EmailAccountDialog
+        emailAccountForm={{
+          originalEmailAccountId: '',
+          emailAccountId: 'fetcher-a',
+          enabled: true,
+          protocol: 'IMAP',
+          host: 'imap.example.com',
+          port: 143,
+          tls: false,
+          authMethod: 'PASSWORD',
+          oauthProvider: 'NONE',
+          username: 'user@example.com',
+          password: 'secret',
+          oauthRefreshToken: '',
+          folder: 'INBOX',
+          unreadOnly: false,
+          customLabel: '',
+          fetchMode: 'POLLING',
+          markReadAfterPoll: false,
+          postPollAction: 'NONE',
+          postPollTargetFolder: ''
+        }}
+        onApplyPreset={vi.fn()}
+        onEmailAccountFormChange={vi.fn()}
+        onClose={vi.fn()}
+        onSave={vi.fn((event) => event.preventDefault())}
+        saveLoading={false}
+        t={(key, params) => translate('en', key, params)}
+      />
+    )
+
+    expect(screen.getByText('Unsafe source connection')).toBeInTheDocument()
+    expect(screen.getByLabelText(/TLS only/)).not.toBeChecked()
+  })
+
+  it('locks the TLS toggle after InboxBridge verifies a secure endpoint', () => {
+    render(
+      <EmailAccountDialog
+        emailAccountForm={{
+          originalEmailAccountId: '',
+          emailAccountId: 'fetcher-a',
+          enabled: true,
+          protocol: 'IMAP',
+          host: 'imap.example.com',
+          port: 993,
+          tls: true,
+          authMethod: 'PASSWORD',
+          oauthProvider: 'NONE',
+          username: 'user@example.com',
+          password: 'secret',
+          oauthRefreshToken: '',
+          folder: 'INBOX',
+          unreadOnly: false,
+          customLabel: '',
+          fetchMode: 'POLLING',
+          markReadAfterPoll: false,
+          postPollAction: 'NONE',
+          postPollTargetFolder: ''
+        }}
+        onApplyPreset={vi.fn()}
+        onEmailAccountFormChange={vi.fn()}
+        onClose={vi.fn()}
+        onSave={vi.fn((event) => event.preventDefault())}
+        saveLoading={false}
+        testResult={{
+          tone: 'success',
+          message: 'Connection test succeeded over TLS.',
+          protocol: 'IMAP',
+          host: 'imap.example.com',
+          port: 993,
+          tls: true,
+          tlsRecommended: true,
+          recommendedTlsPort: 993,
+          authMethod: 'PASSWORD',
+          oauthProvider: 'NONE',
+          authenticated: true,
+          folder: 'INBOX',
+          folderAccessible: true
+        }}
+        t={(key, params) => translate('en', key, params)}
+      />
+    )
+
+    expect(screen.getByText('TLS was enforced automatically')).toBeInTheDocument()
+    expect(screen.getByLabelText(/TLS only/)).toBeDisabled()
+  })
+
   it('hides post-poll source actions for POP3 accounts', () => {
     render(
       <EmailAccountDialog
