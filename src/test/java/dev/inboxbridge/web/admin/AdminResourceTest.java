@@ -13,6 +13,7 @@ import dev.inboxbridge.dto.AuthSecuritySettingsView;
 import dev.inboxbridge.dto.PollLiveView;
 import dev.inboxbridge.dto.PollRunResult;
 import dev.inboxbridge.dto.PollingTimelineBundleView;
+import dev.inboxbridge.dto.SecretReencryptionResultView;
 import dev.inboxbridge.dto.SecretManagementStatusView;
 import dev.inboxbridge.dto.SourcePollingSettingsView;
 import dev.inboxbridge.dto.SourcePollingStatsView;
@@ -167,6 +168,27 @@ class AdminResourceTest {
     }
 
     @Test
+    void reencryptStoredSecretsReturnsOperationResult() {
+        AdminResource resource = new AdminResource();
+        resource.secretManagementService = new FakeSecretManagementService();
+
+        SecretReencryptionResultView response = resource.reencryptStoredSecrets();
+
+        assertEquals("LOCAL:v2", response.activeKeyVersion());
+        assertEquals(2, response.totalRecordsUpdated());
+    }
+
+    @Test
+    void reencryptStoredSecretsSurfacesValidationErrors() {
+        AdminResource resource = new AdminResource();
+        resource.secretManagementService = new ErrorSecretManagementService();
+
+        BadRequestException error = assertThrows(BadRequestException.class, resource::reencryptStoredSecrets);
+
+        assertEquals("Secure token storage is not configured. Set SECURITY_TOKEN_ENCRYPTION_KEY.", error.getMessage());
+    }
+
+    @Test
     void updateAuthSecuritySettingsSurfacesValidationErrors() {
         AdminResource resource = new AdminResource();
         resource.authSecuritySettingsService = new ErrorAuthSecuritySettingsService();
@@ -265,6 +287,22 @@ class AdminResourceTest {
                     0,
                     false,
                     java.util.List.of());
+        }
+
+        @Override
+        public SecretReencryptionResultView reencryptAllStoredSecrets() {
+            return new SecretReencryptionResultView(
+                    "LOCAL:v2",
+                    2,
+                    3,
+                    java.util.List.of());
+        }
+    }
+
+    private static final class ErrorSecretManagementService extends SecretManagementService {
+        @Override
+        public SecretReencryptionResultView reencryptAllStoredSecrets() {
+            throw new IllegalStateException("Secure token storage is not configured. Set SECURITY_TOKEN_ENCRYPTION_KEY.");
         }
     }
 

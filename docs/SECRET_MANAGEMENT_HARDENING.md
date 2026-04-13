@@ -487,6 +487,9 @@ Current repository status:
   `SECURITY_TOKEN_ENCRYPTION_LEGACY_KEYS`
 - admin visibility has started through `/api/admin/secret-management`, which
   reports active mode, configured legacy key ids, and stored key-version usage
+- the first concrete rotation action now exists through
+  `/api/admin/secret-management/re-encrypt`, which rewrites database-stored
+  encrypted secrets under the active local key version
 
 ### Phase 3: OpenBao / Vault Transit support
 

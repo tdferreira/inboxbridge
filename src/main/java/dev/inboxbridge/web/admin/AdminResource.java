@@ -9,6 +9,7 @@ import dev.inboxbridge.dto.LiveEventView;
 import dev.inboxbridge.dto.PollLiveView;
 import dev.inboxbridge.dto.PollRunResult;
 import dev.inboxbridge.dto.PollingTimelineBundleView;
+import dev.inboxbridge.dto.SecretReencryptionResultView;
 import dev.inboxbridge.dto.SecretManagementStatusView;
 import dev.inboxbridge.dto.SourcePollingSettingsView;
 import dev.inboxbridge.dto.SourcePollingStatsView;
@@ -114,6 +115,12 @@ public class AdminResource {
     @Path("/secret-management")
     public SecretManagementStatusView secretManagement() {
         return secretManagementService.status();
+    }
+
+    @POST
+    @Path("/secret-management/re-encrypt")
+    public SecretReencryptionResultView reencryptStoredSecrets() {
+        return WebResourceSupport.badRequest(() -> secretManagementService.reencryptAllStoredSecrets());
     }
 
     @PUT

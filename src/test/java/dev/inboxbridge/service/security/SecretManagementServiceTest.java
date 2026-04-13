@@ -11,6 +11,7 @@ import java.util.Optional;
 import org.junit.jupiter.api.Test;
 
 import dev.inboxbridge.dto.SecretManagementStatusView;
+import dev.inboxbridge.dto.SecretReencryptionResultView;
 import dev.inboxbridge.persistence.OAuthCredential;
 import dev.inboxbridge.persistence.OAuthCredentialRepository;
 import dev.inboxbridge.persistence.SystemAuthSecuritySetting;
@@ -82,6 +83,25 @@ class SecretManagementServiceTest {
         assertTrue(view.keyUsage().isEmpty());
     }
 
+    @Test
+    void reencryptAllStoredSecretsRewritesLegacyRecordsUnderActiveKey() {
+        SecretManagementService service = configuredService();
+
+        SecretReencryptionResultView result = service.reencryptAllStoredSecrets();
+        SecretManagementStatusView status = service.status();
+
+        assertEquals("LOCAL:v2", result.activeKeyVersion());
+        assertEquals(2, result.totalRecordsUpdated());
+        assertEquals(2, result.totalSecretValuesReencrypted());
+        assertEquals("destination-mailboxes", result.areas().get(2).area());
+        assertEquals(1, result.areas().get(2).recordsUpdated());
+        assertEquals("system-oauth", result.areas().get(4).area());
+        assertEquals(1, result.areas().get(4).recordsUpdated());
+        assertEquals(5, status.activeKeyRecordCount());
+        assertEquals(0, status.nonActiveKeyRecordCount());
+        assertTrue(status.safeToRetireLegacyKeys());
+    }
+
     private SecretManagementService configuredService() {
         SecretManagementService service = new SecretManagementService();
         LocalSecretKeyProvider provider = new LocalSecretKeyProvider();
@@ -89,25 +109,45 @@ class SecretManagementServiceTest {
         provider.setTokenEncryptionKeyId("v2");
         provider.setTokenEncryptionLegacyKeys("v1:" + base64("0123456789abcdef0123456789abcdef"));
         service.setLocalSecretKeyProvider(provider);
+        SecretEncryptionService secretEncryptionService = new SecretEncryptionService();
+        secretEncryptionService.setLocalSecretKeyProvider(provider);
+        service.setSecretEncryptionService(secretEncryptionService);
+        SecretEncryptionService legacySecretEncryptionService = new SecretEncryptionService();
+        legacySecretEncryptionService.setTokenEncryptionKey(base64("0123456789abcdef0123456789abcdef"));
+        legacySecretEncryptionService.setTokenEncryptionKeyId("v1");
 
         OAuthCredential oauthCredential = new OAuthCredential();
-        oauthCredential.refreshTokenCiphertext = "cipher";
-        oauthCredential.keyVersion = "LOCAL:v2";
+        SecretEncryptionService.EncryptedValue oauthRefresh = secretEncryptionService.encrypt("oauth-refresh", "GOOGLE:gmail-destination:refresh");
+        oauthCredential.refreshTokenCiphertext = oauthRefresh.ciphertextBase64();
+        oauthCredential.refreshTokenNonce = oauthRefresh.nonceBase64();
+        oauthCredential.keyVersion = secretEncryptionService.keyVersion();
 
         UserEmailAccount sourceMailbox = new UserEmailAccount();
-        sourceMailbox.passwordCiphertext = "cipher";
-        sourceMailbox.keyVersion = "LOCAL:v2";
+        SecretEncryptionService.EncryptedValue sourcePassword = secretEncryptionService.encrypt("source-password", "user-bridge:1:source-a:password");
+        sourceMailbox.userId = 1L;
+        sourceMailbox.emailAccountId = "source-a";
+        sourceMailbox.passwordCiphertext = sourcePassword.ciphertextBase64();
+        sourceMailbox.passwordNonce = sourcePassword.nonceBase64();
+        sourceMailbox.keyVersion = secretEncryptionService.keyVersion();
 
         UserMailDestinationConfig destination = new UserMailDestinationConfig();
-        destination.passwordCiphertext = "cipher";
+        SecretEncryptionService.EncryptedValue destinationPassword = legacySecretEncryptionService.encrypt("destination-password", "user-destination:1:password");
+        destination.userId = 1L;
+        destination.passwordCiphertext = destinationPassword.ciphertextBase64();
+        destination.passwordNonce = destinationPassword.nonceBase64();
         destination.keyVersion = "v1";
 
         UserGmailConfig gmailConfig = new UserGmailConfig();
-        gmailConfig.clientSecretCiphertext = "cipher";
-        gmailConfig.keyVersion = "LOCAL:v2";
+        SecretEncryptionService.EncryptedValue gmailSecret = secretEncryptionService.encrypt("gmail-secret", "user-gmail:1:client-secret");
+        gmailConfig.userId = 1L;
+        gmailConfig.clientSecretCiphertext = gmailSecret.ciphertextBase64();
+        gmailConfig.clientSecretNonce = gmailSecret.nonceBase64();
+        gmailConfig.keyVersion = secretEncryptionService.keyVersion();
 
         SystemOAuthAppSettings systemOAuth = new SystemOAuthAppSettings();
-        systemOAuth.googleClientSecretCiphertext = "cipher";
+        SecretEncryptionService.EncryptedValue systemGoogleSecret = legacySecretEncryptionService.encrypt("system-google-secret", "system-oauth:google-client-secret");
+        systemOAuth.googleClientSecretCiphertext = systemGoogleSecret.ciphertextBase64();
+        systemOAuth.googleClientSecretNonce = systemGoogleSecret.nonceBase64();
         systemOAuth.keyVersion = "v1";
 
         SystemAuthSecuritySetting authSecurity = new SystemAuthSecuritySetting();
@@ -138,6 +178,10 @@ class SecretManagementServiceTest {
         public List<OAuthCredential> listAll() {
             return values;
         }
+
+        @Override
+        public void persist(OAuthCredential entity) {
+        }
     }
 
     private static final class InMemoryUserEmailAccountRepository extends UserEmailAccountRepository {
@@ -150,6 +194,10 @@ class SecretManagementServiceTest {
         @Override
         public List<UserEmailAccount> listAll() {
             return values;
+        }
+
+        @Override
+        public void persist(UserEmailAccount entity) {
         }
     }
 
@@ -164,6 +212,10 @@ class SecretManagementServiceTest {
         public List<UserMailDestinationConfig> listAll() {
             return values;
         }
+
+        @Override
+        public void persist(UserMailDestinationConfig entity) {
+        }
     }
 
     private static final class InMemoryUserGmailConfigRepository extends UserGmailConfigRepository {
@@ -176,6 +228,10 @@ class SecretManagementServiceTest {
         @Override
         public List<UserGmailConfig> listAll() {
             return values;
+        }
+
+        @Override
+        public void persist(UserGmailConfig entity) {
         }
     }
 
@@ -190,6 +246,10 @@ class SecretManagementServiceTest {
         public Optional<SystemOAuthAppSettings> findSingleton() {
             return Optional.ofNullable(value);
         }
+
+        @Override
+        public void persist(SystemOAuthAppSettings entity) {
+        }
     }
 
     private static final class InMemorySystemAuthSecuritySettingRepository extends SystemAuthSecuritySettingRepository {
@@ -202,6 +262,10 @@ class SecretManagementServiceTest {
         @Override
         public Optional<SystemAuthSecuritySetting> findSingleton() {
             return Optional.ofNullable(value);
+        }
+
+        @Override
+        public void persist(SystemAuthSecuritySetting entity) {
         }
     }
 }

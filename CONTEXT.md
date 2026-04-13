@@ -473,7 +473,10 @@ and cached OAuth access tokens. Admin-facing rotation observability has also
 started: `/api/admin/secret-management` now reports the active secret mode,
 configured legacy local key ids, and how many encrypted records still depend
 on each stored key version so operators can see whether older keys are still
-needed before removing them.
+needed before removing them. Admins can now also trigger
+`POST /api/admin/secret-management/re-encrypt` to rewrite all database-stored
+encrypted secrets under the currently active local key version, which is the
+first concrete local-mode rotation action before legacy keys are retired.
 
 ### 8. HTTPS by default in Docker Compose
 
