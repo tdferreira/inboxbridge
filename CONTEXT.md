@@ -476,7 +476,12 @@ on each stored key version so operators can see whether older keys are still
 needed before removing them. Admins can now also trigger
 `POST /api/admin/secret-management/re-encrypt` to rewrite all database-stored
 encrypted secrets under the currently active local key version, which is the
-first concrete local-mode rotation action before legacy keys are retired.
+first concrete local-mode rotation action before legacy keys are retired. The
+admin UI now surfaces that same secret-management status inside
+`Administration -> Authentication Security`, including the active mode/key,
+legacy-key readiness, per-key usage summary, and a confirmation-gated
+`Re-encrypt stored secrets` action so operators can complete local-key
+rotation without leaving the UI.
 
 ### 8. HTTPS by default in Docker Compose
 

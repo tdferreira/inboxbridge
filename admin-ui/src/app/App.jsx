@@ -807,10 +807,12 @@ function AppContent({ timings = DEFAULT_APP_TIMINGS }) {
           setAuthSecuritySettingsForm(authSecurityFormFromSettings(normalizedAuthSecurity))
           setAuthSecuritySettingsDirty(false)
         }
+        await auth.loadSecretManagementStatus({ suppressErrors: true })
       } else {
         setSystemDashboard(null)
         setSystemOAuthSettings(DEFAULT_SYSTEM_OAUTH_SETTINGS)
         setAuthSecuritySettings(DEFAULT_AUTH_SECURITY_SETTINGS)
+        await auth.loadSecretManagementStatus({ suppressErrors: true })
       }
       if (usersPayload) {
         userManagement.applyLoadedUsers(usersPayload)
@@ -1738,6 +1740,7 @@ function AppContent({ timings = DEFAULT_APP_TIMINGS }) {
     globalStatsNeedsAttention,
     adminSetupGuideState,
     authSecuritySettings,
+    secretManagementStatus: auth.secretManagementStatus,
     authOptions,
     dismissQuickSetupGuide,
     focusSection,
@@ -1752,6 +1755,7 @@ function AppContent({ timings = DEFAULT_APP_TIMINGS }) {
     setShowSystemOAuthAppsDialog,
     setSystemOAuthEditorProvider,
     setSystemOAuthSettingsDirty,
+    onReencryptStoredSecrets: auth.handleReencryptStoredSecrets,
     systemDashboard,
     systemOAuthSettings,
     t,

@@ -559,4 +559,121 @@ describe('useAuthSecurityController', () => {
     expect(result.current.authError).toBe('auth.sessionExpired')
     expect(onLogoutReset).toHaveBeenCalledTimes(1)
   })
+
+  it('loads secret-management status for admin sessions', async () => {
+    fetch.mockResolvedValue({
+      ok: true,
+      json: vi.fn().mockResolvedValue({
+        secureStorageConfigured: true,
+        mode: 'LOCAL',
+        providerId: 'LOCAL',
+        activeKeyVersion: 'LOCAL:v2',
+        activeKeyId: 'LOCAL:v2',
+        configuredLegacyKeyIds: ['LOCAL:v1'],
+        protectedRecordCount: 7,
+        activeKeyRecordCount: 5,
+        nonActiveKeyRecordCount: 2,
+        unavailableKeyRecordCount: 0,
+        safeToRetireLegacyKeys: false,
+        keyUsage: [
+          {
+            keyVersion: 'LOCAL:v2',
+            recordCount: 5,
+            areas: 'oauth-credentials',
+            active: true,
+            availableForDecryption: true
+          }
+        ]
+      })
+    })
+    const { result } = renderController()
+
+    act(() => {
+      result.current.setSession({ id: 1, role: 'ADMIN' })
+    })
+
+    await act(async () => {
+      await result.current.loadSecretManagementStatus()
+    })
+
+    expect(fetch).toHaveBeenCalledWith('/api/admin/secret-management')
+    expect(result.current.secretManagementStatus.activeKeyId).toBe('LOCAL:v2')
+    expect(result.current.secretManagementStatus.configuredLegacyKeyIds).toEqual(['LOCAL:v1'])
+  })
+
+  it('opens a confirmation flow and re-encrypts stored secrets', async () => {
+    fetch
+      .mockResolvedValueOnce({
+        ok: true,
+        json: vi.fn().mockResolvedValue({
+          activeKeyVersion: 'LOCAL:v2',
+          totalRecordsUpdated: 4,
+          totalSecretValuesReencrypted: 9,
+          areas: []
+        })
+      })
+      .mockResolvedValueOnce({
+        ok: true,
+        json: vi.fn().mockResolvedValue({
+          secureStorageConfigured: true,
+          mode: 'LOCAL',
+          providerId: 'LOCAL',
+          activeKeyVersion: 'LOCAL:v2',
+          activeKeyId: 'LOCAL:v2',
+          configuredLegacyKeyIds: [],
+          protectedRecordCount: 9,
+          activeKeyRecordCount: 9,
+          nonActiveKeyRecordCount: 0,
+          unavailableKeyRecordCount: 0,
+          safeToRetireLegacyKeys: true,
+          keyUsage: []
+        })
+      })
+    const closeConfirmation = vi.fn()
+    const openConfirmation = vi.fn()
+    const pushNotification = vi.fn()
+    const withPending = vi.fn(async (_key, action) => action())
+    const { result } = renderHook((props) => useAuthSecurityController(props), {
+      initialProps: {
+        bootstrapLoginPrefillEnabled: false,
+        closeConfirmation,
+        errorText: (key) => key,
+        loadAppData: vi.fn(),
+        onLogoutReset: vi.fn(),
+        openConfirmation,
+        pushNotification,
+        t: (key, params) => {
+          if (key === 'notifications.secretManagementReencrypted') {
+            return `Re-encrypted ${params.records} records / ${params.secrets} secrets`
+          }
+          return key
+        },
+        withPending
+      }
+    })
+
+    act(() => {
+      result.current.setSession({ id: 1, role: 'ADMIN' })
+    })
+
+    await act(async () => {
+      await result.current.handleReencryptStoredSecrets()
+    })
+
+    expect(openConfirmation).toHaveBeenCalledTimes(1)
+    const confirmation = openConfirmation.mock.calls[0][0]
+
+    await act(async () => {
+      await confirmation.onConfirm()
+    })
+
+    expect(fetch).toHaveBeenNthCalledWith(1, '/api/admin/secret-management/re-encrypt', { method: 'POST' })
+    expect(fetch).toHaveBeenNthCalledWith(2, '/api/admin/secret-management')
+    expect(closeConfirmation).toHaveBeenCalled()
+    expect(pushNotification).toHaveBeenCalledWith(expect.objectContaining({
+      message: 'Re-encrypted 4 records / 9 secrets',
+      targetId: 'auth-security-section',
+      tone: 'success'
+    }))
+  })
 })

@@ -13,6 +13,20 @@ const DEFAULT_REGISTER_FORM = { username: '', password: '', confirmPassword: '',
 const DEFAULT_PASSWORD_FORM = { currentPassword: '', newPassword: '', confirmNewPassword: '' }
 const DEFAULT_SESSION_ACTIVITY = { recentLogins: [], activeSessions: [], geoIpConfigured: false }
 const DEFAULT_EXTENSION_SESSIONS = []
+const DEFAULT_SECRET_MANAGEMENT_STATUS = {
+  secureStorageConfigured: false,
+  mode: 'LOCAL',
+  providerId: 'LOCAL',
+  activeKeyVersion: '',
+  activeKeyId: '',
+  configuredLegacyKeyIds: [],
+  protectedRecordCount: 0,
+  activeKeyRecordCount: 0,
+  nonActiveKeyRecordCount: 0,
+  unavailableKeyRecordCount: 0,
+  safeToRetireLegacyKeys: true,
+  keyUsage: []
+}
 const SESSION_KIND_KEYS = Object.freeze({
   REMOTE: 'sessions.kindRemote',
   BROWSER: 'sessions.kindBrowser'
@@ -47,6 +61,7 @@ export function useAuthSecurityController({
   const [showPasskeyRegistrationDialog, setShowPasskeyRegistrationDialog] = useState(false)
   const [sessionActivity, setSessionActivity] = useState(DEFAULT_SESSION_ACTIVITY)
   const [extensionSessions, setExtensionSessions] = useState(DEFAULT_EXTENSION_SESSIONS)
+  const [secretManagementStatus, setSecretManagementStatus] = useState(DEFAULT_SECRET_MANAGEMENT_STATUS)
   const latestRecentSessionKeyRef = useRef(null)
   const hasSessionActivityBaselineRef = useRef(false)
   const loginCooldownTimeoutRef = useRef(null)
@@ -73,6 +88,7 @@ export function useAuthSecurityController({
     setMyPasskeys([])
     setSessionActivity(DEFAULT_SESSION_ACTIVITY)
     setExtensionSessions(DEFAULT_EXTENSION_SESSIONS)
+    setSecretManagementStatus(DEFAULT_SECRET_MANAGEMENT_STATUS)
     setPasskeyLabel('')
     setShowSecurityPanel(false)
     setSecurityTab('password')
@@ -570,6 +586,77 @@ export function useAuthSecurityController({
     }
   }
 
+  async function loadSecretManagementStatus({ suppressErrors = false } = {}) {
+    if (session?.role !== 'ADMIN') {
+      setSecretManagementStatus(DEFAULT_SECRET_MANAGEMENT_STATUS)
+      return
+    }
+    try {
+      const response = await fetch('/api/admin/secret-management')
+      if (!response.ok) {
+        throw new Error(await apiErrorText(response, errorText('loadSecretManagementStatus')))
+      }
+      const payload = await response.json()
+      setSecretManagementStatus({
+        ...DEFAULT_SECRET_MANAGEMENT_STATUS,
+        ...(payload || {}),
+        configuredLegacyKeyIds: Array.isArray(payload?.configuredLegacyKeyIds) ? payload.configuredLegacyKeyIds : [],
+        keyUsage: Array.isArray(payload?.keyUsage) ? payload.keyUsage : []
+      })
+    } catch (err) {
+      if (suppressErrors) {
+        return
+      }
+      pushNotification({
+        autoCloseMs: null,
+        copyText: err.message ? pollErrorNotification(err.message) : translatedNotification('errors.loadSecretManagementStatus'),
+        message: err.message ? pollErrorNotification(err.message) : translatedNotification('errors.loadSecretManagementStatus'),
+        targetId: 'auth-security-section',
+        tone: 'error'
+      })
+    }
+  }
+
+  async function handleReencryptStoredSecrets() {
+    openConfirmation({
+      actionKey: 'secretManagementReencrypt',
+      body: t('authSecurity.secretManagementReencryptConfirmBody'),
+      confirmLabel: t('authSecurity.secretManagementReencrypt'),
+      confirmLoadingLabel: t('authSecurity.secretManagementReencryptLoading'),
+      confirmTone: 'danger',
+      onConfirm: async () => {
+        await withPending('secretManagementReencrypt', async () => {
+          try {
+            const response = await fetch('/api/admin/secret-management/re-encrypt', { method: 'POST' })
+            if (!response.ok) {
+              throw new Error(await apiErrorText(response, errorText('reencryptStoredSecrets')))
+            }
+            const payload = await response.json()
+            closeConfirmation?.()
+            await loadSecretManagementStatus({ suppressErrors: true })
+            pushNotification({
+              message: t('notifications.secretManagementReencrypted', {
+                records: payload?.totalRecordsUpdated ?? 0,
+                secrets: payload?.totalSecretValuesReencrypted ?? 0
+              }),
+              targetId: 'auth-security-section',
+              tone: 'success'
+            })
+          } catch (err) {
+            pushNotification({
+              autoCloseMs: null,
+              copyText: err.message ? pollErrorNotification(err.message) : translatedNotification('errors.reencryptStoredSecrets'),
+              message: err.message ? pollErrorNotification(err.message) : translatedNotification('errors.reencryptStoredSecrets'),
+              targetId: 'auth-security-section',
+              tone: 'error'
+            })
+          }
+        })
+      },
+      title: t('authSecurity.secretManagementReencryptConfirmTitle')
+    })
+  }
+
   async function handleRevokeExtensionSession(extensionSession) {
     const sessionId = extensionSession?.id
     openConfirmation({
@@ -789,6 +876,7 @@ export function useAuthSecurityController({
     },
     closeSecurityPanel,
     extensionSessions,
+    handleReencryptStoredSecrets,
     handleDeletePasskey,
     handleLogin,
     handleLogout,
@@ -824,9 +912,11 @@ export function useAuthSecurityController({
     registerOpen,
     securityDialogDirty,
     securityTab,
+    secretManagementStatus,
     sessionActivity,
     selectSecurityTab,
     session,
+    loadSecretManagementStatus,
     setLoginForm: updateLoginForm,
     setPasskeyLabel,
     setPasswordForm,
