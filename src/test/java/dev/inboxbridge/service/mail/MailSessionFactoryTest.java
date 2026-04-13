@@ -8,7 +8,9 @@ import org.junit.jupiter.api.Test;
 
 import dev.inboxbridge.config.InboxBridgeConfig;
 import dev.inboxbridge.config.MailClientConfig;
+import dev.inboxbridge.domain.ImapAppendDestinationTarget;
 import dev.inboxbridge.domain.RuntimeEmailAccount;
+import dev.inboxbridge.service.user.UserMailDestinationConfigService;
 import dev.inboxbridge.domain.SourceFetchMode;
 import dev.inboxbridge.domain.SourcePostPollSettings;
 import jakarta.mail.Session;
@@ -32,6 +34,29 @@ class MailSessionFactoryTest {
         MailSessionFactory factory = factory();
 
         Session session = factory.sourceImapSession(runtimeImapAccount(993, true));
+
+        assertEquals("imaps", session.getProperty("mail.store.protocol"));
+        assertEquals("true", String.valueOf(session.getProperties().get("mail.imap.ssl.enable")));
+        assertEquals("false", String.valueOf(session.getProperties().get("mail.imap.starttls.enable")));
+    }
+
+    @Test
+    void destinationImapSessionUsesStartTlsWhenTlsIsEnabledOnPlainImapPort() {
+        MailSessionFactory factory = factory();
+
+        Session session = factory.destinationImapSession(destinationTarget(143, true));
+
+        assertEquals("imap", session.getProperty("mail.store.protocol"));
+        assertEquals("true", String.valueOf(session.getProperties().get("mail.imap.starttls.enable")));
+        assertEquals("true", String.valueOf(session.getProperties().get("mail.imap.starttls.required")));
+        assertEquals("false", String.valueOf(session.getProperties().get("mail.imap.ssl.enable")));
+    }
+
+    @Test
+    void destinationImapSessionUsesImplicitTlsOnImapsPort() {
+        MailSessionFactory factory = factory();
+
+        Session session = factory.destinationImapSession(destinationTarget(993, true));
 
         assertEquals("imaps", session.getProperty("mail.store.protocol"));
         assertEquals("true", String.valueOf(session.getProperties().get("mail.imap.ssl.enable")));
@@ -81,5 +106,21 @@ class MailSessionFactoryTest {
                 java.util.Optional.empty(),
                 SourcePostPollSettings.none(),
                 null);
+    }
+
+    private static ImapAppendDestinationTarget destinationTarget(int port, boolean tls) {
+        return new ImapAppendDestinationTarget(
+                "destination-1",
+                7L,
+                "alice",
+                UserMailDestinationConfigService.PROVIDER_CUSTOM,
+                "imap.example.test",
+                port,
+                tls,
+                InboxBridgeConfig.AuthMethod.PASSWORD,
+                InboxBridgeConfig.OAuthProvider.NONE,
+                "alice@example.test",
+                "secret",
+                "INBOX");
     }
 }

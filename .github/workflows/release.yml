@@ -123,9 +123,41 @@ jobs:
           echo "chrome_package=$(find browser-extensions/chromium/dist/packages -maxdepth 1 -type f -name '*.zip' | head -n 1)" >> "$GITHUB_OUTPUT"
           echo "firefox_package=$(find browser-extensions/firefox/dist/packages -maxdepth 1 -type f -name '*.xpi' | head -n 1)" >> "$GITHUB_OUTPUT"
 
+      - name: Resolve optional store submission flags
+        id: store_flags
+        env:
+          CHROME_WEBSTORE_CLIENT_ID: ${{ secrets.CHROME_WEBSTORE_CLIENT_ID }}
+          CHROME_WEBSTORE_CLIENT_SECRET: ${{ secrets.CHROME_WEBSTORE_CLIENT_SECRET }}
+          CHROME_WEBSTORE_EXTENSION_ID: ${{ secrets.CHROME_WEBSTORE_EXTENSION_ID }}
+          CHROME_WEBSTORE_PUBLISHER_ID: ${{ secrets.CHROME_WEBSTORE_PUBLISHER_ID }}
+          CHROME_WEBSTORE_REFRESH_TOKEN: ${{ secrets.CHROME_WEBSTORE_REFRESH_TOKEN }}
+          EDGE_ADDONS_API_KEY: ${{ secrets.EDGE_ADDONS_API_KEY }}
+          EDGE_ADDONS_CLIENT_ID: ${{ secrets.EDGE_ADDONS_CLIENT_ID }}
+          EDGE_ADDONS_PRODUCT_ID: ${{ secrets.EDGE_ADDONS_PRODUCT_ID }}
+          FIREFOX_AMO_API_KEY: ${{ secrets.FIREFOX_AMO_API_KEY }}
+          FIREFOX_AMO_API_SECRET: ${{ secrets.FIREFOX_AMO_API_SECRET }}
+        run: |
+          if [ -n "${CHROME_WEBSTORE_CLIENT_ID}" ] && [ -n "${CHROME_WEBSTORE_CLIENT_SECRET}" ] && [ -n "${CHROME_WEBSTORE_EXTENSION_ID}" ] && [ -n "${CHROME_WEBSTORE_PUBLISHER_ID}" ] && [ -n "${CHROME_WEBSTORE_REFRESH_TOKEN}" ]; then
+            echo "chrome_ready=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "chrome_ready=false" >> "$GITHUB_OUTPUT"
+          fi
+
+          if [ -n "${EDGE_ADDONS_API_KEY}" ] && [ -n "${EDGE_ADDONS_CLIENT_ID}" ] && [ -n "${EDGE_ADDONS_PRODUCT_ID}" ]; then
+            echo "edge_ready=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "edge_ready=false" >> "$GITHUB_OUTPUT"
+          fi
+
+          if [ -n "${FIREFOX_AMO_API_KEY}" ] && [ -n "${FIREFOX_AMO_API_SECRET}" ]; then
+            echo "firefox_ready=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "firefox_ready=false" >> "$GITHUB_OUTPUT"
+          fi
+
       - name: Submit Chromium package to Chrome Web Store
         id: chrome_webstore
-        if: ${{ secrets.CHROME_WEBSTORE_CLIENT_ID != '' && secrets.CHROME_WEBSTORE_CLIENT_SECRET != '' && secrets.CHROME_WEBSTORE_EXTENSION_ID != '' && secrets.CHROME_WEBSTORE_PUBLISHER_ID != '' && secrets.CHROME_WEBSTORE_REFRESH_TOKEN != '' }}
+        if: ${{ steps.store_flags.outputs.chrome_ready == 'true' }}
         env:
           CHROME_EXTENSION_ID: ${{ secrets.CHROME_WEBSTORE_EXTENSION_ID }}
           CHROME_PUBLISHER_ID: ${{ secrets.CHROME_WEBSTORE_PUBLISHER_ID }}
@@ -167,7 +199,7 @@ jobs:
 
       - name: Submit Chromium package to Microsoft Edge Add-ons
         id: edge_addons
-        if: ${{ secrets.EDGE_ADDONS_API_KEY != '' && secrets.EDGE_ADDONS_CLIENT_ID != '' && secrets.EDGE_ADDONS_PRODUCT_ID != '' }}
+        if: ${{ steps.store_flags.outputs.edge_ready == 'true' }}
         env:
           EDGE_API_KEY: ${{ secrets.EDGE_ADDONS_API_KEY }}
           EDGE_CLIENT_ID: ${{ secrets.EDGE_ADDONS_CLIENT_ID }}
@@ -195,7 +227,7 @@ jobs:
 
       - name: Submit Firefox package to AMO
         id: firefox_amo
-        if: ${{ secrets.FIREFOX_AMO_API_KEY != '' && secrets.FIREFOX_AMO_API_SECRET != '' }}
+        if: ${{ steps.store_flags.outputs.firefox_ready == 'true' }}
         env:
           FIREFOX_AMO_API_KEY: ${{ secrets.FIREFOX_AMO_API_KEY }}
           FIREFOX_AMO_API_SECRET: ${{ secrets.FIREFOX_AMO_API_SECRET }}

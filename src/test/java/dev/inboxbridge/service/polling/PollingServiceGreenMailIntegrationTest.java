@@ -1,6 +1,7 @@
 package dev.inboxbridge.service.polling;
 
 import dev.inboxbridge.service.destination.*;
+import dev.inboxbridge.service.mail.MailSessionFactory;
 import dev.inboxbridge.service.mail.MailSourceClient;
 import dev.inboxbridge.service.mail.MailSourceClient.MailboxCountProbe;
 import dev.inboxbridge.service.mail.MailSourceStandaloneFactory;
@@ -32,6 +33,7 @@ import com.icegreen.greenmail.util.GreenMail;
 import com.icegreen.greenmail.util.ServerSetup;
 
 import dev.inboxbridge.config.InboxBridgeConfig;
+import dev.inboxbridge.config.MailClientConfig;
 import dev.inboxbridge.domain.FetchedMessage;
 import dev.inboxbridge.domain.ImapAppendDestinationTarget;
 import dev.inboxbridge.domain.MailDestinationTarget;
@@ -73,7 +75,10 @@ class PollingServiceGreenMailIntegrationTest {
     });
 
     @RegisterExtension
-    final GreenMailExtension destinationMail = new GreenMailExtension(new ServerSetup(0, null, ServerSetup.PROTOCOL_IMAP));
+    final GreenMailExtension destinationMail = new GreenMailExtension(new ServerSetup[] {
+            new ServerSetup(0, null, ServerSetup.PROTOCOL_IMAP),
+            new ServerSetup(0, null, ServerSetup.PROTOCOL_IMAPS)
+    });
 
     @BeforeEach
     void setUp() {
@@ -264,6 +269,7 @@ class PollingServiceGreenMailIntegrationTest {
         PollingService service = new PollingService();
         MailSourceClient mailSourceClient = standaloneMailSourceClient();
         ImapAppendMailDestinationService destinationService = new ImapAppendMailDestinationService();
+        configureDestinationMailSessionFactory(destinationService);
         RecordingImportedMessageRepository importedMessageRepository = new RecordingImportedMessageRepository();
         ImportDeduplicationService deduplicationService = new ImportDeduplicationService(
                 importedMessageRepository,
@@ -312,6 +318,7 @@ class PollingServiceGreenMailIntegrationTest {
         PollingService service = new PollingService();
         MailSourceClient mailSourceClient = standaloneMailSourceClient();
         ImapAppendMailDestinationService destinationService = new ImapAppendMailDestinationService();
+        configureDestinationMailSessionFactory(destinationService);
         RecordingImportedMessageRepository importedMessageRepository = new RecordingImportedMessageRepository();
         ImportDeduplicationService deduplicationService = new ImportDeduplicationService(
                 importedMessageRepository,
@@ -516,6 +523,7 @@ class PollingServiceGreenMailIntegrationTest {
         PollingService service = new PollingService();
         MailSourceClient mailSourceClient = standaloneMailSourceClient();
         ImapAppendMailDestinationService destinationService = new ImapAppendMailDestinationService();
+        configureDestinationMailSessionFactory(destinationService);
         RecordingImportedMessageRepository importedMessageRepository = new RecordingImportedMessageRepository();
         ImportDeduplicationService deduplicationService = new ImportDeduplicationService(
                 importedMessageRepository,
@@ -837,6 +845,7 @@ class PollingServiceGreenMailIntegrationTest {
         PollingService service = new PollingService();
         MailSourceClient mailSourceClient = standaloneMailSourceClient(sourcePollingStateService);
         ImapAppendMailDestinationService destinationService = new ImapAppendMailDestinationService();
+        configureDestinationMailSessionFactory(destinationService);
         ImportDeduplicationService deduplicationService = new ImportDeduplicationService(
                 importedMessageRepository,
                 new MimeHashService());
@@ -938,8 +947,8 @@ class PollingServiceGreenMailIntegrationTest {
                         ownerUsername,
                         UserMailDestinationConfigService.PROVIDER_CUSTOM,
                         "127.0.0.1",
-                        destinationMail.getImap().getPort(),
-                        false,
+                        destinationMail.getImaps().getPort(),
+                        true,
                         InboxBridgeConfig.AuthMethod.PASSWORD,
                         InboxBridgeConfig.OAuthProvider.NONE,
                         destinationUsername,
@@ -973,8 +982,8 @@ class PollingServiceGreenMailIntegrationTest {
                         "alice",
                         UserMailDestinationConfigService.PROVIDER_CUSTOM,
                         "127.0.0.1",
-                        destinationMail.getImap().getPort(),
-                        false,
+                        destinationMail.getImaps().getPort(),
+                        true,
                         InboxBridgeConfig.AuthMethod.PASSWORD,
                         InboxBridgeConfig.OAuthProvider.NONE,
                         DESTINATION_USERNAME,
@@ -1034,8 +1043,8 @@ class PollingServiceGreenMailIntegrationTest {
                         ownerUsername,
                         UserMailDestinationConfigService.PROVIDER_CUSTOM,
                         "127.0.0.1",
-                        destinationMail.getImap().getPort(),
-                        false,
+                        destinationMail.getImaps().getPort(),
+                        true,
                         InboxBridgeConfig.AuthMethod.PASSWORD,
                         InboxBridgeConfig.OAuthProvider.NONE,
                         destinationUsername,
@@ -1073,8 +1082,8 @@ class PollingServiceGreenMailIntegrationTest {
                         "alice",
                         UserMailDestinationConfigService.PROVIDER_CUSTOM,
                         "127.0.0.1",
-                        destinationMail.getImap().getPort(),
-                        false,
+                        destinationMail.getImaps().getPort(),
+                        true,
                         InboxBridgeConfig.AuthMethod.PASSWORD,
                         InboxBridgeConfig.OAuthProvider.NONE,
                         DESTINATION_USERNAME,
@@ -1314,6 +1323,50 @@ class PollingServiceGreenMailIntegrationTest {
                 null,
                 null,
                 null);
+    }
+
+    private static MailSessionFactory secureDestinationMailSessionFactory() {
+        MailSessionFactory factory = new MailSessionFactory() {
+            @Override
+            public Session destinationImapSession(ImapAppendDestinationTarget target) {
+                Session session = super.destinationImapSession(target);
+                session.getProperties().put("mail.imap.ssl.checkserveridentity", "false");
+                session.getProperties().put("mail.imaps.ssl.checkserveridentity", "false");
+                session.getProperties().put("mail.imaps.ssl.trust", "*");
+                return session;
+            }
+        };
+        factory.setMailClientConfig(mailClientConfig());
+        return factory;
+    }
+
+    private static void configureDestinationMailSessionFactory(ImapAppendMailDestinationService destinationService) {
+        try {
+            java.lang.reflect.Field field = ImapAppendMailDestinationService.class.getDeclaredField("mailSessionFactory");
+            field.setAccessible(true);
+            field.set(destinationService, secureDestinationMailSessionFactory());
+        } catch (ReflectiveOperationException e) {
+            throw new IllegalStateException("Failed to configure the GreenMail destination session factory for tests.", e);
+        }
+    }
+
+    private static MailClientConfig mailClientConfig() {
+        return new MailClientConfig() {
+            @Override
+            public java.time.Duration connectionTimeout() {
+                return java.time.Duration.ofSeconds(5);
+            }
+
+            @Override
+            public java.time.Duration operationTimeout() {
+                return java.time.Duration.ofSeconds(20);
+            }
+
+            @Override
+            public java.time.Duration idleOperationTimeout() {
+                return java.time.Duration.ofMinutes(29);
+            }
+        };
     }
 
     private static List<String> sortedSubjects(List<String> subjects) {
