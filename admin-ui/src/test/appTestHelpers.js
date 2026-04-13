@@ -28,13 +28,23 @@ export function htmlError(status, statusText, html) {
 }
 
 export function clearLocalStorage() {
-  if (typeof window.localStorage?.clear === 'function') {
-    window.localStorage.clear()
+  try {
+    if (typeof window.localStorage?.clear === 'function') {
+      window.localStorage.clear()
+      return
+    }
+  } catch {
     return
   }
-  Object.keys(window.localStorage || {}).forEach((key) => {
-    delete window.localStorage[key]
-  })
+
+  try {
+    Object.keys(window.localStorage || {}).forEach((key) => {
+      delete window.localStorage[key]
+    })
+  } catch {
+    // Some jsdom environments expose localStorage through an opaque-origin
+    // getter that throws during teardown; tests can safely ignore that case.
+  }
 }
 
 export function createWorkspaceRouteFetch({ session, uiPreferences = {}, sessionActivityResponses = null, extensionSessions = [], adminDashboard = null }) {

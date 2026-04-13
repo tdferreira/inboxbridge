@@ -27,17 +27,10 @@ function createStorageMock() {
   }
 }
 
-if (
-  !window.localStorage
-  || typeof window.localStorage.getItem !== 'function'
-  || typeof window.localStorage.setItem !== 'function'
-  || typeof window.localStorage.clear !== 'function'
-) {
-  Object.defineProperty(window, 'localStorage', {
-    configurable: true,
-    value: createStorageMock()
-  })
-}
+Object.defineProperty(window, 'localStorage', {
+  configurable: true,
+  value: createStorageMock()
+})
 
 if (!navigator.clipboard) {
   Object.assign(navigator, {
