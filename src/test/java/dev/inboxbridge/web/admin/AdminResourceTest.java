@@ -13,6 +13,7 @@ import dev.inboxbridge.dto.AuthSecuritySettingsView;
 import dev.inboxbridge.dto.PollLiveView;
 import dev.inboxbridge.dto.PollRunResult;
 import dev.inboxbridge.dto.PollingTimelineBundleView;
+import dev.inboxbridge.dto.SecretManagementStatusView;
 import dev.inboxbridge.dto.SourcePollingSettingsView;
 import dev.inboxbridge.dto.SourcePollingStatsView;
 import dev.inboxbridge.dto.UpdateAdminPollingSettingsRequest;
@@ -27,6 +28,7 @@ import dev.inboxbridge.service.polling.PollingSettingsService;
 import dev.inboxbridge.service.user.RuntimeEmailAccountService;
 import dev.inboxbridge.service.polling.SourcePollingSettingsService;
 import dev.inboxbridge.service.auth.AuthSecuritySettingsService;
+import dev.inboxbridge.service.security.SecretManagementService;
 import dev.inboxbridge.web.WebResourceSupport;
 import io.smallrye.common.annotation.Blocking;
 import jakarta.ws.rs.BadRequestException;
@@ -152,6 +154,19 @@ class AdminResourceTest {
     }
 
     @Test
+    void secretManagementReturnsCurrentView() {
+        AdminResource resource = new AdminResource();
+        resource.secretManagementService = new FakeSecretManagementService();
+
+        SecretManagementStatusView response = resource.secretManagement();
+
+        assertTrue(response.secureStorageConfigured());
+        assertEquals("LOCAL", response.mode());
+        assertEquals("LOCAL:v2", response.activeKeyVersion());
+        assertEquals(2, response.protectedRecordCount());
+    }
+
+    @Test
     void updateAuthSecuritySettingsSurfacesValidationErrors() {
         AdminResource resource = new AdminResource();
         resource.authSecuritySettingsService = new ErrorAuthSecuritySettingsService();
@@ -231,6 +246,25 @@ class AdminResourceTest {
         @Override
         public SourcePollingSettingsView updateForSystemSource(String sourceId, UpdateSourcePollingSettingsRequest request) {
             return viewForSystemSource(sourceId).orElseThrow();
+        }
+    }
+
+    private static final class FakeSecretManagementService extends SecretManagementService {
+        @Override
+        public SecretManagementStatusView status() {
+            return new SecretManagementStatusView(
+                    true,
+                    "LOCAL",
+                    "LOCAL",
+                    "LOCAL:v2",
+                    "v2",
+                    java.util.List.of("v1"),
+                    2,
+                    1,
+                    1,
+                    0,
+                    false,
+                    java.util.List.of());
         }
     }
 

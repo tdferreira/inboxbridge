@@ -9,6 +9,7 @@ import dev.inboxbridge.dto.LiveEventView;
 import dev.inboxbridge.dto.PollLiveView;
 import dev.inboxbridge.dto.PollRunResult;
 import dev.inboxbridge.dto.PollingTimelineBundleView;
+import dev.inboxbridge.dto.SecretManagementStatusView;
 import dev.inboxbridge.dto.SourcePollingSettingsView;
 import dev.inboxbridge.dto.SourcePollingStatsView;
 import dev.inboxbridge.dto.SystemOAuthAppSettingsView;
@@ -26,6 +27,7 @@ import dev.inboxbridge.service.polling.PollingLiveService;
 import dev.inboxbridge.service.polling.PollingSettingsService;
 import dev.inboxbridge.service.polling.PollingService;
 import dev.inboxbridge.service.polling.SourcePollingSettingsService;
+import dev.inboxbridge.service.security.SecretManagementService;
 import dev.inboxbridge.service.user.RuntimeEmailAccountService;
 import dev.inboxbridge.web.WebResourceSupport;
 import jakarta.inject.Inject;
@@ -80,6 +82,9 @@ public class AdminResource {
     @Inject
     AuthSecuritySettingsService authSecuritySettingsService;
 
+    @Inject
+    SecretManagementService secretManagementService;
+
     @GET
     @Path("/dashboard")
     public AdminDashboardResponse dashboard(@jakarta.ws.rs.HeaderParam(TIMEZONE_HEADER) String timezone) {
@@ -103,6 +108,12 @@ public class AdminResource {
     @Path("/auth-security-settings")
     public AuthSecuritySettingsView authSecuritySettings() {
         return authSecuritySettingsService.view();
+    }
+
+    @GET
+    @Path("/secret-management")
+    public SecretManagementStatusView secretManagement() {
+        return secretManagementService.status();
     }
 
     @PUT

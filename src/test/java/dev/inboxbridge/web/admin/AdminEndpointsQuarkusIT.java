@@ -24,4 +24,12 @@ class AdminEndpointsQuarkusIT {
                 .then()
                 .statusCode(401);
     }
+
+    @Test
+    void secretManagementRejectsAnonymousAccess() {
+        given()
+                .when().get("/api/admin/secret-management")
+                .then()
+                .statusCode(401);
+    }
 }

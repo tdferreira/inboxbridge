@@ -10,7 +10,6 @@ import javax.crypto.Cipher;
 import javax.crypto.spec.GCMParameterSpec;
 import javax.crypto.spec.SecretKeySpec;
 
-import dev.inboxbridge.config.SecurityTokenConfig;
 import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.inject.Inject;
 
@@ -28,30 +27,33 @@ public class SecretEncryptionService {
     private static final int NONCE_BYTES = 12;
 
     @Inject
-    SecurityTokenConfig securityTokenConfig;
-
-    String tokenEncryptionKey;
-
-    String tokenEncryptionKeyId;
+    LocalSecretKeyProvider localSecretKeyProvider;
 
     private final SecureRandom secureRandom = new SecureRandom();
 
     public void setTokenEncryptionKey(String tokenEncryptionKey) {
-        this.tokenEncryptionKey = tokenEncryptionKey;
+        localProvider().setTokenEncryptionKey(tokenEncryptionKey);
     }
 
     public void setTokenEncryptionKeyId(String tokenEncryptionKeyId) {
-        this.tokenEncryptionKeyId = tokenEncryptionKeyId;
+        localProvider().setTokenEncryptionKeyId(tokenEncryptionKeyId);
+    }
+
+    public void setTokenEncryptionLegacyKeys(String tokenEncryptionLegacyKeys) {
+        localProvider().setTokenEncryptionLegacyKeys(tokenEncryptionLegacyKeys);
+    }
+
+    public void setLocalSecretKeyProvider(LocalSecretKeyProvider localSecretKeyProvider) {
+        this.localSecretKeyProvider = localSecretKeyProvider;
     }
 
     public boolean isConfigured() {
-        String configuredKey = configuredTokenEncryptionKey();
-        return !configuredKey.isBlank() && !"replace-me".equals(configuredKey);
+        return configuredProvider().isConfigured();
     }
 
     public String keyVersion() {
         requireConfigured();
-        return configuredTokenEncryptionKeyId();
+        return configuredProvider().activeKey().storedKeyVersion();
     }
 
     public EncryptedValue encrypt(String value, String context) {
@@ -63,10 +65,11 @@ public class SecretEncryptionService {
         byte[] nonce = new byte[NONCE_BYTES];
         secureRandom.nextBytes(nonce);
         byte[] aad = aad(context);
+        SecretKeyMaterial keyMaterial = configuredProvider().activeKey();
 
         try {
             Cipher cipher = Cipher.getInstance("AES/GCM/NoPadding");
-            cipher.init(Cipher.ENCRYPT_MODE, secretKey(), new GCMParameterSpec(GCM_TAG_BITS, nonce));
+            cipher.init(Cipher.ENCRYPT_MODE, secretKey(keyMaterial), new GCMParameterSpec(GCM_TAG_BITS, nonce));
             cipher.updateAAD(aad);
             byte[] ciphertext = cipher.doFinal(value.getBytes(StandardCharsets.UTF_8));
             return new EncryptedValue(base64(ciphertext), base64(nonce));
@@ -77,13 +80,15 @@ public class SecretEncryptionService {
 
     public String decrypt(String ciphertextBase64, String nonceBase64, String keyVersion, String context) {
         requireConfigured();
-        if (!configuredTokenEncryptionKeyId().equals(keyVersion)) {
-            throw new IllegalStateException("Stored secret was encrypted with a different key version");
-        }
+        SecretKeyMaterial keyMaterial = configuredProvider().resolveKey(keyVersion)
+                .orElseThrow(() -> new IllegalStateException("Stored secret was encrypted with an unavailable or unsupported key version"));
 
         try {
             Cipher cipher = Cipher.getInstance("AES/GCM/NoPadding");
-            cipher.init(Cipher.DECRYPT_MODE, secretKey(), new GCMParameterSpec(GCM_TAG_BITS, Base64.getDecoder().decode(nonceBase64)));
+            cipher.init(
+                    Cipher.DECRYPT_MODE,
+                    secretKey(keyMaterial),
+                    new GCMParameterSpec(GCM_TAG_BITS, Base64.getDecoder().decode(nonceBase64)));
             cipher.updateAAD(aad(context));
             byte[] plaintext = cipher.doFinal(Base64.getDecoder().decode(ciphertextBase64));
             return StandardCharsets.UTF_8.decode(ByteBuffer.wrap(plaintext)).toString();
@@ -92,12 +97,8 @@ public class SecretEncryptionService {
         }
     }
 
-    private SecretKeySpec secretKey() {
-        byte[] keyBytes = Base64.getDecoder().decode(configuredTokenEncryptionKey());
-        if (keyBytes.length != 32) {
-            throw new IllegalStateException("SECURITY_TOKEN_ENCRYPTION_KEY must be a base64-encoded 32-byte key");
-        }
-        return new SecretKeySpec(keyBytes, "AES");
+    private SecretKeySpec secretKey(SecretKeyMaterial keyMaterial) {
+        return new SecretKeySpec(keyMaterial.encodedKey(), "AES");
     }
 
     private byte[] aad(String context) {
@@ -114,18 +115,15 @@ public class SecretEncryptionService {
         }
     }
 
-    private String configuredTokenEncryptionKey() {
-        if (tokenEncryptionKey != null) {
-            return tokenEncryptionKey;
-        }
-        return securityTokenConfig.tokenEncryptionKey();
+    private SecretKeyProvider configuredProvider() {
+        return localProvider();
     }
 
-    private String configuredTokenEncryptionKeyId() {
-        if (tokenEncryptionKeyId != null) {
-            return tokenEncryptionKeyId;
+    private LocalSecretKeyProvider localProvider() {
+        if (localSecretKeyProvider == null) {
+            localSecretKeyProvider = new LocalSecretKeyProvider();
         }
-        return securityTokenConfig.tokenEncryptionKeyId();
+        return localSecretKeyProvider;
     }
 
     public record EncryptedValue(String ciphertextBase64, String nonceBase64) {

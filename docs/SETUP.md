@@ -45,6 +45,11 @@ SECURITY_TOKEN_ENCRYPTION_KEY=<base64-32-byte-key>
 SECURITY_TOKEN_ENCRYPTION_KEY_ID=v1
 ```
 
+When you later rotate the local encryption key, move the previous key into
+`SECURITY_TOKEN_ENCRYPTION_LEGACY_KEYS` as a comma-separated
+`keyId:base64Key` entry list so existing encrypted records remain readable
+until they are rewritten under the new active key.
+
 By default, InboxBridge derives its canonical browser URL as
 `https://${PUBLIC_HOSTNAME}:${PUBLIC_PORT}`. You can still set
 `PUBLIC_BASE_URL` explicitly if the public URL needs a different scheme or a

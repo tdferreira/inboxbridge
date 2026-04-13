@@ -198,6 +198,7 @@ These are the settings most operators care about first:
 - `MULTI_USER_ENABLED`: choose single-user or multi-user mode
 - `SECURITY_TOKEN_ENCRYPTION_KEY`: required for encrypted UI-managed secrets and browser OAuth exchange
 - `SECURITY_TOKEN_ENCRYPTION_KEY_ID`: key label stored with encrypted data
+- `SECURITY_TOKEN_ENCRYPTION_LEGACY_KEYS`: optional comma-separated `keyId:base64Key` list used to keep older encrypted records decryptable during key rotation
 - `SECURITY_PASSKEY_*`: passkey/WebAuthn settings
 - `MAIL_ACCOUNT_<n>__...`: optional env-managed source mailbox definitions
 - `GOOGLE_*`: shared Google OAuth app settings for Gmail destination flows
@@ -213,6 +214,7 @@ Use these docs when you are ready to connect real providers:
 - [OAuth Setup](docs/OAUTH_SETUP.md)
 - [Trust the local CA](docs/TRUST_LOCAL_CA.md)
 - [Architecture Notes](docs/ARCHITECTURE.md)
+- [Stronger Secret Management Design](docs/SECRET_MANAGEMENT_HARDENING.md)
 
 Quick callback defaults:
 

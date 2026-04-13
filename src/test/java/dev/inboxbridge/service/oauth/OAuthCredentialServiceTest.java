@@ -38,6 +38,7 @@ class OAuthCredentialServiceTest {
         assertEquals("refresh-token-1", stored.refreshToken());
         assertNotEquals("refresh-token-1", persisted.refreshTokenCiphertext);
         assertNotEquals("access-token-1", persisted.accessTokenCiphertext);
+        assertEquals("LOCAL:v1", persisted.keyVersion);
         assertEquals("refresh-token-1", loaded.refreshToken());
         assertEquals("access-token-1", loaded.accessToken());
         assertEquals(expiresAt, loaded.accessExpiresAt());

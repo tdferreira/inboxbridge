@@ -434,7 +434,12 @@ Implementation:
 
 - AES-GCM
 - context-bound AAD
-- key version recorded alongside ciphertext-bearing records
+- provider-aware key version metadata recorded alongside ciphertext-bearing records
+- new local-key writes now use `LOCAL:<keyId>` metadata while still accepting
+  older plain local key ids such as `v1` for backward compatibility
+- local key rotation can keep previous keys readable through
+  `SECURITY_TOKEN_ENCRYPTION_LEGACY_KEYS` until the affected records are
+  re-saved or re-encrypted
 
 Important nuance:
 
@@ -446,6 +451,29 @@ Not yet covered:
 
 - env-managed mailbox passwords from `.env`
 - external KMS / HSM
+
+The repository now also carries a concrete stronger-secret-management design in
+`docs/SECRET_MANAGEMENT_HARDENING.md`. Phase 2 is now partially implemented:
+InboxBridge has a dedicated local secret-key provider boundary, provider-aware
+stored key metadata, and non-breaking local key rotation support via
+`SECURITY_TOKEN_ENCRYPTION_LEGACY_KEYS`. The broader roadmap still targets a
+future provider-based model with envelope encryption, OpenBao Transit / Vault
+Transit as the preferred hardened self-hosted options, optional cloud-KMS
+support, and a later split-key mode where PostgreSQL plus `.env` alone should
+not be sufficient to decrypt UI-managed secrets. The design also treats
+passkeys as auth-only rather than unattended encryption keys, recommends
+moving routine mailbox credentials out of `.env` and into encrypted
+UI-managed storage, and rejects consumer cloud file stores like Google Drive
+or OneDrive as the primary secret-custody mechanism for unattended polling.
+It also treats secret rotation as a first-class part of the model: normal
+users rotate their own mailbox/OAuth credentials by updating those values,
+while admins get deployment-level encryption rotation plus optional revocation
+of derived trust material such as browser-extension sessions, remote sessions,
+and cached OAuth access tokens. Admin-facing rotation observability has also
+started: `/api/admin/secret-management` now reports the active secret mode,
+configured legacy local key ids, and how many encrypted records still depend
+on each stored key version so operators can see whether older keys are still
+needed before removing them.
 
 ### 8. HTTPS by default in Docker Compose
 
