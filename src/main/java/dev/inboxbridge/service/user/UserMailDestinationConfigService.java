@@ -177,6 +177,7 @@ public class UserMailDestinationConfigService {
     }
 
     public EmailAccountConnectionTestResult testConnectionForUser(AppUser user, UpdateUserMailDestinationRequest request) {
+        requireTlsEnabled(request.tls());
         ImapAppendDestinationTarget target = previewImapTarget(user, request);
         if (target.authMethod() == InboxBridgeConfig.AuthMethod.OAUTH2 && !imapAppendMailDestinationService.isLinked(target)) {
             throw new IllegalStateException("Save and connect the destination mailbox before testing it.");
@@ -186,6 +187,7 @@ public class UserMailDestinationConfigService {
 
     @Transactional
     public UserMailDestinationView update(AppUser user, UpdateUserMailDestinationRequest request) {
+        requireTlsEnabled(request.tls());
         String provider = normalizeProvider(request.provider());
         UserMailDestinationConfig config = repository.findByUserId(user.id).orElseGet(UserMailDestinationConfig::new);
         String nextAuthMethod = PROVIDER_GMAIL.equals(provider)
@@ -367,6 +369,12 @@ public class UserMailDestinationConfigService {
 
     private String blankToDefault(String value, String fallback) {
         return value == null || value.isBlank() ? fallback : value.trim();
+    }
+
+    private void requireTlsEnabled(Boolean tls) {
+        if (Boolean.FALSE.equals(tls)) {
+            throw new IllegalArgumentException("InboxBridge requires TLS for every destination mailbox connection.");
+        }
     }
 
     private ImapAppendDestinationTarget previewImapTarget(AppUser user, UpdateUserMailDestinationRequest request) {

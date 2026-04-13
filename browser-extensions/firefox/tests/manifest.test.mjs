@@ -15,11 +15,7 @@ test('firefox manifest declares gecko metadata and background scripts', async ()
   })
   assert.deepEqual(manifest.permissions, ['storage', 'alarms', 'contextMenus', 'notifications'])
   assert.deepEqual(manifest.optional_permissions, ['tabs'])
-  assert.deepEqual(manifest.optional_host_permissions, [
-    'https://*/*',
-    'http://localhost/*',
-    'http://127.0.0.1/*'
-  ])
+  assert.deepEqual(manifest.optional_host_permissions, ['https://*/*'])
   assert.deepEqual(manifest.icons, {
     16: 'icon16.png',
     32: 'icon32.png',

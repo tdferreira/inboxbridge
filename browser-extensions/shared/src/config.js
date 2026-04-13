@@ -349,9 +349,8 @@ export function normalizeServerUrl(value) {
   } catch {
     throw new Error('Enter a valid InboxBridge URL.')
   }
-  const isLocalHttp = normalized.protocol === 'http:' && ['localhost', '127.0.0.1'].includes(normalized.hostname)
-  if (normalized.protocol !== 'https:' && !isLocalHttp) {
-    throw new Error('Use HTTPS, or HTTP only for localhost/127.0.0.1 during local testing.')
+  if (normalized.protocol !== 'https:') {
+    throw new Error('Use HTTPS for your InboxBridge URL.')
   }
   normalized.hash = ''
   normalized.search = ''

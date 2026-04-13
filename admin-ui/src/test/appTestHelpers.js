@@ -131,22 +131,18 @@ export function createWorkspaceRouteFetch({ session, uiPreferences = {}, session
       })
     }
     if (url === '/api/extension/sessions') {
-      if (method === 'POST') {
-        const payload = JSON.parse(init.body || '{}')
-        const created = {
-          id: storedExtensionSessions.length + 1,
-          label: payload.label || 'Browser extension',
-          browserFamily: payload.browserFamily || 'unknown',
-          extensionVersion: payload.extensionVersion || 'unknown',
-          token: 'ibx_generated_token',
-          tokenPrefix: 'ibx_generate',
-          createdAt: '2026-04-12T10:00:00Z',
-          lastUsedAt: null,
-          expiresAt: null,
-          revokedAt: null
+      if (method === 'DELETE') {
+        storedExtensionSessions = storedExtensionSessions.map((sessionItem) => (
+          sessionItem.revokedAt
+            ? sessionItem
+            : { ...sessionItem, revokedAt: '2026-04-12T10:05:00Z' }
+        ))
+        return {
+          ok: true,
+          status: 204,
+          json: () => Promise.resolve(null),
+          text: () => Promise.resolve('')
         }
-        storedExtensionSessions = [created, ...storedExtensionSessions]
-        return jsonResponse(created)
       }
       return jsonResponse(storedExtensionSessions)
     }

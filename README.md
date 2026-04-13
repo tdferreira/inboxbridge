@@ -141,9 +141,8 @@ Services:
 
 - Admin UI: `https://localhost:3000`
 - Remote control page: `https://localhost:3000/remote`
-- Backend HTTP: `http://localhost:8080`
 - Backend HTTPS: `https://localhost:8443`
-- PostgreSQL: `localhost:5432`
+- Backend and PostgreSQL stay on the internal Docker network and are not published to the host by default
 
 The first startup generates certificates in `./certs`.
 
@@ -204,6 +203,7 @@ These are the settings most operators care about first:
 - `GOOGLE_*`: shared Google OAuth app settings for Gmail destination flows
 - `MICROSOFT_*`: shared Microsoft OAuth app settings for Outlook flows
 - `TLS_FRONTEND_CERT_HOSTNAMES` and `TLS_BACKEND_CERT_HOSTNAMES`: extra hostnames to include in generated local certificates
+- `TLS_POSTGRES_CERT_HOSTNAMES`: extra hostnames to include in the generated PostgreSQL TLS certificate
 
 ## OAuth And Provider Setup
 

@@ -2,7 +2,7 @@ quarkus:
   http:
     port: ${HTTP_PORT:8080}
     ssl-port: ${HTTPS_PORT:8443}
-    insecure-requests: enabled
+    insecure-requests: disabled
     cors:
       enabled: true
       headers: Authorization,Content-Type
@@ -15,7 +15,7 @@ quarkus:
   datasource:
     db-kind: postgresql
     jdbc:
-      url: ${JDBC_URL:jdbc:postgresql://postgres:5432/inboxbridge}
+      url: ${JDBC_URL:jdbc:postgresql://postgres:5432/inboxbridge?sslmode=verify-full&sslrootcert=/etc/inboxbridge/certs/ca.crt}
     username: ${JDBC_USERNAME:inboxbridge}
     password: ${JDBC_PASSWORD:inboxbridge}
   hibernate-orm:

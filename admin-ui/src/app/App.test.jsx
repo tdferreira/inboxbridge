@@ -1130,7 +1130,7 @@ describe('App', () => {
     expect(screen.getByRole('link', { name: 'Open InboxBridge Go' })).toHaveAttribute('href', '/remote')
   })
 
-  it('shows browser extension token management inside the security sessions tab', async () => {
+  it('shows browser extension session management inside the security sessions tab', async () => {
     const fetchMock = createWorkspaceRouteFetch({
       session: {
         id: 1,

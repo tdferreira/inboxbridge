@@ -47,7 +47,6 @@ export function useAuthSecurityController({
   const [showPasskeyRegistrationDialog, setShowPasskeyRegistrationDialog] = useState(false)
   const [sessionActivity, setSessionActivity] = useState(DEFAULT_SESSION_ACTIVITY)
   const [extensionSessions, setExtensionSessions] = useState(DEFAULT_EXTENSION_SESSIONS)
-  const [latestCreatedExtensionSession, setLatestCreatedExtensionSession] = useState(null)
   const latestRecentSessionKeyRef = useRef(null)
   const hasSessionActivityBaselineRef = useRef(false)
   const loginCooldownTimeoutRef = useRef(null)
@@ -74,7 +73,6 @@ export function useAuthSecurityController({
     setMyPasskeys([])
     setSessionActivity(DEFAULT_SESSION_ACTIVITY)
     setExtensionSessions(DEFAULT_EXTENSION_SESSIONS)
-    setLatestCreatedExtensionSession(null)
     setPasskeyLabel('')
     setShowSecurityPanel(false)
     setSecurityTab('password')
@@ -572,41 +570,6 @@ export function useAuthSecurityController({
     }
   }
 
-  async function handleCreateExtensionSession({ browserFamily, extensionVersion, label }) {
-    await withPending('extensionSessionCreate', async () => {
-      try {
-        const response = await fetch('/api/extension/sessions', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            browserFamily,
-            extensionVersion,
-            label
-          })
-        })
-        if (!response.ok) {
-          throw new Error(await apiErrorText(response, errorText('createExtensionSession')))
-        }
-        const payload = await response.json()
-        setLatestCreatedExtensionSession(payload)
-        await loadExtensionSessions({ suppressErrors: true })
-        pushNotification({
-          message: translatedNotification('notifications.extensionSessionCreated'),
-          targetId: 'security-extension-sessions-panel-section',
-          tone: 'success'
-        })
-      } catch (err) {
-        pushNotification({
-          autoCloseMs: null,
-          copyText: err.message ? pollErrorNotification(err.message) : translatedNotification('errors.createExtensionSession'),
-          message: err.message ? pollErrorNotification(err.message) : translatedNotification('errors.createExtensionSession'),
-          targetId: 'security-extension-sessions-panel-section',
-          tone: 'error'
-        })
-      }
-    })
-  }
-
   async function handleRevokeExtensionSession(extensionSession) {
     const sessionId = extensionSession?.id
     openConfirmation({
@@ -624,9 +587,6 @@ export function useAuthSecurityController({
             }
             closeConfirmation?.()
             await loadExtensionSessions({ suppressErrors: true })
-            if (latestCreatedExtensionSession?.id === sessionId) {
-              setLatestCreatedExtensionSession(null)
-            }
             pushNotification({
               message: translatedNotification('notifications.extensionSessionRevoked'),
               targetId: 'security-extension-sessions-panel-section',
@@ -644,6 +604,42 @@ export function useAuthSecurityController({
         })
       },
       title: t('extensionSessions.revokeConfirmTitle')
+    })
+  }
+
+  async function handleRevokeAllExtensionSessions() {
+    openConfirmation({
+      actionKey: 'extensionSessionsRevokeAll',
+      body: t('extensionSessions.revokeAllConfirmBody'),
+      confirmLabel: t('extensionSessions.revokeAll'),
+      confirmLoadingLabel: t('extensionSessions.revokeAllLoading'),
+      confirmTone: 'danger',
+      onConfirm: async () => {
+        await withPending('extensionSessionsRevokeAll', async () => {
+          try {
+            const response = await fetch('/api/extension/sessions', { method: 'DELETE' })
+            if (!response.ok) {
+              throw new Error(await apiErrorText(response, errorText('revokeExtensionSessions')))
+            }
+            closeConfirmation?.()
+            await loadExtensionSessions({ suppressErrors: true })
+            pushNotification({
+              message: translatedNotification('notifications.extensionSessionsRevoked'),
+              targetId: 'security-extension-sessions-panel-section',
+              tone: 'success'
+            })
+          } catch (err) {
+            pushNotification({
+              autoCloseMs: null,
+              copyText: err.message ? pollErrorNotification(err.message) : translatedNotification('errors.revokeExtensionSessions'),
+              message: err.message ? pollErrorNotification(err.message) : translatedNotification('errors.revokeExtensionSessions'),
+              targetId: 'security-extension-sessions-panel-section',
+              tone: 'error'
+            })
+          }
+        })
+      },
+      title: t('extensionSessions.revokeAllConfirmTitle')
     })
   }
 
@@ -786,14 +782,12 @@ export function useAuthSecurityController({
     authError,
     authLoading,
     closePasskeyRegistrationDialog,
-    clearLatestCreatedExtensionSession: () => setLatestCreatedExtensionSession(null),
     closeRegisterDialog: () => {
       setRegisterOpen(false)
       setRegisterChallenge(null)
       setRegisterForm(DEFAULT_REGISTER_FORM)
     },
     closeSecurityPanel,
-    createExtensionSession: handleCreateExtensionSession,
     extensionSessions,
     handleDeletePasskey,
     handleLogin,
@@ -802,9 +796,9 @@ export function useAuthSecurityController({
     handlePasskeyRegistration,
     handlePasswordChange,
     handlePasswordRemoval,
+    handleRevokeAllExtensionSessions,
     handleRevokeExtensionSession,
     handleRegister,
-    latestCreatedExtensionSession,
     loginCoolingDown,
     loginStage,
     loadSession,

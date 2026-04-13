@@ -7,8 +7,6 @@ import java.util.List;
 
 import org.junit.jupiter.api.Test;
 
-import dev.inboxbridge.dto.ExtensionSessionCreateRequest;
-import dev.inboxbridge.dto.ExtensionSessionCreateView;
 import dev.inboxbridge.dto.ExtensionSessionView;
 import dev.inboxbridge.persistence.AppUser;
 import dev.inboxbridge.security.CurrentUserContext;
@@ -19,7 +17,7 @@ import jakarta.ws.rs.core.Response;
 class ExtensionSessionResourceTest {
 
     @Test
-    void createAndListDelegateToTheCurrentUserScope() {
+    void listDelegatesToTheCurrentUserScope() {
         ExtensionSessionResource resource = new ExtensionSessionResource();
         CurrentUserContext context = new CurrentUserContext();
         AppUser user = new AppUser();
@@ -29,20 +27,44 @@ class ExtensionSessionResourceTest {
         resource.currentUserContext = context;
         resource.extensionSessionService = new ExtensionSessionService() {
             @Override
-            public ExtensionSessionCreateView createSession(AppUser actor, ExtensionSessionCreateRequest request) {
-                assertEquals(5L, actor.id);
-                return new ExtensionSessionCreateView(1L, "Chrome", "chromium", "0.1.0", "token", "ibx_123", Instant.now(), null, null, null);
-            }
-
-            @Override
             public List<ExtensionSessionView> listSessions(AppUser actor) {
                 assertEquals(5L, actor.id);
                 return List.of(new ExtensionSessionView(1L, "Chrome", "chromium", "0.1.0", "ibx_123", Instant.now(), null, null, null));
             }
         };
 
-        assertEquals("token", resource.create(new ExtensionSessionCreateRequest("Chrome", "chromium", "0.1.0")).token());
         assertEquals(1, resource.list().size());
+    }
+
+    @Test
+    void revokeAllPublishesEveryRevokedExtensionSession() {
+        ExtensionSessionResource resource = new ExtensionSessionResource();
+        CurrentUserContext context = new CurrentUserContext();
+        AppUser user = new AppUser();
+        user.id = 5L;
+        context.setUser(user);
+        resource.currentUserContext = context;
+        resource.extensionSessionService = new ExtensionSessionService() {
+            @Override
+            public List<Long> revokeAllSessions(AppUser actor) {
+                assertEquals(5L, actor.id);
+                return List.of(7L, 8L);
+            }
+        };
+        java.util.List<Long> published = new java.util.ArrayList<>();
+        resource.pollingLiveService = new PollingLiveService() {
+            @Override
+            public void publishSessionRevoked(Long viewerId, SessionStreamKind streamKind, Long streamSessionId) {
+                assertEquals(5L, viewerId);
+                assertEquals(SessionStreamKind.EXTENSION, streamKind);
+                published.add(streamSessionId);
+            }
+        };
+
+        Response response = resource.revokeAll();
+
+        assertEquals(204, response.getStatus());
+        assertEquals(List.of(7L, 8L), published);
     }
 
     @Test

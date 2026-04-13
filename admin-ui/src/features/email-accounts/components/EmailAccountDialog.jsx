@@ -392,7 +392,7 @@ function EmailAccountDialog({
         ) : null}
         <div className="form-field-pair full fetcher-checkbox-pair">
           <label className="checkbox-row">
-            <input type="checkbox" checked={emailAccountForm.tls} onChange={(event) => onEmailAccountFormChange((current) => ({ ...current, tls: event.target.checked }))} />
+            <input type="checkbox" checked={true} disabled readOnly />
             <span className="field-label-row">
               <span>{t('emailAccounts.tlsOnly')}</span>
               <InfoHint text={t('emailAccounts.tlsOnlyHelp')} />

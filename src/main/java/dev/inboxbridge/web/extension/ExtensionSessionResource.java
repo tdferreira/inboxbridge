@@ -2,8 +2,6 @@ package dev.inboxbridge.web.extension;
 
 import java.util.List;
 
-import dev.inboxbridge.dto.ExtensionSessionCreateRequest;
-import dev.inboxbridge.dto.ExtensionSessionCreateView;
 import dev.inboxbridge.dto.ExtensionSessionView;
 import dev.inboxbridge.security.CurrentUserContext;
 import dev.inboxbridge.security.RequireAuth;
@@ -13,7 +11,6 @@ import jakarta.inject.Inject;
 import jakarta.ws.rs.Consumes;
 import jakarta.ws.rs.DELETE;
 import jakarta.ws.rs.GET;
-import jakarta.ws.rs.POST;
 import jakarta.ws.rs.Path;
 import jakarta.ws.rs.PathParam;
 import jakarta.ws.rs.Produces;
@@ -21,7 +18,7 @@ import jakarta.ws.rs.core.MediaType;
 import jakarta.ws.rs.core.Response;
 
 /**
- * Lets authenticated InboxBridge users manage their browser-extension bearer
+ * Lets authenticated InboxBridge users review and revoke browser-extension
  * sessions from the normal app session.
  */
 @Path("/api/extension/sessions")
@@ -38,15 +35,19 @@ public class ExtensionSessionResource {
     @Inject
     PollingLiveService pollingLiveService;
 
-    @POST
-    @Consumes(MediaType.APPLICATION_JSON)
-    public ExtensionSessionCreateView create(ExtensionSessionCreateRequest request) {
-        return extensionSessionService.createSession(currentUserContext.user(), request);
-    }
-
     @GET
     public List<ExtensionSessionView> list() {
         return extensionSessionService.listSessions(currentUserContext.user());
+    }
+
+    @DELETE
+    public Response revokeAll() {
+        extensionSessionService.revokeAllSessions(currentUserContext.user()).forEach((sessionId) ->
+                pollingLiveService.publishSessionRevoked(
+                        currentUserContext.user().id,
+                        PollingLiveService.SessionStreamKind.EXTENSION,
+                        sessionId));
+        return Response.noContent().build();
     }
 
     @DELETE

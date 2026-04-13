@@ -29,6 +29,10 @@ class ApiSecurityHeadersFilterTest {
         assertEquals("nosniff", headers.getFirst("X-Content-Type-Options"));
         assertEquals("DENY", headers.getFirst("X-Frame-Options"));
         assertEquals("no-referrer", headers.getFirst("Referrer-Policy"));
+        assertEquals("camera=(), geolocation=(), microphone=()", headers.getFirst("Permissions-Policy"));
+        assertEquals("same-origin", headers.getFirst("Cross-Origin-Opener-Policy"));
+        assertEquals("same-origin", headers.getFirst("Cross-Origin-Resource-Policy"));
+        assertEquals("default-src 'none'; frame-ancestors 'none'; base-uri 'none'; form-action 'none'", headers.getFirst("Content-Security-Policy"));
         assertEquals("no-store, no-cache, must-revalidate", headers.getFirst("Cache-Control"));
         assertEquals("no", headers.getFirst("X-Accel-Buffering"));
         assertEquals("max-age=31536000; includeSubDomains", headers.getFirst("Strict-Transport-Security"));

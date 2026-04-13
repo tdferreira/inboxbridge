@@ -140,6 +140,26 @@ class UserMailDestinationConfigServiceTest {
     }
 
     @Test
+    void updateRejectsNonTlsDestinationConnections() {
+        UserMailDestinationConfigService service = service();
+
+        IllegalArgumentException error = assertThrows(
+                IllegalArgumentException.class,
+                () -> service.update(user(), new UpdateUserMailDestinationRequest(
+                        UserMailDestinationConfigService.PROVIDER_CUSTOM,
+                        "imap.example.com",
+                        143,
+                        false,
+                        InboxBridgeConfig.AuthMethod.PASSWORD.name(),
+                        InboxBridgeConfig.OAuthProvider.NONE.name(),
+                        "owner@example.com",
+                        "Secret#123",
+                        "INBOX")));
+
+        assertEquals("InboxBridge requires TLS for every destination mailbox connection.", error.getMessage());
+    }
+
+    @Test
     void listFoldersForUserDelegatesToLinkedImapDestination() {
         UserMailDestinationConfigService service = service();
         AppUser user = user();

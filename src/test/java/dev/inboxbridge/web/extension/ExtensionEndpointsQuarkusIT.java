@@ -43,6 +43,11 @@ class ExtensionEndpointsQuarkusIT {
                 .when().get("/api/extension/sessions")
                 .then()
                 .statusCode(401);
+
+        given()
+                .when().delete("/api/extension/sessions")
+                .then()
+                .statusCode(401);
     }
 
     @Test

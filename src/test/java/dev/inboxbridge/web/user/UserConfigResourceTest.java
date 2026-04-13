@@ -157,6 +157,38 @@ class UserConfigResourceTest {
     }
 
     @Test
+    void testEmailAccountConnectionMapsTlsValidationErrorsToBadRequest() {
+        UserConfigResource resource = resource();
+        resource.userEmailAccountService = new UserEmailAccountService() {
+            @Override
+            public EmailAccountConnectionTestResult testConnection(AppUser user, UpdateUserEmailAccountRequest request) {
+                throw new IllegalArgumentException("InboxBridge requires TLS for every source mailbox connection.");
+            }
+        };
+
+        BadRequestException error = assertThrows(
+                BadRequestException.class,
+                () -> resource.testEmailAccountConnection(new UpdateUserEmailAccountRequest(
+                        null,
+                        "fetcher-1",
+                        true,
+                        "IMAP",
+                        "imap.example.com",
+                        143,
+                        false,
+                        "PASSWORD",
+                        "NONE",
+                        "alice@example.com",
+                        "Secret#123",
+                        "",
+                        "INBOX",
+                        false,
+                        "Imported/Test")));
+
+        assertEquals("InboxBridge requires TLS for every source mailbox connection.", error.getMessage());
+    }
+
+    @Test
     void emailAccountFoldersDelegatesToUserEmailAccountService() {
         UserConfigResource resource = resource();
         resource.userEmailAccountService = new FakeUserEmailAccountService();
@@ -245,6 +277,32 @@ class UserConfigResourceTest {
                         "INBOX")));
 
         assertEquals("Save and connect the destination mailbox before testing it.", error.getMessage());
+    }
+
+    @Test
+    void testDestinationConnectionMapsTlsValidationErrorsToBadRequest() {
+        UserConfigResource resource = resource();
+        resource.userMailDestinationConfigService = new UserMailDestinationConfigService() {
+            @Override
+            public EmailAccountConnectionTestResult testConnectionForUser(AppUser user, UpdateUserMailDestinationRequest request) {
+                throw new IllegalArgumentException("InboxBridge requires TLS for every destination mailbox connection.");
+            }
+        };
+
+        BadRequestException error = assertThrows(
+                BadRequestException.class,
+                () -> resource.testDestinationConnection(new UpdateUserMailDestinationRequest(
+                        "CUSTOM_IMAP",
+                        "imap.example.com",
+                        143,
+                        false,
+                        "PASSWORD",
+                        "NONE",
+                        "alice@example.com",
+                        "Secret#123",
+                        "INBOX")));
+
+        assertEquals("InboxBridge requires TLS for every destination mailbox connection.", error.getMessage());
     }
 
     private UserConfigResource resource() {

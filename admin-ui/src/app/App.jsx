@@ -2047,18 +2047,21 @@ function AppContent({ timings = DEFAULT_APP_TIMINGS }) {
                     onRevokeOtherSessions={auth.handleRevokeOtherSessions}
                     onRevokeSession={auth.handleRevokeSession}
                     recentLogins={auth.sessionActivity.recentLogins}
-                    revokeLoadingId={auth.sessionActivity.activeSessions.find((sessionItem) => isPending(`sessionRevoke:${sessionItem.id}`))?.id || null}
+                    revokeLoadingId={(() => {
+                      const pendingSession = auth.sessionActivity.activeSessions.find((sessionItem) => (
+                        isPending(`sessionRevoke:${sessionItem.sessionType || 'BROWSER'}:${sessionItem.id}`)
+                      ))
+                      return pendingSession ? `${pendingSession.sessionType || 'BROWSER'}:${pendingSession.id}` : null
+                    })()}
                     revokeOthersLoading={isPending('sessionsRevokeOthers')}
                     requestCurrentDeviceLocationLoading={deviceLocation.saving}
                     t={t}
                   />
                   <ExtensionSessionsPanel
-                    createLoading={isPending('extensionSessionCreate')}
-                    latestCreatedSession={auth.latestCreatedExtensionSession}
                     locale={language}
-                    onClearLatestCreatedSession={auth.clearLatestCreatedExtensionSession}
-                    onCreateSession={auth.createExtensionSession}
+                    onRevokeAllSessions={auth.handleRevokeAllExtensionSessions}
                     onRevokeSession={auth.handleRevokeExtensionSession}
+                    revokeAllLoading={isPending('extensionSessionsRevokeAll')}
                     revokeLoadingId={auth.extensionSessions.find((sessionItem) => isPending(`extensionSessionRevoke:${sessionItem.id}`))?.id || null}
                     sessions={auth.extensionSessions}
                     t={t}

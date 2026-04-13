@@ -212,7 +212,7 @@ public interface InboxBridgeConfig {
         @WithDefault("replace-me")
         String clientSecret();
 
-        @WithDefault("http://localhost:8080/api/microsoft-oauth/callback")
+        @WithDefault("https://localhost:3000/api/microsoft-oauth/callback")
         String redirectUri();
     }
 

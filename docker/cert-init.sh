@@ -10,6 +10,7 @@ PUBLIC_PORT="${PUBLIC_PORT:-3000}"
 PUBLIC_BASE_URL="${PUBLIC_BASE_URL:-https://${PUBLIC_HOSTNAME}:${PUBLIC_PORT}}"
 TLS_FRONTEND_CERT_HOSTNAMES="${TLS_FRONTEND_CERT_HOSTNAMES:-}"
 TLS_BACKEND_CERT_HOSTNAMES="${TLS_BACKEND_CERT_HOSTNAMES:-}"
+TLS_POSTGRES_CERT_HOSTNAMES="${TLS_POSTGRES_CERT_HOSTNAMES:-}"
 
 if [ ! -f /certs/ca.key ] || [ ! -f /certs/ca.crt ]; then
   openssl genrsa -out /certs/ca.key 4096 >/dev/null 2>&1
@@ -178,7 +179,9 @@ EOF
 public_host="$(host_from_url "$PUBLIC_BASE_URL")"
 frontend_hosts="$(merge_hostnames "localhost,inboxbridge-admin" "$public_host" "$TLS_FRONTEND_CERT_HOSTNAMES")"
 backend_hosts="$(merge_hostnames "localhost,inboxbridge" "$public_host" "$TLS_BACKEND_CERT_HOSTNAMES")"
+postgres_hosts="$(merge_hostnames "localhost,postgres,inboxbridge-postgres" "$TLS_POSTGRES_CERT_HOSTNAMES")"
 frontend_cn="$(trim "${public_host:-localhost}")"
 
 generate_signed_cert backend inboxbridge "$backend_hosts"
 generate_signed_cert frontend "$frontend_cn" "$frontend_hosts"
+generate_signed_cert postgres postgres "$postgres_hosts"

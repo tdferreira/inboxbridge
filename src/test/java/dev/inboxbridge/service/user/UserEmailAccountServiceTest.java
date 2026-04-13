@@ -234,6 +234,32 @@ class UserEmailAccountServiceTest {
     }
 
     @Test
+    void upsertRejectsNonTlsSourceConnections() {
+        UserEmailAccountService service = service();
+
+        IllegalArgumentException error = assertThrows(
+                IllegalArgumentException.class,
+                () -> service.upsert(user(1L), new UpdateUserEmailAccountRequest(
+                        null,
+                        "fetcher-a",
+                        true,
+                        "IMAP",
+                        "imap.example.com",
+                        143,
+                        false,
+                        "PASSWORD",
+                        "NONE",
+                        "user@example.com",
+                        "Secret#123",
+                        "",
+                        "INBOX",
+                        false,
+                        "Imported/Test")));
+
+        assertEquals("InboxBridge requires TLS for every source mailbox connection.", error.getMessage());
+    }
+
+    @Test
     void listFoldersUsesStoredPasswordWhenEditingWithoutReenteringIt() {
         UserEmailAccountService service = service();
         AppUser owner = user(1L);

@@ -227,7 +227,7 @@ function DestinationMailboxDialog({
               </div>
             </div>
             <label className="checkbox-row full destination-dialog-checkbox">
-              <input checked={resolvedDestinationConfig.tls} onChange={(event) => setDestinationConfig((current) => ({ ...current, tls: event.target.checked }))} type="checkbox" />
+              <input checked={true} disabled readOnly type="checkbox" />
               <span className="field-label-row">
                 <span>{t('emailAccounts.tlsOnly')}</span>
                 <InfoHint text={t('emailAccounts.tlsOnlyHelp')} />

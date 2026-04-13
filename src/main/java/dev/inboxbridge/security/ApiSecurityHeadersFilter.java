@@ -20,6 +20,10 @@ public class ApiSecurityHeadersFilter implements ContainerResponseFilter {
         responseContext.getHeaders().putSingle("X-Content-Type-Options", "nosniff");
         responseContext.getHeaders().putSingle("X-Frame-Options", "DENY");
         responseContext.getHeaders().putSingle("Referrer-Policy", "no-referrer");
+        responseContext.getHeaders().putSingle("Permissions-Policy", "camera=(), geolocation=(), microphone=()");
+        responseContext.getHeaders().putSingle("Cross-Origin-Opener-Policy", "same-origin");
+        responseContext.getHeaders().putSingle("Cross-Origin-Resource-Policy", "same-origin");
+        responseContext.getHeaders().putSingle("Content-Security-Policy", "default-src 'none'; frame-ancestors 'none'; base-uri 'none'; form-action 'none'");
         responseContext.getHeaders().putSingle("Cache-Control", "no-store, no-cache, must-revalidate");
         responseContext.getHeaders().putSingle("Pragma", "no-cache");
         if ("https".equalsIgnoreCase(requestContext.getUriInfo().getRequestUri().getScheme())) {

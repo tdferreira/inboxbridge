@@ -7,8 +7,8 @@ test('normalizeServerUrl trims and preserves https origins', () => {
   assert.equal(normalizeServerUrl(' https://mail.example.com/ '), 'https://mail.example.com')
 })
 
-test('normalizeServerUrl allows local http during development only', () => {
-  assert.equal(normalizeServerUrl('http://localhost:3000/'), 'http://localhost:3000')
+test('normalizeServerUrl rejects every non-https origin', () => {
+  assert.throws(() => normalizeServerUrl('http://localhost:3000/'), /Use HTTPS/)
   assert.throws(() => normalizeServerUrl('http://example.com'), /Use HTTPS/)
 })
 

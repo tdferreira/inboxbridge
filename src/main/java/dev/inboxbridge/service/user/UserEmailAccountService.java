@@ -131,11 +131,13 @@ public class UserEmailAccountService {
     }
 
     public EmailAccountConnectionTestResult testConnection(AppUser user, UpdateUserEmailAccountRequest request) {
+        requireTlsEnabled(request.tls());
         RuntimeEmailAccount candidate = preview(user, request);
         return mailSourceClient.testConnection(candidate);
     }
 
     public DestinationMailboxFolderOptionsView listFolders(AppUser user, UpdateUserEmailAccountRequest request) {
+        requireTlsEnabled(request.tls());
         RuntimeEmailAccount candidate = preview(user, request);
         if (candidate.protocol() != InboxBridgeConfig.Protocol.IMAP) {
             return new DestinationMailboxFolderOptionsView(List.of());
@@ -204,6 +206,7 @@ public class UserEmailAccountService {
         }
         boolean isNew = emailAccount.id == null;
         String host = requireNonBlank(request.host(), "Host");
+        requireTlsEnabled(request.tls());
         InboxBridgeConfig.AuthMethod authMethod = parseAuthMethod(request.authMethod());
         InboxBridgeConfig.OAuthProvider oauthProvider = parseOAuthProvider(request.oauthProvider());
         if (requiresMicrosoftOAuth(host)) {
@@ -757,6 +760,12 @@ public class UserEmailAccountService {
             throw new IllegalArgumentException(label + " is required");
         }
         return value.trim();
+    }
+
+    private void requireTlsEnabled(Boolean tls) {
+        if (Boolean.FALSE.equals(tls)) {
+            throw new IllegalArgumentException("InboxBridge requires TLS for every source mailbox connection.");
+        }
     }
 
     private String blankToNull(String value) {

@@ -61,6 +61,11 @@ describe('SessionsPanel', () => {
 
     expect(onRevokeOtherSessions).toHaveBeenCalledTimes(1)
     expect(onRevokeSession).toHaveBeenCalledWith(expect.objectContaining({ id: 2, sessionType: 'REMOTE' }))
+
+    fireEvent.click(screen.getByRole('button', { name: 'common.collapseSection' }))
+    expect(screen.queryByText('sessions.activeTitle')).not.toBeInTheDocument()
+    fireEvent.click(screen.getByRole('button', { name: 'common.expandSection' }))
+    expect(screen.getByText('sessions.activeTitle')).toBeInTheDocument()
   })
 
   it('hides the setup notice when geo-ip lookups are configured', () => {

@@ -5,6 +5,7 @@ import static org.junit.jupiter.api.Assertions.assertNotEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
+import java.time.Instant;
 import java.time.Duration;
 import java.util.HashMap;
 import java.util.List;
@@ -14,7 +15,6 @@ import java.util.Optional;
 import org.junit.jupiter.api.Test;
 
 import dev.inboxbridge.config.ExtensionSecurityConfig;
-import dev.inboxbridge.dto.ExtensionSessionCreateRequest;
 import dev.inboxbridge.persistence.AppUser;
 import dev.inboxbridge.persistence.ExtensionSession;
 import dev.inboxbridge.persistence.ExtensionSessionRepository;
@@ -22,21 +22,26 @@ import dev.inboxbridge.persistence.ExtensionSessionRepository;
 class ExtensionSessionServiceTest {
 
     @Test
-    void createSessionStoresOnlyTokenHashAndListsSessionMetadata() {
+    void revokeAllSessionsRevokesEveryActiveSessionForTheCurrentUser() {
         ExtensionSessionService service = configuredService();
         InMemoryExtensionSessionRepository repository = (InMemoryExtensionSessionRepository) service.repository;
 
         AppUser user = new AppUser();
         user.id = 11L;
+        AppUser otherUser = new AppUser();
+        otherUser.id = 12L;
 
-        var created = service.createSession(user, new ExtensionSessionCreateRequest("Chrome", "chromium", "0.1.0"));
+        var first = service.createAuthenticatedSession(user, "Chrome", "chromium", "0.1.0");
+        var second = service.createAuthenticatedSession(user, "Firefox", "firefox", "0.1.0");
+        var other = service.createAuthenticatedSession(otherUser, "Edge", "edge", "0.1.0");
+        second.session().revokedAt = Instant.parse("2026-04-13T00:00:00Z");
 
-        assertNotNull(created.token());
-        ExtensionSession persisted = repository.byId.get(created.id());
-        assertNotNull(persisted);
-        assertNotEquals(created.token(), persisted.tokenHash);
-        assertEquals(service.hashToken(created.token()), persisted.tokenHash);
-        assertEquals(List.of(created.id()), service.listSessions(user).stream().map(view -> view.id()).toList());
+        List<Long> revokedIds = service.revokeAllSessions(user);
+
+        assertEquals(List.of(first.session().id), revokedIds);
+        assertNotNull(repository.byId.get(first.session().id).revokedAt);
+        assertEquals(Instant.parse("2026-04-13T00:00:00Z"), repository.byId.get(second.session().id).revokedAt);
+        assertTrue(repository.byId.get(other.session().id).revokedAt == null);
     }
 
     @Test
@@ -70,16 +75,16 @@ class ExtensionSessionServiceTest {
 
         AppUser user = new AppUser();
         user.id = 7L;
-        var created = service.createSession(user, new ExtensionSessionCreateRequest(null, null, null));
+        var created = service.createAuthenticatedSession(user, null, null, null);
 
-        var authenticated = service.authenticate(created.token());
+        var authenticated = service.authenticate(created.accessToken());
 
         assertTrue(authenticated.isPresent());
         assertEquals(user.id, authenticated.get().userId());
-        assertNotNull(repository.byId.get(created.id()).lastUsedAt);
+        assertNotNull(repository.byId.get(created.session().id).lastUsedAt);
 
-        assertTrue(service.revokeSession(user, created.id()));
-        assertTrue(service.authenticate(created.token()).isEmpty());
+        assertTrue(service.revokeSession(user, created.session().id));
+        assertTrue(service.authenticate(created.accessToken()).isEmpty());
 
         var rotating = service.createAuthenticatedSession(user, null, null, null);
         rotating.session().accessExpiresAt = java.time.Instant.now().minusSeconds(1);
@@ -136,6 +141,16 @@ class ExtensionSessionServiceTest {
         @Override
         public Optional<ExtensionSession> findByIdOptional(Long id) {
             return Optional.ofNullable(byId.get(id));
+        }
+
+        @Override
+        public List<ExtensionSession> listActiveByUserId(Long userId, Instant now) {
+            return byId.values().stream()
+                    .filter(session -> userId.equals(session.userId))
+                    .filter(session -> session.revokedAt == null)
+                    .filter(session -> session.expiresAt == null || session.expiresAt.isAfter(now))
+                    .sorted((left, right) -> right.createdAt.compareTo(left.createdAt))
+                    .toList();
         }
     }
 }

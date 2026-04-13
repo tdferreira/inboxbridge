@@ -9,8 +9,6 @@ import java.util.List;
 import java.util.Optional;
 
 import dev.inboxbridge.config.ExtensionSecurityConfig;
-import dev.inboxbridge.dto.ExtensionSessionCreateRequest;
-import dev.inboxbridge.dto.ExtensionSessionCreateView;
 import dev.inboxbridge.dto.ExtensionSessionView;
 import dev.inboxbridge.persistence.AppUser;
 import dev.inboxbridge.persistence.ExtensionSession;
@@ -20,9 +18,8 @@ import jakarta.inject.Inject;
 import jakarta.transaction.Transactional;
 
 /**
- * Mints, authenticates, rotates, lists, and revokes browser-extension tokens.
- * Existing manually created bearer tokens remain supported, while extension
- * login now uses short-lived access tokens plus refresh-token rotation.
+ * Mints, authenticates, rotates, lists, and revokes browser-extension tokens
+ * issued through the direct browser-extension sign-in flow.
  */
 @ApplicationScoped
 public class ExtensionSessionService {
@@ -34,35 +31,6 @@ public class ExtensionSessionService {
 
     @Inject
     ExtensionSecurityConfig extensionSecurityConfig;
-
-    @Transactional
-    public ExtensionSessionCreateView createSession(AppUser user, ExtensionSessionCreateRequest request) {
-        String rawToken = generateRawToken();
-        Instant now = Instant.now();
-
-        ExtensionSession session = new ExtensionSession();
-        session.userId = user.id;
-        session.label = normalizeLabel(request == null ? null : request.label());
-        session.browserFamily = normalizeBrowserFamily(request == null ? null : request.browserFamily());
-        session.extensionVersion = normalizeExtensionVersion(request == null ? null : request.extensionVersion());
-        session.tokenHash = hashToken(rawToken);
-        session.tokenPrefix = tokenPrefix(rawToken);
-        session.createdAt = now;
-
-        repository.persist(session);
-
-        return new ExtensionSessionCreateView(
-                session.id,
-                session.label,
-                session.browserFamily,
-                session.extensionVersion,
-                rawToken,
-                session.tokenPrefix,
-                session.createdAt,
-                session.lastUsedAt,
-                session.expiresAt,
-                session.revokedAt);
-    }
 
     @Transactional
     public CreatedExtensionAuthSession createAuthenticatedSession(
@@ -107,6 +75,16 @@ public class ExtensionSessionService {
             session.get().revokedAt = Instant.now();
         }
         return true;
+    }
+
+    @Transactional
+    public List<Long> revokeAllSessions(AppUser user) {
+        Instant now = Instant.now();
+        List<ExtensionSession> activeSessions = repository.listActiveByUserId(user.id, now);
+        activeSessions.forEach((session) -> session.revokedAt = now);
+        return activeSessions.stream()
+                .map(session -> session.id)
+                .toList();
     }
 
     @Transactional

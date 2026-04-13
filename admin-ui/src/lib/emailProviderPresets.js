@@ -54,7 +54,7 @@ export const EMAIL_PROVIDER_PRESETS = [
       protocol: 'IMAP',
       host: '127.0.0.1',
       port: 1143,
-      tls: false,
+      tls: true,
       authMethod: 'PASSWORD',
       oauthProvider: 'NONE',
       folder: 'INBOX'
@@ -108,7 +108,7 @@ export const DESTINATION_PROVIDER_PRESETS = [
       provider: 'PROTON_BRIDGE_IMAP',
       host: '127.0.0.1',
       port: 1143,
-      tls: false,
+      tls: true,
       authMethod: 'PASSWORD',
       oauthProvider: 'NONE',
       username: '',

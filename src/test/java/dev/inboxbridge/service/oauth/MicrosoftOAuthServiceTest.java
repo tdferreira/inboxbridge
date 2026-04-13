@@ -30,7 +30,7 @@ class MicrosoftOAuthServiceTest {
     void buildAuthorizationUrlIncludesImapScopeAndTracksState() {
         MicrosoftOAuthService service = new MicrosoftOAuthService();
         service.config = new TestConfig(
-                new TestMicrosoft("consumers", "client-id", "client-secret", "http://localhost:8080/api/microsoft-oauth/callback"),
+                new TestMicrosoft("consumers", "client-id", "client-secret", "https://localhost:3000/api/microsoft-oauth/callback"),
                 List.of(new TestSource(
                         "outlook-main-imap",
                         InboxBridgeConfig.Protocol.IMAP,
@@ -47,7 +47,7 @@ class MicrosoftOAuthServiceTest {
 
         assertTrue(authorizationUrl.startsWith("https://login.microsoftonline.com/consumers/oauth2/v2.0/authorize"));
         assertEquals("client-id", params.get("client_id"));
-        assertEquals("http://localhost:8080/api/microsoft-oauth/callback", params.get("redirect_uri"));
+        assertEquals("https://localhost:3000/api/microsoft-oauth/callback", params.get("redirect_uri"));
         assertEquals("offline_access https://outlook.office.com/IMAP.AccessAsUser.All", params.get("scope"));
 
         MicrosoftOAuthService.CallbackValidation callbackValidation = service.validateCallback(params.get("state"));
@@ -59,7 +59,7 @@ class MicrosoftOAuthServiceTest {
     void buildAuthorizationUrlUsesPopScopeForPopSources() {
         MicrosoftOAuthService service = new MicrosoftOAuthService();
         service.config = new TestConfig(
-                new TestMicrosoft("consumers", "client-id", "client-secret", "http://localhost:8080/api/microsoft-oauth/callback"),
+                new TestMicrosoft("consumers", "client-id", "client-secret", "https://localhost:3000/api/microsoft-oauth/callback"),
                 List.of(new TestSource(
                         "outlook-main-pop",
                         InboxBridgeConfig.Protocol.POP3,
@@ -82,7 +82,7 @@ class MicrosoftOAuthServiceTest {
     void buildAuthorizationUrlRejectsUnconfiguredClient() {
         MicrosoftOAuthService service = new MicrosoftOAuthService();
         service.config = new TestConfig(
-                new TestMicrosoft("consumers", "replace-me", "replace-me", "http://localhost:8080/api/microsoft-oauth/callback"),
+                new TestMicrosoft("consumers", "replace-me", "replace-me", "https://localhost:3000/api/microsoft-oauth/callback"),
                 List.of(new TestSource(
                         "outlook-main-imap",
                         InboxBridgeConfig.Protocol.IMAP,
@@ -123,7 +123,7 @@ class MicrosoftOAuthServiceTest {
     void invalidateCachedTokenRemovesExistingCacheEntry() throws Exception {
         MicrosoftOAuthService service = new MicrosoftOAuthService();
         service.config = new TestConfig(
-                new TestMicrosoft("consumers", "client-id", "client-secret", "http://localhost:8080/api/microsoft-oauth/callback"),
+                new TestMicrosoft("consumers", "client-id", "client-secret", "https://localhost:3000/api/microsoft-oauth/callback"),
                 List.of(new TestSource(
                         "outlook-main-imap",
                         InboxBridgeConfig.Protocol.IMAP,

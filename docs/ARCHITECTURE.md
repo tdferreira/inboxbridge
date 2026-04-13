@@ -233,7 +233,8 @@ The browser extension is intentionally thinner than either the main app or
    token, stores only their hashes in `extension_session`, and returns the raw
    values once
 3. The extension stores that local auth bundle encrypted in browser-managed
-   storage and refreshes the access token before it expires
+   storage, refreshes the access token before it expires, and only accepts an
+   HTTPS InboxBridge origin for its configured server URL
 4. Later extension API requests authenticate through the dedicated
    `@RequireExtensionAuth` filter instead of the browser-session cookie model
 5. `GET /api/extension/status` combines persisted per-source poll history with
@@ -249,12 +250,32 @@ The browser extension is intentionally thinner than either the main app or
 That design keeps the extension revocable, user-scoped, and useful even when
 poll failures happened while the user was offline, because the extension status
 comes from durable source poll events rather than transient toast history.
+The browser-extension workspace follows the same least-privilege baseline as
+the rest of the repo: encrypted local auth storage, authenticated SSE with
+bearer headers instead of query tokens, and no support for insecure HTTP-only
+InboxBridge origins.
 
 Repository layout note: browser-extension code now lives under the dedicated
 `browser-extensions/` workspace, with `browser-extensions/shared/` for
 cross-browser modules plus concrete `chromium/` and `firefox/` targets.
 
 The remote page is also the only installable PWA surface in InboxBridge. The main `My InboxBridge` workspace remains a normal authenticated web app, while `/remote` can expose a browser install prompt when the origin is trusted and the browser considers it installable.
+
+## Transport security
+
+InboxBridge now treats encrypted transport as a hard runtime invariant across
+its browser, API, database, and mailbox edges:
+
+- Docker Compose publishes only the HTTPS frontend by default; backend and
+  PostgreSQL stay on the internal Docker network
+- the admin UI proxy serves strict browser-facing security headers, including
+  HSTS and a Content Security Policy, while the API layer mirrors the same
+  defensive header baseline for JSON and SSE responses
+- backend-to-database traffic defaults to certificate-validated PostgreSQL TLS
+  in the local Docker profile
+- source IMAP, source POP3, IMAP IDLE, and destination IMAP APPEND traffic now
+  require TLS and reject insecure mailbox configurations instead of silently
+  downgrading
 
 ## Live polling flow
 

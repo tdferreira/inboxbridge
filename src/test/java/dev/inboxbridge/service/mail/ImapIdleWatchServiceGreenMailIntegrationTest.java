@@ -16,10 +16,10 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.RegisterExtension;
 
 import com.icegreen.greenmail.junit5.GreenMailExtension;
-import com.icegreen.greenmail.util.GreenMail;
 import com.icegreen.greenmail.util.ServerSetup;
 
 import dev.inboxbridge.config.InboxBridgeConfig;
+import dev.inboxbridge.config.MailClientConfig;
 import dev.inboxbridge.domain.RuntimeEmailAccount;
 import dev.inboxbridge.domain.SourceFetchMode;
 import dev.inboxbridge.service.polling.PollingService;
@@ -35,12 +35,13 @@ import jakarta.mail.internet.MimeMultipart;
 
 class ImapIdleWatchServiceGreenMailIntegrationTest {
 
+    private static final String HOST = "localhost";
     private static final String SOURCE_ID = "idle-greenmail-source";
     private static final String SOURCE_USERNAME = "idle-source@example.com";
     private static final String SOURCE_PASSWORD = "Source#123";
 
     @RegisterExtension
-    final GreenMailExtension sourceMail = new GreenMailExtension(new ServerSetup(0, null, ServerSetup.PROTOCOL_IMAP));
+    final GreenMailExtension sourceMail = new GreenMailExtension(new ServerSetup(0, HOST, ServerSetup.PROTOCOL_IMAPS));
 
     @BeforeEach
     void setUp() {
@@ -53,6 +54,7 @@ class ImapIdleWatchServiceGreenMailIntegrationTest {
         ImapIdleWatchService watchService = new ImapIdleWatchService();
         watchService.runtimeEmailAccountService = new FixedRuntimeEmailAccountService(List.of(runtimeAccount(SourceFetchMode.IDLE)));
         watchService.pollingService = pollingService;
+        watchService.mailSessionFactory = secureMailSessionFactory();
         pollingService.watchService = watchService;
 
         watchService.refreshWatches();
@@ -72,6 +74,7 @@ class ImapIdleWatchServiceGreenMailIntegrationTest {
         ImapIdleWatchService watchService = new ImapIdleWatchService();
         watchService.runtimeEmailAccountService = new FixedRuntimeEmailAccountService(List.of(runtimeAccount(SourceFetchMode.IDLE)));
         watchService.pollingService = pollingService;
+        watchService.mailSessionFactory = secureMailSessionFactory();
         pollingService.watchService = watchService;
 
         watchService.refreshWatches();
@@ -91,6 +94,7 @@ class ImapIdleWatchServiceGreenMailIntegrationTest {
         ImapIdleWatchService watchService = new ImapIdleWatchService();
         watchService.runtimeEmailAccountService = new FixedRuntimeEmailAccountService(List.of(runtimeAccount("INBOX, Projects/2026", SourceFetchMode.IDLE)));
         watchService.pollingService = pollingService;
+        watchService.mailSessionFactory = secureMailSessionFactory();
         pollingService.watchService = watchService;
 
         ensureFolderExists("Projects/2026");
@@ -111,6 +115,7 @@ class ImapIdleWatchServiceGreenMailIntegrationTest {
         ImapIdleWatchService watchService = new ImapIdleWatchService();
         watchService.runtimeEmailAccountService = new FixedRuntimeEmailAccountService(List.of(runtimeAccount(SourceFetchMode.IDLE)));
         watchService.pollingService = pollingService;
+        watchService.mailSessionFactory = secureMailSessionFactory();
 
         watchService.refreshWatches();
         watchService.drainPendingSources();
@@ -127,6 +132,7 @@ class ImapIdleWatchServiceGreenMailIntegrationTest {
         ImapIdleWatchService watchService = new ImapIdleWatchService();
         watchService.runtimeEmailAccountService = new FixedRuntimeEmailAccountService(List.of(runtimeAccount(SourceFetchMode.IDLE)));
         watchService.pollingService = pollingService;
+        watchService.mailSessionFactory = secureMailSessionFactory();
 
         watchService.refreshWatches();
         pollingService.invokedSourceIds.clear();
@@ -150,9 +156,9 @@ class ImapIdleWatchServiceGreenMailIntegrationTest {
                 "alice",
                 true,
                 InboxBridgeConfig.Protocol.IMAP,
-                "127.0.0.1",
-                sourceMail.getImap().getPort(),
-                false,
+                HOST,
+                sourceMail.getImaps().getPort(),
+                true,
                 InboxBridgeConfig.AuthMethod.PASSWORD,
                 InboxBridgeConfig.OAuthProvider.NONE,
                 SOURCE_USERNAME,
@@ -171,13 +177,11 @@ class ImapIdleWatchServiceGreenMailIntegrationTest {
 
     private void appendMessage(String folderName, String subject, String messageId) throws Exception {
         ensureFolderExists(folderName);
-        Properties properties = new Properties();
-        properties.put("mail.store.protocol", "imap");
-        Session session = Session.getInstance(properties);
-        Store store = session.getStore("imap");
+        Session session = secureImapSession();
+        Store store = session.getStore("imaps");
         Folder folder = null;
         try {
-            store.connect("127.0.0.1", sourceMail.getImap().getPort(), SOURCE_USERNAME, SOURCE_PASSWORD);
+            store.connect(HOST, sourceMail.getImaps().getPort(), SOURCE_USERNAME, SOURCE_PASSWORD);
             folder = store.getFolder(folderName);
             folder.open(Folder.READ_WRITE);
             MimeMessage message = new MimeMessage(session);
@@ -196,13 +200,11 @@ class ImapIdleWatchServiceGreenMailIntegrationTest {
     }
 
     private void ensureFolderExists(String folderName) throws Exception {
-        Properties properties = new Properties();
-        properties.put("mail.store.protocol", "imap");
-        Session session = Session.getInstance(properties);
-        Store store = session.getStore("imap");
+        Session session = secureImapSession();
+        Store store = session.getStore("imaps");
         Folder folder = null;
         try {
-            store.connect("127.0.0.1", sourceMail.getImap().getPort(), SOURCE_USERNAME, SOURCE_PASSWORD);
+            store.connect(HOST, sourceMail.getImaps().getPort(), SOURCE_USERNAME, SOURCE_PASSWORD);
             folder = store.getFolder(folderName);
             if (!folder.exists()) {
                 folder.create(Folder.HOLDS_MESSAGES);
@@ -214,13 +216,11 @@ class ImapIdleWatchServiceGreenMailIntegrationTest {
     }
 
     private void appendMultipartMessageWithAttachment(String subject, String messageId) throws Exception {
-        Properties properties = new Properties();
-        properties.put("mail.store.protocol", "imap");
-        Session session = Session.getInstance(properties);
-        Store store = session.getStore("imap");
+        Session session = secureImapSession();
+        Store store = session.getStore("imaps");
         Folder folder = null;
         try {
-            store.connect("127.0.0.1", sourceMail.getImap().getPort(), SOURCE_USERNAME, SOURCE_PASSWORD);
+            store.connect(HOST, sourceMail.getImaps().getPort(), SOURCE_USERNAME, SOURCE_PASSWORD);
             folder = store.getFolder("INBOX");
             folder.open(Folder.READ_WRITE);
             MimeMessage message = new MimeMessage(session);
@@ -260,6 +260,49 @@ class ImapIdleWatchServiceGreenMailIntegrationTest {
             Thread.sleep(100L);
         }
         fail("Timed out waiting for IMAP IDLE watcher to trigger a poll");
+    }
+
+    private MailSessionFactory secureMailSessionFactory() {
+        MailSessionFactory factory = new MailSessionFactory() {
+            @Override
+            public Session idleImapSession(RuntimeEmailAccount account) {
+                Session session = super.idleImapSession(account);
+                session.getProperties().put("mail.imap.ssl.checkserveridentity", "false");
+                session.getProperties().put("mail.imaps.ssl.checkserveridentity", "false");
+                session.getProperties().put("mail.imaps.ssl.trust", "*");
+                return session;
+            }
+        };
+        factory.setMailClientConfig(mailClientConfig());
+        return factory;
+    }
+
+    private Session secureImapSession() {
+        Properties properties = new Properties();
+        properties.put("mail.store.protocol", "imaps");
+        properties.put("mail.imap.ssl.checkserveridentity", "false");
+        properties.put("mail.imaps.ssl.checkserveridentity", "false");
+        properties.put("mail.imaps.ssl.trust", "*");
+        return Session.getInstance(properties);
+    }
+
+    private MailClientConfig mailClientConfig() {
+        return new MailClientConfig() {
+            @Override
+            public java.time.Duration connectionTimeout() {
+                return java.time.Duration.ofSeconds(5);
+            }
+
+            @Override
+            public java.time.Duration operationTimeout() {
+                return java.time.Duration.ofSeconds(5);
+            }
+
+            @Override
+            public java.time.Duration idleOperationTimeout() {
+                return java.time.Duration.ofSeconds(5);
+            }
+        };
     }
 
     private void watchAndDrain(ImapIdleWatchService watchService) {

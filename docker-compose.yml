@@ -17,7 +17,6 @@ services:
       network: host
     container_name: inboxbridge
     ports:
-      - "8080:8080"
       - "8443:8443"
     depends_on:
       cert-init:
@@ -50,14 +49,20 @@ services:
   postgres:
     image: postgres:16
     container_name: inboxbridge-postgres
+    depends_on:
+      cert-init:
+        condition: service_completed_successfully
     environment:
       POSTGRES_DB: inboxbridge
       POSTGRES_USER: inboxbridge
       POSTGRES_PASSWORD: inboxbridge
-    ports:
-      - "5432:5432"
     volumes:
       - postgres_data:/var/lib/postgresql/data
+      - ./certs:/etc/inboxbridge/certs:ro
+      - ./docker:/opt/inboxbridge/docker:ro
+    entrypoint:
+      - /bin/bash
+      - /opt/inboxbridge/docker/postgres-entrypoint.sh
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U inboxbridge -d inboxbridge"]
       interval: 10s

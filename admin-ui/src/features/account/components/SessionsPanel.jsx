@@ -1,4 +1,5 @@
-import SectionCard from '@/shared/components/SectionCard'
+import { useState } from 'react'
+import CollapsibleSection from '@/shared/components/CollapsibleSection'
 import LoadingButton from '@/shared/components/LoadingButton'
 import DeviceLocationValue from './DeviceLocationValue'
 import { authMethodLabel, formatDate } from '@/lib/formatters'
@@ -20,6 +21,7 @@ function SessionsPanel({
   requestCurrentDeviceLocationLoading = false,
   t
 }) {
+  const [collapsed, setCollapsed] = useState(false)
   const sessionKindLabel = (session) => t(session.sessionType === 'REMOTE' ? 'sessions.kindRemote' : 'sessions.kindBrowser')
   const canRequestCurrentDeviceLocation = (session) => (
     session.current && session.sessionType === 'BROWSER' && !session.deviceLocationCapturedAt && currentSessionCanRequestDeviceLocation
@@ -29,7 +31,7 @@ function SessionsPanel({
   )
 
   return (
-    <SectionCard
+    <CollapsibleSection
       actions={
         <LoadingButton
           className="secondary"
@@ -43,8 +45,11 @@ function SessionsPanel({
         </LoadingButton>
       }
       className="sessions-panel"
+      collapsed={collapsed}
       copy={t('sessions.copy')}
       id="security-sessions-panel-section"
+      onCollapseToggle={() => setCollapsed((current) => !current)}
+      t={t}
       title={t('sessions.title')}
     >
 
@@ -150,7 +155,7 @@ function SessionsPanel({
           )}
         </div>
       </div>
-    </SectionCard>
+    </CollapsibleSection>
   )
 }
 

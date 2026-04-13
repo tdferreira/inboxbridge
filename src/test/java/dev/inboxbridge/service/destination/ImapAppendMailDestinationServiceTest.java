@@ -18,12 +18,14 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
 import com.icegreen.greenmail.util.GreenMail;
-import com.icegreen.greenmail.util.ServerSetupTest;
+import com.icegreen.greenmail.util.ServerSetup;
 
 import dev.inboxbridge.config.InboxBridgeConfig;
+import dev.inboxbridge.config.MailClientConfig;
 import dev.inboxbridge.domain.FetchedMessage;
 import dev.inboxbridge.domain.ImapAppendDestinationTarget;
 import dev.inboxbridge.dto.EmailAccountConnectionTestResult;
+import dev.inboxbridge.service.mail.MailSessionFactory;
 import dev.inboxbridge.service.user.UserMailDestinationConfigService;
 import jakarta.mail.Folder;
 import jakarta.mail.Message;
@@ -32,6 +34,7 @@ import jakarta.mail.Store;
 
 class ImapAppendMailDestinationServiceTest {
 
+    private static final String HOST = "localhost";
     private static final String USERNAME = "owner@example.com";
     private static final String PASSWORD = "Secret#123";
 
@@ -39,7 +42,7 @@ class ImapAppendMailDestinationServiceTest {
 
     @BeforeEach
     void setUp() {
-        greenMail = new GreenMail(ServerSetupTest.IMAP);
+        greenMail = new GreenMail(new ServerSetup(0, HOST, ServerSetup.PROTOCOL_IMAPS));
         greenMail.start();
         greenMail.setUser(USERNAME, PASSWORD);
     }
@@ -54,16 +57,16 @@ class ImapAppendMailDestinationServiceTest {
     @Test
     void listFoldersReturnsInboxFirstAndIncludesNestedFolders() throws Exception {
         createTestFolders();
-        ImapAppendMailDestinationService service = new ImapAppendMailDestinationService();
+        ImapAppendMailDestinationService service = createService();
 
         List<String> folders = service.listFolders(new ImapAppendDestinationTarget(
                 "user-destination:7",
                 7L,
                 "alice",
                 UserMailDestinationConfigService.PROVIDER_CUSTOM,
-                "127.0.0.1",
-                greenMail.getImap().getPort(),
-                false,
+                HOST,
+                greenMail.getImaps().getPort(),
+                true,
                 InboxBridgeConfig.AuthMethod.PASSWORD,
                 InboxBridgeConfig.OAuthProvider.NONE,
                 USERNAME,
@@ -78,16 +81,16 @@ class ImapAppendMailDestinationServiceTest {
     @Test
     void testConnectionReturnsSuccessfulImapProbe() throws Exception {
         createTestFolders();
-        ImapAppendMailDestinationService service = new ImapAppendMailDestinationService();
+        ImapAppendMailDestinationService service = createService();
 
         EmailAccountConnectionTestResult result = service.testConnection(new ImapAppendDestinationTarget(
                 "user-destination:7",
                 7L,
                 "alice",
                 UserMailDestinationConfigService.PROVIDER_CUSTOM,
-                "127.0.0.1",
-                greenMail.getImap().getPort(),
-                false,
+                HOST,
+                greenMail.getImaps().getPort(),
+                true,
                 InboxBridgeConfig.AuthMethod.PASSWORD,
                 InboxBridgeConfig.OAuthProvider.NONE,
                 USERNAME,
@@ -102,7 +105,7 @@ class ImapAppendMailDestinationServiceTest {
 
     @Test
     void importMessageAllowsConcurrentCreationOfTheDestinationFolder() throws Exception {
-        ImapAppendMailDestinationService service = new ImapAppendMailDestinationService();
+        ImapAppendMailDestinationService service = createService();
         for (int attempt = 0; attempt < 10; attempt++) {
             String folderName = "Imported-" + attempt;
             ImapAppendDestinationTarget target = new ImapAppendDestinationTarget(
@@ -110,9 +113,9 @@ class ImapAppendMailDestinationServiceTest {
                     7L,
                     "alice",
                     UserMailDestinationConfigService.PROVIDER_CUSTOM,
-                    "127.0.0.1",
-                    greenMail.getImap().getPort(),
-                    false,
+                    HOST,
+                    greenMail.getImaps().getPort(),
+                    true,
                     InboxBridgeConfig.AuthMethod.PASSWORD,
                     InboxBridgeConfig.OAuthProvider.NONE,
                     USERNAME,
@@ -150,12 +153,10 @@ class ImapAppendMailDestinationServiceTest {
     }
 
     private void createTestFolders() throws Exception {
-        Properties properties = new Properties();
-        properties.put("mail.store.protocol", "imap");
-        Session session = Session.getInstance(properties);
-        Store store = session.getStore("imap");
+        Session session = secureImapSession();
+        Store store = session.getStore("imaps");
         try {
-            store.connect("127.0.0.1", greenMail.getImap().getPort(), USERNAME, PASSWORD);
+            store.connect(HOST, greenMail.getImaps().getPort(), USERNAME, PASSWORD);
             Folder defaultFolder = store.getDefaultFolder();
             char separator = defaultFolder.getSeparator();
 
@@ -204,12 +205,10 @@ class ImapAppendMailDestinationServiceTest {
     }
 
     private List<String> listSubjects(String folderName) throws Exception {
-        Properties properties = new Properties();
-        properties.put("mail.store.protocol", "imap");
-        Session session = Session.getInstance(properties);
-        Store store = session.getStore("imap");
+        Session session = secureImapSession();
+        Store store = session.getStore("imaps");
         try {
-            store.connect("127.0.0.1", greenMail.getImap().getPort(), USERNAME, PASSWORD);
+            store.connect(HOST, greenMail.getImaps().getPort(), USERNAME, PASSWORD);
             Folder folder = store.getFolder(folderName);
             folder.open(Folder.READ_ONLY);
             Message[] messages = folder.getMessages();
@@ -226,5 +225,54 @@ class ImapAppendMailDestinationServiceTest {
         } finally {
             store.close();
         }
+    }
+
+    private ImapAppendMailDestinationService createService() {
+        ImapAppendMailDestinationService service = new ImapAppendMailDestinationService();
+        service.mailSessionFactory = secureMailSessionFactory();
+        return service;
+    }
+
+    private MailSessionFactory secureMailSessionFactory() {
+        MailSessionFactory factory = new MailSessionFactory() {
+            @Override
+            public Session destinationImapSession(ImapAppendDestinationTarget target) {
+                Session session = super.destinationImapSession(target);
+                session.getProperties().put("mail.imap.ssl.checkserveridentity", "false");
+                session.getProperties().put("mail.imaps.ssl.checkserveridentity", "false");
+                session.getProperties().put("mail.imaps.ssl.trust", "*");
+                return session;
+            }
+        };
+        factory.setMailClientConfig(mailClientConfig());
+        return factory;
+    }
+
+    private Session secureImapSession() {
+        Properties properties = new Properties();
+        properties.put("mail.store.protocol", "imaps");
+        properties.put("mail.imap.ssl.checkserveridentity", "false");
+        properties.put("mail.imaps.ssl.checkserveridentity", "false");
+        properties.put("mail.imaps.ssl.trust", "*");
+        return Session.getInstance(properties);
+    }
+
+    private MailClientConfig mailClientConfig() {
+        return new MailClientConfig() {
+            @Override
+            public java.time.Duration connectionTimeout() {
+                return java.time.Duration.ofSeconds(5);
+            }
+
+            @Override
+            public java.time.Duration operationTimeout() {
+                return java.time.Duration.ofSeconds(5);
+            }
+
+            @Override
+            public java.time.Duration idleOperationTimeout() {
+                return java.time.Duration.ZERO;
+            }
+        };
     }
 }

@@ -2,6 +2,7 @@ package dev.inboxbridge.service.mail;
 
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 
 import java.util.Optional;
 
@@ -79,5 +80,18 @@ class MailSessionFactoryQuarkusTest {
         assertEquals("7000", popSession.getProperties().getProperty("mail.pop3.connectiontimeout"));
         assertEquals("13000", popSession.getProperties().getProperty("mail.pop3.timeout"));
         assertEquals("0", idleSession.getProperties().getProperty("mail.imap.timeout"));
+    }
+
+    @Test
+    void rejectsNonTlsMailboxSessions() {
+        IllegalArgumentException imapError = assertThrows(
+                IllegalArgumentException.class,
+                () -> mailSessionFactory.imapStoreProtocol(false));
+        IllegalArgumentException pop3Error = assertThrows(
+                IllegalArgumentException.class,
+                () -> mailSessionFactory.pop3StoreProtocol(false));
+
+        assertEquals("InboxBridge requires TLS for every mailbox connection.", imapError.getMessage());
+        assertEquals("InboxBridge requires TLS for every mailbox connection.", pop3Error.getMessage());
     }
 }

@@ -54,21 +54,22 @@ After startup:
 
 - admin UI: `https://localhost:3000`
 - remote control page: `https://localhost:3000/remote`
-- backend HTTP: `http://localhost:8080`
 - backend HTTPS: `https://localhost:8443`
+- backend and PostgreSQL stay on the internal Docker network by default, so only the HTTPS frontend is published to the host
 
 If you want the generated self-signed certs to cover extra LAN or Tailscale hostnames, set:
 
 ```dotenv
 TLS_FRONTEND_CERT_HOSTNAMES=inboxbridge.local,inboxbridge.your-tailnet.ts.net
 TLS_BACKEND_CERT_HOSTNAMES=inboxbridge.local,inboxbridge.your-tailnet.ts.net
+TLS_POSTGRES_CERT_HOSTNAMES=inboxbridge.local,inboxbridge.your-tailnet.ts.net
 ```
 
 `cert-init` always includes `localhost`, the internal Docker service names, and
 the hostname from `PUBLIC_BASE_URL` or the derived `PUBLIC_HOSTNAME` /
 `PUBLIC_PORT` base URL; these variables add more SAN entries on top. If the
 expected SAN list changes later, `cert-init` regenerates the self-signed
-frontend/backend certs automatically.
+frontend, backend, and PostgreSQL certs automatically.
 
 For passkeys/WebAuthn, prefer one canonical hostname everywhere instead of mixing unrelated hostnames such as `raspberrypi.local` and `something.ts.net`. One `SECURITY_PASSKEY_RP_ID` cannot span unrelated domains.
 
@@ -231,6 +232,7 @@ Available choices:
 
 Rules enforced by the app:
 
+- InboxBridge now requires TLS for every source and destination mailbox connection; insecure IMAP/POP3 mailbox settings are rejected instead of being saved
 - a source mailbox cannot be the same mailbox as `My Destination Mailbox`
 - if changing the destination would make an existing source point to the same mailbox, InboxBridge disables that source automatically until the conflict is resolved
 - InboxBridge also treats cross-user mailbox mixing as a hard privacy boundary: polling is expected to keep every source tied to its owning destination mailbox, and the backend regression suite now includes multi-user GreenMail isolation coverage for that rule

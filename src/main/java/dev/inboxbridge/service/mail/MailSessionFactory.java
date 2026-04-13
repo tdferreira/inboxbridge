@@ -52,14 +52,17 @@ public class MailSessionFactory {
     }
 
     public String imapStoreProtocol(boolean tls) {
+        requireTlsEnabled(tls);
         return tls ? "imaps" : "imap";
     }
 
     public String pop3StoreProtocol(boolean tls) {
+        requireTlsEnabled(tls);
         return tls ? "pop3s" : "pop3";
     }
 
     private Properties imapProperties(boolean tls, boolean oauth, boolean idleWatch) {
+        requireTlsEnabled(tls);
         Properties properties = new Properties();
         properties.put("mail.store.protocol", imapStoreProtocol(tls));
         properties.put("mail.imap.ssl.enable", tls);
@@ -81,6 +84,7 @@ public class MailSessionFactory {
     }
 
     private Properties pop3Properties(boolean tls, boolean oauth) {
+        requireTlsEnabled(tls);
         Properties properties = new Properties();
         properties.put("mail.store.protocol", pop3StoreProtocol(tls));
         properties.put("mail.pop3.ssl.enable", tls);
@@ -131,5 +135,11 @@ public class MailSessionFactory {
         properties.put("mail.pop3s.auth.xoauth2.disable", "false");
         properties.put("mail.pop3.auth.xoauth2.two.line.authentication.format", "true");
         properties.put("mail.pop3s.auth.xoauth2.two.line.authentication.format", "true");
+    }
+
+    private void requireTlsEnabled(boolean tls) {
+        if (!tls) {
+            throw new IllegalArgumentException("InboxBridge requires TLS for every mailbox connection.");
+        }
     }
 }
