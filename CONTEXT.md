@@ -481,7 +481,12 @@ admin UI now surfaces that same secret-management status inside
 `Administration -> Authentication Security`, including the active mode/key,
 legacy-key readiness, per-key usage summary, and a confirmation-gated
 `Re-encrypt stored secrets` action so operators can complete local-key
-rotation without leaving the UI.
+rotation without leaving the UI. The backend configuration now also makes the
+secret-provider mode explicit through `SECRET_PROVIDER_MODE` and reports
+mode-aware provider health through the same admin status endpoint, so future
+OpenBao / Vault / split-key modes fail closed with a clear status message
+instead of silently falling back to local-key behavior before their runtime
+support is implemented.
 
 ### 8. HTTPS by default in Docker Compose
 

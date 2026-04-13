@@ -36,6 +36,9 @@ class SecretManagementServiceTest {
         assertTrue(view.secureStorageConfigured());
         assertEquals("LOCAL", view.mode());
         assertEquals("LOCAL", view.providerId());
+        assertTrue(view.providerHealthy());
+        assertTrue(view.providerWritable());
+        assertEquals("Local secret provider is ready.", view.providerStatusMessage());
         assertEquals("LOCAL:v2", view.activeKeyVersion());
         assertEquals("v2", view.activeKeyId());
         assertEquals(List.of("v1"), view.configuredLegacyKeyIds());
@@ -63,7 +66,7 @@ class SecretManagementServiceTest {
     }
 
     @Test
-    void reportsUnconfiguredStateWhenSecureStorageIsMissing() {
+    void reportsLocalModeAsUnavailableWhenSecureStorageIsMissing() {
         SecretManagementService service = new SecretManagementService();
         LocalSecretKeyProvider provider = new LocalSecretKeyProvider();
         provider.setTokenEncryptionKey("replace-me");
@@ -79,7 +82,35 @@ class SecretManagementServiceTest {
         SecretManagementStatusView view = service.status();
 
         assertFalse(view.secureStorageConfigured());
-        assertEquals("UNCONFIGURED", view.mode());
+        assertEquals("LOCAL", view.mode());
+        assertFalse(view.providerHealthy());
+        assertFalse(view.providerWritable());
+        assertEquals("Secure token storage is not configured. Set SECURITY_TOKEN_ENCRYPTION_KEY.", view.providerStatusMessage());
+        assertTrue(view.keyUsage().isEmpty());
+    }
+
+    @Test
+    void reportsUnsupportedTransitModeInStatus() {
+        SecretManagementService service = configuredService();
+        SecretProviderResolver resolver = new SecretProviderResolver();
+        resolver.setLocalSecretKeyProvider(service.localSecretKeyProvider);
+        resolver.setProviderMode("VAULT_TRANSIT");
+        resolver.setVaultUrl("https://vault.internal");
+        resolver.setVaultToken("token");
+        resolver.setVaultMount("transit");
+        resolver.setVaultKey("inboxbridge");
+        service.setSecretProviderResolver(resolver);
+
+        SecretManagementStatusView view = service.status();
+
+        assertFalse(view.secureStorageConfigured());
+        assertEquals("VAULT_TRANSIT", view.mode());
+        assertEquals("VAULT_TRANSIT", view.providerId());
+        assertFalse(view.providerHealthy());
+        assertFalse(view.providerWritable());
+        assertEquals(
+                "Secret provider VAULT_TRANSIT is configured, but transit-backed secret encryption is not implemented yet.",
+                view.providerStatusMessage());
         assertTrue(view.keyUsage().isEmpty());
     }
 
@@ -109,8 +140,13 @@ class SecretManagementServiceTest {
         provider.setTokenEncryptionKeyId("v2");
         provider.setTokenEncryptionLegacyKeys("v1:" + base64("0123456789abcdef0123456789abcdef"));
         service.setLocalSecretKeyProvider(provider);
+        SecretProviderResolver resolver = new SecretProviderResolver();
+        resolver.setLocalSecretKeyProvider(provider);
+        resolver.setProviderMode("LOCAL");
+        service.setSecretProviderResolver(resolver);
         SecretEncryptionService secretEncryptionService = new SecretEncryptionService();
         secretEncryptionService.setLocalSecretKeyProvider(provider);
+        secretEncryptionService.setSecretProviderResolver(resolver);
         service.setSecretEncryptionService(secretEncryptionService);
         SecretEncryptionService legacySecretEncryptionService = new SecretEncryptionService();
         legacySecretEncryptionService.setTokenEncryptionKey(base64("0123456789abcdef0123456789abcdef"));

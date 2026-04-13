@@ -196,6 +196,7 @@ These are the settings most operators care about first:
 - `PUBLIC_PORT`: published HTTPS port for the admin UI and remote page; Docker Compose maps this host port to the frontend container
 - `PUBLIC_BASE_URL`: optional override for the canonical public HTTPS URL when it should differ from `https://${PUBLIC_HOSTNAME}:${PUBLIC_PORT}`
 - `MULTI_USER_ENABLED`: choose single-user or multi-user mode
+- `SECRET_PROVIDER_MODE`: selects the deployment secret-provider mode; `LOCAL` is the current working mode, while `OPENBAO_TRANSIT`, `VAULT_TRANSIT`, and `SPLIT_KEY` are reserved and currently fail closed with a clear status message
 - `SECURITY_TOKEN_ENCRYPTION_KEY`: required for encrypted UI-managed secrets and browser OAuth exchange
 - `SECURITY_TOKEN_ENCRYPTION_KEY_ID`: key label stored with encrypted data
 - `SECURITY_TOKEN_ENCRYPTION_LEGACY_KEYS`: optional comma-separated `keyId:base64Key` list used to keep older encrypted records decryptable during key rotation

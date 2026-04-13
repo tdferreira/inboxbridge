@@ -86,6 +86,24 @@ class SecretEncryptionServiceTest {
         assertEquals("Secure token storage is not configured. Set SECURITY_TOKEN_ENCRYPTION_KEY.", error.getMessage());
     }
 
+    @Test
+    void failsClosedWhenUnsupportedSecretProviderModeIsSelected() {
+        SecretEncryptionService service = new SecretEncryptionService();
+        SecretProviderResolver resolver = new SecretProviderResolver();
+        resolver.setProviderMode("OPENBAO_TRANSIT");
+        resolver.setOpenbaoUrl("https://openbao.internal");
+        resolver.setOpenbaoToken("token");
+        resolver.setOpenbaoMount("transit");
+        resolver.setOpenbaoKey("inboxbridge");
+        service.setSecretProviderResolver(resolver);
+
+        IllegalStateException error = assertThrows(IllegalStateException.class, () -> service.encrypt("secret", "context"));
+
+        assertEquals(
+                "Secret provider OPENBAO_TRANSIT is configured, but transit-backed secret encryption is not implemented yet.",
+                error.getMessage());
+    }
+
     private SecretEncryptionService configuredService() {
         SecretEncryptionService service = new SecretEncryptionService();
         service.setTokenEncryptionKey(Base64.getEncoder().encodeToString("0123456789abcdef0123456789abcdef".getBytes()));

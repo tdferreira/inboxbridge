@@ -481,12 +481,17 @@ Potential admin actions:
 Current repository status:
 
 - done for the local provider path
+- provider mode is now explicit through `SECRET_PROVIDER_MODE`, defaulting to
+  `LOCAL`
 - new writes store `LOCAL:<keyId>` metadata
 - older plain local key ids such as `v1` still decrypt as legacy local records
 - local-key rotation can keep previous keys readable through
   `SECURITY_TOKEN_ENCRYPTION_LEGACY_KEYS`
+- backend provider resolution now reports mode-aware health so the admin
+  status endpoint can fail closed instead of silently falling back to local
 - admin visibility has started through `/api/admin/secret-management`, which
-  reports active mode, configured legacy key ids, and stored key-version usage
+  reports active mode, provider health, configured legacy key ids, and stored
+  key-version usage
 - the admin UI now surfaces that status inside `Administration ->
   Authentication Security`, including a confirmation-gated re-encryption flow
 - the first concrete rotation action now exists through
@@ -496,7 +501,8 @@ Current repository status:
 ### Phase 3: OpenBao / Vault Transit support
 
 - add transit-backed unwrap/wrap support
-- add startup/provider health validation
+- extend the current explicit mode/health scaffolding into real OpenBao and
+  Vault transit connectivity checks plus cryptographic operations
 - allow migration from `LOCAL` to `OPENBAO_TRANSIT` or `VAULT_TRANSIT`
 
 ### Phase 4: UI and operational tooling

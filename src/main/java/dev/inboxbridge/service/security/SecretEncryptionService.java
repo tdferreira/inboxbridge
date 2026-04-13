@@ -29,6 +29,9 @@ public class SecretEncryptionService {
     @Inject
     LocalSecretKeyProvider localSecretKeyProvider;
 
+    @Inject
+    SecretProviderResolver secretProviderResolver;
+
     private final SecureRandom secureRandom = new SecureRandom();
 
     public void setTokenEncryptionKey(String tokenEncryptionKey) {
@@ -47,13 +50,17 @@ public class SecretEncryptionService {
         this.localSecretKeyProvider = localSecretKeyProvider;
     }
 
+    public void setSecretProviderResolver(SecretProviderResolver secretProviderResolver) {
+        this.secretProviderResolver = secretProviderResolver;
+    }
+
     public boolean isConfigured() {
-        return configuredProvider().isConfigured();
+        return providerResolver().isWritable();
     }
 
     public String keyVersion() {
         requireConfigured();
-        return configuredProvider().activeKey().storedKeyVersion();
+        return providerResolver().requireWritableProvider().activeKey().storedKeyVersion();
     }
 
     public EncryptedValue encrypt(String value, String context) {
@@ -65,7 +72,7 @@ public class SecretEncryptionService {
         byte[] nonce = new byte[NONCE_BYTES];
         secureRandom.nextBytes(nonce);
         byte[] aad = aad(context);
-        SecretKeyMaterial keyMaterial = configuredProvider().activeKey();
+        SecretKeyMaterial keyMaterial = providerResolver().requireWritableProvider().activeKey();
 
         try {
             Cipher cipher = Cipher.getInstance("AES/GCM/NoPadding");
@@ -80,7 +87,7 @@ public class SecretEncryptionService {
 
     public String decrypt(String ciphertextBase64, String nonceBase64, String keyVersion, String context) {
         requireConfigured();
-        SecretKeyMaterial keyMaterial = configuredProvider().resolveKey(keyVersion)
+        SecretKeyMaterial keyMaterial = providerResolver().resolveKey(keyVersion)
                 .orElseThrow(() -> new IllegalStateException("Stored secret was encrypted with an unavailable or unsupported key version"));
 
         try {
@@ -111,12 +118,17 @@ public class SecretEncryptionService {
 
     private void requireConfigured() {
         if (!isConfigured()) {
-            throw new IllegalStateException("Secure token storage is not configured. Set SECURITY_TOKEN_ENCRYPTION_KEY.");
+            throw new IllegalStateException(providerResolver().health().statusMessage());
         }
     }
 
-    private SecretKeyProvider configuredProvider() {
-        return localProvider();
+    private SecretProviderResolver providerResolver() {
+        if (secretProviderResolver == null) {
+            SecretProviderResolver resolver = new SecretProviderResolver();
+            resolver.setLocalSecretKeyProvider(localProvider());
+            secretProviderResolver = resolver;
+        }
+        return secretProviderResolver;
     }
 
     private LocalSecretKeyProvider localProvider() {

@@ -40,6 +40,9 @@ public class SecretManagementService {
     LocalSecretKeyProvider localSecretKeyProvider;
 
     @Inject
+    SecretProviderResolver secretProviderResolver;
+
+    @Inject
     OAuthCredentialRepository oAuthCredentialRepository;
 
     @Inject
@@ -58,11 +61,15 @@ public class SecretManagementService {
     SystemAuthSecuritySettingRepository systemAuthSecuritySettingRepository;
 
     public SecretManagementStatusView status() {
-        if (!localSecretKeyProvider.isConfigured()) {
+        SecretProviderHealth providerHealth = providerResolver().health();
+        if (!providerHealth.writable()) {
             return new SecretManagementStatusView(
                     false,
-                    "UNCONFIGURED",
-                    localSecretKeyProvider.providerId(),
+                    providerHealth.mode().name(),
+                    providerHealth.providerId(),
+                    providerHealth.healthy(),
+                    providerHealth.writable(),
+                    providerHealth.statusMessage(),
                     null,
                     null,
                     List.of(),
@@ -74,7 +81,7 @@ public class SecretManagementService {
                     List.of());
         }
 
-        SecretKeyMaterial activeKey = localSecretKeyProvider.activeKey();
+        SecretKeyMaterial activeKey = providerResolver().requireWritableProvider().activeKey();
         List<String> configuredLegacyKeyIds = localSecretKeyProvider.configuredLegacyKeyIds().stream()
                 .sorted()
                 .toList();
@@ -106,8 +113,11 @@ public class SecretManagementService {
 
         return new SecretManagementStatusView(
                 true,
-                "LOCAL",
+                providerHealth.mode().name(),
                 activeKey.providerId(),
+                providerHealth.healthy(),
+                providerHealth.writable(),
+                providerHealth.statusMessage(),
                 activeKey.storedKeyVersion(),
                 activeKey.keyId(),
                 configuredLegacyKeyIds,
@@ -121,8 +131,8 @@ public class SecretManagementService {
 
     @Transactional
     public SecretReencryptionResultView reencryptAllStoredSecrets() {
-        if (!localSecretKeyProvider.isConfigured()) {
-            throw new IllegalStateException("Secure token storage is not configured. Set SECURITY_TOKEN_ENCRYPTION_KEY.");
+        if (!providerResolver().isWritable()) {
+            throw new IllegalStateException(providerResolver().health().statusMessage());
         }
 
         List<SecretReencryptionAreaResultView> areas = new ArrayList<>();
@@ -148,6 +158,10 @@ public class SecretManagementService {
 
     public void setSecretEncryptionService(SecretEncryptionService secretEncryptionService) {
         this.secretEncryptionService = secretEncryptionService;
+    }
+
+    public void setSecretProviderResolver(SecretProviderResolver secretProviderResolver) {
+        this.secretProviderResolver = secretProviderResolver;
     }
 
     public void setOAuthCredentialRepository(OAuthCredentialRepository oAuthCredentialRepository) {
@@ -498,5 +512,14 @@ public class SecretManagementService {
             recordCount++;
             areas.add(area);
         }
+    }
+
+    private SecretProviderResolver providerResolver() {
+        if (secretProviderResolver == null) {
+            SecretProviderResolver resolver = new SecretProviderResolver();
+            resolver.setLocalSecretKeyProvider(localSecretKeyProvider);
+            secretProviderResolver = resolver;
+        }
+        return secretProviderResolver;
     }
 }

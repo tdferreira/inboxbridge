@@ -126,9 +126,18 @@ inboxbridge:
       custom-label: ${MAIL_ACCOUNT_0__CUSTOM_LABEL:Imported/Source0}
 
 security:
+  provider-mode: ${SECRET_PROVIDER_MODE:LOCAL}
   token-encryption-key: ${SECURITY_TOKEN_ENCRYPTION_KEY:replace-me}
   token-encryption-key-id: ${SECURITY_TOKEN_ENCRYPTION_KEY_ID:v1}
   token-encryption-legacy-keys: ${SECURITY_TOKEN_ENCRYPTION_LEGACY_KEYS:}
+  openbao-url: ${SECRET_PROVIDER_OPENBAO_URL:}
+  openbao-token: ${SECRET_PROVIDER_OPENBAO_TOKEN:}
+  openbao-mount: ${SECRET_PROVIDER_OPENBAO_MOUNT:}
+  openbao-key: ${SECRET_PROVIDER_OPENBAO_KEY:}
+  vault-url: ${SECRET_PROVIDER_VAULT_URL:}
+  vault-token: ${SECRET_PROVIDER_VAULT_TOKEN:}
+  vault-mount: ${SECRET_PROVIDER_VAULT_MOUNT:}
+  vault-key: ${SECRET_PROVIDER_VAULT_KEY:}
 
 "%test":
   quarkus:

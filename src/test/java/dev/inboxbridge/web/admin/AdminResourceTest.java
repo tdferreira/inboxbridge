@@ -163,6 +163,8 @@ class AdminResourceTest {
 
         assertTrue(response.secureStorageConfigured());
         assertEquals("LOCAL", response.mode());
+        assertTrue(response.providerHealthy());
+        assertTrue(response.providerWritable());
         assertEquals("LOCAL:v2", response.activeKeyVersion());
         assertEquals(2, response.protectedRecordCount());
     }
@@ -278,6 +280,9 @@ class AdminResourceTest {
                     true,
                     "LOCAL",
                     "LOCAL",
+                    true,
+                    true,
+                    "Local secret provider is ready.",
                     "LOCAL:v2",
                     "v2",
                     java.util.List.of("v1"),
