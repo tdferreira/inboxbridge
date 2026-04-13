@@ -6,7 +6,7 @@
     <title>InboxBridge | Self-hosted one inbox, many accounts</title>
     <meta
       name="description"
-      content="InboxBridge is a self-hosted mail importer for IMAP, POP3, Gmail API, and IMAP APPEND destinations, with multi-folder IMAP, POP UIDL checkpoints, optional IMAP IDLE, and a guided .env generator."
+      content="InboxBridge is a self-hosted mail importer for IMAP, POP3, Gmail API, and IMAP APPEND destinations, with multi-folder IMAP, POP UIDL checkpoints, optional IMAP IDLE, browser extensions, and a guided .env generator."
     />
     <link rel="icon" type="image/svg+xml" href="./remote-icon.svg" />
     <link rel="stylesheet" href="./styles.css" />
@@ -60,8 +60,8 @@
             <p>
               InboxBridge imports mail from IMAP and POP3 source mailboxes into one destination mailbox.
               It supports Gmail API delivery, IMAP APPEND destinations, POP UIDL checkpoints, multi-folder IMAP with
-              per-folder IMAP IDLE, encrypted UI-managed secrets, and a browser admin UI that does not require
-              hand-editing configuration for day-to-day use.
+              per-folder IMAP IDLE, encrypted UI-managed secrets, browser extensions for quick poll/status control,
+              and a browser admin UI that does not require hand-editing configuration for day-to-day use.
             </p>
             <div class="hero-actions">
               <a class="button primary" href="https://github.com/tdferreira/inboxbridge">View repository</a>
@@ -87,8 +87,8 @@
               </article>
               <article>
                 <div class="mini-kicker">Control</div>
-                <h2>UI-managed by default</h2>
-                <p>Use the admin UI for normal setup, or generate an env-managed deployment for operators who prefer `.env`.</p>
+                <h2>Admin UI, remote, and extensions</h2>
+                <p>Use the full admin UI for setup, the lighter remote surface for phone-friendly control, or browser extensions for quick poll, status, and error visibility.</p>
               </article>
             </div>
           </aside>
@@ -104,7 +104,8 @@
             </div>
             <p>
               InboxBridge is broader than a simple forwarder. It keeps import history, supports multi-user deployments,
-              and lets operators choose between env-managed and UI-managed configuration.
+              and lets operators choose between env-managed and UI-managed configuration while running on a laptop,
+              homelab server, Raspberry Pi, VPS, or dedicated host they control.
             </p>
           </div>
           <div class="feature-grid">
@@ -120,8 +121,8 @@
             </article>
             <article class="feature-card">
               <div class="mini-kicker">Operator choice</div>
-              <h3>UI-managed or env-managed</h3>
-              <p>Most users can configure mailboxes in the web UI. Operators can still define deployment-wide accounts and defaults in `.env`, then run InboxBridge on a laptop, homelab server, Raspberry Pi, VPS, or dedicated host they control.</p>
+              <h3>Web UI, remote, and browser companion</h3>
+              <p>Most users can configure mailboxes in the web UI, use the lighter remote surface on a phone, or install browser extensions for quick poll-now, recent-import visibility, and error awareness without opening the full dashboard.</p>
             </article>
           </div>
         </div>
@@ -222,8 +223,8 @@
               <div class="architecture-detail-diagram">
                 <article class="architecture-detail-card architecture-detail-card-surface">
                   <div class="mini-kicker">Browser surfaces</div>
-                  <h3>Admin UI and InboxBridge Go</h3>
-                  <p>Operators sign in, configure accounts, and trigger imports from the full admin workspace or the lighter remote surface.</p>
+                  <h3>Admin UI, InboxBridge Go, and extensions</h3>
+                  <p>Operators sign in, configure accounts, and trigger imports from the full admin workspace, the lighter remote surface, or browser extensions that expose quick poll and status controls.</p>
                 </article>
 
                 <div class="architecture-detail-flow architecture-detail-flow-ui" aria-hidden="true">
