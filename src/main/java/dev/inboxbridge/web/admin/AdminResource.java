@@ -10,6 +10,7 @@ import dev.inboxbridge.dto.PollLiveView;
 import dev.inboxbridge.dto.PollRunResult;
 import dev.inboxbridge.dto.PollingTimelineBundleView;
 import dev.inboxbridge.dto.SecretReencryptionResultView;
+import dev.inboxbridge.dto.SecretReencryptionRequest;
 import dev.inboxbridge.dto.SecretManagementStatusView;
 import dev.inboxbridge.dto.SourcePollingSettingsView;
 import dev.inboxbridge.dto.SourcePollingStatsView;
@@ -119,8 +120,9 @@ public class AdminResource {
 
     @POST
     @Path("/secret-management/re-encrypt")
-    public SecretReencryptionResultView reencryptStoredSecrets() {
-        return WebResourceSupport.badRequest(() -> secretManagementService.reencryptAllStoredSecrets());
+    @Consumes(MediaType.APPLICATION_JSON)
+    public SecretReencryptionResultView reencryptStoredSecrets(SecretReencryptionRequest request) {
+        return WebResourceSupport.badRequest(() -> secretManagementService.reencryptAllStoredSecrets(request));
     }
 
     @PUT

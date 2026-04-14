@@ -24,6 +24,9 @@ import dev.inboxbridge.persistence.UserGmailConfig;
 import dev.inboxbridge.persistence.UserGmailConfigRepository;
 import dev.inboxbridge.persistence.UserMailDestinationConfig;
 import dev.inboxbridge.persistence.UserMailDestinationConfigRepository;
+import dev.inboxbridge.service.extension.ExtensionSessionService;
+import dev.inboxbridge.service.oauth.OAuthCredentialService;
+import dev.inboxbridge.service.remote.RemoteSessionService;
 
 class SecretManagementServiceTest {
 
@@ -160,9 +163,26 @@ class SecretManagementServiceTest {
         assertEquals(1, result.areas().get(2).recordsUpdated());
         assertEquals("system-oauth", result.areas().get(4).area());
         assertEquals(1, result.areas().get(4).recordsUpdated());
+        assertEquals(0, result.followUp().browserExtensionSessionsRevoked());
+        assertEquals(0, result.followUp().remoteSessionsRevoked());
+        assertEquals(0, result.followUp().cachedOAuthAccessTokensCleared());
         assertEquals(5, status.activeKeyRecordCount());
         assertEquals(0, status.nonActiveKeyRecordCount());
         assertTrue(status.safeToRetireLegacyKeys());
+    }
+
+    @Test
+    void reencryptAllStoredSecretsCanRevokeDerivedTrustMaterial() {
+        SecretManagementService service = configuredService();
+        service.setExtensionSessionService(new StubExtensionSessionService(4));
+        service.setRemoteSessionService(new StubRemoteSessionService(3));
+        service.setOAuthCredentialService(new StubOAuthCredentialService(2));
+
+        SecretReencryptionResultView result = service.reencryptAllStoredSecrets(new dev.inboxbridge.dto.SecretReencryptionRequest(true, true, true));
+
+        assertEquals(4, result.followUp().browserExtensionSessionsRevoked());
+        assertEquals(3, result.followUp().remoteSessionsRevoked());
+        assertEquals(2, result.followUp().cachedOAuthAccessTokensCleared());
     }
 
     private SecretManagementService configuredService() {
@@ -230,6 +250,9 @@ class SecretManagementServiceTest {
         service.setUserGmailConfigRepository(new InMemoryUserGmailConfigRepository(List.of(gmailConfig)));
         service.setSystemOAuthAppSettingsRepository(new InMemorySystemOAuthAppSettingsRepository(systemOAuth));
         service.setSystemAuthSecuritySettingRepository(new InMemorySystemAuthSecuritySettingRepository(authSecurity));
+        service.setExtensionSessionService(new StubExtensionSessionService(0));
+        service.setRemoteSessionService(new StubRemoteSessionService(0));
+        service.setOAuthCredentialService(new StubOAuthCredentialService(0));
         return service;
     }
 
@@ -364,6 +387,45 @@ class SecretManagementServiceTest {
         @Override
         public String decrypt(TransitProviderConfig config, String ciphertext, String context) {
             return ciphertext.startsWith("transit:") ? ciphertext.substring("transit:".length()) : ciphertext;
+        }
+    }
+
+    private static final class StubExtensionSessionService extends ExtensionSessionService {
+        private final int revokedCount;
+
+        private StubExtensionSessionService(int revokedCount) {
+            this.revokedCount = revokedCount;
+        }
+
+        @Override
+        public int revokeAllSessionsForAllUsers() {
+            return revokedCount;
+        }
+    }
+
+    private static final class StubRemoteSessionService extends RemoteSessionService {
+        private final int revokedCount;
+
+        private StubRemoteSessionService(int revokedCount) {
+            this.revokedCount = revokedCount;
+        }
+
+        @Override
+        public int invalidateAllSessions() {
+            return revokedCount;
+        }
+    }
+
+    private static final class StubOAuthCredentialService extends OAuthCredentialService {
+        private final int clearedCount;
+
+        private StubOAuthCredentialService(int clearedCount) {
+            this.clearedCount = clearedCount;
+        }
+
+        @Override
+        public int clearAllAccessTokens() {
+            return clearedCount;
         }
     }
 }

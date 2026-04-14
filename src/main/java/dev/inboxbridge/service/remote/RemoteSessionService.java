@@ -111,6 +111,14 @@ public class RemoteSessionService {
     }
 
     @Transactional
+    public int invalidateAllSessions() {
+        Instant now = Instant.now();
+        List<RemoteSession> activeSessions = repository.listAllActive(now);
+        activeSessions.forEach((session) -> session.revokedAt = now);
+        return activeSessions.size();
+    }
+
+    @Transactional
     public void recordDeviceLocation(Long sessionId, Double latitude, Double longitude, Double accuracyMeters) {
         if (sessionId == null) {
             throw new IllegalArgumentException("Missing current session");

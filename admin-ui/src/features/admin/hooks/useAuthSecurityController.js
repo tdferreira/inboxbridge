@@ -27,6 +27,11 @@ const DEFAULT_SECRET_MANAGEMENT_STATUS = {
   safeToRetireLegacyKeys: true,
   keyUsage: []
 }
+const DEFAULT_SECRET_REENCRYPT_OPTIONS = {
+  revokeBrowserExtensionSessions: false,
+  revokeRemoteSessions: false,
+  clearCachedOAuthAccessTokens: false
+}
 const SESSION_KIND_KEYS = Object.freeze({
   REMOTE: 'sessions.kindRemote',
   BROWSER: 'sessions.kindBrowser'
@@ -62,6 +67,7 @@ export function useAuthSecurityController({
   const [sessionActivity, setSessionActivity] = useState(DEFAULT_SESSION_ACTIVITY)
   const [extensionSessions, setExtensionSessions] = useState(DEFAULT_EXTENSION_SESSIONS)
   const [secretManagementStatus, setSecretManagementStatus] = useState(DEFAULT_SECRET_MANAGEMENT_STATUS)
+  const [secretReencryptOptions, setSecretReencryptOptions] = useState(DEFAULT_SECRET_REENCRYPT_OPTIONS)
   const latestRecentSessionKeyRef = useRef(null)
   const hasSessionActivityBaselineRef = useRef(false)
   const loginCooldownTimeoutRef = useRef(null)
@@ -89,6 +95,7 @@ export function useAuthSecurityController({
     setSessionActivity(DEFAULT_SESSION_ACTIVITY)
     setExtensionSessions(DEFAULT_EXTENSION_SESSIONS)
     setSecretManagementStatus(DEFAULT_SECRET_MANAGEMENT_STATUS)
+    setSecretReencryptOptions(DEFAULT_SECRET_REENCRYPT_OPTIONS)
     setPasskeyLabel('')
     setShowSecurityPanel(false)
     setSecurityTab('password')
@@ -627,18 +634,34 @@ export function useAuthSecurityController({
       onConfirm: async () => {
         await withPending('secretManagementReencrypt', async () => {
           try {
-            const response = await fetch('/api/admin/secret-management/re-encrypt', { method: 'POST' })
+            const response = await fetch('/api/admin/secret-management/re-encrypt', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify(secretReencryptOptions)
+            })
             if (!response.ok) {
               throw new Error(await apiErrorText(response, errorText('reencryptStoredSecrets')))
             }
             const payload = await response.json()
             closeConfirmation?.()
             await loadSecretManagementStatus({ suppressErrors: true })
+            const followUp = payload?.followUp || {}
+            const hasFollowUpCleanup = (followUp.browserExtensionSessionsRevoked ?? 0) > 0
+              || (followUp.remoteSessionsRevoked ?? 0) > 0
+              || (followUp.cachedOAuthAccessTokensCleared ?? 0) > 0
             pushNotification({
-              message: t('notifications.secretManagementReencrypted', {
-                records: payload?.totalRecordsUpdated ?? 0,
-                secrets: payload?.totalSecretValuesReencrypted ?? 0
-              }),
+              message: hasFollowUpCleanup
+                ? t('notifications.secretManagementReencryptedWithFollowUp', {
+                    records: payload?.totalRecordsUpdated ?? 0,
+                    secrets: payload?.totalSecretValuesReencrypted ?? 0,
+                    extensionSessions: followUp.browserExtensionSessionsRevoked ?? 0,
+                    remoteSessions: followUp.remoteSessionsRevoked ?? 0,
+                    accessTokens: followUp.cachedOAuthAccessTokensCleared ?? 0
+                  })
+                : t('notifications.secretManagementReencrypted', {
+                    records: payload?.totalRecordsUpdated ?? 0,
+                    secrets: payload?.totalSecretValuesReencrypted ?? 0
+                  }),
               targetId: 'auth-security-section',
               tone: 'success'
             })
@@ -913,6 +936,7 @@ export function useAuthSecurityController({
     securityDialogDirty,
     securityTab,
     secretManagementStatus,
+    secretReencryptOptions,
     sessionActivity,
     selectSecurityTab,
     session,
@@ -921,6 +945,7 @@ export function useAuthSecurityController({
     setPasskeyLabel,
     setPasswordForm,
     setRegisterForm,
+    setSecretReencryptOptions,
     setSession,
     showPasskeyRegistrationDialog,
     showSecurityPanel

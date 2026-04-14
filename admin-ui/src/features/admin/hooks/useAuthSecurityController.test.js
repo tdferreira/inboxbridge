@@ -609,7 +609,12 @@ describe('useAuthSecurityController', () => {
           activeKeyVersion: 'LOCAL:v2',
           totalRecordsUpdated: 4,
           totalSecretValuesReencrypted: 9,
-          areas: []
+          areas: [],
+          followUp: {
+            browserExtensionSessionsRevoked: 2,
+            remoteSessionsRevoked: 1,
+            cachedOAuthAccessTokensCleared: 3
+          }
         })
       })
       .mockResolvedValueOnce({
@@ -643,7 +648,7 @@ describe('useAuthSecurityController', () => {
         openConfirmation,
         pushNotification,
         t: (key, params) => {
-          if (key === 'notifications.secretManagementReencrypted') {
+          if (key === 'notifications.secretManagementReencryptedWithFollowUp') {
             return `Re-encrypted ${params.records} records / ${params.secrets} secrets`
           }
           return key
@@ -657,6 +662,14 @@ describe('useAuthSecurityController', () => {
     })
 
     await act(async () => {
+      result.current.setSecretReencryptOptions({
+        revokeBrowserExtensionSessions: true,
+        revokeRemoteSessions: true,
+        clearCachedOAuthAccessTokens: true
+      })
+    })
+
+    await act(async () => {
       await result.current.handleReencryptStoredSecrets()
     })
 
@@ -667,7 +680,15 @@ describe('useAuthSecurityController', () => {
       await confirmation.onConfirm()
     })
 
-    expect(fetch).toHaveBeenNthCalledWith(1, '/api/admin/secret-management/re-encrypt', { method: 'POST' })
+    expect(fetch).toHaveBeenNthCalledWith(1, '/api/admin/secret-management/re-encrypt', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        revokeBrowserExtensionSessions: true,
+        revokeRemoteSessions: true,
+        clearCachedOAuthAccessTokens: true
+      })
+    })
     expect(fetch).toHaveBeenNthCalledWith(2, '/api/admin/secret-management')
     expect(closeConfirmation).toHaveBeenCalled()
     expect(pushNotification).toHaveBeenCalledWith(expect.objectContaining({

@@ -702,6 +702,16 @@ optional follow-up revocation of derived trust material, especially:
 
 That gives operators a clear way to combine key rotation with session cleanup.
 
+Current repository status:
+
+- the admin re-encryption workflow already supports those optional follow-up
+  cleanup actions during `POST /api/admin/secret-management/re-encrypt`
+- operators can now choose, per run, whether InboxBridge also revokes
+  browser-extension sessions, revokes `/remote` sessions, and clears cached
+  OAuth access tokens after the stored secrets are rewritten
+- this is still a full re-encryption workflow rather than a metadata-only
+  rewrap flow
+
 ## Operational Recommendations
 
 ### For most self-hosted users

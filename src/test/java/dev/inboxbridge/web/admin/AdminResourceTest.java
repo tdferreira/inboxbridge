@@ -14,6 +14,7 @@ import dev.inboxbridge.dto.PollLiveView;
 import dev.inboxbridge.dto.PollRunResult;
 import dev.inboxbridge.dto.PollingTimelineBundleView;
 import dev.inboxbridge.dto.SecretReencryptionResultView;
+import dev.inboxbridge.dto.SecretReencryptionRequest;
 import dev.inboxbridge.dto.SecretManagementStatusView;
 import dev.inboxbridge.dto.SourcePollingSettingsView;
 import dev.inboxbridge.dto.SourcePollingStatsView;
@@ -174,10 +175,11 @@ class AdminResourceTest {
         AdminResource resource = new AdminResource();
         resource.secretManagementService = new FakeSecretManagementService();
 
-        SecretReencryptionResultView response = resource.reencryptStoredSecrets();
+        SecretReencryptionResultView response = resource.reencryptStoredSecrets(new SecretReencryptionRequest(true, true, true));
 
         assertEquals("LOCAL:v2", response.activeKeyVersion());
         assertEquals(2, response.totalRecordsUpdated());
+        assertEquals(4, response.followUp().browserExtensionSessionsRevoked());
     }
 
     @Test
@@ -185,7 +187,7 @@ class AdminResourceTest {
         AdminResource resource = new AdminResource();
         resource.secretManagementService = new ErrorSecretManagementService();
 
-        BadRequestException error = assertThrows(BadRequestException.class, resource::reencryptStoredSecrets);
+        BadRequestException error = assertThrows(BadRequestException.class, () -> resource.reencryptStoredSecrets(null));
 
         assertEquals("Secure token storage is not configured. Set SECURITY_TOKEN_ENCRYPTION_KEY.", error.getMessage());
     }
@@ -295,18 +297,22 @@ class AdminResourceTest {
         }
 
         @Override
-        public SecretReencryptionResultView reencryptAllStoredSecrets() {
+        public SecretReencryptionResultView reencryptAllStoredSecrets(SecretReencryptionRequest request) {
             return new SecretReencryptionResultView(
                     "LOCAL:v2",
                     2,
                     3,
-                    java.util.List.of());
+                    java.util.List.of(),
+                    new dev.inboxbridge.dto.SecretReencryptionFollowUpView(
+                            request != null && request.revokeBrowserExtensionSessions() ? 4 : 0,
+                            request != null && request.revokeRemoteSessions() ? 3 : 0,
+                            request != null && request.clearCachedOAuthAccessTokens() ? 2 : 0));
         }
     }
 
     private static final class ErrorSecretManagementService extends SecretManagementService {
         @Override
-        public SecretReencryptionResultView reencryptAllStoredSecrets() {
+        public SecretReencryptionResultView reencryptAllStoredSecrets(SecretReencryptionRequest request) {
             throw new IllegalStateException("Secure token storage is not configured. Set SECURITY_TOKEN_ENCRYPTION_KEY.");
         }
     }

@@ -29,4 +29,8 @@ public class ExtensionSessionRepository implements PanacheRepository<ExtensionSe
     public List<ExtensionSession> listActiveByUserId(Long userId, Instant now) {
         return list("userId = ?1 and revokedAt is null and (expiresAt is null or expiresAt > ?2) order by createdAt desc", userId, now);
     }
+
+    public List<ExtensionSession> listAllActive(Instant now) {
+        return list("revokedAt is null and (expiresAt is null or expiresAt > ?1) order by createdAt desc", now);
+    }
 }

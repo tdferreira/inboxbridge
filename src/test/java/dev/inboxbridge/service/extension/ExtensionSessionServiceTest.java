@@ -45,6 +45,27 @@ class ExtensionSessionServiceTest {
     }
 
     @Test
+    void revokeAllSessionsForAllUsersRevokesEveryActiveSession() {
+        ExtensionSessionService service = configuredService();
+        InMemoryExtensionSessionRepository repository = (InMemoryExtensionSessionRepository) service.repository;
+
+        AppUser alice = new AppUser();
+        alice.id = 11L;
+        AppUser bob = new AppUser();
+        bob.id = 12L;
+
+        var aliceSession = service.createAuthenticatedSession(alice, "Chrome", "chromium", "0.1.0");
+        var bobSession = service.createAuthenticatedSession(bob, "Firefox", "firefox", "0.1.0");
+        bobSession.session().revokedAt = Instant.parse("2026-04-13T00:00:00Z");
+
+        int revoked = service.revokeAllSessionsForAllUsers();
+
+        assertEquals(1, revoked);
+        assertNotNull(repository.byId.get(aliceSession.session().id).revokedAt);
+        assertEquals(Instant.parse("2026-04-13T00:00:00Z"), repository.byId.get(bobSession.session().id).revokedAt);
+    }
+
+    @Test
     void authenticatedSessionsRotateRefreshTokensAndExpireAccessTokens() {
         ExtensionSessionService service = configuredService();
         InMemoryExtensionSessionRepository repository = (InMemoryExtensionSessionRepository) service.repository;
@@ -147,6 +168,15 @@ class ExtensionSessionServiceTest {
         public List<ExtensionSession> listActiveByUserId(Long userId, Instant now) {
             return byId.values().stream()
                     .filter(session -> userId.equals(session.userId))
+                    .filter(session -> session.revokedAt == null)
+                    .filter(session -> session.expiresAt == null || session.expiresAt.isAfter(now))
+                    .sorted((left, right) -> right.createdAt.compareTo(left.createdAt))
+                    .toList();
+        }
+
+        @Override
+        public List<ExtensionSession> listAllActive(Instant now) {
+            return byId.values().stream()
                     .filter(session -> session.revokedAt == null)
                     .filter(session -> session.expiresAt == null || session.expiresAt.isAfter(now))
                     .sorted((left, right) -> right.createdAt.compareTo(left.createdAt))

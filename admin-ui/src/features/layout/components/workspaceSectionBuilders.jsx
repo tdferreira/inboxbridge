@@ -199,6 +199,7 @@ export function buildAdminWorkspaceSections({
   adminSetupGuideState,
   authSecuritySettings,
   secretManagementStatus,
+  secretReencryptOptions,
   authOptions,
   dismissQuickSetupGuide,
   isPending,
@@ -213,6 +214,7 @@ export function buildAdminWorkspaceSections({
   setSystemOAuthEditorProvider,
   setSystemOAuthSettingsDirty,
   onReencryptStoredSecrets,
+  onSecretReencryptOptionsChange,
   systemDashboard,
   systemOAuthSettings,
   t,
@@ -295,8 +297,10 @@ export function buildAdminWorkspaceSections({
           onCollapseToggle={() => toggleWorkspaceSection('authSecurityCollapsed')}
           onOpenEditor={() => setShowAuthSecurityDialog(true)}
           onReencryptStoredSecrets={onReencryptStoredSecrets}
+          onSecretReencryptOptionsChange={onSecretReencryptOptionsChange}
           reencryptionLoading={isPending('secretManagementReencrypt')}
           sectionLoading={isSectionRefreshing('authSecurityCollapsed')}
+          secretReencryptOptions={secretReencryptOptions}
           secretManagementStatus={secretManagementStatus}
           t={t}
         />

@@ -482,13 +482,17 @@ The admin UI now surfaces that same secret-management status inside
 `Administration -> Authentication Security`, including the active mode/key,
 legacy-key readiness, per-key usage summary, and a confirmation-gated
 `Re-encrypt stored secrets` action so operators can complete local-key
-rotation without leaving the UI. The backend configuration now also makes the
-secret-provider mode explicit through `SECRET_PROVIDER_MODE` and reports
-mode-aware provider health through the same admin status endpoint, so future
-OpenBao / Vault deployments use real transit health checks and encryption
-operations instead of silently falling back to local-key behavior. `SPLIT_KEY`
-is still reserved and fails closed with a clear status message until that
-runtime support is implemented.
+rotation without leaving the UI. That re-encryption flow now also supports
+optional follow-up cleanup of derived trust material in the same admin action:
+browser-extension sessions can be revoked deployment-wide, `/remote` sessions
+can be invalidated, and cached OAuth access tokens can be cleared so clients
+must refresh through the newly trusted secret state. The backend configuration
+now also makes the secret-provider mode explicit through
+`SECRET_PROVIDER_MODE` and reports mode-aware provider health through the same
+admin status endpoint, so future OpenBao / Vault deployments use real transit
+health checks and encryption operations instead of silently falling back to
+local-key behavior. `SPLIT_KEY` is still reserved and fails closed with a
+clear status message until that runtime support is implemented.
 
 ### 8. HTTPS by default in Docker Compose
 

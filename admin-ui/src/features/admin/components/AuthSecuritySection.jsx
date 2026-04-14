@@ -28,8 +28,10 @@ function AuthSecuritySection({
   onCollapseToggle,
   onOpenEditor,
   onReencryptStoredSecrets,
+  onSecretReencryptOptionsChange,
   reencryptionLoading = false,
   sectionLoading = false,
+  secretReencryptOptions,
   secretManagementStatus,
   locale = 'en',
   t
@@ -102,6 +104,41 @@ function AuthSecuritySection({
               <div><span>{t('authSecurity.secretManagementRetirementStatus')}</span><strong>{t(secretManagementStatus?.safeToRetireLegacyKeys ? 'authSecurity.secretManagementSafeToRetire' : 'authSecurity.secretManagementKeepLegacyKeys')}</strong></div>
             </div>
             <p className="section-copy">{t('authSecurity.secretManagementReencryptHelp')}</p>
+            <div className="polling-statistics-breakdown">
+              <label className="checkbox-row">
+                <input
+                  checked={Boolean(secretReencryptOptions?.revokeBrowserExtensionSessions)}
+                  onChange={(event) => onSecretReencryptOptionsChange?.((current) => ({
+                    ...current,
+                    revokeBrowserExtensionSessions: event.target.checked
+                  }))}
+                  type="checkbox"
+                />
+                <span>{t('authSecurity.secretManagementReencryptRevokeExtensionSessions')}</span>
+              </label>
+              <label className="checkbox-row">
+                <input
+                  checked={Boolean(secretReencryptOptions?.revokeRemoteSessions)}
+                  onChange={(event) => onSecretReencryptOptionsChange?.((current) => ({
+                    ...current,
+                    revokeRemoteSessions: event.target.checked
+                  }))}
+                  type="checkbox"
+                />
+                <span>{t('authSecurity.secretManagementReencryptRevokeRemoteSessions')}</span>
+              </label>
+              <label className="checkbox-row">
+                <input
+                  checked={Boolean(secretReencryptOptions?.clearCachedOAuthAccessTokens)}
+                  onChange={(event) => onSecretReencryptOptionsChange?.((current) => ({
+                    ...current,
+                    clearCachedOAuthAccessTokens: event.target.checked
+                  }))}
+                  type="checkbox"
+                />
+                <span>{t('authSecurity.secretManagementReencryptClearCachedOAuthAccessTokens')}</span>
+              </label>
+            </div>
             <LoadingButton
               className="secondary"
               disabled={!secretManagementStatus?.secureStorageConfigured}

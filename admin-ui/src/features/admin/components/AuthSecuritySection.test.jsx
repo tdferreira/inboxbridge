@@ -6,6 +6,7 @@ describe('AuthSecuritySection', () => {
   it('renders the effective authentication protection summary and opens the editor', () => {
     const onOpenEditor = vi.fn()
     const onReencryptStoredSecrets = vi.fn()
+    const onSecretReencryptOptionsChange = vi.fn()
 
     const { container } = render(
       <AuthSecuritySection
@@ -24,6 +25,12 @@ describe('AuthSecuritySection', () => {
         onCollapseToggle={vi.fn()}
         onOpenEditor={onOpenEditor}
         onReencryptStoredSecrets={onReencryptStoredSecrets}
+        onSecretReencryptOptionsChange={onSecretReencryptOptionsChange}
+        secretReencryptOptions={{
+          revokeBrowserExtensionSessions: false,
+          revokeRemoteSessions: false,
+          clearCachedOAuthAccessTokens: false
+        }}
         secretManagementStatus={{
           secureStorageConfigured: true,
           mode: 'LOCAL',
@@ -73,9 +80,11 @@ describe('AuthSecuritySection', () => {
     expect(within(screen.getByText('Runtime protection summary').closest('article')).queryByRole('button', { name: 'Edit Authentication Security' })).not.toBeInTheDocument()
 
     fireEvent.click(screen.getByRole('button', { name: 'Edit Authentication Security' }))
+    fireEvent.click(screen.getByRole('checkbox', { name: 'Revoke browser extension sessions after re-encryption' }))
     fireEvent.click(screen.getByRole('button', { name: 'Re-encrypt stored secrets' }))
 
     expect(onOpenEditor).toHaveBeenCalled()
+    expect(onSecretReencryptOptionsChange).toHaveBeenCalled()
     expect(onReencryptStoredSecrets).toHaveBeenCalled()
   })
 })

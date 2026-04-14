@@ -36,6 +36,8 @@ class AdminEndpointsQuarkusIT {
     @Test
     void reencryptStoredSecretsRejectsAnonymousAccess() {
         given()
+                .contentType("application/json")
+                .body("{}")
                 .when().post("/api/admin/secret-management/re-encrypt")
                 .then()
                 .statusCode(401);

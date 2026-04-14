@@ -9,6 +9,8 @@ import java.util.List;
 import java.util.Map;
 
 import dev.inboxbridge.dto.SecretManagementKeyUsageView;
+import dev.inboxbridge.dto.SecretReencryptionFollowUpView;
+import dev.inboxbridge.dto.SecretReencryptionRequest;
 import dev.inboxbridge.dto.SecretReencryptionAreaResultView;
 import dev.inboxbridge.dto.SecretReencryptionResultView;
 import dev.inboxbridge.dto.SecretManagementStatusView;
@@ -24,6 +26,9 @@ import dev.inboxbridge.persistence.UserGmailConfig;
 import dev.inboxbridge.persistence.UserGmailConfigRepository;
 import dev.inboxbridge.persistence.UserMailDestinationConfig;
 import dev.inboxbridge.persistence.UserMailDestinationConfigRepository;
+import dev.inboxbridge.service.extension.ExtensionSessionService;
+import dev.inboxbridge.service.oauth.OAuthCredentialService;
+import dev.inboxbridge.service.remote.RemoteSessionService;
 import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.inject.Inject;
 import jakarta.transaction.Transactional;
@@ -59,6 +64,15 @@ public class SecretManagementService {
 
     @Inject
     SystemAuthSecuritySettingRepository systemAuthSecuritySettingRepository;
+
+    @Inject
+    ExtensionSessionService extensionSessionService;
+
+    @Inject
+    RemoteSessionService remoteSessionService;
+
+    @Inject
+    OAuthCredentialService oAuthCredentialService;
 
     public SecretManagementStatusView status() {
         SecretProviderHealth providerHealth = providerResolver().health();
@@ -134,6 +148,11 @@ public class SecretManagementService {
 
     @Transactional
     public SecretReencryptionResultView reencryptAllStoredSecrets() {
+        return reencryptAllStoredSecrets(new SecretReencryptionRequest(false, false, false));
+    }
+
+    @Transactional
+    public SecretReencryptionResultView reencryptAllStoredSecrets(SecretReencryptionRequest request) {
         if (!providerResolver().isWritable()) {
             throw new IllegalStateException(providerResolver().health().statusMessage());
         }
@@ -148,11 +167,13 @@ public class SecretManagementService {
 
         int totalRecordsUpdated = areas.stream().mapToInt(SecretReencryptionAreaResultView::recordsUpdated).sum();
         int totalSecretValuesReencrypted = areas.stream().mapToInt(SecretReencryptionAreaResultView::secretValuesReencrypted).sum();
+        SecretReencryptionFollowUpView followUp = runFollowUpActions(request);
         return new SecretReencryptionResultView(
                 secretEncryptionService.keyVersion(),
                 totalRecordsUpdated,
                 totalSecretValuesReencrypted,
-                areas);
+                areas,
+                followUp);
     }
 
     public void setLocalSecretKeyProvider(LocalSecretKeyProvider localSecretKeyProvider) {
@@ -189,6 +210,18 @@ public class SecretManagementService {
 
     public void setSystemAuthSecuritySettingRepository(SystemAuthSecuritySettingRepository systemAuthSecuritySettingRepository) {
         this.systemAuthSecuritySettingRepository = systemAuthSecuritySettingRepository;
+    }
+
+    public void setExtensionSessionService(ExtensionSessionService extensionSessionService) {
+        this.extensionSessionService = extensionSessionService;
+    }
+
+    public void setRemoteSessionService(RemoteSessionService remoteSessionService) {
+        this.remoteSessionService = remoteSessionService;
+    }
+
+    public void setOAuthCredentialService(OAuthCredentialService oAuthCredentialService) {
+        this.oAuthCredentialService = oAuthCredentialService;
     }
 
     private void collectUsage(Map<String, UsageAccumulator> usage) {
@@ -505,6 +538,19 @@ public class SecretManagementService {
         SecretEncryptionService.EncryptedValue encrypted = secretEncryptionService.encrypt(plaintext, context);
         saveEncrypted.accept(encrypted);
         return 1;
+    }
+
+    private SecretReencryptionFollowUpView runFollowUpActions(SecretReencryptionRequest request) {
+        SecretReencryptionRequest effectiveRequest = request == null
+                ? new SecretReencryptionRequest(false, false, false)
+                : request;
+        int browserExtensionSessionsRevoked = effectiveRequest.revokeBrowserExtensionSessions() ? extensionSessionService.revokeAllSessionsForAllUsers() : 0;
+        int remoteSessionsRevoked = effectiveRequest.revokeRemoteSessions() ? remoteSessionService.invalidateAllSessions() : 0;
+        int cachedOAuthAccessTokensCleared = effectiveRequest.clearCachedOAuthAccessTokens() ? oAuthCredentialService.clearAllAccessTokens() : 0;
+        return new SecretReencryptionFollowUpView(
+                browserExtensionSessionsRevoked,
+                remoteSessionsRevoked,
+                cachedOAuthAccessTokensCleared);
     }
 
     private static final class UsageAccumulator {

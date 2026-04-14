@@ -110,6 +110,25 @@ public class OAuthCredentialService {
         clearAccessToken(MICROSOFT_PROVIDER, sourceId);
     }
 
+    @Transactional
+    public int clearAllAccessTokens() {
+        int cleared = 0;
+        Instant now = Instant.now();
+        for (OAuthCredential credential : repository.listAll()) {
+            if ((credential.accessTokenCiphertext == null || credential.accessTokenCiphertext.isBlank())
+                    && credential.accessExpiresAt == null) {
+                continue;
+            }
+            credential.accessTokenCiphertext = null;
+            credential.accessTokenNonce = null;
+            credential.accessExpiresAt = null;
+            credential.updatedAt = now;
+            repository.persist(credential);
+            cleared++;
+        }
+        return cleared;
+    }
+
     private Optional<StoredOAuthCredential> findCredential(String provider, String subjectKey) {
         if (!secretEncryptionService.isConfigured()) {
             return Optional.empty();

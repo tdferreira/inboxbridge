@@ -23,6 +23,10 @@ public class RemoteSessionRepository implements PanacheRepository<RemoteSession>
         return find("userId = ?1 and revokedAt is null and expiresAt > ?2 order by lastSeenAt desc", userId, now).list();
     }
 
+    public List<RemoteSession> listAllActive(Instant now) {
+        return find("revokedAt is null and expiresAt > ?1 order by lastSeenAt desc", now).list();
+    }
+
     public Optional<RemoteSession> findByIdForUser(Long sessionId, Long userId) {
         return find("id = ?1 and userId = ?2", sessionId, userId).firstResultOptional();
     }

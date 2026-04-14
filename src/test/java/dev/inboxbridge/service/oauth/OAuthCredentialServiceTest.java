@@ -77,6 +77,39 @@ class OAuthCredentialServiceTest {
         assertTrue(service.secureStorageConfigured());
     }
 
+    @Test
+    void clearAllAccessTokensRemovesOnlyCachedAccessTokens() {
+        InMemoryOAuthCredentialRepository repository = new InMemoryOAuthCredentialRepository();
+        OAuthCredentialService service = configuredService(repository);
+
+        service.storeGoogleCredential(
+                "gmail-destination",
+                "google-refresh-1",
+                "google-access-1",
+                Instant.parse("2026-03-26T13:00:00Z"),
+                "gmail.insert",
+                "Bearer");
+        service.storeMicrosoftCredential(
+                "outlook-main-imap",
+                "refresh-token-1",
+                null,
+                null,
+                "offline_access imap",
+                "Bearer");
+
+        int cleared = service.clearAllAccessTokens();
+        OAuthCredential google = repository.get("GOOGLE", "gmail-destination");
+        OAuthCredential microsoft = repository.get("MICROSOFT", "outlook-main-imap");
+
+        assertEquals(1, cleared);
+        assertEquals("google-refresh-1", service.findGoogleCredential("gmail-destination").orElseThrow().refreshToken());
+        assertEquals(null, service.findGoogleCredential("gmail-destination").orElseThrow().accessToken());
+        assertEquals(null, google.accessTokenCiphertext);
+        assertEquals(null, google.accessTokenNonce);
+        assertEquals(null, google.accessExpiresAt);
+        assertEquals(null, microsoft.accessTokenCiphertext);
+    }
+
     private OAuthCredentialService configuredService(InMemoryOAuthCredentialRepository repository) {
         OAuthCredentialService service = new OAuthCredentialService();
         service.repository = repository;
@@ -106,6 +139,11 @@ class OAuthCredentialServiceTest {
                 credential.id = sequence++;
             }
             store.put(key(credential.provider, credential.subjectKey), copyOf(credential));
+        }
+
+        @Override
+        public java.util.List<OAuthCredential> listAll() {
+            return store.values().stream().map(this::copyOf).toList();
         }
 
         OAuthCredential get(String provider, String subjectKey) {

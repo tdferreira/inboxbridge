@@ -10,5 +10,6 @@ public record SecretReencryptionResultView(
         String activeKeyVersion,
         int totalRecordsUpdated,
         int totalSecretValuesReencrypted,
-        List<SecretReencryptionAreaResultView> areas) {
+        List<SecretReencryptionAreaResultView> areas,
+        SecretReencryptionFollowUpView followUp) {
 }

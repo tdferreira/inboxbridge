@@ -133,6 +133,24 @@ class RemoteSessionServiceTest {
         assertThrows(IllegalArgumentException.class, () -> service.invalidateSessionForUser(alice.id, bobSession.id));
     }
 
+    @Test
+    void invalidateAllSessionsRevokesEveryActiveRemoteSession() {
+        InMemoryRemoteSessionRepository repository = new InMemoryRemoteSessionRepository();
+        RemoteSessionService service = configuredService(repository);
+        AppUser alice = user(7L, "alice");
+        AppUser bob = user(8L, "bob");
+
+        RemoteSession aliceSession = service.createSession(alice, null, null, null, null).session();
+        RemoteSession bobSession = service.createSession(bob, null, null, null, null).session();
+        bobSession.revokedAt = Instant.parse("2026-04-13T00:00:00Z");
+
+        int revoked = service.invalidateAllSessions();
+
+        assertEquals(1, revoked);
+        assertNotNull(aliceSession.revokedAt);
+        assertEquals(Instant.parse("2026-04-13T00:00:00Z"), bobSession.revokedAt);
+    }
+
     private static RemoteSessionService configuredService(InMemoryRemoteSessionRepository repository) {
         RemoteSessionService service = new RemoteSessionService();
         service.repository = repository;
@@ -187,6 +205,13 @@ class RemoteSessionServiceTest {
         public List<RemoteSession> listActiveByUserId(Long userId, Instant now) {
             return sessions.stream()
                     .filter(session -> session.userId.equals(userId))
+                    .filter(session -> session.revokedAt == null && session.expiresAt.isAfter(now))
+                    .toList();
+        }
+
+        @Override
+        public List<RemoteSession> listAllActive(Instant now) {
+            return sessions.stream()
                     .filter(session -> session.revokedAt == null && session.expiresAt.isAfter(now))
                     .toList();
         }

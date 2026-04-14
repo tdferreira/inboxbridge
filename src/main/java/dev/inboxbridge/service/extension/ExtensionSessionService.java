@@ -88,6 +88,14 @@ public class ExtensionSessionService {
     }
 
     @Transactional
+    public int revokeAllSessionsForAllUsers() {
+        Instant now = Instant.now();
+        List<ExtensionSession> activeSessions = repository.listAllActive(now);
+        activeSessions.forEach((session) -> session.revokedAt = now);
+        return activeSessions.size();
+    }
+
+    @Transactional
     public Optional<AuthenticatedExtensionSession> authenticate(String rawToken) {
         if (rawToken == null || rawToken.isBlank()) {
             return Optional.empty();
