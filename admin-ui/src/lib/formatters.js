@@ -801,6 +801,8 @@ export function tokenStorageLabel(mode, locale = 'en') {
       return translate(locale, 'tokenStorage.database')
     case 'ENVIRONMENT':
       return translate(locale, 'tokenStorage.environment')
+    case 'ENVIRONMENT_BLOCKED_BY_POLICY':
+      return translate(locale, 'tokenStorage.environmentBlockedByPolicy')
     case 'CONFIGURED_BUT_EMPTY':
       return translate(locale, 'tokenStorage.configuredEmpty')
     case 'NOT_CONFIGURED':

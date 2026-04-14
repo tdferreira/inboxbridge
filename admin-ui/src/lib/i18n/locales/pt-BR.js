@@ -233,6 +233,7 @@ const dictionary = {
   "password.title": "Senha",
   "tokenStorage.database": "Armazenamento criptografado",
   "tokenStorage.environment": "fallback .env",
+  "tokenStorage.environmentBlockedByPolicy": "fallback .env bloqueado pela política",
   "tokenStorage.configuredEmpty": "Pronto para OAuth",
   "tokenStorage.notConfigured": "Não configurado",
   "tokenStorage.password": "Autenticação por senha",

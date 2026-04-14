@@ -131,7 +131,7 @@ public class GmailImportService {
     }
 
     private GmailApiDestinationTarget systemTarget() {
-        return new GmailApiDestinationTarget(
+        GmailApiDestinationTarget target = new GmailApiDestinationTarget(
                 "gmail-destination",
                 null,
                 "system",
@@ -144,6 +144,15 @@ public class GmailImportService {
                 config.gmail().createMissingLabels(),
                 config.gmail().neverMarkSpam(),
                 config.gmail().processForCalendar());
+        if (target.refreshToken() == null || target.refreshToken().isBlank()) {
+            if (systemOAuthAppSettingsService.envManagedGoogleRefreshTokenBlockedByPolicy()) {
+                throw new IllegalStateException(
+                        "InboxBridge is configured to block env-managed mailbox secrets. Save the Gmail destination refresh token in the admin UI instead of using GMAIL_REFRESH_TOKEN.");
+            }
+            throw new IllegalStateException(
+                    "The configured Gmail destination is incomplete. Reconnect Gmail OAuth or update the configured refresh token.");
+        }
+        return target;
     }
 
     private GmailApiDestinationTarget asDestinationTarget(GmailTarget target) {

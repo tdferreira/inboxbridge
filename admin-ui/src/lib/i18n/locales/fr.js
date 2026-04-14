@@ -319,6 +319,7 @@ const dictionary = {
   "password.title": "Mot de passe",
   "tokenStorage.database": "Stockage chiffré",
   "tokenStorage.environment": "repli .env",
+  "tokenStorage.environmentBlockedByPolicy": "repli .env bloqué par la politique",
   "tokenStorage.configuredEmpty": "Prêt pour OAuth",
   "tokenStorage.notConfigured": "Non configuré",
   "tokenStorage.password": "Auth mot de passe",

@@ -117,6 +117,10 @@ public class SystemOAuthAppSettingsService {
         return isConfiguredValue(config.gmail().refreshToken());
     }
 
+    public boolean envManagedGoogleRefreshTokenBlockedByPolicy() {
+        return envManagedGoogleRefreshTokenConfigured() && !envManagedMailboxSecretsAllowed();
+    }
+
     @Transactional
     public String microsoftClientId() {
         return effectiveMicrosoftClientId(repository.findSingleton().orElse(null));

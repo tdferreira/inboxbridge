@@ -56,6 +56,7 @@ describe('formatters', () => {
 
   it('renders token storage labels for known modes', () => {
     expect(tokenStorageLabel('DATABASE')).toBe('Encrypted storage')
+    expect(tokenStorageLabel('ENVIRONMENT_BLOCKED_BY_POLICY')).toBe('.env fallback blocked by policy')
     expect(tokenStorageLabel('PASSWORD')).toBe('Password auth')
     expect(tokenStorageLabel('SOMETHING_ELSE')).toBe('SOMETHING_ELSE')
   })

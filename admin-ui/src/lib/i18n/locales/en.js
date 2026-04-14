@@ -1454,6 +1454,7 @@ const dictionary = {
   "destinationPreset.custom.description": "Bring your own IMAP APPEND target and fill in the server settings manually.",
   "tokenStorage.database": "Encrypted storage",
   "tokenStorage.environment": ".env fallback",
+  "tokenStorage.environmentBlockedByPolicy": ".env fallback blocked by policy",
   "tokenStorage.configuredEmpty": "Ready for OAuth",
   "tokenStorage.notConfigured": "Not configured",
   "tokenStorage.password": "Password auth",

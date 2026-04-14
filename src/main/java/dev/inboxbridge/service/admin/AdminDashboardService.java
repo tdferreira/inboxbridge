@@ -189,6 +189,9 @@ public class AdminDashboardService {
         if (oAuthCredentialService.secureStorageConfigured() && oAuthCredentialService.findGoogleCredential().isPresent()) {
             return "DATABASE";
         }
+        if (systemOAuthAppSettingsService.envManagedGoogleRefreshTokenBlockedByPolicy()) {
+            return "ENVIRONMENT_BLOCKED_BY_POLICY";
+        }
         if (!systemOAuthAppSettingsService.googleRefreshToken().isBlank() && !"replace-me".equals(systemOAuthAppSettingsService.googleRefreshToken())) {
             return "ENVIRONMENT";
         }

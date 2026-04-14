@@ -242,6 +242,7 @@ const dictionary = {
   "password.title": "Palavra-passe",
   "tokenStorage.database": "Armazenamento encriptado",
   "tokenStorage.environment": "recurso .env",
+  "tokenStorage.environmentBlockedByPolicy": "recurso .env bloqueado pela política",
   "tokenStorage.configuredEmpty": "Pronto para OAuth",
   "tokenStorage.notConfigured": "Não configurado",
   "tokenStorage.password": "Autenticação por palavra-passe",

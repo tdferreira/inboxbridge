@@ -175,6 +175,57 @@ class AdminDashboardServiceTest {
         assertEquals(0, response.overall().sourcesWithErrors());
     }
 
+    @Test
+    void dashboardMarksEnvGmailTokenAsBlockedWhenHardeningPolicyDisablesEnvMailboxSecrets() {
+        AdminDashboardService service = new AdminDashboardService();
+        service.config = new TestConfig();
+        service.importedMessageRepository = new FakeImportedMessageRepository();
+        service.oAuthCredentialService = new OAuthCredentialService() {
+            @Override
+            public boolean secureStorageConfigured() {
+                return true;
+            }
+
+            @Override
+            public Optional<StoredOAuthCredential> findGoogleCredential() {
+                return Optional.empty();
+            }
+
+            @Override
+            public Optional<StoredOAuthCredential> findMicrosoftCredential(String sourceId) {
+                return Optional.empty();
+            }
+        };
+        service.sourcePollEventService = new FakeSourcePollEventService();
+        service.pollingSettingsService = new FakePollingSettingsService();
+        service.sourcePollingSettingsService = new FakeSourcePollingSettingsService();
+        service.envSourceService = envSourceService(service.config);
+        service.sourcePollingStateService = new FakeSourcePollingStateService();
+        service.runtimeEmailAccountService = runtimeEmailAccountService(service.config);
+        service.sourceDiagnosticsService = new FakeSourceDiagnosticsService();
+        service.pollingStatsService = pollingStatsService(service.importedMessageRepository, service.sourcePollEventService, service.envSourceService);
+        service.systemOAuthAppSettingsService = new SystemOAuthAppSettingsService() {
+            @Override
+            public boolean googleClientConfigured() {
+                return true;
+            }
+
+            @Override
+            public boolean envManagedGoogleRefreshTokenBlockedByPolicy() {
+                return true;
+            }
+
+            @Override
+            public String googleRefreshToken() {
+                return "";
+            }
+        };
+
+        AdminDashboardResponse response = service.dashboard();
+
+        assertEquals("ENVIRONMENT_BLOCKED_BY_POLICY", response.destination().tokenStorageMode());
+    }
+
     private static final class FakeSourcePollingStateService extends SourcePollingStateService {
         @Override
         public java.util.Map<String, SourcePollingStateView> viewBySourceIds(java.util.List<String> sourceIds) {

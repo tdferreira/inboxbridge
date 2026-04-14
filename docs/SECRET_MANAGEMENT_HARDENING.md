@@ -232,6 +232,10 @@ Current implementation status:
   and the `.env` `GMAIL_REFRESH_TOKEN` fallback
 - the admin security panel surfaces whether that policy is enabled and whether
   any env-managed mailbox secret material is still configured
+- system-Gmail runtime helpers now fail with an explicit policy-aware message
+  instead of silently attempting to use a blocked `.env` refresh-token
+  fallback, and dashboard token-storage summaries can distinguish `blocked by
+  policy` from truly `not configured`
 
 ### 3. Use envelope encryption internally
 

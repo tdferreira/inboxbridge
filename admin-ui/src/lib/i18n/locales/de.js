@@ -319,6 +319,7 @@ const dictionary = {
   "password.title": "Passwort",
   "tokenStorage.database": "Verschlüsselte Speicherung",
   "tokenStorage.environment": ".env-Ausweichmodus",
+  "tokenStorage.environmentBlockedByPolicy": ".env-Ausweichmodus durch Richtlinie blockiert",
   "tokenStorage.configuredEmpty": "Bereit für OAuth",
   "tokenStorage.notConfigured": "Nicht konfiguriert",
   "tokenStorage.password": "Passwort-Auth",

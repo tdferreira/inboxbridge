@@ -1,6 +1,7 @@
 package dev.inboxbridge.service.destination;
 
 import dev.inboxbridge.service.oauth.GoogleOAuthService;
+import dev.inboxbridge.service.oauth.SystemOAuthAppSettingsService;
 import dev.inboxbridge.service.oauth.UserGmailConfigService;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -95,6 +96,106 @@ class GmailImportServiceTest {
 
         assertEquals("The linked Gmail account no longer grants InboxBridge access. The saved Gmail OAuth link was cleared. Reconnect it from My Destination Mailbox.", error.getMessage());
         assertEquals("user-gmail:10", userGmailConfigService.lastRevokedSubjectKey);
+    }
+
+    @Test
+    void importMessageForSystemTargetFailsClearlyWhenEnvRefreshTokenIsBlockedByPolicy() {
+        GmailImportService service = new GmailImportService();
+        service.googleOAuthService = new FakeGoogleOAuthService("expired-token");
+        service.objectMapper = new ObjectMapper();
+        service.userGmailConfigService = new FakeUserGmailConfigService();
+        service.config = new TestConfig();
+        service.systemOAuthAppSettingsService = new SystemOAuthAppSettingsService() {
+            @Override
+            public String googleDestinationUser() {
+                return "me";
+            }
+
+            @Override
+            public String googleClientId() {
+                return "client";
+            }
+
+            @Override
+            public String googleClientSecret() {
+                return "secret";
+            }
+
+            @Override
+            public String googleRefreshToken() {
+                return "";
+            }
+
+            @Override
+            public String googleRedirectUri() {
+                return "https://localhost:3000/api/google-oauth/callback";
+            }
+
+            @Override
+            public boolean envManagedGoogleRefreshTokenBlockedByPolicy() {
+                return true;
+            }
+        };
+
+        IllegalStateException error = assertThrows(IllegalStateException.class, () -> service.importMessage("hello".getBytes(), List.of("INBOX")));
+
+        assertEquals(
+                "InboxBridge is configured to block env-managed mailbox secrets. Save the Gmail destination refresh token in the admin UI instead of using GMAIL_REFRESH_TOKEN.",
+                error.getMessage());
+    }
+
+    private static final class TestConfig implements dev.inboxbridge.config.InboxBridgeConfig {
+        @Override
+        public boolean pollEnabled() { return true; }
+        @Override
+        public String pollInterval() { return "5m"; }
+        @Override
+        public int fetchWindow() { return 50; }
+        @Override
+        public Duration sourceHostMinSpacing() { return Duration.ofSeconds(1); }
+        @Override
+        public int sourceHostMaxConcurrency() { return 2; }
+        @Override
+        public Duration destinationProviderMinSpacing() { return Duration.ofMillis(250); }
+        @Override
+        public int destinationProviderMaxConcurrency() { return 1; }
+        @Override
+        public Duration throttleLeaseTtl() { return Duration.ofMinutes(2); }
+        @Override
+        public int adaptiveThrottleMaxMultiplier() { return 6; }
+        @Override
+        public double successJitterRatio() { return 0.2d; }
+        @Override
+        public Duration maxSuccessJitter() { return Duration.ofSeconds(30); }
+        @Override
+        public boolean multiUserEnabled() { return true; }
+        @Override
+        public dev.inboxbridge.config.InboxBridgeConfig.Security security() { return null; }
+        @Override
+        public Gmail gmail() {
+            return new Gmail() {
+                @Override
+                public String destinationUser() { return "me"; }
+                @Override
+                public String clientId() { return "client"; }
+                @Override
+                public String clientSecret() { return "secret"; }
+                @Override
+                public String refreshToken() { return ""; }
+                @Override
+                public String redirectUri() { return "https://localhost:3000/api/google-oauth/callback"; }
+                @Override
+                public boolean createMissingLabels() { return true; }
+                @Override
+                public boolean neverMarkSpam() { return false; }
+                @Override
+                public boolean processForCalendar() { return false; }
+            };
+        }
+        @Override
+        public Microsoft microsoft() { return null; }
+        @Override
+        public List<Source> sources() { return List.of(); }
     }
 
     private static final class FakeGoogleOAuthService extends GoogleOAuthService {
