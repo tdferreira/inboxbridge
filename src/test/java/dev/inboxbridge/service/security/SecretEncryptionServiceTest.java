@@ -69,7 +69,7 @@ class SecretEncryptionServiceTest {
                 () -> service.decrypt(
                         encrypted.ciphertextBase64(),
                         encrypted.nonceBase64(),
-                        "VAULT:v1",
+                        "VAULT_TRANSIT:v1",
                         "MICROSOFT:source-1:refresh"));
 
         assertEquals("Stored secret was encrypted with an unavailable or unsupported key version", error.getMessage());
@@ -95,13 +95,27 @@ class SecretEncryptionServiceTest {
         resolver.setOpenbaoToken("token");
         resolver.setOpenbaoMount("transit");
         resolver.setOpenbaoKey("inboxbridge");
+        resolver.setTransitSecretProvider(new StubTransitSecretProvider());
+        service.setTransitSecretProvider(new StubTransitSecretProvider());
         service.setSecretProviderResolver(resolver);
 
-        IllegalStateException error = assertThrows(IllegalStateException.class, () -> service.encrypt("secret", "context"));
+        SecretEncryptionService.EncryptedValue encrypted = service.encrypt("secret", "context");
 
-        assertEquals(
-                "Secret provider OPENBAO_TRANSIT is configured, but transit-backed secret encryption is not implemented yet.",
-                error.getMessage());
+        assertEquals("vault:v1:opaque", encrypted.ciphertextBase64());
+        assertEquals("", encrypted.nonceBase64());
+        assertEquals("secret", service.decrypt(encrypted.ciphertextBase64(), encrypted.nonceBase64(), "OPENBAO_TRANSIT:inboxbridge", "context"));
+    }
+
+    @Test
+    void rejectsDecryptingWhenTransitStoredKeyVersionIsUnavailable() {
+        SecretEncryptionService service = configuredService();
+        service.setTransitSecretProvider(new StubTransitSecretProvider());
+
+        IllegalStateException error = assertThrows(
+                IllegalStateException.class,
+                () -> service.decrypt("vault:v1:opaque", "", "OPENBAO_TRANSIT:inboxbridge", "context"));
+
+        assertEquals("Stored secret was encrypted with an unavailable or unsupported key version", error.getMessage());
     }
 
     private SecretEncryptionService configuredService() {
@@ -109,5 +123,22 @@ class SecretEncryptionServiceTest {
         service.setTokenEncryptionKey(Base64.getEncoder().encodeToString("0123456789abcdef0123456789abcdef".getBytes()));
         service.setTokenEncryptionKeyId("v1");
         return service;
+    }
+
+    private static final class StubTransitSecretProvider extends TransitSecretProvider {
+        @Override
+        public SecretProviderHealth health(TransitProviderConfig config) {
+            return new SecretProviderHealth(config.mode(), config.providerId(), true, true, config.mode().name() + " transit provider is ready.");
+        }
+
+        @Override
+        public SecretEncryptionService.EncryptedValue encrypt(TransitProviderConfig config, String value, String context) {
+            return new SecretEncryptionService.EncryptedValue("vault:v1:opaque", "");
+        }
+
+        @Override
+        public String decrypt(TransitProviderConfig config, String ciphertext, String context) {
+            return "secret";
+        }
     }
 }

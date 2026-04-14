@@ -38,22 +38,23 @@ class SecretProviderResolverTest {
     }
 
     @Test
-    void reportsUnsupportedTransitImplementationEvenWhenConfigured() {
+    void reportsHealthyWritableTransitProviderWhenConfiguredAndReachable() {
         SecretProviderResolver resolver = new SecretProviderResolver();
         resolver.setProviderMode("VAULT_TRANSIT");
         resolver.setVaultUrl("https://vault.internal");
         resolver.setVaultToken("token");
         resolver.setVaultMount("transit");
         resolver.setVaultKey("inboxbridge");
+        resolver.setTransitSecretProvider(new StubTransitSecretProvider(true));
 
         SecretProviderHealth health = resolver.health();
 
         assertEquals(SecretProviderMode.VAULT_TRANSIT, health.mode());
-        assertFalse(health.healthy());
-        assertFalse(health.writable());
-        assertEquals(
-                "Secret provider VAULT_TRANSIT is configured, but transit-backed secret encryption is not implemented yet.",
-                health.statusMessage());
+        assertTrue(health.healthy());
+        assertTrue(health.writable());
+        assertEquals("VAULT_TRANSIT", health.providerId());
+        assertEquals("VAULT_TRANSIT:inboxbridge", resolver.activeKeyVersion());
+        assertEquals("inboxbridge", resolver.activeKeyId());
     }
 
     @Test
@@ -66,6 +67,32 @@ class SecretProviderResolverTest {
         assertEquals("Secret provider SPLIT_KEY is not implemented yet.", error.getMessage());
     }
 
+    @Test
+    void marksTransitStoredKeyVersionAvailableWhenProviderIsHealthy() {
+        SecretProviderResolver resolver = new SecretProviderResolver();
+        resolver.setProviderMode("OPENBAO_TRANSIT");
+        resolver.setOpenbaoUrl("https://openbao.internal");
+        resolver.setOpenbaoToken("token");
+        resolver.setOpenbaoMount("transit");
+        resolver.setOpenbaoKey("active-key");
+        resolver.setTransitSecretProvider(new StubTransitSecretProvider(true));
+
+        assertTrue(resolver.isStoredKeyVersionAvailable("OPENBAO_TRANSIT:legacy-key"));
+    }
+
+    @Test
+    void marksTransitStoredKeyVersionUnavailableWhenProviderHealthFails() {
+        SecretProviderResolver resolver = new SecretProviderResolver();
+        resolver.setProviderMode("OPENBAO_TRANSIT");
+        resolver.setOpenbaoUrl("https://openbao.internal");
+        resolver.setOpenbaoToken("token");
+        resolver.setOpenbaoMount("transit");
+        resolver.setOpenbaoKey("active-key");
+        resolver.setTransitSecretProvider(new StubTransitSecretProvider(false));
+
+        assertFalse(resolver.isStoredKeyVersionAvailable("OPENBAO_TRANSIT:legacy-key"));
+    }
+
     private SecretProviderResolver configuredLocalResolver() {
         LocalSecretKeyProvider provider = new LocalSecretKeyProvider();
         provider.setTokenEncryptionKey(Base64.getEncoder().encodeToString("0123456789abcdef0123456789abcdef".getBytes()));
@@ -74,5 +101,23 @@ class SecretProviderResolverTest {
         resolver.setLocalSecretKeyProvider(provider);
         resolver.setProviderMode("LOCAL");
         return resolver;
+    }
+
+    private static final class StubTransitSecretProvider extends TransitSecretProvider {
+        private final boolean healthy;
+
+        private StubTransitSecretProvider(boolean healthy) {
+            this.healthy = healthy;
+        }
+
+        @Override
+        public SecretProviderHealth health(TransitProviderConfig config) {
+            return new SecretProviderHealth(
+                    config.mode(),
+                    config.providerId(),
+                    healthy,
+                    healthy,
+                    healthy ? config.mode().name() + " transit provider is ready." : "Transit provider unavailable");
+        }
     }
 }

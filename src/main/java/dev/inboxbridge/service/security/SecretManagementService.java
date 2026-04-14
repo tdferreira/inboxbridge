@@ -81,23 +81,26 @@ public class SecretManagementService {
                     List.of());
         }
 
-        SecretKeyMaterial activeKey = providerResolver().requireWritableProvider().activeKey();
-        List<String> configuredLegacyKeyIds = localSecretKeyProvider.configuredLegacyKeyIds().stream()
-                .sorted()
-                .toList();
+        String activeKeyVersion = providerResolver().activeKeyVersion();
+        String activeKeyId = providerResolver().activeKeyId();
+        List<String> configuredLegacyKeyIds = providerHealth.mode() == SecretProviderMode.LOCAL
+                ? localSecretKeyProvider.configuredLegacyKeyIds().stream()
+                        .sorted()
+                        .toList()
+                : List.of();
         Map<String, UsageAccumulator> usage = new LinkedHashMap<>();
         collectUsage(usage);
 
         List<SecretManagementKeyUsageView> keyUsage = usage.entrySet().stream()
                 .sorted(Comparator
-                        .comparing((Map.Entry<String, UsageAccumulator> entry) -> !entry.getKey().equals(activeKey.storedKeyVersion()))
+                        .comparing((Map.Entry<String, UsageAccumulator> entry) -> !entry.getKey().equals(activeKeyVersion))
                         .thenComparing(Map.Entry::getKey))
                 .map(entry -> new SecretManagementKeyUsageView(
                         entry.getKey(),
                         entry.getValue().recordCount,
                         String.join(", ", entry.getValue().areas),
-                        activeKey.storedKeyVersion().equals(entry.getKey()),
-                        localSecretKeyProvider.resolveKey(entry.getKey()).isPresent()))
+                        activeKeyVersion.equals(entry.getKey()),
+                        providerResolver().isStoredKeyVersionAvailable(entry.getKey())))
                 .toList();
 
         long protectedRecordCount = keyUsage.stream().mapToLong(SecretManagementKeyUsageView::recordCount).sum();
@@ -114,12 +117,12 @@ public class SecretManagementService {
         return new SecretManagementStatusView(
                 true,
                 providerHealth.mode().name(),
-                activeKey.providerId(),
+                providerHealth.providerId(),
                 providerHealth.healthy(),
                 providerHealth.writable(),
                 providerHealth.statusMessage(),
-                activeKey.storedKeyVersion(),
-                activeKey.keyId(),
+                activeKeyVersion,
+                activeKeyId,
                 configuredLegacyKeyIds,
                 protectedRecordCount,
                 activeKeyRecordCount,

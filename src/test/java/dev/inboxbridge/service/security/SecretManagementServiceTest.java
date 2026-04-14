@@ -90,7 +90,7 @@ class SecretManagementServiceTest {
     }
 
     @Test
-    void reportsUnsupportedTransitModeInStatus() {
+    void reportsTransitModeStatusWhenProviderIsHealthy() {
         SecretManagementService service = configuredService();
         SecretProviderResolver resolver = new SecretProviderResolver();
         resolver.setLocalSecretKeyProvider(service.localSecretKeyProvider);
@@ -99,19 +99,51 @@ class SecretManagementServiceTest {
         resolver.setVaultToken("token");
         resolver.setVaultMount("transit");
         resolver.setVaultKey("inboxbridge");
+        resolver.setTransitSecretProvider(new StubTransitSecretProvider(true));
         service.setSecretProviderResolver(resolver);
 
         SecretManagementStatusView view = service.status();
 
-        assertFalse(view.secureStorageConfigured());
+        assertTrue(view.secureStorageConfigured());
         assertEquals("VAULT_TRANSIT", view.mode());
         assertEquals("VAULT_TRANSIT", view.providerId());
-        assertFalse(view.providerHealthy());
-        assertFalse(view.providerWritable());
-        assertEquals(
-                "Secret provider VAULT_TRANSIT is configured, but transit-backed secret encryption is not implemented yet.",
-                view.providerStatusMessage());
-        assertTrue(view.keyUsage().isEmpty());
+        assertTrue(view.providerHealthy());
+        assertTrue(view.providerWritable());
+        assertEquals("VAULT_TRANSIT transit provider is ready.", view.providerStatusMessage());
+        assertEquals("VAULT_TRANSIT:inboxbridge", view.activeKeyVersion());
+        assertEquals("inboxbridge", view.activeKeyId());
+        assertEquals(List.of(), view.configuredLegacyKeyIds());
+    }
+
+    @Test
+    void reencryptAllStoredSecretsCanMigrateLocalRecordsIntoTransitProvider() {
+        SecretManagementService service = configuredService();
+        StubTransitSecretProvider transitSecretProvider = new StubTransitSecretProvider(true);
+        SecretProviderResolver resolver = new SecretProviderResolver();
+        resolver.setLocalSecretKeyProvider(service.localSecretKeyProvider);
+        resolver.setTransitSecretProvider(transitSecretProvider);
+        resolver.setProviderMode("OPENBAO_TRANSIT");
+        resolver.setOpenbaoUrl("https://openbao.internal");
+        resolver.setOpenbaoToken("token");
+        resolver.setOpenbaoMount("transit");
+        resolver.setOpenbaoKey("inboxbridge");
+        service.setSecretProviderResolver(resolver);
+        SecretEncryptionService transitEncryptionService = new SecretEncryptionService();
+        transitEncryptionService.setLocalSecretKeyProvider(service.localSecretKeyProvider);
+        transitEncryptionService.setSecretProviderResolver(resolver);
+        transitEncryptionService.setTransitSecretProvider(transitSecretProvider);
+        service.setSecretEncryptionService(transitEncryptionService);
+
+        SecretReencryptionResultView result = service.reencryptAllStoredSecrets();
+        SecretManagementStatusView status = service.status();
+
+        assertEquals("OPENBAO_TRANSIT:inboxbridge", result.activeKeyVersion());
+        assertEquals(5, result.totalRecordsUpdated());
+        assertEquals(5, result.totalSecretValuesReencrypted());
+        assertEquals(5, status.protectedRecordCount());
+        assertEquals(5, status.activeKeyRecordCount());
+        assertEquals(0, status.nonActiveKeyRecordCount());
+        assertTrue(status.safeToRetireLegacyKeys());
     }
 
     @Test
@@ -154,6 +186,8 @@ class SecretManagementServiceTest {
 
         OAuthCredential oauthCredential = new OAuthCredential();
         SecretEncryptionService.EncryptedValue oauthRefresh = secretEncryptionService.encrypt("oauth-refresh", "GOOGLE:gmail-destination:refresh");
+        oauthCredential.provider = "GOOGLE";
+        oauthCredential.subjectKey = "gmail-destination";
         oauthCredential.refreshTokenCiphertext = oauthRefresh.ciphertextBase64();
         oauthCredential.refreshTokenNonce = oauthRefresh.nonceBase64();
         oauthCredential.keyVersion = secretEncryptionService.keyVersion();
@@ -302,6 +336,34 @@ class SecretManagementServiceTest {
 
         @Override
         public void persist(SystemAuthSecuritySetting entity) {
+        }
+    }
+
+    private static final class StubTransitSecretProvider extends TransitSecretProvider {
+        private final boolean healthy;
+
+        private StubTransitSecretProvider(boolean healthy) {
+            this.healthy = healthy;
+        }
+
+        @Override
+        public SecretProviderHealth health(TransitProviderConfig config) {
+            return new SecretProviderHealth(
+                    config.mode(),
+                    config.providerId(),
+                    healthy,
+                    healthy,
+                    healthy ? config.mode().name() + " transit provider is ready." : "Transit provider unavailable");
+        }
+
+        @Override
+        public SecretEncryptionService.EncryptedValue encrypt(TransitProviderConfig config, String value, String context) {
+            return new SecretEncryptionService.EncryptedValue("transit:" + value, "");
+        }
+
+        @Override
+        public String decrypt(TransitProviderConfig config, String ciphertext, String context) {
+            return ciphertext.startsWith("transit:") ? ciphertext.substring("transit:".length()) : ciphertext;
         }
     }
 }

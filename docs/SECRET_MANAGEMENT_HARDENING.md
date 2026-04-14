@@ -433,6 +433,14 @@ Suggested components:
 The existing `SecretEncryptionService` can either evolve into that abstraction
 or become the local-key implementation behind it.
 
+Current repository status:
+
+- `LOCAL` mode is implemented with AES-GCM plus legacy-key rotation support
+- `OPENBAO_TRANSIT` and `VAULT_TRANSIT` are now implemented through the
+  Vault-compatible transit HTTP API for provider health plus encrypt/decrypt
+  operations
+- `SPLIT_KEY` remains a design target and should still fail closed
+
 Responsibilities:
 
 - encrypt/decrypt UI-managed secrets

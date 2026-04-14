@@ -475,18 +475,20 @@ configured legacy local key ids, and how many encrypted records still depend
 on each stored key version so operators can see whether older keys are still
 needed before removing them. Admins can now also trigger
 `POST /api/admin/secret-management/re-encrypt` to rewrite all database-stored
-encrypted secrets under the currently active local key version, which is the
-first concrete local-mode rotation action before legacy keys are retired. The
-admin UI now surfaces that same secret-management status inside
+encrypted secrets under the currently active provider/key version. That now
+covers both local-key rotation and migration into a configured Vault/OpenBao
+transit key, as long as the previously used decrypting keys remain available.
+The admin UI now surfaces that same secret-management status inside
 `Administration -> Authentication Security`, including the active mode/key,
 legacy-key readiness, per-key usage summary, and a confirmation-gated
 `Re-encrypt stored secrets` action so operators can complete local-key
 rotation without leaving the UI. The backend configuration now also makes the
 secret-provider mode explicit through `SECRET_PROVIDER_MODE` and reports
 mode-aware provider health through the same admin status endpoint, so future
-OpenBao / Vault / split-key modes fail closed with a clear status message
-instead of silently falling back to local-key behavior before their runtime
-support is implemented.
+OpenBao / Vault deployments use real transit health checks and encryption
+operations instead of silently falling back to local-key behavior. `SPLIT_KEY`
+is still reserved and fails closed with a clear status message until that
+runtime support is implemented.
 
 ### 8. HTTPS by default in Docker Compose
 

@@ -32,6 +32,9 @@ public class SecretEncryptionService {
     @Inject
     SecretProviderResolver secretProviderResolver;
 
+    @Inject
+    TransitSecretProvider transitSecretProvider;
+
     private final SecureRandom secureRandom = new SecureRandom();
 
     public void setTokenEncryptionKey(String tokenEncryptionKey) {
@@ -54,13 +57,17 @@ public class SecretEncryptionService {
         this.secretProviderResolver = secretProviderResolver;
     }
 
+    public void setTransitSecretProvider(TransitSecretProvider transitSecretProvider) {
+        this.transitSecretProvider = transitSecretProvider;
+    }
+
     public boolean isConfigured() {
         return providerResolver().isWritable();
     }
 
     public String keyVersion() {
         requireConfigured();
-        return providerResolver().requireWritableProvider().activeKey().storedKeyVersion();
+        return providerResolver().activeKeyVersion();
     }
 
     public EncryptedValue encrypt(String value, String context) {
@@ -68,7 +75,30 @@ public class SecretEncryptionService {
         if (value == null || value.isBlank()) {
             throw new IllegalArgumentException("Cannot encrypt an empty secret");
         }
+        return switch (providerResolver().mode()) {
+            case LOCAL -> encryptLocally(value, context);
+            case OPENBAO_TRANSIT, VAULT_TRANSIT -> transitProvider().encrypt(
+                    providerResolver().requireWritableTransitConfig(),
+                    value,
+                    context);
+            case SPLIT_KEY -> throw new IllegalStateException(providerResolver().health().statusMessage());
+        };
+    }
 
+    public String decrypt(String ciphertextBase64, String nonceBase64, String keyVersion, String context) {
+        requireConfigured();
+        StoredSecretKeyReference reference = StoredSecretKeyReference.parse(keyVersion);
+        if (LocalSecretKeyProvider.PROVIDER_ID.equals(reference.providerId())) {
+            SecretKeyMaterial keyMaterial = providerResolver().resolveKey(keyVersion)
+                    .orElseThrow(() -> new IllegalStateException("Stored secret was encrypted with an unavailable or unsupported key version"));
+            return decryptLocally(ciphertextBase64, nonceBase64, keyMaterial, context);
+        }
+        TransitProviderConfig transitConfig = providerResolver().transitConfigForStoredKeyVersion(keyVersion)
+                .orElseThrow(() -> new IllegalStateException("Stored secret was encrypted with an unavailable or unsupported key version"));
+        return transitProvider().decrypt(transitConfig, ciphertextBase64, context);
+    }
+
+    private EncryptedValue encryptLocally(String value, String context) {
         byte[] nonce = new byte[NONCE_BYTES];
         secureRandom.nextBytes(nonce);
         byte[] aad = aad(context);
@@ -85,11 +115,7 @@ public class SecretEncryptionService {
         }
     }
 
-    public String decrypt(String ciphertextBase64, String nonceBase64, String keyVersion, String context) {
-        requireConfigured();
-        SecretKeyMaterial keyMaterial = providerResolver().resolveKey(keyVersion)
-                .orElseThrow(() -> new IllegalStateException("Stored secret was encrypted with an unavailable or unsupported key version"));
-
+    private String decryptLocally(String ciphertextBase64, String nonceBase64, SecretKeyMaterial keyMaterial, String context) {
         try {
             Cipher cipher = Cipher.getInstance("AES/GCM/NoPadding");
             cipher.init(
@@ -126,9 +152,17 @@ public class SecretEncryptionService {
         if (secretProviderResolver == null) {
             SecretProviderResolver resolver = new SecretProviderResolver();
             resolver.setLocalSecretKeyProvider(localProvider());
+            resolver.setTransitSecretProvider(transitProvider());
             secretProviderResolver = resolver;
         }
         return secretProviderResolver;
+    }
+
+    private TransitSecretProvider transitProvider() {
+        if (transitSecretProvider == null) {
+            transitSecretProvider = new TransitSecretProvider();
+        }
+        return transitSecretProvider;
     }
 
     private LocalSecretKeyProvider localProvider() {

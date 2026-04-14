@@ -21,6 +21,9 @@ public class SecretProviderResolver {
     @Inject
     LocalSecretKeyProvider localSecretKeyProvider;
 
+    @Inject
+    TransitSecretProvider transitSecretProvider;
+
     String providerMode;
     String openbaoUrl;
     String openbaoToken;
@@ -71,6 +74,10 @@ public class SecretProviderResolver {
         this.localSecretKeyProvider = localSecretKeyProvider;
     }
 
+    public void setTransitSecretProvider(TransitSecretProvider transitSecretProvider) {
+        this.transitSecretProvider = transitSecretProvider;
+    }
+
     public SecretProviderMode mode() {
         return SecretProviderMode.parse(configuredProviderMode());
     }
@@ -78,7 +85,7 @@ public class SecretProviderResolver {
     public SecretProviderHealth health() {
         return switch (mode()) {
             case LOCAL -> localHealth();
-            case OPENBAO_TRANSIT -> unsupportedTransitHealth(
+            case OPENBAO_TRANSIT -> transitHealth(
                     SecretProviderMode.OPENBAO_TRANSIT,
                     configuredOpenbaoUrl(),
                     configuredOpenbaoToken(),
@@ -88,7 +95,7 @@ public class SecretProviderResolver {
                     "SECRET_PROVIDER_OPENBAO_TOKEN",
                     "SECRET_PROVIDER_OPENBAO_MOUNT",
                     "SECRET_PROVIDER_OPENBAO_KEY");
-            case VAULT_TRANSIT -> unsupportedTransitHealth(
+            case VAULT_TRANSIT -> transitHealth(
                     SecretProviderMode.VAULT_TRANSIT,
                     configuredVaultUrl(),
                     configuredVaultToken(),
@@ -115,6 +122,30 @@ public class SecretProviderResolver {
         return health().providerId();
     }
 
+    public String activeKeyVersion() {
+        SecretProviderHealth health = health();
+        if (!health.writable()) {
+            throw new IllegalStateException(health.statusMessage());
+        }
+        return switch (health.mode()) {
+            case LOCAL -> localProvider().activeKey().storedKeyVersion();
+            case OPENBAO_TRANSIT, VAULT_TRANSIT -> requireWritableTransitConfig().storedKeyVersion();
+            case SPLIT_KEY -> throw new IllegalStateException(health.statusMessage());
+        };
+    }
+
+    public String activeKeyId() {
+        SecretProviderHealth health = health();
+        if (!health.writable()) {
+            throw new IllegalStateException(health.statusMessage());
+        }
+        return switch (health.mode()) {
+            case LOCAL -> localProvider().activeKey().keyId();
+            case OPENBAO_TRANSIT, VAULT_TRANSIT -> requireWritableTransitConfig().keyName();
+            case SPLIT_KEY -> throw new IllegalStateException(health.statusMessage());
+        };
+    }
+
     public SecretKeyProvider requireWritableProvider() {
         SecretProviderHealth health = health();
         if (!health.writable()) {
@@ -126,12 +157,74 @@ public class SecretProviderResolver {
         };
     }
 
+    public TransitProviderConfig requireWritableTransitConfig() {
+        SecretProviderHealth health = health();
+        if (!health.writable()) {
+            throw new IllegalStateException(health.statusMessage());
+        }
+        return activeTransitConfig()
+                .orElseThrow(() -> new IllegalStateException(health.statusMessage()));
+    }
+
     public Optional<SecretKeyMaterial> resolveKey(String storedKeyVersion) {
         StoredSecretKeyReference reference = StoredSecretKeyReference.parse(storedKeyVersion);
         if (LocalSecretKeyProvider.PROVIDER_ID.equals(reference.providerId())) {
             return localProvider().resolveKey(storedKeyVersion);
         }
         return Optional.empty();
+    }
+
+    public Optional<TransitProviderConfig> activeTransitConfig() {
+        return switch (mode()) {
+            case OPENBAO_TRANSIT -> transitConfig(
+                    SecretProviderMode.OPENBAO_TRANSIT,
+                    configuredOpenbaoUrl(),
+                    configuredOpenbaoToken(),
+                    configuredOpenbaoMount(),
+                    configuredOpenbaoKey());
+            case VAULT_TRANSIT -> transitConfig(
+                    SecretProviderMode.VAULT_TRANSIT,
+                    configuredVaultUrl(),
+                    configuredVaultToken(),
+                    configuredVaultMount(),
+                    configuredVaultKey());
+            default -> Optional.empty();
+        };
+    }
+
+    public Optional<TransitProviderConfig> transitConfigForStoredKeyVersion(String storedKeyVersion) {
+        StoredSecretKeyReference reference = StoredSecretKeyReference.parse(storedKeyVersion);
+        SecretProviderMode referenceMode;
+        try {
+            referenceMode = SecretProviderMode.parse(reference.providerId());
+        } catch (IllegalArgumentException error) {
+            return Optional.empty();
+        }
+        return switch (referenceMode) {
+            case OPENBAO_TRANSIT -> transitConfig(
+                    SecretProviderMode.OPENBAO_TRANSIT,
+                    configuredOpenbaoUrl(),
+                    configuredOpenbaoToken(),
+                    configuredOpenbaoMount(),
+                    reference.keyId());
+            case VAULT_TRANSIT -> transitConfig(
+                    SecretProviderMode.VAULT_TRANSIT,
+                    configuredVaultUrl(),
+                    configuredVaultToken(),
+                    configuredVaultMount(),
+                    reference.keyId());
+            default -> Optional.empty();
+        };
+    }
+
+    public boolean isStoredKeyVersionAvailable(String storedKeyVersion) {
+        StoredSecretKeyReference reference = StoredSecretKeyReference.parse(storedKeyVersion);
+        if (LocalSecretKeyProvider.PROVIDER_ID.equals(reference.providerId())) {
+            return localProvider().resolveKey(storedKeyVersion).isPresent();
+        }
+        return transitConfigForStoredKeyVersion(storedKeyVersion)
+                .map(config -> transitProvider().health(config).healthy())
+                .orElse(false);
     }
 
     private SecretProviderHealth localHealth() {
@@ -151,7 +244,7 @@ public class SecretProviderResolver {
                 "Local secret provider is ready.");
     }
 
-    private SecretProviderHealth unsupportedTransitHealth(
+    private SecretProviderHealth transitHealth(
             SecretProviderMode mode,
             String url,
             String token,
@@ -182,16 +275,30 @@ public class SecretProviderResolver {
                     false,
                     "Secret provider " + mode.name() + " is selected but the following settings are missing: " + String.join(", ", missing) + ".");
         }
-        return new SecretProviderHealth(
-                mode,
-                mode.name(),
-                false,
-                false,
-                "Secret provider " + mode.name() + " is configured, but transit-backed secret encryption is not implemented yet.");
+        return transitProvider().health(new TransitProviderConfig(mode, mode.name(), url, token, mount, key));
+    }
+
+    private Optional<TransitProviderConfig> transitConfig(
+            SecretProviderMode mode,
+            String url,
+            String token,
+            String mount,
+            String key) {
+        if (isBlank(url) || isBlank(token) || isBlank(mount) || isBlank(key)) {
+            return Optional.empty();
+        }
+        return Optional.of(new TransitProviderConfig(mode, mode.name(), url, token, mount, key));
     }
 
     private boolean isBlank(String value) {
         return value == null || value.isBlank();
+    }
+
+    private TransitSecretProvider transitProvider() {
+        if (transitSecretProvider == null) {
+            transitSecretProvider = new TransitSecretProvider();
+        }
+        return transitSecretProvider;
     }
 
     private String configuredProviderMode() {

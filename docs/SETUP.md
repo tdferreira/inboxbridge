@@ -51,12 +51,12 @@ When you later rotate the local encryption key, move the previous key into
 `keyId:base64Key` entry list so existing encrypted records remain readable
 until they are rewritten under the new active key.
 
-`SECRET_PROVIDER_MODE` now makes the secret-custody path explicit. Today the
-working runtime mode is still `LOCAL`. Future hardened modes such as
-`OPENBAO_TRANSIT`, `VAULT_TRANSIT`, and `SPLIT_KEY` are reserved in the
-configuration model already, but they currently fail closed and surface a
-clear provider-health message in the admin secret-management status until
-their runtime cryptography support is implemented.
+`SECRET_PROVIDER_MODE` now makes the secret-custody path explicit. `LOCAL`
+keeps the existing AES-GCM local-key flow, while `OPENBAO_TRANSIT` and
+`VAULT_TRANSIT` now use a Vault-compatible transit provider for new encrypted
+writes and provider-health checks. `SPLIT_KEY` is still reserved and fails
+closed with a clear provider-health message until that stronger custody model
+is implemented.
 
 By default, InboxBridge derives its canonical browser URL as
 `https://${PUBLIC_HOSTNAME}:${PUBLIC_PORT}`. You can still set
