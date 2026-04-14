@@ -140,10 +140,12 @@ security:
   vault-token: ${SECRET_PROVIDER_VAULT_TOKEN:}
   vault-mount: ${SECRET_PROVIDER_VAULT_MOUNT:}
   vault-key: ${SECRET_PROVIDER_VAULT_KEY:}
+  split-secondary-mode: ${SECRET_PROVIDER_SPLIT_SECONDARY_MODE:}
 
 "%test":
   quarkus:
     http:
+      insecure-requests: enabled
       ssl-port: 0
       ssl:
         certificate:

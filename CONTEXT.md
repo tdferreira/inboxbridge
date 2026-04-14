@@ -458,11 +458,12 @@ The repository now also carries a concrete stronger-secret-management design in
 `docs/SECRET_MANAGEMENT_HARDENING.md`. Phase 2 is now partially implemented:
 InboxBridge has a dedicated local secret-key provider boundary, provider-aware
 stored key metadata, and non-breaking local key rotation support via
-`SECURITY_TOKEN_ENCRYPTION_LEGACY_KEYS`. The broader roadmap still targets a
-future provider-based model with envelope encryption, OpenBao Transit / Vault
-Transit as the preferred hardened self-hosted options, optional cloud-KMS
-support, and a later split-key mode where PostgreSQL plus `.env` alone should
-not be sufficient to decrypt UI-managed secrets. The design also treats
+`SECURITY_TOKEN_ENCRYPTION_LEGACY_KEYS`. The broader roadmap now includes a
+first implemented split-key mode where local AES-GCM protects the inner secret
+payload and OpenBao/Vault transit protects the outer envelope, so PostgreSQL
+plus only one trust domain is not enough to recover UI-managed secrets. The
+remaining roadmap still targets optional cloud-KMS support and deeper
+split-key variants beyond the current local-plus-transit model. The design also treats
 passkeys as auth-only rather than unattended encryption keys, recommends
 moving routine mailbox credentials out of `.env` and into encrypted
 UI-managed storage, and rejects consumer cloud file stores like Google Drive
@@ -495,10 +496,11 @@ access tokens can be cleared so clients must refresh through the newly trusted
 secret state. The backend configuration now also makes the secret-provider mode
 explicit through
 `SECRET_PROVIDER_MODE` and reports mode-aware provider health through the same
-admin status endpoint, so future OpenBao / Vault deployments use real transit
-health checks and encryption operations instead of silently falling back to
-local-key behavior. `SPLIT_KEY` is still reserved and fails closed with a
-clear status message until that runtime support is implemented.
+admin status endpoint, so OpenBao / Vault deployments use real transit health
+checks and encryption operations instead of silently falling back to local-key
+behavior. `SPLIT_KEY` now also works end-to-end with a local inner key plus a
+transit secondary provider, and the admin secret-management status plus bulk
+re-encryption workflow understand those composite key versions during rotation.
 
 ### 8. HTTPS by default in Docker Compose
 

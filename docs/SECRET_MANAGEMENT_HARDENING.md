@@ -180,7 +180,7 @@ InboxBridge should implement the hardened roadmap in this order:
 3. Support OpenBao Transit first
 4. Support HashiCorp Vault Transit second
 5. Add a generic cloud-KMS-backed envelope option
-6. Add split-key mode after the provider abstraction is proven stable
+6. Extend split-key mode beyond the first local-plus-transit implementation
 
 That sequence keeps the first version realistic while still aligning with the
 stronger long-term security goal.
@@ -426,13 +426,13 @@ SECRET_PROVIDER_VAULT_KEY=inboxbridge
 
 ```dotenv
 SECRET_PROVIDER_MODE=SPLIT_KEY
-SECRET_PROVIDER_SPLIT_PRIMARY_MODE=LOCAL_WRAPPED
 SECRET_PROVIDER_SPLIT_SECONDARY_MODE=OPENBAO_TRANSIT
-...
+SECURITY_TOKEN_ENCRYPTION_KEY=<base64-32-byte-key>
+SECRET_PROVIDER_OPENBAO_URL=https://openbao.example.internal:8200
+SECRET_PROVIDER_OPENBAO_TOKEN=<operator-supplied-token>
+SECRET_PROVIDER_OPENBAO_MOUNT=transit
+SECRET_PROVIDER_OPENBAO_KEY=inboxbridge
 ```
-
-These names are illustrative. Final naming should stay compact and operator
-friendly.
 
 ## Backend Changes
 
@@ -456,7 +456,9 @@ Current repository status:
 - `OPENBAO_TRANSIT` and `VAULT_TRANSIT` are now implemented through the
   Vault-compatible transit HTTP API for provider health plus encrypt/decrypt
   operations
-- `SPLIT_KEY` remains a design target and should still fail closed
+- `SPLIT_KEY` now has an initial production implementation that uses the local
+  AES-GCM key as the inner layer and an OpenBao/Vault transit provider as the
+  outer layer while preserving the current database schema
 
 Responsibilities:
 

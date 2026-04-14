@@ -81,7 +81,7 @@ public class SecretEncryptionService {
                     providerResolver().requireWritableTransitConfig(),
                     value,
                     context);
-            case SPLIT_KEY -> throw new IllegalStateException(providerResolver().health().statusMessage());
+            case SPLIT_KEY -> encryptWithSplitKey(value, context);
         };
     }
 
@@ -93,16 +93,42 @@ public class SecretEncryptionService {
                     .orElseThrow(() -> new IllegalStateException("Stored secret was encrypted with an unavailable or unsupported key version"));
             return decryptLocally(ciphertextBase64, nonceBase64, keyMaterial, context);
         }
+        if (SecretProviderMode.SPLIT_KEY.name().equals(reference.providerId())) {
+            return decryptWithSplitKey(ciphertextBase64, keyVersion, context);
+        }
         TransitProviderConfig transitConfig = providerResolver().transitConfigForStoredKeyVersion(keyVersion)
                 .orElseThrow(() -> new IllegalStateException("Stored secret was encrypted with an unavailable or unsupported key version"));
         return transitProvider().decrypt(transitConfig, ciphertextBase64, context);
+    }
+
+    private EncryptedValue encryptWithSplitKey(String value, String context) {
+        EncryptedValue innerEncrypted = encryptLocally(value, context);
+        SplitKeyEnvelope envelope = new SplitKeyEnvelope(innerEncrypted.ciphertextBase64(), innerEncrypted.nonceBase64());
+        return transitProvider().encrypt(
+                providerResolver().requireWritableTransitConfig(),
+                envelope.serialize(),
+                context);
+    }
+
+    private String decryptWithSplitKey(String ciphertextBase64, String keyVersion, String context) {
+        TransitProviderConfig transitConfig = providerResolver().transitConfigForStoredKeyVersion(keyVersion)
+                .orElseThrow(() -> new IllegalStateException("Stored secret was encrypted with an unavailable or unsupported key version"));
+        String serializedEnvelope = transitProvider().decrypt(transitConfig, ciphertextBase64, context);
+        SplitKeyEnvelope envelope = SplitKeyEnvelope.parse(serializedEnvelope);
+        SplitKeyStoredKeyVersion splitReference = SplitKeyStoredKeyVersion.parse(keyVersion);
+        SecretKeyMaterial keyMaterial = providerResolver().resolveKey(keyVersion)
+                .orElseThrow(() -> new IllegalStateException("Stored secret was encrypted with an unavailable or unsupported key version"));
+        if (!keyMaterial.storedKeyVersion().equals(splitReference.localStoredKeyVersion())) {
+            throw new IllegalStateException("Stored secret was encrypted with an unavailable or unsupported key version");
+        }
+        return decryptLocally(envelope.ciphertextBase64(), envelope.nonceBase64(), keyMaterial, context);
     }
 
     private EncryptedValue encryptLocally(String value, String context) {
         byte[] nonce = new byte[NONCE_BYTES];
         secureRandom.nextBytes(nonce);
         byte[] aad = aad(context);
-        SecretKeyMaterial keyMaterial = providerResolver().requireWritableProvider().activeKey();
+        SecretKeyMaterial keyMaterial = providerResolver().requireWritableLocalKey();
 
         try {
             Cipher cipher = Cipher.getInstance("AES/GCM/NoPadding");

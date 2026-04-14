@@ -101,9 +101,96 @@ class SecretEncryptionServiceTest {
 
         SecretEncryptionService.EncryptedValue encrypted = service.encrypt("secret", "context");
 
-        assertEquals("vault:v1:opaque", encrypted.ciphertextBase64());
+        assertEquals("vault:v1:c2VjcmV0", encrypted.ciphertextBase64());
         assertEquals("", encrypted.nonceBase64());
         assertEquals("secret", service.decrypt(encrypted.ciphertextBase64(), encrypted.nonceBase64(), "OPENBAO_TRANSIT:inboxbridge", "context"));
+    }
+
+    @Test
+    void encryptsAndDecryptsUsingSplitKeyMode() {
+        LocalSecretKeyProvider localProvider = new LocalSecretKeyProvider();
+        localProvider.setTokenEncryptionKey(Base64.getEncoder().encodeToString("0123456789abcdef0123456789abcdef".getBytes()));
+        localProvider.setTokenEncryptionKeyId("v1");
+
+        StubTransitSecretProvider transitProvider = new StubTransitSecretProvider();
+        SecretProviderResolver resolver = new SecretProviderResolver();
+        resolver.setLocalSecretKeyProvider(localProvider);
+        resolver.setTransitSecretProvider(transitProvider);
+        resolver.setProviderMode("SPLIT_KEY");
+        resolver.setSplitSecondaryMode("OPENBAO_TRANSIT");
+        resolver.setOpenbaoUrl("https://openbao.internal");
+        resolver.setOpenbaoToken("token");
+        resolver.setOpenbaoMount("transit");
+        resolver.setOpenbaoKey("inboxbridge");
+
+        SecretEncryptionService service = new SecretEncryptionService();
+        service.setLocalSecretKeyProvider(localProvider);
+        service.setSecretProviderResolver(resolver);
+        service.setTransitSecretProvider(transitProvider);
+
+        SecretEncryptionService.EncryptedValue encrypted = service.encrypt("refresh-token-123", "MICROSOFT:source-1:refresh");
+        String decrypted = service.decrypt(
+                encrypted.ciphertextBase64(),
+                encrypted.nonceBase64(),
+                service.keyVersion(),
+                "MICROSOFT:source-1:refresh");
+
+        assertEquals("SPLIT_KEY:LOCAL=v1|OPENBAO_TRANSIT=inboxbridge", service.keyVersion());
+        assertEquals("refresh-token-123", decrypted);
+        assertTrue(encrypted.ciphertextBase64().startsWith("vault:v1:"));
+        assertEquals("", encrypted.nonceBase64());
+    }
+
+    @Test
+    void rejectsDecryptingSplitKeyRecordsWhenLocalKeyIsUnavailable() {
+        LocalSecretKeyProvider localProvider = new LocalSecretKeyProvider();
+        localProvider.setTokenEncryptionKey(Base64.getEncoder().encodeToString("0123456789abcdef0123456789abcdef".getBytes()));
+        localProvider.setTokenEncryptionKeyId("v1");
+
+        StubTransitSecretProvider transitProvider = new StubTransitSecretProvider();
+        SecretProviderResolver resolver = new SecretProviderResolver();
+        resolver.setLocalSecretKeyProvider(localProvider);
+        resolver.setTransitSecretProvider(transitProvider);
+        resolver.setProviderMode("SPLIT_KEY");
+        resolver.setSplitSecondaryMode("OPENBAO_TRANSIT");
+        resolver.setOpenbaoUrl("https://openbao.internal");
+        resolver.setOpenbaoToken("token");
+        resolver.setOpenbaoMount("transit");
+        resolver.setOpenbaoKey("inboxbridge");
+
+        SecretEncryptionService service = new SecretEncryptionService();
+        service.setLocalSecretKeyProvider(localProvider);
+        service.setSecretProviderResolver(resolver);
+        service.setTransitSecretProvider(transitProvider);
+
+        SecretEncryptionService.EncryptedValue encrypted = service.encrypt("refresh-token-123", "MICROSOFT:source-1:refresh");
+
+        SecretEncryptionService decryptOnlyService = new SecretEncryptionService();
+        SecretProviderResolver decryptResolver = new SecretProviderResolver();
+        LocalSecretKeyProvider missingLocalProvider = new LocalSecretKeyProvider();
+        missingLocalProvider.setTokenEncryptionKey(Base64.getEncoder().encodeToString("fedcba9876543210fedcba9876543210".getBytes()));
+        missingLocalProvider.setTokenEncryptionKeyId("v2");
+        decryptResolver.setLocalSecretKeyProvider(missingLocalProvider);
+        decryptResolver.setTransitSecretProvider(transitProvider);
+        decryptResolver.setProviderMode("SPLIT_KEY");
+        decryptResolver.setSplitSecondaryMode("OPENBAO_TRANSIT");
+        decryptResolver.setOpenbaoUrl("https://openbao.internal");
+        decryptResolver.setOpenbaoToken("token");
+        decryptResolver.setOpenbaoMount("transit");
+        decryptResolver.setOpenbaoKey("inboxbridge");
+        decryptOnlyService.setLocalSecretKeyProvider(missingLocalProvider);
+        decryptOnlyService.setSecretProviderResolver(decryptResolver);
+        decryptOnlyService.setTransitSecretProvider(transitProvider);
+
+        IllegalStateException error = assertThrows(
+                IllegalStateException.class,
+                () -> decryptOnlyService.decrypt(
+                        encrypted.ciphertextBase64(),
+                        encrypted.nonceBase64(),
+                        "SPLIT_KEY:LOCAL=v1|OPENBAO_TRANSIT=inboxbridge",
+                        "MICROSOFT:source-1:refresh"));
+
+        assertEquals("Stored secret was encrypted with an unavailable or unsupported key version", error.getMessage());
     }
 
     @Test
@@ -133,12 +220,17 @@ class SecretEncryptionServiceTest {
 
         @Override
         public SecretEncryptionService.EncryptedValue encrypt(TransitProviderConfig config, String value, String context) {
-            return new SecretEncryptionService.EncryptedValue("vault:v1:opaque", "");
+            return new SecretEncryptionService.EncryptedValue(
+                    "vault:v1:" + Base64.getEncoder().encodeToString(value.getBytes()),
+                    "");
         }
 
         @Override
         public String decrypt(TransitProviderConfig config, String ciphertext, String context) {
-            return "secret";
+            if ("vault:v1:opaque".equals(ciphertext)) {
+                return "secret";
+            }
+            return new String(Base64.getDecoder().decode(ciphertext.substring("vault:v1:".length())));
         }
     }
 }

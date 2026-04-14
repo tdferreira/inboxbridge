@@ -52,11 +52,13 @@ When you later rotate the local encryption key, move the previous key into
 until they are rewritten under the new active key.
 
 `SECRET_PROVIDER_MODE` now makes the secret-custody path explicit. `LOCAL`
-keeps the existing AES-GCM local-key flow, while `OPENBAO_TRANSIT` and
-`VAULT_TRANSIT` now use a Vault-compatible transit provider for new encrypted
-writes and provider-health checks. `SPLIT_KEY` is still reserved and fails
-closed with a clear provider-health message until that stronger custody model
-is implemented.
+keeps the existing AES-GCM local-key flow, `OPENBAO_TRANSIT` and
+`VAULT_TRANSIT` use a Vault-compatible transit provider for new encrypted
+writes and provider-health checks, and `SPLIT_KEY` now combines the local AES
+key with a transit provider so stored UI-managed secrets require both trust
+domains. Split-key mode currently requires `SECURITY_TOKEN_ENCRYPTION_KEY`
+plus `SECRET_PROVIDER_SPLIT_SECONDARY_MODE=OPENBAO_TRANSIT|VAULT_TRANSIT`
+and the corresponding transit settings for the selected secondary provider.
 
 By default, InboxBridge derives its canonical browser URL as
 `https://${PUBLIC_HOSTNAME}:${PUBLIC_PORT}`. You can still set

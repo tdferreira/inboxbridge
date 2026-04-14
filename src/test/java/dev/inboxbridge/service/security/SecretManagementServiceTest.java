@@ -157,6 +157,31 @@ class SecretManagementServiceTest {
     }
 
     @Test
+    void reportsSplitKeyModeStatusWhenProviderIsHealthy() {
+        SecretManagementService service = configuredService();
+        SecretProviderResolver resolver = new SecretProviderResolver();
+        resolver.setLocalSecretKeyProvider(service.localSecretKeyProvider);
+        resolver.setTransitSecretProvider(new StubTransitSecretProvider(true));
+        resolver.setProviderMode("SPLIT_KEY");
+        resolver.setSplitSecondaryMode("OPENBAO_TRANSIT");
+        resolver.setOpenbaoUrl("https://openbao.internal");
+        resolver.setOpenbaoToken("token");
+        resolver.setOpenbaoMount("transit");
+        resolver.setOpenbaoKey("inboxbridge");
+        service.setSecretProviderResolver(resolver);
+
+        SecretManagementStatusView view = service.status();
+
+        assertTrue(view.secureStorageConfigured());
+        assertEquals("SPLIT_KEY", view.mode());
+        assertEquals("SPLIT_KEY", view.providerId());
+        assertTrue(view.providerHealthy());
+        assertTrue(view.providerWritable());
+        assertEquals("SPLIT_KEY:LOCAL=v2|OPENBAO_TRANSIT=inboxbridge", view.activeKeyVersion());
+        assertEquals("LOCAL:v2 + OPENBAO_TRANSIT:inboxbridge", view.activeKeyId());
+    }
+
+    @Test
     void reencryptAllStoredSecretsCanMigrateLocalRecordsIntoTransitProvider() {
         SecretManagementService service = configuredService();
         StubTransitSecretProvider transitSecretProvider = new StubTransitSecretProvider(true);
@@ -185,6 +210,39 @@ class SecretManagementServiceTest {
         assertEquals(5, status.activeKeyRecordCount());
         assertEquals(0, status.nonActiveKeyRecordCount());
         assertTrue(status.safeToRetireLegacyKeys());
+    }
+
+    @Test
+    void reencryptAllStoredSecretsCanMigrateLocalRecordsIntoSplitKeyProvider() {
+        SecretManagementService service = configuredService();
+        StubTransitSecretProvider transitSecretProvider = new StubTransitSecretProvider(true);
+        SecretProviderResolver resolver = new SecretProviderResolver();
+        resolver.setLocalSecretKeyProvider(service.localSecretKeyProvider);
+        resolver.setTransitSecretProvider(transitSecretProvider);
+        resolver.setProviderMode("SPLIT_KEY");
+        resolver.setSplitSecondaryMode("OPENBAO_TRANSIT");
+        resolver.setOpenbaoUrl("https://openbao.internal");
+        resolver.setOpenbaoToken("token");
+        resolver.setOpenbaoMount("transit");
+        resolver.setOpenbaoKey("inboxbridge");
+        service.setSecretProviderResolver(resolver);
+        SecretEncryptionService splitEncryptionService = new SecretEncryptionService();
+        splitEncryptionService.setLocalSecretKeyProvider(service.localSecretKeyProvider);
+        splitEncryptionService.setSecretProviderResolver(resolver);
+        splitEncryptionService.setTransitSecretProvider(transitSecretProvider);
+        service.setSecretEncryptionService(splitEncryptionService);
+
+        SecretReencryptionResultView result = service.reencryptAllStoredSecrets();
+        SecretManagementStatusView status = service.status();
+
+        assertEquals("SPLIT_KEY:LOCAL=v2|OPENBAO_TRANSIT=inboxbridge", result.activeKeyVersion());
+        assertEquals(5, result.totalRecordsUpdated());
+        assertEquals(5, result.totalSecretValuesReencrypted());
+        assertEquals(5, status.protectedRecordCount());
+        assertEquals(5, status.activeKeyRecordCount());
+        assertEquals(0, status.nonActiveKeyRecordCount());
+        assertTrue(status.safeToRetireLegacyKeys());
+        assertEquals("SPLIT_KEY:LOCAL=v2|OPENBAO_TRANSIT=inboxbridge", status.keyUsage().getFirst().keyVersion());
     }
 
     @Test

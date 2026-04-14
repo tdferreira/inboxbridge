@@ -34,4 +34,6 @@ public interface SecurityTokenConfig {
     Optional<String> vaultMount();
 
     Optional<String> vaultKey();
+
+    Optional<String> splitSecondaryMode();
 }

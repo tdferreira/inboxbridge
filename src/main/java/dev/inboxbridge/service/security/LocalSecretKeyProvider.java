@@ -136,6 +136,9 @@ public class LocalSecretKeyProvider implements SecretKeyProvider {
         if (tokenEncryptionLegacyKeys != null) {
             return tokenEncryptionLegacyKeys;
         }
+        if (securityTokenConfig == null) {
+            return null;
+        }
         return securityTokenConfig.tokenEncryptionLegacyKeys().orElse(null);
     }
 }

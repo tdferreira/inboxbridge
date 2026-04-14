@@ -33,6 +33,7 @@ public class SecretProviderResolver {
     String vaultToken;
     String vaultMount;
     String vaultKey;
+    String splitSecondaryMode;
 
     public void setProviderMode(String providerMode) {
         this.providerMode = providerMode;
@@ -70,6 +71,10 @@ public class SecretProviderResolver {
         this.vaultKey = vaultKey;
     }
 
+    public void setSplitSecondaryMode(String splitSecondaryMode) {
+        this.splitSecondaryMode = splitSecondaryMode;
+    }
+
     public void setLocalSecretKeyProvider(LocalSecretKeyProvider localSecretKeyProvider) {
         this.localSecretKeyProvider = localSecretKeyProvider;
     }
@@ -105,12 +110,7 @@ public class SecretProviderResolver {
                     "SECRET_PROVIDER_VAULT_TOKEN",
                     "SECRET_PROVIDER_VAULT_MOUNT",
                     "SECRET_PROVIDER_VAULT_KEY");
-            case SPLIT_KEY -> new SecretProviderHealth(
-                    SecretProviderMode.SPLIT_KEY,
-                    SecretProviderMode.SPLIT_KEY.name(),
-                    false,
-                    false,
-                    "Secret provider SPLIT_KEY is not implemented yet.");
+            case SPLIT_KEY -> splitHealth();
         };
     }
 
@@ -130,7 +130,7 @@ public class SecretProviderResolver {
         return switch (health.mode()) {
             case LOCAL -> localProvider().activeKey().storedKeyVersion();
             case OPENBAO_TRANSIT, VAULT_TRANSIT -> requireWritableTransitConfig().storedKeyVersion();
-            case SPLIT_KEY -> throw new IllegalStateException(health.statusMessage());
+            case SPLIT_KEY -> activeSplitKeyVersion().storedKeyVersion();
         };
     }
 
@@ -142,7 +142,7 @@ public class SecretProviderResolver {
         return switch (health.mode()) {
             case LOCAL -> localProvider().activeKey().keyId();
             case OPENBAO_TRANSIT, VAULT_TRANSIT -> requireWritableTransitConfig().keyName();
-            case SPLIT_KEY -> throw new IllegalStateException(health.statusMessage());
+            case SPLIT_KEY -> activeSplitKeyVersion().summary();
         };
     }
 
@@ -153,6 +153,17 @@ public class SecretProviderResolver {
         }
         return switch (health.mode()) {
             case LOCAL -> localProvider();
+            default -> throw new IllegalStateException(health.statusMessage());
+        };
+    }
+
+    public SecretKeyMaterial requireWritableLocalKey() {
+        SecretProviderHealth health = health();
+        if (!health.writable()) {
+            throw new IllegalStateException(health.statusMessage());
+        }
+        return switch (health.mode()) {
+            case LOCAL, SPLIT_KEY -> localProvider().activeKey();
             default -> throw new IllegalStateException(health.statusMessage());
         };
     }
@@ -171,6 +182,9 @@ public class SecretProviderResolver {
         if (LocalSecretKeyProvider.PROVIDER_ID.equals(reference.providerId())) {
             return localProvider().resolveKey(storedKeyVersion);
         }
+        if (SecretProviderMode.SPLIT_KEY.name().equals(reference.providerId())) {
+            return localProvider().resolveKey(SplitKeyStoredKeyVersion.parse(storedKeyVersion).localStoredKeyVersion());
+        }
         return Optional.empty();
     }
 
@@ -188,6 +202,7 @@ public class SecretProviderResolver {
                     configuredVaultToken(),
                     configuredVaultMount(),
                     configuredVaultKey());
+            case SPLIT_KEY -> splitTransitConfig();
             default -> Optional.empty();
         };
     }
@@ -213,6 +228,10 @@ public class SecretProviderResolver {
                     configuredVaultToken(),
                     configuredVaultMount(),
                     reference.keyId());
+            case SPLIT_KEY -> {
+                SplitKeyStoredKeyVersion splitReference = SplitKeyStoredKeyVersion.parse(storedKeyVersion);
+                yield transitConfigForMode(splitReference.transitMode(), splitReference.transitKeyId());
+            }
             default -> Optional.empty();
         };
     }
@@ -221,6 +240,14 @@ public class SecretProviderResolver {
         StoredSecretKeyReference reference = StoredSecretKeyReference.parse(storedKeyVersion);
         if (LocalSecretKeyProvider.PROVIDER_ID.equals(reference.providerId())) {
             return localProvider().resolveKey(storedKeyVersion).isPresent();
+        }
+        if (SecretProviderMode.SPLIT_KEY.name().equals(reference.providerId())) {
+            SplitKeyStoredKeyVersion splitReference = SplitKeyStoredKeyVersion.parse(storedKeyVersion);
+            boolean localAvailable = localProvider().resolveKey(splitReference.localStoredKeyVersion()).isPresent();
+            boolean transitAvailable = transitConfigForStoredKeyVersion(storedKeyVersion)
+                    .map(config -> transitProvider().health(config).healthy())
+                    .orElse(false);
+            return localAvailable && transitAvailable;
         }
         return transitConfigForStoredKeyVersion(storedKeyVersion)
                 .map(config -> transitProvider().health(config).healthy())
@@ -242,6 +269,50 @@ public class SecretProviderResolver {
                 true,
                 true,
                 "Local secret provider is ready.");
+    }
+
+    private SecretProviderHealth splitHealth() {
+        if (!localProvider().isConfigured()) {
+            return new SecretProviderHealth(
+                    SecretProviderMode.SPLIT_KEY,
+                    SecretProviderMode.SPLIT_KEY.name(),
+                    false,
+                    false,
+                    "Secret provider SPLIT_KEY requires SECURITY_TOKEN_ENCRYPTION_KEY for the local inner key.");
+        }
+        SecretProviderMode secondaryMode;
+        try {
+            secondaryMode = configuredSplitSecondaryMode();
+        } catch (IllegalStateException error) {
+            return new SecretProviderHealth(
+                    SecretProviderMode.SPLIT_KEY,
+                    SecretProviderMode.SPLIT_KEY.name(),
+                    false,
+                    false,
+                    error.getMessage());
+        }
+        SecretProviderHealth transitHealth = transitHealthForMode(secondaryMode);
+        if (!transitHealth.writable()) {
+            return new SecretProviderHealth(
+                    SecretProviderMode.SPLIT_KEY,
+                    SecretProviderMode.SPLIT_KEY.name(),
+                    transitHealth.healthy(),
+                    false,
+                    "Split-key provider requires a healthy transit secondary: " + transitHealth.statusMessage());
+        }
+        SplitKeyStoredKeyVersion activeReference = activeSplitKeyVersion();
+        return new SecretProviderHealth(
+                SecretProviderMode.SPLIT_KEY,
+                SecretProviderMode.SPLIT_KEY.name(),
+                true,
+                true,
+                "Split-key provider is ready with local key "
+                        + activeReference.localKeyId()
+                        + " and "
+                        + activeReference.transitMode().name()
+                        + " key "
+                        + activeReference.transitKeyId()
+                        + ".");
     }
 
     private SecretProviderHealth transitHealth(
@@ -288,6 +359,75 @@ public class SecretProviderResolver {
             return Optional.empty();
         }
         return Optional.of(new TransitProviderConfig(mode, mode.name(), url, token, mount, key));
+    }
+
+    private Optional<TransitProviderConfig> transitConfigForMode(SecretProviderMode mode, String key) {
+        return switch (mode) {
+            case OPENBAO_TRANSIT -> transitConfig(
+                    SecretProviderMode.OPENBAO_TRANSIT,
+                    configuredOpenbaoUrl(),
+                    configuredOpenbaoToken(),
+                    configuredOpenbaoMount(),
+                    key);
+            case VAULT_TRANSIT -> transitConfig(
+                    SecretProviderMode.VAULT_TRANSIT,
+                    configuredVaultUrl(),
+                    configuredVaultToken(),
+                    configuredVaultMount(),
+                    key);
+            default -> Optional.empty();
+        };
+    }
+
+    private SecretProviderHealth transitHealthForMode(SecretProviderMode mode) {
+        return switch (mode) {
+            case OPENBAO_TRANSIT -> transitHealth(
+                    SecretProviderMode.OPENBAO_TRANSIT,
+                    configuredOpenbaoUrl(),
+                    configuredOpenbaoToken(),
+                    configuredOpenbaoMount(),
+                    configuredOpenbaoKey(),
+                    "SECRET_PROVIDER_OPENBAO_URL",
+                    "SECRET_PROVIDER_OPENBAO_TOKEN",
+                    "SECRET_PROVIDER_OPENBAO_MOUNT",
+                    "SECRET_PROVIDER_OPENBAO_KEY");
+            case VAULT_TRANSIT -> transitHealth(
+                    SecretProviderMode.VAULT_TRANSIT,
+                    configuredVaultUrl(),
+                    configuredVaultToken(),
+                    configuredVaultMount(),
+                    configuredVaultKey(),
+                    "SECRET_PROVIDER_VAULT_URL",
+                    "SECRET_PROVIDER_VAULT_TOKEN",
+                    "SECRET_PROVIDER_VAULT_MOUNT",
+                    "SECRET_PROVIDER_VAULT_KEY");
+            default -> new SecretProviderHealth(
+                    mode,
+                    SecretProviderMode.SPLIT_KEY.name(),
+                    false,
+                    false,
+                    "Split-key secondary mode must be OPENBAO_TRANSIT or VAULT_TRANSIT.");
+        };
+    }
+
+    private Optional<TransitProviderConfig> splitTransitConfig() {
+        try {
+            SecretProviderMode secondaryMode = configuredSplitSecondaryMode();
+            return transitConfigForMode(secondaryMode, switch (secondaryMode) {
+                case OPENBAO_TRANSIT -> configuredOpenbaoKey();
+                case VAULT_TRANSIT -> configuredVaultKey();
+                default -> null;
+            });
+        } catch (IllegalStateException error) {
+            return Optional.empty();
+        }
+    }
+
+    private SplitKeyStoredKeyVersion activeSplitKeyVersion() {
+        SecretKeyMaterial localKey = localProvider().activeKey();
+        TransitProviderConfig transitConfig = splitTransitConfig()
+                .orElseThrow(() -> new IllegalStateException("Split-key transit provider is not configured."));
+        return new SplitKeyStoredKeyVersion(localKey.keyId(), transitConfig.mode(), transitConfig.keyName());
     }
 
     private boolean isBlank(String value) {
@@ -389,6 +529,27 @@ public class SecretProviderResolver {
             return null;
         }
         return securityTokenConfig.vaultKey().orElse(null);
+    }
+
+    private SecretProviderMode configuredSplitSecondaryMode() {
+        String configuredValue;
+        if (splitSecondaryMode != null) {
+            configuredValue = splitSecondaryMode;
+        } else if (securityTokenConfig == null) {
+            configuredValue = null;
+        } else {
+            configuredValue = securityTokenConfig.splitSecondaryMode().orElse(null);
+        }
+        if (isBlank(configuredValue)) {
+            throw new IllegalStateException(
+                    "Secret provider SPLIT_KEY requires SECRET_PROVIDER_SPLIT_SECONDARY_MODE to be OPENBAO_TRANSIT or VAULT_TRANSIT.");
+        }
+        SecretProviderMode mode = SecretProviderMode.parse(configuredValue);
+        if (mode != SecretProviderMode.OPENBAO_TRANSIT && mode != SecretProviderMode.VAULT_TRANSIT) {
+            throw new IllegalStateException(
+                    "Secret provider SPLIT_KEY only supports SECRET_PROVIDER_SPLIT_SECONDARY_MODE=OPENBAO_TRANSIT or VAULT_TRANSIT.");
+        }
+        return mode;
     }
 
     private LocalSecretKeyProvider localProvider() {

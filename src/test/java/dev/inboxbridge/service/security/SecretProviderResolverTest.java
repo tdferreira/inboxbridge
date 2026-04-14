@@ -58,13 +58,24 @@ class SecretProviderResolverTest {
     }
 
     @Test
-    void requireWritableProviderFailsClosedForUnsupportedModes() {
+    void reportsHealthyWritableSplitKeyProviderWhenConfiguredAndReachable() {
         SecretProviderResolver resolver = new SecretProviderResolver();
+        resolver.setLocalSecretKeyProvider(configuredLocalProvider());
         resolver.setProviderMode("SPLIT_KEY");
+        resolver.setSplitSecondaryMode("OPENBAO_TRANSIT");
+        resolver.setOpenbaoUrl("https://openbao.internal");
+        resolver.setOpenbaoToken("token");
+        resolver.setOpenbaoMount("transit");
+        resolver.setOpenbaoKey("inboxbridge");
+        resolver.setTransitSecretProvider(new StubTransitSecretProvider(true));
 
-        IllegalStateException error = assertThrows(IllegalStateException.class, resolver::requireWritableProvider);
+        SecretProviderHealth health = resolver.health();
 
-        assertEquals("Secret provider SPLIT_KEY is not implemented yet.", error.getMessage());
+        assertEquals(SecretProviderMode.SPLIT_KEY, health.mode());
+        assertTrue(health.healthy());
+        assertTrue(health.writable());
+        assertEquals("SPLIT_KEY:LOCAL=v1|OPENBAO_TRANSIT=inboxbridge", resolver.activeKeyVersion());
+        assertEquals("LOCAL:v1 + OPENBAO_TRANSIT:inboxbridge", resolver.activeKeyId());
     }
 
     @Test
@@ -93,14 +104,36 @@ class SecretProviderResolverTest {
         assertFalse(resolver.isStoredKeyVersionAvailable("OPENBAO_TRANSIT:legacy-key"));
     }
 
+    @Test
+    void splitKeyStoredKeyVersionRequiresBothLocalAndTransitAvailability() {
+        LocalSecretKeyProvider provider = configuredLocalProvider();
+        provider.setTokenEncryptionLegacyKeys("");
+        SecretProviderResolver resolver = new SecretProviderResolver();
+        resolver.setLocalSecretKeyProvider(provider);
+        resolver.setProviderMode("SPLIT_KEY");
+        resolver.setSplitSecondaryMode("OPENBAO_TRANSIT");
+        resolver.setOpenbaoUrl("https://openbao.internal");
+        resolver.setOpenbaoToken("token");
+        resolver.setOpenbaoMount("transit");
+        resolver.setOpenbaoKey("inboxbridge");
+        resolver.setTransitSecretProvider(new StubTransitSecretProvider(true));
+
+        assertFalse(resolver.isStoredKeyVersionAvailable("SPLIT_KEY:LOCAL=legacy|OPENBAO_TRANSIT=inboxbridge"));
+    }
+
     private SecretProviderResolver configuredLocalResolver() {
-        LocalSecretKeyProvider provider = new LocalSecretKeyProvider();
-        provider.setTokenEncryptionKey(Base64.getEncoder().encodeToString("0123456789abcdef0123456789abcdef".getBytes()));
-        provider.setTokenEncryptionKeyId("v1");
+        LocalSecretKeyProvider provider = configuredLocalProvider();
         SecretProviderResolver resolver = new SecretProviderResolver();
         resolver.setLocalSecretKeyProvider(provider);
         resolver.setProviderMode("LOCAL");
         return resolver;
+    }
+
+    private LocalSecretKeyProvider configuredLocalProvider() {
+        LocalSecretKeyProvider provider = new LocalSecretKeyProvider();
+        provider.setTokenEncryptionKey(Base64.getEncoder().encodeToString("0123456789abcdef0123456789abcdef".getBytes()));
+        provider.setTokenEncryptionKeyId("v1");
+        return provider;
     }
 
     private static final class StubTransitSecretProvider extends TransitSecretProvider {
