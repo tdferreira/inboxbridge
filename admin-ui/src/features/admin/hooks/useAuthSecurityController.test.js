@@ -606,7 +606,7 @@ describe('useAuthSecurityController', () => {
     expect(result.current.secretManagementStatus.configuredEnvManagedSourceCount).toBe(3)
   })
 
-  it('opens a confirmation flow and re-encrypts stored secrets', async () => {
+  it('re-encrypts stored secrets and refreshes secret-management status', async () => {
     fetch
       .mockResolvedValueOnce({
         ok: true,
@@ -639,18 +639,16 @@ describe('useAuthSecurityController', () => {
           keyUsage: []
         })
       })
-    const closeConfirmation = vi.fn()
-    const openConfirmation = vi.fn()
     const pushNotification = vi.fn()
     const withPending = vi.fn(async (_key, action) => action())
     const { result } = renderHook((props) => useAuthSecurityController(props), {
       initialProps: {
         bootstrapLoginPrefillEnabled: false,
-        closeConfirmation,
+        closeConfirmation: vi.fn(),
         errorText: (key) => key,
         loadAppData: vi.fn(),
         onLogoutReset: vi.fn(),
-        openConfirmation,
+        openConfirmation: vi.fn(),
         pushNotification,
         t: (key, params) => {
           if (key === 'notifications.secretManagementReencryptedWithFollowUp') {
@@ -674,15 +672,9 @@ describe('useAuthSecurityController', () => {
       })
     })
 
+    let completed = false
     await act(async () => {
-      await result.current.handleReencryptStoredSecrets()
-    })
-
-    expect(openConfirmation).toHaveBeenCalledTimes(1)
-    const confirmation = openConfirmation.mock.calls[0][0]
-
-    await act(async () => {
-      await confirmation.onConfirm()
+      completed = await result.current.handleReencryptStoredSecrets()
     })
 
     expect(fetch).toHaveBeenNthCalledWith(1, '/api/admin/secret-management/re-encrypt', {
@@ -695,10 +687,10 @@ describe('useAuthSecurityController', () => {
       })
     })
     expect(fetch).toHaveBeenNthCalledWith(2, '/api/admin/secret-management')
-    expect(closeConfirmation).toHaveBeenCalled()
+    expect(completed).toBe(true)
     expect(pushNotification).toHaveBeenCalledWith(expect.objectContaining({
       message: 'Re-encrypted 4 records / 9 secrets',
-      targetId: 'auth-security-section',
+      targetId: 'secret-management-section',
       tone: 'success'
     }))
   })

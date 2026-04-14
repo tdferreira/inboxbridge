@@ -1,4 +1,5 @@
 import AuthSecuritySection from '@/features/admin/components/AuthSecuritySection'
+import SecretManagementSection from '@/features/admin/components/SecretManagementSection'
 import { Suspense, lazy } from 'react'
 import OAuthAppsSection from '@/features/admin/components/OAuthAppsSection'
 import SystemDashboardSection from '@/features/admin/components/SystemDashboardSection'
@@ -198,8 +199,6 @@ export function buildAdminWorkspaceSections({
   globalStatsNeedsAttention = false,
   adminSetupGuideState,
   authSecuritySettings,
-  secretManagementStatus,
-  secretReencryptOptions,
   authOptions,
   dismissQuickSetupGuide,
   isPending,
@@ -215,6 +214,8 @@ export function buildAdminWorkspaceSections({
   setSystemOAuthSettingsDirty,
   onReencryptStoredSecrets,
   onSecretReencryptOptionsChange,
+  secretManagementStatus,
+  secretReencryptOptions,
   systemDashboard,
   systemOAuthSettings,
   t,
@@ -296,12 +297,25 @@ export function buildAdminWorkspaceSections({
           locale={language}
           onCollapseToggle={() => toggleWorkspaceSection('authSecurityCollapsed')}
           onOpenEditor={() => setShowAuthSecurityDialog(true)}
+          sectionLoading={isSectionRefreshing('authSecurityCollapsed')}
+          t={t}
+        />
+      )
+    },
+    {
+      id: 'secretManagement',
+      render: () => (
+        <SecretManagementSection
+          collapsed={uiPreferences.secretManagementCollapsed}
+          collapseLoading={isPending('uiPreferences') && uiPreferences.persistLayout}
+          locale={language}
+          onCollapseToggle={() => toggleWorkspaceSection('secretManagementCollapsed')}
           onReencryptStoredSecrets={onReencryptStoredSecrets}
           onSecretReencryptOptionsChange={onSecretReencryptOptionsChange}
           reencryptionLoading={isPending('secretManagementReencrypt')}
-          sectionLoading={isSectionRefreshing('authSecurityCollapsed')}
-          secretReencryptOptions={secretReencryptOptions}
+          sectionLoading={isSectionRefreshing('secretManagementCollapsed')}
           secretManagementStatus={secretManagementStatus}
+          secretReencryptOptions={secretReencryptOptions}
           t={t}
         />
       )

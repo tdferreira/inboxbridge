@@ -628,59 +628,51 @@ export function useAuthSecurityController({
   }
 
   async function handleReencryptStoredSecrets() {
-    openConfirmation({
-      actionKey: 'secretManagementReencrypt',
-      body: t('authSecurity.secretManagementReencryptConfirmBody'),
-      confirmLabel: t('authSecurity.secretManagementReencrypt'),
-      confirmLoadingLabel: t('authSecurity.secretManagementReencryptLoading'),
-      confirmTone: 'danger',
-      onConfirm: async () => {
-        await withPending('secretManagementReencrypt', async () => {
-          try {
-            const response = await fetch('/api/admin/secret-management/re-encrypt', {
-              method: 'POST',
-              headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify(secretReencryptOptions)
-            })
-            if (!response.ok) {
-              throw new Error(await apiErrorText(response, errorText('reencryptStoredSecrets')))
-            }
-            const payload = await response.json()
-            closeConfirmation?.()
-            await loadSecretManagementStatus({ suppressErrors: true })
-            const followUp = payload?.followUp || {}
-            const hasFollowUpCleanup = (followUp.browserExtensionSessionsRevoked ?? 0) > 0
-              || (followUp.remoteSessionsRevoked ?? 0) > 0
-              || (followUp.cachedOAuthAccessTokensCleared ?? 0) > 0
-            pushNotification({
-              message: hasFollowUpCleanup
-                ? t('notifications.secretManagementReencryptedWithFollowUp', {
-                    records: payload?.totalRecordsUpdated ?? 0,
-                    secrets: payload?.totalSecretValuesReencrypted ?? 0,
-                    extensionSessions: followUp.browserExtensionSessionsRevoked ?? 0,
-                    remoteSessions: followUp.remoteSessionsRevoked ?? 0,
-                    accessTokens: followUp.cachedOAuthAccessTokensCleared ?? 0
-                  })
-                : t('notifications.secretManagementReencrypted', {
-                    records: payload?.totalRecordsUpdated ?? 0,
-                    secrets: payload?.totalSecretValuesReencrypted ?? 0
-                  }),
-              targetId: 'auth-security-section',
-              tone: 'success'
-            })
-          } catch (err) {
-            pushNotification({
-              autoCloseMs: null,
-              copyText: err.message ? pollErrorNotification(err.message) : translatedNotification('errors.reencryptStoredSecrets'),
-              message: err.message ? pollErrorNotification(err.message) : translatedNotification('errors.reencryptStoredSecrets'),
-              targetId: 'auth-security-section',
-              tone: 'error'
-            })
-          }
+    let completed = false
+    await withPending('secretManagementReencrypt', async () => {
+      try {
+        const response = await fetch('/api/admin/secret-management/re-encrypt', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(secretReencryptOptions)
         })
-      },
-      title: t('authSecurity.secretManagementReencryptConfirmTitle')
+        if (!response.ok) {
+          throw new Error(await apiErrorText(response, errorText('reencryptStoredSecrets')))
+        }
+        const payload = await response.json()
+        await loadSecretManagementStatus({ suppressErrors: true })
+        const followUp = payload?.followUp || {}
+        const hasFollowUpCleanup = (followUp.browserExtensionSessionsRevoked ?? 0) > 0
+          || (followUp.remoteSessionsRevoked ?? 0) > 0
+          || (followUp.cachedOAuthAccessTokensCleared ?? 0) > 0
+        pushNotification({
+          message: hasFollowUpCleanup
+            ? t('notifications.secretManagementReencryptedWithFollowUp', {
+                records: payload?.totalRecordsUpdated ?? 0,
+                secrets: payload?.totalSecretValuesReencrypted ?? 0,
+                extensionSessions: followUp.browserExtensionSessionsRevoked ?? 0,
+                remoteSessions: followUp.remoteSessionsRevoked ?? 0,
+                accessTokens: followUp.cachedOAuthAccessTokensCleared ?? 0
+              })
+            : t('notifications.secretManagementReencrypted', {
+                records: payload?.totalRecordsUpdated ?? 0,
+                secrets: payload?.totalSecretValuesReencrypted ?? 0
+              }),
+          targetId: 'secret-management-section',
+          tone: 'success'
+        })
+        completed = true
+      } catch (err) {
+        pushNotification({
+          autoCloseMs: null,
+          copyText: err.message ? pollErrorNotification(err.message) : translatedNotification('errors.reencryptStoredSecrets'),
+          message: err.message ? pollErrorNotification(err.message) : translatedNotification('errors.reencryptStoredSecrets'),
+          targetId: 'secret-management-section',
+          tone: 'error'
+        })
+      }
     })
+    return completed
   }
 
   async function handleRevokeExtensionSession(extensionSession) {

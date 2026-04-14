@@ -4,40 +4,16 @@ import DurationValue from '@/shared/components/DurationValue'
 import { captchaProviderLabel } from '@/lib/captchaProviders'
 import { parseProviderList, providerLabel } from '@/lib/geoIpProviders'
 
-function formatKeyIds(keyIds, t) {
-  return Array.isArray(keyIds) && keyIds.length > 0 ? keyIds.join(', ') : t('authSecurity.secretManagementNoLegacyKeys')
-}
-
-function formatKeyUsageAreas(areas, t) {
-  return String(areas || '')
-    .split(',')
-    .map((value) => value.trim())
-    .filter(Boolean)
-    .map((value) => {
-      const translationKey = `authSecurity.secretArea.${value}`
-      const translated = t(translationKey)
-      return translated === translationKey ? value : translated
-    })
-    .join(', ')
-}
-
 function AuthSecuritySection({
   authSecuritySettings,
   collapsed,
   collapseLoading,
   onCollapseToggle,
   onOpenEditor,
-  onReencryptStoredSecrets,
-  onSecretReencryptOptionsChange,
-  reencryptionLoading = false,
-  sectionLoading = false,
-  secretReencryptOptions,
-  secretManagementStatus,
   locale = 'en',
+  sectionLoading = false,
   t
 }) {
-  const keyUsage = Array.isArray(secretManagementStatus?.keyUsage) ? secretManagementStatus.keyUsage : []
-
   return (
     <CollapsibleSection
       actions={
@@ -88,93 +64,6 @@ function AuthSecuritySection({
           <article className="surface-card polling-statistics-card">
             <div className="polling-statistics-card-title">{t('authSecurity.runtimeSectionTitle')}</div>
             <p className="section-copy">{t('authSecurity.summaryHelp')}</p>
-          </article>
-
-          <article className="surface-card polling-statistics-card">
-            <div className="polling-statistics-card-title">{t('authSecurity.secretManagementTitle')}</div>
-            <p className="section-copy">{t('authSecurity.secretManagementCopy')}</p>
-            <div className="polling-statistics-breakdown">
-              <div><span>{t('authSecurity.secretManagementMode')}</span><strong>{secretManagementStatus?.mode || t('common.unavailable')}</strong></div>
-              <div><span>{t('authSecurity.secretManagementProvider')}</span><strong>{secretManagementStatus?.providerId || t('common.unavailable')}</strong></div>
-              <div><span>{t('authSecurity.secretManagementActiveKey')}</span><strong>{secretManagementStatus?.activeKeyId || secretManagementStatus?.activeKeyVersion || t('common.unavailable')}</strong></div>
-              <div><span>{t('authSecurity.secretManagementProtectedRecords')}</span><strong>{secretManagementStatus?.protectedRecordCount ?? 0}</strong></div>
-              <div><span>{t('authSecurity.secretManagementNonActiveRecords')}</span><strong>{secretManagementStatus?.nonActiveKeyRecordCount ?? 0}</strong></div>
-              <div><span>{t('authSecurity.secretManagementUnavailableRecords')}</span><strong>{secretManagementStatus?.unavailableKeyRecordCount ?? 0}</strong></div>
-              <div><span>{t('authSecurity.secretManagementEnvPolicy')}</span><strong>{t(secretManagementStatus?.envManagedMailboxSecretsAllowed ? 'authSecurity.secretManagementEnvPolicyAllowed' : 'authSecurity.secretManagementEnvPolicyBlocked')}</strong></div>
-              <div><span>{t('authSecurity.secretManagementEnvSourceCount')}</span><strong>{secretManagementStatus?.configuredEnvManagedSourceCount ?? 0}</strong></div>
-              <div><span>{t('authSecurity.secretManagementEnvGoogleRefreshToken')}</span><strong>{t(secretManagementStatus?.envManagedGoogleRefreshTokenConfigured ? 'authSecurity.secretManagementEnvGoogleRefreshTokenConfigured' : 'authSecurity.secretManagementEnvGoogleRefreshTokenNotConfigured')}</strong></div>
-              <div><span>{t('authSecurity.secretManagementLegacyKeys')}</span><strong>{formatKeyIds(secretManagementStatus?.configuredLegacyKeyIds, t)}</strong></div>
-              <div><span>{t('authSecurity.secretManagementRetirementStatus')}</span><strong>{t(secretManagementStatus?.safeToRetireLegacyKeys ? 'authSecurity.secretManagementSafeToRetire' : 'authSecurity.secretManagementKeepLegacyKeys')}</strong></div>
-            </div>
-            <p className="section-copy">{t('authSecurity.secretManagementEnvPolicyHelp')}</p>
-            <p className="section-copy">{t('authSecurity.secretManagementReencryptHelp')}</p>
-            <div className="polling-statistics-breakdown">
-              <label className="checkbox-row">
-                <input
-                  checked={Boolean(secretReencryptOptions?.revokeBrowserExtensionSessions)}
-                  onChange={(event) => onSecretReencryptOptionsChange?.((current) => ({
-                    ...current,
-                    revokeBrowserExtensionSessions: event.target.checked
-                  }))}
-                  type="checkbox"
-                />
-                <span>{t('authSecurity.secretManagementReencryptRevokeExtensionSessions')}</span>
-              </label>
-              <label className="checkbox-row">
-                <input
-                  checked={Boolean(secretReencryptOptions?.revokeRemoteSessions)}
-                  onChange={(event) => onSecretReencryptOptionsChange?.((current) => ({
-                    ...current,
-                    revokeRemoteSessions: event.target.checked
-                  }))}
-                  type="checkbox"
-                />
-                <span>{t('authSecurity.secretManagementReencryptRevokeRemoteSessions')}</span>
-              </label>
-              <label className="checkbox-row">
-                <input
-                  checked={Boolean(secretReencryptOptions?.clearCachedOAuthAccessTokens)}
-                  onChange={(event) => onSecretReencryptOptionsChange?.((current) => ({
-                    ...current,
-                    clearCachedOAuthAccessTokens: event.target.checked
-                  }))}
-                  type="checkbox"
-                />
-                <span>{t('authSecurity.secretManagementReencryptClearCachedOAuthAccessTokens')}</span>
-              </label>
-            </div>
-            <LoadingButton
-              className="secondary"
-              disabled={!secretManagementStatus?.secureStorageConfigured}
-              onClick={onReencryptStoredSecrets}
-              type="button"
-            >
-              {reencryptionLoading ? t('authSecurity.secretManagementReencryptLoading') : t('authSecurity.secretManagementReencrypt')}
-            </LoadingButton>
-          </article>
-
-          <article className="surface-card polling-statistics-card">
-            <div className="polling-statistics-card-title">{t('authSecurity.secretManagementKeyUsageTitle')}</div>
-            {keyUsage.length === 0 ? (
-              <p className="section-copy">{t('authSecurity.secretManagementKeyUsageEmpty')}</p>
-            ) : (
-              <div className="polling-statistics-breakdown">
-                {keyUsage.map((usage) => (
-                  <div key={usage.keyVersion}>
-                    <span>
-                      {usage.keyVersion}
-                      {' · '}
-                      {formatKeyUsageAreas(usage.areas, t)}
-                    </span>
-                    <strong>
-                      {t(usage.availableForDecryption ? 'authSecurity.secretManagementKeyAvailable' : 'authSecurity.secretManagementKeyUnavailable')}
-                      {' · '}
-                      {t('authSecurity.secretManagementKeyRecordCount', { count: usage.recordCount })}
-                    </strong>
-                  </div>
-                ))}
-              </div>
-            )}
           </article>
         </div>
     </CollapsibleSection>

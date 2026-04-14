@@ -4,6 +4,9 @@ import { buildAdminWorkspaceSections, buildUserWorkspaceSections } from './works
 vi.mock('@/features/admin/components/AuthSecuritySection', () => ({
   default: (props) => <div data-component="AuthSecuritySection" data-collapsed={String(props.collapsed)} />
 }))
+vi.mock('@/features/admin/components/SecretManagementSection', () => ({
+  default: (props) => <div data-component="SecretManagementSection" data-collapsed={String(props.collapsed)} />
+}))
 vi.mock('@/features/admin/components/OAuthAppsSection', () => ({
   default: (props) => <button onClick={props.onEditGoogle} type="button">OAuthAppsSection</button>
 }))
@@ -61,6 +64,7 @@ describe('workspaceSectionBuilders', () => {
         systemDashboardCollapsed: false,
         oauthAppsCollapsed: false,
         authSecurityCollapsed: false,
+        secretManagementCollapsed: false,
         globalStatsCollapsed: false,
         userManagementCollapsed: false
       }
@@ -212,6 +216,7 @@ describe('workspaceSectionBuilders', () => {
       'systemDashboard',
       'oauthApps',
       'authSecurity',
+      'secretManagement',
       'globalStats',
       'userManagement'
     ])

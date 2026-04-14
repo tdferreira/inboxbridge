@@ -517,8 +517,10 @@ Current repository status:
 - admin visibility has started through `/api/admin/secret-management`, which
   reports active mode, provider health, configured legacy key ids, and stored
   key-version usage
-- the admin UI now surfaces that status inside `Administration ->
-  Authentication Security`, including a confirmation-gated re-encryption flow
+- the admin UI now surfaces that status inside its own `Administration ->
+  Secret management` section, with a dedicated high-friction re-encryption
+  modal that explains prerequisites, risks, acknowledgements, and optional
+  follow-up cleanup before the action can run
 - the first concrete rotation action now exists through
   `/api/admin/secret-management/re-encrypt`, which rewrites database-stored
   encrypted secrets under the active local key version

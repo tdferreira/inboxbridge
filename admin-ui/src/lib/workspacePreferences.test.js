@@ -49,6 +49,7 @@ describe('workspacePreferences', () => {
       'oauthApps',
       'userManagement',
       'authSecurity',
+      'secretManagement',
       'globalStats'
     ])
   })

@@ -721,6 +721,7 @@ describe('App', () => {
       'oauthApps',
       'userManagement',
       'authSecurity',
+      'secretManagement',
       'globalStats'
     ])
   })

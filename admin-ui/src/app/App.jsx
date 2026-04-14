@@ -1457,6 +1457,7 @@ function AppContent({ timings = DEFAULT_APP_TIMINGS }) {
       'system-dashboard-section': 'systemDashboardCollapsed',
       'oauth-apps-section': 'oauthAppsCollapsed',
       'auth-security-section': 'authSecurityCollapsed',
+      'secret-management-section': 'secretManagementCollapsed',
       'global-polling-stats-section': 'globalStatsCollapsed',
       'user-management-section': 'userManagementCollapsed'
     }[targetId] || (sourceEmailAccountTarget ? 'sourceEmailAccountsCollapsed' : null))
