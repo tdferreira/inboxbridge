@@ -92,6 +92,8 @@ inboxbridge:
     extension:
       access-token-ttl: ${SECURITY_EXTENSION_ACCESS_TOKEN_TTL:PT1H}
       refresh-token-ttl: ${SECURITY_EXTENSION_REFRESH_TOKEN_TTL:PT720H}
+    secret-management:
+      allow-env-managed-mailbox-secrets: ${SECURITY_ALLOW_ENV_MANAGED_MAILBOX_SECRETS:true}
   gmail:
     destination-user: ${GMAIL_DESTINATION_USER:me}
     client-id: ${GOOGLE_CLIENT_ID:replace-me}

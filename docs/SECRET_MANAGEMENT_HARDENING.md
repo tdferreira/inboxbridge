@@ -6,7 +6,11 @@ the normal `.env` file should not be sufficient to decrypt UI-managed secrets.
 
 It is intentionally written as a design target, though the repository now
 implements the first local provider-abstraction step and rotation-friendly
-local key metadata described later in this document.
+local key metadata described later in this document. The repository now also
+implements a deployment policy that can disable env-managed mailbox secrets
+(`SECURITY_ALLOW_ENV_MANAGED_MAILBOX_SECRETS=false`), which makes InboxBridge
+ignore `MAIL_ACCOUNT_*` source definitions and the `.env` Gmail refresh-token
+fallback while still allowing normal bootstrap configuration in `.env`.
 
 ## Why This Exists
 
@@ -217,8 +221,17 @@ Target product guidance:
 
 Future hardening option:
 
-- a deployment policy flag may disable new env-managed mailbox credentials
+- a deployment policy flag may disable env-managed mailbox credentials
   entirely while still allowing generic config in `.env`
+
+Current implementation status:
+
+- this repository now includes `SECURITY_ALLOW_ENV_MANAGED_MAILBOX_SECRETS`
+  (default `true`)
+- when set to `false`, InboxBridge ignores `MAIL_ACCOUNT_*` source definitions
+  and the `.env` `GMAIL_REFRESH_TOKEN` fallback
+- the admin security panel surfaces whether that policy is enabled and whether
+  any env-managed mailbox secret material is still configured
 
 ### 3. Use envelope encryption internally
 

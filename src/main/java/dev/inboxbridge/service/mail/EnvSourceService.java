@@ -3,6 +3,7 @@ package dev.inboxbridge.service.mail;
 import java.util.List;
 
 import dev.inboxbridge.config.InboxBridgeConfig;
+import dev.inboxbridge.config.SecretManagementPolicyConfig;
 import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.inject.Inject;
 
@@ -24,16 +25,38 @@ public class EnvSourceService {
     @Inject
     InboxBridgeConfig config;
 
+    @Inject
+    SecretManagementPolicyConfig secretManagementPolicyConfig;
+
     public void setConfigForTest(InboxBridgeConfig config) {
         this.config = config;
     }
 
+    public void setSecretManagementPolicyConfigForTest(SecretManagementPolicyConfig secretManagementPolicyConfig) {
+        this.secretManagementPolicyConfig = secretManagementPolicyConfig;
+    }
+
     public List<IndexedSource> configuredSources() {
+        if (!envManagedMailboxSecretsAllowed()) {
+            return List.of();
+        }
+        return configuredSourcesIgnoringPolicy();
+    }
+
+    public List<IndexedSource> configuredSourcesIgnoringPolicy() {
         List<InboxBridgeConfig.Source> sources = config.sources();
         return java.util.stream.IntStream.range(0, sources.size())
                 .mapToObj(index -> new IndexedSource(index, sources.get(index)))
                 .filter(indexed -> isConfigured(indexed.source()))
                 .toList();
+    }
+
+    public boolean envManagedMailboxSecretsAllowed() {
+        return secretManagementPolicyConfig == null || secretManagementPolicyConfig.allowEnvManagedMailboxSecrets();
+    }
+
+    public long configuredSourceCountIgnoringPolicy() {
+        return configuredSourcesIgnoringPolicy().size();
     }
 
     public boolean isConfigured(InboxBridgeConfig.Source source) {

@@ -20,6 +20,9 @@ public record SecretManagementStatusView(
         long activeKeyRecordCount,
         long nonActiveKeyRecordCount,
         long unavailableKeyRecordCount,
+        boolean envManagedMailboxSecretsAllowed,
+        long configuredEnvManagedSourceCount,
+        boolean envManagedGoogleRefreshTokenConfigured,
         boolean safeToRetireLegacyKeys,
         List<SecretManagementKeyUsageView> keyUsage) {
 }

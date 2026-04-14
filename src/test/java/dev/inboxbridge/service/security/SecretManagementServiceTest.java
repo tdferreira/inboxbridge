@@ -25,7 +25,9 @@ import dev.inboxbridge.persistence.UserGmailConfigRepository;
 import dev.inboxbridge.persistence.UserMailDestinationConfig;
 import dev.inboxbridge.persistence.UserMailDestinationConfigRepository;
 import dev.inboxbridge.service.extension.ExtensionSessionService;
+import dev.inboxbridge.service.mail.EnvSourceService;
 import dev.inboxbridge.service.oauth.OAuthCredentialService;
+import dev.inboxbridge.service.oauth.SystemOAuthAppSettingsService;
 import dev.inboxbridge.service.remote.RemoteSessionService;
 
 class SecretManagementServiceTest {
@@ -49,6 +51,9 @@ class SecretManagementServiceTest {
         assertEquals(3, view.activeKeyRecordCount());
         assertEquals(2, view.nonActiveKeyRecordCount());
         assertEquals(0, view.unavailableKeyRecordCount());
+        assertTrue(view.envManagedMailboxSecretsAllowed());
+        assertEquals(1, view.configuredEnvManagedSourceCount());
+        assertTrue(view.envManagedGoogleRefreshTokenConfigured());
         assertFalse(view.safeToRetireLegacyKeys());
         assertEquals(2, view.keyUsage().size());
         assertEquals("LOCAL:v2", view.keyUsage().getFirst().keyVersion());
@@ -89,7 +94,40 @@ class SecretManagementServiceTest {
         assertFalse(view.providerHealthy());
         assertFalse(view.providerWritable());
         assertEquals("Secure token storage is not configured. Set SECURITY_TOKEN_ENCRYPTION_KEY.", view.providerStatusMessage());
+        assertTrue(view.envManagedMailboxSecretsAllowed());
+        assertEquals(0, view.configuredEnvManagedSourceCount());
+        assertFalse(view.envManagedGoogleRefreshTokenConfigured());
         assertTrue(view.keyUsage().isEmpty());
+    }
+
+    @Test
+    void statusReportsEnvManagedMailboxPolicyAndConfiguredEnvUsage() {
+        SecretManagementService service = configuredService();
+        EnvSourceService envSourceService = new EnvSourceService() {
+            @Override
+            public boolean envManagedMailboxSecretsAllowed() {
+                return false;
+            }
+
+            @Override
+            public long configuredSourceCountIgnoringPolicy() {
+                return 2;
+            }
+        };
+        SystemOAuthAppSettingsService systemOAuthAppSettingsService = new SystemOAuthAppSettingsService() {
+            @Override
+            public boolean envManagedGoogleRefreshTokenConfigured() {
+                return true;
+            }
+        };
+        service.setEnvSourceService(envSourceService);
+        service.setSystemOAuthAppSettingsService(systemOAuthAppSettingsService);
+
+        SecretManagementStatusView view = service.status();
+
+        assertFalse(view.envManagedMailboxSecretsAllowed());
+        assertEquals(2, view.configuredEnvManagedSourceCount());
+        assertTrue(view.envManagedGoogleRefreshTokenConfigured());
     }
 
     @Test
@@ -253,6 +291,18 @@ class SecretManagementServiceTest {
         service.setExtensionSessionService(new StubExtensionSessionService(0));
         service.setRemoteSessionService(new StubRemoteSessionService(0));
         service.setOAuthCredentialService(new StubOAuthCredentialService(0));
+        service.setEnvSourceService(new EnvSourceService() {
+            @Override
+            public long configuredSourceCountIgnoringPolicy() {
+                return 1;
+            }
+        });
+        service.setSystemOAuthAppSettingsService(new SystemOAuthAppSettingsService() {
+            @Override
+            public boolean envManagedGoogleRefreshTokenConfigured() {
+                return true;
+            }
+        });
         return service;
     }
 

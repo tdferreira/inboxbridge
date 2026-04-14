@@ -64,6 +64,31 @@ class EnvSourceServiceTest {
         assertTrue(service.isConfigured(configured.getFirst().source()));
     }
 
+    @Test
+    void configuredSourcesRespectsDeploymentPolicyThatDisablesEnvManagedMailboxSecrets() {
+        EnvSourceService service = new EnvSourceService();
+        service.setConfigForTest(new TestConfig(List.of(new TestSource(
+                "outlook-main-imap",
+                false,
+                InboxBridgeConfig.Protocol.IMAP,
+                "outlook.office365.com",
+                993,
+                true,
+                InboxBridgeConfig.AuthMethod.OAUTH2,
+                InboxBridgeConfig.OAuthProvider.MICROSOFT,
+                "person@example.com",
+                "replace-me",
+                Optional.of("refresh-token"),
+                Optional.of("INBOX"),
+                false,
+                Optional.of("Imported/Outlook")))));
+        service.setSecretManagementPolicyConfigForTest(() -> false);
+
+        assertTrue(service.configuredSources().isEmpty());
+        assertEquals(1L, service.configuredSourceCountIgnoringPolicy());
+        assertFalse(service.envManagedMailboxSecretsAllowed());
+    }
+
     private static final class TestConfig implements InboxBridgeConfig {
         private final List<Source> sources;
 

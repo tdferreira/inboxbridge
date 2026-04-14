@@ -574,6 +574,9 @@ describe('useAuthSecurityController', () => {
         activeKeyRecordCount: 5,
         nonActiveKeyRecordCount: 2,
         unavailableKeyRecordCount: 0,
+        envManagedMailboxSecretsAllowed: false,
+        configuredEnvManagedSourceCount: 3,
+        envManagedGoogleRefreshTokenConfigured: true,
         safeToRetireLegacyKeys: false,
         keyUsage: [
           {
@@ -599,6 +602,8 @@ describe('useAuthSecurityController', () => {
     expect(fetch).toHaveBeenCalledWith('/api/admin/secret-management')
     expect(result.current.secretManagementStatus.activeKeyId).toBe('LOCAL:v2')
     expect(result.current.secretManagementStatus.configuredLegacyKeyIds).toEqual(['LOCAL:v1'])
+    expect(result.current.secretManagementStatus.envManagedMailboxSecretsAllowed).toBe(false)
+    expect(result.current.secretManagementStatus.configuredEnvManagedSourceCount).toBe(3)
   })
 
   it('opens a confirmation flow and re-encrypts stored secrets', async () => {

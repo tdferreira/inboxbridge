@@ -281,6 +281,18 @@ You can define source email accounts in two ways:
 - in `.env` using `MAIL_ACCOUNT_<n>__...`
 - in the admin UI
 
+For stronger secret management, deployments can disable env-managed mailbox
+secrets entirely with:
+
+```dotenv
+SECURITY_ALLOW_ENV_MANAGED_MAILBOX_SECRETS=false
+```
+
+When that policy is disabled, InboxBridge ignores `MAIL_ACCOUNT_*` source
+definitions and the shared `GMAIL_REFRESH_TOKEN` fallback from `.env`. Generic
+bootstrap settings such as database, public URL, TLS, and scheduler defaults
+still remain in `.env`.
+
 Example env-managed source:
 
 ```dotenv
@@ -299,6 +311,8 @@ MAIL_ACCOUNT_0__CUSTOM_LABEL=Imported/Outlook
 ```
 
 If no `MAIL_ACCOUNT_*` values are configured, InboxBridge loads no env-managed source accounts.
+If `SECURITY_ALLOW_ENV_MANAGED_MAILBOX_SECRETS=false`, InboxBridge also ignores
+configured `MAIL_ACCOUNT_*` values even if they are present.
 
 IMAP sources can now also choose a fetch mode:
 

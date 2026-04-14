@@ -24,6 +24,9 @@ const DEFAULT_SECRET_MANAGEMENT_STATUS = {
   activeKeyRecordCount: 0,
   nonActiveKeyRecordCount: 0,
   unavailableKeyRecordCount: 0,
+  envManagedMailboxSecretsAllowed: true,
+  configuredEnvManagedSourceCount: 0,
+  envManagedGoogleRefreshTokenConfigured: false,
   safeToRetireLegacyKeys: true,
   keyUsage: []
 }

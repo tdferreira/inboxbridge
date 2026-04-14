@@ -27,7 +27,9 @@ import dev.inboxbridge.persistence.UserGmailConfigRepository;
 import dev.inboxbridge.persistence.UserMailDestinationConfig;
 import dev.inboxbridge.persistence.UserMailDestinationConfigRepository;
 import dev.inboxbridge.service.extension.ExtensionSessionService;
+import dev.inboxbridge.service.mail.EnvSourceService;
 import dev.inboxbridge.service.oauth.OAuthCredentialService;
+import dev.inboxbridge.service.oauth.SystemOAuthAppSettingsService;
 import dev.inboxbridge.service.remote.RemoteSessionService;
 import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.inject.Inject;
@@ -74,6 +76,12 @@ public class SecretManagementService {
     @Inject
     OAuthCredentialService oAuthCredentialService;
 
+    @Inject
+    EnvSourceService envSourceService;
+
+    @Inject
+    SystemOAuthAppSettingsService systemOAuthAppSettingsService;
+
     public SecretManagementStatusView status() {
         SecretProviderHealth providerHealth = providerResolver().health();
         if (!providerHealth.writable()) {
@@ -91,6 +99,9 @@ public class SecretManagementService {
                     0,
                     0,
                     0,
+                    envManagedMailboxSecretsAllowed(),
+                    configuredEnvManagedSourceCount(),
+                    envManagedGoogleRefreshTokenConfigured(),
                     false,
                     List.of());
         }
@@ -142,6 +153,9 @@ public class SecretManagementService {
                 activeKeyRecordCount,
                 nonActiveKeyRecordCount,
                 unavailableKeyRecordCount,
+                envManagedMailboxSecretsAllowed(),
+                configuredEnvManagedSourceCount(),
+                envManagedGoogleRefreshTokenConfigured(),
                 nonActiveKeyRecordCount == 0 && unavailableKeyRecordCount == 0,
                 keyUsage);
     }
@@ -222,6 +236,14 @@ public class SecretManagementService {
 
     public void setOAuthCredentialService(OAuthCredentialService oAuthCredentialService) {
         this.oAuthCredentialService = oAuthCredentialService;
+    }
+
+    public void setEnvSourceService(EnvSourceService envSourceService) {
+        this.envSourceService = envSourceService;
+    }
+
+    public void setSystemOAuthAppSettingsService(SystemOAuthAppSettingsService systemOAuthAppSettingsService) {
+        this.systemOAuthAppSettingsService = systemOAuthAppSettingsService;
     }
 
     private void collectUsage(Map<String, UsageAccumulator> usage) {
@@ -570,5 +592,17 @@ public class SecretManagementService {
             secretProviderResolver = resolver;
         }
         return secretProviderResolver;
+    }
+
+    private boolean envManagedMailboxSecretsAllowed() {
+        return envSourceService == null || envSourceService.envManagedMailboxSecretsAllowed();
+    }
+
+    private long configuredEnvManagedSourceCount() {
+        return envSourceService == null ? 0 : envSourceService.configuredSourceCountIgnoringPolicy();
+    }
+
+    private boolean envManagedGoogleRefreshTokenConfigured() {
+        return systemOAuthAppSettingsService != null && systemOAuthAppSettingsService.envManagedGoogleRefreshTokenConfigured();
     }
 }

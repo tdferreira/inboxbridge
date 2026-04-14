@@ -257,6 +257,9 @@ MICROSOFT_CLIENT_SECRET=your-microsoft-app-client-secret
 MICROSOFT_REDIRECT_URI=https://localhost:3000/api/microsoft-oauth/callback
 SECURITY_TOKEN_ENCRYPTION_KEY=base64-encoded-32-byte-key
 SECURITY_TOKEN_ENCRYPTION_KEY_ID=v1
+# Optional hardening: disable mailbox secrets from .env once you have moved
+# source accounts and the shared Gmail destination refresh token into the UI.
+# SECURITY_ALLOW_ENV_MANAGED_MAILBOX_SECRETS=false
 ```
 
 ### Example Outlook source
@@ -275,6 +278,10 @@ MAIL_ACCOUNT_0__OAUTH_REFRESH_TOKEN=
 MAIL_ACCOUNT_0__FOLDER=INBOX
 MAIL_ACCOUNT_0__CUSTOM_LABEL=Imported/Outlook
 ```
+
+If `SECURITY_ALLOW_ENV_MANAGED_MAILBOX_SECRETS=false`, InboxBridge ignores that
+env-managed Outlook source definition and expects the mailbox secret material to
+come from the admin UI's encrypted database storage instead.
 
 ### Browser flow
 

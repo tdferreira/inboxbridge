@@ -168,6 +168,9 @@ class AdminResourceTest {
         assertTrue(response.providerWritable());
         assertEquals("LOCAL:v2", response.activeKeyVersion());
         assertEquals(2, response.protectedRecordCount());
+        assertTrue(response.envManagedMailboxSecretsAllowed());
+        assertEquals(1, response.configuredEnvManagedSourceCount());
+        assertTrue(response.envManagedGoogleRefreshTokenConfigured());
     }
 
     @Test
@@ -292,6 +295,9 @@ class AdminResourceTest {
                     1,
                     1,
                     0,
+                    true,
+                    1,
+                    true,
                     false,
                     java.util.List.of());
         }

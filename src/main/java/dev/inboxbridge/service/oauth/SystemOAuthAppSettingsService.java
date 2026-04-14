@@ -3,6 +3,7 @@ package dev.inboxbridge.service.oauth;
 import java.time.Instant;
 
 import dev.inboxbridge.config.InboxBridgeConfig;
+import dev.inboxbridge.config.SecretManagementPolicyConfig;
 import dev.inboxbridge.dto.SystemOAuthAppSettingsView;
 import dev.inboxbridge.dto.UpdateSystemOAuthAppSettingsRequest;
 import dev.inboxbridge.persistence.SystemOAuthAppSettings;
@@ -22,6 +23,9 @@ public class SystemOAuthAppSettingsService {
     SecretEncryptionService secretEncryptionService;
 
     @Inject
+    SecretManagementPolicyConfig secretManagementPolicyConfig;
+
+    @Inject
     SystemOAuthAppSettingsRepository repository;
 
     public void setConfig(InboxBridgeConfig config) {
@@ -30,6 +34,10 @@ public class SystemOAuthAppSettingsService {
 
     public void setSecretEncryptionService(SecretEncryptionService secretEncryptionService) {
         this.secretEncryptionService = secretEncryptionService;
+    }
+
+    public void setSecretManagementPolicyConfig(SecretManagementPolicyConfig secretManagementPolicyConfig) {
+        this.secretManagementPolicyConfig = secretManagementPolicyConfig;
     }
 
     public void setRepository(SystemOAuthAppSettingsRepository repository) {
@@ -99,6 +107,14 @@ public class SystemOAuthAppSettingsService {
     @Transactional
     public String googleRefreshToken() {
         return effectiveGoogleRefreshToken(repository.findSingleton().orElse(null));
+    }
+
+    public boolean envManagedMailboxSecretsAllowed() {
+        return secretManagementPolicyConfig == null || secretManagementPolicyConfig.allowEnvManagedMailboxSecrets();
+    }
+
+    public boolean envManagedGoogleRefreshTokenConfigured() {
+        return isConfiguredValue(config.gmail().refreshToken());
     }
 
     @Transactional
@@ -230,7 +246,10 @@ public class SystemOAuthAppSettingsService {
 
     private String effectiveGoogleRefreshToken(SystemOAuthAppSettings settings) {
         String stored = decrypt(settings == null ? null : settings.googleRefreshTokenCiphertext, settings == null ? null : settings.googleRefreshTokenNonce, settings == null ? null : settings.keyVersion, "system-oauth:google-refresh-token");
-        return !stored.isBlank() ? stored : config.gmail().refreshToken();
+        if (!stored.isBlank()) {
+            return stored;
+        }
+        return envManagedMailboxSecretsAllowed() ? config.gmail().refreshToken() : "";
     }
 
     private String effectiveMicrosoftClientId(SystemOAuthAppSettings settings) {

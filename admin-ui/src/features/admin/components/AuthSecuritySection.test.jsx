@@ -41,6 +41,9 @@ describe('AuthSecuritySection', () => {
           protectedRecordCount: 14,
           nonActiveKeyRecordCount: 3,
           unavailableKeyRecordCount: 1,
+          envManagedMailboxSecretsAllowed: false,
+          configuredEnvManagedSourceCount: 2,
+          envManagedGoogleRefreshTokenConfigured: true,
           safeToRetireLegacyKeys: false,
           keyUsage: [
             {
@@ -70,6 +73,8 @@ describe('AuthSecuritySection', () => {
     expect(screen.getByText('Secret management')).toBeInTheDocument()
     expect(screen.getByText('LOCAL:v2')).toBeInTheDocument()
     expect(screen.getAllByText('LOCAL:v1').length).toBeGreaterThan(0)
+    expect(screen.getByText('Blocked by policy')).toBeInTheDocument()
+    expect(screen.getByText('Configured')).toBeInTheDocument()
     expect(screen.getByText((content) => content.includes('Available') && content.includes('11 records'))).toBeInTheDocument()
     expect(screen.getByText((content) => content.includes('Unavailable for decryption') && content.includes('3 records'))).toBeInTheDocument()
     expect(screen.getByText('PT5M')).toBeInTheDocument()
