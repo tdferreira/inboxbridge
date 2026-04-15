@@ -7,5 +7,7 @@ package dev.inboxbridge.dto;
 public record SecretReencryptionAreaResultView(
         String area,
         int recordsUpdated,
-        int secretValuesReencrypted) {
+        int secretValuesReencrypted,
+        int fullReencryptionCount,
+        int metadataRewrapCount) {
 }

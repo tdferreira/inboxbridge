@@ -960,6 +960,8 @@ const dictionary = {
   "authSecurity.secretManagementRotationMethodFull": "Recifrado completo",
   "authSecurity.secretManagementRotationMethodRewrap": "Reenvoltura de metadatos",
   "authSecurity.secretManagementRotationMethodNone": "No se requiere reescritura",
+  "authSecurity.secretManagementExecutionMethodFull": "Secretos reescritos mediante recifrado completo",
+  "authSecurity.secretManagementExecutionMethodRewrap": "Secretos actualizados mediante reenvoltura de metadatos",
   "authSecurity.secretManagementRotationRecommendedAction": "Acción recomendada",
   "authSecurity.secretManagementActionsTitle": "Operaciones sensibles",
   "authSecurity.secretManagementKeyUsageEmpty": "Todavía no hay registros cifrados guardados.",

@@ -521,6 +521,12 @@ but their transit ciphertext still carries an older provider key version, the
 admin section now reports a metadata-rewrap plan instead of a full
 re-encryption plan, and the backend re-encryption flow will use the transit
 provider's rewrap path without decrypting the protected plaintext first.
+The re-encryption result flow now also reports which execution method was
+actually used during a run. Completed admin dialog results now show separate
+counts for secrets rewritten through full plaintext re-encryption versus
+secrets refreshed through metadata rewrap, so operators can confirm whether a
+given rotation mostly changed stored ciphertext payloads or only refreshed the
+provider-side wrapping layer.
 That same admin secret-management flow now also supports step-up verification
 per browser session. When
 `SECURITY_SECRET_REENCRYPTION_REAUTHENTICATION_TTL` is greater than zero

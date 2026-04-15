@@ -1194,6 +1194,8 @@ const dictionary = {
   "authSecurity.secretManagementRotationMethodFull": "Full re-encryption",
   "authSecurity.secretManagementRotationMethodRewrap": "Metadata rewrap",
   "authSecurity.secretManagementRotationMethodNone": "No rewrite required",
+  "authSecurity.secretManagementExecutionMethodFull": "Secrets rewritten through full re-encryption",
+  "authSecurity.secretManagementExecutionMethodRewrap": "Secrets refreshed through metadata rewrap",
   "authSecurity.secretManagementRotationRecommendedAction": "Recommended action",
   "authSecurity.secretManagementActionsTitle": "Sensitive operations",
   "authSecurity.secretManagementKeyUsageEmpty": "No encrypted records have been stored yet.",

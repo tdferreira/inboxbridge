@@ -14,6 +14,8 @@ public record SecretReencryptionResultView(
         String activeKeyVersion,
         int totalRecordsUpdated,
         int totalSecretValuesReencrypted,
+        int totalFullReencryptionCount,
+        int totalMetadataRewrapCount,
         List<SecretReencryptionAreaResultView> areas,
         SecretReencryptionFollowUpView followUp,
         SecretReencryptionVerificationView verification) {

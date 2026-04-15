@@ -298,6 +298,8 @@ describe('SecretManagementSection', () => {
       operationStatus: 'COMPLETED',
       message: 'Secret re-encryption completed and post-run verification passed.',
       executeAfter: '2026-04-15T14:00:00Z',
+      totalFullReencryptionCount: 1,
+      totalMetadataRewrapCount: 2,
       verification: {
         passed: true,
         messages: ['All stored secret records now use the active key version.'],
@@ -373,5 +375,9 @@ describe('SecretManagementSection', () => {
     })
     expect(screen.getByText('Save before retiring legacy keys')).toBeInTheDocument()
     expect(screen.getByText('Save the active key version and the current legacy-key list in your recovery notes.')).toBeInTheDocument()
+    const fullRow = screen.getByText('Secrets rewritten through full re-encryption').closest('div')
+    const rewrapRow = screen.getByText('Secrets refreshed through metadata rewrap').closest('div')
+    expect(fullRow).toHaveTextContent('1')
+    expect(rewrapRow).toHaveTextContent('2')
   })
 })

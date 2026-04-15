@@ -254,6 +254,8 @@ class SecretManagementServiceTest {
 
         assertEquals(2, result.totalRecordsUpdated());
         assertEquals(2, result.totalSecretValuesReencrypted());
+        assertEquals(0, result.totalFullReencryptionCount());
+        assertEquals(2, result.totalMetadataRewrapCount());
         assertEquals(2, activeTransitProvider.rewrapCalls());
         assertEquals(0, activeTransitProvider.decryptCalls());
         assertEquals("already-current", status.rotationPlan().planId());
@@ -285,6 +287,8 @@ class SecretManagementServiceTest {
         assertEquals("OPENBAO_TRANSIT:inboxbridge", result.activeKeyVersion());
         assertEquals(5, result.totalRecordsUpdated());
         assertEquals(5, result.totalSecretValuesReencrypted());
+        assertEquals(5, result.totalFullReencryptionCount());
+        assertEquals(0, result.totalMetadataRewrapCount());
         assertEquals(5, status.protectedRecordCount());
         assertEquals(5, status.activeKeyRecordCount());
         assertEquals(0, status.nonActiveKeyRecordCount());
@@ -317,6 +321,8 @@ class SecretManagementServiceTest {
         assertEquals("SPLIT_KEY:LOCAL=v2|OPENBAO_TRANSIT=inboxbridge", result.activeKeyVersion());
         assertEquals(5, result.totalRecordsUpdated());
         assertEquals(5, result.totalSecretValuesReencrypted());
+        assertEquals(5, result.totalFullReencryptionCount());
+        assertEquals(0, result.totalMetadataRewrapCount());
         assertEquals(5, status.protectedRecordCount());
         assertEquals(5, status.activeKeyRecordCount());
         assertEquals(0, status.nonActiveKeyRecordCount());
@@ -334,6 +340,8 @@ class SecretManagementServiceTest {
         assertEquals("LOCAL:v2", result.activeKeyVersion());
         assertEquals(2, result.totalRecordsUpdated());
         assertEquals(2, result.totalSecretValuesReencrypted());
+        assertEquals(2, result.totalFullReencryptionCount());
+        assertEquals(0, result.totalMetadataRewrapCount());
         assertEquals("destination-mailboxes", result.areas().get(2).area());
         assertEquals(1, result.areas().get(2).recordsUpdated());
         assertEquals("system-oauth", result.areas().get(4).area());

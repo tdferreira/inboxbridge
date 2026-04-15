@@ -394,6 +394,8 @@ class AdminResourceTest {
                     "LOCAL:v2",
                     2,
                     3,
+                    2,
+                    1,
                     java.util.List.of(),
                     new dev.inboxbridge.dto.SecretReencryptionFollowUpView(
                             request != null && request.revokeBrowserExtensionSessions() ? 4 : 0,

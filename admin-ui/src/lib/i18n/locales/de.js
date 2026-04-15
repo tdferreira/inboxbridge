@@ -967,6 +967,8 @@ const dictionary = {
   "authSecurity.secretManagementRotationMethodFull": "Vollständige Neuverschlüsselung",
   "authSecurity.secretManagementRotationMethodRewrap": "Metadaten-Rewrap",
   "authSecurity.secretManagementRotationMethodNone": "Keine Umschreibung erforderlich",
+  "authSecurity.secretManagementExecutionMethodFull": "Geheimnisse per vollständiger Neuverschlüsselung umgeschrieben",
+  "authSecurity.secretManagementExecutionMethodRewrap": "Geheimnisse per Metadaten-Rewrap aktualisiert",
   "authSecurity.secretManagementRotationRecommendedAction": "Empfohlene Aktion",
   "authSecurity.secretManagementActionsTitle": "Sensible Vorgänge",
   "authSecurity.secretManagementKeyUsageEmpty": "Es wurden noch keine verschlüsselten Datensätze gespeichert.",

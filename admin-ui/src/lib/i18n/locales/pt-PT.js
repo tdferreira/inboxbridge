@@ -491,6 +491,8 @@ const dictionary = {
   "authSecurity.secretManagementRotationMethodFull": "Re-encriptação completa",
   "authSecurity.secretManagementRotationMethodRewrap": "Reempacotamento de metadados",
   "authSecurity.secretManagementRotationMethodNone": "Não é necessária reescrita",
+  "authSecurity.secretManagementExecutionMethodFull": "Segredos reescritos com re-encriptação completa",
+  "authSecurity.secretManagementExecutionMethodRewrap": "Segredos atualizados com reempacotamento de metadados",
   "authSecurity.secretManagementRotationRecommendedAction": "Ação recomendada",
   "authSecurity.secretManagementActionsTitle": "Operações sensíveis",
   "authSecurity.secretManagementKeyUsageEmpty": "Ainda não existem registos encriptados guardados.",

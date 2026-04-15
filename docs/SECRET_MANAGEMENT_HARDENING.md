@@ -301,6 +301,9 @@ Current implementation status:
   envelopes; when only the provider's internal key version is stale, the
   status reports a metadata-rewrap plan and the bulk action can refresh the
   outer transit ciphertext without decrypting plaintext
+- bulk re-encryption results now distinguish how many secrets were processed
+  through full plaintext re-encryption versus metadata rewrap, so operators
+  can audit what kind of rotation actually ran
 - after completion, the UI shows verification messages plus a list of items the
   operator should save before retiring any legacy key material
 

@@ -70,6 +70,8 @@ function SecretReencryptionDialog({
   const verification = reencryptionResult?.verification || null
   const verificationMessages = Array.isArray(verification?.messages) ? verification.messages : []
   const operatorSaveItems = Array.isArray(verification?.operatorSaveItems) ? verification.operatorSaveItems : []
+  const totalFullReencryptionCount = reencryptionResult?.totalFullReencryptionCount ?? 0
+  const totalMetadataRewrapCount = reencryptionResult?.totalMetadataRewrapCount ?? 0
   const requestSubmitted = Boolean(reencryptionResult?.operationStatus)
   const requestScheduled = reencryptionResult?.operationStatus === 'SCHEDULED'
   const requestCompleted = reencryptionResult?.operationStatus === 'COMPLETED'
@@ -242,6 +244,12 @@ function SecretReencryptionDialog({
               {requestCompleted && verificationMessages.length > 0 ? (
                 <div className="detail-stack">
                   {verificationMessages.map((message) => <span key={message}>{message}</span>)}
+                </div>
+              ) : null}
+              {requestCompleted ? (
+                <div className="polling-statistics-breakdown">
+                  <div><span>{t('authSecurity.secretManagementExecutionMethodFull')}</span><strong>{totalFullReencryptionCount}</strong></div>
+                  <div><span>{t('authSecurity.secretManagementExecutionMethodRewrap')}</span><strong>{totalMetadataRewrapCount}</strong></div>
                 </div>
               ) : null}
               {requestCompleted && operatorSaveItems.length > 0 ? (

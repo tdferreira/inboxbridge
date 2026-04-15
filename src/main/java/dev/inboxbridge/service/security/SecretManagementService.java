@@ -301,6 +301,8 @@ public class SecretManagementService {
                     providerResolver().activeKeyVersion(),
                     0,
                     0,
+                    0,
+                    0,
                     List.of(),
                     new SecretReencryptionFollowUpView(0, 0, 0),
                     buildVerification(status(currentSession)));
@@ -503,9 +505,11 @@ public class SecretManagementService {
     private SecretReencryptionAreaResultView reencryptOAuthCredentials() {
         int recordsUpdated = 0;
         int secretValuesReencrypted = 0;
+        int fullReencryptionCount = 0;
+        int metadataRewrapCount = 0;
         for (OAuthCredential credential : oAuthCredentialRepository.listAll()) {
-            int updatedFields = 0;
-            updatedFields += rewriteSecret(
+            AreaRewriteAccumulator updatedFields = new AreaRewriteAccumulator();
+            updatedFields.add(rewriteSecret(
                     credential.refreshTokenCiphertext,
                     credential.refreshTokenNonce,
                     credential.keyVersion,
@@ -513,8 +517,8 @@ public class SecretManagementService {
                         credential.refreshTokenCiphertext = value.ciphertextBase64();
                         credential.refreshTokenNonce = value.nonceBase64();
                     },
-                    credential.provider + ":" + credential.subjectKey + ":refresh");
-            updatedFields += rewriteSecret(
+                    credential.provider + ":" + credential.subjectKey + ":refresh"));
+            updatedFields.add(rewriteSecret(
                     credential.accessTokenCiphertext,
                     credential.accessTokenNonce,
                     credential.keyVersion,
@@ -522,24 +526,28 @@ public class SecretManagementService {
                         credential.accessTokenCiphertext = value.ciphertextBase64();
                         credential.accessTokenNonce = value.nonceBase64();
                     },
-                    credential.provider + ":" + credential.subjectKey + ":access");
-            if (updatedFields > 0) {
+                    credential.provider + ":" + credential.subjectKey + ":access"));
+            if (updatedFields.secretValuesReencrypted > 0) {
                 credential.keyVersion = secretEncryptionService.keyVersion();
                 credential.updatedAt = Instant.now();
                 oAuthCredentialRepository.persist(credential);
                 recordsUpdated++;
-                secretValuesReencrypted += updatedFields;
+                secretValuesReencrypted += updatedFields.secretValuesReencrypted;
+                fullReencryptionCount += updatedFields.fullReencryptionCount;
+                metadataRewrapCount += updatedFields.metadataRewrapCount;
             }
         }
-        return new SecretReencryptionAreaResultView("oauth-credentials", recordsUpdated, secretValuesReencrypted);
+        return new SecretReencryptionAreaResultView("oauth-credentials", recordsUpdated, secretValuesReencrypted, fullReencryptionCount, metadataRewrapCount);
     }
 
     private SecretReencryptionAreaResultView reencryptSourceMailboxes() {
         int recordsUpdated = 0;
         int secretValuesReencrypted = 0;
+        int fullReencryptionCount = 0;
+        int metadataRewrapCount = 0;
         for (UserEmailAccount account : userEmailAccountRepository.listAll()) {
-            int updatedFields = 0;
-            updatedFields += rewriteSecret(
+            AreaRewriteAccumulator updatedFields = new AreaRewriteAccumulator();
+            updatedFields.add(rewriteSecret(
                     account.passwordCiphertext,
                     account.passwordNonce,
                     account.keyVersion,
@@ -547,8 +555,8 @@ public class SecretManagementService {
                         account.passwordCiphertext = value.ciphertextBase64();
                         account.passwordNonce = value.nonceBase64();
                     },
-                    "user-bridge:" + account.userId + ":" + account.emailAccountId + ":password");
-            updatedFields += rewriteSecret(
+                    "user-bridge:" + account.userId + ":" + account.emailAccountId + ":password"));
+            updatedFields.add(rewriteSecret(
                     account.oauthRefreshTokenCiphertext,
                     account.oauthRefreshTokenNonce,
                     account.keyVersion,
@@ -556,23 +564,27 @@ public class SecretManagementService {
                         account.oauthRefreshTokenCiphertext = value.ciphertextBase64();
                         account.oauthRefreshTokenNonce = value.nonceBase64();
                     },
-                    "user-bridge:" + account.userId + ":" + account.emailAccountId + ":oauth-refresh-token");
-            if (updatedFields > 0) {
+                    "user-bridge:" + account.userId + ":" + account.emailAccountId + ":oauth-refresh-token"));
+            if (updatedFields.secretValuesReencrypted > 0) {
                 account.keyVersion = secretEncryptionService.keyVersion();
                 account.updatedAt = Instant.now();
                 userEmailAccountRepository.persist(account);
                 recordsUpdated++;
-                secretValuesReencrypted += updatedFields;
+                secretValuesReencrypted += updatedFields.secretValuesReencrypted;
+                fullReencryptionCount += updatedFields.fullReencryptionCount;
+                metadataRewrapCount += updatedFields.metadataRewrapCount;
             }
         }
-        return new SecretReencryptionAreaResultView("source-mailboxes", recordsUpdated, secretValuesReencrypted);
+        return new SecretReencryptionAreaResultView("source-mailboxes", recordsUpdated, secretValuesReencrypted, fullReencryptionCount, metadataRewrapCount);
     }
 
     private SecretReencryptionAreaResultView reencryptDestinationMailboxes() {
         int recordsUpdated = 0;
         int secretValuesReencrypted = 0;
+        int fullReencryptionCount = 0;
+        int metadataRewrapCount = 0;
         for (UserMailDestinationConfig config : userMailDestinationConfigRepository.listAll()) {
-            int updatedFields = rewriteSecret(
+            RewriteOutcome updatedFields = rewriteSecret(
                     config.passwordCiphertext,
                     config.passwordNonce,
                     config.keyVersion,
@@ -581,23 +593,27 @@ public class SecretManagementService {
                         config.passwordNonce = value.nonceBase64();
                     },
                     "user-destination:" + config.userId + ":password");
-            if (updatedFields > 0) {
+            if (updatedFields.updated()) {
                 config.keyVersion = secretEncryptionService.keyVersion();
                 config.updatedAt = Instant.now();
                 userMailDestinationConfigRepository.persist(config);
                 recordsUpdated++;
-                secretValuesReencrypted += updatedFields;
+                secretValuesReencrypted += 1;
+                fullReencryptionCount += updatedFields.metadataRewrap() ? 0 : 1;
+                metadataRewrapCount += updatedFields.metadataRewrap() ? 1 : 0;
             }
         }
-        return new SecretReencryptionAreaResultView("destination-mailboxes", recordsUpdated, secretValuesReencrypted);
+        return new SecretReencryptionAreaResultView("destination-mailboxes", recordsUpdated, secretValuesReencrypted, fullReencryptionCount, metadataRewrapCount);
     }
 
     private SecretReencryptionAreaResultView reencryptUserGmailConfig() {
         int recordsUpdated = 0;
         int secretValuesReencrypted = 0;
+        int fullReencryptionCount = 0;
+        int metadataRewrapCount = 0;
         for (UserGmailConfig config : userGmailConfigRepository.listAll()) {
-            int updatedFields = 0;
-            updatedFields += rewriteSecret(
+            AreaRewriteAccumulator updatedFields = new AreaRewriteAccumulator();
+            updatedFields.add(rewriteSecret(
                     config.clientIdCiphertext,
                     config.clientIdNonce,
                     config.keyVersion,
@@ -605,8 +621,8 @@ public class SecretManagementService {
                         config.clientIdCiphertext = value.ciphertextBase64();
                         config.clientIdNonce = value.nonceBase64();
                     },
-                    "user-gmail:" + config.userId + ":client-id");
-            updatedFields += rewriteSecret(
+                    "user-gmail:" + config.userId + ":client-id"));
+            updatedFields.add(rewriteSecret(
                     config.clientSecretCiphertext,
                     config.clientSecretNonce,
                     config.keyVersion,
@@ -614,8 +630,8 @@ public class SecretManagementService {
                         config.clientSecretCiphertext = value.ciphertextBase64();
                         config.clientSecretNonce = value.nonceBase64();
                     },
-                    "user-gmail:" + config.userId + ":client-secret");
-            updatedFields += rewriteSecret(
+                    "user-gmail:" + config.userId + ":client-secret"));
+            updatedFields.add(rewriteSecret(
                     config.refreshTokenCiphertext,
                     config.refreshTokenNonce,
                     config.keyVersion,
@@ -623,25 +639,27 @@ public class SecretManagementService {
                         config.refreshTokenCiphertext = value.ciphertextBase64();
                         config.refreshTokenNonce = value.nonceBase64();
                     },
-                    "user-gmail:" + config.userId + ":refresh-token");
-            if (updatedFields > 0) {
+                    "user-gmail:" + config.userId + ":refresh-token"));
+            if (updatedFields.secretValuesReencrypted > 0) {
                 config.keyVersion = secretEncryptionService.keyVersion();
                 config.updatedAt = Instant.now();
                 userGmailConfigRepository.persist(config);
                 recordsUpdated++;
-                secretValuesReencrypted += updatedFields;
+                secretValuesReencrypted += updatedFields.secretValuesReencrypted;
+                fullReencryptionCount += updatedFields.fullReencryptionCount;
+                metadataRewrapCount += updatedFields.metadataRewrapCount;
             }
         }
-        return new SecretReencryptionAreaResultView("gmail-user-config", recordsUpdated, secretValuesReencrypted);
+        return new SecretReencryptionAreaResultView("gmail-user-config", recordsUpdated, secretValuesReencrypted, fullReencryptionCount, metadataRewrapCount);
     }
 
     private SecretReencryptionAreaResultView reencryptSystemOAuthSettings() {
         SystemOAuthAppSettings settings = systemOAuthAppSettingsRepository.findSingleton().orElse(null);
         if (settings == null) {
-            return new SecretReencryptionAreaResultView("system-oauth", 0, 0);
+            return new SecretReencryptionAreaResultView("system-oauth", 0, 0, 0, 0);
         }
-        int updatedFields = 0;
-        updatedFields += rewriteSecret(
+        AreaRewriteAccumulator updatedFields = new AreaRewriteAccumulator();
+        updatedFields.add(rewriteSecret(
                 settings.googleClientIdCiphertext,
                 settings.googleClientIdNonce,
                 settings.keyVersion,
@@ -649,8 +667,8 @@ public class SecretManagementService {
                     settings.googleClientIdCiphertext = value.ciphertextBase64();
                     settings.googleClientIdNonce = value.nonceBase64();
                 },
-                "system-oauth:google-client-id");
-        updatedFields += rewriteSecret(
+                "system-oauth:google-client-id"));
+        updatedFields.add(rewriteSecret(
                 settings.googleClientSecretCiphertext,
                 settings.googleClientSecretNonce,
                 settings.keyVersion,
@@ -658,8 +676,8 @@ public class SecretManagementService {
                     settings.googleClientSecretCiphertext = value.ciphertextBase64();
                     settings.googleClientSecretNonce = value.nonceBase64();
                 },
-                "system-oauth:google-client-secret");
-        updatedFields += rewriteSecret(
+                "system-oauth:google-client-secret"));
+        updatedFields.add(rewriteSecret(
                 settings.googleRefreshTokenCiphertext,
                 settings.googleRefreshTokenNonce,
                 settings.keyVersion,
@@ -667,8 +685,8 @@ public class SecretManagementService {
                     settings.googleRefreshTokenCiphertext = value.ciphertextBase64();
                     settings.googleRefreshTokenNonce = value.nonceBase64();
                 },
-                "system-oauth:google-refresh-token");
-        updatedFields += rewriteSecret(
+                "system-oauth:google-refresh-token"));
+        updatedFields.add(rewriteSecret(
                 settings.microsoftClientIdCiphertext,
                 settings.microsoftClientIdNonce,
                 settings.keyVersion,
@@ -676,8 +694,8 @@ public class SecretManagementService {
                     settings.microsoftClientIdCiphertext = value.ciphertextBase64();
                     settings.microsoftClientIdNonce = value.nonceBase64();
                 },
-                "system-oauth:microsoft-client-id");
-        updatedFields += rewriteSecret(
+                "system-oauth:microsoft-client-id"));
+        updatedFields.add(rewriteSecret(
                 settings.microsoftClientSecretCiphertext,
                 settings.microsoftClientSecretNonce,
                 settings.keyVersion,
@@ -685,23 +703,28 @@ public class SecretManagementService {
                     settings.microsoftClientSecretCiphertext = value.ciphertextBase64();
                     settings.microsoftClientSecretNonce = value.nonceBase64();
                 },
-                "system-oauth:microsoft-client-secret");
-        if (updatedFields > 0) {
+                "system-oauth:microsoft-client-secret"));
+        if (updatedFields.secretValuesReencrypted > 0) {
             settings.keyVersion = secretEncryptionService.keyVersion();
             settings.updatedAt = Instant.now();
             systemOAuthAppSettingsRepository.persist(settings);
-            return new SecretReencryptionAreaResultView("system-oauth", 1, updatedFields);
+            return new SecretReencryptionAreaResultView(
+                    "system-oauth",
+                    1,
+                    updatedFields.secretValuesReencrypted,
+                    updatedFields.fullReencryptionCount,
+                    updatedFields.metadataRewrapCount);
         }
-        return new SecretReencryptionAreaResultView("system-oauth", 0, 0);
+        return new SecretReencryptionAreaResultView("system-oauth", 0, 0, 0, 0);
     }
 
     private SecretReencryptionAreaResultView reencryptAuthSecuritySettings() {
         SystemAuthSecuritySetting settings = systemAuthSecuritySettingRepository.findSingleton().orElse(null);
         if (settings == null) {
-            return new SecretReencryptionAreaResultView("auth-security", 0, 0);
+            return new SecretReencryptionAreaResultView("auth-security", 0, 0, 0, 0);
         }
-        int updatedFields = 0;
-        updatedFields += rewriteSecret(
+        AreaRewriteAccumulator updatedFields = new AreaRewriteAccumulator();
+        updatedFields.add(rewriteSecret(
                 settings.registrationTurnstileSecretCiphertext,
                 settings.registrationTurnstileSecretNonce,
                 settings.keyVersion,
@@ -709,8 +732,8 @@ public class SecretManagementService {
                     settings.registrationTurnstileSecretCiphertext = value.ciphertextBase64();
                     settings.registrationTurnstileSecretNonce = value.nonceBase64();
                 },
-                "system-auth-security:registration-turnstile-secret");
-        updatedFields += rewriteSecret(
+                "system-auth-security:registration-turnstile-secret"));
+        updatedFields.add(rewriteSecret(
                 settings.registrationHcaptchaSecretCiphertext,
                 settings.registrationHcaptchaSecretNonce,
                 settings.keyVersion,
@@ -718,8 +741,8 @@ public class SecretManagementService {
                     settings.registrationHcaptchaSecretCiphertext = value.ciphertextBase64();
                     settings.registrationHcaptchaSecretNonce = value.nonceBase64();
                 },
-                "system-auth-security:registration-hcaptcha-secret");
-        updatedFields += rewriteSecret(
+                "system-auth-security:registration-hcaptcha-secret"));
+        updatedFields.add(rewriteSecret(
                 settings.geoIpIpinfoTokenCiphertext,
                 settings.geoIpIpinfoTokenNonce,
                 settings.keyVersion,
@@ -727,35 +750,40 @@ public class SecretManagementService {
                     settings.geoIpIpinfoTokenCiphertext = value.ciphertextBase64();
                     settings.geoIpIpinfoTokenNonce = value.nonceBase64();
                 },
-                "system-auth-security:geo-ip-ipinfo-token");
-        if (updatedFields > 0) {
+                "system-auth-security:geo-ip-ipinfo-token"));
+        if (updatedFields.secretValuesReencrypted > 0) {
             settings.keyVersion = secretEncryptionService.keyVersion();
             settings.updatedAt = Instant.now();
             systemAuthSecuritySettingRepository.persist(settings);
-            return new SecretReencryptionAreaResultView("auth-security", 1, updatedFields);
+            return new SecretReencryptionAreaResultView(
+                    "auth-security",
+                    1,
+                    updatedFields.secretValuesReencrypted,
+                    updatedFields.fullReencryptionCount,
+                    updatedFields.metadataRewrapCount);
         }
-        return new SecretReencryptionAreaResultView("auth-security", 0, 0);
+        return new SecretReencryptionAreaResultView("auth-security", 0, 0, 0, 0);
     }
 
-    private int rewriteSecret(
+    private RewriteOutcome rewriteSecret(
             String ciphertext,
             String nonce,
             String keyVersion,
             java.util.function.Consumer<SecretEncryptionService.EncryptedValue> saveEncrypted,
             String context) {
         if (ciphertext == null || ciphertext.isBlank() || keyVersion == null || keyVersion.isBlank()) {
-            return 0;
+            return RewriteOutcome.SKIPPED;
         }
         boolean metadataRewrapCandidate = secretEncryptionService.canMetadataRewrapToActive(ciphertext, nonce, keyVersion);
         if (!metadataRewrapCandidate && (nonce == null || nonce.isBlank())) {
-            return 0;
+            return RewriteOutcome.SKIPPED;
         }
         if (!metadataRewrapCandidate && secretEncryptionService.keyVersion().equals(keyVersion)) {
-            return 0;
+            return RewriteOutcome.SKIPPED;
         }
         SecretEncryptionService.EncryptedValue encrypted = secretEncryptionService.reencryptToActive(ciphertext, nonce, keyVersion, context);
         saveEncrypted.accept(encrypted);
-        return 1;
+        return metadataRewrapCandidate ? RewriteOutcome.METADATA_REWRAP : RewriteOutcome.FULL_REENCRYPTION;
     }
 
     private SecretReencryptionFollowUpView runFollowUpActions(SecretReencryptionRequest request) {
@@ -795,6 +823,8 @@ public class SecretManagementService {
 
             int totalRecordsUpdated = areas.stream().mapToInt(SecretReencryptionAreaResultView::recordsUpdated).sum();
             int totalSecretValuesReencrypted = areas.stream().mapToInt(SecretReencryptionAreaResultView::secretValuesReencrypted).sum();
+            int totalFullReencryptionCount = areas.stream().mapToInt(SecretReencryptionAreaResultView::fullReencryptionCount).sum();
+            int totalMetadataRewrapCount = areas.stream().mapToInt(SecretReencryptionAreaResultView::metadataRewrapCount).sum();
             SecretReencryptionFollowUpView followUp = runFollowUpActions(request);
             SecretReencryptionVerificationView verification = buildVerification(status(currentSession));
             requestState.status = RequestStatus.COMPLETED.name();
@@ -812,6 +842,8 @@ public class SecretManagementService {
                     secretEncryptionService.keyVersion(),
                     totalRecordsUpdated,
                     totalSecretValuesReencrypted,
+                    totalFullReencryptionCount,
+                    totalMetadataRewrapCount,
                     areas,
                     followUp,
                     verification);
@@ -1320,6 +1352,30 @@ public class SecretManagementService {
         private List<String> areas() {
             return List.copyOf(areas);
         }
+    }
+
+    private static final class AreaRewriteAccumulator {
+        private int secretValuesReencrypted;
+        private int fullReencryptionCount;
+        private int metadataRewrapCount;
+
+        private void add(RewriteOutcome outcome) {
+            if (!outcome.updated()) {
+                return;
+            }
+            secretValuesReencrypted++;
+            if (outcome.metadataRewrap()) {
+                metadataRewrapCount++;
+            } else {
+                fullReencryptionCount++;
+            }
+        }
+    }
+
+    private record RewriteOutcome(boolean updated, boolean metadataRewrap) {
+        private static final RewriteOutcome SKIPPED = new RewriteOutcome(false, false);
+        private static final RewriteOutcome FULL_REENCRYPTION = new RewriteOutcome(true, false);
+        private static final RewriteOutcome METADATA_REWRAP = new RewriteOutcome(true, true);
     }
 
     private SecretProviderResolver providerResolver() {
