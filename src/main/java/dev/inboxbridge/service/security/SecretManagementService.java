@@ -16,6 +16,7 @@ import java.util.Optional;
 
 import dev.inboxbridge.config.SecretManagementPolicyConfig;
 import dev.inboxbridge.dto.SecretManagementKeyUsageView;
+import dev.inboxbridge.dto.SecretManagementModeAssessmentView;
 import dev.inboxbridge.dto.SecretManagementRetirementRequirementView;
 import dev.inboxbridge.dto.SecretManagementRetirementCompletionView;
 import dev.inboxbridge.dto.SecretManagementRetirementReviewView;
@@ -139,6 +140,7 @@ public class SecretManagementService {
     public SecretManagementStatusView status(UserSession currentSession) {
         SecretProviderHealth providerHealth = providerResolver().health();
         List<SecretProviderComponentStatusView> providerComponents = providerResolver().componentStatuses();
+        List<SecretManagementModeAssessmentView> modeAssessments = buildModeAssessments();
         SystemSecretReencryptionRequest requestState = currentReencryptionRequest();
         boolean reauthenticationRequired = reencryptionReauthenticationRequired();
         boolean reauthenticationSatisfied = reencryptionReauthenticationSatisfied(currentSession);
@@ -165,6 +167,7 @@ public class SecretManagementService {
                     providerHealth.writable(),
                     providerHealth.statusMessage(),
                     providerComponents,
+                    modeAssessments,
                     null,
                     null,
                     List.of(),
@@ -276,6 +279,7 @@ public class SecretManagementService {
                 providerHealth.writable(),
                 providerHealth.statusMessage(),
                 providerComponents,
+                modeAssessments,
                 activeKeyVersion,
                 activeKeyId,
                 configuredLegacyKeyIds,
@@ -302,6 +306,103 @@ public class SecretManagementService {
                 reauthenticationRequired,
                 reauthenticationSatisfied,
                 reauthenticationExpiresAt);
+    }
+
+    private List<SecretManagementModeAssessmentView> buildModeAssessments() {
+        return List.of(
+                buildModeAssessment(SecretProviderMode.LOCAL),
+                buildModeAssessment(SecretProviderMode.OPENBAO_TRANSIT),
+                buildModeAssessment(SecretProviderMode.VAULT_TRANSIT),
+                buildModeAssessment(SecretProviderMode.SPLIT_KEY));
+    }
+
+    private SecretManagementModeAssessmentView buildModeAssessment(SecretProviderMode mode) {
+        SecretProviderHealth health = providerResolver().healthForMode(mode);
+        boolean current = providerResolver().isModeCurrent(mode);
+        String activeKeyVersion = providerResolver().activeKeyVersionForMode(mode);
+        String activeKeyId = providerResolver().activeKeyIdForMode(mode);
+        return new SecretManagementModeAssessmentView(
+                mode.name(),
+                health.providerId(),
+                current,
+                health.healthy(),
+                health.writable(),
+                modeAssessmentStatusMessage(mode, current, health),
+                activeKeyVersion,
+                activeKeyId,
+                modeAssessmentConfigReferences(mode),
+                modeAssessmentRemediationSteps(mode, current, health));
+    }
+
+    private String modeAssessmentStatusMessage(SecretProviderMode mode, boolean current, SecretProviderHealth health) {
+        if (current) {
+            return health.statusMessage();
+        }
+        if (health.writable()) {
+            return switch (mode) {
+                case LOCAL -> "Local key mode is fully configured and can be used as the next active encryption target.";
+                case OPENBAO_TRANSIT -> "OpenBao transit mode is fully configured and can be used as the next active encryption target.";
+                case VAULT_TRANSIT -> "Vault transit mode is fully configured and can be used as the next active encryption target.";
+                case SPLIT_KEY -> "Split-key mode is fully configured and can be used as the next active encryption target.";
+            };
+        }
+        return health.statusMessage();
+    }
+
+    private List<String> modeAssessmentConfigReferences(SecretProviderMode mode) {
+        return switch (mode) {
+            case LOCAL -> List.of(
+                    "SECRET_PROVIDER_MODE",
+                    "SECURITY_TOKEN_ENCRYPTION_KEY",
+                    "SECURITY_TOKEN_ENCRYPTION_KEY_ID",
+                    "SECURITY_TOKEN_ENCRYPTION_LEGACY_KEYS");
+            case OPENBAO_TRANSIT -> List.of(
+                    "SECRET_PROVIDER_MODE",
+                    "SECRET_PROVIDER_OPENBAO_URL",
+                    "SECRET_PROVIDER_OPENBAO_TOKEN",
+                    "SECRET_PROVIDER_OPENBAO_MOUNT",
+                    "SECRET_PROVIDER_OPENBAO_KEY");
+            case VAULT_TRANSIT -> List.of(
+                    "SECRET_PROVIDER_MODE",
+                    "SECRET_PROVIDER_VAULT_URL",
+                    "SECRET_PROVIDER_VAULT_TOKEN",
+                    "SECRET_PROVIDER_VAULT_MOUNT",
+                    "SECRET_PROVIDER_VAULT_KEY");
+            case SPLIT_KEY -> List.of(
+                    "SECRET_PROVIDER_MODE",
+                    "SECRET_PROVIDER_SPLIT_SECONDARY_MODE",
+                    "SECURITY_TOKEN_ENCRYPTION_KEY",
+                    "SECURITY_TOKEN_ENCRYPTION_KEY_ID",
+                    "SECRET_PROVIDER_OPENBAO_* or SECRET_PROVIDER_VAULT_*");
+        };
+    }
+
+    private List<String> modeAssessmentRemediationSteps(SecretProviderMode mode, boolean current, SecretProviderHealth health) {
+        if (current && health.writable()) {
+            return List.of(
+                    "Keep this active provider path available while you finish re-encryption, validation, and any later retirement review.");
+        }
+        if (health.writable()) {
+            return List.of(
+                    "Switch SECRET_PROVIDER_MODE to " + mode.name() + " when you are ready to make this mode active.",
+                    "Redeploy InboxBridge, refresh Secret management, and confirm this mode still shows healthy and writable before requesting re-encryption.",
+                    "Keep the previous active provider path available until re-encryption and post-cleanup verification are complete.");
+        }
+        return switch (mode) {
+            case LOCAL -> List.of(
+                    "Configure SECURITY_TOKEN_ENCRYPTION_KEY and optionally SECURITY_TOKEN_ENCRYPTION_KEY_ID plus SECURITY_TOKEN_ENCRYPTION_LEGACY_KEYS.",
+                    "If you intend to return to local-only mode, set SECRET_PROVIDER_MODE=LOCAL and redeploy InboxBridge before refreshing this page.");
+            case OPENBAO_TRANSIT -> List.of(
+                    "Configure SECRET_PROVIDER_MODE=OPENBAO_TRANSIT together with the OpenBao transit URL, token, mount, and key name.",
+                    "Verify InboxBridge can reach the OpenBao transit endpoint with the configured TLS trust, then redeploy and refresh this page.");
+            case VAULT_TRANSIT -> List.of(
+                    "Configure SECRET_PROVIDER_MODE=VAULT_TRANSIT together with the Vault transit URL, token, mount, and key name.",
+                    "Verify InboxBridge can reach the Vault transit endpoint with the configured TLS trust, then redeploy and refresh this page.");
+            case SPLIT_KEY -> List.of(
+                    "Configure SECRET_PROVIDER_MODE=SPLIT_KEY and set SECRET_PROVIDER_SPLIT_SECONDARY_MODE to OPENBAO_TRANSIT or VAULT_TRANSIT.",
+                    "Keep the local inner key configured with SECURITY_TOKEN_ENCRYPTION_KEY, then configure the matching secondary transit provider settings and redeploy InboxBridge.",
+                    "Refresh this page only after both the local inner key and the secondary transit provider are healthy and writable.");
+        };
     }
 
     public SecretManagementReportView exportReport(UserSession currentSession) {

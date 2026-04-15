@@ -698,6 +698,11 @@ Current repository status:
   - backend-verified re-encryption readiness exists
   - cooldown plus step-up verification exists
   - provider-component diagnostics exist
+  - backend-assessed migration-target previews now exist for `LOCAL`,
+    `OPENBAO_TRANSIT`, `VAULT_TRANSIT`, and `SPLIT_KEY`, so operators can
+    compare readiness, writable state, active key metadata, config references,
+    and remediation steps for each supported mode before they switch
+    `SECRET_PROVIDER_MODE`
   - provider-aware rotation-plan preview exists
   - metadata-only rewrap now exists for active transit-provider key rollovers
     where the stored InboxBridge key target has not changed and only the

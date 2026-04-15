@@ -154,6 +154,34 @@ class SecretProviderResolverTest {
         assertFalse(resolver.canMetadataRewrapToActive("vault:v1:payload", "nonce", "OPENBAO_TRANSIT:inboxbridge"));
     }
 
+    @Test
+    void canAssessANonCurrentTransitModeWithoutSwitchingTheActiveMode() {
+        SecretProviderResolver resolver = configuredLocalResolver();
+        resolver.setOpenbaoUrl("https://openbao.internal");
+        resolver.setOpenbaoToken("token");
+        resolver.setOpenbaoMount("transit");
+        resolver.setOpenbaoKey("inboxbridge");
+        resolver.setTransitSecretProvider(new StubTransitSecretProvider(true));
+
+        SecretProviderHealth health = resolver.healthForMode(SecretProviderMode.OPENBAO_TRANSIT);
+
+        assertEquals(SecretProviderMode.OPENBAO_TRANSIT, health.mode());
+        assertTrue(health.writable());
+        assertEquals("OPENBAO_TRANSIT:inboxbridge", resolver.activeKeyVersionForMode(SecretProviderMode.OPENBAO_TRANSIT));
+        assertEquals("inboxbridge", resolver.activeKeyIdForMode(SecretProviderMode.OPENBAO_TRANSIT));
+        assertTrue(resolver.isModeCurrent(SecretProviderMode.LOCAL));
+        assertFalse(resolver.isModeCurrent(SecretProviderMode.OPENBAO_TRANSIT));
+    }
+
+    @Test
+    void returnsNullActiveKeyDetailsWhenAssessedModeIsNotWritable() {
+        SecretProviderResolver resolver = configuredLocalResolver();
+
+        assertFalse(resolver.healthForMode(SecretProviderMode.VAULT_TRANSIT).writable());
+        assertEquals(null, resolver.activeKeyVersionForMode(SecretProviderMode.VAULT_TRANSIT));
+        assertEquals(null, resolver.activeKeyIdForMode(SecretProviderMode.VAULT_TRANSIT));
+    }
+
     private SecretProviderResolver configuredLocalResolver() {
         LocalSecretKeyProvider provider = configuredLocalProvider();
         SecretProviderResolver resolver = new SecretProviderResolver();

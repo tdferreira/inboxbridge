@@ -506,14 +506,19 @@ page or in-modal section. The admin `Secret management` section also now shows
 provider-component diagnostics for the active trust boundaries, so local-key,
 transit, and split-key deployments can see exactly which encryption component
 is healthy or writable before they attempt key rotation or bulk re-encryption.
-That same section now also derives a provider-aware rotation plan from the
-stored key-usage data. Operators can now see whether the current situation is
-best understood as a local-key rotation, a transit-key migration, a split-key
-envelope rotation, a full provider migration, or a blocked legacy-key-recovery
-case before they queue any re-encryption run. The UI surfaces the active
-target, affected-record count, unavailable-record count, impacted secret
-areas, and whether the current deployment still requires a full ciphertext
-rewrite instead of a lighter metadata-only rewrap path.
+That same section now also shows backend-assessed migration targets for every
+supported secret-management mode (`LOCAL`, `OPENBAO_TRANSIT`,
+`VAULT_TRANSIT`, `SPLIT_KEY`) so operators can compare readiness, writable
+state, active key metadata, required configuration references, and remediation
+steps before they flip `SECRET_PROVIDER_MODE`. It also derives a
+provider-aware rotation plan from the stored key-usage data. Operators can now
+see whether the current situation is best understood as a local-key rotation,
+a transit-key migration, a split-key envelope rotation, a full provider
+migration, or a blocked legacy-key-recovery case before they queue any
+re-encryption run. The UI surfaces the active target, affected-record count,
+unavailable-record count, impacted secret areas, and whether the current
+deployment still requires a full ciphertext rewrite instead of a lighter
+metadata-only rewrap path.
 That rotation logic now also recognizes provider-side transit key rollovers
 for `OPENBAO_TRANSIT`, `VAULT_TRANSIT`, and the outer envelope in `SPLIT_KEY`
 mode. When stored records already use the active InboxBridge target metadata

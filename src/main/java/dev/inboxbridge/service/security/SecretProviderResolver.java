@@ -90,7 +90,11 @@ public class SecretProviderResolver {
     }
 
     public SecretProviderHealth health() {
-        return switch (mode()) {
+        return healthForMode(mode());
+    }
+
+    public SecretProviderHealth healthForMode(SecretProviderMode requestedMode) {
+        return switch (requestedMode) {
             case LOCAL -> localHealth();
             case OPENBAO_TRANSIT -> transitHealth(
                     SecretProviderMode.OPENBAO_TRANSIT,
@@ -114,6 +118,38 @@ public class SecretProviderResolver {
                     "SECRET_PROVIDER_VAULT_KEY");
             case SPLIT_KEY -> splitHealth();
         };
+    }
+
+    public String activeKeyVersionForMode(SecretProviderMode requestedMode) {
+        SecretProviderHealth health = healthForMode(requestedMode);
+        if (!health.writable()) {
+            return null;
+        }
+        return switch (requestedMode) {
+            case LOCAL -> localProvider().activeKey().storedKeyVersion();
+            case OPENBAO_TRANSIT, VAULT_TRANSIT -> transitConfigForMode(requestedMode, activeKeyNameForMode(requestedMode))
+                    .orElseThrow(() -> new IllegalStateException(health.statusMessage()))
+                    .storedKeyVersion();
+            case SPLIT_KEY -> activeSplitKeyVersion().storedKeyVersion();
+        };
+    }
+
+    public String activeKeyIdForMode(SecretProviderMode requestedMode) {
+        SecretProviderHealth health = healthForMode(requestedMode);
+        if (!health.writable()) {
+            return null;
+        }
+        return switch (requestedMode) {
+            case LOCAL -> localProvider().activeKey().keyId();
+            case OPENBAO_TRANSIT, VAULT_TRANSIT -> transitConfigForMode(requestedMode, activeKeyNameForMode(requestedMode))
+                    .orElseThrow(() -> new IllegalStateException(health.statusMessage()))
+                    .keyName();
+            case SPLIT_KEY -> activeSplitKeyVersion().summary();
+        };
+    }
+
+    public boolean isModeCurrent(SecretProviderMode requestedMode) {
+        return mode() == requestedMode;
     }
 
     public List<SecretProviderComponentStatusView> componentStatuses() {
@@ -456,6 +492,14 @@ public class SecretProviderResolver {
                     configuredVaultMount(),
                     key);
             default -> Optional.empty();
+        };
+    }
+
+    private String activeKeyNameForMode(SecretProviderMode mode) {
+        return switch (mode) {
+            case OPENBAO_TRANSIT -> configuredOpenbaoKey();
+            case VAULT_TRANSIT -> configuredVaultKey();
+            default -> throw new IllegalArgumentException("Mode " + mode + " does not use a direct transit key name");
         };
     }
 

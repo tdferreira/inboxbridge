@@ -46,6 +46,12 @@ function rotationMethodLabel(rotationPlan, t) {
   return t('authSecurity.secretManagementRotationMethodNone')
 }
 
+function modeAssessmentLabel(mode, t) {
+  const translationKey = `authSecurity.secretManagementMode${mode}`
+  const translated = t(translationKey)
+  return translated === translationKey ? mode : translated
+}
+
 function SecretManagementSection({
   collapsed,
   collapseLoading,
@@ -75,6 +81,7 @@ function SecretManagementSection({
   const [reencryptionResult, setReencryptionResult] = useState(null)
   const keyUsage = Array.isArray(secretManagementStatus?.keyUsage) ? secretManagementStatus.keyUsage : []
   const providerComponents = Array.isArray(secretManagementStatus?.providerComponents) ? secretManagementStatus.providerComponents : []
+  const modeAssessments = Array.isArray(secretManagementStatus?.modeAssessments) ? secretManagementStatus.modeAssessments : []
   const rotationPlan = secretManagementStatus?.rotationPlan || null
   const reencryptionRequest = secretManagementStatus?.reencryptionRequest
   const pendingReencryption = reencryptionRequest?.status === 'PENDING'
@@ -149,6 +156,60 @@ function SecretManagementSection({
                     ) : null}
                   </div>
                 ))}
+              </div>
+            )}
+          </article>
+
+          <article className="surface-card polling-statistics-card" id="secret-management-mode-assessments" tabIndex="-1">
+            <div className="polling-statistics-card-title">{t('authSecurity.secretManagementModeAssessmentsTitle')}</div>
+            <p className="section-copy">{t('authSecurity.secretManagementModeAssessmentsCopy')}</p>
+            {modeAssessments.length === 0 ? (
+              <p className="section-copy">{t('authSecurity.secretManagementProviderDiagnosticsEmpty')}</p>
+            ) : (
+              <div className="detail-stack">
+                {modeAssessments.map((assessment) => {
+                  const tone = assessment.current
+                    ? 'status-ok'
+                    : assessment.writable
+                      ? 'tone-warn'
+                      : 'tone-bad'
+                  const statusLabel = assessment.current
+                    ? t('authSecurity.secretManagementModeAssessmentCurrent')
+                    : assessment.writable
+                      ? t('authSecurity.secretManagementModeAssessmentReady')
+                      : t('authSecurity.secretManagementModeAssessmentNeedsAttention')
+                  return (
+                    <div className="muted-box detail-stack" key={assessment.mode}>
+                      <div className="secret-management-provider-component-header">
+                        <strong>{modeAssessmentLabel(assessment.mode, t)}</strong>
+                        <span className={`status-pill ${tone}`}>{statusLabel}</span>
+                      </div>
+                      <span>{assessment.statusMessage}</span>
+                      <div className="polling-statistics-breakdown">
+                        <div><span>{t('authSecurity.secretManagementProvider')}</span><strong>{assessment.providerId || t('common.unavailable')}</strong></div>
+                        <div><span>{t('authSecurity.secretManagementModeAssessmentTarget')}</span><strong>{assessment.activeKeyId || assessment.activeKeyVersion || t('common.unavailable')}</strong></div>
+                      </div>
+                      {Array.isArray(assessment.configReferences) && assessment.configReferences.length > 0 ? (
+                        <div className="detail-stack">
+                          <strong>{t('authSecurity.secretManagementRequirementConfigTitle')}</strong>
+                          <div className="secret-management-config-list">
+                            {assessment.configReferences.map((reference) => (
+                              <code className="secret-management-config-chip" key={`${assessment.mode}:${reference}`}>{reference}</code>
+                            ))}
+                          </div>
+                        </div>
+                      ) : null}
+                      {Array.isArray(assessment.remediationSteps) && assessment.remediationSteps.length > 0 ? (
+                        <div className="detail-stack">
+                          <strong>{t('authSecurity.secretManagementRequirementStepsTitle')}</strong>
+                          <ul className="detail-stack secret-reencryption-detail-list">
+                            {assessment.remediationSteps.map((step) => <li key={`${assessment.mode}:${step}`}>{step}</li>)}
+                          </ul>
+                        </div>
+                      ) : null}
+                    </div>
+                  )
+                })}
               </div>
             )}
           </article>

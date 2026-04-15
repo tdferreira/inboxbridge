@@ -58,6 +58,11 @@ class SecretManagementServiceTest {
         assertTrue(view.providerComponents().getFirst().healthy());
         assertEquals("LOCAL:v2", view.activeKeyVersion());
         assertEquals("v2", view.activeKeyId());
+        assertEquals(4, view.modeAssessments().size());
+        assertTrue(view.modeAssessments().stream().anyMatch(assessment ->
+                "LOCAL".equals(assessment.mode()) && assessment.current() && assessment.writable()));
+        assertTrue(view.modeAssessments().stream().anyMatch(assessment ->
+                "OPENBAO_TRANSIT".equals(assessment.mode()) && !assessment.current() && !assessment.writable()));
         assertEquals("local-key-rotation", view.rotationPlan().planId());
         assertTrue(view.rotationPlan().rotationNeeded());
         assertEquals(List.of("v1"), view.configuredLegacyKeyIds());
@@ -196,6 +201,34 @@ class SecretManagementServiceTest {
         assertEquals("VAULT_TRANSIT:inboxbridge", view.activeKeyVersion());
         assertEquals("inboxbridge", view.activeKeyId());
         assertEquals(List.of(), view.configuredLegacyKeyIds());
+        assertTrue(view.modeAssessments().stream().anyMatch(assessment ->
+                "VAULT_TRANSIT".equals(assessment.mode())
+                        && assessment.current()
+                        && assessment.writable()
+                        && "VAULT_TRANSIT:inboxbridge".equals(assessment.activeKeyVersion())));
+    }
+
+    @Test
+    void statusAssessesFutureSplitKeyModeWhenTransitSecondaryIsConfigured() {
+        SecretManagementService service = configuredService();
+        SecretProviderResolver resolver = new SecretProviderResolver();
+        resolver.setLocalSecretKeyProvider(service.localSecretKeyProvider);
+        resolver.setProviderMode("LOCAL");
+        resolver.setSplitSecondaryMode("OPENBAO_TRANSIT");
+        resolver.setOpenbaoUrl("https://openbao.internal");
+        resolver.setOpenbaoToken("token");
+        resolver.setOpenbaoMount("transit");
+        resolver.setOpenbaoKey("inboxbridge");
+        resolver.setTransitSecretProvider(new StubTransitSecretProvider(true));
+        service.setSecretProviderResolver(resolver);
+
+        SecretManagementStatusView view = service.status();
+
+        assertTrue(view.modeAssessments().stream().anyMatch(assessment ->
+                "SPLIT_KEY".equals(assessment.mode())
+                        && !assessment.current()
+                        && assessment.writable()
+                        && "SPLIT_KEY:LOCAL=v2|OPENBAO_TRANSIT=inboxbridge".equals(assessment.activeKeyVersion())));
     }
 
     @Test

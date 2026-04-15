@@ -19,6 +19,7 @@ import dev.inboxbridge.dto.SecretReencryptionResultView;
 import dev.inboxbridge.dto.SecretReencryptionRequest;
 import dev.inboxbridge.dto.SecretManagementStatusView;
 import dev.inboxbridge.dto.SecretManagementRetirementRequirementView;
+import dev.inboxbridge.dto.SecretManagementModeAssessmentView;
 import dev.inboxbridge.dto.SecretManagementRetirementReviewView;
 import dev.inboxbridge.dto.SecretManagementReportView;
 import dev.inboxbridge.dto.SecretManagementRotationPlanView;
@@ -391,6 +392,29 @@ class AdminResourceTest {
                             java.util.List.of("SECURITY_TOKEN_ENCRYPTION_KEY"),
                             true,
                             true)),
+                    java.util.List.of(
+                            new SecretManagementModeAssessmentView(
+                                    "LOCAL",
+                                    "LOCAL",
+                                    true,
+                                    true,
+                                    true,
+                                    "Local secret provider is ready.",
+                                    "LOCAL:v2",
+                                    "v2",
+                                    java.util.List.of("SECURITY_TOKEN_ENCRYPTION_KEY"),
+                                    java.util.List.of("Keep this active provider path available while you finish re-encryption, validation, and any later retirement review.")),
+                            new SecretManagementModeAssessmentView(
+                                    "VAULT_TRANSIT",
+                                    "VAULT_TRANSIT",
+                                    false,
+                                    false,
+                                    false,
+                                    "Secret provider VAULT_TRANSIT requires SECRET_PROVIDER_VAULT_URL.",
+                                    null,
+                                    null,
+                                    java.util.List.of("SECRET_PROVIDER_MODE", "SECRET_PROVIDER_VAULT_URL"),
+                                    java.util.List.of("Configure SECRET_PROVIDER_MODE=VAULT_TRANSIT together with the Vault transit URL, token, mount, and key name."))),
                     "LOCAL:v2",
                     "v2",
                     java.util.List.of("v1"),
@@ -573,6 +597,7 @@ class AdminResourceTest {
                     current.providerWritable(),
                     current.providerStatusMessage(),
                     current.providerComponents(),
+                    current.modeAssessments(),
                     current.activeKeyVersion(),
                     current.activeKeyId(),
                     current.configuredLegacyKeyIds(),

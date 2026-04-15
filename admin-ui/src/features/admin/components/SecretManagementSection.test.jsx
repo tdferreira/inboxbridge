@@ -38,6 +38,32 @@ function renderSection(overrides = {}) {
             writable: true
           }
         ],
+        modeAssessments: [
+          {
+            mode: 'LOCAL',
+            providerId: 'LOCAL',
+            current: true,
+            healthy: true,
+            writable: true,
+            statusMessage: 'Local secret provider is ready.',
+            activeKeyVersion: 'LOCAL:v2',
+            activeKeyId: 'v2',
+            configReferences: ['SECURITY_TOKEN_ENCRYPTION_KEY'],
+            remediationSteps: ['Keep this active provider path available while you finish re-encryption, validation, and any later retirement review.']
+          },
+          {
+            mode: 'OPENBAO_TRANSIT',
+            providerId: 'OPENBAO_TRANSIT',
+            current: false,
+            healthy: false,
+            writable: false,
+            statusMessage: 'Secret provider OPENBAO_TRANSIT requires SECRET_PROVIDER_OPENBAO_URL.',
+            activeKeyVersion: null,
+            activeKeyId: null,
+            configReferences: ['SECRET_PROVIDER_MODE', 'SECRET_PROVIDER_OPENBAO_URL'],
+            remediationSteps: ['Configure SECRET_PROVIDER_MODE=OPENBAO_TRANSIT together with the OpenBao transit URL, token, mount, and key name.']
+          }
+        ],
         rotationPlan: {
           planId: 'local-key-rotation',
           title: 'Local-key rotation is pending',
@@ -226,6 +252,16 @@ describe('SecretManagementSection', () => {
     })
   })
 
+  it('renders backend-assessed secret-management migration targets', () => {
+    renderSection()
+
+    expect(screen.getByText('Available migration targets')).toBeInTheDocument()
+    expect(screen.getByText('Local key mode')).toBeInTheDocument()
+    expect(screen.getByText('OpenBao transit mode')).toBeInTheDocument()
+    expect(screen.getAllByText('Target key or provider path').length).toBeGreaterThan(0)
+    expect(screen.getByText('Secret provider OPENBAO_TRANSIT requires SECRET_PROVIDER_OPENBAO_URL.')).toBeInTheDocument()
+  })
+
   it('keeps the confirm action disabled when backend requirements are not satisfied', () => {
     const { onSecretReencryptOptionsChange } = renderSection({
       secretManagementStatus: {
@@ -283,7 +319,7 @@ describe('SecretManagementSection', () => {
     expect(screen.getByText('Local-key rotation is pending')).toBeInTheDocument()
     expect(screen.getByText('Action required')).toBeInTheDocument()
     expect(screen.getByText('Full re-encryption')).toBeInTheDocument()
-    expect(screen.getByText('What you need to do')).toBeInTheDocument()
+    expect(screen.getAllByText('What you need to do').length).toBeGreaterThan(0)
     expect(screen.getByText('Restore every missing legacy key or provider credential that still protects encrypted records.')).toBeInTheDocument()
     expect(screen.getByText('SECURITY_TOKEN_ENCRYPTION_LEGACY_KEYS')).toBeInTheDocument()
     expect(screen.getByRole('button', { name: 'Review key usage' })).toBeInTheDocument()

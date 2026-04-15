@@ -250,6 +250,7 @@ describe('useAuthSecurityController', () => {
         mode: 'LOCAL',
         providerId: 'LOCAL',
         providerComponents: null,
+        modeAssessments: null,
         configuredLegacyKeyIds: null,
         keyUsage: null,
         reencryptionRequirements: null,
@@ -280,6 +281,7 @@ describe('useAuthSecurityController', () => {
     })
 
     expect(result.current.secretManagementStatus.providerComponents).toEqual([])
+    expect(result.current.secretManagementStatus.modeAssessments).toEqual([])
     expect(result.current.secretManagementStatus.configuredLegacyKeyIds).toEqual([])
     expect(result.current.secretManagementStatus.keyUsage).toEqual([])
     expect(result.current.secretManagementStatus.reencryptionRequirements).toEqual([])
