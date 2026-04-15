@@ -11,6 +11,7 @@ import java.util.Map;
 
 import dev.inboxbridge.config.SecretManagementPolicyConfig;
 import dev.inboxbridge.dto.SecretManagementKeyUsageView;
+import dev.inboxbridge.dto.SecretManagementRotationPlanView;
 import dev.inboxbridge.dto.SecretProviderComponentStatusView;
 import dev.inboxbridge.dto.SecretReencryptionFollowUpView;
 import dev.inboxbridge.dto.SecretReencryptionRequest;
@@ -152,6 +153,14 @@ public class SecretManagementService {
                     configuredEnvManagedSourceCount(),
                     envManagedGoogleRefreshTokenConfigured(),
                     false,
+                    buildRotationPlan(
+                            null,
+                            null,
+                            0,
+                            0,
+                            List.of(),
+                            false,
+                            false),
                     List.of(),
                     false,
                     requirements,
@@ -195,6 +204,14 @@ public class SecretManagementService {
                 .mapToLong(SecretManagementKeyUsageView::recordCount)
                 .sum();
         long nonActiveKeyRecordCount = protectedRecordCount - activeKeyRecordCount;
+        SecretManagementRotationPlanView rotationPlan = buildRotationPlan(
+                activeKeyVersion,
+                providerHealth,
+                nonActiveKeyRecordCount,
+                unavailableKeyRecordCount,
+                keyUsage,
+                protectedRecordCount > 0,
+                providerHealth.writable());
         List<SecretReencryptionRequirementView> requirements = buildRequirements(
                 true,
                 providerHealth,
@@ -226,6 +243,7 @@ public class SecretManagementService {
                 configuredEnvManagedSourceCount(),
                 envManagedGoogleRefreshTokenConfigured(),
                 nonActiveKeyRecordCount == 0 && unavailableKeyRecordCount == 0,
+                rotationPlan,
                 keyUsage,
                 reencryptionReady,
                 requirements,
@@ -970,6 +988,117 @@ public class SecretManagementService {
                 && currentStatus.nonActiveKeyRecordCount() == 0
                 && currentStatus.unavailableKeyRecordCount() == 0;
         return new SecretReencryptionVerificationView(passed, messages, operatorSaveItems);
+    }
+
+    private SecretManagementRotationPlanView buildRotationPlan(
+            String activeKeyVersion,
+            SecretProviderHealth providerHealth,
+            long nonActiveKeyRecordCount,
+            long unavailableKeyRecordCount,
+            List<SecretManagementKeyUsageView> keyUsage,
+            boolean protectedRecordsPresent,
+            boolean providerWritable) {
+        if (providerHealth == null || !providerWritable || activeKeyVersion == null || activeKeyVersion.isBlank()) {
+            return new SecretManagementRotationPlanView(
+                    "provider-not-ready",
+                    "Rotation target is not ready yet",
+                    "InboxBridge cannot safely plan encryption-layer rotation until the active secret-management provider is healthy and writable.",
+                    "Fix the active provider configuration first, then refresh the secret-management status before running any rotation operation.",
+                    activeKeyVersion,
+                    0,
+                    unavailableKeyRecordCount,
+                    List.of(),
+                    false,
+                    false,
+                    false);
+        }
+        if (!protectedRecordsPresent) {
+            return new SecretManagementRotationPlanView(
+                    "no-records",
+                    "No encrypted records need rotation yet",
+                    "InboxBridge has no stored encrypted records, so there is nothing to rotate at the encryption layer right now.",
+                    "Store or update UI-managed secrets normally. Rotation planning will become relevant once encrypted records exist.",
+                    activeKeyVersion,
+                    0,
+                    0,
+                    List.of(),
+                    false,
+                    false,
+                    false);
+        }
+        if (unavailableKeyRecordCount > 0) {
+            return new SecretManagementRotationPlanView(
+                    "recover-legacy-keys",
+                    "Legacy key recovery is required before rotation",
+                    unavailableKeyRecordCount + " stored records still reference unavailable key material, so a new rotation run would leave those secrets unrecoverable.",
+                    "Restore every missing legacy key or provider credential first. Only then run full re-encryption toward the active target.",
+                    activeKeyVersion,
+                    nonActiveKeyRecordCount,
+                    unavailableKeyRecordCount,
+                    impactedAreas(keyUsage, false),
+                    true,
+                    true,
+                    false);
+        }
+        if (nonActiveKeyRecordCount == 0) {
+            return new SecretManagementRotationPlanView(
+                    "already-current",
+                    "Stored secrets already match the active target",
+                    "Every stored encrypted secret already uses the current active provider and key version.",
+                    "No encryption-layer rotation is needed right now. Keep the current legacy material only until you have completed your normal validation and retirement checks.",
+                    activeKeyVersion,
+                    0,
+                    0,
+                    List.of(),
+                    false,
+                    false,
+                    false);
+        }
+
+        List<String> impactedAreas = impactedAreas(keyUsage, false);
+        StoredSecretKeyReference activeReference = StoredSecretKeyReference.parse(activeKeyVersion);
+        boolean sameProviderOnly = keyUsage.stream()
+                .filter(usage -> !usage.active())
+                .allMatch(usage -> StoredSecretKeyReference.parse(usage.keyVersion()).providerId().equals(activeReference.providerId()));
+        String planId;
+        String title;
+        if (sameProviderOnly) {
+            planId = switch (providerHealth.mode()) {
+                case LOCAL -> "local-key-rotation";
+                case OPENBAO_TRANSIT, VAULT_TRANSIT -> "transit-key-rotation";
+                case SPLIT_KEY -> "split-key-rotation";
+            };
+            title = switch (providerHealth.mode()) {
+                case LOCAL -> "Local-key rotation is pending";
+                case OPENBAO_TRANSIT, VAULT_TRANSIT -> "Transit key migration is pending";
+                case SPLIT_KEY -> "Split-key envelope rotation is pending";
+            };
+        } else {
+            planId = "provider-migration";
+            title = "Provider migration is pending";
+        }
+        return new SecretManagementRotationPlanView(
+                planId,
+                title,
+                nonActiveKeyRecordCount + " stored records still depend on older or different encryption targets and must be rewritten to " + activeKeyVersion + ".",
+                "Keep legacy keys and provider credentials available, run full re-encryption, then validate mailbox, destination, and OAuth flows before retiring the previous secret path.",
+                activeKeyVersion,
+                nonActiveKeyRecordCount,
+                0,
+                impactedAreas,
+                true,
+                true,
+                false);
+    }
+
+    private List<String> impactedAreas(List<SecretManagementKeyUsageView> keyUsage, boolean includeActive) {
+        return keyUsage.stream()
+                .filter(usage -> includeActive || !usage.active())
+                .flatMap(usage -> List.of(usage.areas().split(",")).stream())
+                .map(String::trim)
+                .filter(area -> !area.isBlank())
+                .distinct()
+                .toList();
     }
 
     private SecretReencryptionRequest effectiveRequest(SecretReencryptionRequest request) {

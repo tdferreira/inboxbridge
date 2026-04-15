@@ -183,6 +183,61 @@ describe('useAuthSecurityController', () => {
     expect(result.current.registerForm.captchaToken).toBe('')
   })
 
+  it('normalizes secret-management status arrays and optional rotation metadata', async () => {
+    fetch.mockResolvedValue({
+      ok: true,
+      json: vi.fn().mockResolvedValue({
+        secureStorageConfigured: true,
+        mode: 'LOCAL',
+        providerId: 'LOCAL',
+        providerComponents: null,
+        configuredLegacyKeyIds: null,
+        keyUsage: null,
+        reencryptionRequirements: null,
+        rotationPlan: {
+          planId: 'provider-migration',
+          title: 'Provider migration is pending',
+          summary: '4 stored records still depend on older or different encryption targets.',
+          recommendedAction: 'Run full re-encryption before retiring the previous provider path.',
+          targetKeyVersion: 'OPENBAO_TRANSIT:transit:v3',
+          affectedRecordCount: 4,
+          unavailableRecordCount: 0,
+          impactedAreas: ['source-mailboxes', 'destination-mailboxes'],
+          rotationNeeded: true,
+          requiresFullReencryption: true,
+          metadataRewrapSupported: false
+        }
+      })
+    })
+    const { result } = renderController()
+
+    act(() => {
+      result.current.setSession({ role: 'ADMIN' })
+    })
+
+    await act(async () => {
+      await result.current.loadSecretManagementStatus()
+    })
+
+    expect(result.current.secretManagementStatus.providerComponents).toEqual([])
+    expect(result.current.secretManagementStatus.configuredLegacyKeyIds).toEqual([])
+    expect(result.current.secretManagementStatus.keyUsage).toEqual([])
+    expect(result.current.secretManagementStatus.reencryptionRequirements).toEqual([])
+    expect(result.current.secretManagementStatus.rotationPlan).toEqual({
+      planId: 'provider-migration',
+      title: 'Provider migration is pending',
+      summary: '4 stored records still depend on older or different encryption targets.',
+      recommendedAction: 'Run full re-encryption before retiring the previous provider path.',
+      targetKeyVersion: 'OPENBAO_TRANSIT:transit:v3',
+      affectedRecordCount: 4,
+      unavailableRecordCount: 0,
+      impactedAreas: ['source-mailboxes', 'destination-mailboxes'],
+      rotationNeeded: true,
+      requiresFullReencryption: true,
+      metadataRewrapSupported: false
+    })
+  })
+
   it('refreshes the challenge after a failed registration attempt', async () => {
     fetch
       .mockResolvedValueOnce({

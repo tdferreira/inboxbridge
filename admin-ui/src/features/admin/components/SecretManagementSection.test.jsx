@@ -32,6 +32,19 @@ function renderSection(overrides = {}) {
             writable: true
           }
         ],
+        rotationPlan: {
+          planId: 'local-key-rotation',
+          title: 'Local-key rotation is pending',
+          summary: '3 stored records still depend on older or different encryption targets and must be rewritten to LOCAL:v2.',
+          recommendedAction: 'Keep legacy keys and provider credentials available, run full re-encryption, then validate mailbox, destination, and OAuth flows before retiring the previous secret path.',
+          targetKeyVersion: 'LOCAL:v2',
+          affectedRecordCount: 3,
+          unavailableRecordCount: 0,
+          impactedAreas: ['destination-mailboxes', 'system-oauth'],
+          rotationNeeded: true,
+          requiresFullReencryption: true,
+          metadataRewrapSupported: false
+        },
         configuredLegacyKeyIds: ['LOCAL:v1'],
         protectedRecordCount: 14,
         nonActiveKeyRecordCount: 3,
@@ -127,6 +140,10 @@ describe('SecretManagementSection', () => {
     expect(screen.getByText('Provider diagnostics')).toBeInTheDocument()
     expect(screen.getByText('Local inner encryption key')).toBeInTheDocument()
     expect(screen.getByText('Healthy and writable')).toBeInTheDocument()
+    expect(screen.getByText('Rotation plan')).toBeInTheDocument()
+    expect(screen.getByText('Local-key rotation is pending')).toBeInTheDocument()
+    expect(screen.getByText('Action required')).toBeInTheDocument()
+    expect(screen.getByText('Full re-encryption')).toBeInTheDocument()
     expect(screen.getByText('What you need to do')).toBeInTheDocument()
     expect(screen.getByText('Restore every missing legacy key or provider credential that still protects encrypted records.')).toBeInTheDocument()
     expect(screen.getByText('SECURITY_TOKEN_ENCRYPTION_LEGACY_KEYS')).toBeInTheDocument()

@@ -54,6 +54,7 @@ function SecretManagementSection({
   const [reencryptionResult, setReencryptionResult] = useState(null)
   const keyUsage = Array.isArray(secretManagementStatus?.keyUsage) ? secretManagementStatus.keyUsage : []
   const providerComponents = Array.isArray(secretManagementStatus?.providerComponents) ? secretManagementStatus.providerComponents : []
+  const rotationPlan = secretManagementStatus?.rotationPlan || null
   const reencryptionRequest = secretManagementStatus?.reencryptionRequest
   const pendingReencryption = reencryptionRequest?.status === 'PENDING'
 
@@ -127,6 +128,45 @@ function SecretManagementSection({
                   </div>
                 ))}
               </div>
+            )}
+          </article>
+
+          <article className="surface-card polling-statistics-card" id="secret-management-rotation-plan" tabIndex="-1">
+            <div className="polling-statistics-card-title">{t('authSecurity.secretManagementRotationPlanTitle')}</div>
+            <p className="section-copy">{t('authSecurity.secretManagementRotationPlanCopy')}</p>
+            {rotationPlan ? (
+              <div className="detail-stack">
+                <div className="secret-management-provider-component-header">
+                  <strong>{rotationPlan.title}</strong>
+                  <span className={`status-pill ${rotationPlan.rotationNeeded ? 'tone-warn' : 'status-ok'}`}>
+                    {rotationPlan.rotationNeeded
+                      ? t('authSecurity.secretManagementRotationPlanPending')
+                      : t('authSecurity.secretManagementRotationPlanClear')}
+                  </span>
+                </div>
+                <div className="muted-box detail-stack">
+                  <span>{rotationPlan.summary}</span>
+                  <div className="polling-statistics-breakdown">
+                    <div><span>{t('authSecurity.secretManagementRotationTarget')}</span><strong>{rotationPlan.targetKeyVersion || t('common.unavailable')}</strong></div>
+                    <div><span>{t('authSecurity.secretManagementRotationAffectedRecords')}</span><strong>{rotationPlan.affectedRecordCount ?? 0}</strong></div>
+                    <div><span>{t('authSecurity.secretManagementRotationUnavailableRecords')}</span><strong>{rotationPlan.unavailableRecordCount ?? 0}</strong></div>
+                    <div><span>{t('authSecurity.secretManagementRotationMethod')}</span><strong>{rotationPlan.requiresFullReencryption ? t('authSecurity.secretManagementRotationMethodFull') : t('authSecurity.secretManagementRotationMethodNone')}</strong></div>
+                  </div>
+                  <strong>{t('authSecurity.secretManagementRotationRecommendedAction')}</strong>
+                  <span>{rotationPlan.recommendedAction}</span>
+                  {Array.isArray(rotationPlan.impactedAreas) && rotationPlan.impactedAreas.length > 0 ? (
+                    <div className="secret-management-config-list">
+                      {rotationPlan.impactedAreas.map((area) => (
+                        <span className="status-pill tone-neutral" key={area}>
+                          {formatKeyUsageAreas(area, t) || area}
+                        </span>
+                      ))}
+                    </div>
+                  ) : null}
+                </div>
+              </div>
+            ) : (
+              <p className="section-copy">{t('authSecurity.secretManagementRotationPlanEmpty')}</p>
             )}
           </article>
 

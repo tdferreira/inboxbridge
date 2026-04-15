@@ -29,6 +29,7 @@ const DEFAULT_SECRET_MANAGEMENT_STATUS = {
   configuredEnvManagedSourceCount: 0,
   envManagedGoogleRefreshTokenConfigured: false,
   safeToRetireLegacyKeys: true,
+  rotationPlan: null,
   keyUsage: [],
   reencryptionReady: false,
   reencryptionRequirements: [],
@@ -620,6 +621,7 @@ export function useAuthSecurityController({
       setSecretManagementStatus({
         ...DEFAULT_SECRET_MANAGEMENT_STATUS,
         ...(payload || {}),
+        providerComponents: Array.isArray(payload?.providerComponents) ? payload.providerComponents : [],
         configuredLegacyKeyIds: Array.isArray(payload?.configuredLegacyKeyIds) ? payload.configuredLegacyKeyIds : [],
         keyUsage: Array.isArray(payload?.keyUsage) ? payload.keyUsage : [],
         reencryptionRequirements: Array.isArray(payload?.reencryptionRequirements) ? payload.reencryptionRequirements : []
@@ -714,6 +716,7 @@ export function useAuthSecurityController({
         setSecretManagementStatus({
           ...DEFAULT_SECRET_MANAGEMENT_STATUS,
           ...(payload || {}),
+          providerComponents: Array.isArray(payload?.providerComponents) ? payload.providerComponents : [],
           configuredLegacyKeyIds: Array.isArray(payload?.configuredLegacyKeyIds) ? payload.configuredLegacyKeyIds : [],
           keyUsage: Array.isArray(payload?.keyUsage) ? payload.keyUsage : [],
           reencryptionRequirements: Array.isArray(payload?.reencryptionRequirements) ? payload.reencryptionRequirements : []
@@ -770,6 +773,7 @@ export function useAuthSecurityController({
         setSecretManagementStatus({
           ...DEFAULT_SECRET_MANAGEMENT_STATUS,
           ...(payload || {}),
+          providerComponents: Array.isArray(payload?.providerComponents) ? payload.providerComponents : [],
           configuredLegacyKeyIds: Array.isArray(payload?.configuredLegacyKeyIds) ? payload.configuredLegacyKeyIds : [],
           keyUsage: Array.isArray(payload?.keyUsage) ? payload.keyUsage : [],
           reencryptionRequirements: Array.isArray(payload?.reencryptionRequirements) ? payload.reencryptionRequirements : []

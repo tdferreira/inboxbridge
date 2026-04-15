@@ -58,6 +58,8 @@ class SecretManagementServiceTest {
         assertTrue(view.providerComponents().getFirst().healthy());
         assertEquals("LOCAL:v2", view.activeKeyVersion());
         assertEquals("v2", view.activeKeyId());
+        assertEquals("local-key-rotation", view.rotationPlan().planId());
+        assertTrue(view.rotationPlan().rotationNeeded());
         assertEquals(List.of("v1"), view.configuredLegacyKeyIds());
         assertEquals(5, view.protectedRecordCount());
         assertEquals(3, view.activeKeyRecordCount());
@@ -115,6 +117,7 @@ class SecretManagementServiceTest {
         assertTrue(view.keyUsage().isEmpty());
         assertEquals(1, view.providerComponents().size());
         assertFalse(view.providerComponents().getFirst().writable());
+        assertEquals("provider-not-ready", view.rotationPlan().planId());
         assertTrue(view.reencryptionRequirements().stream()
                 .anyMatch(requirement -> "secure-storage".equals(requirement.requirementId())
                         && requirement.configReferences().contains("SECRET_PROVIDER_MODE")
@@ -174,6 +177,7 @@ class SecretManagementServiceTest {
         assertEquals("VAULT_TRANSIT transit provider is ready.", view.providerStatusMessage());
         assertEquals(1, view.providerComponents().size());
         assertEquals("vault_transit-transit", view.providerComponents().getFirst().componentId());
+        assertEquals("provider-migration", view.rotationPlan().planId());
         assertEquals("VAULT_TRANSIT:inboxbridge", view.activeKeyVersion());
         assertEquals("inboxbridge", view.activeKeyId());
         assertEquals(List.of(), view.configuredLegacyKeyIds());
@@ -203,6 +207,7 @@ class SecretManagementServiceTest {
         assertEquals(2, view.providerComponents().size());
         assertEquals("split-secondary", view.providerComponents().get(1).componentId());
         assertTrue(view.providerComponents().get(1).writable());
+        assertEquals("provider-migration", view.rotationPlan().planId());
         assertEquals("SPLIT_KEY:LOCAL=v2|OPENBAO_TRANSIT=inboxbridge", view.activeKeyVersion());
         assertEquals("LOCAL:v2 + OPENBAO_TRANSIT:inboxbridge", view.activeKeyId());
     }
@@ -221,6 +226,7 @@ class SecretManagementServiceTest {
         assertEquals(2, view.providerComponents().size());
         assertEquals("split-secondary", view.providerComponents().get(1).componentId());
         assertFalse(view.providerComponents().get(1).healthy());
+        assertEquals("provider-not-ready", view.rotationPlan().planId());
         assertTrue(view.providerComponents().get(1).configReferences().contains("SECRET_PROVIDER_SPLIT_SECONDARY_MODE"));
     }
 

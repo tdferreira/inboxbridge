@@ -506,6 +506,14 @@ page or in-modal section. The admin `Secret management` section also now shows
 provider-component diagnostics for the active trust boundaries, so local-key,
 transit, and split-key deployments can see exactly which encryption component
 is healthy or writable before they attempt key rotation or bulk re-encryption.
+That same section now also derives a provider-aware rotation plan from the
+stored key-usage data. Operators can now see whether the current situation is
+best understood as a local-key rotation, a transit-key migration, a split-key
+envelope rotation, a full provider migration, or a blocked legacy-key-recovery
+case before they queue any re-encryption run. The UI surfaces the active
+target, affected-record count, unavailable-record count, impacted secret
+areas, and whether the current deployment still requires a full ciphertext
+rewrite instead of a lighter metadata-only rewrap path.
 That same admin secret-management flow now also supports step-up verification
 per browser session. When
 `SECURITY_SECRET_REENCRYPTION_REAUTHENTICATION_TTL` is greater than zero

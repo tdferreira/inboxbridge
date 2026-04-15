@@ -292,6 +292,10 @@ Current implementation status:
   diagnostics for the active trust boundaries, and the admin section surfaces
   them as separate readiness cards so operators can distinguish a broken local
   key path from a broken transit secondary before rotating secrets
+- that same status payload now also includes a provider-aware rotation-plan
+  preview that classifies the next operator action as local-key rotation,
+  transit-key migration, split-key rotation, provider migration, already
+  aligned, no encrypted records, or blocked legacy-key recovery
 - after completion, the UI shows verification messages plus a list of items the
   operator should save before retiring any legacy key material
 
@@ -618,8 +622,9 @@ Current repository status:
 - backend provider resolution now reports mode-aware health so the admin
   status endpoint can fail closed instead of silently falling back to local
 - admin visibility has started through `/api/admin/secret-management`, which
-  reports active mode, provider health, configured legacy key ids, and stored
-  key-version usage
+  reports active mode, provider health, provider-component diagnostics,
+  configured legacy key ids, stored key-version usage, and a provider-aware
+  rotation-plan preview
 - the admin UI now surfaces that status inside its own `Administration ->
   Secret management` section, with a dedicated high-friction re-encryption
   modal that explains prerequisites, risks, acknowledgements, and optional
@@ -640,6 +645,14 @@ Current repository status:
 - add admin visibility into the active secret mode
 - add safe rewrap / re-encryption workflow
 - add provider migration diagnostics
+- current status:
+  - active mode visibility exists
+  - backend-verified re-encryption readiness exists
+  - cooldown plus step-up verification exists
+  - provider-component diagnostics exist
+  - provider-aware rotation-plan preview exists
+  - metadata-only rewrap still remains a future enhancement; current rotation
+    plans therefore report full re-encryption as the supported execution path
 
 ### Phase 5: Split-key mode
 

@@ -17,6 +17,7 @@ import dev.inboxbridge.dto.PollingTimelineBundleView;
 import dev.inboxbridge.dto.SecretReencryptionResultView;
 import dev.inboxbridge.dto.SecretReencryptionRequest;
 import dev.inboxbridge.dto.SecretManagementStatusView;
+import dev.inboxbridge.dto.SecretManagementRotationPlanView;
 import dev.inboxbridge.dto.SecretProviderComponentStatusView;
 import dev.inboxbridge.dto.StartPasskeyCeremonyResponse;
 import dev.inboxbridge.dto.VerifySecretManagementPasswordRequest;
@@ -173,6 +174,7 @@ class AdminResourceTest {
         assertTrue(response.providerHealthy());
         assertTrue(response.providerWritable());
         assertEquals(1, response.providerComponents().size());
+        assertEquals("local-key-rotation", response.rotationPlan().planId());
         assertEquals("LOCAL:v2", response.activeKeyVersion());
         assertEquals(2, response.protectedRecordCount());
         assertTrue(response.envManagedMailboxSecretsAllowed());
@@ -355,6 +357,18 @@ class AdminResourceTest {
                     1,
                     true,
                     false,
+                    new SecretManagementRotationPlanView(
+                            "local-key-rotation",
+                            "Local-key rotation is pending",
+                            "1 stored records still depend on older or different encryption targets and must be rewritten to LOCAL:v2.",
+                            "Keep legacy keys and provider credentials available, run full re-encryption, then validate mailbox, destination, and OAuth flows before retiring the previous secret path.",
+                            "LOCAL:v2",
+                            1,
+                            0,
+                            java.util.List.of("destination-mailboxes"),
+                            true,
+                            true,
+                            false),
                     java.util.List.of(),
                     true,
                     java.util.List.of(),
