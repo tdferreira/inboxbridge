@@ -527,6 +527,13 @@ counts for secrets rewritten through full plaintext re-encryption versus
 secrets refreshed through metadata rewrap, so operators can confirm whether a
 given rotation mostly changed stored ciphertext payloads or only refreshed the
 provider-side wrapping layer.
+Before the operator confirms that action, the same
+`/api/admin/secret-management` payload now also includes a backend dry-run
+preview with per-area and total counts for records that would be updated,
+secret values that would be rewritten, and whether those updates would happen
+through full plaintext re-encryption or metadata rewrap. The admin modal shows
+that preview ahead of the acknowledgement checkboxes so the operator can verify
+the expected blast radius before queuing the run.
 That same admin secret-management flow now also supports step-up verification
 per browser session. When
 `SECURITY_SECRET_REENCRYPTION_REAUTHENTICATION_TTL` is greater than zero

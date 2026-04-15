@@ -13,6 +13,7 @@ import dev.inboxbridge.config.SecretManagementPolicyConfig;
 import dev.inboxbridge.dto.SecretManagementKeyUsageView;
 import dev.inboxbridge.dto.SecretManagementRotationPlanView;
 import dev.inboxbridge.dto.SecretProviderComponentStatusView;
+import dev.inboxbridge.dto.SecretReencryptionPreviewView;
 import dev.inboxbridge.dto.SecretReencryptionFollowUpView;
 import dev.inboxbridge.dto.SecretReencryptionRequest;
 import dev.inboxbridge.dto.SecretReencryptionAreaResultView;
@@ -163,6 +164,7 @@ public class SecretManagementService {
                             List.of(),
                             false,
                             false),
+                    null,
                     List.of(),
                     false,
                     requirements,
@@ -217,6 +219,7 @@ public class SecretManagementService {
                 keyUsage,
                 protectedRecordCount > 0,
                 providerHealth.writable());
+        SecretReencryptionPreviewView reencryptionPreview = buildReencryptionPreview(activeKeyVersion);
         List<SecretReencryptionRequirementView> requirements = buildRequirements(
                 true,
                 providerHealth,
@@ -249,6 +252,7 @@ public class SecretManagementService {
                 envManagedGoogleRefreshTokenConfigured(),
                 !rotationPlan.rotationNeeded(),
                 rotationPlan,
+                reencryptionPreview,
                 keyUsage,
                 reencryptionReady,
                 requirements,
@@ -501,6 +505,195 @@ public class SecretManagementService {
 
     @Inject
     SecretEncryptionService secretEncryptionService;
+
+    private SecretReencryptionPreviewView buildReencryptionPreview(String activeKeyVersion) {
+        if (activeKeyVersion == null || activeKeyVersion.isBlank()) {
+            return null;
+        }
+        List<SecretReencryptionAreaResultView> areas = List.of(
+                previewOAuthCredentials(),
+                previewSourceMailboxes(),
+                previewDestinationMailboxes(),
+                previewUserGmailConfig(),
+                previewSystemOAuthSettings(),
+                previewAuthSecuritySettings());
+        int totalRecordsPendingUpdate = areas.stream().mapToInt(SecretReencryptionAreaResultView::recordsUpdated).sum();
+        int totalSecretValuesPendingRewrite = areas.stream().mapToInt(SecretReencryptionAreaResultView::secretValuesReencrypted).sum();
+        int totalFullReencryptionCount = areas.stream().mapToInt(SecretReencryptionAreaResultView::fullReencryptionCount).sum();
+        int totalMetadataRewrapCount = areas.stream().mapToInt(SecretReencryptionAreaResultView::metadataRewrapCount).sum();
+        return new SecretReencryptionPreviewView(
+                activeKeyVersion,
+                totalRecordsPendingUpdate,
+                totalSecretValuesPendingRewrite,
+                totalFullReencryptionCount,
+                totalMetadataRewrapCount,
+                areas);
+    }
+
+    private SecretReencryptionAreaResultView previewOAuthCredentials() {
+        int recordsUpdated = 0;
+        int secretValuesReencrypted = 0;
+        int fullReencryptionCount = 0;
+        int metadataRewrapCount = 0;
+        for (OAuthCredential credential : oAuthCredentialRepository.listAll()) {
+            AreaRewriteAccumulator updatedFields = new AreaRewriteAccumulator();
+            updatedFields.add(plannedRewrite(
+                    credential.refreshTokenCiphertext,
+                    credential.refreshTokenNonce,
+                    credential.keyVersion));
+            updatedFields.add(plannedRewrite(
+                    credential.accessTokenCiphertext,
+                    credential.accessTokenNonce,
+                    credential.keyVersion));
+            if (updatedFields.secretValuesReencrypted > 0) {
+                recordsUpdated++;
+                secretValuesReencrypted += updatedFields.secretValuesReencrypted;
+                fullReencryptionCount += updatedFields.fullReencryptionCount;
+                metadataRewrapCount += updatedFields.metadataRewrapCount;
+            }
+        }
+        return new SecretReencryptionAreaResultView("oauth-credentials", recordsUpdated, secretValuesReencrypted, fullReencryptionCount, metadataRewrapCount);
+    }
+
+    private SecretReencryptionAreaResultView previewSourceMailboxes() {
+        int recordsUpdated = 0;
+        int secretValuesReencrypted = 0;
+        int fullReencryptionCount = 0;
+        int metadataRewrapCount = 0;
+        for (UserEmailAccount account : userEmailAccountRepository.listAll()) {
+            AreaRewriteAccumulator updatedFields = new AreaRewriteAccumulator();
+            updatedFields.add(plannedRewrite(
+                    account.passwordCiphertext,
+                    account.passwordNonce,
+                    account.keyVersion));
+            updatedFields.add(plannedRewrite(
+                    account.oauthRefreshTokenCiphertext,
+                    account.oauthRefreshTokenNonce,
+                    account.keyVersion));
+            if (updatedFields.secretValuesReencrypted > 0) {
+                recordsUpdated++;
+                secretValuesReencrypted += updatedFields.secretValuesReencrypted;
+                fullReencryptionCount += updatedFields.fullReencryptionCount;
+                metadataRewrapCount += updatedFields.metadataRewrapCount;
+            }
+        }
+        return new SecretReencryptionAreaResultView("source-mailboxes", recordsUpdated, secretValuesReencrypted, fullReencryptionCount, metadataRewrapCount);
+    }
+
+    private SecretReencryptionAreaResultView previewDestinationMailboxes() {
+        int recordsUpdated = 0;
+        int secretValuesReencrypted = 0;
+        int fullReencryptionCount = 0;
+        int metadataRewrapCount = 0;
+        for (UserMailDestinationConfig config : userMailDestinationConfigRepository.listAll()) {
+            RewriteOutcome updatedFields = plannedRewrite(
+                    config.passwordCiphertext,
+                    config.passwordNonce,
+                    config.keyVersion);
+            if (updatedFields.updated()) {
+                recordsUpdated++;
+                secretValuesReencrypted += 1;
+                fullReencryptionCount += updatedFields.metadataRewrap() ? 0 : 1;
+                metadataRewrapCount += updatedFields.metadataRewrap() ? 1 : 0;
+            }
+        }
+        return new SecretReencryptionAreaResultView("destination-mailboxes", recordsUpdated, secretValuesReencrypted, fullReencryptionCount, metadataRewrapCount);
+    }
+
+    private SecretReencryptionAreaResultView previewUserGmailConfig() {
+        int recordsUpdated = 0;
+        int secretValuesReencrypted = 0;
+        int fullReencryptionCount = 0;
+        int metadataRewrapCount = 0;
+        for (UserGmailConfig config : userGmailConfigRepository.listAll()) {
+            AreaRewriteAccumulator updatedFields = new AreaRewriteAccumulator();
+            updatedFields.add(plannedRewrite(
+                    config.clientIdCiphertext,
+                    config.clientIdNonce,
+                    config.keyVersion));
+            updatedFields.add(plannedRewrite(
+                    config.clientSecretCiphertext,
+                    config.clientSecretNonce,
+                    config.keyVersion));
+            updatedFields.add(plannedRewrite(
+                    config.refreshTokenCiphertext,
+                    config.refreshTokenNonce,
+                    config.keyVersion));
+            if (updatedFields.secretValuesReencrypted > 0) {
+                recordsUpdated++;
+                secretValuesReencrypted += updatedFields.secretValuesReencrypted;
+                fullReencryptionCount += updatedFields.fullReencryptionCount;
+                metadataRewrapCount += updatedFields.metadataRewrapCount;
+            }
+        }
+        return new SecretReencryptionAreaResultView("gmail-user-config", recordsUpdated, secretValuesReencrypted, fullReencryptionCount, metadataRewrapCount);
+    }
+
+    private SecretReencryptionAreaResultView previewSystemOAuthSettings() {
+        SystemOAuthAppSettings settings = systemOAuthAppSettingsRepository.findSingleton().orElse(null);
+        if (settings == null) {
+            return new SecretReencryptionAreaResultView("system-oauth", 0, 0, 0, 0);
+        }
+        AreaRewriteAccumulator updatedFields = new AreaRewriteAccumulator();
+        updatedFields.add(plannedRewrite(
+                settings.googleClientIdCiphertext,
+                settings.googleClientIdNonce,
+                settings.keyVersion));
+        updatedFields.add(plannedRewrite(
+                settings.googleClientSecretCiphertext,
+                settings.googleClientSecretNonce,
+                settings.keyVersion));
+        updatedFields.add(plannedRewrite(
+                settings.googleRefreshTokenCiphertext,
+                settings.googleRefreshTokenNonce,
+                settings.keyVersion));
+        updatedFields.add(plannedRewrite(
+                settings.microsoftClientIdCiphertext,
+                settings.microsoftClientIdNonce,
+                settings.keyVersion));
+        updatedFields.add(plannedRewrite(
+                settings.microsoftClientSecretCiphertext,
+                settings.microsoftClientSecretNonce,
+                settings.keyVersion));
+        if (updatedFields.secretValuesReencrypted > 0) {
+            return new SecretReencryptionAreaResultView(
+                    "system-oauth",
+                    1,
+                    updatedFields.secretValuesReencrypted,
+                    updatedFields.fullReencryptionCount,
+                    updatedFields.metadataRewrapCount);
+        }
+        return new SecretReencryptionAreaResultView("system-oauth", 0, 0, 0, 0);
+    }
+
+    private SecretReencryptionAreaResultView previewAuthSecuritySettings() {
+        SystemAuthSecuritySetting settings = systemAuthSecuritySettingRepository.findSingleton().orElse(null);
+        if (settings == null) {
+            return new SecretReencryptionAreaResultView("auth-security", 0, 0, 0, 0);
+        }
+        AreaRewriteAccumulator updatedFields = new AreaRewriteAccumulator();
+        updatedFields.add(plannedRewrite(
+                settings.registrationTurnstileSecretCiphertext,
+                settings.registrationTurnstileSecretNonce,
+                settings.keyVersion));
+        updatedFields.add(plannedRewrite(
+                settings.registrationHcaptchaSecretCiphertext,
+                settings.registrationHcaptchaSecretNonce,
+                settings.keyVersion));
+        updatedFields.add(plannedRewrite(
+                settings.geoIpIpinfoTokenCiphertext,
+                settings.geoIpIpinfoTokenNonce,
+                settings.keyVersion));
+        if (updatedFields.secretValuesReencrypted > 0) {
+            return new SecretReencryptionAreaResultView(
+                    "auth-security",
+                    1,
+                    updatedFields.secretValuesReencrypted,
+                    updatedFields.fullReencryptionCount,
+                    updatedFields.metadataRewrapCount);
+        }
+        return new SecretReencryptionAreaResultView("auth-security", 0, 0, 0, 0);
+    }
 
     private SecretReencryptionAreaResultView reencryptOAuthCredentials() {
         int recordsUpdated = 0;
@@ -771,6 +964,16 @@ public class SecretManagementService {
             String keyVersion,
             java.util.function.Consumer<SecretEncryptionService.EncryptedValue> saveEncrypted,
             String context) {
+        RewriteOutcome outcome = plannedRewrite(ciphertext, nonce, keyVersion);
+        if (!outcome.updated()) {
+            return outcome;
+        }
+        SecretEncryptionService.EncryptedValue encrypted = secretEncryptionService.reencryptToActive(ciphertext, nonce, keyVersion, context);
+        saveEncrypted.accept(encrypted);
+        return outcome;
+    }
+
+    private RewriteOutcome plannedRewrite(String ciphertext, String nonce, String keyVersion) {
         if (ciphertext == null || ciphertext.isBlank() || keyVersion == null || keyVersion.isBlank()) {
             return RewriteOutcome.SKIPPED;
         }
@@ -781,8 +984,6 @@ public class SecretManagementService {
         if (!metadataRewrapCandidate && secretEncryptionService.keyVersion().equals(keyVersion)) {
             return RewriteOutcome.SKIPPED;
         }
-        SecretEncryptionService.EncryptedValue encrypted = secretEncryptionService.reencryptToActive(ciphertext, nonce, keyVersion, context);
-        saveEncrypted.accept(encrypted);
         return metadataRewrapCandidate ? RewriteOutcome.METADATA_REWRAP : RewriteOutcome.FULL_REENCRYPTION;
     }
 

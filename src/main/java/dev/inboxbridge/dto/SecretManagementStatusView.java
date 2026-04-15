@@ -27,6 +27,7 @@ public record SecretManagementStatusView(
         boolean envManagedGoogleRefreshTokenConfigured,
         boolean safeToRetireLegacyKeys,
         SecretManagementRotationPlanView rotationPlan,
+        SecretReencryptionPreviewView reencryptionPreview,
         List<SecretManagementKeyUsageView> keyUsage,
         boolean reencryptionReady,
         List<SecretReencryptionRequirementView> reencryptionRequirements,

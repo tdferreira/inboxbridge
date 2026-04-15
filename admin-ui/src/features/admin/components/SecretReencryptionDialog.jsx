@@ -5,6 +5,12 @@ import ModalDialog from '@/shared/components/ModalDialog'
 import PasswordField from '@/shared/components/PasswordField'
 import './SecretReencryptionDialog.css'
 
+function formatAreaLabel(area, t) {
+  const translationKey = `authSecurity.secretArea.${area}`
+  const translated = t(translationKey)
+  return translated === translationKey ? area : translated
+}
+
 function RequirementStatusIcon({ satisfied, t }) {
   const label = satisfied
     ? t('authSecurity.secretManagementRequirementSatisfied')
@@ -72,6 +78,8 @@ function SecretReencryptionDialog({
   const operatorSaveItems = Array.isArray(verification?.operatorSaveItems) ? verification.operatorSaveItems : []
   const totalFullReencryptionCount = reencryptionResult?.totalFullReencryptionCount ?? 0
   const totalMetadataRewrapCount = reencryptionResult?.totalMetadataRewrapCount ?? 0
+  const preview = secretManagementStatus?.reencryptionPreview || null
+  const previewAreas = Array.isArray(preview?.areas) ? preview.areas.filter((area) => (area?.recordsUpdated ?? 0) > 0) : []
   const requestSubmitted = Boolean(reencryptionResult?.operationStatus)
   const requestScheduled = reencryptionResult?.operationStatus === 'SCHEDULED'
   const requestCompleted = reencryptionResult?.operationStatus === 'COMPLETED'
@@ -144,6 +152,37 @@ function SecretReencryptionDialog({
             <div><span>{t('authSecurity.secretManagementUnavailableRecords')}</span><strong>{secretManagementStatus?.unavailableKeyRecordCount ?? 0}</strong></div>
           </div>
         </div>
+
+        {preview ? (
+          <div className="muted-box detail-stack">
+            <strong>{t('authSecurity.secretManagementReencryptPreviewTitle')}</strong>
+            <span>{t('authSecurity.secretManagementReencryptPreviewCopy')}</span>
+            <div className="polling-statistics-breakdown">
+              <div><span>{t('authSecurity.secretManagementRotationTarget')}</span><strong>{preview.activeKeyVersion || t('common.unavailable')}</strong></div>
+              <div><span>{t('authSecurity.secretManagementReencryptPreviewRecords')}</span><strong>{preview.totalRecordsPendingUpdate ?? 0}</strong></div>
+              <div><span>{t('authSecurity.secretManagementReencryptPreviewSecrets')}</span><strong>{preview.totalSecretValuesPendingRewrite ?? 0}</strong></div>
+              <div><span>{t('authSecurity.secretManagementExecutionMethodFull')}</span><strong>{preview.totalFullReencryptionCount ?? 0}</strong></div>
+              <div><span>{t('authSecurity.secretManagementExecutionMethodRewrap')}</span><strong>{preview.totalMetadataRewrapCount ?? 0}</strong></div>
+            </div>
+            {previewAreas.length > 0 ? (
+              <div className="polling-statistics-breakdown">
+                {previewAreas.map((area) => (
+                  <div key={area.area}>
+                    <span>{formatAreaLabel(area.area, t)}</span>
+                    <strong>
+                      {t('authSecurity.secretManagementReencryptPreviewAreaSummary', {
+                        records: area.recordsUpdated,
+                        secrets: area.secretValuesReencrypted
+                      })}
+                    </strong>
+                  </div>
+                ))}
+              </div>
+            ) : (
+              <span>{t('authSecurity.secretManagementReencryptPreviewEmpty')}</span>
+            )}
+          </div>
+        ) : null}
 
         <div className="detail-stack">
           <strong>{t('authSecurity.secretManagementReencryptDialogStepsTitle')}</strong>

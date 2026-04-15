@@ -30,6 +30,7 @@ const DEFAULT_SECRET_MANAGEMENT_STATUS = {
   envManagedGoogleRefreshTokenConfigured: false,
   safeToRetireLegacyKeys: true,
   rotationPlan: null,
+  reencryptionPreview: null,
   keyUsage: [],
   reencryptionReady: false,
   reencryptionRequirements: [],

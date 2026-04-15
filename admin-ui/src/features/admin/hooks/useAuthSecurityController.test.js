@@ -636,6 +636,14 @@ describe('useAuthSecurityController', () => {
         reauthenticationRequired: true,
         reauthenticationSatisfied: false,
         reauthenticationExpiresAt: null,
+        reencryptionPreview: {
+          activeKeyVersion: 'LOCAL:v2',
+          totalRecordsPendingUpdate: 2,
+          totalSecretValuesPendingRewrite: 2,
+          totalFullReencryptionCount: 2,
+          totalMetadataRewrapCount: 0,
+          areas: []
+        },
         keyUsage: [
           {
             keyVersion: 'LOCAL:v2',
@@ -664,6 +672,14 @@ describe('useAuthSecurityController', () => {
     expect(result.current.secretManagementStatus.configuredEnvManagedSourceCount).toBe(3)
     expect(result.current.secretManagementStatus.reauthenticationRequired).toBe(true)
     expect(result.current.secretManagementStatus.reauthenticationSatisfied).toBe(false)
+    expect(result.current.secretManagementStatus.reencryptionPreview).toEqual({
+      activeKeyVersion: 'LOCAL:v2',
+      totalRecordsPendingUpdate: 2,
+      totalSecretValuesPendingRewrite: 2,
+      totalFullReencryptionCount: 2,
+      totalMetadataRewrapCount: 0,
+      areas: []
+    })
   })
 
   it('re-encrypts stored secrets and refreshes secret-management status', async () => {

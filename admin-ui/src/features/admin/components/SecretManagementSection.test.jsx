@@ -45,6 +45,29 @@ function renderSection(overrides = {}) {
           requiresFullReencryption: true,
           metadataRewrapSupported: false
         },
+        reencryptionPreview: {
+          activeKeyVersion: 'LOCAL:v2',
+          totalRecordsPendingUpdate: 3,
+          totalSecretValuesPendingRewrite: 3,
+          totalFullReencryptionCount: 3,
+          totalMetadataRewrapCount: 0,
+          areas: [
+            {
+              area: 'destination-mailboxes',
+              recordsUpdated: 1,
+              secretValuesReencrypted: 1,
+              fullReencryptionCount: 1,
+              metadataRewrapCount: 0
+            },
+            {
+              area: 'system-oauth',
+              recordsUpdated: 2,
+              secretValuesReencrypted: 2,
+              fullReencryptionCount: 2,
+              metadataRewrapCount: 0
+            }
+          ]
+        },
         configuredLegacyKeyIds: ['LOCAL:v1'],
         protectedRecordCount: 14,
         nonActiveKeyRecordCount: 3,
@@ -136,6 +159,9 @@ describe('SecretManagementSection', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Re-encrypt stored secrets' }))
 
     expect(screen.getByText('Backend-verified requirements')).toBeInTheDocument()
+    expect(screen.getByText('Backend dry-run preview')).toBeInTheDocument()
+    expect(screen.getByText('Records that would be updated')).toBeInTheDocument()
+    expect(screen.getByText('Stored secrets that would be rewritten')).toBeInTheDocument()
     expect(screen.getByText('Not satisfied')).toBeInTheDocument()
     expect(screen.getByText('Provider diagnostics')).toBeInTheDocument()
     expect(screen.getByText('Local inner encryption key')).toBeInTheDocument()

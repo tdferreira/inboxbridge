@@ -296,6 +296,10 @@ Current implementation status:
   preview that classifies the next operator action as local-key rotation,
   transit-key migration, split-key rotation, provider migration, already
   aligned, no encrypted records, or blocked legacy-key recovery
+- `/api/admin/secret-management` now also includes a backend dry-run preview
+  of the bulk rewrite itself, with per-area and total counts for records that
+  would be updated, secret values that would be rewritten, and whether those
+  updates would use full plaintext re-encryption or metadata rewrap
 - the current implementation now also detects provider-side transit key
   rollovers for active `OPENBAO_TRANSIT`, `VAULT_TRANSIT`, and split-key outer
   envelopes; when only the provider's internal key version is stale, the

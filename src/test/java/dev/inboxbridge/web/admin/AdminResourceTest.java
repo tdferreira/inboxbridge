@@ -19,6 +19,7 @@ import dev.inboxbridge.dto.SecretReencryptionRequest;
 import dev.inboxbridge.dto.SecretManagementStatusView;
 import dev.inboxbridge.dto.SecretManagementRotationPlanView;
 import dev.inboxbridge.dto.SecretProviderComponentStatusView;
+import dev.inboxbridge.dto.SecretReencryptionPreviewView;
 import dev.inboxbridge.dto.StartPasskeyCeremonyResponse;
 import dev.inboxbridge.dto.VerifySecretManagementPasswordRequest;
 import dev.inboxbridge.dto.SourcePollingSettingsView;
@@ -369,6 +370,13 @@ class AdminResourceTest {
                             true,
                             true,
                             false),
+                    new SecretReencryptionPreviewView(
+                            "LOCAL:v2",
+                            1,
+                            1,
+                            1,
+                            0,
+                            java.util.List.of()),
                     java.util.List.of(),
                     true,
                     java.util.List.of(),

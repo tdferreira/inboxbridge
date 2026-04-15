@@ -72,6 +72,12 @@ class SecretManagementServiceTest {
         assertTrue(view.reauthenticationSatisfied());
         assertEquals(null, view.reauthenticationExpiresAt());
         assertFalse(view.safeToRetireLegacyKeys());
+        assertNotNull(view.reencryptionPreview());
+        assertEquals("LOCAL:v2", view.reencryptionPreview().activeKeyVersion());
+        assertEquals(2, view.reencryptionPreview().totalRecordsPendingUpdate());
+        assertEquals(2, view.reencryptionPreview().totalSecretValuesPendingRewrite());
+        assertEquals(2, view.reencryptionPreview().totalFullReencryptionCount());
+        assertEquals(0, view.reencryptionPreview().totalMetadataRewrapCount());
         assertEquals(2, view.keyUsage().size());
         assertEquals("LOCAL:v2", view.keyUsage().getFirst().keyVersion());
         assertEquals("v1", view.keyUsage().get(1).keyVersion());
@@ -241,6 +247,11 @@ class SecretManagementServiceTest {
         assertTrue(view.rotationPlan().metadataRewrapSupported());
         assertFalse(view.rotationPlan().requiresFullReencryption());
         assertEquals(2, view.rotationPlan().affectedRecordCount());
+        assertNotNull(view.reencryptionPreview());
+        assertEquals(2, view.reencryptionPreview().totalRecordsPendingUpdate());
+        assertEquals(2, view.reencryptionPreview().totalSecretValuesPendingRewrite());
+        assertEquals(0, view.reencryptionPreview().totalFullReencryptionCount());
+        assertEquals(2, view.reencryptionPreview().totalMetadataRewrapCount());
         assertFalse(view.safeToRetireLegacyKeys());
     }
 
