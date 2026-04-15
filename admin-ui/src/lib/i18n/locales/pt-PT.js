@@ -527,6 +527,7 @@ const dictionary = {
   "authSecurity.secretManagementRequirementNotSatisfied": "Não cumprido",
   "authSecurity.secretManagementReencryptPendingTitle": "Já existe um pedido de re-encriptação pendente",
   "authSecurity.secretManagementReencryptPendingBody": "O InboxBridge já tem um pedido de re-encriptação em fila. Está agendado para executar em {executeAfter}.",
+  "authSecurity.secretManagementReencryptQueuedPreviewTitle": "Instantâneo do pedido em fila",
   "authSecurity.secretManagementReencryptImmediateOverride": "Executar imediatamente e ignorar a janela de espera (requer uma substituição de teste ativada no servidor)",
   "authSecurity.secretManagementReencryptSaveItemsTitle": "Guardar antes de retirar chaves legadas",
   "authSecurity.secretManagementReencryptLatestRequestTitle": "Pedido de re-encriptação mais recente",

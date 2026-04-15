@@ -1,5 +1,9 @@
 package dev.inboxbridge.service.security;
 
+import com.fasterxml.jackson.core.JsonProcessingException;
+import com.fasterxml.jackson.core.type.TypeReference;
+import com.fasterxml.jackson.databind.ObjectMapper;
+
 import java.time.Duration;
 import java.time.Instant;
 import java.util.ArrayList;
@@ -114,6 +118,9 @@ public class SecretManagementService {
 
     @Inject
     PasskeyService passkeyService;
+
+    @Inject
+    ObjectMapper objectMapper;
 
     public SecretManagementStatusView status() {
         return status(null);
@@ -284,6 +291,7 @@ public class SecretManagementService {
         SecretReencryptionRequest effectiveRequest = effectiveRequest(request);
         ensureNoPendingRequest();
         validateReencryptionReadiness(currentSession, true);
+        SecretReencryptionPreviewView requestPreview = buildReencryptionPreview(providerResolver().activeKeyVersion());
         if (effectiveRequest.immediateExecutionOverride() && !allowImmediateReencryptOverride()) {
             throw new IllegalStateException(
                     "Immediate secret re-encryption override is disabled by server policy. Wait for the configured cooldown window or enable the testing override on the server first.");
@@ -292,11 +300,12 @@ public class SecretManagementService {
         Instant now = Instant.now();
         if (!effectiveRequest.immediateExecutionOverride() && !cooldown.isZero() && !cooldown.isNegative()) {
             Instant executeAfter = now.plus(cooldown);
-            SystemSecretReencryptionRequest requestState = upsertRequestState(actor, effectiveRequest, now, executeAfter);
+            SystemSecretReencryptionRequest requestState = upsertRequestState(actor, effectiveRequest, requestPreview, now, executeAfter);
             requestState.status = RequestStatus.PENDING.name();
             requestState.lastErrorMessage = null;
             requestState.lastResultMessage = "Secret re-encryption is queued and will execute after the cooldown window.";
             requestState.lastVerificationPassed = null;
+            clearLastExecutionSnapshot(requestState);
             persistRequestState(requestState);
             return new SecretReencryptionResultView(
                     RequestStatus.SCHEDULED.name(),
@@ -311,7 +320,7 @@ public class SecretManagementService {
                     new SecretReencryptionFollowUpView(0, 0, 0),
                     buildVerification(status(currentSession)));
         }
-        return executeReencryption(actor, currentSession, effectiveRequest, now, true);
+        return executeReencryption(actor, currentSession, effectiveRequest, requestPreview, now, true);
     }
 
     @Transactional
@@ -378,7 +387,7 @@ public class SecretManagementService {
         if (requestState.executeAfter.isAfter(now)) {
             return;
         }
-            executeReencryption(null, null, toRequest(requestState), now, false);
+            executeReencryption(null, null, toRequest(requestState), readRequestPreview(requestState), now, false);
     }
 
     public void setLocalSecretKeyProvider(LocalSecretKeyProvider localSecretKeyProvider) {
@@ -443,6 +452,10 @@ public class SecretManagementService {
 
     public void setSystemSecretReencryptionRequestRepository(SystemSecretReencryptionRequestRepository systemSecretReencryptionRequestRepository) {
         this.systemSecretReencryptionRequestRepository = systemSecretReencryptionRequestRepository;
+    }
+
+    public void setObjectMapper(ObjectMapper objectMapper) {
+        this.objectMapper = objectMapper;
     }
 
     private void collectUsage(Map<String, UsageAccumulator> usage) {
@@ -1004,10 +1017,16 @@ public class SecretManagementService {
             AppUser actor,
             UserSession currentSession,
             SecretReencryptionRequest request,
+            SecretReencryptionPreviewView requestPreview,
             Instant now,
             boolean immediate) {
         validateReencryptionReadiness(currentSession, immediate);
-        SystemSecretReencryptionRequest requestState = upsertRequestState(actor, request, now, immediate ? now : currentReencryptionRequest() == null ? now : currentReencryptionRequest().executeAfter);
+        SystemSecretReencryptionRequest requestState = upsertRequestState(
+                actor,
+                request,
+                requestPreview,
+                now,
+                immediate ? now : currentReencryptionRequest() == null ? now : currentReencryptionRequest().executeAfter);
         requestState.status = RequestStatus.RUNNING.name();
         requestState.lastStartedAt = now;
         requestState.lastFailedAt = null;
@@ -1035,6 +1054,13 @@ public class SecretManagementService {
                     : "Secret re-encryption completed but post-run verification still requires operator attention.";
             requestState.lastVerificationPassed = verification.passed();
             requestState.executeAfter = immediate ? now : requestState.executeAfter;
+            requestState.lastTotalRecordsUpdated = totalRecordsUpdated;
+            requestState.lastTotalSecretValuesReencrypted = totalSecretValuesReencrypted;
+            requestState.lastTotalFullReencryptionCount = totalFullReencryptionCount;
+            requestState.lastTotalMetadataRewrapCount = totalMetadataRewrapCount;
+            requestState.lastAreaResultsJson = writeJson(areas);
+            requestState.lastFollowUpJson = writeJson(followUp);
+            requestState.lastVerificationJson = writeJson(verification);
             persistRequestState(requestState);
             return new SecretReencryptionResultView(
                     RequestStatus.COMPLETED.name(),
@@ -1054,6 +1080,7 @@ public class SecretManagementService {
             requestState.lastErrorMessage = error.getMessage();
             requestState.lastResultMessage = "Secret re-encryption did not complete successfully.";
             requestState.lastVerificationPassed = Boolean.FALSE;
+            clearLastExecutionSnapshot(requestState);
             persistRequestState(requestState);
             throw error;
         }
@@ -1437,6 +1464,7 @@ public class SecretManagementService {
     private SystemSecretReencryptionRequest upsertRequestState(
             AppUser actor,
             SecretReencryptionRequest request,
+            SecretReencryptionPreviewView requestPreview,
             Instant requestedAt,
             Instant executeAfter) {
         SystemSecretReencryptionRequest requestState = currentReencryptionRequest();
@@ -1451,6 +1479,7 @@ public class SecretManagementService {
         requestState.revokeBrowserExtensionSessions = request.revokeBrowserExtensionSessions();
         requestState.revokeRemoteSessions = request.revokeRemoteSessions();
         requestState.clearCachedOAuthAccessTokens = request.clearCachedOAuthAccessTokens();
+        requestState.requestPreviewJson = writeJson(requestPreview);
         return requestState;
     }
 
@@ -1470,6 +1499,10 @@ public class SecretManagementService {
         if (requestState == null || requestState.status == null || requestState.status.isBlank()) {
             return null;
         }
+        SecretReencryptionPreviewView plannedPreview = readRequestPreview(requestState);
+        List<SecretReencryptionAreaResultView> areas = readAreaResults(requestState);
+        SecretReencryptionFollowUpView followUp = readLastFollowUp(requestState);
+        SecretReencryptionVerificationView verification = readLastVerification(requestState);
         return new SecretReencryptionRequestStatusView(
                 requestState.status,
                 requestState.requestedAt,
@@ -1482,7 +1515,81 @@ public class SecretManagementService {
                 requestState.lastErrorMessage != null && !requestState.lastErrorMessage.isBlank()
                         ? requestState.lastErrorMessage
                         : requestState.lastResultMessage,
-                Boolean.TRUE.equals(requestState.lastVerificationPassed));
+                Boolean.TRUE.equals(requestState.lastVerificationPassed),
+                plannedPreview,
+                requestState.lastTotalRecordsUpdated,
+                requestState.lastTotalSecretValuesReencrypted,
+                requestState.lastTotalFullReencryptionCount,
+                requestState.lastTotalMetadataRewrapCount,
+                areas,
+                followUp,
+                verification);
+    }
+
+    private SecretReencryptionPreviewView readRequestPreview(SystemSecretReencryptionRequest requestState) {
+        return readJson(requestState == null ? null : requestState.requestPreviewJson, SecretReencryptionPreviewView.class);
+    }
+
+    private List<SecretReencryptionAreaResultView> readAreaResults(SystemSecretReencryptionRequest requestState) {
+        List<SecretReencryptionAreaResultView> values = readJson(
+                requestState == null ? null : requestState.lastAreaResultsJson,
+                new TypeReference<List<SecretReencryptionAreaResultView>>() {
+                });
+        return values == null ? List.of() : values;
+    }
+
+    private SecretReencryptionFollowUpView readLastFollowUp(SystemSecretReencryptionRequest requestState) {
+        SecretReencryptionFollowUpView followUp = readJson(
+                requestState == null ? null : requestState.lastFollowUpJson,
+                SecretReencryptionFollowUpView.class);
+        return followUp == null ? new SecretReencryptionFollowUpView(0, 0, 0) : followUp;
+    }
+
+    private SecretReencryptionVerificationView readLastVerification(SystemSecretReencryptionRequest requestState) {
+        return readJson(requestState == null ? null : requestState.lastVerificationJson, SecretReencryptionVerificationView.class);
+    }
+
+    private void clearLastExecutionSnapshot(SystemSecretReencryptionRequest requestState) {
+        requestState.lastTotalRecordsUpdated = 0;
+        requestState.lastTotalSecretValuesReencrypted = 0;
+        requestState.lastTotalFullReencryptionCount = 0;
+        requestState.lastTotalMetadataRewrapCount = 0;
+        requestState.lastAreaResultsJson = null;
+        requestState.lastFollowUpJson = null;
+        requestState.lastVerificationJson = null;
+    }
+
+    private String writeJson(Object value) {
+        if (value == null) {
+            return null;
+        }
+        try {
+            return mapper().writeValueAsString(value);
+        } catch (JsonProcessingException error) {
+            throw new IllegalStateException("Failed to persist secret re-encryption snapshot data.", error);
+        }
+    }
+
+    private <T> T readJson(String rawValue, Class<T> type) {
+        if (rawValue == null || rawValue.isBlank()) {
+            return null;
+        }
+        try {
+            return mapper().readValue(rawValue, type);
+        } catch (JsonProcessingException error) {
+            throw new IllegalStateException("Failed to read persisted secret re-encryption snapshot data.", error);
+        }
+    }
+
+    private <T> T readJson(String rawValue, TypeReference<T> type) {
+        if (rawValue == null || rawValue.isBlank()) {
+            return null;
+        }
+        try {
+            return mapper().readValue(rawValue, type);
+        } catch (JsonProcessingException error) {
+            throw new IllegalStateException("Failed to read persisted secret re-encryption snapshot data.", error);
+        }
     }
 
     private Duration reencryptionCooldown() {
@@ -1586,6 +1693,13 @@ public class SecretManagementService {
             secretProviderResolver = resolver;
         }
         return secretProviderResolver;
+    }
+
+    private ObjectMapper mapper() {
+        if (objectMapper == null) {
+            objectMapper = new ObjectMapper();
+        }
+        return objectMapper;
     }
 
     private boolean envManagedMailboxSecretsAllowed() {

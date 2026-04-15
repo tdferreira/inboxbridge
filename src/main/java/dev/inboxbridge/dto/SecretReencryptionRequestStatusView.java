@@ -1,6 +1,7 @@
 package dev.inboxbridge.dto;
 
 import java.time.Instant;
+import java.util.List;
 
 /**
  * Surfaces the latest scheduled or completed secret re-encryption request so
@@ -17,5 +18,13 @@ public record SecretReencryptionRequestStatusView(
         Instant lastFailedAt,
         boolean immediateExecutionOverrideUsed,
         String message,
-        boolean verificationPassed) {
+        boolean verificationPassed,
+        SecretReencryptionPreviewView plannedPreview,
+        int totalRecordsUpdated,
+        int totalSecretValuesReencrypted,
+        int totalFullReencryptionCount,
+        int totalMetadataRewrapCount,
+        List<SecretReencryptionAreaResultView> areas,
+        SecretReencryptionFollowUpView followUp,
+        SecretReencryptionVerificationView verification) {
 }

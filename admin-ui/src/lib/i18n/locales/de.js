@@ -1003,6 +1003,7 @@ const dictionary = {
   "authSecurity.secretManagementRequirementNotSatisfied": "Nicht erfüllt",
   "authSecurity.secretManagementReencryptPendingTitle": "Es gibt bereits eine ausstehende Anfrage zur Neuverschlüsselung",
   "authSecurity.secretManagementReencryptPendingBody": "InboxBridge hat bereits eine Anfrage zur Neuverschlüsselung in der Warteschlange. Sie ist für {executeAfter} geplant.",
+  "authSecurity.secretManagementReencryptQueuedPreviewTitle": "Momentaufnahme der geplanten Anfrage",
   "authSecurity.secretManagementReencryptImmediateOverride": "Sofort ausführen und das Wartefenster umgehen (erfordert eine serverseitig aktivierte Testausnahme)",
   "authSecurity.secretManagementReencryptSaveItemsTitle": "Vor dem Entfernen von Altschlüsseln speichern",
   "authSecurity.secretManagementReencryptLatestRequestTitle": "Neueste Neuverschlüsselungsanfrage",

@@ -70,6 +70,7 @@ function SecretManagementSection({
   const rotationPlan = secretManagementStatus?.rotationPlan || null
   const reencryptionRequest = secretManagementStatus?.reencryptionRequest
   const pendingReencryption = reencryptionRequest?.status === 'PENDING'
+  const latestRequestPreview = reencryptionRequest?.plannedPreview || null
 
   async function handleConfirmReencrypt() {
     const result = await onReencryptStoredSecrets?.()
@@ -222,6 +223,18 @@ function SecretManagementSection({
                     <span>{t('authSecurity.secretManagementReencryptLatestRequestStatus', { status: reencryptionRequest.status })}</span>
                     {reencryptionRequest.executeAfter ? <span>{t('authSecurity.secretManagementReencryptLatestRequestExecuteAfter', { value: reencryptionRequest.executeAfter })}</span> : null}
                     {reencryptionRequest.message ? <span>{reencryptionRequest.message}</span> : null}
+                    {pendingReencryption && latestRequestPreview ? (
+                      <div className="polling-statistics-breakdown">
+                        <div><span>{t('authSecurity.secretManagementReencryptPreviewRecords')}</span><strong>{latestRequestPreview.totalRecordsPendingUpdate ?? 0}</strong></div>
+                        <div><span>{t('authSecurity.secretManagementReencryptPreviewSecrets')}</span><strong>{latestRequestPreview.totalSecretValuesPendingRewrite ?? 0}</strong></div>
+                      </div>
+                    ) : null}
+                    {!pendingReencryption ? (
+                      <div className="polling-statistics-breakdown">
+                        <div><span>{t('authSecurity.secretManagementExecutionMethodFull')}</span><strong>{reencryptionRequest.totalFullReencryptionCount ?? 0}</strong></div>
+                        <div><span>{t('authSecurity.secretManagementExecutionMethodRewrap')}</span><strong>{reencryptionRequest.totalMetadataRewrapCount ?? 0}</strong></div>
+                      </div>
+                    ) : null}
                   </div>
                 </Banner>
               ) : null}

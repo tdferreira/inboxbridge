@@ -644,6 +644,30 @@ describe('useAuthSecurityController', () => {
           totalMetadataRewrapCount: 0,
           areas: []
         },
+        reencryptionRequest: {
+          status: 'PENDING',
+          executeAfter: '2026-04-16T10:00:00Z',
+          verificationPassed: false,
+          plannedPreview: {
+            activeKeyVersion: 'LOCAL:v2',
+            totalRecordsPendingUpdate: 2,
+            totalSecretValuesPendingRewrite: 2,
+            totalFullReencryptionCount: 2,
+            totalMetadataRewrapCount: 0,
+            areas: []
+          },
+          totalRecordsUpdated: 0,
+          totalSecretValuesReencrypted: 0,
+          totalFullReencryptionCount: 0,
+          totalMetadataRewrapCount: 0,
+          areas: [],
+          followUp: {
+            browserExtensionSessionsRevoked: 0,
+            remoteSessionsRevoked: 0,
+            cachedOAuthAccessTokensCleared: 0
+          },
+          verification: null
+        },
         keyUsage: [
           {
             keyVersion: 'LOCAL:v2',
@@ -680,6 +704,17 @@ describe('useAuthSecurityController', () => {
       totalMetadataRewrapCount: 0,
       areas: []
     })
+    expect(result.current.secretManagementStatus.reencryptionRequest).toEqual(expect.objectContaining({
+      status: 'PENDING',
+      plannedPreview: {
+        activeKeyVersion: 'LOCAL:v2',
+        totalRecordsPendingUpdate: 2,
+        totalSecretValuesPendingRewrite: 2,
+        totalFullReencryptionCount: 2,
+        totalMetadataRewrapCount: 0,
+        areas: []
+      }
+    }))
   })
 
   it('re-encrypts stored secrets and refreshes secret-management status', async () => {

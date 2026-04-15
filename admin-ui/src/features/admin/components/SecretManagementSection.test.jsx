@@ -406,4 +406,36 @@ describe('SecretManagementSection', () => {
     expect(fullRow).toHaveTextContent('1')
     expect(rewrapRow).toHaveTextContent('2')
   })
+
+  it('renders the persisted queued-request snapshot from secret-management status', () => {
+    renderSection({
+      secretManagementStatus: {
+        reencryptionRequest: {
+          status: 'PENDING',
+          executeAfter: '2026-04-16T10:00:00Z',
+          message: 'Secret re-encryption is queued and will execute after the cooldown window.',
+          verificationPassed: false,
+          plannedPreview: {
+            activeKeyVersion: 'LOCAL:v2',
+            totalRecordsPendingUpdate: 2,
+            totalSecretValuesPendingRewrite: 2,
+            totalFullReencryptionCount: 2,
+            totalMetadataRewrapCount: 0,
+            areas: []
+          },
+          totalRecordsUpdated: 0,
+          totalSecretValuesReencrypted: 0,
+          totalFullReencryptionCount: 0,
+          totalMetadataRewrapCount: 0,
+          areas: [],
+          followUp: { browserExtensionSessionsRevoked: 0, remoteSessionsRevoked: 0, cachedOAuthAccessTokensCleared: 0 },
+          verification: null
+        }
+      }
+    })
+
+    expect(screen.getByText('Latest re-encryption request')).toBeInTheDocument()
+    expect(screen.getByText('Records that would be updated')).toBeInTheDocument()
+    expect(screen.getByText('Stored secrets that would be rewritten')).toBeInTheDocument()
+  })
 })

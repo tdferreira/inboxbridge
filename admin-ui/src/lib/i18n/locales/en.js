@@ -1230,6 +1230,7 @@ const dictionary = {
   "authSecurity.secretManagementRequirementNotSatisfied": "Not satisfied",
   "authSecurity.secretManagementReencryptPendingTitle": "A re-encryption request is already pending",
   "authSecurity.secretManagementReencryptPendingBody": "InboxBridge already has a queued re-encryption request. It is scheduled to execute at {executeAfter}.",
+  "authSecurity.secretManagementReencryptQueuedPreviewTitle": "Queued request snapshot",
   "authSecurity.secretManagementReencryptImmediateOverride": "Execute immediately and bypass the cooldown window (server-side testing override required)",
   "authSecurity.secretManagementReencryptSaveItemsTitle": "Save before retiring legacy keys",
   "authSecurity.secretManagementReencryptLatestRequestTitle": "Latest re-encryption request",

@@ -73,16 +73,24 @@ function SecretReencryptionDialog({
     .every((requirement) => requirement?.satisfied)
   const pendingRequest = secretManagementStatus?.reencryptionRequest?.status === 'PENDING'
   const allowImmediateOverride = Boolean(secretManagementStatus?.immediateReencryptionOverrideAllowed)
-  const verification = reencryptionResult?.verification || null
-  const verificationMessages = Array.isArray(verification?.messages) ? verification.messages : []
-  const operatorSaveItems = Array.isArray(verification?.operatorSaveItems) ? verification.operatorSaveItems : []
-  const totalFullReencryptionCount = reencryptionResult?.totalFullReencryptionCount ?? 0
-  const totalMetadataRewrapCount = reencryptionResult?.totalMetadataRewrapCount ?? 0
+  const persistedRequest = secretManagementStatus?.reencryptionRequest || null
+  const latestVerification = reencryptionResult?.verification || persistedRequest?.verification || null
+  const verificationMessages = Array.isArray(latestVerification?.messages) ? latestVerification.messages : []
+  const operatorSaveItems = Array.isArray(latestVerification?.operatorSaveItems) ? latestVerification.operatorSaveItems : []
+  const totalFullReencryptionCount = reencryptionResult?.totalFullReencryptionCount ?? persistedRequest?.totalFullReencryptionCount ?? 0
+  const totalMetadataRewrapCount = reencryptionResult?.totalMetadataRewrapCount ?? persistedRequest?.totalMetadataRewrapCount ?? 0
   const preview = secretManagementStatus?.reencryptionPreview || null
   const previewAreas = Array.isArray(preview?.areas) ? preview.areas.filter((area) => (area?.recordsUpdated ?? 0) > 0) : []
-  const requestSubmitted = Boolean(reencryptionResult?.operationStatus)
-  const requestScheduled = reencryptionResult?.operationStatus === 'SCHEDULED'
-  const requestCompleted = reencryptionResult?.operationStatus === 'COMPLETED'
+  const latestRequestPreview = reencryptionResult ? preview : (persistedRequest?.plannedPreview || null)
+  const latestPreviewAreas = Array.isArray(latestRequestPreview?.areas)
+    ? latestRequestPreview.areas.filter((area) => (area?.recordsUpdated ?? 0) > 0)
+    : []
+  const latestOperationStatus = reencryptionResult?.operationStatus || persistedRequest?.status || null
+  const latestRequestMessage = reencryptionResult?.message || persistedRequest?.message || null
+  const latestExecuteAfter = reencryptionResult?.executeAfter || persistedRequest?.executeAfter || null
+  const requestSubmitted = Boolean(latestOperationStatus)
+  const requestScheduled = latestOperationStatus === 'SCHEDULED' || latestOperationStatus === 'PENDING'
+  const requestCompleted = latestOperationStatus === 'COMPLETED'
   const requiresReauthentication = Boolean(secretManagementStatus?.reauthenticationRequired)
   const reauthenticationSatisfied = Boolean(secretManagementStatus?.reauthenticationSatisfied)
   const [expandedRequirementIds, setExpandedRequirementIds] = useState(() => new Set(
@@ -269,16 +277,43 @@ function SecretReencryptionDialog({
             <div className="detail-stack">
               <strong id="secret-reencryption-pending-request" tabIndex="-1">{t('authSecurity.secretManagementReencryptPendingTitle')}</strong>
               <span>{t('authSecurity.secretManagementReencryptPendingBody', { executeAfter: secretManagementStatus?.reencryptionRequest?.executeAfter || '' })}</span>
+              {latestRequestPreview ? (
+                <div className="polling-statistics-breakdown">
+                  <div><span>{t('authSecurity.secretManagementReencryptPreviewRecords')}</span><strong>{latestRequestPreview.totalRecordsPendingUpdate ?? 0}</strong></div>
+                  <div><span>{t('authSecurity.secretManagementReencryptPreviewSecrets')}</span><strong>{latestRequestPreview.totalSecretValuesPendingRewrite ?? 0}</strong></div>
+                </div>
+              ) : null}
             </div>
           </Banner>
         ) : null}
 
         {requestSubmitted ? (
-          <Banner tone={requestScheduled ? 'info' : verification?.passed === false ? 'warning' : 'success'}>
+          <Banner tone={requestScheduled ? 'info' : latestVerification?.passed === false ? 'warning' : 'success'}>
             <div className="detail-stack">
-              <strong>{reencryptionResult?.message || t('authSecurity.secretManagementReencryptLatestRequestTitle')}</strong>
-              {reencryptionResult?.executeAfter ? (
-                <span>{t('authSecurity.secretManagementReencryptLatestRequestExecuteAfter', { value: reencryptionResult.executeAfter })}</span>
+              <strong>{latestRequestMessage || t('authSecurity.secretManagementReencryptLatestRequestTitle')}</strong>
+              {latestExecuteAfter ? (
+                <span>{t('authSecurity.secretManagementReencryptLatestRequestExecuteAfter', { value: latestExecuteAfter })}</span>
+              ) : null}
+              {requestScheduled && latestRequestPreview ? (
+                <div className="detail-stack">
+                  <strong>{t('authSecurity.secretManagementReencryptQueuedPreviewTitle')}</strong>
+                  <div className="polling-statistics-breakdown">
+                    <div><span>{t('authSecurity.secretManagementReencryptPreviewRecords')}</span><strong>{latestRequestPreview.totalRecordsPendingUpdate ?? 0}</strong></div>
+                    <div><span>{t('authSecurity.secretManagementReencryptPreviewSecrets')}</span><strong>{latestRequestPreview.totalSecretValuesPendingRewrite ?? 0}</strong></div>
+                    <div><span>{t('authSecurity.secretManagementExecutionMethodFull')}</span><strong>{latestRequestPreview.totalFullReencryptionCount ?? 0}</strong></div>
+                    <div><span>{t('authSecurity.secretManagementExecutionMethodRewrap')}</span><strong>{latestRequestPreview.totalMetadataRewrapCount ?? 0}</strong></div>
+                  </div>
+                  {latestPreviewAreas.length > 0 ? (
+                    <div className="polling-statistics-breakdown">
+                      {latestPreviewAreas.map((area) => (
+                        <div key={`queued-${area.area}`}>
+                          <span>{formatAreaLabel(area.area, t)}</span>
+                          <strong>{t('authSecurity.secretManagementReencryptPreviewAreaSummary', { records: area.recordsUpdated, secrets: area.secretValuesReencrypted })}</strong>
+                        </div>
+                      ))}
+                    </div>
+                  ) : null}
+                </div>
               ) : null}
               {requestCompleted && verificationMessages.length > 0 ? (
                 <div className="detail-stack">

@@ -996,6 +996,7 @@ const dictionary = {
   "authSecurity.secretManagementRequirementNotSatisfied": "No cumplido",
   "authSecurity.secretManagementReencryptPendingTitle": "Ya existe una solicitud de recifrado pendiente",
   "authSecurity.secretManagementReencryptPendingBody": "InboxBridge ya tiene una solicitud de recifrado en cola. Está programada para ejecutarse en {executeAfter}.",
+  "authSecurity.secretManagementReencryptQueuedPreviewTitle": "Instantánea de la solicitud en cola",
   "authSecurity.secretManagementReencryptImmediateOverride": "Ejecutar de inmediato y omitir la ventana de enfriamiento (requiere una anulación de prueba habilitada en el servidor)",
   "authSecurity.secretManagementReencryptSaveItemsTitle": "Guarda esto antes de retirar claves heredadas",
   "authSecurity.secretManagementReencryptLatestRequestTitle": "Solicitud de recifrado más reciente",

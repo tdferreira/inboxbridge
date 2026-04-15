@@ -996,6 +996,7 @@ const dictionary = {
   "authSecurity.secretManagementRequirementNotSatisfied": "Non satisfaite",
   "authSecurity.secretManagementReencryptPendingTitle": "Une demande de rechiffrement est déjà en attente",
   "authSecurity.secretManagementReencryptPendingBody": "InboxBridge a déjà une demande de rechiffrement en file d’attente. Elle est programmée pour s’exécuter à {executeAfter}.",
+  "authSecurity.secretManagementReencryptQueuedPreviewTitle": "Instantané de la demande en file",
   "authSecurity.secretManagementReencryptImmediateOverride": "Exécuter immédiatement et contourner la fenêtre d’attente (nécessite une dérogation de test activée côté serveur)",
   "authSecurity.secretManagementReencryptSaveItemsTitle": "À conserver avant de retirer les clés héritées",
   "authSecurity.secretManagementReencryptLatestRequestTitle": "Demande de rechiffrement la plus récente",

@@ -534,6 +534,12 @@ secret values that would be rewritten, and whether those updates would happen
 through full plaintext re-encryption or metadata rewrap. The admin modal shows
 that preview ahead of the acknowledgement checkboxes so the operator can verify
 the expected blast radius before queuing the run.
+Queued and completed re-encryption requests now also persist that audit context
+inside `system_secret_reencryption_request`: the queued preview is snapshotted
+when the request is created, and the latest execution stores its totals,
+per-area results, follow-up cleanup counts, and verification summary. Reloading
+the admin UI therefore still shows the last queued/completed request details
+even after the live secret-management status has moved on.
 That same admin secret-management flow now also supports step-up verification
 per browser session. When
 `SECURITY_SECRET_REENCRYPTION_REAUTHENTICATION_TTL` is greater than zero

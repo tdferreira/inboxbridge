@@ -41,6 +41,9 @@ public class SystemSecretReencryptionRequest extends PanacheEntityBase {
     @Column(name = "clear_cached_oauth_access_tokens", nullable = false)
     public boolean clearCachedOAuthAccessTokens;
 
+    @Column(name = "request_preview_json", columnDefinition = "text")
+    public String requestPreviewJson;
+
     @Column(name = "last_started_at")
     public Instant lastStartedAt;
 
@@ -58,4 +61,25 @@ public class SystemSecretReencryptionRequest extends PanacheEntityBase {
 
     @Column(name = "last_verification_passed")
     public Boolean lastVerificationPassed;
+
+    @Column(name = "last_total_records_updated", nullable = false)
+    public int lastTotalRecordsUpdated;
+
+    @Column(name = "last_total_secret_values_reencrypted", nullable = false)
+    public int lastTotalSecretValuesReencrypted;
+
+    @Column(name = "last_total_full_reencryption_count", nullable = false)
+    public int lastTotalFullReencryptionCount;
+
+    @Column(name = "last_total_metadata_rewrap_count", nullable = false)
+    public int lastTotalMetadataRewrapCount;
+
+    @Column(name = "last_area_results_json", columnDefinition = "text")
+    public String lastAreaResultsJson;
+
+    @Column(name = "last_follow_up_json", columnDefinition = "text")
+    public String lastFollowUpJson;
+
+    @Column(name = "last_verification_json", columnDefinition = "text")
+    public String lastVerificationJson;
 }

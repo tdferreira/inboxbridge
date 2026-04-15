@@ -300,6 +300,10 @@ Current implementation status:
   of the bulk rewrite itself, with per-area and total counts for records that
   would be updated, secret values that would be rewritten, and whether those
   updates would use full plaintext re-encryption or metadata rewrap
+- queued and completed secret re-encryption requests now persist those
+  snapshots too, so the admin UI can still show the queued preview plus the
+  latest execution totals, per-area result breakdown, follow-up cleanup
+  counts, and verification summary after a page reload
 - the current implementation now also detects provider-side transit key
   rollovers for active `OPENBAO_TRANSIT`, `VAULT_TRANSIT`, and split-key outer
   envelopes; when only the provider's internal key version is stale, the

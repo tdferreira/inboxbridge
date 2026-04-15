@@ -390,6 +390,10 @@ class SecretManagementServiceTest {
         assertNotNull(result.executeAfter());
         assertEquals("PENDING", status.reencryptionRequest().status());
         assertEquals(1L, status.reencryptionRequest().requestedByUserId());
+        assertNotNull(status.reencryptionRequest().plannedPreview());
+        assertEquals(2, status.reencryptionRequest().plannedPreview().totalRecordsPendingUpdate());
+        assertEquals(2, status.reencryptionRequest().plannedPreview().totalSecretValuesPendingRewrite());
+        assertEquals(0, status.reencryptionRequest().totalRecordsUpdated());
         assertTrue(status.reencryptionReady());
     }
 
@@ -429,6 +433,13 @@ class SecretManagementServiceTest {
         assertEquals("COMPLETED", status.reencryptionRequest().status());
         assertEquals(0, status.nonActiveKeyRecordCount());
         assertTrue(status.safeToRetireLegacyKeys());
+        assertNotNull(status.reencryptionRequest().plannedPreview());
+        assertEquals(2, status.reencryptionRequest().plannedPreview().totalRecordsPendingUpdate());
+        assertEquals(2, status.reencryptionRequest().totalRecordsUpdated());
+        assertEquals(2, status.reencryptionRequest().totalSecretValuesReencrypted());
+        assertEquals(2, status.reencryptionRequest().totalFullReencryptionCount());
+        assertEquals(0, status.reencryptionRequest().totalMetadataRewrapCount());
+        assertTrue(status.reencryptionRequest().verification().passed());
     }
 
     @Test
