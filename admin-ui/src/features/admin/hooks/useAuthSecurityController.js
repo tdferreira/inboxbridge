@@ -34,6 +34,8 @@ const DEFAULT_SECRET_MANAGEMENT_STATUS = {
   keyUsage: [],
   reencryptionReady: false,
   reencryptionRequirements: [],
+  legacyKeyRetirementReady: false,
+  retirementRequirements: [],
   reencryptionRequest: null,
   reencryptionCooldown: 'PT12H',
   immediateReencryptionOverrideAllowed: false,
@@ -51,6 +53,18 @@ const SESSION_KIND_KEYS = Object.freeze({
   REMOTE: 'sessions.kindRemote',
   BROWSER: 'sessions.kindBrowser'
 })
+
+function normalizeSecretManagementStatus(payload) {
+  return {
+    ...DEFAULT_SECRET_MANAGEMENT_STATUS,
+    ...(payload || {}),
+    providerComponents: Array.isArray(payload?.providerComponents) ? payload.providerComponents : [],
+    configuredLegacyKeyIds: Array.isArray(payload?.configuredLegacyKeyIds) ? payload.configuredLegacyKeyIds : [],
+    keyUsage: Array.isArray(payload?.keyUsage) ? payload.keyUsage : [],
+    reencryptionRequirements: Array.isArray(payload?.reencryptionRequirements) ? payload.reencryptionRequirements : [],
+    retirementRequirements: Array.isArray(payload?.retirementRequirements) ? payload.retirementRequirements : []
+  }
+}
 
 export function useAuthSecurityController({
   bootstrapLoginPrefillEnabled = false,
@@ -619,14 +633,7 @@ export function useAuthSecurityController({
         throw new Error(await apiErrorText(response, errorText('loadSecretManagementStatus')))
       }
       const payload = await response.json()
-      setSecretManagementStatus({
-        ...DEFAULT_SECRET_MANAGEMENT_STATUS,
-        ...(payload || {}),
-        providerComponents: Array.isArray(payload?.providerComponents) ? payload.providerComponents : [],
-        configuredLegacyKeyIds: Array.isArray(payload?.configuredLegacyKeyIds) ? payload.configuredLegacyKeyIds : [],
-        keyUsage: Array.isArray(payload?.keyUsage) ? payload.keyUsage : [],
-        reencryptionRequirements: Array.isArray(payload?.reencryptionRequirements) ? payload.reencryptionRequirements : []
-      })
+      setSecretManagementStatus(normalizeSecretManagementStatus(payload))
     } catch (err) {
       if (suppressErrors) {
         return
@@ -714,14 +721,7 @@ export function useAuthSecurityController({
           throw new Error(await apiErrorText(response, errorText('verifySecretManagementPassword')))
         }
         const payload = await response.json()
-        setSecretManagementStatus({
-          ...DEFAULT_SECRET_MANAGEMENT_STATUS,
-          ...(payload || {}),
-          providerComponents: Array.isArray(payload?.providerComponents) ? payload.providerComponents : [],
-          configuredLegacyKeyIds: Array.isArray(payload?.configuredLegacyKeyIds) ? payload.configuredLegacyKeyIds : [],
-          keyUsage: Array.isArray(payload?.keyUsage) ? payload.keyUsage : [],
-          reencryptionRequirements: Array.isArray(payload?.reencryptionRequirements) ? payload.reencryptionRequirements : []
-        })
+        setSecretManagementStatus(normalizeSecretManagementStatus(payload))
         pushNotification({
           message: translatedNotification('notifications.secretManagementReauthenticationVerified'),
           targetId: 'secret-management-section',
@@ -771,14 +771,7 @@ export function useAuthSecurityController({
           throw new Error(await apiErrorText(finishResponse, errorText('finishSecretManagementPasskeyVerification')))
         }
         const payload = await finishResponse.json()
-        setSecretManagementStatus({
-          ...DEFAULT_SECRET_MANAGEMENT_STATUS,
-          ...(payload || {}),
-          providerComponents: Array.isArray(payload?.providerComponents) ? payload.providerComponents : [],
-          configuredLegacyKeyIds: Array.isArray(payload?.configuredLegacyKeyIds) ? payload.configuredLegacyKeyIds : [],
-          keyUsage: Array.isArray(payload?.keyUsage) ? payload.keyUsage : [],
-          reencryptionRequirements: Array.isArray(payload?.reencryptionRequirements) ? payload.reencryptionRequirements : []
-        })
+        setSecretManagementStatus(normalizeSecretManagementStatus(payload))
         pushNotification({
           message: translatedNotification('notifications.secretManagementReauthenticationVerified'),
           targetId: 'secret-management-section',

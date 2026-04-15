@@ -78,6 +78,7 @@ function renderSection(overrides = {}) {
         configuredEnvManagedSourceCount: 2,
         envManagedGoogleRefreshTokenConfigured: true,
         safeToRetireLegacyKeys: false,
+        legacyKeyRetirementReady: false,
         keyUsage: [],
         reencryptionReady: true,
         reencryptionRequirements: [
@@ -90,6 +91,19 @@ function renderSection(overrides = {}) {
             actionTargetId: 'secret-management-provider-diagnostics',
             actionLabel: 'Review provider diagnostics',
             satisfied: true,
+            blocking: true
+          }
+        ],
+        retirementRequirements: [
+          {
+            requirementId: 'rotation-complete',
+            title: 'No encrypted records still depend on a legacy rotation target',
+            detail: '3 stored records still depend on older or different encryption targets and must be rewritten to LOCAL:v2.',
+            remediationSteps: ['Finish the pending re-encryption or metadata rewrap first.'],
+            configReferences: ['active provider / key settings'],
+            actionTargetId: 'secret-management-rotation-plan',
+            actionLabel: 'Review rotation plan',
+            satisfied: false,
             blocking: true
           }
         ],
@@ -115,6 +129,40 @@ function renderSection(overrides = {}) {
 }
 
 describe('SecretManagementSection', () => {
+  it('opens the legacy-key retirement review dialog', async () => {
+    renderSection({
+      secretManagementStatus: {
+        safeToRetireLegacyKeys: true,
+        legacyKeyRetirementReady: true,
+        configuredLegacyKeyIds: ['LOCAL:v1'],
+        nonActiveKeyRecordCount: 0,
+        unavailableKeyRecordCount: 0,
+        retirementRequirements: [
+          {
+            requirementId: 'rotation-complete',
+            title: 'No encrypted records still depend on a legacy rotation target',
+            detail: 'InboxBridge does not currently see any encrypted records that still need rotation or rewrap.',
+            remediationSteps: ['The current key-usage summary shows no records left on non-active targets.'],
+            configReferences: ['active provider / key settings'],
+            actionTargetId: 'secret-management-rotation-plan',
+            actionLabel: 'Review rotation plan',
+            satisfied: true,
+            blocking: true
+          }
+        ]
+      }
+    })
+
+    fireEvent.click(screen.getByRole('button', { name: 'Review legacy-key retirement' }))
+
+    await waitFor(() => {
+      expect(screen.getByRole('dialog')).toBeInTheDocument()
+    })
+    expect(screen.getByText('InboxBridge no longer sees any encrypted records that still require legacy key material.')).toBeInTheDocument()
+    expect(screen.getByText('No encrypted records still depend on a legacy rotation target')).toBeInTheDocument()
+    expect(screen.getAllByText('Safe to retire').length).toBeGreaterThan(0)
+  })
+
   it('exports the latest report from the actions card', async () => {
     const { onExportSecretManagementReport } = renderSection()
 

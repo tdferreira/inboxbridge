@@ -3,6 +3,7 @@ import LoadingButton from '@/shared/components/LoadingButton'
 import Banner from '@/shared/components/Banner'
 import CollapsibleSection from '@/shared/components/CollapsibleSection'
 import SecretReencryptionDialog from './SecretReencryptionDialog'
+import SecretRetirementDialog from './SecretRetirementDialog'
 import './SecretManagementSection.css'
 
 function formatKeyIds(keyIds, t) {
@@ -66,6 +67,7 @@ function SecretManagementSection({
   t
 }) {
   const [showReencryptDialog, setShowReencryptDialog] = useState(false)
+  const [showRetirementDialog, setShowRetirementDialog] = useState(false)
   const [reencryptionResult, setReencryptionResult] = useState(null)
   const keyUsage = Array.isArray(secretManagementStatus?.keyUsage) ? secretManagementStatus.keyUsage : []
   const providerComponents = Array.isArray(secretManagementStatus?.providerComponents) ? secretManagementStatus.providerComponents : []
@@ -245,6 +247,13 @@ function SecretManagementSection({
             <div className="button-row">
               <LoadingButton
                 className="secondary"
+                onClick={() => setShowRetirementDialog(true)}
+                type="button"
+              >
+                {t('authSecurity.secretManagementRetirementReview')}
+              </LoadingButton>
+              <LoadingButton
+                className="secondary"
                 onClick={() => onExportSecretManagementReport?.()}
                 type="button"
               >
@@ -286,6 +295,13 @@ function SecretManagementSection({
           session={session}
           secretManagementStatus={secretManagementStatus}
           secretReencryptOptions={secretReencryptOptions}
+          t={t}
+        />
+      ) : null}
+      {showRetirementDialog ? (
+        <SecretRetirementDialog
+          onClose={() => setShowRetirementDialog(false)}
+          secretManagementStatus={secretManagementStatus}
           t={t}
         />
       ) : null}

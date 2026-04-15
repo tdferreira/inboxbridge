@@ -309,6 +309,15 @@ Current implementation status:
   current status payload plus an export timestamp so operators can archive the
   active provider state, key-usage view, and persisted queued/completed
   re-encryption evidence before retiring legacy key material
+- `/api/admin/secret-management` now also includes backend-verified legacy-key
+  retirement requirements so the admin UI can tell operators whether it is
+  currently safe to remove old key ids, transit credentials, or other legacy
+  provider material from the deployment
+- the admin UI now exposes that retirement review in its own dialog, with the
+  current key-usage summary, latest request status, backend retirement checks,
+  and an explicit operator procedure of export report -> remove obsolete legacy
+  config -> redeploy -> re-check status before considering legacy material
+  fully retired
 - the current implementation now also detects provider-side transit key
   rollovers for active `OPENBAO_TRANSIT`, `VAULT_TRANSIT`, and split-key outer
   envelopes; when only the provider's internal key version is stale, the

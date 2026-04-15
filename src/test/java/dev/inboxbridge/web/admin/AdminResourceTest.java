@@ -1,6 +1,7 @@
 package dev.inboxbridge.web.admin;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
@@ -17,6 +18,7 @@ import dev.inboxbridge.dto.PollingTimelineBundleView;
 import dev.inboxbridge.dto.SecretReencryptionResultView;
 import dev.inboxbridge.dto.SecretReencryptionRequest;
 import dev.inboxbridge.dto.SecretManagementStatusView;
+import dev.inboxbridge.dto.SecretManagementRetirementRequirementView;
 import dev.inboxbridge.dto.SecretManagementReportView;
 import dev.inboxbridge.dto.SecretManagementRotationPlanView;
 import dev.inboxbridge.dto.SecretProviderComponentStatusView;
@@ -195,6 +197,8 @@ class AdminResourceTest {
         assertEquals("LOCAL", response.status().mode());
         assertEquals("LOCAL:v2", response.status().activeKeyVersion());
         assertTrue(response.exportedAt() != null);
+        assertFalse(response.status().legacyKeyRetirementReady());
+        assertEquals(1, response.status().retirementRequirements().size());
     }
 
     @Test
@@ -372,6 +376,7 @@ class AdminResourceTest {
                     1,
                     true,
                     false,
+                    false,
                     new SecretManagementRotationPlanView(
                             "local-key-rotation",
                             "Local-key rotation is pending",
@@ -394,6 +399,17 @@ class AdminResourceTest {
                     java.util.List.of(),
                     true,
                     java.util.List.of(),
+                    java.util.List.of(
+                            new SecretManagementRetirementRequirementView(
+                                    "rotation-complete",
+                                    "No encrypted records still depend on a legacy rotation target",
+                                    "1 stored records still depend on older or different encryption targets and must be rewritten to LOCAL:v2.",
+                                    java.util.List.of("Finish the pending re-encryption or metadata rewrap first."),
+                                    java.util.List.of("active provider / key settings"),
+                                    "secret-management-rotation-plan",
+                                    "Review rotation plan",
+                                    false,
+                                    true)),
                     null,
                     "PT12H",
                     false,

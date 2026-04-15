@@ -72,6 +72,7 @@ class SecretManagementServiceTest {
         assertTrue(view.reauthenticationSatisfied());
         assertEquals(null, view.reauthenticationExpiresAt());
         assertFalse(view.safeToRetireLegacyKeys());
+        assertFalse(view.legacyKeyRetirementReady());
         assertNotNull(view.reencryptionPreview());
         assertEquals("LOCAL:v2", view.reencryptionPreview().activeKeyVersion());
         assertEquals(2, view.reencryptionPreview().totalRecordsPendingUpdate());
@@ -82,6 +83,8 @@ class SecretManagementServiceTest {
         assertEquals("LOCAL:v2", view.keyUsage().getFirst().keyVersion());
         assertEquals("v1", view.keyUsage().get(1).keyVersion());
         assertTrue(view.keyUsage().get(1).availableForDecryption());
+        assertTrue(view.retirementRequirements().stream()
+                .anyMatch(requirement -> "rotation-complete".equals(requirement.requirementId()) && !requirement.satisfied()));
     }
 
     @Test
@@ -94,6 +97,9 @@ class SecretManagementServiceTest {
         assertEquals(2, view.unavailableKeyRecordCount());
         assertFalse(view.keyUsage().get(1).availableForDecryption());
         assertFalse(view.safeToRetireLegacyKeys());
+        assertFalse(view.legacyKeyRetirementReady());
+        assertTrue(view.retirementRequirements().stream()
+                .anyMatch(requirement -> "no-unavailable-records".equals(requirement.requirementId()) && !requirement.satisfied()));
     }
 
     @Test
@@ -128,6 +134,9 @@ class SecretManagementServiceTest {
                 .anyMatch(requirement -> "secure-storage".equals(requirement.requirementId())
                         && requirement.configReferences().contains("SECRET_PROVIDER_MODE")
                         && "Review provider diagnostics".equals(requirement.actionLabel())));
+        assertFalse(view.legacyKeyRetirementReady());
+        assertTrue(view.retirementRequirements().stream()
+                .anyMatch(requirement -> "provider-health".equals(requirement.requirementId()) && !requirement.satisfied()));
     }
 
     @Test
@@ -271,6 +280,7 @@ class SecretManagementServiceTest {
         assertEquals(0, activeTransitProvider.decryptCalls());
         assertEquals("already-current", status.rotationPlan().planId());
         assertTrue(status.safeToRetireLegacyKeys());
+        assertTrue(status.legacyKeyRetirementReady());
     }
 
     @Test
@@ -304,6 +314,7 @@ class SecretManagementServiceTest {
         assertEquals(5, status.activeKeyRecordCount());
         assertEquals(0, status.nonActiveKeyRecordCount());
         assertTrue(status.safeToRetireLegacyKeys());
+        assertTrue(status.legacyKeyRetirementReady());
     }
 
     @Test
@@ -339,6 +350,7 @@ class SecretManagementServiceTest {
         assertEquals(0, status.nonActiveKeyRecordCount());
         assertTrue(status.safeToRetireLegacyKeys());
         assertEquals("SPLIT_KEY:LOCAL=v2|OPENBAO_TRANSIT=inboxbridge", status.keyUsage().getFirst().keyVersion());
+        assertTrue(status.legacyKeyRetirementReady());
     }
 
     @Test
@@ -363,6 +375,7 @@ class SecretManagementServiceTest {
         assertEquals(5, status.activeKeyRecordCount());
         assertEquals(0, status.nonActiveKeyRecordCount());
         assertTrue(status.safeToRetireLegacyKeys());
+        assertTrue(status.legacyKeyRetirementReady());
     }
 
     @Test
@@ -395,6 +408,9 @@ class SecretManagementServiceTest {
         assertEquals(2, status.reencryptionRequest().plannedPreview().totalSecretValuesPendingRewrite());
         assertEquals(0, status.reencryptionRequest().totalRecordsUpdated());
         assertTrue(status.reencryptionReady());
+        assertFalse(status.legacyKeyRetirementReady());
+        assertTrue(status.retirementRequirements().stream()
+                .anyMatch(requirement -> "no-pending-request".equals(requirement.requirementId()) && !requirement.satisfied()));
     }
 
     @Test
@@ -433,6 +449,7 @@ class SecretManagementServiceTest {
         assertEquals("COMPLETED", status.reencryptionRequest().status());
         assertEquals(0, status.nonActiveKeyRecordCount());
         assertTrue(status.safeToRetireLegacyKeys());
+        assertTrue(status.legacyKeyRetirementReady());
         assertNotNull(status.reencryptionRequest().plannedPreview());
         assertEquals(2, status.reencryptionRequest().plannedPreview().totalRecordsPendingUpdate());
         assertEquals(2, status.reencryptionRequest().totalRecordsUpdated());

@@ -15,6 +15,7 @@ import java.util.Map;
 
 import dev.inboxbridge.config.SecretManagementPolicyConfig;
 import dev.inboxbridge.dto.SecretManagementKeyUsageView;
+import dev.inboxbridge.dto.SecretManagementRetirementRequirementView;
 import dev.inboxbridge.dto.SecretManagementReportView;
 import dev.inboxbridge.dto.SecretManagementRotationPlanView;
 import dev.inboxbridge.dto.SecretProviderComponentStatusView;
@@ -143,6 +144,11 @@ public class SecretManagementService {
                     requestState,
                     reauthenticationRequired,
                     reauthenticationSatisfied);
+            List<SecretManagementRetirementRequirementView> retirementRequirements = buildRetirementRequirements(
+                    providerHealth,
+                    null,
+                    0,
+                    requestState);
             return new SecretManagementStatusView(
                     false,
                     providerHealth.mode().name(),
@@ -162,6 +168,7 @@ public class SecretManagementService {
                     configuredEnvManagedSourceCount(),
                     envManagedGoogleRefreshTokenConfigured(),
                     false,
+                    false,
                     buildRotationPlan(
                             null,
                             null,
@@ -176,6 +183,7 @@ public class SecretManagementService {
                     List.of(),
                     false,
                     requirements,
+                    retirementRequirements,
                     toRequestStatusView(requestState),
                     reencryptionCooldown().toString(),
                     allowImmediateReencryptOverride(),
@@ -239,6 +247,14 @@ public class SecretManagementService {
         boolean reencryptionReady = requirements.stream()
                 .filter(SecretReencryptionRequirementView::blocking)
                 .allMatch(SecretReencryptionRequirementView::satisfied);
+        List<SecretManagementRetirementRequirementView> retirementRequirements = buildRetirementRequirements(
+                providerHealth,
+                rotationPlan,
+                unavailableKeyRecordCount,
+                requestState);
+        boolean legacyKeyRetirementReady = retirementRequirements.stream()
+                .filter(SecretManagementRetirementRequirementView::blocking)
+                .allMatch(SecretManagementRetirementRequirementView::satisfied);
 
         return new SecretManagementStatusView(
                 true,
@@ -259,11 +275,13 @@ public class SecretManagementService {
                 configuredEnvManagedSourceCount(),
                 envManagedGoogleRefreshTokenConfigured(),
                 !rotationPlan.rotationNeeded(),
+                legacyKeyRetirementReady,
                 rotationPlan,
                 reencryptionPreview,
                 keyUsage,
                 reencryptionReady,
                 requirements,
+                retirementRequirements,
                 toRequestStatusView(requestState),
                 reencryptionCooldown().toString(),
                 allowImmediateReencryptOverride(),
@@ -1225,6 +1243,103 @@ public class SecretManagementService {
                 reauthenticationRequired ? "Open session verification" : null,
                 !reauthenticationRequired || reauthenticationSatisfied,
                 reauthenticationRequired));
+        return requirements;
+    }
+
+    private List<SecretManagementRetirementRequirementView> buildRetirementRequirements(
+            SecretProviderHealth providerHealth,
+            SecretManagementRotationPlanView rotationPlan,
+            long unavailableKeyRecordCount,
+            SystemSecretReencryptionRequest requestState) {
+        List<SecretManagementRetirementRequirementView> requirements = new ArrayList<>();
+        boolean providerReady = providerHealth != null && providerHealth.writable();
+        requirements.add(new SecretManagementRetirementRequirementView(
+                "provider-health",
+                "Active secret provider is healthy and writable",
+                providerReady
+                        ? "The active secret provider is healthy and can still read and write protected values."
+                        : "InboxBridge cannot verify the active secret provider as healthy and writable right now.",
+                providerReady
+                        ? List.of("Keep the current active provider configuration available while you finish the retirement procedure.")
+                        : List.of(
+                                "Fix the active provider configuration first.",
+                                "Do not remove any legacy key material until the provider diagnostics report a healthy, writable target again."),
+                List.of("SECRET_PROVIDER_MODE", "active provider / key settings"),
+                "secret-management-provider-diagnostics",
+                "Review provider diagnostics",
+                providerReady,
+                true));
+        boolean noPendingRequest = requestState == null || !RequestStatus.PENDING.name().equals(requestState.status);
+        requirements.add(new SecretManagementRetirementRequirementView(
+                "no-pending-request",
+                "No secret re-encryption request is still pending",
+                noPendingRequest
+                        ? "No queued secret re-encryption request is still waiting for the cooldown window to finish."
+                        : "A secret re-encryption request is still queued and has not executed yet.",
+                noPendingRequest
+                        ? List.of("No queued rotation run is still outstanding.")
+                        : List.of(
+                                "Wait for the queued request to complete before removing any legacy key material.",
+                                "Re-open the latest status after the queued run finishes so you can verify the final key-usage snapshot."),
+                List.of("SECURITY_SECRET_REENCRYPTION_COOLDOWN"),
+                noPendingRequest ? null : "secret-management-section",
+                noPendingRequest ? null : "Review latest request",
+                noPendingRequest,
+                true));
+        boolean noUnavailableRecords = unavailableKeyRecordCount == 0;
+        requirements.add(new SecretManagementRetirementRequirementView(
+                "no-unavailable-records",
+                "Every stored secret is still decryptable before retirement",
+                noUnavailableRecords
+                        ? "No stored records reference unavailable key material."
+                        : unavailableKeyRecordCount + " stored records still reference unavailable key material.",
+                noUnavailableRecords
+                        ? List.of("The current deployment can still decrypt every stored secret it knows about.")
+                        : List.of(
+                                "Restore every missing legacy key or provider credential before retiring any older material.",
+                                "Do not remove more key material until the unavailable-record counter returns to zero."),
+                List.of("SECURITY_TOKEN_ENCRYPTION_LEGACY_KEYS", "legacy transit / provider credentials"),
+                "secret-management-key-usage",
+                "Review key usage",
+                noUnavailableRecords,
+                true));
+        boolean noRotationNeeded = rotationPlan != null && !rotationPlan.rotationNeeded();
+        requirements.add(new SecretManagementRetirementRequirementView(
+                "rotation-complete",
+                "No encrypted records still depend on a legacy rotation target",
+                noRotationNeeded
+                        ? "InboxBridge does not currently see any encrypted records that still need rotation or rewrap."
+                        : rotationPlan == null
+                                ? "InboxBridge cannot verify rotation status yet."
+                                : rotationPlan.summary(),
+                noRotationNeeded
+                        ? List.of("The current key-usage summary shows no records left on non-active targets.")
+                        : List.of(
+                                "Finish the pending re-encryption or metadata rewrap first.",
+                                "Only retire older key material after the rotation plan reports that all stored secrets already match the active target."),
+                List.of("active provider / key settings"),
+                "secret-management-rotation-plan",
+                "Review rotation plan",
+                noRotationNeeded,
+                true));
+        boolean latestVerificationPassed = requestState == null || requestState.lastVerificationPassed == null || requestState.lastVerificationPassed;
+        requirements.add(new SecretManagementRetirementRequirementView(
+                "latest-verification",
+                "The latest persisted secret-management verification did not report a failure",
+                latestVerificationPassed
+                        ? "No persisted secret-management verification is currently reporting a failed outcome."
+                        : "The latest persisted secret-management verification reported a failed or incomplete result.",
+                latestVerificationPassed
+                        ? List.of(
+                                "Keep the latest exported report and your operator notes alongside the active key version before you remove any old material.")
+                        : List.of(
+                                "Review the latest secret-management request result and fix the reported verification issues first.",
+                                "Do not retire legacy material until a refreshed status or a newer completed run no longer reports a failed verification."),
+                List.of(),
+                "secret-management-section",
+                "Review latest request",
+                latestVerificationPassed,
+                true));
         return requirements;
     }
 

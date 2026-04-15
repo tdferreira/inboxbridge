@@ -546,6 +546,15 @@ current status snapshot plus an export timestamp, and the admin UI downloads it
 as JSON so the active provider state, key-usage picture, and persisted
 queued/completed re-encryption evidence can be saved alongside an operator
 runbook before any legacy key material is retired.
+That same admin section now also exposes a dedicated legacy-key retirement
+review dialog. The backend includes retirement-specific requirements in the
+`/api/admin/secret-management` payload and verifies whether the active provider
+is still writable, whether any re-encryption request is still pending, whether
+unavailable records remain, whether the current rotation plan is fully clear,
+and whether the latest persisted verification reported a failure. The UI uses
+that status to guide operators through exporting the report, removing only the
+now-obsolete legacy key/provider settings, redeploying, and then refreshing the
+secret-management view to confirm no dependency on legacy material remains.
 That same admin secret-management flow now also supports step-up verification
 per browser session. When
 `SECURITY_SECRET_REENCRYPTION_REAUTHENTICATION_TTL` is greater than zero

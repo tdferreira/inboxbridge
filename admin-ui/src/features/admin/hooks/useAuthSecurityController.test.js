@@ -692,6 +692,7 @@ describe('useAuthSecurityController', () => {
         configuredEnvManagedSourceCount: 3,
         envManagedGoogleRefreshTokenConfigured: true,
         safeToRetireLegacyKeys: false,
+        legacyKeyRetirementReady: false,
         reauthenticationRequired: true,
         reauthenticationSatisfied: false,
         reauthenticationExpiresAt: null,
@@ -735,6 +736,19 @@ describe('useAuthSecurityController', () => {
             active: true,
             availableForDecryption: true
           }
+        ],
+        retirementRequirements: [
+          {
+            requirementId: 'rotation-complete',
+            title: 'No encrypted records still depend on a legacy rotation target',
+            detail: '2 stored records still depend on older or different encryption targets and must be rewritten to LOCAL:v2.',
+            remediationSteps: ['Finish the pending re-encryption or metadata rewrap first.'],
+            configReferences: ['active provider / key settings'],
+            actionTargetId: 'secret-management-rotation-plan',
+            actionLabel: 'Review rotation plan',
+            satisfied: false,
+            blocking: true
+          }
         ]
       })
     })
@@ -774,6 +788,8 @@ describe('useAuthSecurityController', () => {
         areas: []
       }
     }))
+    expect(result.current.secretManagementStatus.legacyKeyRetirementReady).toBe(false)
+    expect(result.current.secretManagementStatus.retirementRequirements).toHaveLength(1)
   })
 
   it('re-encrypts stored secrets and refreshes secret-management status', async () => {
