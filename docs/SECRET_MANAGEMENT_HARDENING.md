@@ -284,8 +284,47 @@ Current implementation status:
 - `/api/admin/secret-management` now reports backend-verified requirements for
   the re-encryption workflow
 - the modal disables confirmation when blocking requirements are unmet
+- each requirement now carries backend-provided remediation steps, related
+  server configuration references, and optional focus targets so the operator
+  can jump directly to the key-status, key-usage, pending-request, or session
+  verification area that needs attention
 - after completion, the UI shows verification messages plus a list of items the
   operator should save before retiring any legacy key material
+
+### 2c. Require fresh step-up verification for sensitive browser actions
+
+Cooldowns help against rushed misuse of a stolen admin session, but they do not
+prove that the person currently clicking the button is still the legitimate
+administrator.
+
+InboxBridge should therefore also require a recent step-up verification for the
+browser session that requests secret re-encryption.
+
+Current implementation status:
+
+- `SECURITY_SECRET_REENCRYPTION_REAUTHENTICATION_TTL` controls how long a
+  sensitive-session verification remains valid (default `PT10M`)
+- `POST /api/admin/secret-management/re-auth/password` lets the current admin
+  re-verify the browser session with their current password
+- `POST /api/admin/secret-management/re-auth/passkey/options` and
+  `POST /api/admin/secret-management/re-auth/passkey/verify` let the same
+  browser session satisfy that step-up check with a passkey
+- the backend stores the verification timestamp on the current `user_session`
+  row and exposes the remaining validity window through
+  `/api/admin/secret-management`
+- scheduled re-encryption requests require the step-up check only when the
+  request is queued; the later cooldown-triggered execution does not need an
+  interactive browser session
+
+Operational guidance:
+
+- keep the step-up TTL short enough that an abandoned admin browser session
+  cannot silently schedule high-impact secret changes much later
+- prefer passkey verification when available, but keep the current-password
+  path as a recovery-friendly fallback for admins who have not enrolled a
+  passkey yet
+- document the expected TTL and the permitted step-up methods in the operator
+  runbook for the deployment
 
 This keeps the operator workflow explicit:
 

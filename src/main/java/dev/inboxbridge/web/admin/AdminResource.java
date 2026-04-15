@@ -12,6 +12,9 @@ import dev.inboxbridge.dto.PollingTimelineBundleView;
 import dev.inboxbridge.dto.SecretReencryptionResultView;
 import dev.inboxbridge.dto.SecretReencryptionRequest;
 import dev.inboxbridge.dto.SecretManagementStatusView;
+import dev.inboxbridge.dto.StartPasskeyCeremonyResponse;
+import dev.inboxbridge.dto.FinishPasskeyCeremonyRequest;
+import dev.inboxbridge.dto.VerifySecretManagementPasswordRequest;
 import dev.inboxbridge.dto.SourcePollingSettingsView;
 import dev.inboxbridge.dto.SourcePollingStatsView;
 import dev.inboxbridge.dto.SystemOAuthAppSettingsView;
@@ -115,14 +118,45 @@ public class AdminResource {
     @GET
     @Path("/secret-management")
     public SecretManagementStatusView secretManagement() {
-        return secretManagementService.status();
+        return secretManagementService.status(currentUserContext.session());
+    }
+
+    @POST
+    @Path("/secret-management/re-auth/password")
+    @Consumes(MediaType.APPLICATION_JSON)
+    public SecretManagementStatusView verifySecretManagementPassword(VerifySecretManagementPasswordRequest request) {
+        return WebResourceSupport.badRequest(() ->
+                secretManagementService.verifyReencryptionPassword(
+                        currentUserContext.user(),
+                        currentUserContext.session(),
+                        request == null ? null : request.password()));
+    }
+
+    @POST
+    @Path("/secret-management/re-auth/passkey/options")
+    public StartPasskeyCeremonyResponse startSecretManagementPasskeyVerification() {
+        return WebResourceSupport.badRequest(() ->
+                secretManagementService.startReencryptionPasskeyVerification(
+                        currentUserContext.user(),
+                        currentUserContext.session()));
+    }
+
+    @POST
+    @Path("/secret-management/re-auth/passkey/verify")
+    @Consumes(MediaType.APPLICATION_JSON)
+    public SecretManagementStatusView finishSecretManagementPasskeyVerification(FinishPasskeyCeremonyRequest request) {
+        return WebResourceSupport.badRequest(() ->
+                secretManagementService.finishReencryptionPasskeyVerification(
+                        currentUserContext.user(),
+                        currentUserContext.session(),
+                        request));
     }
 
     @POST
     @Path("/secret-management/re-encrypt")
     @Consumes(MediaType.APPLICATION_JSON)
     public SecretReencryptionResultView reencryptStoredSecrets(SecretReencryptionRequest request) {
-        return WebResourceSupport.badRequest(() -> secretManagementService.reencryptAllStoredSecrets(currentUserContext.user(), request));
+        return WebResourceSupport.badRequest(() -> secretManagementService.reencryptAllStoredSecrets(currentUserContext.user(), currentUserContext.session(), request));
     }
 
     @PUT

@@ -10,12 +10,15 @@ import org.junit.jupiter.api.Test;
 
 import dev.inboxbridge.dto.AdminPollingSettingsView;
 import dev.inboxbridge.dto.AuthSecuritySettingsView;
+import dev.inboxbridge.dto.FinishPasskeyCeremonyRequest;
 import dev.inboxbridge.dto.PollLiveView;
 import dev.inboxbridge.dto.PollRunResult;
 import dev.inboxbridge.dto.PollingTimelineBundleView;
 import dev.inboxbridge.dto.SecretReencryptionResultView;
 import dev.inboxbridge.dto.SecretReencryptionRequest;
 import dev.inboxbridge.dto.SecretManagementStatusView;
+import dev.inboxbridge.dto.StartPasskeyCeremonyResponse;
+import dev.inboxbridge.dto.VerifySecretManagementPasswordRequest;
 import dev.inboxbridge.dto.SourcePollingSettingsView;
 import dev.inboxbridge.dto.SourcePollingStatsView;
 import dev.inboxbridge.dto.UpdateAdminPollingSettingsRequest;
@@ -23,6 +26,7 @@ import dev.inboxbridge.dto.UpdateAuthSecuritySettingsRequest;
 import dev.inboxbridge.dto.UpdateSourcePollingSettingsRequest;
 import dev.inboxbridge.domain.RuntimeEmailAccount;
 import dev.inboxbridge.persistence.AppUser;
+import dev.inboxbridge.persistence.UserSession;
 import dev.inboxbridge.security.CurrentUserContext;
 import dev.inboxbridge.service.polling.PollingStatsService;
 import dev.inboxbridge.service.polling.PollingService;
@@ -158,6 +162,7 @@ class AdminResourceTest {
     @Test
     void secretManagementReturnsCurrentView() {
         AdminResource resource = new AdminResource();
+        resource.currentUserContext = currentUserContext();
         resource.secretManagementService = new FakeSecretManagementService();
 
         SecretManagementStatusView response = resource.secretManagement();
@@ -198,6 +203,42 @@ class AdminResourceTest {
     }
 
     @Test
+    void verifySecretManagementPasswordReturnsUpdatedStatus() {
+        AdminResource resource = new AdminResource();
+        resource.currentUserContext = currentUserContext();
+        resource.secretManagementService = new FakeSecretManagementService();
+
+        SecretManagementStatusView response = resource.verifySecretManagementPassword(new VerifySecretManagementPasswordRequest("Current1!"));
+
+        assertTrue(response.reauthenticationRequired());
+        assertTrue(response.reauthenticationSatisfied());
+    }
+
+    @Test
+    void startSecretManagementPasskeyVerificationReturnsChallenge() {
+        AdminResource resource = new AdminResource();
+        resource.currentUserContext = currentUserContext();
+        resource.secretManagementService = new FakeSecretManagementService();
+
+        StartPasskeyCeremonyResponse response = resource.startSecretManagementPasskeyVerification();
+
+        assertEquals("ceremony-1", response.ceremonyId());
+    }
+
+    @Test
+    void finishSecretManagementPasskeyVerificationReturnsUpdatedStatus() {
+        AdminResource resource = new AdminResource();
+        resource.currentUserContext = currentUserContext();
+        resource.secretManagementService = new FakeSecretManagementService();
+
+        SecretManagementStatusView response = resource.finishSecretManagementPasskeyVerification(
+                new FinishPasskeyCeremonyRequest("ceremony-1", "{\"id\":\"credential\"}"));
+
+        assertTrue(response.reauthenticationRequired());
+        assertTrue(response.reauthenticationSatisfied());
+    }
+
+    @Test
     void updateAuthSecuritySettingsSurfacesValidationErrors() {
         AdminResource resource = new AdminResource();
         resource.authSecuritySettingsService = new ErrorAuthSecuritySettingsService();
@@ -219,6 +260,10 @@ class AdminResourceTest {
         user.username = "admin";
         user.role = AppUser.Role.ADMIN;
         context.setUser(user);
+        UserSession session = new UserSession();
+        session.id = 10L;
+        session.userId = user.id;
+        context.setSession(session);
         return context;
     }
 
@@ -282,7 +327,7 @@ class AdminResourceTest {
 
     private static final class FakeSecretManagementService extends SecretManagementService {
         @Override
-        public SecretManagementStatusView status() {
+        public SecretManagementStatusView status(UserSession currentSession) {
             return new SecretManagementStatusView(
                     true,
                     "LOCAL",
@@ -306,11 +351,19 @@ class AdminResourceTest {
                     java.util.List.of(),
                     null,
                     "PT12H",
-                    false);
+                    false,
+                    true,
+                    currentSession != null && currentSession.lastSensitiveAuthAt != null,
+                    currentSession == null || currentSession.lastSensitiveAuthAt == null
+                            ? null
+                            : currentSession.lastSensitiveAuthAt.plus(java.time.Duration.ofMinutes(10)));
         }
 
         @Override
-        public SecretReencryptionResultView reencryptAllStoredSecrets(dev.inboxbridge.persistence.AppUser actor, SecretReencryptionRequest request) {
+        public SecretReencryptionResultView reencryptAllStoredSecrets(
+                dev.inboxbridge.persistence.AppUser actor,
+                UserSession currentSession,
+                SecretReencryptionRequest request) {
             return new SecretReencryptionResultView(
                     "COMPLETED",
                     "Secret re-encryption completed and post-run verification passed.",
@@ -328,11 +381,34 @@ class AdminResourceTest {
                             java.util.List.of("No stored records remain on non-active key versions."),
                             java.util.List.of("Save the active secret-management target now in use: LOCAL:v2.")));
         }
+
+        @Override
+        public SecretManagementStatusView verifyReencryptionPassword(AppUser actor, UserSession currentSession, String password) {
+            currentSession.lastSensitiveAuthAt = java.time.Instant.parse("2026-04-15T00:00:00Z");
+            return status(currentSession);
+        }
+
+        @Override
+        public StartPasskeyCeremonyResponse startReencryptionPasskeyVerification(AppUser actor, UserSession currentSession) {
+            return new StartPasskeyCeremonyResponse("ceremony-1", "{\"challenge\":\"abc\"}");
+        }
+
+        @Override
+        public SecretManagementStatusView finishReencryptionPasskeyVerification(
+                AppUser actor,
+                UserSession currentSession,
+                FinishPasskeyCeremonyRequest request) {
+            currentSession.lastSensitiveAuthAt = java.time.Instant.parse("2026-04-15T00:00:00Z");
+            return status(currentSession);
+        }
     }
 
     private static final class ErrorSecretManagementService extends SecretManagementService {
         @Override
-        public SecretReencryptionResultView reencryptAllStoredSecrets(dev.inboxbridge.persistence.AppUser actor, SecretReencryptionRequest request) {
+        public SecretReencryptionResultView reencryptAllStoredSecrets(
+                dev.inboxbridge.persistence.AppUser actor,
+                UserSession currentSession,
+                SecretReencryptionRequest request) {
             throw new IllegalStateException("Secure token storage is not configured. Set SECURITY_TOKEN_ENCRYPTION_KEY.");
         }
     }

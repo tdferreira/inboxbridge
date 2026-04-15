@@ -43,6 +43,11 @@ class SystemOAuthAppSettingsServiceTest {
             public boolean allowImmediateReencryptOverride() {
                 return false;
             }
+
+            @Override
+            public java.time.Duration reauthenticationTtl() {
+                return java.time.Duration.ofMinutes(10);
+            }
         });
         service.setRepository(new EmptySystemOAuthAppSettingsRepository());
 

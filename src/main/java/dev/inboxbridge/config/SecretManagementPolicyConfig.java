@@ -16,4 +16,7 @@ public interface SecretManagementPolicyConfig {
 
     @WithDefault("false")
     boolean allowImmediateReencryptOverride();
+
+    @WithDefault("PT10M")
+    Duration reauthenticationTtl();
 }

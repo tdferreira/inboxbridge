@@ -42,4 +42,32 @@ class AdminEndpointsQuarkusIT {
                 .then()
                 .statusCode(401);
     }
+
+    @Test
+    void secretManagementPasswordReauthRejectsAnonymousAccess() {
+        given()
+                .contentType("application/json")
+                .body("{\"password\":\"Current1!\"}")
+                .when().post("/api/admin/secret-management/re-auth/password")
+                .then()
+                .statusCode(401);
+    }
+
+    @Test
+    void secretManagementPasskeyReauthStartRejectsAnonymousAccess() {
+        given()
+                .when().post("/api/admin/secret-management/re-auth/passkey/options")
+                .then()
+                .statusCode(401);
+    }
+
+    @Test
+    void secretManagementPasskeyReauthFinishRejectsAnonymousAccess() {
+        given()
+                .contentType("application/json")
+                .body("{\"ceremonyId\":\"ceremony-1\",\"credentialJson\":\"{}\"}")
+                .when().post("/api/admin/secret-management/re-auth/passkey/verify")
+                .then()
+                .statusCode(401);
+    }
 }

@@ -1,5 +1,6 @@
 package dev.inboxbridge.dto;
 
+import java.time.Instant;
 import java.util.List;
 
 /**
@@ -29,5 +30,8 @@ public record SecretManagementStatusView(
         List<SecretReencryptionRequirementView> reencryptionRequirements,
         SecretReencryptionRequestStatusView reencryptionRequest,
         String reencryptionCooldown,
-        boolean immediateReencryptionOverrideAllowed) {
+        boolean immediateReencryptionOverrideAllowed,
+        boolean reauthenticationRequired,
+        boolean reauthenticationSatisfied,
+        Instant reauthenticationExpiresAt) {
 }

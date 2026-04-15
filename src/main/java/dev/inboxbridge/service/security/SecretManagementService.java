@@ -19,6 +19,8 @@ import dev.inboxbridge.dto.SecretReencryptionResultView;
 import dev.inboxbridge.dto.SecretReencryptionRequestStatusView;
 import dev.inboxbridge.dto.SecretReencryptionVerificationView;
 import dev.inboxbridge.dto.SecretManagementStatusView;
+import dev.inboxbridge.dto.StartPasskeyCeremonyResponse;
+import dev.inboxbridge.dto.FinishPasskeyCeremonyRequest;
 import dev.inboxbridge.persistence.AppUser;
 import dev.inboxbridge.persistence.OAuthCredential;
 import dev.inboxbridge.persistence.OAuthCredentialRepository;
@@ -34,6 +36,10 @@ import dev.inboxbridge.persistence.UserGmailConfig;
 import dev.inboxbridge.persistence.UserGmailConfigRepository;
 import dev.inboxbridge.persistence.UserMailDestinationConfig;
 import dev.inboxbridge.persistence.UserMailDestinationConfigRepository;
+import dev.inboxbridge.persistence.UserSession;
+import dev.inboxbridge.service.admin.AppUserService;
+import dev.inboxbridge.service.auth.PasskeyService;
+import dev.inboxbridge.service.auth.UserSessionService;
 import dev.inboxbridge.service.extension.ExtensionSessionService;
 import dev.inboxbridge.service.mail.EnvSourceService;
 import dev.inboxbridge.service.oauth.OAuthCredentialService;
@@ -97,16 +103,34 @@ public class SecretManagementService {
     @Inject
     SystemSecretReencryptionRequestRepository systemSecretReencryptionRequestRepository;
 
+    @Inject
+    AppUserService appUserService;
+
+    @Inject
+    UserSessionService userSessionService;
+
+    @Inject
+    PasskeyService passkeyService;
+
     public SecretManagementStatusView status() {
+        return status(null);
+    }
+
+    public SecretManagementStatusView status(UserSession currentSession) {
         SecretProviderHealth providerHealth = providerResolver().health();
         SystemSecretReencryptionRequest requestState = currentReencryptionRequest();
+        boolean reauthenticationRequired = reencryptionReauthenticationRequired();
+        boolean reauthenticationSatisfied = reencryptionReauthenticationSatisfied(currentSession);
+        Instant reauthenticationExpiresAt = reencryptionReauthenticationExpiresAt(currentSession);
         if (!providerHealth.writable()) {
             List<SecretReencryptionRequirementView> requirements = buildRequirements(
                     false,
                     providerHealth,
                     null,
                     0,
-                    requestState);
+                    requestState,
+                    reauthenticationRequired,
+                    reauthenticationSatisfied);
             return new SecretManagementStatusView(
                     false,
                     providerHealth.mode().name(),
@@ -130,7 +154,10 @@ public class SecretManagementService {
                     requirements,
                     toRequestStatusView(requestState),
                     reencryptionCooldown().toString(),
-                    allowImmediateReencryptOverride());
+                    allowImmediateReencryptOverride(),
+                    reauthenticationRequired,
+                    reauthenticationSatisfied,
+                    reauthenticationExpiresAt);
         }
 
         String activeKeyVersion = providerResolver().activeKeyVersion();
@@ -170,7 +197,9 @@ public class SecretManagementService {
                 providerHealth,
                 activeKeyVersion,
                 unavailableKeyRecordCount,
-                requestState);
+                requestState,
+                reauthenticationRequired,
+                reauthenticationSatisfied);
         boolean reencryptionReady = requirements.stream()
                 .filter(SecretReencryptionRequirementView::blocking)
                 .allMatch(SecretReencryptionRequirementView::satisfied);
@@ -198,24 +227,32 @@ public class SecretManagementService {
                 requirements,
                 toRequestStatusView(requestState),
                 reencryptionCooldown().toString(),
-                allowImmediateReencryptOverride());
+                allowImmediateReencryptOverride(),
+                reauthenticationRequired,
+                reauthenticationSatisfied,
+                reauthenticationExpiresAt);
     }
 
     @Transactional
     public SecretReencryptionResultView reencryptAllStoredSecrets() {
-        return reencryptAllStoredSecrets(null, new SecretReencryptionRequest(false, false, false, false));
+        return reencryptAllStoredSecrets(null, null, new SecretReencryptionRequest(false, false, false, false));
     }
 
     @Transactional
     public SecretReencryptionResultView reencryptAllStoredSecrets(SecretReencryptionRequest request) {
-        return reencryptAllStoredSecrets(null, request);
+        return reencryptAllStoredSecrets(null, null, request);
     }
 
     @Transactional
     public SecretReencryptionResultView reencryptAllStoredSecrets(AppUser actor, SecretReencryptionRequest request) {
+        return reencryptAllStoredSecrets(actor, null, request);
+    }
+
+    @Transactional
+    public SecretReencryptionResultView reencryptAllStoredSecrets(AppUser actor, UserSession currentSession, SecretReencryptionRequest request) {
         SecretReencryptionRequest effectiveRequest = effectiveRequest(request);
         ensureNoPendingRequest();
-        validateReencryptionReadiness();
+        validateReencryptionReadiness(currentSession, true);
         if (effectiveRequest.immediateExecutionOverride() && !allowImmediateReencryptOverride()) {
             throw new IllegalStateException(
                     "Immediate secret re-encryption override is disabled by server policy. Wait for the configured cooldown window or enable the testing override on the server first.");
@@ -239,9 +276,59 @@ public class SecretManagementService {
                     0,
                     List.of(),
                     new SecretReencryptionFollowUpView(0, 0, 0),
-                    buildVerification(status()));
+                    buildVerification(status(currentSession)));
         }
-        return executeReencryption(actor, effectiveRequest, now, true);
+        return executeReencryption(actor, currentSession, effectiveRequest, now, true);
+    }
+
+    @Transactional
+    public SecretManagementStatusView verifyReencryptionPassword(AppUser actor, UserSession currentSession, String password) {
+        requireReauthenticationCapableSession(currentSession);
+        if (actor == null || actor.id == null) {
+            throw new IllegalArgumentException("Missing current user");
+        }
+        if (password == null || password.isBlank()) {
+            throw new IllegalArgumentException("Enter the current password to verify this sensitive action.");
+        }
+        if (appUserService == null || !appUserService.passwordMatches(actor, password)) {
+            throw new IllegalArgumentException("Current password is incorrect.");
+        }
+        Instant verifiedAt = userSessionService.markSensitiveActionAuthenticated(currentSession.id);
+        currentSession.lastSensitiveAuthAt = verifiedAt;
+        return status(currentSession);
+    }
+
+    @Transactional
+    public StartPasskeyCeremonyResponse startReencryptionPasskeyVerification(AppUser actor, UserSession currentSession) {
+        requireReauthenticationCapableSession(currentSession);
+        if (actor == null || actor.id == null) {
+            throw new IllegalArgumentException("Missing current user");
+        }
+        if (passkeyService == null) {
+            throw new IllegalStateException("Passkey verification is unavailable.");
+        }
+        return passkeyService.startAuthenticationForUser(actor, true);
+    }
+
+    @Transactional
+    public SecretManagementStatusView finishReencryptionPasskeyVerification(
+            AppUser actor,
+            UserSession currentSession,
+            FinishPasskeyCeremonyRequest request) {
+        requireReauthenticationCapableSession(currentSession);
+        if (actor == null || actor.id == null) {
+            throw new IllegalArgumentException("Missing current user");
+        }
+        if (passkeyService == null) {
+            throw new IllegalStateException("Passkey verification is unavailable.");
+        }
+        PasskeyService.PasskeyAuthenticationResult result = passkeyService.finishAuthentication(request);
+        if (result.user() == null || !actor.id.equals(result.user().id)) {
+            throw new IllegalArgumentException("Passkey verification failed for this browser session.");
+        }
+        Instant verifiedAt = userSessionService.markSensitiveActionAuthenticated(currentSession.id);
+        currentSession.lastSensitiveAuthAt = verifiedAt;
+        return status(currentSession);
     }
 
     @Scheduled(every = "1m")
@@ -258,7 +345,7 @@ public class SecretManagementService {
         if (requestState.executeAfter.isAfter(now)) {
             return;
         }
-        executeReencryption(null, toRequest(requestState), now, false);
+            executeReencryption(null, null, toRequest(requestState), now, false);
     }
 
     public void setLocalSecretKeyProvider(LocalSecretKeyProvider localSecretKeyProvider) {
@@ -656,10 +743,11 @@ public class SecretManagementService {
 
     private SecretReencryptionResultView executeReencryption(
             AppUser actor,
+            UserSession currentSession,
             SecretReencryptionRequest request,
             Instant now,
             boolean immediate) {
-        validateReencryptionReadiness();
+        validateReencryptionReadiness(currentSession, immediate);
         SystemSecretReencryptionRequest requestState = upsertRequestState(actor, request, now, immediate ? now : currentReencryptionRequest() == null ? now : currentReencryptionRequest().executeAfter);
         requestState.status = RequestStatus.RUNNING.name();
         requestState.lastStartedAt = now;
@@ -678,7 +766,7 @@ public class SecretManagementService {
             int totalRecordsUpdated = areas.stream().mapToInt(SecretReencryptionAreaResultView::recordsUpdated).sum();
             int totalSecretValuesReencrypted = areas.stream().mapToInt(SecretReencryptionAreaResultView::secretValuesReencrypted).sum();
             SecretReencryptionFollowUpView followUp = runFollowUpActions(request);
-            SecretReencryptionVerificationView verification = buildVerification(status());
+            SecretReencryptionVerificationView verification = buildVerification(status(currentSession));
             requestState.status = RequestStatus.COMPLETED.name();
             requestState.lastCompletedAt = Instant.now();
             requestState.lastResultMessage = verification.passed()
@@ -713,7 +801,9 @@ public class SecretManagementService {
             SecretProviderHealth providerHealth,
             String activeKeyVersion,
             long unavailableKeyRecordCount,
-            SystemSecretReencryptionRequest requestState) {
+            SystemSecretReencryptionRequest requestState,
+            boolean reauthenticationRequired,
+            boolean reauthenticationSatisfied) {
         List<SecretReencryptionRequirementView> requirements = new ArrayList<>();
         requirements.add(new SecretReencryptionRequirementView(
                 "secure-storage",
@@ -721,6 +811,24 @@ public class SecretManagementService {
                 secureStorageConfigured
                         ? "InboxBridge can currently read and write encrypted stored secrets."
                         : "InboxBridge cannot safely rewrite stored secrets until encrypted secret storage is configured.",
+                secureStorageConfigured
+                        ? List.of(
+                                "Keep the currently active secret-management provider configured until the migration and follow-up verification are complete.")
+                        : List.of(
+                                "Choose a new secret-management mode before continuing: local key mode, external transit / KMS mode, or split-key mode.",
+                                "For local mode, configure SECURITY_TOKEN_ENCRYPTION_KEY and optionally SECURITY_TOKEN_ENCRYPTION_KEY_ID plus SECURITY_TOKEN_ENCRYPTION_LEGACY_KEYS.",
+                                "For external transit mode, configure SECRET_PROVIDER_MODE together with the provider-specific Vault / OpenBao / transit connection properties and verify the provider is reachable from the InboxBridge server.",
+                                "For split-key mode, configure the local key fragment plus the secondary transit provider so both trust domains are available before starting re-encryption."), 
+                secureStorageConfigured
+                        ? List.of("SECURITY_TOKEN_ENCRYPTION_KEY", "SECURITY_TOKEN_ENCRYPTION_KEY_ID", "SECURITY_TOKEN_ENCRYPTION_LEGACY_KEYS")
+                        : List.of(
+                                "SECURITY_TOKEN_ENCRYPTION_KEY",
+                                "SECURITY_TOKEN_ENCRYPTION_KEY_ID",
+                                "SECURITY_TOKEN_ENCRYPTION_LEGACY_KEYS",
+                                "SECRET_PROVIDER_MODE",
+                                "VAULT_* / OPENBAO_* / split-key provider settings"),
+                "secret-management-summary",
+                "Review secret-management summary",
                 secureStorageConfigured,
                 true));
         requirements.add(new SecretReencryptionRequirementView(
@@ -729,6 +837,17 @@ public class SecretManagementService {
                 providerHealth.writable()
                         ? providerHealth.statusMessage()
                         : "InboxBridge must be able to write with the active key path before re-encryption can start.",
+                providerHealth.writable()
+                        ? List.of(
+                                "The active provider reported itself healthy during the latest backend verification.")
+                        : List.of(
+                                "Verify the active provider endpoint, credentials, mount / key path, and TLS trust from the InboxBridge server.",
+                                "After updating the provider configuration, refresh this page and confirm the provider becomes healthy and writable before requesting re-encryption."),
+                providerHealth.mode() == SecretProviderMode.LOCAL
+                        ? List.of("SECURITY_TOKEN_ENCRYPTION_KEY", "SECURITY_TOKEN_ENCRYPTION_KEY_ID", "SECURITY_TOKEN_ENCRYPTION_LEGACY_KEYS")
+                        : List.of("SECRET_PROVIDER_MODE", providerHealth.providerId() + " connection settings"),
+                "secret-management-summary",
+                "Review provider health",
                 providerHealth.writable(),
                 true));
         requirements.add(new SecretReencryptionRequirementView(
@@ -737,6 +856,16 @@ public class SecretManagementService {
                 activeKeyVersion != null && !activeKeyVersion.isBlank()
                         ? "InboxBridge will target " + activeKeyVersion + "."
                         : "No active key version could be resolved for this deployment.",
+                activeKeyVersion != null && !activeKeyVersion.isBlank()
+                        ? List.of(
+                                "Confirm that the target shown in Current key status is the new key or provider version you intend to migrate to.")
+                        : List.of(
+                                "Configure the new active key identifier before continuing so InboxBridge knows which key version must become authoritative.",
+                                "For local mode, define SECURITY_TOKEN_ENCRYPTION_KEY_ID alongside the active key material.",
+                                "For transit or split-key mode, confirm the provider key path resolves to the intended target version."),
+                List.of("SECURITY_TOKEN_ENCRYPTION_KEY_ID", "provider key / transit path settings"),
+                "secret-reencryption-key-status",
+                "Review current key status",
                 activeKeyVersion != null && !activeKeyVersion.isBlank(),
                 true));
         requirements.add(new SecretReencryptionRequirementView(
@@ -745,6 +874,15 @@ public class SecretManagementService {
                 unavailableKeyRecordCount == 0
                         ? "No stored records reference unavailable key material."
                         : "Some stored records already reference unavailable key material. Restore those keys before re-encrypting.",
+                unavailableKeyRecordCount == 0
+                        ? List.of(
+                                "Keep the currently configured legacy keys available until the post-run verification confirms no records still depend on them.")
+                        : List.of(
+                                "Restore every missing legacy key or provider credential that still protects encrypted records.",
+                                "Do not start re-encryption until the unavailable-record counter returns to zero, otherwise some secrets will remain unrecoverable."),
+                List.of("SECURITY_TOKEN_ENCRYPTION_LEGACY_KEYS", "legacy transit / provider credentials"),
+                "secret-management-key-usage",
+                "Review key usage",
                 unavailableKeyRecordCount == 0,
                 true));
         requirements.add(new SecretReencryptionRequirementView(
@@ -753,15 +891,53 @@ public class SecretManagementService {
                 requestState != null && RequestStatus.PENDING.name().equals(requestState.status)
                         ? "A re-encryption request is already queued for execution after the cooldown window."
                         : "No queued re-encryption request is currently blocking this action.",
+                requestState != null && RequestStatus.PENDING.name().equals(requestState.status)
+                        ? List.of(
+                                "Wait for the queued request to complete or fail before scheduling another migration.",
+                                "If you are testing the workflow, ask an operator to review the cooldown policy instead of submitting duplicate requests.")
+                        : List.of(
+                                "No existing cooldown-window request is blocking a new re-encryption run."),
+                List.of("SECURITY_SECRET_REENCRYPTION_COOLDOWN"),
+                requestState != null && RequestStatus.PENDING.name().equals(requestState.status)
+                        ? "secret-reencryption-pending-request"
+                        : null,
+                requestState != null && RequestStatus.PENDING.name().equals(requestState.status)
+                        ? "Review queued request"
+                        : null,
                 requestState == null || !RequestStatus.PENDING.name().equals(requestState.status),
                 false));
+        requirements.add(new SecretReencryptionRequirementView(
+                "recent-reauthentication",
+                "This browser session was recently re-authenticated for sensitive actions",
+                !reauthenticationRequired
+                        ? "No extra step-up verification window is required by server policy."
+                        : reauthenticationSatisfied
+                                ? "This browser session was recently re-verified and can perform secret re-encryption."
+                                : "Re-authenticate this browser session with the current password or a passkey before re-encrypting stored secrets.",
+                !reauthenticationRequired
+                        ? List.of(
+                                "This deployment currently does not require an extra step-up verification window for secret re-encryption.")
+                        : reauthenticationSatisfied
+                                ? List.of(
+                                        "This browser session is already within the server-side re-authentication window for sensitive secret-management actions.")
+                                : List.of(
+                                        "Use Verify with current password or Verify with passkey in this dialog before confirming re-encryption.",
+                                        "If the verification window expires before you submit the request, repeat the verification step in this same browser session."),
+                reauthenticationRequired
+                        ? List.of("inboxbridge.security.secret-management.reauthentication-ttl")
+                        : List.of(),
+                reauthenticationRequired ? "secret-reencryption-reauthentication" : null,
+                reauthenticationRequired ? "Open session verification" : null,
+                !reauthenticationRequired || reauthenticationSatisfied,
+                reauthenticationRequired));
         return requirements;
     }
 
-    private void validateReencryptionReadiness() {
-        SecretManagementStatusView currentStatus = status();
+    private void validateReencryptionReadiness(UserSession currentSession, boolean requireReauthentication) {
+        SecretManagementStatusView currentStatus = status(currentSession);
         currentStatus.reencryptionRequirements().stream()
-                .filter(SecretReencryptionRequirementView::blocking)
+                .filter(requirement -> requirement.blocking()
+                        && (requireReauthentication || !"recent-reauthentication".equals(requirement.requirementId())))
                 .filter(requirement -> !requirement.satisfied())
                 .findFirst()
                 .ifPresent(requirement -> {
@@ -868,8 +1044,38 @@ public class SecretManagementService {
         return secretManagementPolicyConfig == null ? Duration.ofHours(12) : secretManagementPolicyConfig.reencryptionCooldown();
     }
 
+    private Duration reencryptionReauthenticationTtl() {
+        return secretManagementPolicyConfig == null ? Duration.ofMinutes(10) : secretManagementPolicyConfig.reauthenticationTtl();
+    }
+
     private boolean allowImmediateReencryptOverride() {
         return secretManagementPolicyConfig != null && secretManagementPolicyConfig.allowImmediateReencryptOverride();
+    }
+
+    private boolean reencryptionReauthenticationRequired() {
+        Duration ttl = reencryptionReauthenticationTtl();
+        return !ttl.isZero() && !ttl.isNegative();
+    }
+
+    private Instant reencryptionReauthenticationExpiresAt(UserSession currentSession) {
+        if (currentSession == null || currentSession.lastSensitiveAuthAt == null || !reencryptionReauthenticationRequired()) {
+            return null;
+        }
+        return currentSession.lastSensitiveAuthAt.plus(reencryptionReauthenticationTtl());
+    }
+
+    private boolean reencryptionReauthenticationSatisfied(UserSession currentSession) {
+        if (!reencryptionReauthenticationRequired()) {
+            return true;
+        }
+        Instant expiresAt = reencryptionReauthenticationExpiresAt(currentSession);
+        return expiresAt != null && expiresAt.isAfter(Instant.now());
+    }
+
+    private void requireReauthenticationCapableSession(UserSession currentSession) {
+        if (currentSession == null || currentSession.id == null) {
+            throw new IllegalArgumentException("Sensitive secret-management actions require a current browser session.");
+        }
     }
 
     private enum RequestStatus {

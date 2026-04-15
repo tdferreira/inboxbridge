@@ -7,6 +7,7 @@ import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.time.Duration;
+import java.time.Instant;
 import java.util.Base64;
 import java.util.List;
 import java.util.Optional;
@@ -28,6 +29,10 @@ import dev.inboxbridge.persistence.UserGmailConfig;
 import dev.inboxbridge.persistence.UserGmailConfigRepository;
 import dev.inboxbridge.persistence.UserMailDestinationConfig;
 import dev.inboxbridge.persistence.UserMailDestinationConfigRepository;
+import dev.inboxbridge.persistence.UserSession;
+import dev.inboxbridge.service.admin.AppUserService;
+import dev.inboxbridge.service.auth.PasskeyService;
+import dev.inboxbridge.service.auth.UserSessionService;
 import dev.inboxbridge.service.extension.ExtensionSessionService;
 import dev.inboxbridge.service.mail.EnvSourceService;
 import dev.inboxbridge.service.oauth.OAuthCredentialService;
@@ -58,6 +63,9 @@ class SecretManagementServiceTest {
         assertTrue(view.envManagedMailboxSecretsAllowed());
         assertEquals(1, view.configuredEnvManagedSourceCount());
         assertTrue(view.envManagedGoogleRefreshTokenConfigured());
+        assertFalse(view.reauthenticationRequired());
+        assertTrue(view.reauthenticationSatisfied());
+        assertEquals(null, view.reauthenticationExpiresAt());
         assertFalse(view.safeToRetireLegacyKeys());
         assertEquals(2, view.keyUsage().size());
         assertEquals("LOCAL:v2", view.keyUsage().getFirst().keyVersion());
@@ -102,6 +110,10 @@ class SecretManagementServiceTest {
         assertEquals(0, view.configuredEnvManagedSourceCount());
         assertFalse(view.envManagedGoogleRefreshTokenConfigured());
         assertTrue(view.keyUsage().isEmpty());
+        assertTrue(view.reencryptionRequirements().stream()
+                .anyMatch(requirement -> "secure-storage".equals(requirement.requirementId())
+                        && requirement.configReferences().contains("SECRET_PROVIDER_MODE")
+                        && "Review secret-management summary".equals(requirement.actionLabel())));
     }
 
     @Test
@@ -337,11 +349,109 @@ class SecretManagementServiceTest {
         assertTrue(status.safeToRetireLegacyKeys());
     }
 
+    @Test
+    void statusRequiresRecentReauthenticationWhenPolicyEnablesIt() {
+        SecretManagementService service = configuredService(Duration.ZERO, false, Duration.ofMinutes(10));
+        UserSession session = new UserSession();
+        session.id = 7L;
+        session.userId = 1L;
+
+        SecretManagementStatusView status = service.status(session);
+
+        assertTrue(status.reauthenticationRequired());
+        assertFalse(status.reauthenticationSatisfied());
+        assertEquals(null, status.reauthenticationExpiresAt());
+        assertFalse(status.reencryptionReady());
+        assertTrue(status.reencryptionRequirements().stream()
+                .anyMatch(requirement -> "recent-reauthentication".equals(requirement.requirementId()) && !requirement.satisfied()));
+        assertTrue(status.reencryptionRequirements().stream()
+                .anyMatch(requirement -> "recent-reauthentication".equals(requirement.requirementId())
+                        && "secret-reencryption-reauthentication".equals(requirement.actionTargetId())
+                        && requirement.remediationSteps().stream().anyMatch(step -> step.contains("Verify with current password"))));
+    }
+
+    @Test
+    void verifyReencryptionPasswordMarksCurrentSessionAsSatisfied() {
+        SecretManagementService service = configuredService(Duration.ZERO, false, Duration.ofMinutes(10));
+        service.appUserService = new AppUserService() {
+            @Override
+            public boolean passwordMatches(AppUser user, String rawPassword) {
+                return "Current1!".equals(rawPassword);
+            }
+        };
+        service.userSessionService = new UserSessionService() {
+            @Override
+            public Instant markSensitiveActionAuthenticated(Long sessionId) {
+                return Instant.parse("2026-04-15T10:15:30Z");
+            }
+        };
+        UserSession session = new UserSession();
+        session.id = 8L;
+        session.userId = 1L;
+
+        SecretManagementStatusView status = service.verifyReencryptionPassword(adminUser(), session, "Current1!");
+
+        assertTrue(status.reauthenticationRequired());
+        assertTrue(status.reauthenticationSatisfied());
+        assertNotNull(status.reauthenticationExpiresAt());
+        assertNotNull(session.lastSensitiveAuthAt);
+    }
+
+    @Test
+    void reencryptAllStoredSecretsRejectsMissingRecentReauthentication() {
+        SecretManagementService service = configuredService(Duration.ZERO, false, Duration.ofMinutes(10));
+        UserSession session = new UserSession();
+        session.id = 9L;
+        session.userId = 1L;
+
+        IllegalStateException error = assertThrows(
+                IllegalStateException.class,
+                () -> service.reencryptAllStoredSecrets(adminUser(), session, new dev.inboxbridge.dto.SecretReencryptionRequest(false, false, false, false)));
+
+        assertTrue(error.getMessage().contains("Re-authenticate this browser session"));
+    }
+
+    @Test
+    void finishReencryptionPasskeyVerificationMarksCurrentSessionAsSatisfied() {
+        SecretManagementService service = configuredService(Duration.ZERO, false, Duration.ofMinutes(10));
+        service.passkeyService = new PasskeyService() {
+            @Override
+            public PasskeyAuthenticationResult finishAuthentication(dev.inboxbridge.dto.FinishPasskeyCeremonyRequest request) {
+                AppUser user = new AppUser();
+                user.id = 1L;
+                user.username = "admin";
+                user.role = AppUser.Role.ADMIN;
+                return new PasskeyAuthenticationResult(user, true);
+            }
+        };
+        service.userSessionService = new UserSessionService() {
+            @Override
+            public Instant markSensitiveActionAuthenticated(Long sessionId) {
+                return Instant.parse("2026-04-15T10:15:30Z");
+            }
+        };
+        UserSession session = new UserSession();
+        session.id = 10L;
+        session.userId = 1L;
+
+        SecretManagementStatusView status = service.finishReencryptionPasskeyVerification(
+                adminUser(),
+                session,
+                new dev.inboxbridge.dto.FinishPasskeyCeremonyRequest("ceremony-1", "{\"id\":\"credential\"}"));
+
+        assertTrue(status.reauthenticationSatisfied());
+        assertNotNull(session.lastSensitiveAuthAt);
+    }
+
     private SecretManagementService configuredService() {
-        return configuredService(Duration.ZERO, false);
+        return configuredService(Duration.ZERO, false, Duration.ZERO);
     }
 
     private SecretManagementService configuredService(Duration cooldown, boolean allowImmediateOverride) {
+        return configuredService(cooldown, allowImmediateOverride, Duration.ZERO);
+    }
+
+    private SecretManagementService configuredService(Duration cooldown, boolean allowImmediateOverride, Duration reauthenticationTtl) {
         SecretManagementService service = new SecretManagementService();
         LocalSecretKeyProvider provider = new LocalSecretKeyProvider();
         provider.setTokenEncryptionKey(base64("fedcba9876543210fedcba9876543210"));
@@ -421,6 +531,11 @@ class SecretManagementServiceTest {
             @Override
             public boolean allowImmediateReencryptOverride() {
                 return allowImmediateOverride;
+            }
+
+            @Override
+            public java.time.Duration reauthenticationTtl() {
+                return reauthenticationTtl;
             }
         });
         service.setExtensionSessionService(new StubExtensionSessionService(0));
@@ -635,4 +750,5 @@ class SecretManagementServiceTest {
             return clearedCount;
         }
     }
+
 }

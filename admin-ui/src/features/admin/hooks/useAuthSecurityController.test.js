@@ -578,6 +578,9 @@ describe('useAuthSecurityController', () => {
         configuredEnvManagedSourceCount: 3,
         envManagedGoogleRefreshTokenConfigured: true,
         safeToRetireLegacyKeys: false,
+        reauthenticationRequired: true,
+        reauthenticationSatisfied: false,
+        reauthenticationExpiresAt: null,
         keyUsage: [
           {
             keyVersion: 'LOCAL:v2',
@@ -604,6 +607,8 @@ describe('useAuthSecurityController', () => {
     expect(result.current.secretManagementStatus.configuredLegacyKeyIds).toEqual(['LOCAL:v1'])
     expect(result.current.secretManagementStatus.envManagedMailboxSecretsAllowed).toBe(false)
     expect(result.current.secretManagementStatus.configuredEnvManagedSourceCount).toBe(3)
+    expect(result.current.secretManagementStatus.reauthenticationRequired).toBe(true)
+    expect(result.current.secretManagementStatus.reauthenticationSatisfied).toBe(false)
   })
 
   it('re-encrypts stored secrets and refreshes secret-management status', async () => {
@@ -636,6 +641,9 @@ describe('useAuthSecurityController', () => {
           nonActiveKeyRecordCount: 0,
           unavailableKeyRecordCount: 0,
           safeToRetireLegacyKeys: true,
+          reauthenticationRequired: false,
+          reauthenticationSatisfied: true,
+          reauthenticationExpiresAt: null,
           keyUsage: []
         })
       })
@@ -694,6 +702,140 @@ describe('useAuthSecurityController', () => {
     }))
     expect(pushNotification).toHaveBeenCalledWith(expect.objectContaining({
       message: 'Re-encrypted 4 records / 9 secrets',
+      targetId: 'secret-management-section',
+      tone: 'success'
+    }))
+  })
+
+  it('verifies secret-management password re-authentication and updates status', async () => {
+    fetch.mockResolvedValue({
+      ok: true,
+      json: vi.fn().mockResolvedValue({
+        secureStorageConfigured: true,
+        mode: 'LOCAL',
+        providerId: 'LOCAL',
+        activeKeyVersion: 'LOCAL:v2',
+        activeKeyId: 'LOCAL:v2',
+        configuredLegacyKeyIds: [],
+        protectedRecordCount: 9,
+        activeKeyRecordCount: 9,
+        nonActiveKeyRecordCount: 0,
+        unavailableKeyRecordCount: 0,
+        safeToRetireLegacyKeys: true,
+        reauthenticationRequired: true,
+        reauthenticationSatisfied: true,
+        reauthenticationExpiresAt: '2026-04-15T10:25:30Z',
+        keyUsage: []
+      })
+    })
+    const { result, pushNotification } = renderController()
+
+    act(() => {
+      result.current.setSession({ id: 1, role: 'ADMIN' })
+    })
+
+    let completed = null
+    await act(async () => {
+      completed = await result.current.handleVerifySecretManagementPassword('Current1!')
+    })
+
+    expect(fetch).toHaveBeenCalledWith('/api/admin/secret-management/re-auth/password', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ password: 'Current1!' })
+    })
+    expect(completed).toEqual(expect.objectContaining({
+      reauthenticationRequired: true,
+      reauthenticationSatisfied: true
+    }))
+    expect(result.current.secretManagementStatus.reauthenticationSatisfied).toBe(true)
+    expect(pushNotification).toHaveBeenCalledWith(expect.objectContaining({
+      message: { kind: 'translation', key: 'notifications.secretManagementReauthenticationVerified', params: {} },
+      targetId: 'secret-management-section',
+      tone: 'success'
+    }))
+  })
+
+  it('verifies secret-management passkey re-authentication and updates status', async () => {
+    Object.defineProperty(window, 'PublicKeyCredential', {
+      configurable: true,
+      value: function PublicKeyCredential() {}
+    })
+    Object.defineProperty(window.navigator, 'credentials', {
+      configurable: true,
+      value: {
+        get: vi.fn().mockResolvedValue({
+          id: 'credential-1',
+          rawId: new Uint8Array([1, 2, 3]).buffer,
+          type: 'public-key',
+          response: {
+            clientDataJSON: new Uint8Array([4, 5, 6]).buffer,
+            authenticatorData: new Uint8Array([7, 8, 9]).buffer,
+            signature: new Uint8Array([10, 11, 12]).buffer,
+            userHandle: null
+          },
+          getClientExtensionResults: () => ({})
+        })
+      }
+    })
+    fetch
+      .mockResolvedValueOnce({
+        ok: true,
+        json: vi.fn().mockResolvedValue({
+          ceremonyId: 'ceremony-1',
+          publicKeyJson: JSON.stringify({
+            publicKey: {
+              challenge: 'AQ',
+              allowCredentials: []
+            }
+          })
+        })
+      })
+      .mockResolvedValueOnce({
+        ok: true,
+        json: vi.fn().mockResolvedValue({
+          secureStorageConfigured: true,
+          mode: 'LOCAL',
+          providerId: 'LOCAL',
+          activeKeyVersion: 'LOCAL:v2',
+          activeKeyId: 'LOCAL:v2',
+          configuredLegacyKeyIds: [],
+          protectedRecordCount: 9,
+          activeKeyRecordCount: 9,
+          nonActiveKeyRecordCount: 0,
+          unavailableKeyRecordCount: 0,
+          safeToRetireLegacyKeys: true,
+          reauthenticationRequired: true,
+          reauthenticationSatisfied: true,
+          reauthenticationExpiresAt: '2026-04-15T10:25:30Z',
+          keyUsage: []
+        })
+      })
+    const { result, pushNotification } = renderController()
+
+    act(() => {
+      result.current.setSession({ id: 1, role: 'ADMIN' })
+    })
+
+    let completed = null
+    await act(async () => {
+      completed = await result.current.handleVerifySecretManagementPasskey()
+    })
+
+    expect(fetch).toHaveBeenNthCalledWith(1, '/api/admin/secret-management/re-auth/passkey/options', {
+      method: 'POST'
+    })
+    expect(fetch).toHaveBeenNthCalledWith(2, '/api/admin/secret-management/re-auth/passkey/verify', expect.objectContaining({
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' }
+    }))
+    expect(completed).toEqual(expect.objectContaining({
+      reauthenticationRequired: true,
+      reauthenticationSatisfied: true
+    }))
+    expect(result.current.secretManagementStatus.reauthenticationSatisfied).toBe(true)
+    expect(pushNotification).toHaveBeenCalledWith(expect.objectContaining({
+      message: { kind: 'translation', key: 'notifications.secretManagementReauthenticationVerified', params: {} },
       targetId: 'secret-management-section',
       tone: 'success'
     }))

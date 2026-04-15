@@ -33,7 +33,10 @@ const DEFAULT_SECRET_MANAGEMENT_STATUS = {
   reencryptionRequirements: [],
   reencryptionRequest: null,
   reencryptionCooldown: 'PT12H',
-  immediateReencryptionOverrideAllowed: false
+  immediateReencryptionOverrideAllowed: false,
+  reauthenticationRequired: true,
+  reauthenticationSatisfied: false,
+  reauthenticationExpiresAt: null
 }
 const DEFAULT_SECRET_REENCRYPT_OPTIONS = {
   immediateExecutionOverride: false,
@@ -694,6 +697,102 @@ export function useAuthSecurityController({
     return result
   }
 
+  async function handleVerifySecretManagementPassword(password) {
+    let result = null
+    await withPending('secretManagementReauthPassword', async () => {
+      try {
+        const response = await fetch('/api/admin/secret-management/re-auth/password', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ password })
+        })
+        if (!response.ok) {
+          throw new Error(await apiErrorText(response, errorText('verifySecretManagementPassword')))
+        }
+        const payload = await response.json()
+        setSecretManagementStatus({
+          ...DEFAULT_SECRET_MANAGEMENT_STATUS,
+          ...(payload || {}),
+          configuredLegacyKeyIds: Array.isArray(payload?.configuredLegacyKeyIds) ? payload.configuredLegacyKeyIds : [],
+          keyUsage: Array.isArray(payload?.keyUsage) ? payload.keyUsage : [],
+          reencryptionRequirements: Array.isArray(payload?.reencryptionRequirements) ? payload.reencryptionRequirements : []
+        })
+        pushNotification({
+          message: translatedNotification('notifications.secretManagementReauthenticationVerified'),
+          targetId: 'secret-management-section',
+          tone: 'success'
+        })
+        result = payload
+      } catch (err) {
+        pushNotification({
+          autoCloseMs: null,
+          copyText: err.message ? pollErrorNotification(err.message) : translatedNotification('errors.verifySecretManagementPassword'),
+          message: err.message ? pollErrorNotification(err.message) : translatedNotification('errors.verifySecretManagementPassword'),
+          targetId: 'secret-management-section',
+          tone: 'error'
+        })
+      }
+    })
+    return result
+  }
+
+  async function handleVerifySecretManagementPasskey() {
+    let result = null
+    await withPending('secretManagementReauthPasskey', async () => {
+      try {
+        if (!passkeysSupported()) {
+          throw new Error(t('errors.passkeyUnsupported'))
+        }
+        const startResponse = await fetch('/api/admin/secret-management/re-auth/passkey/options', {
+          method: 'POST'
+        })
+        if (!startResponse.ok) {
+          throw new Error(await apiErrorText(startResponse, errorText('startSecretManagementPasskeyVerification')))
+        }
+        const startPayload = await startResponse.json()
+        const credential = await navigator.credentials.get({ publicKey: parseGetOptions(startPayload.publicKeyJson) })
+        if (!credential) {
+          throw new Error(t('errors.passkeyCancelled'))
+        }
+        const finishResponse = await fetch('/api/admin/secret-management/re-auth/passkey/verify', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            ceremonyId: startPayload.ceremonyId,
+            credentialJson: serializeCredential(credential)
+          })
+        })
+        if (!finishResponse.ok) {
+          throw new Error(await apiErrorText(finishResponse, errorText('finishSecretManagementPasskeyVerification')))
+        }
+        const payload = await finishResponse.json()
+        setSecretManagementStatus({
+          ...DEFAULT_SECRET_MANAGEMENT_STATUS,
+          ...(payload || {}),
+          configuredLegacyKeyIds: Array.isArray(payload?.configuredLegacyKeyIds) ? payload.configuredLegacyKeyIds : [],
+          keyUsage: Array.isArray(payload?.keyUsage) ? payload.keyUsage : [],
+          reencryptionRequirements: Array.isArray(payload?.reencryptionRequirements) ? payload.reencryptionRequirements : []
+        })
+        pushNotification({
+          message: translatedNotification('notifications.secretManagementReauthenticationVerified'),
+          targetId: 'secret-management-section',
+          tone: 'success'
+        })
+        result = payload
+      } catch (err) {
+        const message = normalizePasskeyError(err, t, 'authentication')
+        pushNotification({
+          autoCloseMs: null,
+          copyText: pollErrorNotification(message),
+          message: pollErrorNotification(message),
+          targetId: 'secret-management-section',
+          tone: 'error'
+        })
+      }
+    })
+    return result
+  }
+
   async function handleRevokeExtensionSession(extensionSession) {
     const sessionId = extensionSession?.id
     openConfirmation({
@@ -914,6 +1013,8 @@ export function useAuthSecurityController({
     closeSecurityPanel,
     extensionSessions,
     handleReencryptStoredSecrets,
+    handleVerifySecretManagementPassword,
+    handleVerifySecretManagementPasskey,
     handleDeletePasskey,
     handleLogin,
     handleLogout,

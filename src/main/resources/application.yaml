@@ -96,6 +96,7 @@ inboxbridge:
       allow-env-managed-mailbox-secrets: ${SECURITY_ALLOW_ENV_MANAGED_MAILBOX_SECRETS:true}
       reencryption-cooldown: ${SECURITY_SECRET_REENCRYPTION_COOLDOWN:PT12H}
       allow-immediate-reencrypt-override: ${SECURITY_SECRET_REENCRYPTION_ALLOW_IMMEDIATE_OVERRIDE:false}
+      reauthentication-ttl: ${SECURITY_SECRET_REENCRYPTION_REAUTHENTICATION_TTL:PT10M}
   gmail:
     destination-user: ${GMAIL_DESTINATION_USER:me}
     client-id: ${GOOGLE_CLIENT_ID:replace-me}

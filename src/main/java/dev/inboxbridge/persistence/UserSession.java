@@ -69,6 +69,9 @@ public class UserSession extends PanacheEntityBase {
     @Column(name = "device_location_captured_at")
     public Instant deviceLocationCapturedAt;
 
+    @Column(name = "last_sensitive_auth_at")
+    public Instant lastSensitiveAuthAt;
+
     @Column(name = "user_agent", length = 512)
     public String userAgent;
 

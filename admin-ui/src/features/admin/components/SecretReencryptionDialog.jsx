@@ -1,14 +1,49 @@
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import Banner from '@/shared/components/Banner'
 import LoadingButton from '@/shared/components/LoadingButton'
 import ModalDialog from '@/shared/components/ModalDialog'
+import PasswordField from '@/shared/components/PasswordField'
+import './SecretReencryptionDialog.css'
+
+function RequirementStatusIcon({ satisfied, t }) {
+  const label = satisfied
+    ? t('authSecurity.secretManagementRequirementSatisfied')
+    : t('authSecurity.secretManagementRequirementNotSatisfied')
+  const stroke = satisfied ? 'var(--accent)' : 'var(--danger)'
+
+  return (
+    <span
+      aria-label={label}
+      className={`secret-reencryption-requirement-status-icon ${satisfied ? 'is-satisfied' : 'is-unsatisfied'}`}
+      role="img"
+      title={label}
+    >
+      <svg aria-hidden="true" fill="none" height="22" viewBox="0 0 24 24" width="22">
+        <circle cx="12" cy="12" fill="transparent" r="9" stroke={stroke} strokeWidth="1.8" />
+        {satisfied ? (
+          <path d="M7.5 12.4 10.4 15.2 16.7 8.9" stroke={stroke} strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.2" />
+        ) : (
+          <>
+            <path d="M8.6 8.6 15.4 15.4" stroke={stroke} strokeLinecap="round" strokeWidth="2.2" />
+            <path d="M15.4 8.6 8.6 15.4" stroke={stroke} strokeLinecap="round" strokeWidth="2.2" />
+          </>
+        )}
+      </svg>
+    </span>
+  )
+}
 
 function SecretReencryptionDialog({
   onClose,
   onConfirm,
   onOptionsChange,
+  onVerifyPasskey,
+  onVerifyPassword,
   pending = false,
+  reauthPasskeyLoading = false,
+  reauthPasswordLoading = false,
   reencryptionResult = null,
+  session,
   secretManagementStatus,
   secretReencryptOptions,
   t
@@ -18,6 +53,7 @@ function SecretReencryptionDialog({
     preservedLegacyKeys: false,
     understoodRisk: false
   })
+  const [password, setPassword] = useState('')
 
   const allAcknowledged = useMemo(
     () => Object.values(acknowledgements).every(Boolean),
@@ -37,14 +73,57 @@ function SecretReencryptionDialog({
   const requestSubmitted = Boolean(reencryptionResult?.operationStatus)
   const requestScheduled = reencryptionResult?.operationStatus === 'SCHEDULED'
   const requestCompleted = reencryptionResult?.operationStatus === 'COMPLETED'
-  const confirmDisabled = !allAcknowledged || !blockingRequirementsMet || pendingRequest || requestSubmitted
+  const requiresReauthentication = Boolean(secretManagementStatus?.reauthenticationRequired)
+  const reauthenticationSatisfied = Boolean(secretManagementStatus?.reauthenticationSatisfied)
+  const [expandedRequirementIds, setExpandedRequirementIds] = useState(() => new Set(
+    requirements
+      .filter((requirement) => !requirement?.satisfied)
+      .map((requirement) => requirement.requirementId)
+  ))
+  const confirmDisabled = !allAcknowledged || !blockingRequirementsMet || pendingRequest || requestSubmitted || (requiresReauthentication && !reauthenticationSatisfied)
+
+  useEffect(() => {
+    setExpandedRequirementIds((current) => {
+      const next = new Set(current)
+      requirements
+        .filter((requirement) => !requirement?.satisfied)
+        .forEach((requirement) => next.add(requirement.requirementId))
+      return next
+    })
+  }, [requirements])
 
   function updateAcknowledgement(key, checked) {
     setAcknowledgements((current) => ({ ...current, [key]: checked }))
   }
 
+  function toggleRequirement(requirementId) {
+    setExpandedRequirementIds((current) => {
+      const next = new Set(current)
+      if (next.has(requirementId)) {
+        next.delete(requirementId)
+      } else {
+        next.add(requirementId)
+      }
+      return next
+    })
+  }
+
+  function focusTarget(targetId) {
+    if (!targetId || typeof document === 'undefined') {
+      return
+    }
+    const target = document.getElementById(targetId)
+    if (!target) {
+      return
+    }
+    target.scrollIntoView({ behavior: 'smooth', block: 'center' })
+    if (typeof target.focus === 'function') {
+      target.focus({ preventScroll: true })
+    }
+  }
+
   return (
-    <ModalDialog closeDisabled={pending} onClose={onClose} title={t('authSecurity.secretManagementReencryptDialogTitle')}>
+    <ModalDialog closeDisabled={pending} onClose={onClose} size="wide" title={t('authSecurity.secretManagementReencryptDialogTitle')}>
       <div className="detail-stack">
         <p className="section-copy">{t('authSecurity.secretManagementReencryptDialogIntro')}</p>
 
@@ -55,7 +134,7 @@ function SecretReencryptionDialog({
           </div>
         </Banner>
 
-        <div className="muted-box detail-stack">
+        <div className="muted-box detail-stack" id="secret-reencryption-key-status" tabIndex="-1">
           <strong>{t('authSecurity.secretManagementReencryptDialogStatusTitle')}</strong>
           <div className="polling-statistics-breakdown">
             <div><span>{t('authSecurity.secretManagementActiveKey')}</span><strong>{secretManagementStatus?.activeKeyId || secretManagementStatus?.activeKeyVersion || t('common.unavailable')}</strong></div>
@@ -66,7 +145,7 @@ function SecretReencryptionDialog({
 
         <div className="detail-stack">
           <strong>{t('authSecurity.secretManagementReencryptDialogStepsTitle')}</strong>
-          <ol className="detail-stack">
+          <ol className="detail-stack secret-reencryption-procedure-list">
             <li>{t('authSecurity.secretManagementReencryptDialogStep1')}</li>
             <li>{t('authSecurity.secretManagementReencryptDialogStep2')}</li>
             <li>{t('authSecurity.secretManagementReencryptDialogStep3')}</li>
@@ -76,21 +155,78 @@ function SecretReencryptionDialog({
 
         <div className="detail-stack">
           <strong>{t('authSecurity.secretManagementReencryptDialogRequirementsTitle')}</strong>
-          <div className="detail-stack">
-            {requirements.map((requirement) => (
-              <div className="muted-box detail-stack" key={requirement.requirementId}>
-                <strong>{requirement.title}</strong>
-                <span>{requirement.detail}</span>
-                <span>{requirement.satisfied ? t('authSecurity.secretManagementRequirementSatisfied') : t('authSecurity.secretManagementRequirementNotSatisfied')}</span>
-              </div>
-            ))}
+          <div className="secret-reencryption-requirements-grid">
+            {requirements.map((requirement) => {
+              const expanded = expandedRequirementIds.has(requirement.requirementId)
+              const remediationSteps = Array.isArray(requirement.remediationSteps) ? requirement.remediationSteps : []
+              const configReferences = Array.isArray(requirement.configReferences) ? requirement.configReferences : []
+
+              return (
+                <article
+                  className={`muted-box secret-reencryption-requirement-card ${expanded ? 'expanded' : ''}`}
+                  key={requirement.requirementId}
+                >
+                  <button
+                    aria-expanded={expanded}
+                    className="secret-reencryption-requirement-toggle"
+                    onClick={() => toggleRequirement(requirement.requirementId)}
+                    type="button"
+                  >
+                    <div className="secret-reencryption-requirement-copy">
+                      <strong>{requirement.title}</strong>
+                      <span>{requirement.detail}</span>
+                    </div>
+                    <div className="secret-reencryption-requirement-meta">
+                      <RequirementStatusIcon satisfied={requirement.satisfied} t={t} />
+                      <span className={`status-pill ${requirement.satisfied ? 'status-ok' : 'tone-bad'}`}>
+                        {requirement.satisfied ? t('authSecurity.secretManagementRequirementSatisfied') : t('authSecurity.secretManagementRequirementNotSatisfied')}
+                      </span>
+                    </div>
+                  </button>
+
+                  {expanded ? (
+                    <div className="secret-reencryption-requirement-body detail-stack">
+                      {remediationSteps.length > 0 ? (
+                        <div className="detail-stack">
+                          <strong>{t('authSecurity.secretManagementRequirementStepsTitle')}</strong>
+                          <ul className="detail-stack secret-reencryption-detail-list">
+                            {remediationSteps.map((step) => <li key={step}>{step}</li>)}
+                          </ul>
+                        </div>
+                      ) : null}
+                      {configReferences.length > 0 ? (
+                        <div className="detail-stack">
+                          <strong>{t('authSecurity.secretManagementRequirementConfigTitle')}</strong>
+                          <div className="secret-reencryption-config-list">
+                            {configReferences.map((reference) => (
+                              <code className="secret-reencryption-config-chip" key={reference}>{reference}</code>
+                            ))}
+                          </div>
+                        </div>
+                      ) : null}
+                      {requirement.actionTargetId && requirement.actionLabel ? (
+                        <div className="secret-reencryption-requirement-actions">
+                          <button
+                            className="secondary"
+                            onClick={() => focusTarget(requirement.actionTargetId)}
+                            type="button"
+                          >
+                            {requirement.actionLabel}
+                          </button>
+                        </div>
+                      ) : null}
+                    </div>
+                  ) : null}
+                </article>
+              )
+            })}
           </div>
         </div>
 
         {pendingRequest ? (
           <Banner tone="info">
             <div className="detail-stack">
-              <strong>{t('authSecurity.secretManagementReencryptPendingTitle')}</strong>
+              <strong id="secret-reencryption-pending-request" tabIndex="-1">{t('authSecurity.secretManagementReencryptPendingTitle')}</strong>
               <span>{t('authSecurity.secretManagementReencryptPendingBody', { executeAfter: secretManagementStatus?.reencryptionRequest?.executeAfter || '' })}</span>
             </div>
           </Banner>
@@ -118,6 +254,63 @@ function SecretReencryptionDialog({
               ) : null}
             </div>
           </Banner>
+        ) : null}
+
+        {requiresReauthentication ? (
+          <div className="detail-stack" id="secret-reencryption-reauthentication" tabIndex="-1">
+            <strong>{t('authSecurity.secretManagementReauthenticationTitle')}</strong>
+            <Banner tone={reauthenticationSatisfied ? 'success' : 'warning'}>
+              <div className="detail-stack">
+                <span>
+                  {reauthenticationSatisfied
+                    ? t('authSecurity.secretManagementReauthenticationSatisfied', {
+                        expiresAt: secretManagementStatus?.reauthenticationExpiresAt || ''
+                      })
+                    : t('authSecurity.secretManagementReauthenticationRequired')}
+                </span>
+              </div>
+            </Banner>
+            {!reauthenticationSatisfied ? (
+              <div className="detail-stack">
+                {session?.hasPassword ? (
+                  <div className="detail-stack">
+                    <PasswordField
+                      autoComplete="current-password"
+                      label={t('authSecurity.secretManagementReauthenticationPasswordLabel')}
+                      onChange={(event) => setPassword(event.target.value)}
+                      value={password}
+                    />
+                    <LoadingButton
+                      className="secondary"
+                      disabled={!password.trim()}
+                      isLoading={reauthPasswordLoading}
+                      loadingLabel={t('authSecurity.secretManagementReauthenticationVerifying')}
+                      onClick={async () => {
+                        const result = await onVerifyPassword?.(password)
+                        if (result) {
+                          setPassword('')
+                        }
+                      }}
+                      type="button"
+                    >
+                      {t('authSecurity.secretManagementReauthenticationVerifyPassword')}
+                    </LoadingButton>
+                  </div>
+                ) : null}
+                {session?.passkeyCount > 0 ? (
+                  <LoadingButton
+                    className="secondary"
+                    isLoading={reauthPasskeyLoading}
+                    loadingLabel={t('authSecurity.secretManagementReauthenticationVerifying')}
+                    onClick={onVerifyPasskey}
+                    type="button"
+                  >
+                    {t('authSecurity.secretManagementReauthenticationVerifyPasskey')}
+                  </LoadingButton>
+                ) : null}
+              </div>
+            ) : null}
+          </div>
         ) : null}
 
         <div className="detail-stack">

@@ -122,6 +122,17 @@ public class UserSessionService {
         session.deviceLocationCapturedAt = Instant.now();
     }
 
+    @Transactional
+    public Instant markSensitiveActionAuthenticated(Long sessionId) {
+        if (sessionId == null) {
+            throw new IllegalArgumentException("Missing current session");
+        }
+        UserSession session = repository.findByIdOptional(sessionId)
+                .orElseThrow(() -> new IllegalArgumentException("Unknown session id"));
+        session.lastSensitiveAuthAt = Instant.now();
+        return session.lastSensitiveAuthAt;
+    }
+
     public boolean csrfMatches(UserSession session, String csrfToken) {
         return session != null
                 && csrfToken != null

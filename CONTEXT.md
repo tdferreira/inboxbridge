@@ -498,7 +498,24 @@ already pending, and only exposes an immediate-execution bypass when the server
 explicitly enables the testing-only
 `SECURITY_SECRET_REENCRYPTION_ALLOW_IMMEDIATE_OVERRIDE=true` flag. After the
 run completes, the modal now keeps the operator-facing verification summary and
-the list of recovery details to save before any legacy keys are removed.
+the list of recovery details to save before any legacy keys are removed. The
+same modal is now rendered in a wider layout and each backend requirement is
+shown as an expandable status card with remediation steps, related config
+references, and optional focus actions that jump the operator to the relevant
+page or in-modal section.
+That same admin secret-management flow now also supports step-up verification
+per browser session. When
+`SECURITY_SECRET_REENCRYPTION_REAUTHENTICATION_TTL` is greater than zero
+(default `PT10M`), the current browser session must first re-authenticate with
+either the current password or a passkey before it can queue or run
+re-encryption. The backend stores that verification timestamp on the current
+`user_session`, surfaces the requirement plus expiry window from
+`/api/admin/secret-management`, and exposes the step-up endpoints at
+`POST /api/admin/secret-management/re-auth/password`,
+`POST /api/admin/secret-management/re-auth/passkey/options`, and
+`POST /api/admin/secret-management/re-auth/passkey/verify`. The delayed
+cooldown-triggered execution itself does not need an interactive session again;
+the step-up check is enforced when the request is submitted.
 That re-encryption flow still supports optional cleanup of derived trust
 material in the same admin action: browser-extension sessions can be revoked
 deployment-wide, `/remote` sessions can be invalidated, and cached OAuth

@@ -27,9 +27,14 @@ function SecretManagementSection({
   locale = 'en',
   onCollapseToggle,
   onReencryptStoredSecrets,
+  onVerifySecretManagementPasskey,
+  onVerifySecretManagementPassword,
   onSecretReencryptOptionsChange,
+  reauthPasskeyLoading = false,
+  reauthPasswordLoading = false,
   reencryptionLoading = false,
   sectionLoading = false,
+  session,
   secretManagementStatus,
   secretReencryptOptions,
   t
@@ -61,7 +66,7 @@ function SecretManagementSection({
         title={t('authSecurity.secretManagementTitle')}
       >
         <div className="polling-statistics-grid">
-          <article className="surface-card polling-statistics-card">
+          <article className="surface-card polling-statistics-card" id="secret-management-summary" tabIndex="-1">
             <div className="polling-statistics-card-title">{t('authSecurity.secretManagementSummaryTitle')}</div>
             <p className="section-copy">{t('authSecurity.secretManagementCopy')}</p>
             <div className="polling-statistics-breakdown">
@@ -80,7 +85,7 @@ function SecretManagementSection({
             <p className="section-copy">{t('authSecurity.secretManagementEnvPolicyHelp')}</p>
           </article>
 
-          <article className="surface-card polling-statistics-card">
+          <article className="surface-card polling-statistics-card" id="secret-management-key-usage" tabIndex="-1">
             <div className="polling-statistics-card-title">{t('authSecurity.secretManagementKeyUsageTitle')}</div>
             <p className="section-copy">{t('authSecurity.secretManagementKeyUsageCopy')}</p>
             {keyUsage.length === 0 ? (
@@ -150,8 +155,13 @@ function SecretManagementSection({
           }}
           onConfirm={handleConfirmReencrypt}
           onOptionsChange={onSecretReencryptOptionsChange}
+          onVerifyPasskey={onVerifySecretManagementPasskey}
+          onVerifyPassword={onVerifySecretManagementPassword}
           pending={reencryptionLoading}
+          reauthPasskeyLoading={reauthPasskeyLoading}
+          reauthPasswordLoading={reauthPasswordLoading}
           reencryptionResult={reencryptionResult}
+          session={session}
           secretManagementStatus={secretManagementStatus}
           secretReencryptOptions={secretReencryptOptions}
           t={t}

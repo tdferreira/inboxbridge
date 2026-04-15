@@ -1758,6 +1758,8 @@ function AppContent({ timings = DEFAULT_APP_TIMINGS }) {
     setSystemOAuthEditorProvider,
     setSystemOAuthSettingsDirty,
     onReencryptStoredSecrets: auth.handleReencryptStoredSecrets,
+    onVerifySecretManagementPassword: auth.handleVerifySecretManagementPassword,
+    onVerifySecretManagementPasskey: auth.handleVerifySecretManagementPasskey,
     onSecretReencryptOptionsChange: auth.setSecretReencryptOptions,
     systemDashboard,
     systemOAuthSettings,
