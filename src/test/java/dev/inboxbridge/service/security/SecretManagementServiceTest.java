@@ -2,8 +2,11 @@ package dev.inboxbridge.service.security;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
+import java.time.Duration;
 import java.util.Base64;
 import java.util.List;
 import java.util.Optional;
@@ -12,6 +15,7 @@ import org.junit.jupiter.api.Test;
 
 import dev.inboxbridge.dto.SecretManagementStatusView;
 import dev.inboxbridge.dto.SecretReencryptionResultView;
+import dev.inboxbridge.persistence.AppUser;
 import dev.inboxbridge.persistence.OAuthCredential;
 import dev.inboxbridge.persistence.OAuthCredentialRepository;
 import dev.inboxbridge.persistence.SystemAuthSecuritySetting;
@@ -274,14 +278,70 @@ class SecretManagementServiceTest {
         service.setRemoteSessionService(new StubRemoteSessionService(3));
         service.setOAuthCredentialService(new StubOAuthCredentialService(2));
 
-        SecretReencryptionResultView result = service.reencryptAllStoredSecrets(new dev.inboxbridge.dto.SecretReencryptionRequest(true, true, true));
+        SecretReencryptionResultView result = service.reencryptAllStoredSecrets(new dev.inboxbridge.dto.SecretReencryptionRequest(false, true, true, true));
 
         assertEquals(4, result.followUp().browserExtensionSessionsRevoked());
         assertEquals(3, result.followUp().remoteSessionsRevoked());
         assertEquals(2, result.followUp().cachedOAuthAccessTokensCleared());
     }
 
+    @Test
+    void reencryptAllStoredSecretsSchedulesRequestWhenCooldownIsConfigured() {
+        SecretManagementService service = configuredService(Duration.ofHours(12), false);
+
+        SecretReencryptionResultView result = service.reencryptAllStoredSecrets(adminUser(), new dev.inboxbridge.dto.SecretReencryptionRequest(false, true, false, false));
+        SecretManagementStatusView status = service.status();
+
+        assertEquals("SCHEDULED", result.operationStatus());
+        assertNotNull(result.executeAfter());
+        assertEquals("PENDING", status.reencryptionRequest().status());
+        assertEquals(1L, status.reencryptionRequest().requestedByUserId());
+        assertTrue(status.reencryptionReady());
+    }
+
+    @Test
+    void reencryptAllStoredSecretsRejectsImmediateOverrideWhenServerPolicyDisablesIt() {
+        SecretManagementService service = configuredService(Duration.ofHours(12), false);
+
+        IllegalStateException error = assertThrows(
+                IllegalStateException.class,
+                () -> service.reencryptAllStoredSecrets(adminUser(), new dev.inboxbridge.dto.SecretReencryptionRequest(true, false, false, false)));
+
+        assertTrue(error.getMessage().contains("Immediate secret re-encryption override is disabled"));
+    }
+
+    @Test
+    void reencryptAllStoredSecretsCanBypassCooldownWhenImmediateOverrideIsAllowed() {
+        SecretManagementService service = configuredService(Duration.ofHours(12), true);
+
+        SecretReencryptionResultView result = service.reencryptAllStoredSecrets(adminUser(), new dev.inboxbridge.dto.SecretReencryptionRequest(true, false, false, false));
+
+        assertEquals("COMPLETED", result.operationStatus());
+        assertTrue(result.verification().passed());
+        assertEquals("COMPLETED", service.status().reencryptionRequest().status());
+    }
+
+    @Test
+    void executeDueReencryptionRequestsRunsQueuedRequestAfterCooldownExpires() {
+        SecretManagementService service = configuredService(Duration.ofHours(2), false);
+
+        SecretReencryptionResultView scheduled = service.reencryptAllStoredSecrets(
+                adminUser(),
+                new dev.inboxbridge.dto.SecretReencryptionRequest(false, true, true, true));
+
+        service.executeDueReencryptionRequestsAt(scheduled.executeAfter().plusSeconds(1));
+        SecretManagementStatusView status = service.status();
+
+        assertEquals("COMPLETED", status.reencryptionRequest().status());
+        assertEquals(0, status.nonActiveKeyRecordCount());
+        assertTrue(status.safeToRetireLegacyKeys());
+    }
+
     private SecretManagementService configuredService() {
+        return configuredService(Duration.ZERO, false);
+    }
+
+    private SecretManagementService configuredService(Duration cooldown, boolean allowImmediateOverride) {
         SecretManagementService service = new SecretManagementService();
         LocalSecretKeyProvider provider = new LocalSecretKeyProvider();
         provider.setTokenEncryptionKey(base64("fedcba9876543210fedcba9876543210"));
@@ -346,6 +406,23 @@ class SecretManagementServiceTest {
         service.setUserGmailConfigRepository(new InMemoryUserGmailConfigRepository(List.of(gmailConfig)));
         service.setSystemOAuthAppSettingsRepository(new InMemorySystemOAuthAppSettingsRepository(systemOAuth));
         service.setSystemAuthSecuritySettingRepository(new InMemorySystemAuthSecuritySettingRepository(authSecurity));
+        service.setSystemSecretReencryptionRequestRepository(new InMemorySystemSecretReencryptionRequestRepository());
+        service.setSecretManagementPolicyConfig(new dev.inboxbridge.config.SecretManagementPolicyConfig() {
+            @Override
+            public boolean allowEnvManagedMailboxSecrets() {
+                return true;
+            }
+
+            @Override
+            public java.time.Duration reencryptionCooldown() {
+                return cooldown;
+            }
+
+            @Override
+            public boolean allowImmediateReencryptOverride() {
+                return allowImmediateOverride;
+            }
+        });
         service.setExtensionSessionService(new StubExtensionSessionService(0));
         service.setRemoteSessionService(new StubRemoteSessionService(0));
         service.setOAuthCredentialService(new StubOAuthCredentialService(0));
@@ -362,6 +439,14 @@ class SecretManagementServiceTest {
             }
         });
         return service;
+    }
+
+    private AppUser adminUser() {
+        AppUser user = new AppUser();
+        user.id = 1L;
+        user.username = "admin";
+        user.role = AppUser.Role.ADMIN;
+        return user;
     }
 
     private String base64(String value) {
@@ -467,6 +552,20 @@ class SecretManagementServiceTest {
 
         @Override
         public void persist(SystemAuthSecuritySetting entity) {
+        }
+    }
+
+    private static final class InMemorySystemSecretReencryptionRequestRepository extends dev.inboxbridge.persistence.SystemSecretReencryptionRequestRepository {
+        private dev.inboxbridge.persistence.SystemSecretReencryptionRequest value;
+
+        @Override
+        public Optional<dev.inboxbridge.persistence.SystemSecretReencryptionRequest> findSingleton() {
+            return Optional.ofNullable(value);
+        }
+
+        @Override
+        public void persist(dev.inboxbridge.persistence.SystemSecretReencryptionRequest entity) {
+            value = entity;
         }
     }
 

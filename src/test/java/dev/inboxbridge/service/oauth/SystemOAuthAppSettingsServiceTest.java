@@ -28,7 +28,22 @@ class SystemOAuthAppSettingsServiceTest {
     void googleRefreshTokenIgnoresEnvFallbackWhenPolicyDisablesEnvManagedMailboxSecrets() {
         SystemOAuthAppSettingsService service = new SystemOAuthAppSettingsService();
         service.setConfig(new TestConfig());
-        service.setSecretManagementPolicyConfig(() -> false);
+        service.setSecretManagementPolicyConfig(new dev.inboxbridge.config.SecretManagementPolicyConfig() {
+            @Override
+            public boolean allowEnvManagedMailboxSecrets() {
+                return false;
+            }
+
+            @Override
+            public java.time.Duration reencryptionCooldown() {
+                return java.time.Duration.ofHours(12);
+            }
+
+            @Override
+            public boolean allowImmediateReencryptOverride() {
+                return false;
+            }
+        });
         service.setRepository(new EmptySystemOAuthAppSettingsRepository());
 
         assertEquals("", service.googleRefreshToken());

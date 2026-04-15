@@ -672,7 +672,7 @@ describe('useAuthSecurityController', () => {
       })
     })
 
-    let completed = false
+    let completed = null
     await act(async () => {
       completed = await result.current.handleReencryptStoredSecrets()
     })
@@ -687,7 +687,11 @@ describe('useAuthSecurityController', () => {
       })
     })
     expect(fetch).toHaveBeenNthCalledWith(2, '/api/admin/secret-management')
-    expect(completed).toBe(true)
+    expect(completed).toEqual(expect.objectContaining({
+      activeKeyVersion: 'LOCAL:v2',
+      totalRecordsUpdated: 4,
+      totalSecretValuesReencrypted: 9
+    }))
     expect(pushNotification).toHaveBeenCalledWith(expect.objectContaining({
       message: 'Re-encrypted 4 records / 9 secrets',
       targetId: 'secret-management-section',

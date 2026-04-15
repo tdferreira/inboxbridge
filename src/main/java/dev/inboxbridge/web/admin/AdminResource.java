@@ -122,7 +122,7 @@ public class AdminResource {
     @Path("/secret-management/re-encrypt")
     @Consumes(MediaType.APPLICATION_JSON)
     public SecretReencryptionResultView reencryptStoredSecrets(SecretReencryptionRequest request) {
-        return WebResourceSupport.badRequest(() -> secretManagementService.reencryptAllStoredSecrets(request));
+        return WebResourceSupport.badRequest(() -> secretManagementService.reencryptAllStoredSecrets(currentUserContext.user(), request));
     }
 
     @PUT

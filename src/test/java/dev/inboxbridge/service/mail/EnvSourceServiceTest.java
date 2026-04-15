@@ -82,7 +82,22 @@ class EnvSourceServiceTest {
                 Optional.of("INBOX"),
                 false,
                 Optional.of("Imported/Outlook")))));
-        service.setSecretManagementPolicyConfigForTest(() -> false);
+        service.setSecretManagementPolicyConfigForTest(new dev.inboxbridge.config.SecretManagementPolicyConfig() {
+            @Override
+            public boolean allowEnvManagedMailboxSecrets() {
+                return false;
+            }
+
+            @Override
+            public java.time.Duration reencryptionCooldown() {
+                return java.time.Duration.ofHours(12);
+            }
+
+            @Override
+            public boolean allowImmediateReencryptOverride() {
+                return false;
+            }
+        });
 
         assertTrue(service.configuredSources().isEmpty());
         assertEquals(1L, service.configuredSourceCountIgnoringPolicy());

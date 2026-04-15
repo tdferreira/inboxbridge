@@ -35,12 +35,15 @@ function SecretManagementSection({
   t
 }) {
   const [showReencryptDialog, setShowReencryptDialog] = useState(false)
+  const [reencryptionResult, setReencryptionResult] = useState(null)
   const keyUsage = Array.isArray(secretManagementStatus?.keyUsage) ? secretManagementStatus.keyUsage : []
+  const reencryptionRequest = secretManagementStatus?.reencryptionRequest
+  const pendingReencryption = reencryptionRequest?.status === 'PENDING'
 
   async function handleConfirmReencrypt() {
-    const completed = await onReencryptStoredSecrets?.()
-    if (completed) {
-      setShowReencryptDialog(false)
+    const result = await onReencryptStoredSecrets?.()
+    if (result) {
+      setReencryptionResult(result)
     }
   }
 
@@ -109,12 +112,25 @@ function SecretManagementSection({
               <Banner tone="warning">
                 <strong>{t('authSecurity.secretManagementReencryptWarning')}</strong>
               </Banner>
+              {reencryptionRequest ? (
+                <Banner tone={pendingReencryption ? 'info' : reencryptionRequest?.verificationPassed ? 'success' : 'warning'}>
+                  <div className="detail-stack">
+                    <strong>{t('authSecurity.secretManagementReencryptLatestRequestTitle')}</strong>
+                    <span>{t('authSecurity.secretManagementReencryptLatestRequestStatus', { status: reencryptionRequest.status })}</span>
+                    {reencryptionRequest.executeAfter ? <span>{t('authSecurity.secretManagementReencryptLatestRequestExecuteAfter', { value: reencryptionRequest.executeAfter })}</span> : null}
+                    {reencryptionRequest.message ? <span>{reencryptionRequest.message}</span> : null}
+                  </div>
+                </Banner>
+              ) : null}
               <p className="section-copy">{t('authSecurity.secretManagementReencryptActionCopy')}</p>
             </div>
             <LoadingButton
               className="secondary"
               disabled={!secretManagementStatus?.secureStorageConfigured}
-              onClick={() => setShowReencryptDialog(true)}
+              onClick={() => {
+                setReencryptionResult(null)
+                setShowReencryptDialog(true)
+              }}
               type="button"
             >
               {reencryptionLoading ? t('authSecurity.secretManagementReencryptLoading') : t('authSecurity.secretManagementReencrypt')}
@@ -128,12 +144,14 @@ function SecretManagementSection({
           locale={locale}
           onClose={() => {
             if (!reencryptionLoading) {
+              setReencryptionResult(null)
               setShowReencryptDialog(false)
             }
           }}
           onConfirm={handleConfirmReencrypt}
           onOptionsChange={onSecretReencryptOptionsChange}
           pending={reencryptionLoading}
+          reencryptionResult={reencryptionResult}
           secretManagementStatus={secretManagementStatus}
           secretReencryptOptions={secretReencryptOptions}
           t={t}

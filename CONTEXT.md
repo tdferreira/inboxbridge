@@ -489,6 +489,16 @@ readiness, env-managed mailbox-secret policy state, and per-key usage summary.
 explicit prerequisites, risk copy, operator acknowledgements, and optional
 follow-up cleanup toggles before the action can run, so local-key rotation can
 be completed without leaving the UI while making the consequences much clearer.
+That re-encryption flow is no longer purely immediate: the backend can now
+enforce a deployment-level cooldown through
+`SECURITY_SECRET_REENCRYPTION_COOLDOWN` (default `PT12H`), so an admin request
+is first queued and only executes after the waiting window expires. The dialog
+shows backend-verified blocking requirements, warns when another request is
+already pending, and only exposes an immediate-execution bypass when the server
+explicitly enables the testing-only
+`SECURITY_SECRET_REENCRYPTION_ALLOW_IMMEDIATE_OVERRIDE=true` flag. After the
+run completes, the modal now keeps the operator-facing verification summary and
+the list of recovery details to save before any legacy keys are removed.
 That re-encryption flow still supports optional cleanup of derived trust
 material in the same admin action: browser-extension sessions can be revoked
 deployment-wide, `/remote` sessions can be invalidated, and cached OAuth

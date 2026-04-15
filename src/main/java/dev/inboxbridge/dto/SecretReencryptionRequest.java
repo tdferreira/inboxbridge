@@ -5,6 +5,7 @@ package dev.inboxbridge.dto;
  * re-encrypted under the active provider or key version.
  */
 public record SecretReencryptionRequest(
+        boolean immediateExecutionOverride,
         boolean revokeBrowserExtensionSessions,
         boolean revokeRemoteSessions,
         boolean clearCachedOAuthAccessTokens) {

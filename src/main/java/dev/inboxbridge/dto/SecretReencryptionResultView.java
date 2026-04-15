@@ -1,5 +1,6 @@
 package dev.inboxbridge.dto;
 
+import java.time.Instant;
 import java.util.List;
 
 /**
@@ -7,9 +8,13 @@ import java.util.List;
  * currently active key.
  */
 public record SecretReencryptionResultView(
+        String operationStatus,
+        String message,
+        Instant executeAfter,
         String activeKeyVersion,
         int totalRecordsUpdated,
         int totalSecretValuesReencrypted,
         List<SecretReencryptionAreaResultView> areas,
-        SecretReencryptionFollowUpView followUp) {
+        SecretReencryptionFollowUpView followUp,
+        SecretReencryptionVerificationView verification) {
 }

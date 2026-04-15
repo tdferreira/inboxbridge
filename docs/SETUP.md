@@ -51,6 +51,21 @@ When you later rotate the local encryption key, move the previous key into
 `keyId:base64Key` entry list so existing encrypted records remain readable
 until they are rewritten under the new active key.
 
+InboxBridge now also supports a safety cooldown for the admin-side
+`Re-encrypt stored secrets` workflow:
+
+- `SECURITY_SECRET_REENCRYPTION_COOLDOWN` defines how long a queued
+  re-encryption request waits before execution
+- the default is `PT12H`
+- `PT0S` disables the cooldown and makes the action run immediately
+- `SECURITY_SECRET_REENCRYPTION_ALLOW_IMMEDIATE_OVERRIDE=true` exposes a
+  testing-only checkbox in the admin dialog that bypasses the cooldown for the
+  current request
+
+Leave the immediate override disabled in normal deployments. It exists so
+manual testing and local validation do not require waiting through the full
+cooldown window.
+
 `SECRET_PROVIDER_MODE` now makes the secret-custody path explicit. `LOCAL`
 keeps the existing AES-GCM local-key flow, `OPENBAO_TRANSIT` and
 `VAULT_TRANSIT` use a Vault-compatible transit provider for new encrypted
@@ -89,6 +104,24 @@ frontend, backend, and PostgreSQL certs automatically.
 For passkeys/WebAuthn, prefer one canonical hostname everywhere instead of mixing unrelated hostnames such as `raspberrypi.local` and `something.ts.net`. One `SECURITY_PASSKEY_RP_ID` cannot span unrelated domains.
 
 After the stack creates or refreshes the generated certs, trust `certs/ca.crt` on every browser/device that will open InboxBridge. Otherwise the browser will still treat the site as having a TLS error even if the hostname is present in the SAN list.
+
+## Secret Rotation Safety
+
+Secret rotation is now intentionally high-friction:
+
+1. Configure the new active key or secret provider.
+2. Keep all legacy decrypting keys available.
+3. Open `Administration -> Secret management`.
+4. Start `Re-encrypt stored secrets`.
+5. Review the backend-verified prerequisites shown in the dialog.
+6. If the cooldown is enabled, wait until the scheduled execution time.
+7. After completion, save the verification details shown in the dialog before
+   retiring any legacy keys.
+
+The dialog now validates actual backend readiness, not just operator
+acknowledgements. It also returns post-run verification messages and a list of
+items the operator should save in recovery notes, such as the active key id
+and any still-required legacy keys.
 
 Important host/access notes:
 

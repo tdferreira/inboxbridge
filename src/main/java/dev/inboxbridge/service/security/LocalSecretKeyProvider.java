@@ -122,12 +122,18 @@ public class LocalSecretKeyProvider implements SecretKeyProvider {
         if (tokenEncryptionKey != null) {
             return tokenEncryptionKey;
         }
+        if (securityTokenConfig == null) {
+            return null;
+        }
         return securityTokenConfig.tokenEncryptionKey();
     }
 
     private String configuredTokenEncryptionKeyId() {
         if (tokenEncryptionKeyId != null) {
             return tokenEncryptionKeyId;
+        }
+        if (securityTokenConfig == null) {
+            return "v1";
         }
         return securityTokenConfig.tokenEncryptionKeyId();
     }

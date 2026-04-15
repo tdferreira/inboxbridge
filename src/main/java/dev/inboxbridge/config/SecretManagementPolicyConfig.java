@@ -1,5 +1,7 @@
 package dev.inboxbridge.config;
 
+import java.time.Duration;
+
 import io.smallrye.config.ConfigMapping;
 import io.smallrye.config.WithDefault;
 
@@ -8,4 +10,10 @@ public interface SecretManagementPolicyConfig {
 
     @WithDefault("true")
     boolean allowEnvManagedMailboxSecrets();
+
+    @WithDefault("PT12H")
+    Duration reencryptionCooldown();
+
+    @WithDefault("false")
+    boolean allowImmediateReencryptOverride();
 }

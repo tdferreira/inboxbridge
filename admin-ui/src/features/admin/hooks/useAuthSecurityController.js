@@ -28,9 +28,15 @@ const DEFAULT_SECRET_MANAGEMENT_STATUS = {
   configuredEnvManagedSourceCount: 0,
   envManagedGoogleRefreshTokenConfigured: false,
   safeToRetireLegacyKeys: true,
-  keyUsage: []
+  keyUsage: [],
+  reencryptionReady: false,
+  reencryptionRequirements: [],
+  reencryptionRequest: null,
+  reencryptionCooldown: 'PT12H',
+  immediateReencryptionOverrideAllowed: false
 }
 const DEFAULT_SECRET_REENCRYPT_OPTIONS = {
+  immediateExecutionOverride: false,
   revokeBrowserExtensionSessions: false,
   revokeRemoteSessions: false,
   clearCachedOAuthAccessTokens: false
@@ -611,7 +617,8 @@ export function useAuthSecurityController({
         ...DEFAULT_SECRET_MANAGEMENT_STATUS,
         ...(payload || {}),
         configuredLegacyKeyIds: Array.isArray(payload?.configuredLegacyKeyIds) ? payload.configuredLegacyKeyIds : [],
-        keyUsage: Array.isArray(payload?.keyUsage) ? payload.keyUsage : []
+        keyUsage: Array.isArray(payload?.keyUsage) ? payload.keyUsage : [],
+        reencryptionRequirements: Array.isArray(payload?.reencryptionRequirements) ? payload.reencryptionRequirements : []
       })
     } catch (err) {
       if (suppressErrors) {
@@ -628,7 +635,7 @@ export function useAuthSecurityController({
   }
 
   async function handleReencryptStoredSecrets() {
-    let completed = false
+    let result = null
     await withPending('secretManagementReencrypt', async () => {
       try {
         const response = await fetch('/api/admin/secret-management/re-encrypt', {
@@ -642,26 +649,38 @@ export function useAuthSecurityController({
         const payload = await response.json()
         await loadSecretManagementStatus({ suppressErrors: true })
         const followUp = payload?.followUp || {}
+        const verification = payload?.verification || {}
+        const saveItems = Array.isArray(verification?.operatorSaveItems) ? verification.operatorSaveItems : []
+        const verificationMessages = Array.isArray(verification?.messages) ? verification.messages : []
         const hasFollowUpCleanup = (followUp.browserExtensionSessionsRevoked ?? 0) > 0
           || (followUp.remoteSessionsRevoked ?? 0) > 0
           || (followUp.cachedOAuthAccessTokensCleared ?? 0) > 0
         pushNotification({
-          message: hasFollowUpCleanup
-            ? t('notifications.secretManagementReencryptedWithFollowUp', {
-                records: payload?.totalRecordsUpdated ?? 0,
-                secrets: payload?.totalSecretValuesReencrypted ?? 0,
-                extensionSessions: followUp.browserExtensionSessionsRevoked ?? 0,
-                remoteSessions: followUp.remoteSessionsRevoked ?? 0,
-                accessTokens: followUp.cachedOAuthAccessTokensCleared ?? 0
+          copyText: [...verificationMessages, ...saveItems].join('\n'),
+          message: payload?.operationStatus === 'SCHEDULED'
+            ? t('notifications.secretManagementReencryptionScheduled', {
+                executeAfter: payload?.executeAfter || ''
               })
-            : t('notifications.secretManagementReencrypted', {
-                records: payload?.totalRecordsUpdated ?? 0,
-                secrets: payload?.totalSecretValuesReencrypted ?? 0
-              }),
+            : hasFollowUpCleanup
+              ? t('notifications.secretManagementReencryptedWithFollowUp', {
+                  records: payload?.totalRecordsUpdated ?? 0,
+                  secrets: payload?.totalSecretValuesReencrypted ?? 0,
+                  extensionSessions: followUp.browserExtensionSessionsRevoked ?? 0,
+                  remoteSessions: followUp.remoteSessionsRevoked ?? 0,
+                  accessTokens: followUp.cachedOAuthAccessTokensCleared ?? 0
+                })
+              : t('notifications.secretManagementReencrypted', {
+                  records: payload?.totalRecordsUpdated ?? 0,
+                  secrets: payload?.totalSecretValuesReencrypted ?? 0
+                }),
           targetId: 'secret-management-section',
-          tone: 'success'
+          tone: payload?.operationStatus === 'SCHEDULED'
+            ? 'info'
+            : verification?.passed === false
+              ? 'warning'
+              : 'success'
         })
-        completed = true
+        result = payload
       } catch (err) {
         pushNotification({
           autoCloseMs: null,
@@ -672,7 +691,7 @@ export function useAuthSecurityController({
         })
       }
     })
-    return completed
+    return result
   }
 
   async function handleRevokeExtensionSession(extensionSession) {

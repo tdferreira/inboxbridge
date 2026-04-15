@@ -1,5 +1,6 @@
 package dev.inboxbridge.service.security;
 
+import java.time.Duration;
 import java.time.Instant;
 import java.util.ArrayList;
 import java.util.Comparator;
@@ -8,18 +9,25 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 
+import dev.inboxbridge.config.SecretManagementPolicyConfig;
 import dev.inboxbridge.dto.SecretManagementKeyUsageView;
 import dev.inboxbridge.dto.SecretReencryptionFollowUpView;
 import dev.inboxbridge.dto.SecretReencryptionRequest;
 import dev.inboxbridge.dto.SecretReencryptionAreaResultView;
+import dev.inboxbridge.dto.SecretReencryptionRequirementView;
 import dev.inboxbridge.dto.SecretReencryptionResultView;
+import dev.inboxbridge.dto.SecretReencryptionRequestStatusView;
+import dev.inboxbridge.dto.SecretReencryptionVerificationView;
 import dev.inboxbridge.dto.SecretManagementStatusView;
+import dev.inboxbridge.persistence.AppUser;
 import dev.inboxbridge.persistence.OAuthCredential;
 import dev.inboxbridge.persistence.OAuthCredentialRepository;
 import dev.inboxbridge.persistence.SystemAuthSecuritySetting;
 import dev.inboxbridge.persistence.SystemAuthSecuritySettingRepository;
 import dev.inboxbridge.persistence.SystemOAuthAppSettings;
 import dev.inboxbridge.persistence.SystemOAuthAppSettingsRepository;
+import dev.inboxbridge.persistence.SystemSecretReencryptionRequest;
+import dev.inboxbridge.persistence.SystemSecretReencryptionRequestRepository;
 import dev.inboxbridge.persistence.UserEmailAccount;
 import dev.inboxbridge.persistence.UserEmailAccountRepository;
 import dev.inboxbridge.persistence.UserGmailConfig;
@@ -34,6 +42,7 @@ import dev.inboxbridge.service.remote.RemoteSessionService;
 import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.inject.Inject;
 import jakarta.transaction.Transactional;
+import io.quarkus.scheduler.Scheduled;
 
 /**
  * Reports the active secret-management mode together with the stored key
@@ -82,9 +91,22 @@ public class SecretManagementService {
     @Inject
     SystemOAuthAppSettingsService systemOAuthAppSettingsService;
 
+    @Inject
+    SecretManagementPolicyConfig secretManagementPolicyConfig;
+
+    @Inject
+    SystemSecretReencryptionRequestRepository systemSecretReencryptionRequestRepository;
+
     public SecretManagementStatusView status() {
         SecretProviderHealth providerHealth = providerResolver().health();
+        SystemSecretReencryptionRequest requestState = currentReencryptionRequest();
         if (!providerHealth.writable()) {
+            List<SecretReencryptionRequirementView> requirements = buildRequirements(
+                    false,
+                    providerHealth,
+                    null,
+                    0,
+                    requestState);
             return new SecretManagementStatusView(
                     false,
                     providerHealth.mode().name(),
@@ -103,7 +125,12 @@ public class SecretManagementService {
                     configuredEnvManagedSourceCount(),
                     envManagedGoogleRefreshTokenConfigured(),
                     false,
-                    List.of());
+                    List.of(),
+                    false,
+                    requirements,
+                    toRequestStatusView(requestState),
+                    reencryptionCooldown().toString(),
+                    allowImmediateReencryptOverride());
         }
 
         String activeKeyVersion = providerResolver().activeKeyVersion();
@@ -138,6 +165,15 @@ public class SecretManagementService {
                 .mapToLong(SecretManagementKeyUsageView::recordCount)
                 .sum();
         long nonActiveKeyRecordCount = protectedRecordCount - activeKeyRecordCount;
+        List<SecretReencryptionRequirementView> requirements = buildRequirements(
+                true,
+                providerHealth,
+                activeKeyVersion,
+                unavailableKeyRecordCount,
+                requestState);
+        boolean reencryptionReady = requirements.stream()
+                .filter(SecretReencryptionRequirementView::blocking)
+                .allMatch(SecretReencryptionRequirementView::satisfied);
 
         return new SecretManagementStatusView(
                 true,
@@ -157,37 +193,72 @@ public class SecretManagementService {
                 configuredEnvManagedSourceCount(),
                 envManagedGoogleRefreshTokenConfigured(),
                 nonActiveKeyRecordCount == 0 && unavailableKeyRecordCount == 0,
-                keyUsage);
+                keyUsage,
+                reencryptionReady,
+                requirements,
+                toRequestStatusView(requestState),
+                reencryptionCooldown().toString(),
+                allowImmediateReencryptOverride());
     }
 
     @Transactional
     public SecretReencryptionResultView reencryptAllStoredSecrets() {
-        return reencryptAllStoredSecrets(new SecretReencryptionRequest(false, false, false));
+        return reencryptAllStoredSecrets(null, new SecretReencryptionRequest(false, false, false, false));
     }
 
     @Transactional
     public SecretReencryptionResultView reencryptAllStoredSecrets(SecretReencryptionRequest request) {
-        if (!providerResolver().isWritable()) {
-            throw new IllegalStateException(providerResolver().health().statusMessage());
+        return reencryptAllStoredSecrets(null, request);
+    }
+
+    @Transactional
+    public SecretReencryptionResultView reencryptAllStoredSecrets(AppUser actor, SecretReencryptionRequest request) {
+        SecretReencryptionRequest effectiveRequest = effectiveRequest(request);
+        ensureNoPendingRequest();
+        validateReencryptionReadiness();
+        if (effectiveRequest.immediateExecutionOverride() && !allowImmediateReencryptOverride()) {
+            throw new IllegalStateException(
+                    "Immediate secret re-encryption override is disabled by server policy. Wait for the configured cooldown window or enable the testing override on the server first.");
         }
+        Duration cooldown = reencryptionCooldown();
+        Instant now = Instant.now();
+        if (!effectiveRequest.immediateExecutionOverride() && !cooldown.isZero() && !cooldown.isNegative()) {
+            Instant executeAfter = now.plus(cooldown);
+            SystemSecretReencryptionRequest requestState = upsertRequestState(actor, effectiveRequest, now, executeAfter);
+            requestState.status = RequestStatus.PENDING.name();
+            requestState.lastErrorMessage = null;
+            requestState.lastResultMessage = "Secret re-encryption is queued and will execute after the cooldown window.";
+            requestState.lastVerificationPassed = null;
+            persistRequestState(requestState);
+            return new SecretReencryptionResultView(
+                    RequestStatus.SCHEDULED.name(),
+                    "Secret re-encryption was scheduled after the configured cooldown window.",
+                    executeAfter,
+                    providerResolver().activeKeyVersion(),
+                    0,
+                    0,
+                    List.of(),
+                    new SecretReencryptionFollowUpView(0, 0, 0),
+                    buildVerification(status()));
+        }
+        return executeReencryption(actor, effectiveRequest, now, true);
+    }
 
-        List<SecretReencryptionAreaResultView> areas = new ArrayList<>();
-        areas.add(reencryptOAuthCredentials());
-        areas.add(reencryptSourceMailboxes());
-        areas.add(reencryptDestinationMailboxes());
-        areas.add(reencryptUserGmailConfig());
-        areas.add(reencryptSystemOAuthSettings());
-        areas.add(reencryptAuthSecuritySettings());
+    @Scheduled(every = "1m")
+    @Transactional
+    void executeDueReencryptionRequests() {
+        executeDueReencryptionRequestsAt(Instant.now());
+    }
 
-        int totalRecordsUpdated = areas.stream().mapToInt(SecretReencryptionAreaResultView::recordsUpdated).sum();
-        int totalSecretValuesReencrypted = areas.stream().mapToInt(SecretReencryptionAreaResultView::secretValuesReencrypted).sum();
-        SecretReencryptionFollowUpView followUp = runFollowUpActions(request);
-        return new SecretReencryptionResultView(
-                secretEncryptionService.keyVersion(),
-                totalRecordsUpdated,
-                totalSecretValuesReencrypted,
-                areas,
-                followUp);
+    void executeDueReencryptionRequestsAt(Instant now) {
+        SystemSecretReencryptionRequest requestState = currentReencryptionRequest();
+        if (requestState == null || !RequestStatus.PENDING.name().equals(requestState.status) || requestState.executeAfter == null) {
+            return;
+        }
+        if (requestState.executeAfter.isAfter(now)) {
+            return;
+        }
+        executeReencryption(null, toRequest(requestState), now, false);
     }
 
     public void setLocalSecretKeyProvider(LocalSecretKeyProvider localSecretKeyProvider) {
@@ -244,6 +315,14 @@ public class SecretManagementService {
 
     public void setSystemOAuthAppSettingsService(SystemOAuthAppSettingsService systemOAuthAppSettingsService) {
         this.systemOAuthAppSettingsService = systemOAuthAppSettingsService;
+    }
+
+    public void setSecretManagementPolicyConfig(SecretManagementPolicyConfig secretManagementPolicyConfig) {
+        this.secretManagementPolicyConfig = secretManagementPolicyConfig;
+    }
+
+    public void setSystemSecretReencryptionRequestRepository(SystemSecretReencryptionRequestRepository systemSecretReencryptionRequestRepository) {
+        this.systemSecretReencryptionRequestRepository = systemSecretReencryptionRequestRepository;
     }
 
     private void collectUsage(Map<String, UsageAccumulator> usage) {
@@ -564,7 +643,7 @@ public class SecretManagementService {
 
     private SecretReencryptionFollowUpView runFollowUpActions(SecretReencryptionRequest request) {
         SecretReencryptionRequest effectiveRequest = request == null
-                ? new SecretReencryptionRequest(false, false, false)
+                ? new SecretReencryptionRequest(false, false, false, false)
                 : request;
         int browserExtensionSessionsRevoked = effectiveRequest.revokeBrowserExtensionSessions() ? extensionSessionService.revokeAllSessionsForAllUsers() : 0;
         int remoteSessionsRevoked = effectiveRequest.revokeRemoteSessions() ? remoteSessionService.invalidateAllSessions() : 0;
@@ -573,6 +652,232 @@ public class SecretManagementService {
                 browserExtensionSessionsRevoked,
                 remoteSessionsRevoked,
                 cachedOAuthAccessTokensCleared);
+    }
+
+    private SecretReencryptionResultView executeReencryption(
+            AppUser actor,
+            SecretReencryptionRequest request,
+            Instant now,
+            boolean immediate) {
+        validateReencryptionReadiness();
+        SystemSecretReencryptionRequest requestState = upsertRequestState(actor, request, now, immediate ? now : currentReencryptionRequest() == null ? now : currentReencryptionRequest().executeAfter);
+        requestState.status = RequestStatus.RUNNING.name();
+        requestState.lastStartedAt = now;
+        requestState.lastFailedAt = null;
+        requestState.lastErrorMessage = null;
+        persistRequestState(requestState);
+        try {
+            List<SecretReencryptionAreaResultView> areas = new ArrayList<>();
+            areas.add(reencryptOAuthCredentials());
+            areas.add(reencryptSourceMailboxes());
+            areas.add(reencryptDestinationMailboxes());
+            areas.add(reencryptUserGmailConfig());
+            areas.add(reencryptSystemOAuthSettings());
+            areas.add(reencryptAuthSecuritySettings());
+
+            int totalRecordsUpdated = areas.stream().mapToInt(SecretReencryptionAreaResultView::recordsUpdated).sum();
+            int totalSecretValuesReencrypted = areas.stream().mapToInt(SecretReencryptionAreaResultView::secretValuesReencrypted).sum();
+            SecretReencryptionFollowUpView followUp = runFollowUpActions(request);
+            SecretReencryptionVerificationView verification = buildVerification(status());
+            requestState.status = RequestStatus.COMPLETED.name();
+            requestState.lastCompletedAt = Instant.now();
+            requestState.lastResultMessage = verification.passed()
+                    ? "Secret re-encryption completed and post-run verification passed."
+                    : "Secret re-encryption completed but post-run verification still requires operator attention.";
+            requestState.lastVerificationPassed = verification.passed();
+            requestState.executeAfter = immediate ? now : requestState.executeAfter;
+            persistRequestState(requestState);
+            return new SecretReencryptionResultView(
+                    RequestStatus.COMPLETED.name(),
+                    requestState.lastResultMessage,
+                    immediate ? now : requestState.executeAfter,
+                    secretEncryptionService.keyVersion(),
+                    totalRecordsUpdated,
+                    totalSecretValuesReencrypted,
+                    areas,
+                    followUp,
+                    verification);
+        } catch (RuntimeException error) {
+            requestState.status = RequestStatus.FAILED.name();
+            requestState.lastFailedAt = Instant.now();
+            requestState.lastErrorMessage = error.getMessage();
+            requestState.lastResultMessage = "Secret re-encryption did not complete successfully.";
+            requestState.lastVerificationPassed = Boolean.FALSE;
+            persistRequestState(requestState);
+            throw error;
+        }
+    }
+
+    private List<SecretReencryptionRequirementView> buildRequirements(
+            boolean secureStorageConfigured,
+            SecretProviderHealth providerHealth,
+            String activeKeyVersion,
+            long unavailableKeyRecordCount,
+            SystemSecretReencryptionRequest requestState) {
+        List<SecretReencryptionRequirementView> requirements = new ArrayList<>();
+        requirements.add(new SecretReencryptionRequirementView(
+                "secure-storage",
+                "Secure secret storage is configured",
+                secureStorageConfigured
+                        ? "InboxBridge can currently read and write encrypted stored secrets."
+                        : "InboxBridge cannot safely rewrite stored secrets until encrypted secret storage is configured.",
+                secureStorageConfigured,
+                true));
+        requirements.add(new SecretReencryptionRequirementView(
+                "provider-health",
+                "Active secret provider is healthy and writable",
+                providerHealth.writable()
+                        ? providerHealth.statusMessage()
+                        : "InboxBridge must be able to write with the active key path before re-encryption can start.",
+                providerHealth.writable(),
+                true));
+        requirements.add(new SecretReencryptionRequirementView(
+                "active-key",
+                "An active key version is available",
+                activeKeyVersion != null && !activeKeyVersion.isBlank()
+                        ? "InboxBridge will target " + activeKeyVersion + "."
+                        : "No active key version could be resolved for this deployment.",
+                activeKeyVersion != null && !activeKeyVersion.isBlank(),
+                true));
+        requirements.add(new SecretReencryptionRequirementView(
+                "legacy-key-availability",
+                "Every stored secret is currently decryptable",
+                unavailableKeyRecordCount == 0
+                        ? "No stored records reference unavailable key material."
+                        : "Some stored records already reference unavailable key material. Restore those keys before re-encrypting.",
+                unavailableKeyRecordCount == 0,
+                true));
+        requirements.add(new SecretReencryptionRequirementView(
+                "no-pending-request",
+                "No other re-encryption request is pending",
+                requestState != null && RequestStatus.PENDING.name().equals(requestState.status)
+                        ? "A re-encryption request is already queued for execution after the cooldown window."
+                        : "No queued re-encryption request is currently blocking this action.",
+                requestState == null || !RequestStatus.PENDING.name().equals(requestState.status),
+                false));
+        return requirements;
+    }
+
+    private void validateReencryptionReadiness() {
+        SecretManagementStatusView currentStatus = status();
+        currentStatus.reencryptionRequirements().stream()
+                .filter(SecretReencryptionRequirementView::blocking)
+                .filter(requirement -> !requirement.satisfied())
+                .findFirst()
+                .ifPresent(requirement -> {
+                    throw new IllegalStateException(requirement.detail());
+                });
+    }
+
+    private SecretReencryptionVerificationView buildVerification(SecretManagementStatusView currentStatus) {
+        List<String> messages = new ArrayList<>();
+        messages.add(currentStatus.providerWritable()
+                ? "The active provider remained writable after the re-encryption run."
+                : "The active provider is not currently writable after the re-encryption run.");
+        messages.add(currentStatus.nonActiveKeyRecordCount() == 0
+                ? "No stored records remain on non-active key versions."
+                : currentStatus.nonActiveKeyRecordCount() + " stored records still remain on older key versions.");
+        messages.add(currentStatus.unavailableKeyRecordCount() == 0
+                ? "No stored records reference unavailable key material."
+                : currentStatus.unavailableKeyRecordCount() + " stored records still reference unavailable key material.");
+        List<String> operatorSaveItems = new ArrayList<>();
+        if (currentStatus.activeKeyVersion() != null && !currentStatus.activeKeyVersion().isBlank()) {
+            operatorSaveItems.add("Save the active secret-management target now in use: " + currentStatus.activeKeyVersion() + ".");
+        }
+        operatorSaveItems.add("Keep the previous key material and provider credentials in a safe place until you finish manual mailbox and OAuth validation.");
+        operatorSaveItems.add("Update your operator runbook with the current secret-provider mode (" + currentStatus.mode() + ") and the exact recovery steps for this deployment.");
+        boolean passed = currentStatus.providerWritable()
+                && currentStatus.nonActiveKeyRecordCount() == 0
+                && currentStatus.unavailableKeyRecordCount() == 0;
+        return new SecretReencryptionVerificationView(passed, messages, operatorSaveItems);
+    }
+
+    private SecretReencryptionRequest effectiveRequest(SecretReencryptionRequest request) {
+        return request == null
+                ? new SecretReencryptionRequest(false, false, false, false)
+                : request;
+    }
+
+    private SecretReencryptionRequest toRequest(SystemSecretReencryptionRequest requestState) {
+        return new SecretReencryptionRequest(
+                requestState.immediateExecutionOverride,
+                requestState.revokeBrowserExtensionSessions,
+                requestState.revokeRemoteSessions,
+                requestState.clearCachedOAuthAccessTokens);
+    }
+
+    private void ensureNoPendingRequest() {
+        SystemSecretReencryptionRequest requestState = currentReencryptionRequest();
+        if (requestState != null && RequestStatus.PENDING.name().equals(requestState.status)) {
+            throw new IllegalStateException("A secret re-encryption request is already pending. Wait for it to execute or clear the condition before scheduling another one.");
+        }
+    }
+
+    private SystemSecretReencryptionRequest upsertRequestState(
+            AppUser actor,
+            SecretReencryptionRequest request,
+            Instant requestedAt,
+            Instant executeAfter) {
+        SystemSecretReencryptionRequest requestState = currentReencryptionRequest();
+        if (requestState == null) {
+            requestState = new SystemSecretReencryptionRequest();
+            requestState.id = SystemSecretReencryptionRequest.SINGLETON_ID;
+        }
+        requestState.requestedAt = requestedAt;
+        requestState.requestedByUserId = actor == null ? requestState.requestedByUserId : actor.id;
+        requestState.executeAfter = executeAfter;
+        requestState.immediateExecutionOverride = request.immediateExecutionOverride();
+        requestState.revokeBrowserExtensionSessions = request.revokeBrowserExtensionSessions();
+        requestState.revokeRemoteSessions = request.revokeRemoteSessions();
+        requestState.clearCachedOAuthAccessTokens = request.clearCachedOAuthAccessTokens();
+        return requestState;
+    }
+
+    private SystemSecretReencryptionRequest currentReencryptionRequest() {
+        return systemSecretReencryptionRequestRepository == null
+                ? null
+                : systemSecretReencryptionRequestRepository.findSingleton().orElse(null);
+    }
+
+    private void persistRequestState(SystemSecretReencryptionRequest requestState) {
+        if (systemSecretReencryptionRequestRepository != null) {
+            systemSecretReencryptionRequestRepository.persist(requestState);
+        }
+    }
+
+    private SecretReencryptionRequestStatusView toRequestStatusView(SystemSecretReencryptionRequest requestState) {
+        if (requestState == null || requestState.status == null || requestState.status.isBlank()) {
+            return null;
+        }
+        return new SecretReencryptionRequestStatusView(
+                requestState.status,
+                requestState.requestedAt,
+                requestState.requestedByUserId,
+                requestState.executeAfter,
+                requestState.lastStartedAt,
+                requestState.lastCompletedAt,
+                requestState.lastFailedAt,
+                requestState.immediateExecutionOverride,
+                requestState.lastErrorMessage != null && !requestState.lastErrorMessage.isBlank()
+                        ? requestState.lastErrorMessage
+                        : requestState.lastResultMessage,
+                Boolean.TRUE.equals(requestState.lastVerificationPassed));
+    }
+
+    private Duration reencryptionCooldown() {
+        return secretManagementPolicyConfig == null ? Duration.ofHours(12) : secretManagementPolicyConfig.reencryptionCooldown();
+    }
+
+    private boolean allowImmediateReencryptOverride() {
+        return secretManagementPolicyConfig != null && secretManagementPolicyConfig.allowImmediateReencryptOverride();
+    }
+
+    private enum RequestStatus {
+        PENDING,
+        SCHEDULED,
+        RUNNING,
+        COMPLETED,
+        FAILED
     }
 
     private static final class UsageAccumulator {

@@ -176,9 +176,10 @@ class AdminResourceTest {
     @Test
     void reencryptStoredSecretsReturnsOperationResult() {
         AdminResource resource = new AdminResource();
+        resource.currentUserContext = currentUserContext();
         resource.secretManagementService = new FakeSecretManagementService();
 
-        SecretReencryptionResultView response = resource.reencryptStoredSecrets(new SecretReencryptionRequest(true, true, true));
+        SecretReencryptionResultView response = resource.reencryptStoredSecrets(new SecretReencryptionRequest(false, true, true, true));
 
         assertEquals("LOCAL:v2", response.activeKeyVersion());
         assertEquals(2, response.totalRecordsUpdated());
@@ -188,6 +189,7 @@ class AdminResourceTest {
     @Test
     void reencryptStoredSecretsSurfacesValidationErrors() {
         AdminResource resource = new AdminResource();
+        resource.currentUserContext = currentUserContext();
         resource.secretManagementService = new ErrorSecretManagementService();
 
         BadRequestException error = assertThrows(BadRequestException.class, () -> resource.reencryptStoredSecrets(null));
@@ -299,12 +301,20 @@ class AdminResourceTest {
                     1,
                     true,
                     false,
-                    java.util.List.of());
+                    java.util.List.of(),
+                    true,
+                    java.util.List.of(),
+                    null,
+                    "PT12H",
+                    false);
         }
 
         @Override
-        public SecretReencryptionResultView reencryptAllStoredSecrets(SecretReencryptionRequest request) {
+        public SecretReencryptionResultView reencryptAllStoredSecrets(dev.inboxbridge.persistence.AppUser actor, SecretReencryptionRequest request) {
             return new SecretReencryptionResultView(
+                    "COMPLETED",
+                    "Secret re-encryption completed and post-run verification passed.",
+                    java.time.Instant.parse("2026-04-15T00:00:00Z"),
                     "LOCAL:v2",
                     2,
                     3,
@@ -312,13 +322,17 @@ class AdminResourceTest {
                     new dev.inboxbridge.dto.SecretReencryptionFollowUpView(
                             request != null && request.revokeBrowserExtensionSessions() ? 4 : 0,
                             request != null && request.revokeRemoteSessions() ? 3 : 0,
-                            request != null && request.clearCachedOAuthAccessTokens() ? 2 : 0));
+                            request != null && request.clearCachedOAuthAccessTokens() ? 2 : 0),
+                    new dev.inboxbridge.dto.SecretReencryptionVerificationView(
+                            true,
+                            java.util.List.of("No stored records remain on non-active key versions."),
+                            java.util.List.of("Save the active secret-management target now in use: LOCAL:v2.")));
         }
     }
 
     private static final class ErrorSecretManagementService extends SecretManagementService {
         @Override
-        public SecretReencryptionResultView reencryptAllStoredSecrets(SecretReencryptionRequest request) {
+        public SecretReencryptionResultView reencryptAllStoredSecrets(dev.inboxbridge.persistence.AppUser actor, SecretReencryptionRequest request) {
             throw new IllegalStateException("Secure token storage is not configured. Set SECURITY_TOKEN_ENCRYPTION_KEY.");
         }
     }

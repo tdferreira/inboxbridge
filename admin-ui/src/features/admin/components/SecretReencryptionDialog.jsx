@@ -8,6 +8,7 @@ function SecretReencryptionDialog({
   onConfirm,
   onOptionsChange,
   pending = false,
+  reencryptionResult = null,
   secretManagementStatus,
   secretReencryptOptions,
   t
@@ -22,6 +23,21 @@ function SecretReencryptionDialog({
     () => Object.values(acknowledgements).every(Boolean),
     [acknowledgements]
   )
+  const requirements = Array.isArray(secretManagementStatus?.reencryptionRequirements)
+    ? secretManagementStatus.reencryptionRequirements
+    : []
+  const blockingRequirementsMet = requirements
+    .filter((requirement) => requirement?.blocking)
+    .every((requirement) => requirement?.satisfied)
+  const pendingRequest = secretManagementStatus?.reencryptionRequest?.status === 'PENDING'
+  const allowImmediateOverride = Boolean(secretManagementStatus?.immediateReencryptionOverrideAllowed)
+  const verification = reencryptionResult?.verification || null
+  const verificationMessages = Array.isArray(verification?.messages) ? verification.messages : []
+  const operatorSaveItems = Array.isArray(verification?.operatorSaveItems) ? verification.operatorSaveItems : []
+  const requestSubmitted = Boolean(reencryptionResult?.operationStatus)
+  const requestScheduled = reencryptionResult?.operationStatus === 'SCHEDULED'
+  const requestCompleted = reencryptionResult?.operationStatus === 'COMPLETED'
+  const confirmDisabled = !allAcknowledged || !blockingRequirementsMet || pendingRequest || requestSubmitted
 
   function updateAcknowledgement(key, checked) {
     setAcknowledgements((current) => ({ ...current, [key]: checked }))
@@ -59,8 +75,67 @@ function SecretReencryptionDialog({
         </div>
 
         <div className="detail-stack">
+          <strong>{t('authSecurity.secretManagementReencryptDialogRequirementsTitle')}</strong>
+          <div className="detail-stack">
+            {requirements.map((requirement) => (
+              <div className="muted-box detail-stack" key={requirement.requirementId}>
+                <strong>{requirement.title}</strong>
+                <span>{requirement.detail}</span>
+                <span>{requirement.satisfied ? t('authSecurity.secretManagementRequirementSatisfied') : t('authSecurity.secretManagementRequirementNotSatisfied')}</span>
+              </div>
+            ))}
+          </div>
+        </div>
+
+        {pendingRequest ? (
+          <Banner tone="info">
+            <div className="detail-stack">
+              <strong>{t('authSecurity.secretManagementReencryptPendingTitle')}</strong>
+              <span>{t('authSecurity.secretManagementReencryptPendingBody', { executeAfter: secretManagementStatus?.reencryptionRequest?.executeAfter || '' })}</span>
+            </div>
+          </Banner>
+        ) : null}
+
+        {requestSubmitted ? (
+          <Banner tone={requestScheduled ? 'info' : verification?.passed === false ? 'warning' : 'success'}>
+            <div className="detail-stack">
+              <strong>{reencryptionResult?.message || t('authSecurity.secretManagementReencryptLatestRequestTitle')}</strong>
+              {reencryptionResult?.executeAfter ? (
+                <span>{t('authSecurity.secretManagementReencryptLatestRequestExecuteAfter', { value: reencryptionResult.executeAfter })}</span>
+              ) : null}
+              {requestCompleted && verificationMessages.length > 0 ? (
+                <div className="detail-stack">
+                  {verificationMessages.map((message) => <span key={message}>{message}</span>)}
+                </div>
+              ) : null}
+              {requestCompleted && operatorSaveItems.length > 0 ? (
+                <div className="detail-stack">
+                  <strong>{t('authSecurity.secretManagementReencryptSaveItemsTitle')}</strong>
+                  <ul className="detail-stack">
+                    {operatorSaveItems.map((item) => <li key={item}>{item}</li>)}
+                  </ul>
+                </div>
+              ) : null}
+            </div>
+          </Banner>
+        ) : null}
+
+        <div className="detail-stack">
           <strong>{t('authSecurity.secretManagementReencryptDialogFollowUpTitle')}</strong>
           <div className="polling-statistics-breakdown">
+            {allowImmediateOverride ? (
+              <label className="checkbox-row">
+                <input
+                  checked={Boolean(secretReencryptOptions?.immediateExecutionOverride)}
+                  onChange={(event) => onOptionsChange?.((current) => ({
+                    ...current,
+                    immediateExecutionOverride: event.target.checked
+                  }))}
+                  type="checkbox"
+                />
+                <span>{t('authSecurity.secretManagementReencryptImmediateOverride')}</span>
+              </label>
+            ) : null}
             <label className="checkbox-row">
               <input
                 checked={Boolean(secretReencryptOptions?.revokeBrowserExtensionSessions)}
@@ -133,13 +208,13 @@ function SecretReencryptionDialog({
           </button>
           <LoadingButton
             className="danger"
-            disabled={!allAcknowledged}
+            disabled={confirmDisabled}
             isLoading={pending}
             loadingLabel={t('authSecurity.secretManagementReencryptLoading')}
             onClick={onConfirm}
             type="button"
           >
-            {t('authSecurity.secretManagementReencrypt')}
+            {requestSubmitted ? t('common.done') : t('authSecurity.secretManagementReencrypt')}
           </LoadingButton>
         </div>
       </div>

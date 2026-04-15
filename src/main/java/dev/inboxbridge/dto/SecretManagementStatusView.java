@@ -24,5 +24,10 @@ public record SecretManagementStatusView(
         long configuredEnvManagedSourceCount,
         boolean envManagedGoogleRefreshTokenConfigured,
         boolean safeToRetireLegacyKeys,
-        List<SecretManagementKeyUsageView> keyUsage) {
+        List<SecretManagementKeyUsageView> keyUsage,
+        boolean reencryptionReady,
+        List<SecretReencryptionRequirementView> reencryptionRequirements,
+        SecretReencryptionRequestStatusView reencryptionRequest,
+        String reencryptionCooldown,
+        boolean immediateReencryptionOverrideAllowed) {
 }

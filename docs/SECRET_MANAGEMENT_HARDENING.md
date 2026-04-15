@@ -11,6 +11,9 @@ implements a deployment policy that can disable env-managed mailbox secrets
 (`SECURITY_ALLOW_ENV_MANAGED_MAILBOX_SECRETS=false`), which makes InboxBridge
 ignore `MAIL_ACCOUNT_*` source definitions and the `.env` Gmail refresh-token
 fallback while still allowing normal bootstrap configuration in `.env`.
+The admin-side bulk re-encryption workflow now also supports a configurable
+cooldown window plus a server-controlled immediate-execution override intended
+only for testing.
 
 ## Why This Exists
 
@@ -47,6 +50,8 @@ the ability for InboxBridge to run unattended.
   secret handling.
 - Make the stronger mode additive and migration-friendly.
 - Reduce the need to keep mailbox credentials directly in `.env`.
+- Make destructive secret-rotation actions resilient against a hijacked admin
+  session by allowing delayed execution and clearer operator verification.
 
 ## Non-Goals
 
@@ -236,6 +241,59 @@ Current implementation status:
   instead of silently attempting to use a blocked `.env` refresh-token
   fallback, and dashboard token-storage summaries can distinguish `blocked by
   policy` from truly `not configured`
+
+### 2a. Gate bulk secret re-encryption behind a cooldown window
+
+Bulk re-encryption is a high-impact administrative action. If an attacker
+temporarily gains an admin session, an immediate rotation could let them try to
+replace the active key path and re-encrypt stored secrets under attacker-
+controlled material.
+
+InboxBridge should therefore support a deployment-level cooldown between:
+
+- the moment an admin requests re-encryption
+- and the moment the server actually executes it
+
+Current implementation status:
+
+- `SECURITY_SECRET_REENCRYPTION_COOLDOWN` controls that delay
+- the backend stores the queued request and executes it only after the
+  configured time passes
+- the admin modal now shows backend-verified readiness requirements and any
+  already-pending request
+- `SECURITY_SECRET_REENCRYPTION_ALLOW_IMMEDIATE_OVERRIDE` exists only as a
+  server-side testing escape hatch so manual/local validation can bypass the
+  delay
+
+Operational guidance:
+
+- keep the immediate override disabled in real deployments
+- record the scheduled execution time and the resulting verification summary in
+  operator recovery notes
+- retire legacy keys only after the post-run verification says every stored
+  record is now decryptable through the active provider/key path
+
+### 2b. Verify requirements and outcomes explicitly
+
+The re-encryption dialog should not rely only on checkbox acknowledgements.
+Instead, the backend should evaluate whether the action is currently safe to
+start.
+
+Current implementation status:
+
+- `/api/admin/secret-management` now reports backend-verified requirements for
+  the re-encryption workflow
+- the modal disables confirmation when blocking requirements are unmet
+- after completion, the UI shows verification messages plus a list of items the
+  operator should save before retiring any legacy key material
+
+This keeps the operator workflow explicit:
+
+1. Confirm the backend says the current provider/key path is healthy.
+2. Confirm all stored records are still decryptable.
+3. Queue or run the re-encryption.
+4. Save the resulting verification output.
+5. Only then remove legacy key material.
 
 ### 3. Use envelope encryption internally
 
