@@ -32,6 +32,19 @@ function componentTone(component) {
   return 'tone-bad'
 }
 
+function rotationMethodLabel(rotationPlan, t) {
+  if (!rotationPlan?.rotationNeeded) {
+    return t('authSecurity.secretManagementRotationMethodNone')
+  }
+  if (rotationPlan?.requiresFullReencryption) {
+    return t('authSecurity.secretManagementRotationMethodFull')
+  }
+  if (rotationPlan?.metadataRewrapSupported) {
+    return t('authSecurity.secretManagementRotationMethodRewrap')
+  }
+  return t('authSecurity.secretManagementRotationMethodNone')
+}
+
 function SecretManagementSection({
   collapsed,
   collapseLoading,
@@ -150,7 +163,7 @@ function SecretManagementSection({
                     <div><span>{t('authSecurity.secretManagementRotationTarget')}</span><strong>{rotationPlan.targetKeyVersion || t('common.unavailable')}</strong></div>
                     <div><span>{t('authSecurity.secretManagementRotationAffectedRecords')}</span><strong>{rotationPlan.affectedRecordCount ?? 0}</strong></div>
                     <div><span>{t('authSecurity.secretManagementRotationUnavailableRecords')}</span><strong>{rotationPlan.unavailableRecordCount ?? 0}</strong></div>
-                    <div><span>{t('authSecurity.secretManagementRotationMethod')}</span><strong>{rotationPlan.requiresFullReencryption ? t('authSecurity.secretManagementRotationMethodFull') : t('authSecurity.secretManagementRotationMethodNone')}</strong></div>
+                    <div><span>{t('authSecurity.secretManagementRotationMethod')}</span><strong>{rotationMethodLabel(rotationPlan, t)}</strong></div>
                   </div>
                   <strong>{t('authSecurity.secretManagementRotationRecommendedAction')}</strong>
                   <span>{rotationPlan.recommendedAction}</span>

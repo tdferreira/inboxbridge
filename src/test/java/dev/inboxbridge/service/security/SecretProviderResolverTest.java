@@ -138,6 +138,22 @@ class SecretProviderResolverTest {
         assertFalse(resolver.isStoredKeyVersionAvailable("SPLIT_KEY:LOCAL=legacy|OPENBAO_TRANSIT=inboxbridge"));
     }
 
+    @Test
+    void detectsWhenActiveTransitCiphertextCanBeMetadataRewrapped() {
+        SecretProviderResolver resolver = new SecretProviderResolver();
+        resolver.setLocalSecretKeyProvider(configuredLocalProvider());
+        resolver.setProviderMode("OPENBAO_TRANSIT");
+        resolver.setOpenbaoUrl("https://openbao.internal");
+        resolver.setOpenbaoToken("token");
+        resolver.setOpenbaoMount("transit");
+        resolver.setOpenbaoKey("inboxbridge");
+        resolver.setTransitSecretProvider(new StubTransitSecretProvider(true, 3));
+
+        assertTrue(resolver.canMetadataRewrapToActive("vault:v1:payload", "", "OPENBAO_TRANSIT:inboxbridge"));
+        assertFalse(resolver.canMetadataRewrapToActive("vault:v3:payload", "", "OPENBAO_TRANSIT:inboxbridge"));
+        assertFalse(resolver.canMetadataRewrapToActive("vault:v1:payload", "nonce", "OPENBAO_TRANSIT:inboxbridge"));
+    }
+
     private SecretProviderResolver configuredLocalResolver() {
         LocalSecretKeyProvider provider = configuredLocalProvider();
         SecretProviderResolver resolver = new SecretProviderResolver();
@@ -155,9 +171,15 @@ class SecretProviderResolverTest {
 
     private static final class StubTransitSecretProvider extends TransitSecretProvider {
         private final boolean healthy;
+        private final int latestVersion;
 
         private StubTransitSecretProvider(boolean healthy) {
+            this(healthy, 1);
+        }
+
+        private StubTransitSecretProvider(boolean healthy, int latestVersion) {
             this.healthy = healthy;
+            this.latestVersion = latestVersion;
         }
 
         @Override
@@ -168,6 +190,11 @@ class SecretProviderResolverTest {
                     healthy,
                     healthy,
                     healthy ? config.mode().name() + " transit provider is ready." : "Transit provider unavailable");
+        }
+
+        @Override
+        public java.util.OptionalInt latestKeyVersion(TransitProviderConfig config) {
+            return healthy ? java.util.OptionalInt.of(latestVersion) : java.util.OptionalInt.empty();
         }
     }
 }

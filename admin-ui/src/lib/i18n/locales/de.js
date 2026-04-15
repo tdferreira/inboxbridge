@@ -965,6 +965,7 @@ const dictionary = {
   "authSecurity.secretManagementRotationUnavailableRecords": "Nicht verfügbare Datensätze",
   "authSecurity.secretManagementRotationMethod": "Erforderliche Methode",
   "authSecurity.secretManagementRotationMethodFull": "Vollständige Neuverschlüsselung",
+  "authSecurity.secretManagementRotationMethodRewrap": "Metadaten-Rewrap",
   "authSecurity.secretManagementRotationMethodNone": "Keine Umschreibung erforderlich",
   "authSecurity.secretManagementRotationRecommendedAction": "Empfohlene Aktion",
   "authSecurity.secretManagementActionsTitle": "Sensible Vorgänge",

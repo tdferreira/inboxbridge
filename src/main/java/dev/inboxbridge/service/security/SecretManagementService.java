@@ -158,6 +158,8 @@ public class SecretManagementService {
                             null,
                             0,
                             0,
+                            0,
+                            List.of(),
                             List.of(),
                             false,
                             false),
@@ -204,11 +206,14 @@ public class SecretManagementService {
                 .mapToLong(SecretManagementKeyUsageView::recordCount)
                 .sum();
         long nonActiveKeyRecordCount = protectedRecordCount - activeKeyRecordCount;
+        RotationNeedAccumulator metadataRewrapCandidates = collectMetadataRewrapCandidates();
         SecretManagementRotationPlanView rotationPlan = buildRotationPlan(
                 activeKeyVersion,
                 providerHealth,
                 nonActiveKeyRecordCount,
                 unavailableKeyRecordCount,
+                metadataRewrapCandidates.recordCount,
+                metadataRewrapCandidates.areas(),
                 keyUsage,
                 protectedRecordCount > 0,
                 providerHealth.writable());
@@ -242,7 +247,7 @@ public class SecretManagementService {
                 envManagedMailboxSecretsAllowed(),
                 configuredEnvManagedSourceCount(),
                 envManagedGoogleRefreshTokenConfigured(),
-                nonActiveKeyRecordCount == 0 && unavailableKeyRecordCount == 0,
+                !rotationPlan.rotationNeeded(),
                 rotationPlan,
                 keyUsage,
                 reencryptionReady,
@@ -738,14 +743,17 @@ public class SecretManagementService {
             String keyVersion,
             java.util.function.Consumer<SecretEncryptionService.EncryptedValue> saveEncrypted,
             String context) {
-        if (ciphertext == null || ciphertext.isBlank() || nonce == null || nonce.isBlank() || keyVersion == null || keyVersion.isBlank()) {
+        if (ciphertext == null || ciphertext.isBlank() || keyVersion == null || keyVersion.isBlank()) {
             return 0;
         }
-        if (secretEncryptionService.keyVersion().equals(keyVersion)) {
+        boolean metadataRewrapCandidate = secretEncryptionService.canMetadataRewrapToActive(ciphertext, nonce, keyVersion);
+        if (!metadataRewrapCandidate && (nonce == null || nonce.isBlank())) {
             return 0;
         }
-        String plaintext = secretEncryptionService.decrypt(ciphertext, nonce, keyVersion, context);
-        SecretEncryptionService.EncryptedValue encrypted = secretEncryptionService.encrypt(plaintext, context);
+        if (!metadataRewrapCandidate && secretEncryptionService.keyVersion().equals(keyVersion)) {
+            return 0;
+        }
+        SecretEncryptionService.EncryptedValue encrypted = secretEncryptionService.reencryptToActive(ciphertext, nonce, keyVersion, context);
         saveEncrypted.accept(encrypted);
         return 1;
     }
@@ -985,8 +993,8 @@ public class SecretManagementService {
         operatorSaveItems.add("Keep the previous key material and provider credentials in a safe place until you finish manual mailbox and OAuth validation.");
         operatorSaveItems.add("Update your operator runbook with the current secret-provider mode (" + currentStatus.mode() + ") and the exact recovery steps for this deployment.");
         boolean passed = currentStatus.providerWritable()
-                && currentStatus.nonActiveKeyRecordCount() == 0
-                && currentStatus.unavailableKeyRecordCount() == 0;
+                && currentStatus.unavailableKeyRecordCount() == 0
+                && (currentStatus.rotationPlan() == null || !currentStatus.rotationPlan().rotationNeeded());
         return new SecretReencryptionVerificationView(passed, messages, operatorSaveItems);
     }
 
@@ -995,6 +1003,8 @@ public class SecretManagementService {
             SecretProviderHealth providerHealth,
             long nonActiveKeyRecordCount,
             long unavailableKeyRecordCount,
+            long metadataRewrapRecordCount,
+            List<String> metadataRewrapAreas,
             List<SecretManagementKeyUsageView> keyUsage,
             boolean protectedRecordsPresent,
             boolean providerWritable) {
@@ -1039,6 +1049,26 @@ public class SecretManagementService {
                     true,
                     true,
                     false);
+        }
+        if (nonActiveKeyRecordCount == 0 && metadataRewrapRecordCount > 0) {
+            String planId = providerHealth.mode() == SecretProviderMode.SPLIT_KEY
+                    ? "split-key-envelope-rewrap"
+                    : "transit-key-rollover";
+            String title = providerHealth.mode() == SecretProviderMode.SPLIT_KEY
+                    ? "Split-key envelope rewrap is pending"
+                    : "Transit key rollover rewrap is pending";
+            return new SecretManagementRotationPlanView(
+                    planId,
+                    title,
+                    metadataRewrapRecordCount + " stored records already use the active target metadata but still carry older transit-provider key versions inside the ciphertext envelope.",
+                    "Run metadata rewrap so InboxBridge can refresh the outer transit ciphertext to the current provider key version without rewriting plaintext, then validate the provider before retiring older provider-side key versions.",
+                    activeKeyVersion,
+                    metadataRewrapRecordCount,
+                    0,
+                    metadataRewrapAreas,
+                    true,
+                    false,
+                    true);
         }
         if (nonActiveKeyRecordCount == 0) {
             return new SecretManagementRotationPlanView(
@@ -1099,6 +1129,55 @@ public class SecretManagementService {
                 .filter(area -> !area.isBlank())
                 .distinct()
                 .toList();
+    }
+
+    private RotationNeedAccumulator collectMetadataRewrapCandidates() {
+        RotationNeedAccumulator accumulator = new RotationNeedAccumulator();
+        for (OAuthCredential credential : oAuthCredentialRepository.listAll()) {
+            if (isMetadataRewrapCandidate(credential.refreshTokenCiphertext, credential.refreshTokenNonce, credential.keyVersion)
+                    || isMetadataRewrapCandidate(credential.accessTokenCiphertext, credential.accessTokenNonce, credential.keyVersion)) {
+                accumulator.add("oauth-credentials");
+            }
+        }
+        for (UserEmailAccount account : userEmailAccountRepository.listAll()) {
+            if (isMetadataRewrapCandidate(account.passwordCiphertext, account.passwordNonce, account.keyVersion)
+                    || isMetadataRewrapCandidate(account.oauthRefreshTokenCiphertext, account.oauthRefreshTokenNonce, account.keyVersion)) {
+                accumulator.add("source-mailboxes");
+            }
+        }
+        for (UserMailDestinationConfig config : userMailDestinationConfigRepository.listAll()) {
+            if (isMetadataRewrapCandidate(config.passwordCiphertext, config.passwordNonce, config.keyVersion)) {
+                accumulator.add("destination-mailboxes");
+            }
+        }
+        for (UserGmailConfig config : userGmailConfigRepository.listAll()) {
+            if (isMetadataRewrapCandidate(config.clientIdCiphertext, config.clientIdNonce, config.keyVersion)
+                    || isMetadataRewrapCandidate(config.clientSecretCiphertext, config.clientSecretNonce, config.keyVersion)
+                    || isMetadataRewrapCandidate(config.refreshTokenCiphertext, config.refreshTokenNonce, config.keyVersion)) {
+                accumulator.add("gmail-user-config");
+            }
+        }
+        SystemOAuthAppSettings systemOAuth = systemOAuthAppSettingsRepository.findSingleton().orElse(null);
+        if (systemOAuth != null
+                && (isMetadataRewrapCandidate(systemOAuth.googleClientIdCiphertext, systemOAuth.googleClientIdNonce, systemOAuth.keyVersion)
+                        || isMetadataRewrapCandidate(systemOAuth.googleClientSecretCiphertext, systemOAuth.googleClientSecretNonce, systemOAuth.keyVersion)
+                        || isMetadataRewrapCandidate(systemOAuth.googleRefreshTokenCiphertext, systemOAuth.googleRefreshTokenNonce, systemOAuth.keyVersion)
+                        || isMetadataRewrapCandidate(systemOAuth.microsoftClientIdCiphertext, systemOAuth.microsoftClientIdNonce, systemOAuth.keyVersion)
+                        || isMetadataRewrapCandidate(systemOAuth.microsoftClientSecretCiphertext, systemOAuth.microsoftClientSecretNonce, systemOAuth.keyVersion))) {
+            accumulator.add("system-oauth");
+        }
+        SystemAuthSecuritySetting authSecurity = systemAuthSecuritySettingRepository.findSingleton().orElse(null);
+        if (authSecurity != null
+                && (isMetadataRewrapCandidate(authSecurity.registrationTurnstileSecretCiphertext, authSecurity.registrationTurnstileSecretNonce, authSecurity.keyVersion)
+                        || isMetadataRewrapCandidate(authSecurity.registrationHcaptchaSecretCiphertext, authSecurity.registrationHcaptchaSecretNonce, authSecurity.keyVersion)
+                        || isMetadataRewrapCandidate(authSecurity.geoIpIpinfoTokenCiphertext, authSecurity.geoIpIpinfoTokenNonce, authSecurity.keyVersion))) {
+            accumulator.add("auth-security");
+        }
+        return accumulator;
+    }
+
+    private boolean isMetadataRewrapCandidate(String ciphertext, String nonce, String keyVersion) {
+        return secretEncryptionService.canMetadataRewrapToActive(ciphertext, nonce, keyVersion);
     }
 
     private SecretReencryptionRequest effectiveRequest(SecretReencryptionRequest request) {
@@ -1226,6 +1305,20 @@ public class SecretManagementService {
         private void add(String area) {
             recordCount++;
             areas.add(area);
+        }
+    }
+
+    private static final class RotationNeedAccumulator {
+        private long recordCount;
+        private final LinkedHashSet<String> areas = new LinkedHashSet<>();
+
+        private void add(String area) {
+            recordCount++;
+            areas.add(area);
+        }
+
+        private List<String> areas() {
+            return List.copyOf(areas);
         }
     }
 

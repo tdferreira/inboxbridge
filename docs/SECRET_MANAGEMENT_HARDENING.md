@@ -296,6 +296,11 @@ Current implementation status:
   preview that classifies the next operator action as local-key rotation,
   transit-key migration, split-key rotation, provider migration, already
   aligned, no encrypted records, or blocked legacy-key recovery
+- the current implementation now also detects provider-side transit key
+  rollovers for active `OPENBAO_TRANSIT`, `VAULT_TRANSIT`, and split-key outer
+  envelopes; when only the provider's internal key version is stale, the
+  status reports a metadata-rewrap plan and the bulk action can refresh the
+  outer transit ciphertext without decrypting plaintext
 - after completion, the UI shows verification messages plus a list of items the
   operator should save before retiring any legacy key material
 
@@ -651,8 +656,12 @@ Current repository status:
   - cooldown plus step-up verification exists
   - provider-component diagnostics exist
   - provider-aware rotation-plan preview exists
-  - metadata-only rewrap still remains a future enhancement; current rotation
-    plans therefore report full re-encryption as the supported execution path
+  - metadata-only rewrap now exists for active transit-provider key rollovers
+    where the stored InboxBridge key target has not changed and only the
+    provider-side ciphertext version is stale
+  - full plaintext re-encryption is still required for local-key changes,
+    provider changes, split-key local-inner-key changes, and any migration
+    that changes the stored InboxBridge key target itself
 
 ### Phase 5: Split-key mode
 

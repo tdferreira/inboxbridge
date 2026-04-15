@@ -178,6 +178,28 @@ describe('SecretManagementSection', () => {
     })
   })
 
+  it('renders metadata rewrap as the required method when the rotation plan supports it', () => {
+    renderSection({
+      secretManagementStatus: {
+        rotationPlan: {
+          planId: 'transit-key-rollover',
+          title: 'Transit key rollover rewrap is pending',
+          summary: '2 stored records already use the active target metadata but still carry older transit-provider key versions inside the ciphertext envelope.',
+          recommendedAction: 'Run metadata rewrap so InboxBridge can refresh the outer transit ciphertext to the current provider key version without rewriting plaintext, then validate the provider before retiring older provider-side key versions.',
+          targetKeyVersion: 'OPENBAO_TRANSIT:inboxbridge',
+          affectedRecordCount: 2,
+          unavailableRecordCount: 0,
+          impactedAreas: ['oauth-credentials'],
+          rotationNeeded: true,
+          requiresFullReencryption: false,
+          metadataRewrapSupported: true
+        }
+      }
+    })
+
+    expect(screen.getByText('Metadata rewrap')).toBeInTheDocument()
+  })
+
   it('requires sensitive-session re-authentication before confirming when server policy demands it', async () => {
     const onVerifySecretManagementPassword = vi.fn().mockResolvedValue(true)
     render(

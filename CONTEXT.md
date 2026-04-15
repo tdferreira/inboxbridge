@@ -514,6 +514,13 @@ case before they queue any re-encryption run. The UI surfaces the active
 target, affected-record count, unavailable-record count, impacted secret
 areas, and whether the current deployment still requires a full ciphertext
 rewrite instead of a lighter metadata-only rewrap path.
+That rotation logic now also recognizes provider-side transit key rollovers
+for `OPENBAO_TRANSIT`, `VAULT_TRANSIT`, and the outer envelope in `SPLIT_KEY`
+mode. When stored records already use the active InboxBridge target metadata
+but their transit ciphertext still carries an older provider key version, the
+admin section now reports a metadata-rewrap plan instead of a full
+re-encryption plan, and the backend re-encryption flow will use the transit
+provider's rewrap path without decrypting the protected plaintext first.
 That same admin secret-management flow now also supports step-up verification
 per browser session. When
 `SECURITY_SECRET_REENCRYPTION_REAUTHENTICATION_TTL` is greater than zero

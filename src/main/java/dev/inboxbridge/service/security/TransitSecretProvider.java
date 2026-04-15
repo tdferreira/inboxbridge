@@ -8,6 +8,9 @@ import java.net.http.HttpResponse;
 import java.nio.charset.StandardCharsets;
 import java.time.Duration;
 import java.util.Base64;
+import java.util.OptionalInt;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -23,6 +26,7 @@ import jakarta.inject.Inject;
 public class TransitSecretProvider {
 
     private static final Duration REQUEST_TIMEOUT = Duration.ofSeconds(10);
+    private static final Pattern TRANSIT_CIPHERTEXT_VERSION_PATTERN = Pattern.compile("^[^:]+:v(\\d+):.+$");
 
     @Inject
     ObjectMapper objectMapper;
@@ -41,15 +45,7 @@ public class TransitSecretProvider {
 
     public SecretProviderHealth health(TransitProviderConfig config) {
         try {
-            JsonNode response = sendJson(
-                    "GET",
-                    keyUrl(config),
-                    config.token(),
-                    null);
-            JsonNode data = response.path("data");
-            if (data.isMissingNode()) {
-                throw new IllegalStateException("Transit provider did not return key metadata");
-            }
+            keyMetadata(config);
             return new SecretProviderHealth(
                     config.mode(),
                     config.providerId(),
@@ -63,6 +59,18 @@ public class TransitSecretProvider {
                     false,
                     false,
                     "Unable to reach " + config.mode().name() + " transit provider: " + error.getMessage());
+        }
+    }
+
+    public OptionalInt latestKeyVersion(TransitProviderConfig config) {
+        try {
+            JsonNode latestVersion = keyMetadata(config).path("latest_version");
+            if (!latestVersion.canConvertToInt()) {
+                return OptionalInt.empty();
+            }
+            return OptionalInt.of(latestVersion.asInt());
+        } catch (Exception error) {
+            return OptionalInt.empty();
         }
     }
 
@@ -112,6 +120,40 @@ public class TransitSecretProvider {
         }
     }
 
+    public String rewrap(TransitProviderConfig config, String ciphertext, String context) {
+        try {
+            String requestBody = objectMapper.writeValueAsString(new TransitDecryptRequest(
+                    ciphertext,
+                    Base64.getEncoder().encodeToString(context.getBytes(StandardCharsets.UTF_8))));
+            JsonNode response = sendJson(
+                    "POST",
+                    rewrapUrl(config),
+                    config.token(),
+                    requestBody);
+            String rewrappedCiphertext = response.path("data").path("ciphertext").asText();
+            if (rewrappedCiphertext == null || rewrappedCiphertext.isBlank()) {
+                throw new IllegalStateException("Transit provider did not return ciphertext");
+            }
+            return rewrappedCiphertext;
+        } catch (IOException e) {
+            throw new IllegalStateException("Transit rewrap request failed", e);
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+            throw new IllegalStateException("Transit rewrap request was interrupted", e);
+        }
+    }
+
+    public OptionalInt ciphertextVersion(String ciphertext) {
+        if (ciphertext == null || ciphertext.isBlank()) {
+            return OptionalInt.empty();
+        }
+        Matcher matcher = TRANSIT_CIPHERTEXT_VERSION_PATTERN.matcher(ciphertext.trim());
+        if (!matcher.matches()) {
+            return OptionalInt.empty();
+        }
+        return OptionalInt.of(Integer.parseInt(matcher.group(1)));
+    }
+
     private JsonNode sendJson(String method, URI uri, String token, String body) throws IOException, InterruptedException {
         HttpRequest.Builder requestBuilder = HttpRequest.newBuilder(uri)
                 .timeout(REQUEST_TIMEOUT)
@@ -140,6 +182,23 @@ public class TransitSecretProvider {
 
     private URI decryptUrl(TransitProviderConfig config) {
         return URI.create(trimTrailingSlash(config.baseUrl()) + "/v1/" + normalizeSegment(config.mount()) + "/decrypt/" + normalizeSegment(config.keyName()));
+    }
+
+    private URI rewrapUrl(TransitProviderConfig config) {
+        return URI.create(trimTrailingSlash(config.baseUrl()) + "/v1/" + normalizeSegment(config.mount()) + "/rewrap/" + normalizeSegment(config.keyName()));
+    }
+
+    private JsonNode keyMetadata(TransitProviderConfig config) throws IOException, InterruptedException {
+        JsonNode response = sendJson(
+                "GET",
+                keyUrl(config),
+                config.token(),
+                null);
+        JsonNode data = response.path("data");
+        if (data.isMissingNode()) {
+            throw new IllegalStateException("Transit provider did not return key metadata");
+        }
+        return data;
     }
 
     private String trimTrailingSlash(String value) {

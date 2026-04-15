@@ -101,6 +101,20 @@ public class SecretEncryptionService {
         return transitProvider().decrypt(transitConfig, ciphertextBase64, context);
     }
 
+    public boolean canMetadataRewrapToActive(String ciphertextBase64, String nonceBase64, String keyVersion) {
+        requireConfigured();
+        return providerResolver().canMetadataRewrapToActive(ciphertextBase64, nonceBase64, keyVersion);
+    }
+
+    public EncryptedValue reencryptToActive(String ciphertextBase64, String nonceBase64, String keyVersion, String context) {
+        requireConfigured();
+        if (canMetadataRewrapToActive(ciphertextBase64, nonceBase64, keyVersion)) {
+            return new EncryptedValue(providerResolver().rewrapToActive(ciphertextBase64, context), "");
+        }
+        String plaintext = decrypt(ciphertextBase64, nonceBase64, keyVersion, context);
+        return encrypt(plaintext, context);
+    }
+
     private EncryptedValue encryptWithSplitKey(String value, String context) {
         EncryptedValue innerEncrypted = encryptLocally(value, context);
         SplitKeyEnvelope envelope = new SplitKeyEnvelope(innerEncrypted.ciphertextBase64(), innerEncrypted.nonceBase64());

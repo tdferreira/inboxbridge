@@ -3,6 +3,7 @@ package dev.inboxbridge.service.security;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;
+import java.util.OptionalInt;
 
 import dev.inboxbridge.config.SecurityTokenConfig;
 import dev.inboxbridge.dto.SecretProviderComponentStatusView;
@@ -244,6 +245,35 @@ public class SecretProviderResolver {
             }
             default -> Optional.empty();
         };
+    }
+
+    public boolean canMetadataRewrapToActive(String ciphertextBase64, String nonceBase64, String storedKeyVersion) {
+        if (ciphertextBase64 == null || ciphertextBase64.isBlank() || storedKeyVersion == null || storedKeyVersion.isBlank()) {
+            return false;
+        }
+        if (nonceBase64 != null && !nonceBase64.isBlank()) {
+            return false;
+        }
+        SecretProviderHealth health = health();
+        if (!health.writable()) {
+            return false;
+        }
+        Optional<TransitProviderConfig> activeTransitConfig = activeTransitConfig();
+        if (activeTransitConfig.isEmpty()) {
+            return false;
+        }
+        if (!activeKeyVersion().equals(storedKeyVersion)) {
+            return false;
+        }
+        OptionalInt currentCiphertextVersion = transitProvider().ciphertextVersion(ciphertextBase64);
+        OptionalInt latestActiveVersion = transitProvider().latestKeyVersion(activeTransitConfig.get());
+        return currentCiphertextVersion.isPresent()
+                && latestActiveVersion.isPresent()
+                && currentCiphertextVersion.getAsInt() < latestActiveVersion.getAsInt();
+    }
+
+    public String rewrapToActive(String ciphertextBase64, String context) {
+        return transitProvider().rewrap(requireWritableTransitConfig(), ciphertextBase64, context);
     }
 
     public boolean isStoredKeyVersionAvailable(String storedKeyVersion) {

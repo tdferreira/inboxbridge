@@ -231,6 +231,36 @@ class SecretManagementServiceTest {
     }
 
     @Test
+    void statusReportsTransitKeyRolloverWhenActiveProviderHasNewerTransitVersion() {
+        SecretManagementService service = configuredTransitRolloverService(SecretProviderMode.OPENBAO_TRANSIT, null);
+
+        SecretManagementStatusView view = service.status();
+
+        assertEquals("transit-key-rollover", view.rotationPlan().planId());
+        assertTrue(view.rotationPlan().rotationNeeded());
+        assertTrue(view.rotationPlan().metadataRewrapSupported());
+        assertFalse(view.rotationPlan().requiresFullReencryption());
+        assertEquals(2, view.rotationPlan().affectedRecordCount());
+        assertFalse(view.safeToRetireLegacyKeys());
+    }
+
+    @Test
+    void reencryptAllStoredSecretsUsesMetadataRewrapForTransitKeyRollover() {
+        StubTransitSecretProvider activeTransitProvider = new StubTransitSecretProvider(true, 2);
+        SecretManagementService service = configuredTransitRolloverService(SecretProviderMode.OPENBAO_TRANSIT, activeTransitProvider);
+
+        SecretReencryptionResultView result = service.reencryptAllStoredSecrets();
+        SecretManagementStatusView status = service.status();
+
+        assertEquals(2, result.totalRecordsUpdated());
+        assertEquals(2, result.totalSecretValuesReencrypted());
+        assertEquals(2, activeTransitProvider.rewrapCalls());
+        assertEquals(0, activeTransitProvider.decryptCalls());
+        assertEquals("already-current", status.rotationPlan().planId());
+        assertTrue(status.safeToRetireLegacyKeys());
+    }
+
+    @Test
     void reencryptAllStoredSecretsCanMigrateLocalRecordsIntoTransitProvider() {
         SecretManagementService service = configuredService();
         StubTransitSecretProvider transitSecretProvider = new StubTransitSecretProvider(true);
@@ -480,6 +510,100 @@ class SecretManagementServiceTest {
         return configuredService(Duration.ZERO, false, Duration.ZERO);
     }
 
+    private SecretManagementService configuredTransitRolloverService(SecretProviderMode mode, StubTransitSecretProvider activeTransitProviderOverride) {
+        SecretManagementService service = new SecretManagementService();
+        LocalSecretKeyProvider provider = new LocalSecretKeyProvider();
+        provider.setTokenEncryptionKey(base64("fedcba9876543210fedcba9876543210"));
+        provider.setTokenEncryptionKeyId("v2");
+        service.setLocalSecretKeyProvider(provider);
+
+        StubTransitSecretProvider staleTransitProvider = new StubTransitSecretProvider(true, 1);
+        StubTransitSecretProvider activeTransitProvider = activeTransitProviderOverride == null
+                ? new StubTransitSecretProvider(true, 2)
+                : activeTransitProviderOverride;
+
+        SecretProviderResolver staleResolver = new SecretProviderResolver();
+        staleResolver.setLocalSecretKeyProvider(provider);
+        staleResolver.setTransitSecretProvider(staleTransitProvider);
+        configureTransitMode(staleResolver, mode);
+        SecretEncryptionService staleEncryptionService = new SecretEncryptionService();
+        staleEncryptionService.setLocalSecretKeyProvider(provider);
+        staleEncryptionService.setSecretProviderResolver(staleResolver);
+        staleEncryptionService.setTransitSecretProvider(staleTransitProvider);
+
+        SecretProviderResolver activeResolver = new SecretProviderResolver();
+        activeResolver.setLocalSecretKeyProvider(provider);
+        activeResolver.setTransitSecretProvider(activeTransitProvider);
+        configureTransitMode(activeResolver, mode);
+        service.setSecretProviderResolver(activeResolver);
+        SecretEncryptionService activeEncryptionService = new SecretEncryptionService();
+        activeEncryptionService.setLocalSecretKeyProvider(provider);
+        activeEncryptionService.setSecretProviderResolver(activeResolver);
+        activeEncryptionService.setTransitSecretProvider(activeTransitProvider);
+        service.setSecretEncryptionService(activeEncryptionService);
+
+        OAuthCredential oauthCredential = new OAuthCredential();
+        SecretEncryptionService.EncryptedValue oauthRefresh = staleEncryptionService.encrypt("oauth-refresh", "GOOGLE:gmail-destination:refresh");
+        oauthCredential.provider = "GOOGLE";
+        oauthCredential.subjectKey = "gmail-destination";
+        oauthCredential.refreshTokenCiphertext = oauthRefresh.ciphertextBase64();
+        oauthCredential.refreshTokenNonce = oauthRefresh.nonceBase64();
+        oauthCredential.keyVersion = staleEncryptionService.keyVersion();
+
+        UserMailDestinationConfig destination = new UserMailDestinationConfig();
+        SecretEncryptionService.EncryptedValue destinationPassword = staleEncryptionService.encrypt("destination-password", "user-destination:1:password");
+        destination.userId = 1L;
+        destination.passwordCiphertext = destinationPassword.ciphertextBase64();
+        destination.passwordNonce = destinationPassword.nonceBase64();
+        destination.keyVersion = staleEncryptionService.keyVersion();
+
+        service.setOAuthCredentialRepository(new InMemoryOAuthCredentialRepository(List.of(oauthCredential)));
+        service.setUserEmailAccountRepository(new InMemoryUserEmailAccountRepository(List.of()));
+        service.setUserMailDestinationConfigRepository(new InMemoryUserMailDestinationConfigRepository(List.of(destination)));
+        service.setUserGmailConfigRepository(new InMemoryUserGmailConfigRepository(List.of()));
+        service.setSystemOAuthAppSettingsRepository(new InMemorySystemOAuthAppSettingsRepository(null));
+        service.setSystemAuthSecuritySettingRepository(new InMemorySystemAuthSecuritySettingRepository(null));
+        service.setSystemSecretReencryptionRequestRepository(new InMemorySystemSecretReencryptionRequestRepository());
+        service.setSecretManagementPolicyConfig(new dev.inboxbridge.config.SecretManagementPolicyConfig() {
+            @Override
+            public boolean allowEnvManagedMailboxSecrets() {
+                return true;
+            }
+
+            @Override
+            public Duration reencryptionCooldown() {
+                return Duration.ZERO;
+            }
+
+            @Override
+            public boolean allowImmediateReencryptOverride() {
+                return false;
+            }
+
+            @Override
+            public Duration reauthenticationTtl() {
+                return Duration.ZERO;
+            }
+        });
+        service.setExtensionSessionService(new StubExtensionSessionService(0));
+        service.setRemoteSessionService(new StubRemoteSessionService(0));
+        service.setOAuthCredentialService(new StubOAuthCredentialService(0));
+        return service;
+    }
+
+    private void configureTransitMode(SecretProviderResolver resolver, SecretProviderMode mode) {
+        if (mode == SecretProviderMode.SPLIT_KEY) {
+            resolver.setProviderMode("SPLIT_KEY");
+            resolver.setSplitSecondaryMode("OPENBAO_TRANSIT");
+        } else {
+            resolver.setProviderMode(mode.name());
+        }
+        resolver.setOpenbaoUrl("https://openbao.internal");
+        resolver.setOpenbaoToken("token");
+        resolver.setOpenbaoMount("transit");
+        resolver.setOpenbaoKey("inboxbridge");
+    }
+
     private SecretManagementService configuredService(Duration cooldown, boolean allowImmediateOverride) {
         return configuredService(cooldown, allowImmediateOverride, Duration.ZERO);
     }
@@ -719,9 +843,17 @@ class SecretManagementServiceTest {
 
     private static final class StubTransitSecretProvider extends TransitSecretProvider {
         private final boolean healthy;
+        private final int latestVersion;
+        private int rewrapCalls;
+        private int decryptCalls;
 
         private StubTransitSecretProvider(boolean healthy) {
+            this(healthy, 1);
+        }
+
+        private StubTransitSecretProvider(boolean healthy, int latestVersion) {
             this.healthy = healthy;
+            this.latestVersion = latestVersion;
         }
 
         @Override
@@ -736,12 +868,35 @@ class SecretManagementServiceTest {
 
         @Override
         public SecretEncryptionService.EncryptedValue encrypt(TransitProviderConfig config, String value, String context) {
-            return new SecretEncryptionService.EncryptedValue("transit:" + value, "");
+            return new SecretEncryptionService.EncryptedValue("vault:v" + latestVersion + ":" + value, "");
         }
 
         @Override
         public String decrypt(TransitProviderConfig config, String ciphertext, String context) {
-            return ciphertext.startsWith("transit:") ? ciphertext.substring("transit:".length()) : ciphertext;
+            decryptCalls++;
+            int separator = ciphertext == null ? -1 : ciphertext.indexOf(':', ciphertext.indexOf(':') + 1);
+            return separator >= 0 ? ciphertext.substring(separator + 1) : ciphertext;
+        }
+
+        @Override
+        public java.util.OptionalInt latestKeyVersion(TransitProviderConfig config) {
+            return healthy ? java.util.OptionalInt.of(latestVersion) : java.util.OptionalInt.empty();
+        }
+
+        @Override
+        public String rewrap(TransitProviderConfig config, String ciphertext, String context) {
+            rewrapCalls++;
+            String value = decrypt(config, ciphertext, context);
+            decryptCalls--;
+            return "vault:v" + latestVersion + ":" + value;
+        }
+
+        int rewrapCalls() {
+            return rewrapCalls;
+        }
+
+        int decryptCalls() {
+            return decryptCalls;
         }
     }
 
