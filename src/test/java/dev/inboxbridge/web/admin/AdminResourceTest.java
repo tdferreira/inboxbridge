@@ -17,6 +17,7 @@ import dev.inboxbridge.dto.PollingTimelineBundleView;
 import dev.inboxbridge.dto.SecretReencryptionResultView;
 import dev.inboxbridge.dto.SecretReencryptionRequest;
 import dev.inboxbridge.dto.SecretManagementStatusView;
+import dev.inboxbridge.dto.SecretProviderComponentStatusView;
 import dev.inboxbridge.dto.StartPasskeyCeremonyResponse;
 import dev.inboxbridge.dto.VerifySecretManagementPasswordRequest;
 import dev.inboxbridge.dto.SourcePollingSettingsView;
@@ -171,6 +172,7 @@ class AdminResourceTest {
         assertEquals("LOCAL", response.mode());
         assertTrue(response.providerHealthy());
         assertTrue(response.providerWritable());
+        assertEquals(1, response.providerComponents().size());
         assertEquals("LOCAL:v2", response.activeKeyVersion());
         assertEquals(2, response.protectedRecordCount());
         assertTrue(response.envManagedMailboxSecretsAllowed());
@@ -335,6 +337,13 @@ class AdminResourceTest {
                     true,
                     true,
                     "Local secret provider is ready.",
+                    java.util.List.of(new SecretProviderComponentStatusView(
+                            "local-key",
+                            "Local inner encryption key",
+                            "The local AES-GCM key path is configured and can protect InboxBridge-managed secrets.",
+                            java.util.List.of("SECURITY_TOKEN_ENCRYPTION_KEY"),
+                            true,
+                            true)),
                     "LOCAL:v2",
                     "v2",
                     java.util.List.of("v1"),

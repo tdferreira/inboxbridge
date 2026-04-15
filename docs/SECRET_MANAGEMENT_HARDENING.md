@@ -288,6 +288,10 @@ Current implementation status:
   server configuration references, and optional focus targets so the operator
   can jump directly to the key-status, key-usage, pending-request, or session
   verification area that needs attention
+- `/api/admin/secret-management` also now reports provider-component
+  diagnostics for the active trust boundaries, and the admin section surfaces
+  them as separate readiness cards so operators can distinguish a broken local
+  key path from a broken transit secondary before rotating secrets
 - after completion, the UI shows verification messages plus a list of items the
   operator should save before retiring any legacy key material
 

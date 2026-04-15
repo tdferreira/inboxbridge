@@ -22,6 +22,16 @@ function renderSection(overrides = {}) {
         providerId: 'LOCAL',
         activeKeyVersion: 'LOCAL:v2',
         activeKeyId: 'LOCAL:v2',
+        providerComponents: [
+          {
+            componentId: 'local-key',
+            title: 'Local inner encryption key',
+            detail: 'The local AES-GCM key path is configured and can protect InboxBridge-managed secrets.',
+            configReferences: ['SECURITY_TOKEN_ENCRYPTION_KEY', 'SECURITY_TOKEN_ENCRYPTION_KEY_ID'],
+            healthy: true,
+            writable: true
+          }
+        ],
         configuredLegacyKeyIds: ['LOCAL:v1'],
         protectedRecordCount: 14,
         nonActiveKeyRecordCount: 3,
@@ -39,8 +49,8 @@ function renderSection(overrides = {}) {
             detail: 'Local secret provider is ready.',
             remediationSteps: ['Verify the current provider endpoint from the server host.'],
             configReferences: ['SECURITY_TOKEN_ENCRYPTION_KEY'],
-            actionTargetId: 'secret-management-summary',
-            actionLabel: 'Review provider health',
+            actionTargetId: 'secret-management-provider-diagnostics',
+            actionLabel: 'Review provider diagnostics',
             satisfied: true,
             blocking: true
           }
@@ -79,8 +89,8 @@ describe('SecretManagementSection', () => {
             detail: 'Local secret provider is ready.',
             remediationSteps: ['Verify the current provider endpoint from the server host.'],
             configReferences: ['SECURITY_TOKEN_ENCRYPTION_KEY'],
-            actionTargetId: 'secret-management-summary',
-            actionLabel: 'Review provider health',
+            actionTargetId: 'secret-management-provider-diagnostics',
+            actionLabel: 'Review provider diagnostics',
             satisfied: true,
             blocking: true
           },
@@ -114,6 +124,9 @@ describe('SecretManagementSection', () => {
 
     expect(screen.getByText('Backend-verified requirements')).toBeInTheDocument()
     expect(screen.getByText('Not satisfied')).toBeInTheDocument()
+    expect(screen.getByText('Provider diagnostics')).toBeInTheDocument()
+    expect(screen.getByText('Local inner encryption key')).toBeInTheDocument()
+    expect(screen.getByText('Healthy and writable')).toBeInTheDocument()
     expect(screen.getByText('What you need to do')).toBeInTheDocument()
     expect(screen.getByText('Restore every missing legacy key or provider credential that still protects encrypted records.')).toBeInTheDocument()
     expect(screen.getByText('SECURITY_TOKEN_ENCRYPTION_LEGACY_KEYS')).toBeInTheDocument()
@@ -184,8 +197,8 @@ describe('SecretManagementSection', () => {
               detail: 'Local secret provider is ready.',
               remediationSteps: ['Verify the current provider endpoint from the server host.'],
               configReferences: ['SECURITY_TOKEN_ENCRYPTION_KEY'],
-              actionTargetId: 'secret-management-summary',
-              actionLabel: 'Review provider health',
+            actionTargetId: 'secret-management-provider-diagnostics',
+            actionLabel: 'Review provider diagnostics',
               satisfied: true,
               blocking: true
             },
@@ -284,8 +297,8 @@ describe('SecretManagementSection', () => {
               detail: 'Local secret provider is ready.',
               remediationSteps: ['Verify the current provider endpoint from the server host.'],
               configReferences: ['SECURITY_TOKEN_ENCRYPTION_KEY'],
-              actionTargetId: 'secret-management-summary',
-              actionLabel: 'Review provider health',
+              actionTargetId: 'secret-management-provider-diagnostics',
+              actionLabel: 'Review provider diagnostics',
               satisfied: true,
               blocking: true
             }

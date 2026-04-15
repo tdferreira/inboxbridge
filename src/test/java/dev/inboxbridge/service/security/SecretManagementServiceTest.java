@@ -53,6 +53,9 @@ class SecretManagementServiceTest {
         assertTrue(view.providerHealthy());
         assertTrue(view.providerWritable());
         assertEquals("Local secret provider is ready.", view.providerStatusMessage());
+        assertEquals(1, view.providerComponents().size());
+        assertEquals("local-key", view.providerComponents().getFirst().componentId());
+        assertTrue(view.providerComponents().getFirst().healthy());
         assertEquals("LOCAL:v2", view.activeKeyVersion());
         assertEquals("v2", view.activeKeyId());
         assertEquals(List.of("v1"), view.configuredLegacyKeyIds());
@@ -110,10 +113,12 @@ class SecretManagementServiceTest {
         assertEquals(0, view.configuredEnvManagedSourceCount());
         assertFalse(view.envManagedGoogleRefreshTokenConfigured());
         assertTrue(view.keyUsage().isEmpty());
+        assertEquals(1, view.providerComponents().size());
+        assertFalse(view.providerComponents().getFirst().writable());
         assertTrue(view.reencryptionRequirements().stream()
                 .anyMatch(requirement -> "secure-storage".equals(requirement.requirementId())
                         && requirement.configReferences().contains("SECRET_PROVIDER_MODE")
-                        && "Review secret-management summary".equals(requirement.actionLabel())));
+                        && "Review provider diagnostics".equals(requirement.actionLabel())));
     }
 
     @Test
@@ -167,6 +172,8 @@ class SecretManagementServiceTest {
         assertTrue(view.providerHealthy());
         assertTrue(view.providerWritable());
         assertEquals("VAULT_TRANSIT transit provider is ready.", view.providerStatusMessage());
+        assertEquals(1, view.providerComponents().size());
+        assertEquals("vault_transit-transit", view.providerComponents().getFirst().componentId());
         assertEquals("VAULT_TRANSIT:inboxbridge", view.activeKeyVersion());
         assertEquals("inboxbridge", view.activeKeyId());
         assertEquals(List.of(), view.configuredLegacyKeyIds());
@@ -193,8 +200,28 @@ class SecretManagementServiceTest {
         assertEquals("SPLIT_KEY", view.providerId());
         assertTrue(view.providerHealthy());
         assertTrue(view.providerWritable());
+        assertEquals(2, view.providerComponents().size());
+        assertEquals("split-secondary", view.providerComponents().get(1).componentId());
+        assertTrue(view.providerComponents().get(1).writable());
         assertEquals("SPLIT_KEY:LOCAL=v2|OPENBAO_TRANSIT=inboxbridge", view.activeKeyVersion());
         assertEquals("LOCAL:v2 + OPENBAO_TRANSIT:inboxbridge", view.activeKeyId());
+    }
+
+    @Test
+    void reportsSplitKeyComponentDiagnosticsWhenSecondaryModeIsMissing() {
+        SecretManagementService service = configuredService();
+        SecretProviderResolver resolver = new SecretProviderResolver();
+        resolver.setLocalSecretKeyProvider(service.localSecretKeyProvider);
+        resolver.setProviderMode("SPLIT_KEY");
+        service.setSecretProviderResolver(resolver);
+
+        SecretManagementStatusView view = service.status();
+
+        assertEquals("SPLIT_KEY", view.mode());
+        assertEquals(2, view.providerComponents().size());
+        assertEquals("split-secondary", view.providerComponents().get(1).componentId());
+        assertFalse(view.providerComponents().get(1).healthy());
+        assertTrue(view.providerComponents().get(1).configReferences().contains("SECRET_PROVIDER_SPLIT_SECONDARY_MODE"));
     }
 
     @Test
@@ -382,7 +409,7 @@ class SecretManagementServiceTest {
         service.userSessionService = new UserSessionService() {
             @Override
             public Instant markSensitiveActionAuthenticated(Long sessionId) {
-                return Instant.parse("2026-04-15T10:15:30Z");
+                return Instant.now();
             }
         };
         UserSession session = new UserSession();
@@ -427,7 +454,7 @@ class SecretManagementServiceTest {
         service.userSessionService = new UserSessionService() {
             @Override
             public Instant markSensitiveActionAuthenticated(Long sessionId) {
-                return Instant.parse("2026-04-15T10:15:30Z");
+                return Instant.now();
             }
         };
         UserSession session = new UserSession();

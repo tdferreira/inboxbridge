@@ -19,6 +19,7 @@ const DEFAULT_SECRET_MANAGEMENT_STATUS = {
   providerId: 'LOCAL',
   activeKeyVersion: '',
   activeKeyId: '',
+  providerComponents: [],
   configuredLegacyKeyIds: [],
   protectedRecordCount: 0,
   activeKeyRecordCount: 0,

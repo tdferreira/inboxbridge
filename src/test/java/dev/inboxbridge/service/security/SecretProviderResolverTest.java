@@ -22,6 +22,8 @@ class SecretProviderResolverTest {
         assertTrue(health.healthy());
         assertTrue(health.writable());
         assertEquals("Local secret provider is ready.", health.statusMessage());
+        assertEquals(1, resolver.componentStatuses().size());
+        assertEquals("local-key", resolver.componentStatuses().getFirst().componentId());
     }
 
     @Test
@@ -53,6 +55,8 @@ class SecretProviderResolverTest {
         assertTrue(health.healthy());
         assertTrue(health.writable());
         assertEquals("VAULT_TRANSIT", health.providerId());
+        assertEquals(1, resolver.componentStatuses().size());
+        assertEquals("vault_transit-transit", resolver.componentStatuses().getFirst().componentId());
         assertEquals("VAULT_TRANSIT:inboxbridge", resolver.activeKeyVersion());
         assertEquals("inboxbridge", resolver.activeKeyId());
     }
@@ -74,8 +78,21 @@ class SecretProviderResolverTest {
         assertEquals(SecretProviderMode.SPLIT_KEY, health.mode());
         assertTrue(health.healthy());
         assertTrue(health.writable());
+        assertEquals(2, resolver.componentStatuses().size());
+        assertEquals("split-secondary", resolver.componentStatuses().get(1).componentId());
         assertEquals("SPLIT_KEY:LOCAL=v1|OPENBAO_TRANSIT=inboxbridge", resolver.activeKeyVersion());
         assertEquals("LOCAL:v1 + OPENBAO_TRANSIT:inboxbridge", resolver.activeKeyId());
+    }
+
+    @Test
+    void reportsSplitKeySecondaryComponentWhenSplitModeIsMisconfigured() {
+        SecretProviderResolver resolver = new SecretProviderResolver();
+        resolver.setLocalSecretKeyProvider(configuredLocalProvider());
+        resolver.setProviderMode("SPLIT_KEY");
+
+        assertEquals(2, resolver.componentStatuses().size());
+        assertEquals("split-secondary", resolver.componentStatuses().get(1).componentId());
+        assertFalse(resolver.componentStatuses().get(1).writable());
     }
 
     @Test

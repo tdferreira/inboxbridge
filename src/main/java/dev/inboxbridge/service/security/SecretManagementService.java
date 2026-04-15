@@ -11,6 +11,7 @@ import java.util.Map;
 
 import dev.inboxbridge.config.SecretManagementPolicyConfig;
 import dev.inboxbridge.dto.SecretManagementKeyUsageView;
+import dev.inboxbridge.dto.SecretProviderComponentStatusView;
 import dev.inboxbridge.dto.SecretReencryptionFollowUpView;
 import dev.inboxbridge.dto.SecretReencryptionRequest;
 import dev.inboxbridge.dto.SecretReencryptionAreaResultView;
@@ -118,6 +119,7 @@ public class SecretManagementService {
 
     public SecretManagementStatusView status(UserSession currentSession) {
         SecretProviderHealth providerHealth = providerResolver().health();
+        List<SecretProviderComponentStatusView> providerComponents = providerResolver().componentStatuses();
         SystemSecretReencryptionRequest requestState = currentReencryptionRequest();
         boolean reauthenticationRequired = reencryptionReauthenticationRequired();
         boolean reauthenticationSatisfied = reencryptionReauthenticationSatisfied(currentSession);
@@ -138,6 +140,7 @@ public class SecretManagementService {
                     providerHealth.healthy(),
                     providerHealth.writable(),
                     providerHealth.statusMessage(),
+                    providerComponents,
                     null,
                     null,
                     List.of(),
@@ -211,6 +214,7 @@ public class SecretManagementService {
                 providerHealth.healthy(),
                 providerHealth.writable(),
                 providerHealth.statusMessage(),
+                providerComponents,
                 activeKeyVersion,
                 activeKeyId,
                 configuredLegacyKeyIds,
@@ -827,8 +831,8 @@ public class SecretManagementService {
                                 "SECURITY_TOKEN_ENCRYPTION_LEGACY_KEYS",
                                 "SECRET_PROVIDER_MODE",
                                 "VAULT_* / OPENBAO_* / split-key provider settings"),
-                "secret-management-summary",
-                "Review secret-management summary",
+                "secret-management-provider-diagnostics",
+                "Review provider diagnostics",
                 secureStorageConfigured,
                 true));
         requirements.add(new SecretReencryptionRequirementView(
@@ -846,8 +850,8 @@ public class SecretManagementService {
                 providerHealth.mode() == SecretProviderMode.LOCAL
                         ? List.of("SECURITY_TOKEN_ENCRYPTION_KEY", "SECURITY_TOKEN_ENCRYPTION_KEY_ID", "SECURITY_TOKEN_ENCRYPTION_LEGACY_KEYS")
                         : List.of("SECRET_PROVIDER_MODE", providerHealth.providerId() + " connection settings"),
-                "secret-management-summary",
-                "Review provider health",
+                "secret-management-provider-diagnostics",
+                "Review provider diagnostics",
                 providerHealth.writable(),
                 true));
         requirements.add(new SecretReencryptionRequirementView(

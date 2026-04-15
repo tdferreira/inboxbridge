@@ -3,6 +3,7 @@ import LoadingButton from '@/shared/components/LoadingButton'
 import Banner from '@/shared/components/Banner'
 import CollapsibleSection from '@/shared/components/CollapsibleSection'
 import SecretReencryptionDialog from './SecretReencryptionDialog'
+import './SecretManagementSection.css'
 
 function formatKeyIds(keyIds, t) {
   return Array.isArray(keyIds) && keyIds.length > 0 ? keyIds.join(', ') : t('authSecurity.secretManagementNoLegacyKeys')
@@ -19,6 +20,16 @@ function formatKeyUsageAreas(areas, t) {
       return translated === translationKey ? value : translated
     })
     .join(', ')
+}
+
+function componentTone(component) {
+  if (component?.writable) {
+    return 'status-ok'
+  }
+  if (component?.healthy) {
+    return 'tone-warn'
+  }
+  return 'tone-bad'
 }
 
 function SecretManagementSection({
@@ -42,6 +53,7 @@ function SecretManagementSection({
   const [showReencryptDialog, setShowReencryptDialog] = useState(false)
   const [reencryptionResult, setReencryptionResult] = useState(null)
   const keyUsage = Array.isArray(secretManagementStatus?.keyUsage) ? secretManagementStatus.keyUsage : []
+  const providerComponents = Array.isArray(secretManagementStatus?.providerComponents) ? secretManagementStatus.providerComponents : []
   const reencryptionRequest = secretManagementStatus?.reencryptionRequest
   const pendingReencryption = reencryptionRequest?.status === 'PENDING'
 
@@ -83,6 +95,39 @@ function SecretManagementSection({
               <div><span>{t('authSecurity.secretManagementRetirementStatus')}</span><strong>{t(secretManagementStatus?.safeToRetireLegacyKeys ? 'authSecurity.secretManagementSafeToRetire' : 'authSecurity.secretManagementKeepLegacyKeys')}</strong></div>
             </div>
             <p className="section-copy">{t('authSecurity.secretManagementEnvPolicyHelp')}</p>
+          </article>
+
+          <article className="surface-card polling-statistics-card" id="secret-management-provider-diagnostics" tabIndex="-1">
+            <div className="polling-statistics-card-title">{t('authSecurity.secretManagementProviderDiagnosticsTitle')}</div>
+            <p className="section-copy">{t('authSecurity.secretManagementProviderDiagnosticsCopy')}</p>
+            {providerComponents.length === 0 ? (
+              <p className="section-copy">{t('authSecurity.secretManagementProviderDiagnosticsEmpty')}</p>
+            ) : (
+              <div className="detail-stack">
+                {providerComponents.map((component) => (
+                  <div className="muted-box detail-stack" key={component.componentId}>
+                    <div className="secret-management-provider-component-header">
+                      <strong>{component.title}</strong>
+                      <span className={`status-pill ${componentTone(component)}`}>
+                        {component.writable
+                          ? t('authSecurity.secretManagementProviderComponentWritable')
+                          : component.healthy
+                            ? t('authSecurity.secretManagementProviderComponentReadOnly')
+                            : t('authSecurity.secretManagementProviderComponentUnavailable')}
+                      </span>
+                    </div>
+                    <span>{component.detail}</span>
+                    {Array.isArray(component.configReferences) && component.configReferences.length > 0 ? (
+                      <div className="secret-management-config-list">
+                        {component.configReferences.map((reference) => (
+                          <code className="secret-management-config-chip" key={`${component.componentId}:${reference}`}>{reference}</code>
+                        ))}
+                      </div>
+                    ) : null}
+                  </div>
+                ))}
+              </div>
+            )}
           </article>
 
           <article className="surface-card polling-statistics-card" id="secret-management-key-usage" tabIndex="-1">

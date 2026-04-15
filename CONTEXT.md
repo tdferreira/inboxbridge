@@ -502,7 +502,10 @@ the list of recovery details to save before any legacy keys are removed. The
 same modal is now rendered in a wider layout and each backend requirement is
 shown as an expandable status card with remediation steps, related config
 references, and optional focus actions that jump the operator to the relevant
-page or in-modal section.
+page or in-modal section. The admin `Secret management` section also now shows
+provider-component diagnostics for the active trust boundaries, so local-key,
+transit, and split-key deployments can see exactly which encryption component
+is healthy or writable before they attempt key rotation or bulk re-encryption.
 That same admin secret-management flow now also supports step-up verification
 per browser session. When
 `SECURITY_SECRET_REENCRYPTION_REAUTHENTICATION_TTL` is greater than zero

@@ -14,6 +14,7 @@ public record SecretManagementStatusView(
         boolean providerHealthy,
         boolean providerWritable,
         String providerStatusMessage,
+        List<SecretProviderComponentStatusView> providerComponents,
         String activeKeyVersion,
         String activeKeyId,
         List<String> configuredLegacyKeyIds,

@@ -5,6 +5,7 @@ import java.util.List;
 import java.util.Optional;
 
 import dev.inboxbridge.config.SecurityTokenConfig;
+import dev.inboxbridge.dto.SecretProviderComponentStatusView;
 import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.inject.Inject;
 
@@ -111,6 +112,15 @@ public class SecretProviderResolver {
                     "SECRET_PROVIDER_VAULT_MOUNT",
                     "SECRET_PROVIDER_VAULT_KEY");
             case SPLIT_KEY -> splitHealth();
+        };
+    }
+
+    public List<SecretProviderComponentStatusView> componentStatuses() {
+        return switch (mode()) {
+            case LOCAL -> List.of(localComponentStatus());
+            case OPENBAO_TRANSIT -> List.of(transitComponentStatus(SecretProviderMode.OPENBAO_TRANSIT));
+            case VAULT_TRANSIT -> List.of(transitComponentStatus(SecretProviderMode.VAULT_TRANSIT));
+            case SPLIT_KEY -> splitComponentStatuses();
         };
     }
 
@@ -271,6 +281,19 @@ public class SecretProviderResolver {
                 "Local secret provider is ready.");
     }
 
+    private SecretProviderComponentStatusView localComponentStatus() {
+        boolean configured = localProvider().isConfigured();
+        return new SecretProviderComponentStatusView(
+                "local-key",
+                "Local inner encryption key",
+                configured
+                        ? "The local AES-GCM key path is configured and can protect InboxBridge-managed secrets."
+                        : "The local AES-GCM key path is missing. Configure SECURITY_TOKEN_ENCRYPTION_KEY before using local or split-key secret management.",
+                List.of("SECURITY_TOKEN_ENCRYPTION_KEY", "SECURITY_TOKEN_ENCRYPTION_KEY_ID", "SECURITY_TOKEN_ENCRYPTION_LEGACY_KEYS"),
+                configured,
+                configured);
+    }
+
     private SecretProviderHealth splitHealth() {
         if (!localProvider().isConfigured()) {
             return new SecretProviderHealth(
@@ -349,6 +372,33 @@ public class SecretProviderResolver {
         return transitProvider().health(new TransitProviderConfig(mode, mode.name(), url, token, mount, key));
     }
 
+    private SecretProviderComponentStatusView transitComponentStatus(SecretProviderMode mode) {
+        SecretProviderHealth health = transitHealthForMode(mode);
+        List<String> configReferences = mode == SecretProviderMode.OPENBAO_TRANSIT
+                ? List.of(
+                        "SECRET_PROVIDER_OPENBAO_URL",
+                        "SECRET_PROVIDER_OPENBAO_TOKEN",
+                        "SECRET_PROVIDER_OPENBAO_MOUNT",
+                        "SECRET_PROVIDER_OPENBAO_KEY")
+                : List.of(
+                        "SECRET_PROVIDER_VAULT_URL",
+                        "SECRET_PROVIDER_VAULT_TOKEN",
+                        "SECRET_PROVIDER_VAULT_MOUNT",
+                        "SECRET_PROVIDER_VAULT_KEY");
+        String configuredPath = mode == SecretProviderMode.OPENBAO_TRANSIT
+                ? configuredOpenbaoMount() + "/" + configuredOpenbaoKey()
+                : configuredVaultMount() + "/" + configuredVaultKey();
+        return new SecretProviderComponentStatusView(
+                mode.name().toLowerCase() + "-transit",
+                mode == SecretProviderMode.OPENBAO_TRANSIT ? "OpenBao transit provider" : "Vault transit provider",
+                health.writable()
+                        ? health.statusMessage() + " Key path: " + configuredPath + "."
+                        : health.statusMessage(),
+                configReferences,
+                health.healthy(),
+                health.writable());
+    }
+
     private Optional<TransitProviderConfig> transitConfig(
             SecretProviderMode mode,
             String url,
@@ -408,6 +458,48 @@ public class SecretProviderResolver {
                     false,
                     "Split-key secondary mode must be OPENBAO_TRANSIT or VAULT_TRANSIT.");
         };
+    }
+
+    private List<SecretProviderComponentStatusView> splitComponentStatuses() {
+        List<SecretProviderComponentStatusView> statuses = new ArrayList<>();
+        statuses.add(localComponentStatus());
+        try {
+            SecretProviderMode secondaryMode = configuredSplitSecondaryMode();
+            SecretProviderComponentStatusView transitStatus = transitComponentStatus(secondaryMode);
+            statuses.add(new SecretProviderComponentStatusView(
+                    "split-secondary",
+                    "Split-key transit secondary",
+                    transitStatus.detail(),
+                    combineLists(
+                            List.of("SECRET_PROVIDER_SPLIT_SECONDARY_MODE"),
+                            transitStatus.configReferences()),
+                    transitStatus.healthy(),
+                    transitStatus.writable()));
+        } catch (IllegalStateException error) {
+            statuses.add(new SecretProviderComponentStatusView(
+                    "split-secondary",
+                    "Split-key transit secondary",
+                    error.getMessage(),
+                    List.of(
+                            "SECRET_PROVIDER_SPLIT_SECONDARY_MODE",
+                            "SECRET_PROVIDER_OPENBAO_URL / SECRET_PROVIDER_VAULT_URL",
+                            "SECRET_PROVIDER_OPENBAO_TOKEN / SECRET_PROVIDER_VAULT_TOKEN",
+                            "SECRET_PROVIDER_OPENBAO_MOUNT / SECRET_PROVIDER_VAULT_MOUNT",
+                            "SECRET_PROVIDER_OPENBAO_KEY / SECRET_PROVIDER_VAULT_KEY"),
+                    false,
+                    false));
+        }
+        return statuses;
+    }
+
+    private List<String> combineLists(List<String> first, List<String> second) {
+        List<String> combined = new ArrayList<>(first);
+        for (String value : second) {
+            if (!combined.contains(value)) {
+                combined.add(value);
+            }
+        }
+        return combined;
     }
 
     private Optional<TransitProviderConfig> splitTransitConfig() {
