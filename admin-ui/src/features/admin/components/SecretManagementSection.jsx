@@ -52,11 +52,15 @@ function SecretManagementSection({
   locale = 'en',
   onCollapseToggle,
   onExportSecretManagementReport,
+  onRecordSecretManagementRetirementReview,
+  onVerifySecretManagementRetirementCompletion,
   onReencryptStoredSecrets,
   onVerifySecretManagementPasskey,
   onVerifySecretManagementPassword,
   onSecretReencryptOptionsChange,
   exportReportLoading = false,
+  retirementReviewLoading = false,
+  retirementCompletionLoading = false,
   reauthPasskeyLoading = false,
   reauthPasswordLoading = false,
   reencryptionLoading = false,
@@ -301,6 +305,10 @@ function SecretManagementSection({
       {showRetirementDialog ? (
         <SecretRetirementDialog
           onClose={() => setShowRetirementDialog(false)}
+          onRecordRetirementReview={onRecordSecretManagementRetirementReview}
+          onVerifyRetirementCompletion={onVerifySecretManagementRetirementCompletion}
+          completionPending={retirementCompletionLoading}
+          pending={retirementReviewLoading}
           secretManagementStatus={secretManagementStatus}
           t={t}
         />

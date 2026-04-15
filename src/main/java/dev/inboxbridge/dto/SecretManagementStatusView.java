@@ -33,6 +33,8 @@ public record SecretManagementStatusView(
         boolean reencryptionReady,
         List<SecretReencryptionRequirementView> reencryptionRequirements,
         List<SecretManagementRetirementRequirementView> retirementRequirements,
+        SecretManagementRetirementReviewView latestRetirementReview,
+        List<SecretManagementRetirementReviewView> recentRetirementReviews,
         SecretReencryptionRequestStatusView reencryptionRequest,
         String reencryptionCooldown,
         boolean immediateReencryptionOverrideAllowed,

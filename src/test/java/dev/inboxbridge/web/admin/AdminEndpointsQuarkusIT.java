@@ -42,6 +42,22 @@ class AdminEndpointsQuarkusIT {
     }
 
     @Test
+    void secretManagementRetirementReviewRejectsAnonymousAccess() {
+        given()
+                .when().post("/api/admin/secret-management/retirement-review")
+                .then()
+                .statusCode(401);
+    }
+
+    @Test
+    void secretManagementRetirementCompletionRejectsAnonymousAccess() {
+        given()
+                .when().post("/api/admin/secret-management/retirement-complete")
+                .then()
+                .statusCode(401);
+    }
+
+    @Test
     void reencryptStoredSecretsRejectsAnonymousAccess() {
         given()
                 .contentType("application/json")

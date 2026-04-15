@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react'
 import Banner from '@/shared/components/Banner'
+import LoadingButton from '@/shared/components/LoadingButton'
 import ModalDialog from '@/shared/components/ModalDialog'
 import './SecretReencryptionDialog.css'
 
@@ -33,6 +34,10 @@ function RequirementStatusIcon({ satisfied, t }) {
 
 function SecretRetirementDialog({
   onClose,
+  onRecordRetirementReview,
+  onVerifyRetirementCompletion,
+  completionPending = false,
+  pending = false,
   secretManagementStatus,
   t
 }) {
@@ -46,6 +51,11 @@ function SecretRetirementDialog({
   ))
   const requestState = secretManagementStatus?.reencryptionRequest || null
   const latestRequestStatus = requestState?.status || null
+  const latestRetirementReview = secretManagementStatus?.latestRetirementReview || null
+  const recentRetirementReviews = Array.isArray(secretManagementStatus?.recentRetirementReviews)
+    ? secretManagementStatus.recentRetirementReviews
+    : []
+  const latestCompletion = latestRetirementReview?.completion || null
 
   useEffect(() => {
     setExpandedRequirementIds((current) => {
@@ -188,6 +198,58 @@ function SecretRetirementDialog({
         </div>
 
         <div className="detail-stack">
+          <strong>{t('authSecurity.secretManagementRetirementLatestReviewTitle')}</strong>
+          {latestRetirementReview ? (
+            <div className="muted-box detail-stack">
+              <div className="polling-statistics-breakdown">
+                <div><span>{t('authSecurity.secretManagementRetirementReviewRecordedAt')}</span><strong>{latestRetirementReview.reviewedAt || t('common.unavailable')}</strong></div>
+                <div><span>{t('authSecurity.secretManagementRetirementReviewRecordedBy')}</span><strong>{latestRetirementReview.reviewedByUsername || latestRetirementReview.reviewedByUserId || t('common.unavailable')}</strong></div>
+                <div><span>{t('authSecurity.secretManagementRetirementStatus')}</span><strong>{t(latestRetirementReview.legacyKeyRetirementReady ? 'authSecurity.secretManagementSafeToRetire' : 'authSecurity.secretManagementKeepLegacyKeys')}</strong></div>
+                <div><span>{t('authSecurity.secretManagementRetirementReviewRemainingBlocking')}</span><strong>{latestRetirementReview.blockingRequirementsRemaining ?? 0}</strong></div>
+              </div>
+              {latestCompletion ? (
+                <div className="detail-stack">
+                  <strong>{t('authSecurity.secretManagementRetirementCompletionTitle')}</strong>
+                  <div className="polling-statistics-breakdown">
+                    <div><span>{t('authSecurity.secretManagementRetirementCompletionVerifiedAt')}</span><strong>{latestCompletion.verifiedAt || t('common.unavailable')}</strong></div>
+                    <div><span>{t('authSecurity.secretManagementRetirementCompletionVerifiedBy')}</span><strong>{latestCompletion.verifiedByUsername || latestCompletion.verifiedByUserId || t('common.unavailable')}</strong></div>
+                    <div><span>{t('authSecurity.secretManagementRetirementCompletionStatus')}</span><strong>{latestCompletion.status || t('common.unavailable')}</strong></div>
+                  </div>
+                  {latestCompletion.message ? <span>{latestCompletion.message}</span> : null}
+                </div>
+              ) : (
+                <span>{t('authSecurity.secretManagementRetirementCompletionNotRecorded')}</span>
+              )}
+            </div>
+          ) : (
+            <p className="section-copy">{t('authSecurity.secretManagementRetirementNoReviews')}</p>
+          )}
+        </div>
+
+        {recentRetirementReviews.length > 0 ? (
+          <div className="detail-stack">
+            <strong>{t('authSecurity.secretManagementRetirementRecentReviewsTitle')}</strong>
+            <div className="secret-reencryption-requirements-grid">
+              {recentRetirementReviews.map((review) => (
+                <article className="muted-box secret-reencryption-requirement-card" key={review.reviewId || review.reviewedAt}>
+                  <div className="secret-reencryption-requirement-toggle">
+                    <div className="secret-reencryption-requirement-copy">
+                      <strong>{review.reviewedAt || t('common.unavailable')}</strong>
+                      <span>{review.reviewedByUsername || review.reviewedByUserId || t('common.unavailable')}</span>
+                    </div>
+                    <div className="secret-reencryption-requirement-meta">
+                      <span className={`status-pill ${review.legacyKeyRetirementReady ? 'status-ok' : 'tone-warn'}`}>
+                        {t(review.legacyKeyRetirementReady ? 'authSecurity.secretManagementSafeToRetire' : 'authSecurity.secretManagementKeepLegacyKeys')}
+                      </span>
+                    </div>
+                  </div>
+                </article>
+              ))}
+            </div>
+          </div>
+        ) : null}
+
+        <div className="detail-stack">
           <strong>{t('authSecurity.secretManagementRetirementDialogStepsTitle')}</strong>
           <ol className="detail-stack secret-reencryption-procedure-list">
             <li>{t('authSecurity.secretManagementRetirementDialogStep1')}</li>
@@ -198,6 +260,25 @@ function SecretRetirementDialog({
         </div>
 
         <div className="action-row">
+          <LoadingButton
+            className="secondary"
+            disabled={!latestRetirementReview}
+            onClick={() => onVerifyRetirementCompletion?.()}
+            type="button"
+          >
+            {completionPending
+              ? t('authSecurity.secretManagementRetirementVerifyCompletionLoading')
+              : t('authSecurity.secretManagementRetirementVerifyCompletion')}
+          </LoadingButton>
+          <LoadingButton
+            className="primary"
+            onClick={() => onRecordRetirementReview?.()}
+            type="button"
+          >
+            {pending
+              ? t('authSecurity.secretManagementRetirementRecordReviewLoading')
+              : t('authSecurity.secretManagementRetirementRecordReview')}
+          </LoadingButton>
           <button className="secondary" onClick={onClose} type="button">
             {t('common.done')}
           </button>

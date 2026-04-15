@@ -318,6 +318,21 @@ Current implementation status:
   and an explicit operator procedure of export report -> remove obsolete legacy
   config -> redeploy -> re-check status before considering legacy material
   fully retired
+- `POST /api/admin/secret-management/retirement-review` now persists an
+  operator-reviewed audit snapshot in `system_secret_retirement_review`,
+  capturing the reviewer identity, active key/provider summary, remaining
+  blocking retirement checks, and the exact status payload reviewed at that
+  time
+- `/api/admin/secret-management` now also returns the latest recorded
+  retirement review plus a short recent-review history so the UI can show when
+  an operator last recorded a backend-verified retirement decision
+- `POST /api/admin/secret-management/retirement-complete` now performs the
+  post-cleanup verification step after the operator removes legacy
+  provider/key material and redeploys; the backend compares the live
+  provider/key summary against the latest recorded retirement review, persists
+  the verifier identity plus any still-unsatisfied checks, and stores a second
+  completion snapshot so the deployment can prove cleanup actually survived a
+  restart
 - the current implementation now also detects provider-side transit key
   rollovers for active `OPENBAO_TRANSIT`, `VAULT_TRANSIT`, and split-key outer
   envelopes; when only the provider's internal key version is stale, the
@@ -328,6 +343,9 @@ Current implementation status:
   can audit what kind of rotation actually ran
 - after completion, the UI shows verification messages plus a list of items the
   operator should save before retiring any legacy key material
+- the retirement dialog now also exposes the latest post-cleanup completion
+  verification, including the last verified timestamp, verifier identity,
+  completion status, and a dedicated `Verify post-cleanup completion` action
 
 ### 2c. Require fresh step-up verification for sensitive browser actions
 

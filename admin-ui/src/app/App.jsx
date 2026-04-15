@@ -1758,6 +1758,8 @@ function AppContent({ timings = DEFAULT_APP_TIMINGS }) {
     setSystemOAuthEditorProvider,
     setSystemOAuthSettingsDirty,
     onExportSecretManagementReport: auth.handleExportSecretManagementReport,
+    onRecordSecretManagementRetirementReview: auth.handleRecordSecretManagementRetirementReview,
+    onVerifySecretManagementRetirementCompletion: auth.handleVerifySecretManagementRetirementCompletion,
     onReencryptStoredSecrets: auth.handleReencryptStoredSecrets,
     onVerifySecretManagementPassword: auth.handleVerifySecretManagementPassword,
     onVerifySecretManagementPasskey: auth.handleVerifySecretManagementPasskey,

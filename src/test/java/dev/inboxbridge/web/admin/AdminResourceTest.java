@@ -19,6 +19,7 @@ import dev.inboxbridge.dto.SecretReencryptionResultView;
 import dev.inboxbridge.dto.SecretReencryptionRequest;
 import dev.inboxbridge.dto.SecretManagementStatusView;
 import dev.inboxbridge.dto.SecretManagementRetirementRequirementView;
+import dev.inboxbridge.dto.SecretManagementRetirementReviewView;
 import dev.inboxbridge.dto.SecretManagementReportView;
 import dev.inboxbridge.dto.SecretManagementRotationPlanView;
 import dev.inboxbridge.dto.SecretProviderComponentStatusView;
@@ -199,6 +200,31 @@ class AdminResourceTest {
         assertTrue(response.exportedAt() != null);
         assertFalse(response.status().legacyKeyRetirementReady());
         assertEquals(1, response.status().retirementRequirements().size());
+    }
+
+    @Test
+    void recordSecretManagementRetirementReviewReturnsUpdatedSnapshot() {
+        AdminResource resource = new AdminResource();
+        resource.currentUserContext = currentUserContext();
+        resource.secretManagementService = new FakeSecretManagementService();
+
+        SecretManagementStatusView response = resource.recordSecretManagementRetirementReview();
+
+        assertTrue(response.latestRetirementReview() != null);
+        assertEquals("admin", response.latestRetirementReview().reviewedByUsername());
+        assertEquals(1, response.recentRetirementReviews().size());
+    }
+
+    @Test
+    void verifySecretManagementRetirementCompletionReturnsUpdatedSnapshot() {
+        AdminResource resource = new AdminResource();
+        resource.currentUserContext = currentUserContext();
+        resource.secretManagementService = new FakeSecretManagementService();
+
+        SecretManagementStatusView response = resource.verifySecretManagementRetirementCompletion();
+
+        assertTrue(response.latestRetirementReview() != null);
+        assertEquals("VERIFIED", response.latestRetirementReview().completion().status());
     }
 
     @Test
@@ -410,6 +436,41 @@ class AdminResourceTest {
                                     "Review rotation plan",
                                     false,
                                     true)),
+                    new SecretManagementRetirementReviewView(
+                            7L,
+                            java.time.Instant.parse("2026-04-15T13:00:00Z"),
+                            1L,
+                            "admin",
+                            "LOCAL",
+                            "LOCAL:v2",
+                            "v2",
+                            java.util.List.of("v1"),
+                            false,
+                            false,
+                            1,
+                            0,
+                            "COMPLETED",
+                            1,
+                            java.util.List.of("rotation-complete"),
+                            null),
+                    java.util.List.of(
+                            new SecretManagementRetirementReviewView(
+                                    7L,
+                                    java.time.Instant.parse("2026-04-15T13:00:00Z"),
+                                    1L,
+                                    "admin",
+                                    "LOCAL",
+                                    "LOCAL:v2",
+                                    "v2",
+                                    java.util.List.of("v1"),
+                                    false,
+                                    false,
+                                    1,
+                                    0,
+                                    "COMPLETED",
+                                    1,
+                                    java.util.List.of("rotation-complete"),
+                                    null)),
                     null,
                     "PT12H",
                     false,
@@ -470,6 +531,74 @@ class AdminResourceTest {
             return new SecretManagementReportView(
                     java.time.Instant.parse("2026-04-15T12:00:00Z"),
                     status(currentSession));
+        }
+
+        @Override
+        public SecretManagementStatusView recordRetirementReview(AppUser actor, UserSession currentSession) {
+            return status(currentSession);
+        }
+
+        @Override
+        public SecretManagementStatusView verifyRetirementCompletion(AppUser actor, UserSession currentSession) {
+            SecretManagementStatusView current = status(currentSession);
+            SecretManagementRetirementReviewView latest = current.latestRetirementReview();
+            SecretManagementRetirementReviewView completed = new SecretManagementRetirementReviewView(
+                    latest.reviewId(),
+                    latest.reviewedAt(),
+                    latest.reviewedByUserId(),
+                    latest.reviewedByUsername(),
+                    latest.providerId(),
+                    latest.activeKeyVersion(),
+                    latest.activeKeyId(),
+                    latest.configuredLegacyKeyIds(),
+                    latest.safeToRetireLegacyKeys(),
+                    latest.legacyKeyRetirementReady(),
+                    latest.nonActiveKeyRecordCount(),
+                    latest.unavailableKeyRecordCount(),
+                    latest.latestRequestStatus(),
+                    latest.blockingRequirementsRemaining(),
+                    latest.unsatisfiedRequirementIds(),
+                    new dev.inboxbridge.dto.SecretManagementRetirementCompletionView(
+                            java.time.Instant.parse("2026-04-15T14:00:00Z"),
+                            1L,
+                            "admin",
+                            "VERIFIED",
+                            "Legacy-key cleanup was verified against the latest recorded retirement review.",
+                            java.util.List.of()));
+            return new SecretManagementStatusView(
+                    current.secureStorageConfigured(),
+                    current.mode(),
+                    current.providerId(),
+                    current.providerHealthy(),
+                    current.providerWritable(),
+                    current.providerStatusMessage(),
+                    current.providerComponents(),
+                    current.activeKeyVersion(),
+                    current.activeKeyId(),
+                    current.configuredLegacyKeyIds(),
+                    current.protectedRecordCount(),
+                    current.activeKeyRecordCount(),
+                    current.nonActiveKeyRecordCount(),
+                    current.unavailableKeyRecordCount(),
+                    current.envManagedMailboxSecretsAllowed(),
+                    current.configuredEnvManagedSourceCount(),
+                    current.envManagedGoogleRefreshTokenConfigured(),
+                    current.safeToRetireLegacyKeys(),
+                    current.legacyKeyRetirementReady(),
+                    current.rotationPlan(),
+                    current.reencryptionPreview(),
+                    current.keyUsage(),
+                    current.reencryptionReady(),
+                    current.reencryptionRequirements(),
+                    current.retirementRequirements(),
+                    completed,
+                    java.util.List.of(completed),
+                    current.reencryptionRequest(),
+                    current.reencryptionCooldown(),
+                    current.immediateReencryptionOverrideAllowed(),
+                    current.reauthenticationRequired(),
+                    current.reauthenticationSatisfied(),
+                    current.reauthenticationExpiresAt());
         }
     }
 

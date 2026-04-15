@@ -228,6 +228,48 @@ class SecretManagementServiceTest {
     }
 
     @Test
+    void recordRetirementReviewPersistsAnAuditableSnapshot() {
+        SecretManagementService service = configuredService();
+
+        SecretManagementStatusView updatedStatus = service.recordRetirementReview(adminUser(), null);
+
+        assertNotNull(updatedStatus.latestRetirementReview());
+        assertEquals("admin", updatedStatus.latestRetirementReview().reviewedByUsername());
+        assertEquals("LOCAL", updatedStatus.latestRetirementReview().providerId());
+        assertEquals("LOCAL:v2", updatedStatus.latestRetirementReview().activeKeyVersion());
+        assertEquals(1, updatedStatus.latestRetirementReview().blockingRequirementsRemaining());
+        assertTrue(updatedStatus.latestRetirementReview().unsatisfiedRequirementIds().contains("rotation-complete"));
+        assertEquals(1, updatedStatus.recentRetirementReviews().size());
+        assertEquals(updatedStatus.latestRetirementReview().reviewId(), updatedStatus.recentRetirementReviews().getFirst().reviewId());
+    }
+
+    @Test
+    void verifyRetirementCompletionPersistsVerifiedCleanupWhenLiveStatusMatchesExpectedPostCleanupState() {
+        SecretManagementService service = configuredRetirementReadyService();
+        service.recordRetirementReview(adminUser(), null);
+        SecretManagementStatusView updatedStatus = service.verifyRetirementCompletion(adminUser(), null);
+
+        assertNotNull(updatedStatus.latestRetirementReview());
+        assertNotNull(updatedStatus.latestRetirementReview().completion());
+        assertEquals("VERIFIED", updatedStatus.latestRetirementReview().completion().status());
+        assertTrue(updatedStatus.latestRetirementReview().completion().unsatisfiedCheckIds().isEmpty());
+    }
+
+    @Test
+    void verifyRetirementCompletionBlocksWhenLegacyCleanupStillHasDriftOrConfiguredLegacyKeys() {
+        SecretManagementService service = configuredService();
+        service.recordRetirementReview(adminUser(), null);
+
+        SecretManagementStatusView updatedStatus = service.verifyRetirementCompletion(adminUser(), null);
+
+        assertNotNull(updatedStatus.latestRetirementReview());
+        assertNotNull(updatedStatus.latestRetirementReview().completion());
+        assertEquals("BLOCKED", updatedStatus.latestRetirementReview().completion().status());
+        assertTrue(updatedStatus.latestRetirementReview().completion().unsatisfiedCheckIds().contains("legacy-key-config-removed"));
+        assertTrue(updatedStatus.latestRetirementReview().completion().unsatisfiedCheckIds().contains("live-retirement-ready"));
+    }
+
+    @Test
     void reportsSplitKeyComponentDiagnosticsWhenSecondaryModeIsMissing() {
         SecretManagementService service = configuredService();
         SecretProviderResolver resolver = new SecretProviderResolver();
@@ -611,6 +653,7 @@ class SecretManagementServiceTest {
         service.setSystemOAuthAppSettingsRepository(new InMemorySystemOAuthAppSettingsRepository(null));
         service.setSystemAuthSecuritySettingRepository(new InMemorySystemAuthSecuritySettingRepository(null));
         service.setSystemSecretReencryptionRequestRepository(new InMemorySystemSecretReencryptionRequestRepository());
+        service.setSystemSecretRetirementReviewRepository(new InMemorySystemSecretRetirementReviewRepository());
         service.setSecretManagementPolicyConfig(new dev.inboxbridge.config.SecretManagementPolicyConfig() {
             @Override
             public boolean allowEnvManagedMailboxSecrets() {
@@ -721,6 +764,7 @@ class SecretManagementServiceTest {
         service.setSystemOAuthAppSettingsRepository(new InMemorySystemOAuthAppSettingsRepository(systemOAuth));
         service.setSystemAuthSecuritySettingRepository(new InMemorySystemAuthSecuritySettingRepository(authSecurity));
         service.setSystemSecretReencryptionRequestRepository(new InMemorySystemSecretReencryptionRequestRepository());
+        service.setSystemSecretRetirementReviewRepository(new InMemorySystemSecretRetirementReviewRepository());
         service.setSecretManagementPolicyConfig(new dev.inboxbridge.config.SecretManagementPolicyConfig() {
             @Override
             public boolean allowEnvManagedMailboxSecrets() {
@@ -755,6 +799,85 @@ class SecretManagementServiceTest {
             @Override
             public boolean envManagedGoogleRefreshTokenConfigured() {
                 return true;
+            }
+        });
+        return service;
+    }
+
+    private SecretManagementService configuredRetirementReadyService() {
+        SecretManagementService service = new SecretManagementService();
+        LocalSecretKeyProvider provider = new LocalSecretKeyProvider();
+        provider.setTokenEncryptionKey(base64("fedcba9876543210fedcba9876543210"));
+        provider.setTokenEncryptionKeyId("v2");
+        provider.setTokenEncryptionLegacyKeys("");
+        service.setLocalSecretKeyProvider(provider);
+        SecretProviderResolver resolver = new SecretProviderResolver();
+        resolver.setLocalSecretKeyProvider(provider);
+        resolver.setProviderMode("LOCAL");
+        service.setSecretProviderResolver(resolver);
+        SecretEncryptionService secretEncryptionService = new SecretEncryptionService();
+        secretEncryptionService.setLocalSecretKeyProvider(provider);
+        secretEncryptionService.setSecretProviderResolver(resolver);
+        service.setSecretEncryptionService(secretEncryptionService);
+
+        OAuthCredential oauthCredential = new OAuthCredential();
+        SecretEncryptionService.EncryptedValue oauthRefresh = secretEncryptionService.encrypt("oauth-refresh", "GOOGLE:gmail-destination:refresh");
+        oauthCredential.provider = "GOOGLE";
+        oauthCredential.subjectKey = "gmail-destination";
+        oauthCredential.refreshTokenCiphertext = oauthRefresh.ciphertextBase64();
+        oauthCredential.refreshTokenNonce = oauthRefresh.nonceBase64();
+        oauthCredential.keyVersion = secretEncryptionService.keyVersion();
+
+        UserEmailAccount sourceMailbox = new UserEmailAccount();
+        SecretEncryptionService.EncryptedValue sourcePassword = secretEncryptionService.encrypt("source-password", "user-bridge:1:source-a:password");
+        sourceMailbox.userId = 1L;
+        sourceMailbox.emailAccountId = "source-a";
+        sourceMailbox.passwordCiphertext = sourcePassword.ciphertextBase64();
+        sourceMailbox.passwordNonce = sourcePassword.nonceBase64();
+        sourceMailbox.keyVersion = secretEncryptionService.keyVersion();
+
+        service.setOAuthCredentialRepository(new InMemoryOAuthCredentialRepository(List.of(oauthCredential)));
+        service.setUserEmailAccountRepository(new InMemoryUserEmailAccountRepository(List.of(sourceMailbox)));
+        service.setUserMailDestinationConfigRepository(new InMemoryUserMailDestinationConfigRepository(List.of()));
+        service.setUserGmailConfigRepository(new InMemoryUserGmailConfigRepository(List.of()));
+        service.setSystemOAuthAppSettingsRepository(new InMemorySystemOAuthAppSettingsRepository(null));
+        service.setSystemAuthSecuritySettingRepository(new InMemorySystemAuthSecuritySettingRepository(null));
+        service.setSystemSecretReencryptionRequestRepository(new InMemorySystemSecretReencryptionRequestRepository());
+        service.setSystemSecretRetirementReviewRepository(new InMemorySystemSecretRetirementReviewRepository());
+        service.setSecretManagementPolicyConfig(new dev.inboxbridge.config.SecretManagementPolicyConfig() {
+            @Override
+            public boolean allowEnvManagedMailboxSecrets() {
+                return true;
+            }
+
+            @Override
+            public Duration reencryptionCooldown() {
+                return Duration.ZERO;
+            }
+
+            @Override
+            public boolean allowImmediateReencryptOverride() {
+                return false;
+            }
+
+            @Override
+            public Duration reauthenticationTtl() {
+                return Duration.ZERO;
+            }
+        });
+        service.setExtensionSessionService(new StubExtensionSessionService(0));
+        service.setRemoteSessionService(new StubRemoteSessionService(0));
+        service.setOAuthCredentialService(new StubOAuthCredentialService(0));
+        service.setEnvSourceService(new EnvSourceService() {
+            @Override
+            public long configuredSourceCountIgnoringPolicy() {
+                return 0;
+            }
+        });
+        service.setSystemOAuthAppSettingsService(new SystemOAuthAppSettingsService() {
+            @Override
+            public boolean envManagedGoogleRefreshTokenConfigured() {
+                return false;
             }
         });
         return service;
@@ -885,6 +1008,41 @@ class SecretManagementServiceTest {
         @Override
         public void persist(dev.inboxbridge.persistence.SystemSecretReencryptionRequest entity) {
             value = entity;
+        }
+    }
+
+    private static final class InMemorySystemSecretRetirementReviewRepository extends dev.inboxbridge.persistence.SystemSecretRetirementReviewRepository {
+        private final java.util.List<dev.inboxbridge.persistence.SystemSecretRetirementReview> values = new java.util.ArrayList<>();
+        private long nextId = 1L;
+
+        @Override
+        public Optional<dev.inboxbridge.persistence.SystemSecretRetirementReview> findLatest() {
+            return values.stream()
+                    .sorted(java.util.Comparator
+                            .comparing((dev.inboxbridge.persistence.SystemSecretRetirementReview review) -> review.reviewedAt)
+                            .thenComparing(review -> review.id)
+                            .reversed())
+                    .findFirst();
+        }
+
+        @Override
+        public java.util.List<dev.inboxbridge.persistence.SystemSecretRetirementReview> listRecent(int maxResults) {
+            return values.stream()
+                    .sorted(java.util.Comparator
+                            .comparing((dev.inboxbridge.persistence.SystemSecretRetirementReview review) -> review.reviewedAt)
+                            .thenComparing(review -> review.id)
+                            .reversed())
+                    .limit(maxResults)
+                    .toList();
+        }
+
+        @Override
+        public void persist(dev.inboxbridge.persistence.SystemSecretRetirementReview entity) {
+            if (entity.id == null) {
+                entity.id = nextId++;
+            }
+            values.removeIf(existing -> existing.id.equals(entity.id));
+            values.add(entity);
         }
     }
 

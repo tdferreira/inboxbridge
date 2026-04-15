@@ -12,10 +12,13 @@ import java.util.LinkedHashSet;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 
 import dev.inboxbridge.config.SecretManagementPolicyConfig;
 import dev.inboxbridge.dto.SecretManagementKeyUsageView;
 import dev.inboxbridge.dto.SecretManagementRetirementRequirementView;
+import dev.inboxbridge.dto.SecretManagementRetirementCompletionView;
+import dev.inboxbridge.dto.SecretManagementRetirementReviewView;
 import dev.inboxbridge.dto.SecretManagementReportView;
 import dev.inboxbridge.dto.SecretManagementRotationPlanView;
 import dev.inboxbridge.dto.SecretProviderComponentStatusView;
@@ -39,6 +42,8 @@ import dev.inboxbridge.persistence.SystemOAuthAppSettings;
 import dev.inboxbridge.persistence.SystemOAuthAppSettingsRepository;
 import dev.inboxbridge.persistence.SystemSecretReencryptionRequest;
 import dev.inboxbridge.persistence.SystemSecretReencryptionRequestRepository;
+import dev.inboxbridge.persistence.SystemSecretRetirementReview;
+import dev.inboxbridge.persistence.SystemSecretRetirementReviewRepository;
 import dev.inboxbridge.persistence.UserEmailAccount;
 import dev.inboxbridge.persistence.UserEmailAccountRepository;
 import dev.inboxbridge.persistence.UserGmailConfig;
@@ -113,6 +118,9 @@ public class SecretManagementService {
     SystemSecretReencryptionRequestRepository systemSecretReencryptionRequestRepository;
 
     @Inject
+    SystemSecretRetirementReviewRepository systemSecretRetirementReviewRepository;
+
+    @Inject
     AppUserService appUserService;
 
     @Inject
@@ -184,6 +192,8 @@ public class SecretManagementService {
                     false,
                     requirements,
                     retirementRequirements,
+                    latestRetirementReview(),
+                    recentRetirementReviews(),
                     toRequestStatusView(requestState),
                     reencryptionCooldown().toString(),
                     allowImmediateReencryptOverride(),
@@ -255,6 +265,8 @@ public class SecretManagementService {
         boolean legacyKeyRetirementReady = retirementRequirements.stream()
                 .filter(SecretManagementRetirementRequirementView::blocking)
                 .allMatch(SecretManagementRetirementRequirementView::satisfied);
+        SecretManagementRetirementReviewView latestRetirementReview = latestRetirementReview();
+        List<SecretManagementRetirementReviewView> recentRetirementReviews = recentRetirementReviews();
 
         return new SecretManagementStatusView(
                 true,
@@ -282,6 +294,8 @@ public class SecretManagementService {
                 reencryptionReady,
                 requirements,
                 retirementRequirements,
+                latestRetirementReview,
+                recentRetirementReviews,
                 toRequestStatusView(requestState),
                 reencryptionCooldown().toString(),
                 allowImmediateReencryptOverride(),
@@ -292,6 +306,82 @@ public class SecretManagementService {
 
     public SecretManagementReportView exportReport(UserSession currentSession) {
         return new SecretManagementReportView(Instant.now(), status(currentSession));
+    }
+
+    @Transactional
+    public SecretManagementStatusView recordRetirementReview(AppUser actor, UserSession currentSession) {
+        if (actor == null || actor.id == null) {
+            throw new IllegalArgumentException("Missing current user");
+        }
+        SecretManagementStatusView currentStatus = status(currentSession);
+        SystemSecretRetirementReview review = new SystemSecretRetirementReview();
+        review.reviewedAt = Instant.now();
+        review.reviewedByUserId = actor.id;
+        review.reviewedByUsername = actor.username;
+        review.providerId = currentStatus.providerId();
+        review.activeKeyVersion = currentStatus.activeKeyVersion();
+        review.activeKeyId = currentStatus.activeKeyId();
+        review.legacyKeyIdsJson = writeJson(currentStatus.configuredLegacyKeyIds());
+        review.safeToRetireLegacyKeys = currentStatus.safeToRetireLegacyKeys();
+        review.legacyKeyRetirementReady = currentStatus.legacyKeyRetirementReady();
+        review.nonActiveKeyRecordCount = currentStatus.nonActiveKeyRecordCount();
+        review.unavailableKeyRecordCount = currentStatus.unavailableKeyRecordCount();
+        review.latestRequestStatus = currentStatus.reencryptionRequest() == null
+                ? null
+                : currentStatus.reencryptionRequest().status();
+        review.blockingRequirementsRemaining = (int) currentStatus.retirementRequirements().stream()
+                .filter(SecretManagementRetirementRequirementView::blocking)
+                .filter(requirement -> !requirement.satisfied())
+                .count();
+        review.unsatisfiedRequirementIdsJson = writeJson(currentStatus.retirementRequirements().stream()
+                .filter(requirement -> !requirement.satisfied())
+                .map(SecretManagementRetirementRequirementView::requirementId)
+                .toList());
+        review.statusSnapshotJson = writeJson(currentStatus);
+        if (systemSecretRetirementReviewRepository != null) {
+            systemSecretRetirementReviewRepository.persist(review);
+        }
+        return status(currentSession);
+    }
+
+    @Transactional
+    public SecretManagementStatusView verifyRetirementCompletion(AppUser actor, UserSession currentSession) {
+        if (actor == null || actor.id == null) {
+            throw new IllegalArgumentException("Missing current user");
+        }
+        if (systemSecretRetirementReviewRepository == null) {
+            throw new IllegalStateException("Retirement review storage is unavailable.");
+        }
+        SystemSecretRetirementReview review = systemSecretRetirementReviewRepository.findLatest()
+                .orElseThrow(() -> new IllegalStateException(
+                        "Record a legacy-key retirement review snapshot before verifying post-cleanup completion."));
+        SecretManagementStatusView currentStatus = status(currentSession);
+        List<String> unsatisfiedChecks = new ArrayList<>();
+        if (!currentStatus.legacyKeyRetirementReady()) {
+            unsatisfiedChecks.add("live-retirement-ready");
+        }
+        if (!currentStatus.safeToRetireLegacyKeys()) {
+            unsatisfiedChecks.add("live-safe-to-retire");
+        }
+        if (!currentStatus.configuredLegacyKeyIds().isEmpty()) {
+            unsatisfiedChecks.add("legacy-key-config-removed");
+        }
+        if (!equalsNullable(review.providerId, currentStatus.providerId())
+                || !equalsNullable(review.activeKeyVersion, currentStatus.activeKeyVersion())
+                || !equalsNullable(review.activeKeyId, currentStatus.activeKeyId())) {
+            unsatisfiedChecks.add("active-target-unchanged");
+        }
+        review.completionVerifiedAt = Instant.now();
+        review.completionVerifiedByUserId = actor.id;
+        review.completionVerifiedByUsername = actor.username;
+        review.completionStatus = unsatisfiedChecks.isEmpty() ? "VERIFIED" : "BLOCKED";
+        review.completionMessage = unsatisfiedChecks.isEmpty()
+                ? "Legacy-key cleanup was verified against the latest recorded retirement review."
+                : "Post-cleanup verification found remaining drift or blockers. Restore the expected active target or finish the remaining retirement steps before marking cleanup complete.";
+        review.completionUnsatisfiedCheckIdsJson = writeJson(unsatisfiedChecks);
+        review.completionSnapshotJson = writeJson(currentStatus);
+        systemSecretRetirementReviewRepository.persist(review);
+        return status(currentSession);
     }
 
     @Transactional
@@ -475,6 +565,10 @@ public class SecretManagementService {
 
     public void setSystemSecretReencryptionRequestRepository(SystemSecretReencryptionRequestRepository systemSecretReencryptionRequestRepository) {
         this.systemSecretReencryptionRequestRepository = systemSecretReencryptionRequestRepository;
+    }
+
+    public void setSystemSecretRetirementReviewRepository(SystemSecretRetirementReviewRepository systemSecretRetirementReviewRepository) {
+        this.systemSecretRetirementReviewRepository = systemSecretRetirementReviewRepository;
     }
 
     public void setObjectMapper(ObjectMapper objectMapper) {
@@ -1679,6 +1773,67 @@ public class SecretManagementService {
         requestState.lastVerificationJson = null;
     }
 
+    private SecretManagementRetirementReviewView latestRetirementReview() {
+        if (systemSecretRetirementReviewRepository == null) {
+            return null;
+        }
+        Optional<SystemSecretRetirementReview> latest = systemSecretRetirementReviewRepository.findLatest();
+        return latest.map(this::toRetirementReviewView).orElse(null);
+    }
+
+    private List<SecretManagementRetirementReviewView> recentRetirementReviews() {
+        if (systemSecretRetirementReviewRepository == null) {
+            return List.of();
+        }
+        return systemSecretRetirementReviewRepository.listRecent(5).stream()
+                .map(this::toRetirementReviewView)
+                .toList();
+    }
+
+    private SecretManagementRetirementReviewView toRetirementReviewView(SystemSecretRetirementReview review) {
+        List<String> configuredLegacyKeyIds = readJson(
+                review == null ? null : review.legacyKeyIdsJson,
+                new TypeReference<List<String>>() {
+                });
+        List<String> unsatisfiedRequirementIds = readJson(
+                review == null ? null : review.unsatisfiedRequirementIdsJson,
+                new TypeReference<List<String>>() {
+                });
+        List<String> completionUnsatisfiedCheckIds = readJson(
+                review == null ? null : review.completionUnsatisfiedCheckIdsJson,
+                new TypeReference<List<String>>() {
+                });
+        return new SecretManagementRetirementReviewView(
+                review.id,
+                review.reviewedAt,
+                review.reviewedByUserId,
+                review.reviewedByUsername,
+                review.providerId,
+                review.activeKeyVersion,
+                review.activeKeyId,
+                configuredLegacyKeyIds == null ? List.of() : configuredLegacyKeyIds,
+                review.safeToRetireLegacyKeys,
+                review.legacyKeyRetirementReady,
+                review.nonActiveKeyRecordCount,
+                review.unavailableKeyRecordCount,
+                review.latestRequestStatus,
+                review.blockingRequirementsRemaining,
+                unsatisfiedRequirementIds == null ? List.of() : unsatisfiedRequirementIds,
+                review.completionVerifiedAt == null && (review.completionStatus == null || review.completionStatus.isBlank())
+                        ? null
+                        : new SecretManagementRetirementCompletionView(
+                                review.completionVerifiedAt,
+                                review.completionVerifiedByUserId,
+                                review.completionVerifiedByUsername,
+                                review.completionStatus,
+                                review.completionMessage,
+                                completionUnsatisfiedCheckIds == null ? List.of() : completionUnsatisfiedCheckIds));
+    }
+
+    private boolean equalsNullable(Object left, Object right) {
+        return left == null ? right == null : left.equals(right);
+    }
+
     private String writeJson(Object value) {
         if (value == null) {
             return null;
@@ -1817,7 +1972,7 @@ public class SecretManagementService {
 
     private ObjectMapper mapper() {
         if (objectMapper == null) {
-            objectMapper = new ObjectMapper();
+            objectMapper = new ObjectMapper().findAndRegisterModules();
         }
         return objectMapper;
     }

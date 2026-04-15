@@ -253,6 +253,7 @@ describe('useAuthSecurityController', () => {
         configuredLegacyKeyIds: null,
         keyUsage: null,
         reencryptionRequirements: null,
+        recentRetirementReviews: null,
         rotationPlan: {
           planId: 'provider-migration',
           title: 'Provider migration is pending',
@@ -282,6 +283,7 @@ describe('useAuthSecurityController', () => {
     expect(result.current.secretManagementStatus.configuredLegacyKeyIds).toEqual([])
     expect(result.current.secretManagementStatus.keyUsage).toEqual([])
     expect(result.current.secretManagementStatus.reencryptionRequirements).toEqual([])
+    expect(result.current.secretManagementStatus.recentRetirementReviews).toEqual([])
     expect(result.current.secretManagementStatus.rotationPlan).toEqual({
       planId: 'provider-migration',
       title: 'Provider migration is pending',
@@ -749,6 +751,42 @@ describe('useAuthSecurityController', () => {
             satisfied: false,
             blocking: true
           }
+        ],
+        latestRetirementReview: {
+          reviewId: 8,
+          reviewedAt: '2026-04-15T13:00:00Z',
+          reviewedByUserId: 1,
+          reviewedByUsername: 'admin',
+          providerId: 'LOCAL',
+          activeKeyVersion: 'LOCAL:v2',
+          activeKeyId: 'LOCAL:v2',
+          configuredLegacyKeyIds: ['LOCAL:v1'],
+          safeToRetireLegacyKeys: false,
+          legacyKeyRetirementReady: false,
+          nonActiveKeyRecordCount: 2,
+          unavailableKeyRecordCount: 0,
+          latestRequestStatus: 'PENDING',
+          blockingRequirementsRemaining: 1,
+          unsatisfiedRequirementIds: ['rotation-complete']
+        },
+        recentRetirementReviews: [
+          {
+            reviewId: 8,
+            reviewedAt: '2026-04-15T13:00:00Z',
+            reviewedByUserId: 1,
+            reviewedByUsername: 'admin',
+            providerId: 'LOCAL',
+            activeKeyVersion: 'LOCAL:v2',
+            activeKeyId: 'LOCAL:v2',
+            configuredLegacyKeyIds: ['LOCAL:v1'],
+            safeToRetireLegacyKeys: false,
+            legacyKeyRetirementReady: false,
+            nonActiveKeyRecordCount: 2,
+            unavailableKeyRecordCount: 0,
+            latestRequestStatus: 'PENDING',
+            blockingRequirementsRemaining: 1,
+            unsatisfiedRequirementIds: ['rotation-complete']
+          }
         ]
       })
     })
@@ -790,6 +828,152 @@ describe('useAuthSecurityController', () => {
     }))
     expect(result.current.secretManagementStatus.legacyKeyRetirementReady).toBe(false)
     expect(result.current.secretManagementStatus.retirementRequirements).toHaveLength(1)
+    expect(result.current.secretManagementStatus.latestRetirementReview).toEqual(expect.objectContaining({
+      reviewId: 8,
+      reviewedByUsername: 'admin'
+    }))
+    expect(result.current.secretManagementStatus.recentRetirementReviews).toHaveLength(1)
+  })
+
+  it('records a secret-management retirement review and refreshes the status', async () => {
+    fetch.mockResolvedValue({
+      ok: true,
+      json: vi.fn().mockResolvedValue({
+        secureStorageConfigured: true,
+        mode: 'LOCAL',
+        providerId: 'LOCAL',
+        activeKeyVersion: 'LOCAL:v2',
+        activeKeyId: 'LOCAL:v2',
+        configuredLegacyKeyIds: ['LOCAL:v1'],
+        legacyKeyRetirementReady: false,
+        retirementRequirements: [],
+        latestRetirementReview: {
+          reviewId: 9,
+          reviewedAt: '2026-04-15T14:00:00Z',
+          reviewedByUserId: 1,
+          reviewedByUsername: 'admin',
+          providerId: 'LOCAL',
+          activeKeyVersion: 'LOCAL:v2',
+          activeKeyId: 'LOCAL:v2',
+          configuredLegacyKeyIds: ['LOCAL:v1'],
+          safeToRetireLegacyKeys: false,
+          legacyKeyRetirementReady: false,
+          nonActiveKeyRecordCount: 2,
+          unavailableKeyRecordCount: 0,
+          latestRequestStatus: 'PENDING',
+          blockingRequirementsRemaining: 1,
+          unsatisfiedRequirementIds: ['rotation-complete']
+        },
+        recentRetirementReviews: [
+          {
+            reviewId: 9,
+            reviewedAt: '2026-04-15T14:00:00Z',
+            reviewedByUserId: 1,
+            reviewedByUsername: 'admin',
+            providerId: 'LOCAL',
+            activeKeyVersion: 'LOCAL:v2',
+            activeKeyId: 'LOCAL:v2',
+            configuredLegacyKeyIds: ['LOCAL:v1'],
+            safeToRetireLegacyKeys: false,
+            legacyKeyRetirementReady: false,
+            nonActiveKeyRecordCount: 2,
+            unavailableKeyRecordCount: 0,
+            latestRequestStatus: 'PENDING',
+            blockingRequirementsRemaining: 1,
+            unsatisfiedRequirementIds: ['rotation-complete']
+          }
+        ]
+      })
+    })
+    const { result, pushNotification } = renderController()
+
+    act(() => {
+      result.current.setSession({ id: 1, role: 'ADMIN' })
+    })
+
+    await act(async () => {
+      await result.current.handleRecordSecretManagementRetirementReview()
+    })
+
+    expect(fetch).toHaveBeenCalledWith('/api/admin/secret-management/retirement-review', {
+      method: 'POST'
+    })
+    expect(result.current.secretManagementStatus.latestRetirementReview).toEqual(expect.objectContaining({
+      reviewId: 9,
+      reviewedByUsername: 'admin'
+    }))
+    expect(pushNotification).toHaveBeenCalledWith(expect.objectContaining({
+      message: { kind: 'translation', key: 'notifications.secretManagementRetirementReviewRecorded', params: {} },
+      targetId: 'secret-management-section',
+      tone: 'success'
+    }))
+  })
+
+  it('verifies secret-management retirement completion and updates status', async () => {
+    fetch.mockResolvedValue({
+      ok: true,
+      json: vi.fn().mockResolvedValue({
+        secureStorageConfigured: true,
+        mode: 'LOCAL',
+        providerId: 'LOCAL',
+        activeKeyVersion: 'LOCAL:v2',
+        activeKeyId: 'LOCAL:v2',
+        configuredLegacyKeyIds: [],
+        safeToRetireLegacyKeys: true,
+        legacyKeyRetirementReady: true,
+        retirementRequirements: [],
+        latestRetirementReview: {
+          reviewId: 9,
+          reviewedAt: '2026-04-15T14:00:00Z',
+          reviewedByUserId: 1,
+          reviewedByUsername: 'admin',
+          providerId: 'LOCAL',
+          activeKeyVersion: 'LOCAL:v2',
+          activeKeyId: 'LOCAL:v2',
+          configuredLegacyKeyIds: [],
+          safeToRetireLegacyKeys: true,
+          legacyKeyRetirementReady: true,
+          nonActiveKeyRecordCount: 0,
+          unavailableKeyRecordCount: 0,
+          latestRequestStatus: 'COMPLETED',
+          blockingRequirementsRemaining: 0,
+          unsatisfiedRequirementIds: [],
+          completion: {
+            verifiedAt: '2026-04-15T15:00:00Z',
+            verifiedByUserId: 1,
+            verifiedByUsername: 'admin',
+            status: 'VERIFIED',
+            message: 'Legacy-key cleanup was verified against the latest recorded retirement review.',
+            unsatisfiedCheckIds: []
+          }
+        },
+        recentRetirementReviews: []
+      })
+    })
+    const { result, pushNotification } = renderController()
+
+    act(() => {
+      result.current.setSession({ id: 1, role: 'ADMIN' })
+    })
+
+    await act(async () => {
+      await result.current.handleVerifySecretManagementRetirementCompletion()
+    })
+
+    expect(fetch).toHaveBeenCalledWith('/api/admin/secret-management/retirement-complete', {
+      method: 'POST'
+    })
+    expect(result.current.secretManagementStatus.latestRetirementReview).toEqual(expect.objectContaining({
+      reviewId: 9,
+      completion: expect.objectContaining({
+        status: 'VERIFIED'
+      })
+    }))
+    expect(pushNotification).toHaveBeenCalledWith(expect.objectContaining({
+      message: { kind: 'translation', key: 'notifications.secretManagementRetirementCompletionVerified', params: {} },
+      targetId: 'secret-management-section',
+      tone: 'success'
+    }))
   })
 
   it('re-encrypts stored secrets and refreshes secret-management status', async () => {

@@ -36,6 +36,8 @@ const DEFAULT_SECRET_MANAGEMENT_STATUS = {
   reencryptionRequirements: [],
   legacyKeyRetirementReady: false,
   retirementRequirements: [],
+  latestRetirementReview: null,
+  recentRetirementReviews: [],
   reencryptionRequest: null,
   reencryptionCooldown: 'PT12H',
   immediateReencryptionOverrideAllowed: false,
@@ -62,7 +64,8 @@ function normalizeSecretManagementStatus(payload) {
     configuredLegacyKeyIds: Array.isArray(payload?.configuredLegacyKeyIds) ? payload.configuredLegacyKeyIds : [],
     keyUsage: Array.isArray(payload?.keyUsage) ? payload.keyUsage : [],
     reencryptionRequirements: Array.isArray(payload?.reencryptionRequirements) ? payload.reencryptionRequirements : [],
-    retirementRequirements: Array.isArray(payload?.retirementRequirements) ? payload.retirementRequirements : []
+    retirementRequirements: Array.isArray(payload?.retirementRequirements) ? payload.retirementRequirements : [],
+    recentRetirementReviews: Array.isArray(payload?.recentRetirementReviews) ? payload.recentRetirementReviews : []
   }
 }
 
@@ -829,6 +832,71 @@ export function useAuthSecurityController({
     return completed
   }
 
+  async function handleRecordSecretManagementRetirementReview() {
+    let result = null
+    await withPending('secretManagementRetirementReview', async () => {
+      try {
+        const response = await fetch('/api/admin/secret-management/retirement-review', {
+          method: 'POST'
+        })
+        if (!response.ok) {
+          throw new Error(await apiErrorText(response, errorText('recordSecretManagementRetirementReview')))
+        }
+        const payload = await response.json()
+        setSecretManagementStatus(normalizeSecretManagementStatus(payload))
+        pushNotification({
+          message: translatedNotification('notifications.secretManagementRetirementReviewRecorded'),
+          targetId: 'secret-management-section',
+          tone: 'success'
+        })
+        result = payload
+      } catch (err) {
+        pushNotification({
+          autoCloseMs: null,
+          copyText: err.message ? pollErrorNotification(err.message) : translatedNotification('errors.recordSecretManagementRetirementReview'),
+          message: err.message ? pollErrorNotification(err.message) : translatedNotification('errors.recordSecretManagementRetirementReview'),
+          targetId: 'secret-management-section',
+          tone: 'error'
+        })
+      }
+    })
+    return result
+  }
+
+  async function handleVerifySecretManagementRetirementCompletion() {
+    let result = null
+    await withPending('secretManagementRetirementComplete', async () => {
+      try {
+        const response = await fetch('/api/admin/secret-management/retirement-complete', {
+          method: 'POST'
+        })
+        if (!response.ok) {
+          throw new Error(await apiErrorText(response, errorText('verifySecretManagementRetirementCompletion')))
+        }
+        const payload = await response.json()
+        setSecretManagementStatus(normalizeSecretManagementStatus(payload))
+        const completion = payload?.latestRetirementReview?.completion
+        pushNotification({
+          message: completion?.status === 'VERIFIED'
+            ? translatedNotification('notifications.secretManagementRetirementCompletionVerified')
+            : translatedNotification('notifications.secretManagementRetirementCompletionBlocked'),
+          targetId: 'secret-management-section',
+          tone: completion?.status === 'VERIFIED' ? 'success' : 'warning'
+        })
+        result = payload
+      } catch (err) {
+        pushNotification({
+          autoCloseMs: null,
+          copyText: err.message ? pollErrorNotification(err.message) : translatedNotification('errors.verifySecretManagementRetirementCompletion'),
+          message: err.message ? pollErrorNotification(err.message) : translatedNotification('errors.verifySecretManagementRetirementCompletion'),
+          targetId: 'secret-management-section',
+          tone: 'error'
+        })
+      }
+    })
+    return result
+  }
+
   async function handleRevokeExtensionSession(extensionSession) {
     const sessionId = extensionSession?.id
     openConfirmation({
@@ -1050,6 +1118,8 @@ export function useAuthSecurityController({
     extensionSessions,
     handleReencryptStoredSecrets,
     handleExportSecretManagementReport,
+    handleRecordSecretManagementRetirementReview,
+    handleVerifySecretManagementRetirementCompletion,
     handleVerifySecretManagementPassword,
     handleVerifySecretManagementPasskey,
     handleDeletePasskey,

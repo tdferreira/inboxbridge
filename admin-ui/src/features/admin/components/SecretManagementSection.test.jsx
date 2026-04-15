@@ -4,6 +4,8 @@ import { translate } from '@/lib/i18n'
 
 function renderSection(overrides = {}) {
   const onExportSecretManagementReport = vi.fn().mockResolvedValue(true)
+  const onRecordSecretManagementRetirementReview = vi.fn().mockResolvedValue(true)
+  const onVerifySecretManagementRetirementCompletion = vi.fn().mockResolvedValue(true)
   const onReencryptStoredSecrets = vi.fn().mockResolvedValue(true)
   const onSecretReencryptOptionsChange = vi.fn()
   render(
@@ -13,6 +15,8 @@ function renderSection(overrides = {}) {
       locale="en"
       onCollapseToggle={vi.fn()}
       onExportSecretManagementReport={onExportSecretManagementReport}
+      onRecordSecretManagementRetirementReview={onRecordSecretManagementRetirementReview}
+      onVerifySecretManagementRetirementCompletion={onVerifySecretManagementRetirementCompletion}
       onReencryptStoredSecrets={onReencryptStoredSecrets}
       onVerifySecretManagementPassword={vi.fn()}
       onVerifySecretManagementPasskey={vi.fn()}
@@ -107,6 +111,8 @@ function renderSection(overrides = {}) {
             blocking: true
           }
         ],
+        latestRetirementReview: null,
+        recentRetirementReviews: [],
         reencryptionRequest: null,
         reencryptionCooldown: 'PT12H',
         immediateReencryptionOverrideAllowed: false,
@@ -125,7 +131,13 @@ function renderSection(overrides = {}) {
       t={(key, params) => translate('en', key, params)}
     />
   )
-  return { onExportSecretManagementReport, onReencryptStoredSecrets, onSecretReencryptOptionsChange }
+  return {
+    onExportSecretManagementReport,
+    onRecordSecretManagementRetirementReview,
+    onVerifySecretManagementRetirementCompletion,
+    onReencryptStoredSecrets,
+    onSecretReencryptOptionsChange
+  }
 }
 
 describe('SecretManagementSection', () => {
@@ -161,6 +173,47 @@ describe('SecretManagementSection', () => {
     expect(screen.getByText('InboxBridge no longer sees any encrypted records that still require legacy key material.')).toBeInTheDocument()
     expect(screen.getByText('No encrypted records still depend on a legacy rotation target')).toBeInTheDocument()
     expect(screen.getAllByText('Safe to retire').length).toBeGreaterThan(0)
+  })
+
+  it('records a retirement review from the dialog', async () => {
+    const { onRecordSecretManagementRetirementReview } = renderSection()
+
+    fireEvent.click(screen.getByRole('button', { name: 'Review legacy-key retirement' }))
+
+    await waitFor(() => {
+      expect(screen.getByRole('dialog')).toBeInTheDocument()
+    })
+    fireEvent.click(screen.getByRole('button', { name: 'Record review snapshot' }))
+
+    await waitFor(() => {
+      expect(onRecordSecretManagementRetirementReview).toHaveBeenCalledTimes(1)
+    })
+  })
+
+  it('verifies post-cleanup retirement completion from the dialog', async () => {
+    const { onVerifySecretManagementRetirementCompletion } = renderSection({
+      secretManagementStatus: {
+        latestRetirementReview: {
+          reviewId: 9,
+          reviewedAt: '2026-04-15T14:00:00Z',
+          reviewedByUsername: 'admin',
+          legacyKeyRetirementReady: true,
+          blockingRequirementsRemaining: 0,
+          completion: null
+        }
+      }
+    })
+
+    fireEvent.click(screen.getByRole('button', { name: 'Review legacy-key retirement' }))
+
+    await waitFor(() => {
+      expect(screen.getByRole('dialog')).toBeInTheDocument()
+    })
+    fireEvent.click(screen.getByRole('button', { name: 'Verify post-cleanup completion' }))
+
+    await waitFor(() => {
+      expect(onVerifySecretManagementRetirementCompletion).toHaveBeenCalledTimes(1)
+    })
   })
 
   it('exports the latest report from the actions card', async () => {

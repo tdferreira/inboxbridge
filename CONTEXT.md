@@ -555,6 +555,24 @@ and whether the latest persisted verification reported a failure. The UI uses
 that status to guide operators through exporting the report, removing only the
 now-obsolete legacy key/provider settings, redeploying, and then refreshing the
 secret-management view to confirm no dependency on legacy material remains.
+Retirement review now also has its own persisted audit trail. Posting
+`/api/admin/secret-management/retirement-review` stores an operator-reviewed
+snapshot in `system_secret_retirement_review`, including who recorded the
+review, the active key/provider summary, how many blocking retirement checks
+were still outstanding, and the full status snapshot JSON that was reviewed at
+that moment. The secret-management payload now surfaces the latest recorded
+review plus a short recent-review list so operators can tie later cleanup steps
+back to a concrete backend-verified snapshot instead of relying only on memory.
+That workflow now also has a post-cleanup verification step. Posting
+`/api/admin/secret-management/retirement-complete` after the operator removes
+legacy material and redeploys InboxBridge compares the live provider/key
+summary with the latest recorded retirement review, then stores the completion
+verifier identity, verification timestamp, completion status, any still
+unsatisfied check ids, and a second live status snapshot on the same
+`system_secret_retirement_review` row. The admin UI retirement dialog exposes
+that as a separate `Verify post-cleanup completion` action plus a latest
+completion summary so operators can distinguish "review captured" from
+"cleanup survived a real restart and is confirmed".
 That same admin secret-management flow now also supports step-up verification
 per browser session. When
 `SECURITY_SECRET_REENCRYPTION_REAUTHENTICATION_TTL` is greater than zero

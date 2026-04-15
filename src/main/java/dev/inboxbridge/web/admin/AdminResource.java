@@ -129,6 +129,24 @@ public class AdminResource {
     }
 
     @POST
+    @Path("/secret-management/retirement-review")
+    public SecretManagementStatusView recordSecretManagementRetirementReview() {
+        return WebResourceSupport.badRequest(() ->
+                secretManagementService.recordRetirementReview(
+                        currentUserContext.user(),
+                        currentUserContext.session()));
+    }
+
+    @POST
+    @Path("/secret-management/retirement-complete")
+    public SecretManagementStatusView verifySecretManagementRetirementCompletion() {
+        return WebResourceSupport.badRequest(() ->
+                secretManagementService.verifyRetirementCompletion(
+                        currentUserContext.user(),
+                        currentUserContext.session()));
+    }
+
+    @POST
     @Path("/secret-management/re-auth/password")
     @Consumes(MediaType.APPLICATION_JSON)
     public SecretManagementStatusView verifySecretManagementPassword(VerifySecretManagementPasswordRequest request) {
