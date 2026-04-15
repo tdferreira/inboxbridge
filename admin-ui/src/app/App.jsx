@@ -1757,6 +1757,7 @@ function AppContent({ timings = DEFAULT_APP_TIMINGS }) {
     setShowSystemOAuthAppsDialog,
     setSystemOAuthEditorProvider,
     setSystemOAuthSettingsDirty,
+    onExportSecretManagementReport: auth.handleExportSecretManagementReport,
     onReencryptStoredSecrets: auth.handleReencryptStoredSecrets,
     onVerifySecretManagementPassword: auth.handleVerifySecretManagementPassword,
     onVerifySecretManagementPasskey: auth.handleVerifySecretManagementPasskey,

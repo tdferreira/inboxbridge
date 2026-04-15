@@ -304,6 +304,11 @@ Current implementation status:
   snapshots too, so the admin UI can still show the queued preview plus the
   latest execution totals, per-area result breakdown, follow-up cleanup
   counts, and verification summary after a page reload
+- `GET /api/admin/secret-management/report` now exports that latest
+  secret-management snapshot as a downloadable JSON report, including the
+  current status payload plus an export timestamp so operators can archive the
+  active provider state, key-usage view, and persisted queued/completed
+  re-encryption evidence before retiring legacy key material
 - the current implementation now also detects provider-side transit key
   rollovers for active `OPENBAO_TRANSIT`, `VAULT_TRANSIT`, and split-key outer
   envelopes; when only the provider's internal key version is stale, the

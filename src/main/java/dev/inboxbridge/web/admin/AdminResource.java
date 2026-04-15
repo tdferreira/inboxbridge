@@ -12,6 +12,7 @@ import dev.inboxbridge.dto.PollingTimelineBundleView;
 import dev.inboxbridge.dto.SecretReencryptionResultView;
 import dev.inboxbridge.dto.SecretReencryptionRequest;
 import dev.inboxbridge.dto.SecretManagementStatusView;
+import dev.inboxbridge.dto.SecretManagementReportView;
 import dev.inboxbridge.dto.StartPasskeyCeremonyResponse;
 import dev.inboxbridge.dto.FinishPasskeyCeremonyRequest;
 import dev.inboxbridge.dto.VerifySecretManagementPasswordRequest;
@@ -119,6 +120,12 @@ public class AdminResource {
     @Path("/secret-management")
     public SecretManagementStatusView secretManagement() {
         return secretManagementService.status(currentUserContext.session());
+    }
+
+    @GET
+    @Path("/secret-management/report")
+    public SecretManagementReportView secretManagementReport() {
+        return secretManagementService.exportReport(currentUserContext.session());
     }
 
     @POST

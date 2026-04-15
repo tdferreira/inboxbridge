@@ -44,6 +44,65 @@ describe('useAuthSecurityController', () => {
     }
   }
 
+  it('exports the latest secret-management report as a downloadable JSON file', async () => {
+    const click = vi.fn()
+    const createObjectURL = vi.fn(() => 'blob:secret-report')
+    const revokeObjectURL = vi.fn()
+    const originalCreateElement = document.createElement.bind(document)
+    let downloadAnchor = null
+    const createElement = vi.spyOn(document, 'createElement').mockImplementation((tagName) => {
+      if (tagName === 'a') {
+        downloadAnchor = {
+          click,
+          download: '',
+          href: ''
+        }
+        return downloadAnchor
+      }
+      return originalCreateElement(tagName)
+    })
+    Object.defineProperty(window, 'URL', {
+      configurable: true,
+      value: {
+        createObjectURL,
+        revokeObjectURL
+      }
+    })
+    fetch.mockResolvedValue({
+      ok: true,
+      json: vi.fn().mockResolvedValue({
+        exportedAt: '2026-04-15T12:00:00Z',
+        status: {
+          mode: 'LOCAL',
+          activeKeyVersion: 'LOCAL:v2'
+        }
+      })
+    })
+    const { result, pushNotification } = renderController()
+
+    await act(async () => {
+      const completed = await result.current.handleExportSecretManagementReport()
+      expect(completed).toBe(true)
+    })
+
+    expect(fetch).toHaveBeenCalledWith('/api/admin/secret-management/report')
+    expect(createObjectURL).toHaveBeenCalledTimes(1)
+    expect(createObjectURL.mock.calls[0][0]).toBeInstanceOf(Blob)
+    expect(createElement).toHaveBeenCalledWith('a')
+    expect(downloadAnchor.href).toBe('blob:secret-report')
+    expect(downloadAnchor.download).toBe('inboxbridge-secret-management-report-2026-04-15T12-00-00Z.json')
+    expect(click).toHaveBeenCalledTimes(1)
+    expect(revokeObjectURL).toHaveBeenCalledWith('blob:secret-report')
+    expect(pushNotification).toHaveBeenCalledWith(expect.objectContaining({
+      message: expect.objectContaining({
+        kind: 'translation',
+        key: 'notifications.secretManagementReportExported'
+      }),
+      targetId: 'secret-management-section',
+      tone: 'success'
+    }))
+  })
+
   it('marks the security dialog dirty when password fields are populated', () => {
     const { result } = renderController()
 

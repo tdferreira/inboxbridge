@@ -799,6 +799,43 @@ export function useAuthSecurityController({
     return result
   }
 
+  async function handleExportSecretManagementReport() {
+    let completed = false
+    await withPending('secretManagementExportReport', async () => {
+      try {
+        const response = await fetch('/api/admin/secret-management/report')
+        if (!response.ok) {
+          throw new Error(await apiErrorText(response, errorText('exportSecretManagementReport')))
+        }
+        const payload = await response.json()
+        const exportedAt = payload?.exportedAt || new Date().toISOString()
+        const safeTimestamp = String(exportedAt).replaceAll(':', '-')
+        const blob = new Blob([JSON.stringify(payload, null, 2)], { type: 'application/json' })
+        const downloadUrl = window.URL.createObjectURL(blob)
+        const anchor = document.createElement('a')
+        anchor.href = downloadUrl
+        anchor.download = `inboxbridge-secret-management-report-${safeTimestamp}.json`
+        anchor.click()
+        window.URL.revokeObjectURL(downloadUrl)
+        pushNotification({
+          message: translatedNotification('notifications.secretManagementReportExported'),
+          targetId: 'secret-management-section',
+          tone: 'success'
+        })
+        completed = true
+      } catch (err) {
+        pushNotification({
+          autoCloseMs: null,
+          copyText: err.message ? pollErrorNotification(err.message) : translatedNotification('errors.exportSecretManagementReport'),
+          message: err.message ? pollErrorNotification(err.message) : translatedNotification('errors.exportSecretManagementReport'),
+          targetId: 'secret-management-section',
+          tone: 'error'
+        })
+      }
+    })
+    return completed
+  }
+
   async function handleRevokeExtensionSession(extensionSession) {
     const sessionId = extensionSession?.id
     openConfirmation({
@@ -1019,6 +1056,7 @@ export function useAuthSecurityController({
     closeSecurityPanel,
     extensionSessions,
     handleReencryptStoredSecrets,
+    handleExportSecretManagementReport,
     handleVerifySecretManagementPassword,
     handleVerifySecretManagementPasskey,
     handleDeletePasskey,

@@ -3,6 +3,7 @@ import SecretManagementSection from './SecretManagementSection'
 import { translate } from '@/lib/i18n'
 
 function renderSection(overrides = {}) {
+  const onExportSecretManagementReport = vi.fn().mockResolvedValue(true)
   const onReencryptStoredSecrets = vi.fn().mockResolvedValue(true)
   const onSecretReencryptOptionsChange = vi.fn()
   render(
@@ -11,6 +12,7 @@ function renderSection(overrides = {}) {
       collapseLoading={false}
       locale="en"
       onCollapseToggle={vi.fn()}
+      onExportSecretManagementReport={onExportSecretManagementReport}
       onReencryptStoredSecrets={onReencryptStoredSecrets}
       onVerifySecretManagementPassword={vi.fn()}
       onVerifySecretManagementPasskey={vi.fn()}
@@ -109,10 +111,20 @@ function renderSection(overrides = {}) {
       t={(key, params) => translate('en', key, params)}
     />
   )
-  return { onReencryptStoredSecrets, onSecretReencryptOptionsChange }
+  return { onExportSecretManagementReport, onReencryptStoredSecrets, onSecretReencryptOptionsChange }
 }
 
 describe('SecretManagementSection', () => {
+  it('exports the latest report from the actions card', async () => {
+    const { onExportSecretManagementReport } = renderSection()
+
+    fireEvent.click(screen.getByRole('button', { name: 'Export latest report' }))
+
+    await waitFor(() => {
+      expect(onExportSecretManagementReport).toHaveBeenCalledTimes(1)
+    })
+  })
+
   it('keeps the confirm action disabled when backend requirements are not satisfied', () => {
     const { onSecretReencryptOptionsChange } = renderSection({
       secretManagementStatus: {

@@ -34,6 +34,14 @@ class AdminEndpointsQuarkusIT {
     }
 
     @Test
+    void secretManagementReportRejectsAnonymousAccess() {
+        given()
+                .when().get("/api/admin/secret-management/report")
+                .then()
+                .statusCode(401);
+    }
+
+    @Test
     void reencryptStoredSecretsRejectsAnonymousAccess() {
         given()
                 .contentType("application/json")

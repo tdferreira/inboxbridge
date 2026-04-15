@@ -15,6 +15,7 @@ import java.util.Map;
 
 import dev.inboxbridge.config.SecretManagementPolicyConfig;
 import dev.inboxbridge.dto.SecretManagementKeyUsageView;
+import dev.inboxbridge.dto.SecretManagementReportView;
 import dev.inboxbridge.dto.SecretManagementRotationPlanView;
 import dev.inboxbridge.dto.SecretProviderComponentStatusView;
 import dev.inboxbridge.dto.SecretReencryptionPreviewView;
@@ -269,6 +270,10 @@ public class SecretManagementService {
                 reauthenticationRequired,
                 reauthenticationSatisfied,
                 reauthenticationExpiresAt);
+    }
+
+    public SecretManagementReportView exportReport(UserSession currentSession) {
+        return new SecretManagementReportView(Instant.now(), status(currentSession));
     }
 
     @Transactional

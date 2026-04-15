@@ -540,6 +540,12 @@ when the request is created, and the latest execution stores its totals,
 per-area results, follow-up cleanup counts, and verification summary. Reloading
 the admin UI therefore still shows the last queued/completed request details
 even after the live secret-management status has moved on.
+Operators can now also export a point-in-time secret-management report from the
+same admin section. `GET /api/admin/secret-management/report` returns the
+current status snapshot plus an export timestamp, and the admin UI downloads it
+as JSON so the active provider state, key-usage picture, and persisted
+queued/completed re-encryption evidence can be saved alongside an operator
+runbook before any legacy key material is retired.
 That same admin secret-management flow now also supports step-up verification
 per browser session. When
 `SECURITY_SECRET_REENCRYPTION_REAUTHENTICATION_TTL` is greater than zero

@@ -50,10 +50,12 @@ function SecretManagementSection({
   collapseLoading,
   locale = 'en',
   onCollapseToggle,
+  onExportSecretManagementReport,
   onReencryptStoredSecrets,
   onVerifySecretManagementPasskey,
   onVerifySecretManagementPassword,
   onSecretReencryptOptionsChange,
+  exportReportLoading = false,
   reauthPasskeyLoading = false,
   reauthPasswordLoading = false,
   reencryptionLoading = false,
@@ -240,17 +242,26 @@ function SecretManagementSection({
               ) : null}
               <p className="section-copy">{t('authSecurity.secretManagementReencryptActionCopy')}</p>
             </div>
-            <LoadingButton
-              className="secondary"
-              disabled={!secretManagementStatus?.secureStorageConfigured}
-              onClick={() => {
-                setReencryptionResult(null)
-                setShowReencryptDialog(true)
-              }}
-              type="button"
-            >
-              {reencryptionLoading ? t('authSecurity.secretManagementReencryptLoading') : t('authSecurity.secretManagementReencrypt')}
-            </LoadingButton>
+            <div className="button-row">
+              <LoadingButton
+                className="secondary"
+                onClick={() => onExportSecretManagementReport?.()}
+                type="button"
+              >
+                {exportReportLoading ? t('authSecurity.secretManagementExportReportLoading') : t('authSecurity.secretManagementExportReport')}
+              </LoadingButton>
+              <LoadingButton
+                className="secondary"
+                disabled={!secretManagementStatus?.secureStorageConfigured}
+                onClick={() => {
+                  setReencryptionResult(null)
+                  setShowReencryptDialog(true)
+                }}
+                type="button"
+              >
+                {reencryptionLoading ? t('authSecurity.secretManagementReencryptLoading') : t('authSecurity.secretManagementReencrypt')}
+              </LoadingButton>
+            </div>
           </article>
         </div>
       </CollapsibleSection>

@@ -17,6 +17,7 @@ import dev.inboxbridge.dto.PollingTimelineBundleView;
 import dev.inboxbridge.dto.SecretReencryptionResultView;
 import dev.inboxbridge.dto.SecretReencryptionRequest;
 import dev.inboxbridge.dto.SecretManagementStatusView;
+import dev.inboxbridge.dto.SecretManagementReportView;
 import dev.inboxbridge.dto.SecretManagementRotationPlanView;
 import dev.inboxbridge.dto.SecretProviderComponentStatusView;
 import dev.inboxbridge.dto.SecretReencryptionPreviewView;
@@ -181,6 +182,19 @@ class AdminResourceTest {
         assertTrue(response.envManagedMailboxSecretsAllowed());
         assertEquals(1, response.configuredEnvManagedSourceCount());
         assertTrue(response.envManagedGoogleRefreshTokenConfigured());
+    }
+
+    @Test
+    void secretManagementReportReturnsExportableSnapshot() {
+        AdminResource resource = new AdminResource();
+        resource.currentUserContext = currentUserContext();
+        resource.secretManagementService = new FakeSecretManagementService();
+
+        SecretManagementReportView response = resource.secretManagementReport();
+
+        assertEquals("LOCAL", response.status().mode());
+        assertEquals("LOCAL:v2", response.status().activeKeyVersion());
+        assertTrue(response.exportedAt() != null);
     }
 
     @Test
@@ -433,6 +447,13 @@ class AdminResourceTest {
                 FinishPasskeyCeremonyRequest request) {
             currentSession.lastSensitiveAuthAt = java.time.Instant.parse("2026-04-15T00:00:00Z");
             return status(currentSession);
+        }
+
+        @Override
+        public SecretManagementReportView exportReport(UserSession currentSession) {
+            return new SecretManagementReportView(
+                    java.time.Instant.parse("2026-04-15T12:00:00Z"),
+                    status(currentSession));
         }
     }
 

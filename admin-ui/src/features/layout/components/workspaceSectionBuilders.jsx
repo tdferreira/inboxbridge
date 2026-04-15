@@ -212,6 +212,7 @@ export function buildAdminWorkspaceSections({
   setShowSystemOAuthAppsDialog,
   setSystemOAuthEditorProvider,
   setSystemOAuthSettingsDirty,
+  onExportSecretManagementReport,
   onReencryptStoredSecrets,
   onVerifySecretManagementPassword,
   onVerifySecretManagementPasskey,
@@ -312,10 +313,12 @@ export function buildAdminWorkspaceSections({
           collapseLoading={isPending('uiPreferences') && uiPreferences.persistLayout}
           locale={language}
           onCollapseToggle={() => toggleWorkspaceSection('secretManagementCollapsed')}
+          onExportSecretManagementReport={onExportSecretManagementReport}
           onReencryptStoredSecrets={onReencryptStoredSecrets}
           onVerifySecretManagementPassword={onVerifySecretManagementPassword}
           onVerifySecretManagementPasskey={onVerifySecretManagementPasskey}
           onSecretReencryptOptionsChange={onSecretReencryptOptionsChange}
+          exportReportLoading={isPending('secretManagementExportReport')}
           reauthPasskeyLoading={isPending('secretManagementReauthPasskey')}
           reauthPasswordLoading={isPending('secretManagementReauthPassword')}
           reencryptionLoading={isPending('secretManagementReencrypt')}
