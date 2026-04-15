@@ -42,6 +42,15 @@ class AdminEndpointsQuarkusIT {
     }
 
     @Test
+    void secretManagementMigrationGuideRejectsAnonymousAccess() {
+        given()
+                .queryParam("targetMode", "VAULT_TRANSIT")
+                .when().get("/api/admin/secret-management/migration-guide")
+                .then()
+                .statusCode(401);
+    }
+
+    @Test
     void secretManagementRetirementReviewRejectsAnonymousAccess() {
         given()
                 .when().post("/api/admin/secret-management/retirement-review")

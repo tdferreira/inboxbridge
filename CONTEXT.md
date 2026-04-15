@@ -511,6 +511,11 @@ supported secret-management mode (`LOCAL`, `OPENBAO_TRANSIT`,
 `VAULT_TRANSIT`, `SPLIT_KEY`) so operators can compare readiness, writable
 state, active key metadata, required configuration references, and remediation
 steps before they flip `SECRET_PROVIDER_MODE`. It also derives a
+backend-generated migration checklist for any selected target mode, with
+validated preflight checks plus explicit before-switch, switch, and
+post-switch steps. The UI keeps this read-only on purpose: InboxBridge can
+guide the operator through a provider cutover, but it does not try to mutate
+deployment secrets or mode configuration from the browser. It also derives a
 provider-aware rotation plan from the stored key-usage data. Operators can now
 see whether the current situation is best understood as a local-key rotation,
 a transit-key migration, a split-key envelope rotation, a full provider

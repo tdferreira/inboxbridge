@@ -16,6 +16,8 @@ import java.util.Optional;
 
 import dev.inboxbridge.config.SecretManagementPolicyConfig;
 import dev.inboxbridge.dto.SecretManagementKeyUsageView;
+import dev.inboxbridge.dto.SecretManagementMigrationCheckView;
+import dev.inboxbridge.dto.SecretManagementMigrationGuideView;
 import dev.inboxbridge.dto.SecretManagementModeAssessmentView;
 import dev.inboxbridge.dto.SecretManagementRetirementRequirementView;
 import dev.inboxbridge.dto.SecretManagementRetirementCompletionView;
@@ -403,6 +405,144 @@ public class SecretManagementService {
                     "Keep the local inner key configured with SECURITY_TOKEN_ENCRYPTION_KEY, then configure the matching secondary transit provider settings and redeploy InboxBridge.",
                     "Refresh this page only after both the local inner key and the secondary transit provider are healthy and writable.");
         };
+    }
+
+    public SecretManagementMigrationGuideView migrationGuide(String targetModeValue, UserSession currentSession) {
+        SecretProviderMode targetMode = SecretProviderMode.parse(targetModeValue);
+        SecretManagementStatusView currentStatus = status(currentSession);
+        SecretManagementModeAssessmentView targetAssessment = currentStatus.modeAssessments().stream()
+                .filter(assessment -> targetMode.name().equals(assessment.mode()))
+                .findFirst()
+                .orElseThrow(() -> new IllegalArgumentException("Unknown secret-management mode: " + targetModeValue));
+        List<SecretManagementMigrationCheckView> checks = buildMigrationChecks(currentStatus, targetAssessment);
+        boolean targetReady = checks.stream().allMatch(SecretManagementMigrationCheckView::satisfied);
+        String executionMethod = targetAssessment.current()
+                ? "No provider switch is required. Follow the current rotation plan and re-encryption guidance already shown in Secret management."
+                : "Changing the active secret-management target requires a full stored-secret re-encryption after the server starts on the new mode.";
+        return new SecretManagementMigrationGuideView(
+                currentStatus.mode(),
+                currentStatus.providerId(),
+                targetAssessment.mode(),
+                targetAssessment.providerId(),
+                targetReady,
+                targetAssessment.current(),
+                migrationGuideTitle(targetAssessment),
+                migrationGuideSummary(currentStatus, targetAssessment),
+                executionMethod,
+                checks,
+                migrationGuideBeforeSwitchSteps(currentStatus, targetAssessment),
+                migrationGuideSwitchSteps(targetAssessment),
+                migrationGuideAfterSwitchSteps(targetAssessment));
+    }
+
+    private List<SecretManagementMigrationCheckView> buildMigrationChecks(
+            SecretManagementStatusView currentStatus,
+            SecretManagementModeAssessmentView targetAssessment) {
+        List<SecretManagementMigrationCheckView> checks = new ArrayList<>();
+        checks.add(new SecretManagementMigrationCheckView(
+                "target-ready",
+                "Target mode is configured and writable",
+                targetAssessment.writable(),
+                targetAssessment.writable()
+                        ? "InboxBridge can already use the selected target mode as an active encryption path."
+                        : targetAssessment.statusMessage(),
+                targetAssessment.configReferences()));
+        checks.add(new SecretManagementMigrationCheckView(
+                "current-provider-healthy",
+                "Current provider path is still healthy",
+                currentStatus.providerWritable(),
+                currentStatus.providerWritable()
+                        ? "Keep the currently active provider path available until the migration and follow-up validation are complete."
+                        : currentStatus.providerStatusMessage(),
+                List.of("SECRET_PROVIDER_MODE")));
+        boolean noPendingRequest = currentStatus.reencryptionRequest() == null
+                || !"PENDING".equals(currentStatus.reencryptionRequest().status());
+        checks.add(new SecretManagementMigrationCheckView(
+                "no-pending-reencryption",
+                "No secret re-encryption request is pending",
+                noPendingRequest,
+                noPendingRequest
+                        ? "No queued secret re-encryption request will overlap this provider switch."
+                        : "Wait for the currently queued secret re-encryption request to complete or fail before changing the active provider mode.",
+                List.of()));
+        boolean noUnavailableRecords = currentStatus.unavailableKeyRecordCount() == 0;
+        checks.add(new SecretManagementMigrationCheckView(
+                "no-unavailable-records",
+                "No encrypted records depend on unavailable key material",
+                noUnavailableRecords,
+                noUnavailableRecords
+                        ? "Every encrypted record can still be decrypted with the currently configured key material."
+                        : "Restore the missing legacy key or provider credential first so InboxBridge can decrypt every stored secret before you switch providers.",
+                List.of("SECURITY_TOKEN_ENCRYPTION_LEGACY_KEYS")));
+        return checks;
+    }
+
+    private String migrationGuideTitle(SecretManagementModeAssessmentView targetAssessment) {
+        if (targetAssessment.current()) {
+            return switch (SecretProviderMode.parse(targetAssessment.mode())) {
+                case LOCAL -> "Review the local-key operating checklist";
+                case OPENBAO_TRANSIT -> "Review the OpenBao transit operating checklist";
+                case VAULT_TRANSIT -> "Review the Vault transit operating checklist";
+                case SPLIT_KEY -> "Review the split-key operating checklist";
+            };
+        }
+        return switch (SecretProviderMode.parse(targetAssessment.mode())) {
+            case LOCAL -> "Migrate back to local key mode";
+            case OPENBAO_TRANSIT -> "Migrate to OpenBao transit mode";
+            case VAULT_TRANSIT -> "Migrate to Vault transit mode";
+            case SPLIT_KEY -> "Migrate to split-key mode";
+        };
+    }
+
+    private String migrationGuideSummary(
+            SecretManagementStatusView currentStatus,
+            SecretManagementModeAssessmentView targetAssessment) {
+        if (targetAssessment.current()) {
+            return "This mode is already active. Use this checklist to keep the current trust path healthy while you complete any remaining rotation, re-encryption, or legacy-key retirement work.";
+        }
+        return "InboxBridge is currently running on " + currentStatus.mode()
+                + ". Use this checklist to prepare the target mode, switch the server configuration, restart InboxBridge, and only then re-encrypt stored secrets onto the new active path.";
+    }
+
+    private List<String> migrationGuideBeforeSwitchSteps(
+            SecretManagementStatusView currentStatus,
+            SecretManagementModeAssessmentView targetAssessment) {
+        List<String> steps = new ArrayList<>();
+        steps.add("Confirm the target mode shows healthy and writable in Secret management before you change any deployment setting.");
+        steps.add("Keep the current provider path and every legacy decryption path configured until the switch, re-encryption, and validation are complete.");
+        if (currentStatus.unavailableKeyRecordCount() > 0) {
+            steps.add("Restore the missing legacy key or provider credential first, because InboxBridge still has encrypted records that cannot currently be decrypted.");
+        }
+        if (currentStatus.reencryptionRequest() != null && "PENDING".equals(currentStatus.reencryptionRequest().status())) {
+            steps.add("Wait for the queued secret re-encryption request to complete or fail before attempting a provider-mode switch.");
+        }
+        if (!targetAssessment.current()) {
+            steps.add("Record the current active target and health state so you can roll back quickly if the target mode does not start cleanly after deployment.");
+        }
+        return steps;
+    }
+
+    private List<String> migrationGuideSwitchSteps(SecretManagementModeAssessmentView targetAssessment) {
+        if (targetAssessment.current()) {
+            return List.of(
+                    "No provider-mode switch is needed while this mode remains active.",
+                    "If you still need to rotate keys inside this mode, use the current rotation plan and re-encryption workflow instead of changing SECRET_PROVIDER_MODE.");
+        }
+        return List.of(
+                "Set SECRET_PROVIDER_MODE=" + targetAssessment.mode() + " in the server environment.",
+                "Apply every config reference required for the target mode, redeploy InboxBridge, and wait for the new instance to start cleanly.",
+                "Refresh Secret management immediately after deployment and confirm the target mode is now the active, healthy, writable provider path before requesting re-encryption.");
+    }
+
+    private List<String> migrationGuideAfterSwitchSteps(SecretManagementModeAssessmentView targetAssessment) {
+        List<String> steps = new ArrayList<>();
+        steps.add("Run stored-secret re-encryption so InboxBridge rewrites encrypted data onto the new active provider path.");
+        steps.add("Validate mailbox polling, destination imports, OAuth-backed flows, browser extensions, and remote sessions before you retire the previous provider path.");
+        steps.add("Record a retirement review snapshot, remove the previous provider path only after the key-usage summary and retirement requirements are clear, then verify post-cleanup completion.");
+        if (!targetAssessment.current()) {
+            steps.add("If the new provider path is transit-backed or split-key, verify the provider-side key metadata matches the active target reported in Secret management after re-encryption.");
+        }
+        return steps;
     }
 
     public SecretManagementReportView exportReport(UserSession currentSession) {

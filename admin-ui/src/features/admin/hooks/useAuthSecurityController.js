@@ -653,6 +653,25 @@ export function useAuthSecurityController({
     }
   }
 
+  async function loadSecretManagementMigrationGuide(targetMode) {
+    try {
+      const response = await fetch(`/api/admin/secret-management/migration-guide?targetMode=${encodeURIComponent(targetMode)}`)
+      if (!response.ok) {
+        throw new Error(await apiErrorText(response, errorText('loadSecretManagementMigrationGuide')))
+      }
+      return await response.json()
+    } catch (err) {
+      pushNotification({
+        autoCloseMs: null,
+        copyText: err.message ? pollErrorNotification(err.message) : translatedNotification('errors.loadSecretManagementMigrationGuide'),
+        message: err.message ? pollErrorNotification(err.message) : translatedNotification('errors.loadSecretManagementMigrationGuide'),
+        targetId: 'secret-management-section',
+        tone: 'error'
+      })
+      return null
+    }
+  }
+
   async function handleReencryptStoredSecrets() {
     let result = null
     await withPending('secretManagementReencrypt', async () => {
@@ -1165,6 +1184,7 @@ export function useAuthSecurityController({
     selectSecurityTab,
     session,
     loadSecretManagementStatus,
+    loadSecretManagementMigrationGuide,
     setLoginForm: updateLoginForm,
     setPasskeyLabel,
     setPasswordForm,

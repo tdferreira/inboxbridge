@@ -18,6 +18,8 @@ import dev.inboxbridge.dto.PollingTimelineBundleView;
 import dev.inboxbridge.dto.SecretReencryptionResultView;
 import dev.inboxbridge.dto.SecretReencryptionRequest;
 import dev.inboxbridge.dto.SecretManagementStatusView;
+import dev.inboxbridge.dto.SecretManagementMigrationCheckView;
+import dev.inboxbridge.dto.SecretManagementMigrationGuideView;
 import dev.inboxbridge.dto.SecretManagementRetirementRequirementView;
 import dev.inboxbridge.dto.SecretManagementModeAssessmentView;
 import dev.inboxbridge.dto.SecretManagementRetirementReviewView;
@@ -201,6 +203,20 @@ class AdminResourceTest {
         assertTrue(response.exportedAt() != null);
         assertFalse(response.status().legacyKeyRetirementReady());
         assertEquals(1, response.status().retirementRequirements().size());
+    }
+
+    @Test
+    void secretManagementMigrationGuideReturnsTargetChecklist() {
+        AdminResource resource = new AdminResource();
+        resource.currentUserContext = currentUserContext();
+        resource.secretManagementService = new FakeSecretManagementService();
+
+        SecretManagementMigrationGuideView response = resource.secretManagementMigrationGuide("VAULT_TRANSIT");
+
+        assertEquals("LOCAL", response.currentMode());
+        assertEquals("VAULT_TRANSIT", response.targetMode());
+        assertFalse(response.targetReady());
+        assertTrue(response.checks().stream().anyMatch(check -> "target-ready".equals(check.checkId()) && !check.satisfied()));
     }
 
     @Test
@@ -555,6 +571,30 @@ class AdminResourceTest {
             return new SecretManagementReportView(
                     java.time.Instant.parse("2026-04-15T12:00:00Z"),
                     status(currentSession));
+        }
+
+        @Override
+        public SecretManagementMigrationGuideView migrationGuide(String targetModeValue, UserSession currentSession) {
+            return new SecretManagementMigrationGuideView(
+                    "LOCAL",
+                    "LOCAL",
+                    targetModeValue,
+                    targetModeValue,
+                    false,
+                    false,
+                    "Migrate to Vault transit mode",
+                    "InboxBridge is currently running on LOCAL. Use this checklist to prepare the target mode, switch the server configuration, restart InboxBridge, and only then re-encrypt stored secrets onto the new active path.",
+                    "Changing the active secret-management target requires a full stored-secret re-encryption after the server starts on the new mode.",
+                    java.util.List.of(
+                            new SecretManagementMigrationCheckView(
+                                    "target-ready",
+                                    "Target mode is configured and writable",
+                                    false,
+                                    "Secret provider VAULT_TRANSIT requires SECRET_PROVIDER_VAULT_URL.",
+                                    java.util.List.of("SECRET_PROVIDER_MODE", "SECRET_PROVIDER_VAULT_URL"))),
+                    java.util.List.of("Confirm the target mode shows healthy and writable in Secret management before you change any deployment setting."),
+                    java.util.List.of("Set SECRET_PROVIDER_MODE=VAULT_TRANSIT in the server environment."),
+                    java.util.List.of("Run stored-secret re-encryption so InboxBridge rewrites encrypted data onto the new active provider path."));
         }
 
         @Override

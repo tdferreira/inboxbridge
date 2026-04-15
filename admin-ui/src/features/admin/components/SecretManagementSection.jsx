@@ -2,6 +2,7 @@ import { useState } from 'react'
 import LoadingButton from '@/shared/components/LoadingButton'
 import Banner from '@/shared/components/Banner'
 import CollapsibleSection from '@/shared/components/CollapsibleSection'
+import SecretMigrationGuideDialog from './SecretMigrationGuideDialog'
 import SecretReencryptionDialog from './SecretReencryptionDialog'
 import SecretRetirementDialog from './SecretRetirementDialog'
 import './SecretManagementSection.css'
@@ -61,6 +62,7 @@ function SecretManagementSection({
   onRecordSecretManagementRetirementReview,
   onVerifySecretManagementRetirementCompletion,
   onReencryptStoredSecrets,
+  onLoadSecretManagementMigrationGuide,
   onVerifySecretManagementPasskey,
   onVerifySecretManagementPassword,
   onSecretReencryptOptionsChange,
@@ -78,6 +80,9 @@ function SecretManagementSection({
 }) {
   const [showReencryptDialog, setShowReencryptDialog] = useState(false)
   const [showRetirementDialog, setShowRetirementDialog] = useState(false)
+  const [showMigrationGuideDialog, setShowMigrationGuideDialog] = useState(false)
+  const [migrationGuideLoading, setMigrationGuideLoading] = useState(false)
+  const [migrationGuide, setMigrationGuide] = useState(null)
   const [reencryptionResult, setReencryptionResult] = useState(null)
   const keyUsage = Array.isArray(secretManagementStatus?.keyUsage) ? secretManagementStatus.keyUsage : []
   const providerComponents = Array.isArray(secretManagementStatus?.providerComponents) ? secretManagementStatus.providerComponents : []
@@ -92,6 +97,15 @@ function SecretManagementSection({
     if (result) {
       setReencryptionResult(result)
     }
+  }
+
+  async function handleOpenMigrationGuide(targetMode) {
+    setMigrationGuide(null)
+    setMigrationGuideLoading(true)
+    setShowMigrationGuideDialog(true)
+    const guide = await onLoadSecretManagementMigrationGuide?.(targetMode)
+    setMigrationGuide(guide)
+    setMigrationGuideLoading(false)
   }
 
   return (
@@ -207,6 +221,11 @@ function SecretManagementSection({
                           </ul>
                         </div>
                       ) : null}
+                      <div>
+                        <button className="secondary" onClick={() => handleOpenMigrationGuide(assessment.mode)} type="button">
+                          {t('authSecurity.secretManagementMigrationGuideAction')}
+                        </button>
+                      </div>
                     </div>
                   )
                 })}
@@ -360,6 +379,18 @@ function SecretManagementSection({
           session={session}
           secretManagementStatus={secretManagementStatus}
           secretReencryptOptions={secretReencryptOptions}
+          t={t}
+        />
+      ) : null}
+      {showMigrationGuideDialog ? (
+        <SecretMigrationGuideDialog
+          guide={migrationGuide}
+          loading={migrationGuideLoading}
+          onClose={() => {
+            setShowMigrationGuideDialog(false)
+            setMigrationGuideLoading(false)
+            setMigrationGuide(null)
+          }}
           t={t}
         />
       ) : null}

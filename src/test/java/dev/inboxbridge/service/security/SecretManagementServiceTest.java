@@ -15,6 +15,7 @@ import java.util.Optional;
 import org.junit.jupiter.api.Test;
 
 import dev.inboxbridge.dto.SecretManagementStatusView;
+import dev.inboxbridge.dto.SecretManagementMigrationGuideView;
 import dev.inboxbridge.dto.SecretReencryptionResultView;
 import dev.inboxbridge.persistence.AppUser;
 import dev.inboxbridge.persistence.OAuthCredential;
@@ -258,6 +259,43 @@ class SecretManagementServiceTest {
         assertEquals("provider-migration", view.rotationPlan().planId());
         assertEquals("SPLIT_KEY:LOCAL=v2|OPENBAO_TRANSIT=inboxbridge", view.activeKeyVersion());
         assertEquals("LOCAL:v2 + OPENBAO_TRANSIT:inboxbridge", view.activeKeyId());
+    }
+
+    @Test
+    void migrationGuideExplainsHowToSwitchToAReadyTransitTarget() {
+        SecretManagementService service = configuredService();
+        SecretProviderResolver resolver = new SecretProviderResolver();
+        resolver.setLocalSecretKeyProvider(service.localSecretKeyProvider);
+        resolver.setProviderMode("LOCAL");
+        resolver.setOpenbaoUrl("https://openbao.internal");
+        resolver.setOpenbaoToken("token");
+        resolver.setOpenbaoMount("transit");
+        resolver.setOpenbaoKey("inboxbridge");
+        resolver.setTransitSecretProvider(new StubTransitSecretProvider(true));
+        service.setSecretProviderResolver(resolver);
+
+        SecretManagementMigrationGuideView guide = service.migrationGuide("OPENBAO_TRANSIT", null);
+
+        assertEquals("LOCAL", guide.currentMode());
+        assertEquals("OPENBAO_TRANSIT", guide.targetMode());
+        assertTrue(guide.targetReady());
+        assertFalse(guide.current());
+        assertTrue(guide.executionMethod().contains("full stored-secret re-encryption"));
+        assertTrue(guide.checks().stream().allMatch(check -> check.satisfied()));
+        assertTrue(guide.switchSteps().stream().anyMatch(step -> step.contains("SECRET_PROVIDER_MODE=OPENBAO_TRANSIT")));
+    }
+
+    @Test
+    void migrationGuideFlagsUnavailableRecordsBeforeProviderSwitch() {
+        SecretManagementService service = configuredService();
+        service.localSecretKeyProvider.setTokenEncryptionLegacyKeys("");
+
+        SecretManagementMigrationGuideView guide = service.migrationGuide("VAULT_TRANSIT", null);
+
+        assertFalse(guide.targetReady());
+        assertTrue(guide.checks().stream().anyMatch(check ->
+                "no-unavailable-records".equals(check.checkId()) && !check.satisfied()));
+        assertTrue(guide.beforeSwitchSteps().stream().anyMatch(step -> step.contains("cannot currently be decrypted")));
     }
 
     @Test

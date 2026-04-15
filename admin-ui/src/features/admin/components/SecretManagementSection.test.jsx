@@ -7,6 +7,15 @@ function renderSection(overrides = {}) {
   const onRecordSecretManagementRetirementReview = vi.fn().mockResolvedValue(true)
   const onVerifySecretManagementRetirementCompletion = vi.fn().mockResolvedValue(true)
   const onReencryptStoredSecrets = vi.fn().mockResolvedValue(true)
+  const onLoadSecretManagementMigrationGuide = vi.fn().mockResolvedValue({
+    title: 'Migrate to OpenBao transit mode',
+    summary: 'Prepare the target mode, switch the server configuration, restart InboxBridge, and then re-encrypt stored secrets.',
+    executionMethod: 'Changing the active secret-management target requires a full stored-secret re-encryption after the server starts on the new mode.',
+    checks: [{ checkId: 'target-ready', title: 'Target mode is configured and writable', satisfied: false, detail: 'Missing configuration.', configReferences: ['SECRET_PROVIDER_OPENBAO_URL'] }],
+    beforeSwitchSteps: ['Confirm the target mode is writable.'],
+    switchSteps: ['Set SECRET_PROVIDER_MODE=OPENBAO_TRANSIT in the server environment.'],
+    afterSwitchSteps: ['Run stored-secret re-encryption.']
+  })
   const onSecretReencryptOptionsChange = vi.fn()
   render(
     <SecretManagementSection
@@ -18,6 +27,7 @@ function renderSection(overrides = {}) {
       onRecordSecretManagementRetirementReview={onRecordSecretManagementRetirementReview}
       onVerifySecretManagementRetirementCompletion={onVerifySecretManagementRetirementCompletion}
       onReencryptStoredSecrets={onReencryptStoredSecrets}
+      onLoadSecretManagementMigrationGuide={onLoadSecretManagementMigrationGuide}
       onVerifySecretManagementPassword={vi.fn()}
       onVerifySecretManagementPasskey={vi.fn()}
       onSecretReencryptOptionsChange={onSecretReencryptOptionsChange}
@@ -159,6 +169,7 @@ function renderSection(overrides = {}) {
   )
   return {
     onExportSecretManagementReport,
+    onLoadSecretManagementMigrationGuide,
     onRecordSecretManagementRetirementReview,
     onVerifySecretManagementRetirementCompletion,
     onReencryptStoredSecrets,
@@ -260,6 +271,17 @@ describe('SecretManagementSection', () => {
     expect(screen.getByText('OpenBao transit mode')).toBeInTheDocument()
     expect(screen.getAllByText('Target key or provider path').length).toBeGreaterThan(0)
     expect(screen.getByText('Secret provider OPENBAO_TRANSIT requires SECRET_PROVIDER_OPENBAO_URL.')).toBeInTheDocument()
+  })
+
+  it('opens the backend-generated migration checklist for a target mode', async () => {
+    const { onLoadSecretManagementMigrationGuide } = renderSection()
+
+    fireEvent.click(screen.getAllByRole('button', { name: 'Open migration checklist' })[1])
+
+    await waitFor(() => expect(onLoadSecretManagementMigrationGuide).toHaveBeenCalledWith('OPENBAO_TRANSIT'))
+    expect(screen.getByText('Migrate to OpenBao transit mode')).toBeInTheDocument()
+    expect(screen.getByText('Backend-validated preflight checks')).toBeInTheDocument()
+    expect(screen.getByText('Set SECRET_PROVIDER_MODE=OPENBAO_TRANSIT in the server environment.')).toBeInTheDocument()
   })
 
   it('keeps the confirm action disabled when backend requirements are not satisfied', () => {

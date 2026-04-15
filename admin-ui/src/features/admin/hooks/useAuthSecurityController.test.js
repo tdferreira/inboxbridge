@@ -301,6 +301,47 @@ describe('useAuthSecurityController', () => {
     })
   })
 
+  it('loads a backend-generated secret-management migration guide', async () => {
+    fetch.mockResolvedValue({
+      ok: true,
+      json: vi.fn().mockResolvedValue({
+        currentMode: 'LOCAL',
+        targetMode: 'OPENBAO_TRANSIT',
+        targetReady: true,
+        checks: [{ checkId: 'target-ready', satisfied: true }],
+        beforeSwitchSteps: ['Prepare the new provider.'],
+        switchSteps: ['Set SECRET_PROVIDER_MODE=OPENBAO_TRANSIT.'],
+        afterSwitchSteps: ['Run stored-secret re-encryption.']
+      })
+    })
+    const { result } = renderController()
+
+    const guide = await result.current.loadSecretManagementMigrationGuide('OPENBAO_TRANSIT')
+
+    expect(fetch).toHaveBeenCalledWith('/api/admin/secret-management/migration-guide?targetMode=OPENBAO_TRANSIT')
+    expect(guide.targetMode).toBe('OPENBAO_TRANSIT')
+    expect(guide.targetReady).toBe(true)
+  })
+
+  it('notifies when loading the secret-management migration guide fails', async () => {
+    fetch.mockResolvedValue({
+      ok: false,
+      text: vi.fn().mockResolvedValue(JSON.stringify({
+        code: 'bad_request',
+        message: 'The target mode is invalid.'
+      }))
+    })
+    const { result, pushNotification } = renderController()
+
+    const guide = await result.current.loadSecretManagementMigrationGuide('INVALID')
+
+    expect(guide).toBeNull()
+    expect(pushNotification).toHaveBeenCalledWith(expect.objectContaining({
+      tone: 'error',
+      targetId: 'secret-management-section'
+    }))
+  })
+
   it('refreshes the challenge after a failed registration attempt', async () => {
     fetch
       .mockResolvedValueOnce({
