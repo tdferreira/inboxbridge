@@ -755,6 +755,11 @@ Current repository status:
     jumps for remediation targets, and only exposes the retry handoff back into
     the re-encryption dialog when those backend checks report that retry is
     actually ready against the current active target
+  - migration guidance now also becomes actionable after the operator has
+    already switched into the target mode: the checklist shows live
+    post-switch re-encryption requirements from the active backend status and
+    only exposes the handoff into the re-encryption dialog when that active
+    target is ready for a fresh rotation run
   - the recovery flow remains read-only by design: InboxBridge does not try to
     mutate `SECRET_PROVIDER_MODE` or infer a rollback target automatically,
     because that decision must stay anchored in the operator's recorded

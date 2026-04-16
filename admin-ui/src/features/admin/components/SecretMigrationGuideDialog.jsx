@@ -1,5 +1,7 @@
 import ModalDialog from '@/shared/components/ModalDialog'
 
+const EMPTY_ITEMS = []
+
 function CheckStatusIcon({ satisfied, t }) {
   const label = satisfied
     ? t('authSecurity.secretManagementRequirementSatisfied')
@@ -28,11 +30,41 @@ function CheckStatusIcon({ satisfied, t }) {
   )
 }
 
-export default function SecretMigrationGuideDialog({ guide, loading = false, onClose, t }) {
-  const checks = Array.isArray(guide?.checks) ? guide.checks : []
-  const beforeSwitchSteps = Array.isArray(guide?.beforeSwitchSteps) ? guide.beforeSwitchSteps : []
-  const switchSteps = Array.isArray(guide?.switchSteps) ? guide.switchSteps : []
-  const afterSwitchSteps = Array.isArray(guide?.afterSwitchSteps) ? guide.afterSwitchSteps : []
+export default function SecretMigrationGuideDialog({
+  guide,
+  loading = false,
+  onClose,
+  onContinueReencryption,
+  secretManagementStatus,
+  t
+}) {
+  const checks = Array.isArray(guide?.checks) ? guide.checks : EMPTY_ITEMS
+  const beforeSwitchSteps = Array.isArray(guide?.beforeSwitchSteps) ? guide.beforeSwitchSteps : EMPTY_ITEMS
+  const switchSteps = Array.isArray(guide?.switchSteps) ? guide.switchSteps : EMPTY_ITEMS
+  const afterSwitchSteps = Array.isArray(guide?.afterSwitchSteps) ? guide.afterSwitchSteps : EMPTY_ITEMS
+  const reencryptionRequirements = guide?.current && Array.isArray(secretManagementStatus?.reencryptionRequirements)
+    ? secretManagementStatus.reencryptionRequirements
+    : EMPTY_ITEMS
+  const canContinueToReencryption = Boolean(guide?.current && secretManagementStatus?.reencryptionReady)
+
+  function focusTarget(targetId) {
+    if (!targetId || typeof document === 'undefined') {
+      return
+    }
+    const target = document.getElementById(targetId)
+    if (!target) {
+      return
+    }
+    target.scrollIntoView({ behavior: 'smooth', block: 'center' })
+    if (typeof target.focus === 'function') {
+      target.focus({ preventScroll: true })
+    }
+  }
+
+  function handleContinueReencryption() {
+    onClose?.()
+    onContinueReencryption?.()
+  }
 
   return (
     <ModalDialog closeDisabled={loading} onClose={onClose} size="wide" title={guide?.title || t('authSecurity.secretManagementMigrationGuideTitle')}>
@@ -100,6 +132,77 @@ export default function SecretMigrationGuideDialog({ guide, loading = false, onC
             {afterSwitchSteps.map((step) => <li key={`after:${step}`}>{step}</li>)}
           </ol>
         </div>
+
+        {guide?.current ? (
+          <div className="detail-stack">
+            <strong>{t('authSecurity.secretManagementMigrationPostSwitchChecksTitle')}</strong>
+            {reencryptionRequirements.length > 0 ? (
+              <div className="secret-reencryption-requirements-grid">
+                {reencryptionRequirements.map((requirement) => (
+                  <article className="muted-box secret-reencryption-requirement-card expanded" key={requirement.requirementId}>
+                    <div className="secret-reencryption-requirement-toggle">
+                      <div className="secret-reencryption-requirement-copy">
+                        <strong>{requirement.title}</strong>
+                        <span>{requirement.detail}</span>
+                      </div>
+                      <div className="secret-reencryption-requirement-meta">
+                        <CheckStatusIcon satisfied={requirement.satisfied} t={t} />
+                        <span className={`status-pill ${requirement.satisfied ? 'status-ok' : 'tone-bad'}`}>
+                          {requirement.satisfied ? t('authSecurity.secretManagementRequirementSatisfied') : t('authSecurity.secretManagementRequirementNotSatisfied')}
+                        </span>
+                      </div>
+                    </div>
+                    <div className="secret-reencryption-requirement-body detail-stack">
+                      {Array.isArray(requirement.remediationSteps) && requirement.remediationSteps.length > 0 ? (
+                        <div className="detail-stack">
+                          <strong>{t('authSecurity.secretManagementRequirementStepsTitle')}</strong>
+                          <ul className="detail-stack secret-reencryption-detail-list">
+                            {requirement.remediationSteps.map((step) => <li key={step}>{step}</li>)}
+                          </ul>
+                        </div>
+                      ) : null}
+                      {Array.isArray(requirement.configReferences) && requirement.configReferences.length > 0 ? (
+                        <div className="detail-stack">
+                          <strong>{t('authSecurity.secretManagementRequirementConfigTitle')}</strong>
+                          <div className="secret-reencryption-config-list">
+                            {requirement.configReferences.map((reference) => (
+                              <code className="secret-reencryption-config-chip" key={`${requirement.requirementId}:${reference}`}>{reference}</code>
+                            ))}
+                          </div>
+                        </div>
+                      ) : null}
+                      {requirement.actionTargetId && requirement.actionLabel ? (
+                        <div className="secret-reencryption-requirement-actions">
+                          <button
+                            className="secondary"
+                            onClick={() => focusTarget(requirement.actionTargetId)}
+                            type="button"
+                          >
+                            {requirement.actionLabel}
+                          </button>
+                        </div>
+                      ) : null}
+                    </div>
+                  </article>
+                ))}
+              </div>
+            ) : (
+              <span>{t('authSecurity.secretManagementMigrationGuideLoading')}</span>
+            )}
+            <p className="section-copy">
+              {canContinueToReencryption
+                ? t('authSecurity.secretManagementMigrationContinueReady')
+                : t('authSecurity.secretManagementMigrationContinueBlocked')}
+            </p>
+            {canContinueToReencryption ? (
+              <div className="action-row">
+                <button className="secondary" onClick={handleContinueReencryption} type="button">
+                  {t('authSecurity.secretManagementMigrationContinueAction')}
+                </button>
+              </div>
+            ) : null}
+          </div>
+        ) : null}
       </div>
     </ModalDialog>
   )

@@ -328,6 +328,55 @@ describe('SecretManagementSection', () => {
     expect(screen.getByText('Set SECRET_PROVIDER_MODE=OPENBAO_TRANSIT in the server environment.')).toBeInTheDocument()
   })
 
+  it('lets the operator continue into re-encryption once the target mode is already active and ready', async () => {
+    const { onLoadSecretManagementMigrationGuide } = renderSection({
+      secretManagementStatus: {
+        mode: 'OPENBAO_TRANSIT',
+        providerId: 'OPENBAO_TRANSIT',
+        reencryptionReady: true,
+        reencryptionRequirements: [
+          {
+            requirementId: 'provider-health',
+            title: 'Active secret provider is healthy and writable',
+            detail: 'The provider is ready for a fresh re-encryption run.',
+            remediationSteps: [],
+            configReferences: ['SECRET_PROVIDER_MODE'],
+            actionTargetId: 'secret-management-provider-diagnostics',
+            actionLabel: 'Review provider diagnostics',
+            satisfied: true,
+            blocking: true
+          }
+        ]
+      },
+      onLoadSecretManagementMigrationGuide: vi.fn().mockResolvedValue({
+        title: 'Review the OpenBao transit operating checklist',
+        summary: 'This mode is already active. Use this checklist to keep the current trust path healthy while you complete any remaining rotation work.',
+        executionMethod: 'No provider switch is required. Follow the current rotation plan and re-encryption guidance already shown in Secret management.',
+        currentMode: 'OPENBAO_TRANSIT',
+        currentProviderId: 'OPENBAO_TRANSIT',
+        targetMode: 'OPENBAO_TRANSIT',
+        targetProviderId: 'OPENBAO_TRANSIT',
+        targetReady: true,
+        current: true,
+        checks: [{ checkId: 'target-ready', title: 'Target mode is configured and writable', satisfied: true, detail: 'InboxBridge can already use the selected target mode as an active encryption path.', configReferences: ['SECRET_PROVIDER_MODE'] }],
+        beforeSwitchSteps: ['Keep the current provider path available until rotation is complete.'],
+        switchSteps: ['No provider-mode switch is needed while this mode remains active.'],
+        afterSwitchSteps: ['Run stored-secret re-encryption so InboxBridge rewrites encrypted data onto the new active provider path.']
+      })
+    })
+
+    fireEvent.click(screen.getAllByRole('button', { name: 'Open migration checklist' })[1])
+
+    await waitFor(() => expect(onLoadSecretManagementMigrationGuide).toHaveBeenCalledWith('OPENBAO_TRANSIT'))
+    expect(screen.getByText('Post-switch re-encryption checks')).toBeInTheDocument()
+
+    fireEvent.click(screen.getByRole('button', { name: 'Open re-encryption dialog' }))
+
+    await waitFor(() => {
+      expect(screen.getByRole('dialog')).toHaveTextContent('Re-encrypt stored secrets')
+    })
+  })
+
   it('opens the backend-generated recovery checklist when the latest request needs operator follow-up', async () => {
     const { onLoadSecretManagementRecoveryGuide, onRecordSecretManagementRecoveryReview } = renderSection({
       secretManagementStatus: {

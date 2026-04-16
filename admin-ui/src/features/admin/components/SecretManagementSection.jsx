@@ -477,11 +477,16 @@ function SecretManagementSection({
         <SecretMigrationGuideDialog
           guide={migrationGuide}
           loading={migrationGuideLoading}
+          onContinueReencryption={() => {
+            setReencryptionResult(null)
+            setShowReencryptDialog(true)
+          }}
           onClose={() => {
             setShowMigrationGuideDialog(false)
             setMigrationGuideLoading(false)
             setMigrationGuide(null)
           }}
+          secretManagementStatus={secretManagementStatus}
           t={t}
         />
       ) : null}

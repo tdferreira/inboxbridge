@@ -635,6 +635,12 @@ same expandable requirement-card treatment as the re-encryption and retirement
 flows, including deep links back to the relevant section, and it only offers a
 direct `Open re-encryption dialog` handoff when the backend says retry is
 ready against the current active target.
+The same secret-management lifecycle now applies to migration guidance too:
+once the operator has already switched the deployment into the target mode, the
+migration checklist pivots into post-switch re-encryption checks using the live
+backend `reencryptionRequirements`, with the same section-jump actions and a
+direct handoff into the re-encryption dialog only when the backend says the
+active target is ready for a fresh run.
 That re-encryption flow still supports optional cleanup of derived trust
 material in the same admin action: browser-extension sessions can be revoked
 deployment-wide, `/remote` sessions can be invalidated, and cached OAuth
