@@ -856,6 +856,12 @@ describe('useAuthSecurityController', () => {
         },
         reencryptionRequest: {
           status: 'PENDING',
+          requestedTarget: {
+            mode: 'LOCAL',
+            providerId: 'LOCAL',
+            activeKeyVersion: 'LOCAL:v2',
+            activeKeyId: 'v2'
+          },
           executeAfter: '2026-04-16T10:00:00Z',
           verificationPassed: false,
           plannedPreview: {
@@ -965,6 +971,12 @@ describe('useAuthSecurityController', () => {
     })
     expect(result.current.secretManagementStatus.reencryptionRequest).toEqual(expect.objectContaining({
       status: 'PENDING',
+      requestedTarget: {
+        mode: 'LOCAL',
+        providerId: 'LOCAL',
+        activeKeyVersion: 'LOCAL:v2',
+        activeKeyId: 'v2'
+      },
       plannedPreview: {
         activeKeyVersion: 'LOCAL:v2',
         totalRecordsPendingUpdate: 2,

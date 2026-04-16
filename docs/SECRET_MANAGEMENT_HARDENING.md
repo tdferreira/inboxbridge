@@ -741,6 +741,10 @@ Current repository status:
     legacy decrypt path after the target changes, InboxBridge keeps
     re-encryption readiness blocked until the operator restores decryptability
     for the still-encrypted older records
+  - the admin UI now shows that queued-request target snapshot beside the
+    current active target and adds explicit stale-request remediation copy, so
+    operators can see exactly which reviewed target drifted and whether they
+    must restore an older key/provider path before retrying
   - the recovery flow remains read-only by design: InboxBridge does not try to
     mutate `SECRET_PROVIDER_MODE` or infer a rollback target automatically,
     because that decision must stay anchored in the operator's recorded

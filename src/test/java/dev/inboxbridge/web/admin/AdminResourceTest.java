@@ -293,6 +293,8 @@ class AdminResourceTest {
         SecretManagementStatusView response = resource.approveQueuedSecretReencryption();
 
         assertEquals("PENDING", response.reencryptionRequest().status());
+        assertEquals("LOCAL:v2", response.reencryptionRequest().requestedTarget().activeKeyVersion());
+        assertEquals("LOCAL", response.reencryptionRequest().requestedTarget().mode());
         assertTrue(response.reencryptionRequest().approvalRequired());
         assertFalse(response.reencryptionRequest().approvalReady());
         assertEquals("admin", response.reencryptionRequest().approvedByUsername());
@@ -597,6 +599,11 @@ class AdminResourceTest {
                     "PENDING",
                     java.time.Instant.parse("2026-04-15T11:00:00Z"),
                     1L,
+                    new dev.inboxbridge.dto.SecretReencryptionTargetView(
+                            "LOCAL",
+                            "LOCAL",
+                            "LOCAL:v2",
+                            "v2"),
                     java.time.Instant.parse("2026-04-15T23:00:00Z"),
                     true,
                     false,

@@ -13,6 +13,7 @@ public record SecretReencryptionRequestStatusView(
         String status,
         Instant requestedAt,
         Long requestedByUserId,
+        SecretReencryptionTargetView requestedTarget,
         Instant executeAfter,
         boolean approvalRequired,
         boolean approvalReady,

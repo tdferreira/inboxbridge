@@ -39,6 +39,13 @@ function RequirementStatusIcon({ satisfied, t }) {
   )
 }
 
+function preferredTargetLabel(target, fallback) {
+  if (!target) {
+    return fallback
+  }
+  return target.activeKeyId || target.activeKeyVersion || target.providerId || target.mode || fallback
+}
+
 function SecretReencryptionDialog({
   onClose,
   onApproveQueuedReencryption,
@@ -93,9 +100,18 @@ function SecretReencryptionDialog({
   const requestSubmitted = Boolean(latestOperationStatus)
   const requestScheduled = latestOperationStatus === 'SCHEDULED' || latestOperationStatus === 'PENDING'
   const requestCompleted = latestOperationStatus === 'COMPLETED'
+  const requestBlocked = latestOperationStatus === 'BLOCKED'
   const approvalReady = Boolean(persistedRequest?.approvalReady)
   const requiresReauthentication = Boolean(secretManagementStatus?.reauthenticationRequired)
   const reauthenticationSatisfied = Boolean(secretManagementStatus?.reauthenticationSatisfied)
+  const requestedTarget = persistedRequest?.requestedTarget || null
+  const currentTarget = {
+    mode: secretManagementStatus?.mode,
+    providerId: secretManagementStatus?.providerId,
+    activeKeyVersion: secretManagementStatus?.activeKeyVersion,
+    activeKeyId: secretManagementStatus?.activeKeyId
+  }
+  const legacyKeyAvailabilityRequirement = requirements.find((requirement) => requirement?.requirementId === 'legacy-key-availability')
   const [expandedRequirementIds, setExpandedRequirementIds] = useState(() => new Set(
     requirements
       .filter((requirement) => !requirement?.satisfied)
@@ -291,11 +307,26 @@ function SecretReencryptionDialog({
         ) : null}
 
         {requestSubmitted ? (
-          <Banner tone={requestScheduled ? 'info' : latestVerification?.passed === false ? 'warning' : 'success'}>
+          <Banner tone={requestBlocked ? 'warning' : requestScheduled ? 'info' : latestVerification?.passed === false ? 'warning' : 'success'}>
             <div className="detail-stack">
               <strong>{latestRequestMessage || t('authSecurity.secretManagementReencryptLatestRequestTitle')}</strong>
               {latestExecuteAfter ? (
                 <span>{t('authSecurity.secretManagementReencryptLatestRequestExecuteAfter', { value: latestExecuteAfter })}</span>
+              ) : null}
+              {requestedTarget ? (
+                <div className="polling-statistics-breakdown">
+                  <div><span>{t('authSecurity.secretManagementQueuedTarget')}</span><strong>{preferredTargetLabel(requestedTarget, t('common.unavailable'))}</strong></div>
+                  <div><span>{t('authSecurity.secretManagementCurrentTarget')}</span><strong>{preferredTargetLabel(currentTarget, t('common.unavailable'))}</strong></div>
+                </div>
+              ) : null}
+              {requestBlocked ? (
+                <div className="detail-stack">
+                  <strong>{t('authSecurity.secretManagementQueuedTargetDriftTitle')}</strong>
+                  <span>{t('authSecurity.secretManagementQueuedTargetDriftBody')}</span>
+                  {legacyKeyAvailabilityRequirement && !legacyKeyAvailabilityRequirement.satisfied ? (
+                    <span>{t('authSecurity.secretManagementQueuedTargetDriftLegacyKeyWarning')}</span>
+                  ) : null}
+                </div>
               ) : null}
               {persistedRequest?.approvedAt ? (
                 <span>{t('authSecurity.secretManagementReencryptLatestRequestApprovedBy', { user: persistedRequest?.approvedByUsername || t('common.unavailable'), value: persistedRequest.approvedAt })}</span>

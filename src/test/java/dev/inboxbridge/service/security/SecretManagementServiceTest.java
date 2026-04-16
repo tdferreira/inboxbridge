@@ -581,6 +581,10 @@ class SecretManagementServiceTest {
         assertNotNull(result.executeAfter());
         assertEquals("PENDING", status.reencryptionRequest().status());
         assertEquals(1L, status.reencryptionRequest().requestedByUserId());
+        assertEquals("LOCAL", status.reencryptionRequest().requestedTarget().mode());
+        assertEquals("LOCAL", status.reencryptionRequest().requestedTarget().providerId());
+        assertEquals("LOCAL:v2", status.reencryptionRequest().requestedTarget().activeKeyVersion());
+        assertEquals("v2", status.reencryptionRequest().requestedTarget().activeKeyId());
         assertTrue(status.reencryptionRequest().approvalRequired());
         assertFalse(status.reencryptionRequest().approvalReady());
         assertNotNull(status.reencryptionRequest().plannedPreview());

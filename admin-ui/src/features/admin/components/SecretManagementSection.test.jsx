@@ -359,6 +359,52 @@ describe('SecretManagementSection', () => {
     await waitFor(() => expect(onApproveSecretManagementReencryption).toHaveBeenCalledTimes(1))
   })
 
+  it('renders stale queued-target remediation when a blocked request no longer matches the active target', () => {
+    renderSection({
+      secretManagementStatus: {
+        mode: 'LOCAL',
+        providerId: 'LOCAL',
+        activeKeyVersion: 'LOCAL:v3',
+        activeKeyId: 'v3',
+        reencryptionReady: false,
+        reencryptionRequirements: [
+          {
+            requirementId: 'legacy-key-availability',
+            title: 'Every stored secret is currently decryptable',
+            detail: 'Some stored records already reference unavailable key material. Restore those keys before re-encrypting.',
+            remediationSteps: [
+              'Restore every missing legacy key or provider credential that still protects encrypted records.'
+            ],
+            configReferences: ['SECURITY_TOKEN_ENCRYPTION_LEGACY_KEYS'],
+            actionTargetId: 'secret-management-key-usage',
+            actionLabel: 'Review key usage',
+            satisfied: false,
+            blocking: true
+          }
+        ],
+        reencryptionRequest: {
+          requestFingerprint: 'BLOCKED|2026-04-16T08:00:00Z',
+          status: 'BLOCKED',
+          requestedAt: '2026-04-16T08:00:00Z',
+          requestedTarget: {
+            mode: 'LOCAL',
+            providerId: 'LOCAL',
+            activeKeyVersion: 'LOCAL:v2',
+            activeKeyId: 'v2'
+          },
+          message: 'Queued secret re-encryption was blocked because the active secret-management target changed from v2 to v3.'
+        }
+      }
+    })
+
+    expect(screen.getByText('This queued request became stale')).toBeInTheDocument()
+    expect(screen.getByText('Queued target')).toBeInTheDocument()
+    expect(screen.getByText('Current active target')).toBeInTheDocument()
+    expect(screen.getAllByText('v2').length).toBeGreaterThan(0)
+    expect(screen.getAllByText('v3').length).toBeGreaterThan(0)
+    expect(screen.getByText('The current backend requirements also show that some older records are no longer decryptable with the active configuration. Restore the previous key or provider path as a legacy decrypt path before retrying.')).toBeInTheDocument()
+  })
+
   it('keeps the confirm action disabled when backend requirements are not satisfied', () => {
     const { onSecretReencryptOptionsChange } = renderSection({
       secretManagementStatus: {

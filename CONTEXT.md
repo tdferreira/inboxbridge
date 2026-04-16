@@ -622,7 +622,10 @@ the new target. On local-key rotations this can also surface fresh
 `legacy-key-availability` blockers until the previous active key is kept
 available as a legacy decrypt path, so operators cannot accidentally queue a
 retry after cutting over to a new key that no longer decrypts the older
-records.
+records. The admin UI now surfaces that same requested-target snapshot beside
+the current active target in both the Secret management actions card and the
+re-encryption dialog, plus a dedicated stale-request remediation warning when a
+queued request was blocked after drift.
 That re-encryption flow still supports optional cleanup of derived trust
 material in the same admin action: browser-extension sessions can be revoked
 deployment-wide, `/remote` sessions can be invalidated, and cached OAuth

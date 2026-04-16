@@ -35,6 +35,7 @@ import dev.inboxbridge.dto.SecretReencryptionAreaResultView;
 import dev.inboxbridge.dto.SecretReencryptionRequirementView;
 import dev.inboxbridge.dto.SecretReencryptionResultView;
 import dev.inboxbridge.dto.SecretReencryptionRequestStatusView;
+import dev.inboxbridge.dto.SecretReencryptionTargetView;
 import dev.inboxbridge.dto.SecretReencryptionVerificationView;
 import dev.inboxbridge.dto.SecretManagementStatusView;
 import dev.inboxbridge.dto.StartPasskeyCeremonyResponse;
@@ -2230,6 +2231,11 @@ public class SecretManagementService {
                 requestState.status,
                 requestState.requestedAt,
                 requestState.requestedByUserId,
+                new SecretReencryptionTargetView(
+                        requestState.requestedMode,
+                        requestState.requestedProviderId,
+                        requestState.requestedActiveKeyVersion,
+                        requestState.requestedActiveKeyId),
                 requestState.executeAfter,
                 requestState.approvalRequired,
                 approvalReady,

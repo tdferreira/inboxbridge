@@ -54,6 +54,13 @@ function modeAssessmentLabel(mode, t) {
   return translated === translationKey ? mode : translated
 }
 
+function preferredTargetLabel(target, fallback) {
+  if (!target) {
+    return fallback
+  }
+  return target.activeKeyId || target.activeKeyVersion || target.providerId || target.mode || fallback
+}
+
 function SecretManagementSection({
   collapsed,
   collapseLoading,
@@ -99,11 +106,22 @@ function SecretManagementSection({
   const rotationPlan = secretManagementStatus?.rotationPlan || null
   const reencryptionRequest = secretManagementStatus?.reencryptionRequest
   const pendingReencryption = reencryptionRequest?.status === 'PENDING'
+  const blockedReencryption = reencryptionRequest?.status === 'BLOCKED'
   const approvalReady = Boolean(reencryptionRequest?.approvalReady)
   const canApproveDirectly = approvalReady
     && (!secretManagementStatus?.reauthenticationRequired || secretManagementStatus?.reauthenticationSatisfied)
   const latestRequestPreview = reencryptionRequest?.plannedPreview || null
   const recoveryGuideAvailable = Boolean(reencryptionRequest && (reencryptionRequest.status === 'FAILED' || (reencryptionRequest.status === 'COMPLETED' && reencryptionRequest.verificationPassed === false)))
+  const requestedTarget = reencryptionRequest?.requestedTarget || null
+  const currentTarget = {
+    mode: secretManagementStatus?.mode,
+    providerId: secretManagementStatus?.providerId,
+    activeKeyVersion: secretManagementStatus?.activeKeyVersion,
+    activeKeyId: secretManagementStatus?.activeKeyId
+  }
+  const legacyKeyAvailabilityRequirement = Array.isArray(secretManagementStatus?.reencryptionRequirements)
+    ? secretManagementStatus.reencryptionRequirements.find((requirement) => requirement?.requirementId === 'legacy-key-availability')
+    : null
 
   async function handleConfirmReencrypt() {
     const result = await onReencryptStoredSecrets?.()
@@ -331,12 +349,27 @@ function SecretManagementSection({
                 <strong>{t('authSecurity.secretManagementReencryptWarning')}</strong>
               </Banner>
               {reencryptionRequest ? (
-                <Banner tone={pendingReencryption ? (approvalReady ? 'warning' : 'info') : reencryptionRequest?.verificationPassed ? 'success' : 'warning'}>
+                <Banner tone={blockedReencryption ? 'warning' : pendingReencryption ? (approvalReady ? 'warning' : 'info') : reencryptionRequest?.verificationPassed ? 'success' : 'warning'}>
                   <div className="detail-stack">
                     <strong>{t('authSecurity.secretManagementReencryptLatestRequestTitle')}</strong>
                     <span>{t('authSecurity.secretManagementReencryptLatestRequestStatus', { status: reencryptionRequest.status })}</span>
                     {reencryptionRequest.executeAfter ? <span>{t('authSecurity.secretManagementReencryptLatestRequestExecuteAfter', { value: reencryptionRequest.executeAfter })}</span> : null}
                     {reencryptionRequest.message ? <span>{reencryptionRequest.message}</span> : null}
+                    {requestedTarget ? (
+                      <div className="polling-statistics-breakdown">
+                        <div><span>{t('authSecurity.secretManagementQueuedTarget')}</span><strong>{preferredTargetLabel(requestedTarget, t('common.unavailable'))}</strong></div>
+                        <div><span>{t('authSecurity.secretManagementCurrentTarget')}</span><strong>{preferredTargetLabel(currentTarget, t('common.unavailable'))}</strong></div>
+                      </div>
+                    ) : null}
+                    {blockedReencryption ? (
+                      <div className="detail-stack">
+                        <strong>{t('authSecurity.secretManagementQueuedTargetDriftTitle')}</strong>
+                        <span>{t('authSecurity.secretManagementQueuedTargetDriftBody')}</span>
+                        {legacyKeyAvailabilityRequirement && !legacyKeyAvailabilityRequirement.satisfied ? (
+                          <span>{t('authSecurity.secretManagementQueuedTargetDriftLegacyKeyWarning')}</span>
+                        ) : null}
+                      </div>
+                    ) : null}
                     {reencryptionRequest.approvedAt ? (
                       <span>{t('authSecurity.secretManagementReencryptLatestRequestApprovedBy', { user: reencryptionRequest.approvedByUsername || t('common.unavailable'), value: reencryptionRequest.approvedAt })}</span>
                     ) : null}
