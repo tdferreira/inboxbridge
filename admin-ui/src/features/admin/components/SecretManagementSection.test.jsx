@@ -7,7 +7,7 @@ function renderSection(overrides = {}) {
   const onRecordSecretManagementRetirementReview = vi.fn().mockResolvedValue(true)
   const onVerifySecretManagementRetirementCompletion = vi.fn().mockResolvedValue(true)
   const onReencryptStoredSecrets = vi.fn().mockResolvedValue(true)
-  const onLoadSecretManagementMigrationGuide = vi.fn().mockResolvedValue({
+  const onLoadSecretManagementMigrationGuide = overrides.onLoadSecretManagementMigrationGuide || vi.fn().mockResolvedValue({
     title: 'Migrate to OpenBao transit mode',
     summary: 'Prepare the target mode, switch the server configuration, restart InboxBridge, and then re-encrypt stored secrets.',
     executionMethod: 'Changing the active secret-management target requires a full stored-secret re-encryption after the server starts on the new mode.',
@@ -16,7 +16,7 @@ function renderSection(overrides = {}) {
     switchSteps: ['Set SECRET_PROVIDER_MODE=OPENBAO_TRANSIT in the server environment.'],
     afterSwitchSteps: ['Run stored-secret re-encryption.']
   })
-  const onLoadSecretManagementRecoveryGuide = vi.fn().mockResolvedValue({
+  const onLoadSecretManagementRecoveryGuide = overrides.onLoadSecretManagementRecoveryGuide || vi.fn().mockResolvedValue({
     title: 'Secret-management recovery checklist',
     summary: 'The last stored-secret re-encryption run failed or finished with warnings. Stabilize the provider state before retrying.',
     triggerReason: 'The latest re-encryption request failed while the current provider was no longer writable.',
@@ -373,6 +373,69 @@ describe('SecretManagementSection', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Open recovery checklist' }))
 
     await waitFor(() => expect(onLoadSecretManagementRecoveryGuide).toHaveBeenCalledTimes(1))
+  })
+
+  it('lets the operator reopen the re-encryption dialog once the recovery checklist says retry is ready', async () => {
+    const { onLoadSecretManagementRecoveryGuide } = renderSection({
+      secretManagementStatus: {
+        reencryptionRequest: {
+          requestFingerprint: 'BLOCKED|2026-04-16T08:00:00Z',
+          status: 'BLOCKED',
+          requestedAt: '2026-04-16T08:00:00Z',
+          verificationPassed: false,
+          message: 'Queued secret re-encryption was blocked because the active secret-management target changed.'
+        }
+      },
+      onLoadSecretManagementRecoveryGuide: vi.fn().mockResolvedValue({
+        title: 'Secret-management recovery checklist',
+        summary: 'The reviewed target drifted, but the backend checks are clear again now.',
+        triggerReason: 'The latest request was BLOCKED before execution.',
+        currentMode: 'LOCAL',
+        providerId: 'LOCAL',
+        currentTarget: {
+          mode: 'LOCAL',
+          providerId: 'LOCAL',
+          activeKeyVersion: 'LOCAL:v3',
+          activeKeyId: 'v3'
+        },
+        latestRequestStatus: 'BLOCKED',
+        latestRequestMessage: 'Queued secret re-encryption was blocked because the active target changed.',
+        latestRequestTarget: {
+          mode: 'LOCAL',
+          providerId: 'LOCAL',
+          activeKeyVersion: 'LOCAL:v2',
+          activeKeyId: 'v2'
+        },
+        retryReady: true,
+        retryRequirements: [
+          {
+            requirementId: 'provider-health',
+            title: 'Active secret provider is healthy and writable',
+            detail: 'The provider is ready for a fresh request.',
+            remediationSteps: [],
+            configReferences: [],
+            actionTargetId: null,
+            actionLabel: null,
+            satisfied: true,
+            blocking: true
+          }
+        ],
+        rollbackRecommended: false,
+        containmentSteps: ['Save the updated target in the runbook.'],
+        rollbackSteps: ['No rollback is currently required.'],
+        validationSteps: ['Submit a fresh request against the current target.'],
+        evidenceItems: ['The current active target and the stale queued target.']
+      })
+    })
+
+    fireEvent.click(screen.getByRole('button', { name: 'Open recovery checklist' }))
+
+    await waitFor(() => expect(onLoadSecretManagementRecoveryGuide).toHaveBeenCalledTimes(1))
+    fireEvent.click(screen.getByRole('button', { name: 'Open re-encryption dialog' }))
+
+    await waitFor(() => {
+      expect(screen.getByRole('dialog')).toHaveTextContent('Re-encrypt stored secrets')
+    })
   })
 
   it('lets an operator approve a queued re-encryption after the cooldown window elapses', async () => {

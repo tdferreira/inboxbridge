@@ -630,7 +630,11 @@ checklist now also treats `BLOCKED` requests the same as failed or warning
 states for audit/retry gating: it shows the queued target beside the current
 target, lists backend-verified retry-readiness checks, and keeps retry blocked
 until a fresh recovery review is recorded after the operator validates the
-current decrypt path.
+current decrypt path. In the admin UI, that recovery dialog now reuses the
+same expandable requirement-card treatment as the re-encryption and retirement
+flows, including deep links back to the relevant section, and it only offers a
+direct `Open re-encryption dialog` handoff when the backend says retry is
+ready against the current active target.
 That re-encryption flow still supports optional cleanup of derived trust
 material in the same admin action: browser-extension sessions can be revoked
 deployment-wide, `/remote` sessions can be invalidated, and cached OAuth

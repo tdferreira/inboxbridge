@@ -750,6 +750,11 @@ Current repository status:
     queued target that drifted, surfaces backend-verified retry-readiness
     requirements, and requires a fresh recovery review before another
     high-risk re-encryption run can be submitted
+  - the admin recovery dialog now uses the same expandable requirement-card UX
+    as the main re-encryption and retirement flows, including direct section
+    jumps for remediation targets, and only exposes the retry handoff back into
+    the re-encryption dialog when those backend checks report that retry is
+    actually ready against the current active target
   - the recovery flow remains read-only by design: InboxBridge does not try to
     mutate `SECRET_PROVIDER_MODE` or infer a rollback target automatically,
     because that decision must stay anchored in the operator's recorded

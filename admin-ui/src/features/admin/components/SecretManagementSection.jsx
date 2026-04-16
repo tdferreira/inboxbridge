@@ -490,6 +490,10 @@ function SecretManagementSection({
           guide={recoveryGuide}
           loading={recoveryGuideLoading}
           onRecordRecoveryReview={onRecordSecretManagementRecoveryReview}
+          onRetryReencryption={() => {
+            setReencryptionResult(null)
+            setShowReencryptDialog(true)
+          }}
           onClose={() => {
             setShowRecoveryGuideDialog(false)
             setRecoveryGuideLoading(false)
