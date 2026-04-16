@@ -442,6 +442,13 @@ public class SecretManagementService {
                 .orElseThrow(() -> new IllegalArgumentException("Unknown secret-management mode: " + targetModeValue));
         List<SecretManagementMigrationCheckView> checks = buildMigrationChecks(currentStatus, targetAssessment);
         boolean targetReady = checks.stream().allMatch(SecretManagementMigrationCheckView::satisfied);
+        List<SecretReencryptionRequirementView> postSwitchRequirements = targetAssessment.current()
+                ? currentStatus.reencryptionRequirements()
+                : List.of();
+        boolean continueReady = targetAssessment.current()
+                && postSwitchRequirements.stream()
+                        .filter(SecretReencryptionRequirementView::blocking)
+                        .allMatch(SecretReencryptionRequirementView::satisfied);
         String executionMethod = targetAssessment.current()
                 ? "No provider switch is required. Follow the current rotation plan and re-encryption guidance already shown in Secret management."
                 : "Changing the active secret-management target requires a full stored-secret re-encryption after the server starts on the new mode.";
@@ -452,13 +459,15 @@ public class SecretManagementService {
                 targetAssessment.providerId(),
                 targetReady,
                 targetAssessment.current(),
+                continueReady,
                 migrationGuideTitle(targetAssessment),
                 migrationGuideSummary(currentStatus, targetAssessment),
                 executionMethod,
                 checks,
                 migrationGuideBeforeSwitchSteps(currentStatus, targetAssessment),
                 migrationGuideSwitchSteps(targetAssessment),
-                migrationGuideAfterSwitchSteps(targetAssessment));
+                migrationGuideAfterSwitchSteps(targetAssessment),
+                postSwitchRequirements);
     }
 
     public SecretManagementRecoveryGuideView recoveryGuide(UserSession currentSession) {
@@ -726,7 +735,16 @@ public class SecretManagementService {
     }
 
     public SecretManagementReportView exportReport(UserSession currentSession) {
-        return new SecretManagementReportView(Instant.now(), status(currentSession));
+        SecretManagementStatusView currentStatus = status(currentSession);
+        SecretManagementRecoveryGuideView latestRecoveryGuide = currentStatus.reencryptionRequest() != null
+                && recoveryReviewRequired(currentStatus.reencryptionRequest())
+                ? recoveryGuide(currentSession)
+                : null;
+        return new SecretManagementReportView(
+                Instant.now(),
+                currentStatus,
+                buildReportSaveChecklist(currentStatus, latestRecoveryGuide),
+                latestRecoveryGuide);
     }
 
     @Transactional
@@ -1989,6 +2007,30 @@ public class SecretManagementService {
                 && currentStatus.unavailableKeyRecordCount() == 0
                 && (currentStatus.rotationPlan() == null || !currentStatus.rotationPlan().rotationNeeded());
         return new SecretReencryptionVerificationView(passed, messages, operatorSaveItems);
+    }
+
+    private List<String> buildReportSaveChecklist(
+            SecretManagementStatusView currentStatus,
+            SecretManagementRecoveryGuideView latestRecoveryGuide) {
+        LinkedHashSet<String> items = new LinkedHashSet<>();
+        SecretReencryptionRequestStatusView requestState = currentStatus.reencryptionRequest();
+        if (requestState != null
+                && requestState.verification() != null
+                && requestState.verification().operatorSaveItems() != null) {
+            items.addAll(requestState.verification().operatorSaveItems());
+        } else {
+            items.addAll(buildVerification(currentStatus).operatorSaveItems());
+        }
+        if (currentStatus.latestRecoveryReview() != null) {
+            items.add("Save the latest recovery review snapshot together with this exported report until the secret-management workflow is fully stabilized.");
+        }
+        if (currentStatus.latestRetirementReview() != null) {
+            items.add("Save the latest legacy-key retirement review and any post-cleanup verification evidence with this report before removing legacy provider material.");
+        }
+        if (latestRecoveryGuide != null && latestRecoveryGuide.evidenceItems() != null) {
+            items.addAll(latestRecoveryGuide.evidenceItems());
+        }
+        return List.copyOf(items);
     }
 
     private SecretManagementRotationPlanView buildRotationPlan(

@@ -16,6 +16,7 @@ import java.util.Optional;
 import org.junit.jupiter.api.Test;
 
 import dev.inboxbridge.dto.SecretManagementStatusView;
+import dev.inboxbridge.dto.SecretManagementReportView;
 import dev.inboxbridge.dto.SecretManagementMigrationGuideView;
 import dev.inboxbridge.dto.SecretManagementRecoveryGuideView;
 import dev.inboxbridge.dto.SecretReencryptionResultView;
@@ -282,6 +283,8 @@ class SecretManagementServiceTest {
         assertEquals("OPENBAO_TRANSIT", guide.targetMode());
         assertTrue(guide.targetReady());
         assertFalse(guide.current());
+        assertFalse(guide.continueReady());
+        assertTrue(guide.postSwitchRequirements().isEmpty());
         assertTrue(guide.executionMethod().contains("full stored-secret re-encryption"));
         assertTrue(guide.checks().stream().allMatch(check -> check.satisfied()));
         assertTrue(guide.switchSteps().stream().anyMatch(step -> step.contains("SECRET_PROVIDER_MODE=OPENBAO_TRANSIT")));
@@ -297,7 +300,22 @@ class SecretManagementServiceTest {
         assertFalse(guide.targetReady());
         assertTrue(guide.checks().stream().anyMatch(check ->
                 "no-unavailable-records".equals(check.checkId()) && !check.satisfied()));
+        assertFalse(guide.continueReady());
+        assertTrue(guide.postSwitchRequirements().isEmpty());
         assertTrue(guide.beforeSwitchSteps().stream().anyMatch(step -> step.contains("cannot currently be decrypted")));
+    }
+
+    @Test
+    void migrationGuideIncludesLivePostSwitchRequirementsWhenTargetModeIsAlreadyActive() {
+        SecretManagementService service = configuredTransitRolloverService(SecretProviderMode.OPENBAO_TRANSIT, null);
+
+        SecretManagementMigrationGuideView guide = service.migrationGuide("OPENBAO_TRANSIT", null);
+
+        assertTrue(guide.current());
+        assertTrue(guide.continueReady());
+        assertFalse(guide.postSwitchRequirements().isEmpty());
+        assertTrue(guide.postSwitchRequirements().stream()
+                .anyMatch(requirement -> "provider-health".equals(requirement.requirementId()) && requirement.satisfied()));
     }
 
     @Test
@@ -433,6 +451,34 @@ class SecretManagementServiceTest {
         assertEquals("BLOCKED", updatedStatus.latestRetirementReview().completion().status());
         assertTrue(updatedStatus.latestRetirementReview().completion().unsatisfiedCheckIds().contains("legacy-key-config-removed"));
         assertTrue(updatedStatus.latestRetirementReview().completion().unsatisfiedCheckIds().contains("live-retirement-ready"));
+    }
+
+    @Test
+    void exportReportIncludesSaveChecklistAndRecoveryGuideWhenLatestRequestNeedsRecovery() {
+        SecretManagementService service = configuredService();
+        service.setSystemSecretReencryptionRequestRepository(new InMemorySystemSecretReencryptionRequestRepository(completedRequestStateWithWarning()));
+
+        SecretManagementReportView report = service.exportReport(null);
+
+        assertNotNull(report.exportedAt());
+        assertNotNull(report.recoveryGuide());
+        assertFalse(report.saveChecklist().isEmpty());
+        assertTrue(report.saveChecklist().stream()
+                .anyMatch(item -> item.contains("active key version") || item.contains("active secret-management target")));
+        assertTrue(report.saveChecklist().stream()
+                .anyMatch(item -> item.contains("latest recovery notes")));
+        assertEquals("COMPLETED", report.recoveryGuide().latestRequestStatus());
+    }
+
+    @Test
+    void exportReportOmitsRecoveryGuideWhenLatestRequestDoesNotNeedRecovery() {
+        SecretManagementService service = configuredService();
+
+        SecretManagementReportView report = service.exportReport(null);
+
+        assertNotNull(report.exportedAt());
+        assertNull(report.recoveryGuide());
+        assertFalse(report.saveChecklist().isEmpty());
     }
 
     @Test

@@ -8,5 +8,7 @@ import java.time.Instant;
  */
 public record SecretManagementReportView(
         Instant exportedAt,
-        SecretManagementStatusView status) {
+        SecretManagementStatusView status,
+        java.util.List<String> saveChecklist,
+        SecretManagementRecoveryGuideView recoveryGuide) {
 }

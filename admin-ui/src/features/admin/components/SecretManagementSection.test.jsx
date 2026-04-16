@@ -11,10 +11,12 @@ function renderSection(overrides = {}) {
     title: 'Migrate to OpenBao transit mode',
     summary: 'Prepare the target mode, switch the server configuration, restart InboxBridge, and then re-encrypt stored secrets.',
     executionMethod: 'Changing the active secret-management target requires a full stored-secret re-encryption after the server starts on the new mode.',
+    continueReady: false,
     checks: [{ checkId: 'target-ready', title: 'Target mode is configured and writable', satisfied: false, detail: 'Missing configuration.', configReferences: ['SECRET_PROVIDER_OPENBAO_URL'] }],
     beforeSwitchSteps: ['Confirm the target mode is writable.'],
     switchSteps: ['Set SECRET_PROVIDER_MODE=OPENBAO_TRANSIT in the server environment.'],
-    afterSwitchSteps: ['Run stored-secret re-encryption.']
+    afterSwitchSteps: ['Run stored-secret re-encryption.'],
+    postSwitchRequirements: []
   })
   const onLoadSecretManagementRecoveryGuide = overrides.onLoadSecretManagementRecoveryGuide || vi.fn().mockResolvedValue({
     title: 'Secret-management recovery checklist',
@@ -358,10 +360,24 @@ describe('SecretManagementSection', () => {
         targetProviderId: 'OPENBAO_TRANSIT',
         targetReady: true,
         current: true,
+        continueReady: true,
         checks: [{ checkId: 'target-ready', title: 'Target mode is configured and writable', satisfied: true, detail: 'InboxBridge can already use the selected target mode as an active encryption path.', configReferences: ['SECRET_PROVIDER_MODE'] }],
         beforeSwitchSteps: ['Keep the current provider path available until rotation is complete.'],
         switchSteps: ['No provider-mode switch is needed while this mode remains active.'],
-        afterSwitchSteps: ['Run stored-secret re-encryption so InboxBridge rewrites encrypted data onto the new active provider path.']
+        afterSwitchSteps: ['Run stored-secret re-encryption so InboxBridge rewrites encrypted data onto the new active provider path.'],
+        postSwitchRequirements: [
+          {
+            requirementId: 'provider-health',
+            title: 'Active secret provider is healthy and writable',
+            detail: 'The provider is ready for a fresh re-encryption run.',
+            remediationSteps: [],
+            configReferences: ['SECRET_PROVIDER_MODE'],
+            actionTargetId: 'secret-management-provider-diagnostics',
+            actionLabel: 'Review provider diagnostics',
+            satisfied: true,
+            blocking: true
+          }
+        ]
       })
     })
 

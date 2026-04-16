@@ -13,11 +13,13 @@ public record SecretManagementMigrationGuideView(
         String targetProviderId,
         boolean targetReady,
         boolean current,
+        boolean continueReady,
         String title,
         String summary,
         String executionMethod,
         List<SecretManagementMigrationCheckView> checks,
         List<String> beforeSwitchSteps,
         List<String> switchSteps,
-        List<String> afterSwitchSteps) {
+        List<String> afterSwitchSteps,
+        List<SecretReencryptionRequirementView> postSwitchRequirements) {
 }

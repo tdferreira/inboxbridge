@@ -42,10 +42,10 @@ export default function SecretMigrationGuideDialog({
   const beforeSwitchSteps = Array.isArray(guide?.beforeSwitchSteps) ? guide.beforeSwitchSteps : EMPTY_ITEMS
   const switchSteps = Array.isArray(guide?.switchSteps) ? guide.switchSteps : EMPTY_ITEMS
   const afterSwitchSteps = Array.isArray(guide?.afterSwitchSteps) ? guide.afterSwitchSteps : EMPTY_ITEMS
-  const reencryptionRequirements = guide?.current && Array.isArray(secretManagementStatus?.reencryptionRequirements)
-    ? secretManagementStatus.reencryptionRequirements
+  const reencryptionRequirements = guide?.current && Array.isArray(guide?.postSwitchRequirements)
+    ? guide.postSwitchRequirements
     : EMPTY_ITEMS
-  const canContinueToReencryption = Boolean(guide?.current && secretManagementStatus?.reencryptionReady)
+  const canContinueToReencryption = Boolean(guide?.current && guide?.continueReady)
 
   function focusTarget(targetId) {
     if (!targetId || typeof document === 'undefined') {

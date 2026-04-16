@@ -570,6 +570,10 @@ current status snapshot plus an export timestamp, and the admin UI downloads it
 as JSON so the active provider state, key-usage picture, and persisted
 queued/completed re-encryption evidence can be saved alongside an operator
 runbook before any legacy key material is retired.
+That exported report now also carries a top-level save checklist plus the
+latest recovery guide whenever the newest request still needs recovery
+handling, so the downloaded JSON artifact remains actionable even if the live
+deployment state drifts before the operator reviews or archives it.
 That same admin section now also exposes a dedicated legacy-key retirement
 review dialog. The backend includes retirement-specific requirements in the
 `/api/admin/secret-management` payload and verifies whether the active provider
@@ -640,7 +644,9 @@ once the operator has already switched the deployment into the target mode, the
 migration checklist pivots into post-switch re-encryption checks using the live
 backend `reencryptionRequirements`, with the same section-jump actions and a
 direct handoff into the re-encryption dialog only when the backend says the
-active target is ready for a fresh run.
+active target is ready for a fresh run. That readiness and those post-switch
+requirements are now part of the migration-guide payload itself instead of
+being inferred separately in the frontend from the broader status response.
 That re-encryption flow still supports optional cleanup of derived trust
 material in the same admin action: browser-extension sessions can be revoked
 deployment-wide, `/remote` sessions can be invalidated, and cached OAuth

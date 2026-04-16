@@ -309,6 +309,11 @@ Current implementation status:
   current status payload plus an export timestamp so operators can archive the
   active provider state, key-usage view, and persisted queued/completed
   re-encryption evidence before retiring legacy key material
+- that export now also carries a top-level save checklist derived from the
+  latest verification or current backend state, plus the latest recovery guide
+  when the newest request still needs recovery handling, so the downloaded
+  JSON artifact remains actionable even if the live deployment state changes
+  later
 - `/api/admin/secret-management` now also includes backend-verified legacy-key
   retirement requirements so the admin UI can tell operators whether it is
   currently safe to remove old key ids, transit credentials, or other legacy
@@ -760,6 +765,9 @@ Current repository status:
     post-switch re-encryption requirements from the active backend status and
     only exposes the handoff into the re-encryption dialog when that active
     target is ready for a fresh rotation run
+  - the migration-guide payload now carries that post-switch readiness and
+    those live re-encryption requirements directly, so browser clients do not
+    need to recompute the handoff by stitching together separate status fields
   - the recovery flow remains read-only by design: InboxBridge does not try to
     mutate `SECRET_PROVIDER_MODE` or infer a rollback target automatically,
     because that decision must stay anchored in the operator's recorded

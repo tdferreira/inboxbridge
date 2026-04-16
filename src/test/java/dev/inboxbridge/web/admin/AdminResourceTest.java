@@ -2,6 +2,7 @@ package dev.inboxbridge.web.admin;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
@@ -204,6 +205,8 @@ class AdminResourceTest {
         assertTrue(response.exportedAt() != null);
         assertFalse(response.status().legacyKeyRetirementReady());
         assertEquals(1, response.status().retirementRequirements().size());
+        assertFalse(response.saveChecklist().isEmpty());
+        assertNull(response.recoveryGuide());
     }
 
     @Test
@@ -217,6 +220,8 @@ class AdminResourceTest {
         assertEquals("LOCAL", response.currentMode());
         assertEquals("VAULT_TRANSIT", response.targetMode());
         assertFalse(response.targetReady());
+        assertFalse(response.continueReady());
+        assertTrue(response.postSwitchRequirements().isEmpty());
         assertTrue(response.checks().stream().anyMatch(check -> "target-ready".equals(check.checkId()) && !check.satisfied()));
     }
 
@@ -691,7 +696,9 @@ class AdminResourceTest {
         public SecretManagementReportView exportReport(UserSession currentSession) {
             return new SecretManagementReportView(
                     java.time.Instant.parse("2026-04-15T12:00:00Z"),
-                    status(currentSession));
+                    status(currentSession),
+                    java.util.List.of("Save the active secret-management target now in use: LOCAL:v2."),
+                    null);
         }
 
         @Override
@@ -701,6 +708,7 @@ class AdminResourceTest {
                     "LOCAL",
                     targetModeValue,
                     targetModeValue,
+                    false,
                     false,
                     false,
                     "Migrate to Vault transit mode",
@@ -715,7 +723,8 @@ class AdminResourceTest {
                                     java.util.List.of("SECRET_PROVIDER_MODE", "SECRET_PROVIDER_VAULT_URL"))),
                     java.util.List.of("Confirm the target mode shows healthy and writable in Secret management before you change any deployment setting."),
                     java.util.List.of("Set SECRET_PROVIDER_MODE=VAULT_TRANSIT in the server environment."),
-                    java.util.List.of("Run stored-secret re-encryption so InboxBridge rewrites encrypted data onto the new active provider path."));
+                    java.util.List.of("Run stored-secret re-encryption so InboxBridge rewrites encrypted data onto the new active provider path."),
+                    java.util.List.of());
         }
 
         @Override
