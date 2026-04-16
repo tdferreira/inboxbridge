@@ -788,6 +788,9 @@ public class SecretManagementService {
         if (!requestState.approvalRequired) {
             throw new IllegalStateException("The queued secret re-encryption request does not require a separate approval step.");
         }
+        if (blockQueuedRequestIfTargetDrifted(requestState)) {
+            throw new IllegalStateException(requestState.lastResultMessage);
+        }
         if (!approvalReady(requestState)) {
             throw new IllegalStateException("The cooldown window has not elapsed yet. Wait until the scheduled execution time before approving this run.");
         }
@@ -821,6 +824,7 @@ public class SecretManagementService {
         SecretReencryptionRequest effectiveRequest = effectiveRequest(request);
         ensureNoPendingRequest();
         validateReencryptionReadiness(currentSession, true);
+        RequestTargetSnapshot requestTarget = currentRequestTargetSnapshot();
         SecretReencryptionPreviewView requestPreview = buildReencryptionPreview(providerResolver().activeKeyVersion());
         if (effectiveRequest.immediateExecutionOverride() && !allowImmediateReencryptOverride()) {
             throw new IllegalStateException(
@@ -830,7 +834,7 @@ public class SecretManagementService {
         Instant now = Instant.now();
         if (!effectiveRequest.immediateExecutionOverride() && !cooldown.isZero() && !cooldown.isNegative()) {
             Instant executeAfter = now.plus(cooldown);
-            SystemSecretReencryptionRequest requestState = upsertRequestState(actor, effectiveRequest, requestPreview, now, executeAfter);
+            SystemSecretReencryptionRequest requestState = upsertRequestState(actor, effectiveRequest, requestTarget, requestPreview, now, executeAfter);
             requestState.status = RequestStatus.PENDING.name();
             requestState.approvalRequired = true;
             requestState.approvedAt = null;
@@ -919,6 +923,9 @@ public class SecretManagementService {
             return;
         }
         if (requestState.executeAfter.isAfter(now)) {
+            return;
+        }
+        if (blockQueuedRequestIfTargetDrifted(requestState)) {
             return;
         }
         if (requestState.approvalRequired && requestState.approvedAt == null) {
@@ -1573,6 +1580,7 @@ public class SecretManagementService {
         SystemSecretReencryptionRequest requestState = upsertRequestState(
                 actor,
                 request,
+                currentRequestTargetSnapshot(),
                 requestPreview,
                 now,
                 immediate ? now : currentReencryptionRequest() == null ? now : currentReencryptionRequest().executeAfter);
@@ -2153,6 +2161,9 @@ public class SecretManagementService {
     private void ensureNoPendingRequest() {
         SystemSecretReencryptionRequest requestState = currentReencryptionRequest();
         if (requestState != null && RequestStatus.PENDING.name().equals(requestState.status)) {
+            if (blockQueuedRequestIfTargetDrifted(requestState)) {
+                return;
+            }
             throw new IllegalStateException("A secret re-encryption request is already pending. Wait for it to execute or clear the condition before scheduling another one.");
         }
     }
@@ -2160,6 +2171,7 @@ public class SecretManagementService {
     private SystemSecretReencryptionRequest upsertRequestState(
             AppUser actor,
             SecretReencryptionRequest request,
+            RequestTargetSnapshot requestTarget,
             SecretReencryptionPreviewView requestPreview,
             Instant requestedAt,
             Instant executeAfter) {
@@ -2170,6 +2182,10 @@ public class SecretManagementService {
         }
         requestState.requestedAt = requestedAt;
         requestState.requestedByUserId = actor == null ? requestState.requestedByUserId : actor.id;
+        requestState.requestedMode = requestTarget.mode();
+        requestState.requestedProviderId = requestTarget.providerId();
+        requestState.requestedActiveKeyVersion = requestTarget.activeKeyVersion();
+        requestState.requestedActiveKeyId = requestTarget.activeKeyId();
         requestState.executeAfter = executeAfter;
         requestState.approvalRequired = false;
         requestState.approvedAt = null;
@@ -2276,6 +2292,55 @@ public class SecretManagementService {
                 && requestState.approvedAt == null
                 && (REENCRYPTION_APPROVAL_READY_MESSAGE.equals(requestState.lastResultMessage)
                         || (requestState.executeAfter != null && !requestState.executeAfter.isAfter(Instant.now())));
+    }
+
+    private RequestTargetSnapshot currentRequestTargetSnapshot() {
+        SecretProviderHealth health = providerResolver().health();
+        return new RequestTargetSnapshot(
+                health.mode().name(),
+                health.providerId(),
+                providerResolver().activeKeyVersion(),
+                providerResolver().activeKeyId());
+    }
+
+    private boolean blockQueuedRequestIfTargetDrifted(SystemSecretReencryptionRequest requestState) {
+        if (requestState == null || !RequestStatus.PENDING.name().equals(requestState.status)) {
+            return false;
+        }
+        RequestTargetSnapshot currentTarget = currentRequestTargetSnapshot();
+        if (matchesRequestedTarget(requestState, currentTarget)) {
+            return false;
+        }
+        requestState.status = RequestStatus.BLOCKED.name();
+        requestState.approvedAt = null;
+        requestState.approvedByUserId = null;
+        requestState.approvedByUsername = null;
+        requestState.lastErrorMessage = null;
+        requestState.lastVerificationPassed = null;
+        requestState.lastResultMessage = "Queued secret re-encryption was blocked because the active secret-management target changed from "
+                + requestedTargetSummary(requestState)
+                + " to "
+                + currentTarget.summary()
+                + ". Review the updated status and submit a new re-encryption request for the new target.";
+        persistRequestState(requestState);
+        return true;
+    }
+
+    private boolean matchesRequestedTarget(SystemSecretReencryptionRequest requestState, RequestTargetSnapshot currentTarget) {
+        return equalsNullable(requestState.requestedMode, currentTarget.mode())
+                && equalsNullable(requestState.requestedProviderId, currentTarget.providerId())
+                && equalsNullable(requestState.requestedActiveKeyVersion, currentTarget.activeKeyVersion())
+                && equalsNullable(requestState.requestedActiveKeyId, currentTarget.activeKeyId());
+    }
+
+    private String requestedTargetSummary(SystemSecretReencryptionRequest requestState) {
+        String preferredTarget = requestState.requestedActiveKeyId != null && !requestState.requestedActiveKeyId.isBlank()
+                ? requestState.requestedActiveKeyId
+                : requestState.requestedActiveKeyVersion;
+        if (preferredTarget != null && !preferredTarget.isBlank()) {
+            return preferredTarget;
+        }
+        return valueOrBlank(requestState.requestedProviderId);
     }
 
     private SecretManagementRetirementReviewView latestRetirementReview() {
@@ -2504,9 +2569,27 @@ public class SecretManagementService {
     private enum RequestStatus {
         PENDING,
         SCHEDULED,
+        BLOCKED,
         RUNNING,
         COMPLETED,
         FAILED
+    }
+
+    private record RequestTargetSnapshot(
+            String mode,
+            String providerId,
+            String activeKeyVersion,
+            String activeKeyId) {
+
+        private String summary() {
+            if (activeKeyId != null && !activeKeyId.isBlank()) {
+                return activeKeyId;
+            }
+            if (activeKeyVersion != null && !activeKeyVersion.isBlank()) {
+                return activeKeyVersion;
+            }
+            return providerId == null || providerId.isBlank() ? mode : providerId;
+        }
     }
 
     private static final class UsageAccumulator {

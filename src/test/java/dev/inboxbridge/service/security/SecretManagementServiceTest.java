@@ -678,6 +678,43 @@ class SecretManagementServiceTest {
     }
 
     @Test
+    void staleQueuedReencryptionIsBlockedWhenTheTargetChangesBeforeCooldownExecution() {
+        SecretManagementService service = configuredService(Duration.ofHours(2), false);
+        SecretReencryptionResultView scheduled = service.reencryptAllStoredSecrets(
+                adminUser(),
+                new dev.inboxbridge.dto.SecretReencryptionRequest(false, false, false, false));
+
+        service.localSecretKeyProvider.setTokenEncryptionKeyId("v3");
+
+        service.executeDueReencryptionRequestsAt(scheduled.executeAfter().plusSeconds(1));
+        SecretManagementStatusView blockedStatus = service.status();
+
+        assertEquals("BLOCKED", blockedStatus.reencryptionRequest().status());
+        assertTrue(
+                blockedStatus.reencryptionRequest().message().contains("active secret-management target changed"),
+                blockedStatus.reencryptionRequest().message());
+        assertFalse(blockedStatus.reencryptionReady());
+        assertTrue(blockedStatus.reencryptionRequirements().stream()
+                .anyMatch(requirement -> "legacy-key-availability".equals(requirement.requirementId()) && !requirement.satisfied()));
+
+        service.localSecretKeyProvider.setTokenEncryptionLegacyKeys(
+                "v1:" + base64("0123456789abcdef0123456789abcdef")
+                        + ",v2:" + base64("fedcba9876543210fedcba9876543210"));
+        SecretManagementStatusView recoveredStatus = service.status();
+
+        assertTrue(recoveredStatus.reencryptionReady());
+
+        SecretReencryptionResultView rescheduled = service.reencryptAllStoredSecrets(
+                adminUser(),
+                new dev.inboxbridge.dto.SecretReencryptionRequest(false, false, false, false));
+        SecretManagementStatusView rescheduledStatus = service.status();
+
+        assertEquals("SCHEDULED", rescheduled.operationStatus());
+        assertEquals("PENDING", rescheduledStatus.reencryptionRequest().status());
+        assertEquals("LOCAL:v3", rescheduled.activeKeyVersion());
+    }
+
+    @Test
     void statusRequiresRecentReauthenticationWhenPolicyEnablesIt() {
         SecretManagementService service = configuredService(Duration.ZERO, false, Duration.ofMinutes(10));
         UserSession session = new UserSession();

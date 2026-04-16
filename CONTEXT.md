@@ -614,6 +614,15 @@ backend marks the queued request as ready for approval, the admin UI exposes an
 `Approve queued execution` action, and
 `POST /api/admin/secret-management/re-encrypt/approve` requires the same
 step-up verification before the scheduler is allowed to execute the queued run.
+Queued cooldown-window requests now also snapshot the exact secret-management
+target they were reviewed against (mode, provider id, active key version, and
+active key id). If that target drifts before approval or execution, InboxBridge
+automatically blocks the stale request instead of silently reusing it against
+the new target. On local-key rotations this can also surface fresh
+`legacy-key-availability` blockers until the previous active key is kept
+available as a legacy decrypt path, so operators cannot accidentally queue a
+retry after cutting over to a new key that no longer decrypts the older
+records.
 That re-encryption flow still supports optional cleanup of derived trust
 material in the same admin action: browser-extension sessions can be revoked
 deployment-wide, `/remote` sessions can be invalidated, and cached OAuth

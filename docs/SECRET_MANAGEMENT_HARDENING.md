@@ -732,6 +732,15 @@ Current repository status:
     approval checkpoint once the cooldown elapses, so InboxBridge will not run
     the queued migration until an operator explicitly approves it through the
     admin UI with a fresh step-up verified browser session
+  - queued cooldown-window requests now persist the exact target they were
+    reviewed against; if the active mode/provider/key target changes before
+    approval or execution, InboxBridge blocks the stale request and forces the
+    operator to submit a new one against the new target
+  - that stale-request block is intentionally fail-closed for local-key
+    rotations too: if the previous active local key is no longer available as a
+    legacy decrypt path after the target changes, InboxBridge keeps
+    re-encryption readiness blocked until the operator restores decryptability
+    for the still-encrypted older records
   - the recovery flow remains read-only by design: InboxBridge does not try to
     mutate `SECRET_PROVIDER_MODE` or infer a rollback target automatically,
     because that decision must stay anchored in the operator's recorded

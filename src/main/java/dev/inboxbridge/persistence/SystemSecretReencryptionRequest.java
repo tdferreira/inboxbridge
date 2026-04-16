@@ -26,6 +26,18 @@ public class SystemSecretReencryptionRequest extends PanacheEntityBase {
     @Column(name = "requested_by_user_id")
     public Long requestedByUserId;
 
+    @Column(name = "requested_mode", length = 64)
+    public String requestedMode;
+
+    @Column(name = "requested_provider_id", length = 190)
+    public String requestedProviderId;
+
+    @Column(name = "requested_active_key_version", length = 255)
+    public String requestedActiveKeyVersion;
+
+    @Column(name = "requested_active_key_id", length = 255)
+    public String requestedActiveKeyId;
+
     @Column(name = "execute_after")
     public Instant executeAfter;
 
