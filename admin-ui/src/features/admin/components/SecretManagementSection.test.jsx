@@ -16,6 +16,20 @@ function renderSection(overrides = {}) {
     switchSteps: ['Set SECRET_PROVIDER_MODE=OPENBAO_TRANSIT in the server environment.'],
     afterSwitchSteps: ['Run stored-secret re-encryption.']
   })
+  const onLoadSecretManagementRecoveryGuide = vi.fn().mockResolvedValue({
+    title: 'Secret-management recovery checklist',
+    summary: 'The last stored-secret re-encryption run failed or finished with warnings. Stabilize the provider state before retrying.',
+    triggerReason: 'The latest re-encryption request failed while the current provider was no longer writable.',
+    currentMode: 'OPENBAO_TRANSIT',
+    providerId: 'OPENBAO_TRANSIT',
+    latestRequestStatus: 'FAILED',
+    latestRequestMessage: 'The OpenBao transit token was rejected during verification.',
+    rollbackRecommended: true,
+    containmentSteps: ['Preserve the previous provider credentials and all legacy key material until recovery is complete.'],
+    rollbackSteps: ['If you recently switched SECRET_PROVIDER_MODE, revert it to the last known-good mode recorded in your operator runbook.'],
+    validationSteps: ['Refresh the Secret management status and confirm the provider is healthy and writable again.'],
+    evidenceItems: ['The last-known-good provider mode and key references saved in your operator runbook.']
+  })
   const onSecretReencryptOptionsChange = vi.fn()
   render(
     <SecretManagementSection
@@ -28,6 +42,7 @@ function renderSection(overrides = {}) {
       onVerifySecretManagementRetirementCompletion={onVerifySecretManagementRetirementCompletion}
       onReencryptStoredSecrets={onReencryptStoredSecrets}
       onLoadSecretManagementMigrationGuide={onLoadSecretManagementMigrationGuide}
+      onLoadSecretManagementRecoveryGuide={onLoadSecretManagementRecoveryGuide}
       onVerifySecretManagementPassword={vi.fn()}
       onVerifySecretManagementPasskey={vi.fn()}
       onSecretReencryptOptionsChange={onSecretReencryptOptionsChange}
@@ -170,6 +185,7 @@ function renderSection(overrides = {}) {
   return {
     onExportSecretManagementReport,
     onLoadSecretManagementMigrationGuide,
+    onLoadSecretManagementRecoveryGuide,
     onRecordSecretManagementRetirementReview,
     onVerifySecretManagementRetirementCompletion,
     onReencryptStoredSecrets,
@@ -282,6 +298,28 @@ describe('SecretManagementSection', () => {
     expect(screen.getByText('Migrate to OpenBao transit mode')).toBeInTheDocument()
     expect(screen.getByText('Backend-validated preflight checks')).toBeInTheDocument()
     expect(screen.getByText('Set SECRET_PROVIDER_MODE=OPENBAO_TRANSIT in the server environment.')).toBeInTheDocument()
+  })
+
+  it('opens the backend-generated recovery checklist when the latest request needs operator follow-up', async () => {
+    const { onLoadSecretManagementRecoveryGuide } = renderSection({
+      secretManagementStatus: {
+        reencryptionRequest: {
+          requestId: 42,
+          status: 'FAILED',
+          requestedAt: '2026-04-16T08:00:00Z',
+          requestedByUsername: 'admin',
+          summary: 'Run failed',
+          verificationPassed: false
+        }
+      }
+    })
+
+    fireEvent.click(screen.getByRole('button', { name: 'Open recovery checklist' }))
+
+    await waitFor(() => expect(onLoadSecretManagementRecoveryGuide).toHaveBeenCalledTimes(1))
+    expect(screen.getByText('Secret-management recovery checklist')).toBeInTheDocument()
+    expect(screen.getByText('The OpenBao transit token was rejected during verification.')).toBeInTheDocument()
+    expect(screen.getByText('Preserve the previous provider credentials and all legacy key material until recovery is complete.')).toBeInTheDocument()
   })
 
   it('keeps the confirm action disabled when backend requirements are not satisfied', () => {

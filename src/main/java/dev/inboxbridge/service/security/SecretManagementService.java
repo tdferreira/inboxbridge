@@ -19,6 +19,7 @@ import dev.inboxbridge.dto.SecretManagementKeyUsageView;
 import dev.inboxbridge.dto.SecretManagementMigrationCheckView;
 import dev.inboxbridge.dto.SecretManagementMigrationGuideView;
 import dev.inboxbridge.dto.SecretManagementModeAssessmentView;
+import dev.inboxbridge.dto.SecretManagementRecoveryGuideView;
 import dev.inboxbridge.dto.SecretManagementRetirementRequirementView;
 import dev.inboxbridge.dto.SecretManagementRetirementCompletionView;
 import dev.inboxbridge.dto.SecretManagementRetirementReviewView;
@@ -435,6 +436,39 @@ public class SecretManagementService {
                 migrationGuideAfterSwitchSteps(targetAssessment));
     }
 
+    public SecretManagementRecoveryGuideView recoveryGuide(UserSession currentSession) {
+        SecretManagementStatusView currentStatus = status(currentSession);
+        SecretReencryptionRequestStatusView requestState = currentStatus.reencryptionRequest();
+        if (requestState == null) {
+            throw new IllegalStateException("No secret-management request history is available for recovery guidance.");
+        }
+        boolean failed = "FAILED".equals(requestState.status());
+        boolean verificationWarning = "COMPLETED".equals(requestState.status()) && !requestState.verificationPassed();
+        if (!failed && !verificationWarning) {
+            throw new IllegalStateException("The latest secret-management request does not currently require a recovery checklist.");
+        }
+        boolean rollbackRecommended = failed
+                || !currentStatus.providerWritable()
+                || currentStatus.unavailableKeyRecordCount() > 0;
+        return new SecretManagementRecoveryGuideView(
+                failed ? "Recover from a failed secret-management change" : "Resolve secret-management verification warnings",
+                failed
+                        ? "The latest secret-management action did not complete successfully. Preserve every trust path that could still decrypt stored data, restore service health, and only retry the migration after validation is clean."
+                        : "The latest secret-management action completed, but InboxBridge still sees verification issues that need operator attention before any previous provider path or legacy key material is retired.",
+                failed
+                        ? "The latest request ended in FAILED state."
+                        : "The latest request completed with verification warnings.",
+                currentStatus.mode(),
+                currentStatus.providerId(),
+                requestState.status(),
+                requestState.message(),
+                rollbackRecommended,
+                buildRecoveryContainmentSteps(currentStatus, requestState),
+                buildRecoveryRollbackSteps(currentStatus, rollbackRecommended),
+                buildRecoveryValidationSteps(currentStatus),
+                buildRecoveryEvidenceItems(currentStatus, requestState));
+    }
+
     private List<SecretManagementMigrationCheckView> buildMigrationChecks(
             SecretManagementStatusView currentStatus,
             SecretManagementModeAssessmentView targetAssessment) {
@@ -543,6 +577,67 @@ public class SecretManagementService {
             steps.add("If the new provider path is transit-backed or split-key, verify the provider-side key metadata matches the active target reported in Secret management after re-encryption.");
         }
         return steps;
+    }
+
+    private List<String> buildRecoveryContainmentSteps(
+            SecretManagementStatusView currentStatus,
+            SecretReencryptionRequestStatusView requestState) {
+        List<String> steps = new ArrayList<>();
+        steps.add("Do not remove any legacy key material or previous provider credentials while recovery is in progress.");
+        steps.add("Export the current secret-management report and save the latest request status, message, active mode, provider id, and active key version in your operator notes.");
+        if (requestState.message() != null && !requestState.message().isBlank()) {
+            steps.add("Preserve the latest backend message exactly as reported: " + requestState.message());
+        }
+        if (currentStatus.unavailableKeyRecordCount() > 0) {
+            steps.add("Restore any missing legacy key or provider credential first, because some stored records are currently not decryptable.");
+        }
+        return steps;
+    }
+
+    private List<String> buildRecoveryRollbackSteps(
+            SecretManagementStatusView currentStatus,
+            boolean rollbackRecommended) {
+        List<String> steps = new ArrayList<>();
+        steps.add("If the current provider mode was only recently activated, revert SECRET_PROVIDER_MODE to the last known-good mode recorded in your operator runbook.");
+        steps.add("Redeploy InboxBridge with both the last known-good provider path and any still-needed legacy decryption material available.");
+        steps.add("Refresh Secret management and confirm the recovered provider path is healthy, writable, and can still decrypt every stored secret before retrying any migration.");
+        if (!rollbackRecommended) {
+            steps.add("A full provider rollback may not be required, but keep the last known-good configuration available until follow-up validation is fully clear.");
+        }
+        if (!currentStatus.providerWritable()) {
+            steps.add("Do not retry re-encryption while the active provider path is unhealthy or read-only.");
+        }
+        return steps;
+    }
+
+    private List<String> buildRecoveryValidationSteps(SecretManagementStatusView currentStatus) {
+        List<String> steps = new ArrayList<>();
+        steps.add("Validate mailbox polling, destination imports, OAuth-backed flows, browser extensions, and remote sessions after recovery or rollback.");
+        steps.add("Confirm Secret management no longer reports unavailable records and that the active provider diagnostics are healthy and writable.");
+        steps.add("Only retry re-encryption or provider migration after the validation checks above are clean and the new recovery report has been saved.");
+        if (currentStatus.rotationPlan() != null && currentStatus.rotationPlan().rotationNeeded()) {
+            steps.add("Review the current rotation plan again before retrying, because the required action may have changed after recovery.");
+        }
+        return steps;
+    }
+
+    private List<String> buildRecoveryEvidenceItems(
+            SecretManagementStatusView currentStatus,
+            SecretReencryptionRequestStatusView requestState) {
+        List<String> items = new ArrayList<>();
+        items.add("Current active provider mode: " + currentStatus.mode());
+        items.add("Current provider id: " + currentStatus.providerId());
+        items.add("Current active key target: " + (currentStatus.activeKeyId() == null || currentStatus.activeKeyId().isBlank()
+                ? currentStatus.activeKeyVersion()
+                : currentStatus.activeKeyId()));
+        items.add("Latest request status: " + requestState.status());
+        if (requestState.message() != null && !requestState.message().isBlank()) {
+            items.add("Latest request message: " + requestState.message());
+        }
+        if (requestState.verification() != null && requestState.verification().operatorSaveItems() != null) {
+            items.addAll(requestState.verification().operatorSaveItems());
+        }
+        return items;
     }
 
     public SecretManagementReportView exportReport(UserSession currentSession) {

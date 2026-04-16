@@ -1762,6 +1762,7 @@ function AppContent({ timings = DEFAULT_APP_TIMINGS }) {
     onVerifySecretManagementRetirementCompletion: auth.handleVerifySecretManagementRetirementCompletion,
     onReencryptStoredSecrets: auth.handleReencryptStoredSecrets,
     onLoadSecretManagementMigrationGuide: auth.loadSecretManagementMigrationGuide,
+    onLoadSecretManagementRecoveryGuide: auth.loadSecretManagementRecoveryGuide,
     onVerifySecretManagementPassword: auth.handleVerifySecretManagementPassword,
     onVerifySecretManagementPasskey: auth.handleVerifySecretManagementPasskey,
     onSecretReencryptOptionsChange: auth.setSecretReencryptOptions,

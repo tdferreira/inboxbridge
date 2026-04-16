@@ -672,6 +672,25 @@ export function useAuthSecurityController({
     }
   }
 
+  async function loadSecretManagementRecoveryGuide() {
+    try {
+      const response = await fetch('/api/admin/secret-management/recovery-guide')
+      if (!response.ok) {
+        throw new Error(await apiErrorText(response, errorText('loadSecretManagementRecoveryGuide')))
+      }
+      return await response.json()
+    } catch (err) {
+      pushNotification({
+        autoCloseMs: null,
+        copyText: err.message ? pollErrorNotification(err.message) : translatedNotification('errors.loadSecretManagementRecoveryGuide'),
+        message: err.message ? pollErrorNotification(err.message) : translatedNotification('errors.loadSecretManagementRecoveryGuide'),
+        targetId: 'secret-management-section',
+        tone: 'error'
+      })
+      return null
+    }
+  }
+
   async function handleReencryptStoredSecrets() {
     let result = null
     await withPending('secretManagementReencrypt', async () => {
@@ -1185,6 +1204,7 @@ export function useAuthSecurityController({
     session,
     loadSecretManagementStatus,
     loadSecretManagementMigrationGuide,
+    loadSecretManagementRecoveryGuide,
     setLoginForm: updateLoginForm,
     setPasskeyLabel,
     setPasswordForm,

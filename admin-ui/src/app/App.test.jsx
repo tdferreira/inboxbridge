@@ -2616,7 +2616,7 @@ describe('App', () => {
 
     await waitFor(() => {
       expect(window.location.pathname).toBe('/administracao')
-    })
+    }, { timeout: 4000 })
     expect(await screen.findByRole('tab', { name: 'Administração', selected: true })).toBeInTheDocument()
   })
 

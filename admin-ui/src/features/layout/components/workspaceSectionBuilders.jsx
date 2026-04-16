@@ -217,6 +217,7 @@ export function buildAdminWorkspaceSections({
   onVerifySecretManagementRetirementCompletion,
   onReencryptStoredSecrets,
   onLoadSecretManagementMigrationGuide,
+  onLoadSecretManagementRecoveryGuide,
   onVerifySecretManagementPassword,
   onVerifySecretManagementPasskey,
   onSecretReencryptOptionsChange,
@@ -321,6 +322,7 @@ export function buildAdminWorkspaceSections({
           onVerifySecretManagementRetirementCompletion={onVerifySecretManagementRetirementCompletion}
           onReencryptStoredSecrets={onReencryptStoredSecrets}
           onLoadSecretManagementMigrationGuide={onLoadSecretManagementMigrationGuide}
+          onLoadSecretManagementRecoveryGuide={onLoadSecretManagementRecoveryGuide}
           onVerifySecretManagementPassword={onVerifySecretManagementPassword}
           onVerifySecretManagementPasskey={onVerifySecretManagementPasskey}
           onSecretReencryptOptionsChange={onSecretReencryptOptionsChange}

@@ -16,6 +16,7 @@ import org.junit.jupiter.api.Test;
 
 import dev.inboxbridge.dto.SecretManagementStatusView;
 import dev.inboxbridge.dto.SecretManagementMigrationGuideView;
+import dev.inboxbridge.dto.SecretManagementRecoveryGuideView;
 import dev.inboxbridge.dto.SecretReencryptionResultView;
 import dev.inboxbridge.persistence.AppUser;
 import dev.inboxbridge.persistence.OAuthCredential;
@@ -296,6 +297,32 @@ class SecretManagementServiceTest {
         assertTrue(guide.checks().stream().anyMatch(check ->
                 "no-unavailable-records".equals(check.checkId()) && !check.satisfied()));
         assertTrue(guide.beforeSwitchSteps().stream().anyMatch(step -> step.contains("cannot currently be decrypted")));
+    }
+
+    @Test
+    void recoveryGuideExplainsHowToContainAndRollbackAfterFailedRun() {
+        SecretManagementService service = configuredService();
+        service.setSystemSecretReencryptionRequestRepository(new InMemorySystemSecretReencryptionRequestRepository(failedRequestState()));
+
+        SecretManagementRecoveryGuideView guide = service.recoveryGuide(null);
+
+        assertEquals("FAILED", guide.latestRequestStatus());
+        assertTrue(guide.rollbackRecommended());
+        assertTrue(guide.containmentSteps().stream().anyMatch(step -> step.contains("Do not remove any legacy key material")));
+        assertTrue(guide.rollbackSteps().stream().anyMatch(step -> step.contains("revert SECRET_PROVIDER_MODE")));
+    }
+
+    @Test
+    void recoveryGuideExplainsPostRunWarningsWithoutInventingServerSideRollbackTarget() {
+        SecretManagementService service = configuredService();
+        service.setSystemSecretReencryptionRequestRepository(new InMemorySystemSecretReencryptionRequestRepository(completedRequestStateWithWarning()));
+
+        SecretManagementRecoveryGuideView guide = service.recoveryGuide(null);
+
+        assertEquals("COMPLETED", guide.latestRequestStatus());
+        assertFalse(guide.latestRequestMessage().isBlank());
+        assertTrue(guide.validationSteps().stream().anyMatch(step -> step.contains("Validate mailbox polling")));
+        assertTrue(guide.evidenceItems().stream().anyMatch(item -> item.contains("Current active provider mode")));
     }
 
     @Test
@@ -966,6 +993,32 @@ class SecretManagementServiceTest {
         return Base64.getEncoder().encodeToString(value.getBytes());
     }
 
+    private dev.inboxbridge.persistence.SystemSecretReencryptionRequest failedRequestState() {
+        dev.inboxbridge.persistence.SystemSecretReencryptionRequest request = new dev.inboxbridge.persistence.SystemSecretReencryptionRequest();
+        request.status = "FAILED";
+        request.requestedAt = Instant.parse("2026-04-15T10:00:00Z");
+        request.requestedByUserId = 1L;
+        request.lastStartedAt = Instant.parse("2026-04-15T10:01:00Z");
+        request.lastFailedAt = Instant.parse("2026-04-15T10:02:00Z");
+        request.lastErrorMessage = "OpenBao transit health check failed.";
+        request.lastResultMessage = "Secret re-encryption did not complete successfully.";
+        request.lastVerificationPassed = Boolean.FALSE;
+        return request;
+    }
+
+    private dev.inboxbridge.persistence.SystemSecretReencryptionRequest completedRequestStateWithWarning() {
+        dev.inboxbridge.persistence.SystemSecretReencryptionRequest request = new dev.inboxbridge.persistence.SystemSecretReencryptionRequest();
+        request.status = "COMPLETED";
+        request.requestedAt = Instant.parse("2026-04-15T11:00:00Z");
+        request.requestedByUserId = 1L;
+        request.lastStartedAt = Instant.parse("2026-04-15T11:01:00Z");
+        request.lastCompletedAt = Instant.parse("2026-04-15T11:02:00Z");
+        request.lastResultMessage = "Secret re-encryption completed but post-run verification still requires operator attention.";
+        request.lastVerificationPassed = Boolean.FALSE;
+        request.lastVerificationJson = "{\"passed\":false,\"messages\":[\"Destination mailbox validation still needs attention.\"],\"operatorSaveItems\":[\"Save the active key version and latest recovery notes.\"]}";
+        return request;
+    }
+
     private static final class InMemoryOAuthCredentialRepository extends OAuthCredentialRepository {
         private final List<OAuthCredential> values;
 
@@ -1070,6 +1123,13 @@ class SecretManagementServiceTest {
 
     private static final class InMemorySystemSecretReencryptionRequestRepository extends dev.inboxbridge.persistence.SystemSecretReencryptionRequestRepository {
         private dev.inboxbridge.persistence.SystemSecretReencryptionRequest value;
+
+        private InMemorySystemSecretReencryptionRequestRepository() {
+        }
+
+        private InMemorySystemSecretReencryptionRequestRepository(dev.inboxbridge.persistence.SystemSecretReencryptionRequest value) {
+            this.value = value;
+        }
 
         @Override
         public Optional<dev.inboxbridge.persistence.SystemSecretReencryptionRequest> findSingleton() {

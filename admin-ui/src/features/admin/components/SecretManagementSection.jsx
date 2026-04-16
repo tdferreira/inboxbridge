@@ -3,6 +3,7 @@ import LoadingButton from '@/shared/components/LoadingButton'
 import Banner from '@/shared/components/Banner'
 import CollapsibleSection from '@/shared/components/CollapsibleSection'
 import SecretMigrationGuideDialog from './SecretMigrationGuideDialog'
+import SecretRecoveryGuideDialog from './SecretRecoveryGuideDialog'
 import SecretReencryptionDialog from './SecretReencryptionDialog'
 import SecretRetirementDialog from './SecretRetirementDialog'
 import './SecretManagementSection.css'
@@ -63,6 +64,7 @@ function SecretManagementSection({
   onVerifySecretManagementRetirementCompletion,
   onReencryptStoredSecrets,
   onLoadSecretManagementMigrationGuide,
+  onLoadSecretManagementRecoveryGuide,
   onVerifySecretManagementPasskey,
   onVerifySecretManagementPassword,
   onSecretReencryptOptionsChange,
@@ -83,6 +85,9 @@ function SecretManagementSection({
   const [showMigrationGuideDialog, setShowMigrationGuideDialog] = useState(false)
   const [migrationGuideLoading, setMigrationGuideLoading] = useState(false)
   const [migrationGuide, setMigrationGuide] = useState(null)
+  const [showRecoveryGuideDialog, setShowRecoveryGuideDialog] = useState(false)
+  const [recoveryGuideLoading, setRecoveryGuideLoading] = useState(false)
+  const [recoveryGuide, setRecoveryGuide] = useState(null)
   const [reencryptionResult, setReencryptionResult] = useState(null)
   const keyUsage = Array.isArray(secretManagementStatus?.keyUsage) ? secretManagementStatus.keyUsage : []
   const providerComponents = Array.isArray(secretManagementStatus?.providerComponents) ? secretManagementStatus.providerComponents : []
@@ -91,6 +96,7 @@ function SecretManagementSection({
   const reencryptionRequest = secretManagementStatus?.reencryptionRequest
   const pendingReencryption = reencryptionRequest?.status === 'PENDING'
   const latestRequestPreview = reencryptionRequest?.plannedPreview || null
+  const recoveryGuideAvailable = Boolean(reencryptionRequest && (reencryptionRequest.status === 'FAILED' || (reencryptionRequest.status === 'COMPLETED' && reencryptionRequest.verificationPassed === false)))
 
   async function handleConfirmReencrypt() {
     const result = await onReencryptStoredSecrets?.()
@@ -106,6 +112,15 @@ function SecretManagementSection({
     const guide = await onLoadSecretManagementMigrationGuide?.(targetMode)
     setMigrationGuide(guide)
     setMigrationGuideLoading(false)
+  }
+
+  async function handleOpenRecoveryGuide() {
+    setRecoveryGuide(null)
+    setRecoveryGuideLoading(true)
+    setShowRecoveryGuideDialog(true)
+    const guide = await onLoadSecretManagementRecoveryGuide?.()
+    setRecoveryGuide(guide)
+    setRecoveryGuideLoading(false)
   }
 
   return (
@@ -323,6 +338,13 @@ function SecretManagementSection({
                         <div><span>{t('authSecurity.secretManagementExecutionMethodRewrap')}</span><strong>{reencryptionRequest.totalMetadataRewrapCount ?? 0}</strong></div>
                       </div>
                     ) : null}
+                    {recoveryGuideAvailable ? (
+                      <div>
+                        <button className="secondary" onClick={() => handleOpenRecoveryGuide()} type="button">
+                          {t('authSecurity.secretManagementRecoveryGuideAction')}
+                        </button>
+                      </div>
+                    ) : null}
                   </div>
                 </Banner>
               ) : null}
@@ -390,6 +412,18 @@ function SecretManagementSection({
             setShowMigrationGuideDialog(false)
             setMigrationGuideLoading(false)
             setMigrationGuide(null)
+          }}
+          t={t}
+        />
+      ) : null}
+      {showRecoveryGuideDialog ? (
+        <SecretRecoveryGuideDialog
+          guide={recoveryGuide}
+          loading={recoveryGuideLoading}
+          onClose={() => {
+            setShowRecoveryGuideDialog(false)
+            setRecoveryGuideLoading(false)
+            setRecoveryGuide(null)
           }}
           t={t}
         />

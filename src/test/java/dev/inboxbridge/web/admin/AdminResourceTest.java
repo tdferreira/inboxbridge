@@ -20,6 +20,7 @@ import dev.inboxbridge.dto.SecretReencryptionRequest;
 import dev.inboxbridge.dto.SecretManagementStatusView;
 import dev.inboxbridge.dto.SecretManagementMigrationCheckView;
 import dev.inboxbridge.dto.SecretManagementMigrationGuideView;
+import dev.inboxbridge.dto.SecretManagementRecoveryGuideView;
 import dev.inboxbridge.dto.SecretManagementRetirementRequirementView;
 import dev.inboxbridge.dto.SecretManagementModeAssessmentView;
 import dev.inboxbridge.dto.SecretManagementRetirementReviewView;
@@ -217,6 +218,19 @@ class AdminResourceTest {
         assertEquals("VAULT_TRANSIT", response.targetMode());
         assertFalse(response.targetReady());
         assertTrue(response.checks().stream().anyMatch(check -> "target-ready".equals(check.checkId()) && !check.satisfied()));
+    }
+
+    @Test
+    void secretManagementRecoveryGuideReturnsRollbackChecklist() {
+        AdminResource resource = new AdminResource();
+        resource.currentUserContext = currentUserContext();
+        resource.secretManagementService = new FakeSecretManagementService();
+
+        SecretManagementRecoveryGuideView response = resource.secretManagementRecoveryGuide();
+
+        assertEquals("FAILED", response.latestRequestStatus());
+        assertTrue(response.rollbackRecommended());
+        assertTrue(response.rollbackSteps().stream().anyMatch(step -> step.contains("revert SECRET_PROVIDER_MODE")));
     }
 
     @Test
@@ -595,6 +609,23 @@ class AdminResourceTest {
                     java.util.List.of("Confirm the target mode shows healthy and writable in Secret management before you change any deployment setting."),
                     java.util.List.of("Set SECRET_PROVIDER_MODE=VAULT_TRANSIT in the server environment."),
                     java.util.List.of("Run stored-secret re-encryption so InboxBridge rewrites encrypted data onto the new active provider path."));
+        }
+
+        @Override
+        public SecretManagementRecoveryGuideView recoveryGuide(UserSession currentSession) {
+            return new SecretManagementRecoveryGuideView(
+                    "Recover from a failed secret-management change",
+                    "The latest secret-management action did not complete successfully.",
+                    "The latest request ended in FAILED state.",
+                    "LOCAL",
+                    "LOCAL",
+                    "FAILED",
+                    "Secret re-encryption did not complete successfully.",
+                    true,
+                    java.util.List.of("Do not remove any legacy key material or previous provider credentials while recovery is in progress."),
+                    java.util.List.of("If the current provider mode was only recently activated, revert SECRET_PROVIDER_MODE to the last known-good mode recorded in your operator runbook."),
+                    java.util.List.of("Validate mailbox polling, destination imports, OAuth-backed flows, browser extensions, and remote sessions after recovery or rollback."),
+                    java.util.List.of("Current active provider mode: LOCAL"));
         }
 
         @Override

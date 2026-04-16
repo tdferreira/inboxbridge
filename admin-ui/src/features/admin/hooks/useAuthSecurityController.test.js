@@ -103,6 +103,46 @@ describe('useAuthSecurityController', () => {
     }))
   })
 
+  it('loads the backend-generated secret-management recovery checklist', async () => {
+    fetch.mockResolvedValue({
+      ok: true,
+      json: vi.fn().mockResolvedValue({
+        title: 'Secret-management recovery checklist',
+        rollbackRecommended: true
+      })
+    })
+    const { result } = renderController()
+
+    await act(async () => {
+      const guide = await result.current.loadSecretManagementRecoveryGuide()
+      expect(guide).toEqual({
+        title: 'Secret-management recovery checklist',
+        rollbackRecommended: true
+      })
+    })
+
+    expect(fetch).toHaveBeenCalledWith('/api/admin/secret-management/recovery-guide')
+  })
+
+  it('surfaces a notification when the secret-management recovery checklist cannot be loaded', async () => {
+    fetch.mockResolvedValue({
+      ok: false,
+      status: 500,
+      text: vi.fn().mockResolvedValue('backend unavailable')
+    })
+    const { result, pushNotification } = renderController()
+
+    await act(async () => {
+      const guide = await result.current.loadSecretManagementRecoveryGuide()
+      expect(guide).toBeNull()
+    })
+
+    expect(pushNotification).toHaveBeenCalledWith(expect.objectContaining({
+      tone: 'error',
+      targetId: 'secret-management-section'
+    }))
+  })
+
   it('marks the security dialog dirty when password fields are populated', () => {
     const { result } = renderController()
 

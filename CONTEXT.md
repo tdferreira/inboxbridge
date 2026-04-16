@@ -524,6 +524,15 @@ re-encryption run. The UI surfaces the active target, affected-record count,
 unavailable-record count, impacted secret areas, and whether the current
 deployment still requires a full ciphertext rewrite instead of a lighter
 metadata-only rewrap path.
+When the latest re-encryption request fails or completes with verification
+warnings, the admin Secret management section now also exposes a backend-
+generated recovery checklist. That checklist is intentionally read-only and
+operator-driven: it summarizes the trigger reason, current mode/provider
+state, whether rollback is recommended, the containment steps, the rollback
+steps, the validation steps, and the evidence that should be preserved before
+any retry. InboxBridge does not attempt to infer or mutate the rollback target
+from the browser because the last-known-good provider mode must come from the
+operator's recorded deployment runbook.
 That rotation logic now also recognizes provider-side transit key rollovers
 for `OPENBAO_TRANSIT`, `VAULT_TRANSIT`, and the outer envelope in `SPLIT_KEY`
 mode. When stored records already use the active InboxBridge target metadata

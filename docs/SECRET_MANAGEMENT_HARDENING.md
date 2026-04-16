@@ -719,6 +719,15 @@ Current repository status:
 
 - add advanced dual-trust-domain support
 - define recovery procedures and failure handling
+- current status:
+  - backend-generated recovery checklists now exist for failed re-encryption
+    runs and verification-warning completions, so operators can preserve the
+    last-known-good trust path, capture the required evidence, and follow an
+    explicit rollback-and-validation procedure from the admin UI
+  - the recovery flow remains read-only by design: InboxBridge does not try to
+    mutate `SECRET_PROVIDER_MODE` or infer a rollback target automatically,
+    because that decision must stay anchored in the operator's recorded
+    last-known-good deployment state
 
 ### Phase 6: Deprecate plaintext env mailbox credentials
 

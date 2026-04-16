@@ -51,6 +51,14 @@ class AdminEndpointsQuarkusIT {
     }
 
     @Test
+    void secretManagementRecoveryGuideRejectsAnonymousAccess() {
+        given()
+                .when().get("/api/admin/secret-management/recovery-guide")
+                .then()
+                .statusCode(401);
+    }
+
+    @Test
     void secretManagementRetirementReviewRejectsAnonymousAccess() {
         given()
                 .when().post("/api/admin/secret-management/retirement-review")
