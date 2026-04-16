@@ -728,6 +728,10 @@ Current repository status:
     snapshot, and InboxBridge blocks re-encryption retries plus legacy-key
     retirement progression until the latest failed or warning-state request has
     a recorded recovery review
+  - cooldown-window re-encryption requests now pause at a server-tracked
+    approval checkpoint once the cooldown elapses, so InboxBridge will not run
+    the queued migration until an operator explicitly approves it through the
+    admin UI with a fresh step-up verified browser session
   - the recovery flow remains read-only by design: InboxBridge does not try to
     mutate `SECRET_PROVIDER_MODE` or infer a rollback target automatically,
     because that decision must stay anchored in the operator's recorded

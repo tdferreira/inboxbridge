@@ -175,6 +175,39 @@ describe('useAuthSecurityController', () => {
     }))
   })
 
+  it('approves a queued secret-management re-encryption and refreshes the status', async () => {
+    fetch.mockResolvedValue({
+      ok: true,
+      json: vi.fn().mockResolvedValue({
+        reencryptionRequest: {
+          status: 'PENDING',
+          approvalRequired: true,
+          approvalReady: false,
+          approvedAt: '2026-04-16T12:00:00Z',
+          approvedByUsername: 'admin'
+        }
+      })
+    })
+    const { result, pushNotification } = renderController()
+
+    await act(async () => {
+      const payload = await result.current.handleApproveSecretManagementReencryption()
+      expect(payload.reencryptionRequest.approvedByUsername).toBe('admin')
+    })
+
+    expect(fetch).toHaveBeenCalledWith('/api/admin/secret-management/re-encrypt/approve', {
+      method: 'POST'
+    })
+    expect(result.current.secretManagementStatus.reencryptionRequest).toEqual(expect.objectContaining({
+      approvedByUsername: 'admin',
+      approvalReady: false
+    }))
+    expect(pushNotification).toHaveBeenCalledWith(expect.objectContaining({
+      tone: 'success',
+      targetId: 'secret-management-section'
+    }))
+  })
+
   it('marks the security dialog dirty when password fields are populated', () => {
     const { result } = renderController()
 

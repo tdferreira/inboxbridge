@@ -8,11 +8,12 @@ import java.time.Duration;
 import java.time.Instant;
 import java.util.ArrayList;
 import java.util.Comparator;
-import java.util.LinkedHashSet;
 import java.util.LinkedHashMap;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import java.util.Set;
 
 import dev.inboxbridge.config.SecretManagementPolicyConfig;
 import dev.inboxbridge.dto.SecretManagementKeyUsageView;
@@ -78,6 +79,13 @@ import io.quarkus.scheduler.Scheduled;
  */
 @ApplicationScoped
 public class SecretManagementService {
+
+    private static final String REENCRYPTION_SCHEDULED_MESSAGE =
+            "Secret re-encryption is queued and will require explicit approval after the cooldown window.";
+    private static final String REENCRYPTION_APPROVAL_READY_MESSAGE =
+            "The cooldown window has elapsed. Review the queued plan and explicitly approve execution before InboxBridge runs it.";
+    private static final String REENCRYPTION_APPROVED_MESSAGE =
+            "The queued secret re-encryption request was approved and will run on the next scheduler pass.";
 
     @Inject
     LocalSecretKeyProvider localSecretKeyProvider;
@@ -769,6 +777,31 @@ public class SecretManagementService {
     }
 
     @Transactional
+    public SecretManagementStatusView approveQueuedReencryptionExecution(AppUser actor, UserSession currentSession) {
+        if (actor == null || actor.id == null) {
+            throw new IllegalArgumentException("Missing current user");
+        }
+        SystemSecretReencryptionRequest requestState = currentReencryptionRequest();
+        if (requestState == null || !RequestStatus.PENDING.name().equals(requestState.status)) {
+            throw new IllegalStateException("There is no queued secret re-encryption request waiting for approval.");
+        }
+        if (!requestState.approvalRequired) {
+            throw new IllegalStateException("The queued secret re-encryption request does not require a separate approval step.");
+        }
+        if (!approvalReady(requestState)) {
+            throw new IllegalStateException("The cooldown window has not elapsed yet. Wait until the scheduled execution time before approving this run.");
+        }
+        Instant now = Instant.now();
+        validateReencryptionReadiness(currentSession, true, Set.of("no-pending-request"));
+        requestState.approvedAt = now;
+        requestState.approvedByUserId = actor.id;
+        requestState.approvedByUsername = actor.username;
+        requestState.lastResultMessage = REENCRYPTION_APPROVED_MESSAGE;
+        persistRequestState(requestState);
+        return status(currentSession);
+    }
+
+    @Transactional
     public SecretReencryptionResultView reencryptAllStoredSecrets() {
         return reencryptAllStoredSecrets(null, null, new SecretReencryptionRequest(false, false, false, false));
     }
@@ -799,8 +832,12 @@ public class SecretManagementService {
             Instant executeAfter = now.plus(cooldown);
             SystemSecretReencryptionRequest requestState = upsertRequestState(actor, effectiveRequest, requestPreview, now, executeAfter);
             requestState.status = RequestStatus.PENDING.name();
+            requestState.approvalRequired = true;
+            requestState.approvedAt = null;
+            requestState.approvedByUserId = null;
+            requestState.approvedByUsername = null;
             requestState.lastErrorMessage = null;
-            requestState.lastResultMessage = "Secret re-encryption is queued and will execute after the cooldown window.";
+            requestState.lastResultMessage = REENCRYPTION_SCHEDULED_MESSAGE;
             requestState.lastVerificationPassed = null;
             clearLastExecutionSnapshot(requestState);
             persistRequestState(requestState);
@@ -884,7 +921,14 @@ public class SecretManagementService {
         if (requestState.executeAfter.isAfter(now)) {
             return;
         }
-            executeReencryption(null, null, toRequest(requestState), readRequestPreview(requestState), now, false);
+        if (requestState.approvalRequired && requestState.approvedAt == null) {
+            if (!REENCRYPTION_APPROVAL_READY_MESSAGE.equals(requestState.lastResultMessage)) {
+                requestState.lastResultMessage = REENCRYPTION_APPROVAL_READY_MESSAGE;
+                persistRequestState(requestState);
+            }
+            return;
+        }
+        executeReencryption(null, null, toRequest(requestState), readRequestPreview(requestState), now, false);
     }
 
     public void setLocalSecretKeyProvider(LocalSecretKeyProvider localSecretKeyProvider) {
@@ -1868,9 +1912,17 @@ public class SecretManagementService {
     }
 
     private void validateReencryptionReadiness(UserSession currentSession, boolean requireReauthentication) {
+        validateReencryptionReadiness(currentSession, requireReauthentication, Set.of());
+    }
+
+    private void validateReencryptionReadiness(
+            UserSession currentSession,
+            boolean requireReauthentication,
+            Set<String> excludedRequirementIds) {
         SecretManagementStatusView currentStatus = status(currentSession);
         currentStatus.reencryptionRequirements().stream()
                 .filter(requirement -> requirement.blocking()
+                        && !excludedRequirementIds.contains(requirement.requirementId())
                         && (requireReauthentication || !"recent-reauthentication".equals(requirement.requirementId())))
                 .filter(requirement -> !requirement.satisfied())
                 .findFirst()
@@ -2119,6 +2171,10 @@ public class SecretManagementService {
         requestState.requestedAt = requestedAt;
         requestState.requestedByUserId = actor == null ? requestState.requestedByUserId : actor.id;
         requestState.executeAfter = executeAfter;
+        requestState.approvalRequired = false;
+        requestState.approvedAt = null;
+        requestState.approvedByUserId = null;
+        requestState.approvedByUsername = null;
         requestState.immediateExecutionOverride = request.immediateExecutionOverride();
         requestState.revokeBrowserExtensionSessions = request.revokeBrowserExtensionSessions();
         requestState.revokeRemoteSessions = request.revokeRemoteSessions();
@@ -2147,19 +2203,28 @@ public class SecretManagementService {
         List<SecretReencryptionAreaResultView> areas = readAreaResults(requestState);
         SecretReencryptionFollowUpView followUp = readLastFollowUp(requestState);
         SecretReencryptionVerificationView verification = readLastVerification(requestState);
+        boolean approvalReady = approvalReady(requestState);
+        String message = requestState.lastErrorMessage != null && !requestState.lastErrorMessage.isBlank()
+                ? requestState.lastErrorMessage
+                : approvalReady
+                        ? REENCRYPTION_APPROVAL_READY_MESSAGE
+                        : requestState.lastResultMessage;
         return new SecretReencryptionRequestStatusView(
                 requestFingerprint(requestState),
                 requestState.status,
                 requestState.requestedAt,
                 requestState.requestedByUserId,
                 requestState.executeAfter,
+                requestState.approvalRequired,
+                approvalReady,
+                requestState.approvedAt,
+                requestState.approvedByUserId,
+                requestState.approvedByUsername,
                 requestState.lastStartedAt,
                 requestState.lastCompletedAt,
                 requestState.lastFailedAt,
                 requestState.immediateExecutionOverride,
-                requestState.lastErrorMessage != null && !requestState.lastErrorMessage.isBlank()
-                        ? requestState.lastErrorMessage
-                        : requestState.lastResultMessage,
+                message,
                 Boolean.TRUE.equals(requestState.lastVerificationPassed),
                 plannedPreview,
                 requestState.lastTotalRecordsUpdated,
@@ -2202,6 +2267,15 @@ public class SecretManagementService {
         requestState.lastAreaResultsJson = null;
         requestState.lastFollowUpJson = null;
         requestState.lastVerificationJson = null;
+    }
+
+    private boolean approvalReady(SystemSecretReencryptionRequest requestState) {
+        return requestState != null
+                && requestState.approvalRequired
+                && RequestStatus.PENDING.name().equals(requestState.status)
+                && requestState.approvedAt == null
+                && (REENCRYPTION_APPROVAL_READY_MESSAGE.equals(requestState.lastResultMessage)
+                        || (requestState.executeAfter != null && !requestState.executeAfter.isAfter(Instant.now())));
     }
 
     private SecretManagementRetirementReviewView latestRetirementReview() {

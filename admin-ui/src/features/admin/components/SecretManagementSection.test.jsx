@@ -31,6 +31,7 @@ function renderSection(overrides = {}) {
     evidenceItems: ['The last-known-good provider mode and key references saved in your operator runbook.']
   })
   const onRecordSecretManagementRecoveryReview = vi.fn().mockResolvedValue(true)
+  const onApproveSecretManagementReencryption = vi.fn().mockResolvedValue(true)
   const onSecretReencryptOptionsChange = vi.fn()
   render(
     <SecretManagementSection
@@ -42,6 +43,7 @@ function renderSection(overrides = {}) {
       onRecordSecretManagementRecoveryReview={onRecordSecretManagementRecoveryReview}
       onRecordSecretManagementRetirementReview={onRecordSecretManagementRetirementReview}
       onVerifySecretManagementRetirementCompletion={onVerifySecretManagementRetirementCompletion}
+      onApproveSecretManagementReencryption={onApproveSecretManagementReencryption}
       onReencryptStoredSecrets={onReencryptStoredSecrets}
       onLoadSecretManagementMigrationGuide={onLoadSecretManagementMigrationGuide}
       onLoadSecretManagementRecoveryGuide={onLoadSecretManagementRecoveryGuide}
@@ -185,6 +187,7 @@ function renderSection(overrides = {}) {
     />
   )
   return {
+    onApproveSecretManagementReencryption,
     onExportSecretManagementReport,
     onLoadSecretManagementMigrationGuide,
     onLoadSecretManagementRecoveryGuide,
@@ -328,6 +331,32 @@ describe('SecretManagementSection', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Record recovery snapshot' }))
 
     await waitFor(() => expect(onRecordSecretManagementRecoveryReview).toHaveBeenCalledTimes(1))
+  })
+
+  it('lets an operator approve a queued re-encryption after the cooldown window elapses', async () => {
+    const { onApproveSecretManagementReencryption } = renderSection({
+      secretManagementStatus: {
+        reencryptionRequest: {
+          requestFingerprint: 'PENDING|2026-04-16T08:00:00Z',
+          status: 'PENDING',
+          requestedAt: '2026-04-16T08:00:00Z',
+          executeAfter: '2026-04-16T08:10:00Z',
+          approvalRequired: true,
+          approvalReady: true,
+          approvedAt: null,
+          approvedByUsername: null,
+          message: 'The cooldown window has elapsed. Review the queued plan and explicitly approve execution before InboxBridge runs it.',
+          plannedPreview: {
+            totalRecordsPendingUpdate: 3,
+            totalSecretValuesPendingRewrite: 3
+          }
+        }
+      }
+    })
+
+    fireEvent.click(screen.getByRole('button', { name: 'Approve queued execution' }))
+
+    await waitFor(() => expect(onApproveSecretManagementReencryption).toHaveBeenCalledTimes(1))
   })
 
   it('keeps the confirm action disabled when backend requirements are not satisfied', () => {

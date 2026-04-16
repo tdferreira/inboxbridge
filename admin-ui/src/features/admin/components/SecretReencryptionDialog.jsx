@@ -41,10 +41,12 @@ function RequirementStatusIcon({ satisfied, t }) {
 
 function SecretReencryptionDialog({
   onClose,
+  onApproveQueuedReencryption,
   onConfirm,
   onOptionsChange,
   onVerifyPasskey,
   onVerifyPassword,
+  approvalPending = false,
   pending = false,
   reauthPasskeyLoading = false,
   reauthPasswordLoading = false,
@@ -91,6 +93,7 @@ function SecretReencryptionDialog({
   const requestSubmitted = Boolean(latestOperationStatus)
   const requestScheduled = latestOperationStatus === 'SCHEDULED' || latestOperationStatus === 'PENDING'
   const requestCompleted = latestOperationStatus === 'COMPLETED'
+  const approvalReady = Boolean(persistedRequest?.approvalReady)
   const requiresReauthentication = Boolean(secretManagementStatus?.reauthenticationRequired)
   const reauthenticationSatisfied = Boolean(secretManagementStatus?.reauthenticationSatisfied)
   const [expandedRequirementIds, setExpandedRequirementIds] = useState(() => new Set(
@@ -294,6 +297,9 @@ function SecretReencryptionDialog({
               {latestExecuteAfter ? (
                 <span>{t('authSecurity.secretManagementReencryptLatestRequestExecuteAfter', { value: latestExecuteAfter })}</span>
               ) : null}
+              {persistedRequest?.approvedAt ? (
+                <span>{t('authSecurity.secretManagementReencryptLatestRequestApprovedBy', { user: persistedRequest?.approvedByUsername || t('common.unavailable'), value: persistedRequest.approvedAt })}</span>
+              ) : null}
               {requestScheduled && latestRequestPreview ? (
                 <div className="detail-stack">
                   <strong>{t('authSecurity.secretManagementReencryptQueuedPreviewTitle')}</strong>
@@ -314,6 +320,17 @@ function SecretReencryptionDialog({
                     </div>
                   ) : null}
                 </div>
+              ) : null}
+              {approvalReady ? (
+                <LoadingButton
+                  className="secondary"
+                  isLoading={approvalPending}
+                  loadingLabel={t('authSecurity.secretManagementReencryptApproveLoading')}
+                  onClick={onApproveQueuedReencryption}
+                  type="button"
+                >
+                  {t('authSecurity.secretManagementReencryptApprove')}
+                </LoadingButton>
               ) : null}
               {requestCompleted && verificationMessages.length > 0 ? (
                 <div className="detail-stack">

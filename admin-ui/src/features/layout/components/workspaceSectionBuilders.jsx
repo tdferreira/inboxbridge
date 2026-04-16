@@ -216,6 +216,7 @@ export function buildAdminWorkspaceSections({
   onRecordSecretManagementRecoveryReview,
   onRecordSecretManagementRetirementReview,
   onVerifySecretManagementRetirementCompletion,
+  onApproveSecretManagementReencryption,
   onReencryptStoredSecrets,
   onLoadSecretManagementMigrationGuide,
   onLoadSecretManagementRecoveryGuide,
@@ -322,6 +323,7 @@ export function buildAdminWorkspaceSections({
           onRecordSecretManagementRecoveryReview={onRecordSecretManagementRecoveryReview}
           onRecordSecretManagementRetirementReview={onRecordSecretManagementRetirementReview}
           onVerifySecretManagementRetirementCompletion={onVerifySecretManagementRetirementCompletion}
+          onApproveSecretManagementReencryption={onApproveSecretManagementReencryption}
           onReencryptStoredSecrets={onReencryptStoredSecrets}
           onLoadSecretManagementMigrationGuide={onLoadSecretManagementMigrationGuide}
           onLoadSecretManagementRecoveryGuide={onLoadSecretManagementRecoveryGuide}
@@ -334,6 +336,7 @@ export function buildAdminWorkspaceSections({
           retirementCompletionLoading={isPending('secretManagementRetirementComplete')}
           reauthPasskeyLoading={isPending('secretManagementReauthPasskey')}
           reauthPasswordLoading={isPending('secretManagementReauthPassword')}
+          reencryptionApprovalLoading={isPending('secretManagementReencryptApprove')}
           reencryptionLoading={isPending('secretManagementReencrypt')}
           session={session}
           sectionLoading={isSectionRefreshing('secretManagementCollapsed')}

@@ -607,9 +607,13 @@ re-encryption. The backend stores that verification timestamp on the current
 `/api/admin/secret-management`, and exposes the step-up endpoints at
 `POST /api/admin/secret-management/re-auth/password`,
 `POST /api/admin/secret-management/re-auth/passkey/options`, and
-`POST /api/admin/secret-management/re-auth/passkey/verify`. The delayed
-cooldown-triggered execution itself does not need an interactive session again;
-the step-up check is enforced when the request is submitted.
+`POST /api/admin/secret-management/re-auth/passkey/verify`. Cooldown-window
+re-encryption requests now also stop at an explicit approval checkpoint instead
+of auto-running as soon as the timer elapses: once the cooldown expires, the
+backend marks the queued request as ready for approval, the admin UI exposes an
+`Approve queued execution` action, and
+`POST /api/admin/secret-management/re-encrypt/approve` requires the same
+step-up verification before the scheduler is allowed to execute the queued run.
 That re-encryption flow still supports optional cleanup of derived trust
 material in the same admin action: browser-extension sessions can be revoked
 deployment-wide, `/remote` sessions can be invalidated, and cached OAuth

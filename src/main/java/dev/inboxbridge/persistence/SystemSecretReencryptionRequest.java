@@ -29,6 +29,18 @@ public class SystemSecretReencryptionRequest extends PanacheEntityBase {
     @Column(name = "execute_after")
     public Instant executeAfter;
 
+    @Column(name = "approval_required", nullable = false)
+    public boolean approvalRequired;
+
+    @Column(name = "approved_at")
+    public Instant approvedAt;
+
+    @Column(name = "approved_by_user_id")
+    public Long approvedByUserId;
+
+    @Column(name = "approved_by_username", length = 190)
+    public String approvedByUsername;
+
     @Column(name = "immediate_execution_override", nullable = false)
     public boolean immediateExecutionOverride;
 

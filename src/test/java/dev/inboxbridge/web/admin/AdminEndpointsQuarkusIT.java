@@ -93,6 +93,14 @@ class AdminEndpointsQuarkusIT {
     }
 
     @Test
+    void approveQueuedSecretReencryptionRejectsAnonymousAccess() {
+        given()
+                .when().post("/api/admin/secret-management/re-encrypt/approve")
+                .then()
+                .statusCode(401);
+    }
+
+    @Test
     void secretManagementPasswordReauthRejectsAnonymousAccess() {
         given()
                 .contentType("application/json")

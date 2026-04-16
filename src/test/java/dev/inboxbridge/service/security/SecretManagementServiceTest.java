@@ -3,6 +3,7 @@ package dev.inboxbridge.service.security;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
@@ -580,6 +581,8 @@ class SecretManagementServiceTest {
         assertNotNull(result.executeAfter());
         assertEquals("PENDING", status.reencryptionRequest().status());
         assertEquals(1L, status.reencryptionRequest().requestedByUserId());
+        assertTrue(status.reencryptionRequest().approvalRequired());
+        assertFalse(status.reencryptionRequest().approvalReady());
         assertNotNull(status.reencryptionRequest().plannedPreview());
         assertEquals(2, status.reencryptionRequest().plannedPreview().totalRecordsPendingUpdate());
         assertEquals(2, status.reencryptionRequest().plannedPreview().totalSecretValuesPendingRewrite());
@@ -621,6 +624,24 @@ class SecretManagementServiceTest {
                 new dev.inboxbridge.dto.SecretReencryptionRequest(false, true, true, true));
 
         service.executeDueReencryptionRequestsAt(scheduled.executeAfter().plusSeconds(1));
+        SecretManagementStatusView blockedStatus = service.status();
+
+        assertEquals("PENDING", blockedStatus.reencryptionRequest().status());
+        assertTrue(blockedStatus.reencryptionRequest().approvalReady());
+        assertNull(blockedStatus.reencryptionRequest().approvedAt());
+
+        UserSession session = new UserSession();
+        session.id = 11L;
+        session.userId = 1L;
+        session.lastSensitiveAuthAt = Instant.now();
+        SecretManagementStatusView approvedStatus = service.approveQueuedReencryptionExecution(adminUser(), session);
+
+        assertNotNull(approvedStatus.reencryptionRequest().approvedAt());
+        assertEquals(1L, approvedStatus.reencryptionRequest().approvedByUserId());
+        assertEquals("admin", approvedStatus.reencryptionRequest().approvedByUsername());
+        assertFalse(approvedStatus.reencryptionRequest().approvalReady());
+
+        service.executeDueReencryptionRequestsAt(scheduled.executeAfter().plusSeconds(2));
         SecretManagementStatusView status = service.status();
 
         assertEquals("COMPLETED", status.reencryptionRequest().status());
@@ -634,6 +655,26 @@ class SecretManagementServiceTest {
         assertEquals(2, status.reencryptionRequest().totalFullReencryptionCount());
         assertEquals(0, status.reencryptionRequest().totalMetadataRewrapCount());
         assertTrue(status.reencryptionRequest().verification().passed());
+    }
+
+    @Test
+    void approveQueuedReencryptionExecutionRejectsApprovalBeforeCooldownExpires() {
+        SecretManagementService service = configuredService(Duration.ofHours(2), false);
+        SecretReencryptionResultView scheduled = service.reencryptAllStoredSecrets(
+                adminUser(),
+                new dev.inboxbridge.dto.SecretReencryptionRequest(false, false, false, false));
+        UserSession session = new UserSession();
+        session.id = 12L;
+        session.userId = 1L;
+        session.lastSensitiveAuthAt = Instant.now();
+
+        IllegalStateException error = assertThrows(
+                IllegalStateException.class,
+                () -> service.approveQueuedReencryptionExecution(adminUser(), session));
+
+        assertTrue(error.getMessage().contains("cooldown window has not elapsed"));
+        assertEquals("PENDING", service.status().reencryptionRequest().status());
+        assertNotNull(scheduled.executeAfter());
     }
 
     @Test

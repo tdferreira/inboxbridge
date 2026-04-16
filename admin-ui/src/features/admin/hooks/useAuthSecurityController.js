@@ -754,6 +754,37 @@ export function useAuthSecurityController({
     return result
   }
 
+  async function handleApproveSecretManagementReencryption() {
+    let result = null
+    await withPending('secretManagementReencryptApprove', async () => {
+      try {
+        const response = await fetch('/api/admin/secret-management/re-encrypt/approve', {
+          method: 'POST'
+        })
+        if (!response.ok) {
+          throw new Error(await apiErrorText(response, errorText('approveSecretManagementReencryption')))
+        }
+        const payload = await response.json()
+        setSecretManagementStatus(normalizeSecretManagementStatus(payload))
+        pushNotification({
+          message: translatedNotification('notifications.secretManagementReencryptionApproved'),
+          targetId: 'secret-management-section',
+          tone: 'success'
+        })
+        result = payload
+      } catch (err) {
+        pushNotification({
+          autoCloseMs: null,
+          copyText: err.message ? pollErrorNotification(err.message) : translatedNotification('errors.approveSecretManagementReencryption'),
+          message: err.message ? pollErrorNotification(err.message) : translatedNotification('errors.approveSecretManagementReencryption'),
+          targetId: 'secret-management-section',
+          tone: 'error'
+        })
+      }
+    })
+    return result
+  }
+
   async function handleVerifySecretManagementPassword(password) {
     let result = null
     await withPending('secretManagementReauthPassword', async () => {
@@ -1190,6 +1221,7 @@ export function useAuthSecurityController({
     },
     closeSecurityPanel,
     extensionSessions,
+    handleApproveSecretManagementReencryption,
     handleReencryptStoredSecrets,
     handleExportSecretManagementReport,
     handleRecordSecretManagementRecoveryReview,

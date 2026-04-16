@@ -285,6 +285,20 @@ class AdminResourceTest {
     }
 
     @Test
+    void approveQueuedSecretReencryptionReturnsUpdatedSnapshot() {
+        AdminResource resource = new AdminResource();
+        resource.currentUserContext = currentUserContext();
+        resource.secretManagementService = new FakeSecretManagementService();
+
+        SecretManagementStatusView response = resource.approveQueuedSecretReencryption();
+
+        assertEquals("PENDING", response.reencryptionRequest().status());
+        assertTrue(response.reencryptionRequest().approvalRequired());
+        assertFalse(response.reencryptionRequest().approvalReady());
+        assertEquals("admin", response.reencryptionRequest().approvedByUsername());
+    }
+
+    @Test
     void reencryptStoredSecretsSurfacesValidationErrors() {
         AdminResource resource = new AdminResource();
         resource.currentUserContext = currentUserContext();
@@ -573,6 +587,73 @@ class AdminResourceTest {
                             true,
                             java.util.List.of("No stored records remain on non-active key versions."),
                             java.util.List.of("Save the active secret-management target now in use: LOCAL:v2.")));
+        }
+
+        @Override
+        public SecretManagementStatusView approveQueuedReencryptionExecution(AppUser actor, UserSession currentSession) {
+            SecretManagementStatusView current = status(currentSession);
+            dev.inboxbridge.dto.SecretReencryptionRequestStatusView request = new dev.inboxbridge.dto.SecretReencryptionRequestStatusView(
+                    "queued-fingerprint",
+                    "PENDING",
+                    java.time.Instant.parse("2026-04-15T11:00:00Z"),
+                    1L,
+                    java.time.Instant.parse("2026-04-15T23:00:00Z"),
+                    true,
+                    false,
+                    java.time.Instant.parse("2026-04-15T23:05:00Z"),
+                    1L,
+                    "admin",
+                    null,
+                    null,
+                    null,
+                    false,
+                    "The queued secret re-encryption request was approved and will run on the next scheduler pass.",
+                    false,
+                    current.reencryptionPreview(),
+                    0,
+                    0,
+                    0,
+                    0,
+                    java.util.List.of(),
+                    new dev.inboxbridge.dto.SecretReencryptionFollowUpView(0, 0, 0),
+                    null);
+            return new SecretManagementStatusView(
+                    current.secureStorageConfigured(),
+                    current.mode(),
+                    current.providerId(),
+                    current.providerHealthy(),
+                    current.providerWritable(),
+                    current.providerStatusMessage(),
+                    current.providerComponents(),
+                    current.modeAssessments(),
+                    current.activeKeyVersion(),
+                    current.activeKeyId(),
+                    current.configuredLegacyKeyIds(),
+                    current.protectedRecordCount(),
+                    current.activeKeyRecordCount(),
+                    current.nonActiveKeyRecordCount(),
+                    current.unavailableKeyRecordCount(),
+                    current.envManagedMailboxSecretsAllowed(),
+                    current.configuredEnvManagedSourceCount(),
+                    current.envManagedGoogleRefreshTokenConfigured(),
+                    current.safeToRetireLegacyKeys(),
+                    current.legacyKeyRetirementReady(),
+                    current.rotationPlan(),
+                    current.reencryptionPreview(),
+                    current.keyUsage(),
+                    current.reencryptionReady(),
+                    current.reencryptionRequirements(),
+                    current.retirementRequirements(),
+                    current.latestRecoveryReview(),
+                    current.recentRecoveryReviews(),
+                    current.latestRetirementReview(),
+                    current.recentRetirementReviews(),
+                    request,
+                    current.reencryptionCooldown(),
+                    current.immediateReencryptionOverrideAllowed(),
+                    current.reauthenticationRequired(),
+                    current.reauthenticationSatisfied(),
+                    current.reauthenticationExpiresAt());
         }
 
         @Override

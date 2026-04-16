@@ -63,6 +63,7 @@ function SecretManagementSection({
   onRecordSecretManagementRecoveryReview,
   onRecordSecretManagementRetirementReview,
   onVerifySecretManagementRetirementCompletion,
+  onApproveSecretManagementReencryption,
   onReencryptStoredSecrets,
   onLoadSecretManagementMigrationGuide,
   onLoadSecretManagementRecoveryGuide,
@@ -75,6 +76,7 @@ function SecretManagementSection({
   retirementCompletionLoading = false,
   reauthPasskeyLoading = false,
   reauthPasswordLoading = false,
+  reencryptionApprovalLoading = false,
   reencryptionLoading = false,
   sectionLoading = false,
   session,
@@ -97,6 +99,9 @@ function SecretManagementSection({
   const rotationPlan = secretManagementStatus?.rotationPlan || null
   const reencryptionRequest = secretManagementStatus?.reencryptionRequest
   const pendingReencryption = reencryptionRequest?.status === 'PENDING'
+  const approvalReady = Boolean(reencryptionRequest?.approvalReady)
+  const canApproveDirectly = approvalReady
+    && (!secretManagementStatus?.reauthenticationRequired || secretManagementStatus?.reauthenticationSatisfied)
   const latestRequestPreview = reencryptionRequest?.plannedPreview || null
   const recoveryGuideAvailable = Boolean(reencryptionRequest && (reencryptionRequest.status === 'FAILED' || (reencryptionRequest.status === 'COMPLETED' && reencryptionRequest.verificationPassed === false)))
 
@@ -105,6 +110,10 @@ function SecretManagementSection({
     if (result) {
       setReencryptionResult(result)
     }
+  }
+
+  async function handleApproveQueuedReencryption() {
+    await onApproveSecretManagementReencryption?.()
   }
 
   async function handleOpenMigrationGuide(targetMode) {
@@ -322,12 +331,15 @@ function SecretManagementSection({
                 <strong>{t('authSecurity.secretManagementReencryptWarning')}</strong>
               </Banner>
               {reencryptionRequest ? (
-                <Banner tone={pendingReencryption ? 'info' : reencryptionRequest?.verificationPassed ? 'success' : 'warning'}>
+                <Banner tone={pendingReencryption ? (approvalReady ? 'warning' : 'info') : reencryptionRequest?.verificationPassed ? 'success' : 'warning'}>
                   <div className="detail-stack">
                     <strong>{t('authSecurity.secretManagementReencryptLatestRequestTitle')}</strong>
                     <span>{t('authSecurity.secretManagementReencryptLatestRequestStatus', { status: reencryptionRequest.status })}</span>
                     {reencryptionRequest.executeAfter ? <span>{t('authSecurity.secretManagementReencryptLatestRequestExecuteAfter', { value: reencryptionRequest.executeAfter })}</span> : null}
                     {reencryptionRequest.message ? <span>{reencryptionRequest.message}</span> : null}
+                    {reencryptionRequest.approvedAt ? (
+                      <span>{t('authSecurity.secretManagementReencryptLatestRequestApprovedBy', { user: reencryptionRequest.approvedByUsername || t('common.unavailable'), value: reencryptionRequest.approvedAt })}</span>
+                    ) : null}
                     {pendingReencryption && latestRequestPreview ? (
                       <div className="polling-statistics-breakdown">
                         <div><span>{t('authSecurity.secretManagementReencryptPreviewRecords')}</span><strong>{latestRequestPreview.totalRecordsPendingUpdate ?? 0}</strong></div>
@@ -345,6 +357,19 @@ function SecretManagementSection({
                         <button className="secondary" onClick={() => handleOpenRecoveryGuide()} type="button">
                           {t('authSecurity.secretManagementRecoveryGuideAction')}
                         </button>
+                      </div>
+                    ) : null}
+                    {canApproveDirectly ? (
+                      <div>
+                        <LoadingButton
+                          className="secondary"
+                          isLoading={reencryptionApprovalLoading}
+                          loadingLabel={t('authSecurity.secretManagementReencryptApproveLoading')}
+                          onClick={handleApproveQueuedReencryption}
+                          type="button"
+                        >
+                          {t('authSecurity.secretManagementReencryptApprove')}
+                        </LoadingButton>
                       </div>
                     ) : null}
                   </div>
@@ -393,9 +418,11 @@ function SecretManagementSection({
             }
           }}
           onConfirm={handleConfirmReencrypt}
+          onApproveQueuedReencryption={handleApproveQueuedReencryption}
           onOptionsChange={onSecretReencryptOptionsChange}
           onVerifyPasskey={onVerifySecretManagementPasskey}
           onVerifyPassword={onVerifySecretManagementPassword}
+          approvalPending={reencryptionApprovalLoading}
           pending={reencryptionLoading}
           reauthPasskeyLoading={reauthPasskeyLoading}
           reauthPasswordLoading={reauthPasswordLoading}

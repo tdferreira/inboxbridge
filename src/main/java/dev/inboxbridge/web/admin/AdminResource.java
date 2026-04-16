@@ -209,6 +209,15 @@ public class AdminResource {
         return WebResourceSupport.badRequest(() -> secretManagementService.reencryptAllStoredSecrets(currentUserContext.user(), currentUserContext.session(), request));
     }
 
+    @POST
+    @Path("/secret-management/re-encrypt/approve")
+    public SecretManagementStatusView approveQueuedSecretReencryption() {
+        return WebResourceSupport.badRequest(() ->
+                secretManagementService.approveQueuedReencryptionExecution(
+                        currentUserContext.user(),
+                        currentUserContext.session()));
+    }
+
     @PUT
     @Path("/auth-security-settings")
     @Consumes(MediaType.APPLICATION_JSON)
