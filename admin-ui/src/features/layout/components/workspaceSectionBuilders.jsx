@@ -213,6 +213,7 @@ export function buildAdminWorkspaceSections({
   setSystemOAuthEditorProvider,
   setSystemOAuthSettingsDirty,
   onExportSecretManagementReport,
+  onRecordSecretManagementRecoveryReview,
   onRecordSecretManagementRetirementReview,
   onVerifySecretManagementRetirementCompletion,
   onReencryptStoredSecrets,
@@ -318,6 +319,7 @@ export function buildAdminWorkspaceSections({
           locale={language}
           onCollapseToggle={() => toggleWorkspaceSection('secretManagementCollapsed')}
           onExportSecretManagementReport={onExportSecretManagementReport}
+          onRecordSecretManagementRecoveryReview={onRecordSecretManagementRecoveryReview}
           onRecordSecretManagementRetirementReview={onRecordSecretManagementRetirementReview}
           onVerifySecretManagementRetirementCompletion={onVerifySecretManagementRetirementCompletion}
           onReencryptStoredSecrets={onReencryptStoredSecrets}
@@ -327,6 +329,7 @@ export function buildAdminWorkspaceSections({
           onVerifySecretManagementPasskey={onVerifySecretManagementPasskey}
           onSecretReencryptOptionsChange={onSecretReencryptOptionsChange}
           exportReportLoading={isPending('secretManagementExportReport')}
+          recoveryReviewLoading={isPending('secretManagementRecoveryReview')}
           retirementReviewLoading={isPending('secretManagementRetirementReview')}
           retirementCompletionLoading={isPending('secretManagementRetirementComplete')}
           reauthPasskeyLoading={isPending('secretManagementReauthPasskey')}

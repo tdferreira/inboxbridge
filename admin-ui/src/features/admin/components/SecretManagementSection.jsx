@@ -60,6 +60,7 @@ function SecretManagementSection({
   locale = 'en',
   onCollapseToggle,
   onExportSecretManagementReport,
+  onRecordSecretManagementRecoveryReview,
   onRecordSecretManagementRetirementReview,
   onVerifySecretManagementRetirementCompletion,
   onReencryptStoredSecrets,
@@ -69,6 +70,7 @@ function SecretManagementSection({
   onVerifySecretManagementPassword,
   onSecretReencryptOptionsChange,
   exportReportLoading = false,
+  recoveryReviewLoading = false,
   retirementReviewLoading = false,
   retirementCompletionLoading = false,
   reauthPasskeyLoading = false,
@@ -420,11 +422,14 @@ function SecretManagementSection({
         <SecretRecoveryGuideDialog
           guide={recoveryGuide}
           loading={recoveryGuideLoading}
+          onRecordRecoveryReview={onRecordSecretManagementRecoveryReview}
           onClose={() => {
             setShowRecoveryGuideDialog(false)
             setRecoveryGuideLoading(false)
             setRecoveryGuide(null)
           }}
+          pending={recoveryReviewLoading}
+          secretManagementStatus={secretManagementStatus}
           t={t}
         />
       ) : null}

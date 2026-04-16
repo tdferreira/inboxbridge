@@ -532,7 +532,12 @@ state, whether rollback is recommended, the containment steps, the rollback
 steps, the validation steps, and the evidence that should be preserved before
 any retry. InboxBridge does not attempt to infer or mutate the rollback target
 from the browser because the last-known-good provider mode must come from the
-operator's recorded deployment runbook.
+operator's recorded deployment runbook. That recovery path is now also
+auditable: admins can record a recovery-review snapshot for the latest failed
+or warning-state request, the status payload keeps the latest and recent
+recovery reviews alongside retirement reviews, and backend readiness checks now
+block re-encryption retries plus legacy-key retirement until the latest
+recovery-required request has a matching recorded review.
 That rotation logic now also recognizes provider-side transit key rollovers
 for `OPENBAO_TRANSIT`, `VAULT_TRANSIT`, and the outer envelope in `SPLIT_KEY`
 mode. When stored records already use the active InboxBridge target metadata

@@ -20,6 +20,7 @@ import dev.inboxbridge.dto.SecretManagementMigrationCheckView;
 import dev.inboxbridge.dto.SecretManagementMigrationGuideView;
 import dev.inboxbridge.dto.SecretManagementModeAssessmentView;
 import dev.inboxbridge.dto.SecretManagementRecoveryGuideView;
+import dev.inboxbridge.dto.SecretManagementRecoveryReviewView;
 import dev.inboxbridge.dto.SecretManagementRetirementRequirementView;
 import dev.inboxbridge.dto.SecretManagementRetirementCompletionView;
 import dev.inboxbridge.dto.SecretManagementRetirementReviewView;
@@ -44,6 +45,8 @@ import dev.inboxbridge.persistence.SystemAuthSecuritySetting;
 import dev.inboxbridge.persistence.SystemAuthSecuritySettingRepository;
 import dev.inboxbridge.persistence.SystemOAuthAppSettings;
 import dev.inboxbridge.persistence.SystemOAuthAppSettingsRepository;
+import dev.inboxbridge.persistence.SystemSecretRecoveryReview;
+import dev.inboxbridge.persistence.SystemSecretRecoveryReviewRepository;
 import dev.inboxbridge.persistence.SystemSecretReencryptionRequest;
 import dev.inboxbridge.persistence.SystemSecretReencryptionRequestRepository;
 import dev.inboxbridge.persistence.SystemSecretRetirementReview;
@@ -122,6 +125,9 @@ public class SecretManagementService {
     SystemSecretReencryptionRequestRepository systemSecretReencryptionRequestRepository;
 
     @Inject
+    SystemSecretRecoveryReviewRepository systemSecretRecoveryReviewRepository;
+
+    @Inject
     SystemSecretRetirementReviewRepository systemSecretRetirementReviewRepository;
 
     @Inject
@@ -148,6 +154,8 @@ public class SecretManagementService {
         boolean reauthenticationRequired = reencryptionReauthenticationRequired();
         boolean reauthenticationSatisfied = reencryptionReauthenticationSatisfied(currentSession);
         Instant reauthenticationExpiresAt = reencryptionReauthenticationExpiresAt(currentSession);
+        SecretManagementRecoveryReviewView latestRecoveryReview = latestRecoveryReview();
+        List<SecretManagementRecoveryReviewView> recentRecoveryReviews = recentRecoveryReviews();
         if (!providerHealth.writable()) {
             List<SecretReencryptionRequirementView> requirements = buildRequirements(
                     false,
@@ -155,13 +163,15 @@ public class SecretManagementService {
                     null,
                     0,
                     requestState,
+                    latestRecoveryReview,
                     reauthenticationRequired,
                     reauthenticationSatisfied);
             List<SecretManagementRetirementRequirementView> retirementRequirements = buildRetirementRequirements(
                     providerHealth,
                     null,
                     0,
-                    requestState);
+                    requestState,
+                    latestRecoveryReview);
             return new SecretManagementStatusView(
                     false,
                     providerHealth.mode().name(),
@@ -198,6 +208,8 @@ public class SecretManagementService {
                     false,
                     requirements,
                     retirementRequirements,
+                    latestRecoveryReview,
+                    recentRecoveryReviews,
                     latestRetirementReview(),
                     recentRetirementReviews(),
                     toRequestStatusView(requestState),
@@ -258,6 +270,7 @@ public class SecretManagementService {
                 activeKeyVersion,
                 unavailableKeyRecordCount,
                 requestState,
+                latestRecoveryReview,
                 reauthenticationRequired,
                 reauthenticationSatisfied);
         boolean reencryptionReady = requirements.stream()
@@ -267,7 +280,8 @@ public class SecretManagementService {
                 providerHealth,
                 rotationPlan,
                 unavailableKeyRecordCount,
-                requestState);
+                requestState,
+                latestRecoveryReview);
         boolean legacyKeyRetirementReady = retirementRequirements.stream()
                 .filter(SecretManagementRetirementRequirementView::blocking)
                 .allMatch(SecretManagementRetirementRequirementView::satisfied);
@@ -301,6 +315,8 @@ public class SecretManagementService {
                 reencryptionReady,
                 requirements,
                 retirementRequirements,
+                latestRecoveryReview,
+                recentRecoveryReviews,
                 latestRetirementReview,
                 recentRetirementReviews,
                 toRequestStatusView(requestState),
@@ -467,6 +483,38 @@ public class SecretManagementService {
                 buildRecoveryRollbackSteps(currentStatus, rollbackRecommended),
                 buildRecoveryValidationSteps(currentStatus),
                 buildRecoveryEvidenceItems(currentStatus, requestState));
+    }
+
+    @Transactional
+    public SecretManagementStatusView recordRecoveryReview(AppUser actor, UserSession currentSession) {
+        if (actor == null || actor.id == null) {
+            throw new IllegalArgumentException("Missing current user");
+        }
+        if (systemSecretRecoveryReviewRepository == null) {
+            throw new IllegalStateException("Recovery review storage is unavailable.");
+        }
+        SecretManagementStatusView currentStatus = status(currentSession);
+        SecretReencryptionRequestStatusView requestState = currentStatus.reencryptionRequest();
+        if (!recoveryReviewRequired(requestState)) {
+            throw new IllegalStateException("The latest secret-management request does not currently require a recovery review.");
+        }
+        SystemSecretRecoveryReview review = new SystemSecretRecoveryReview();
+        review.reviewedAt = Instant.now();
+        review.reviewedByUserId = actor.id;
+        review.reviewedByUsername = actor.username;
+        review.requestFingerprint = requestFingerprint(requestState);
+        review.latestRequestStatus = requestState.status();
+        review.latestRequestMessage = requestState.message();
+        review.verificationPassed = requestState.verificationPassed();
+        review.rollbackRecommended = recoveryRollbackRecommended(currentStatus, requestState);
+        review.mode = currentStatus.mode();
+        review.providerId = currentStatus.providerId();
+        review.activeKeyVersion = currentStatus.activeKeyVersion();
+        review.providerWritable = currentStatus.providerWritable();
+        review.unavailableKeyRecordCount = currentStatus.unavailableKeyRecordCount();
+        review.statusSnapshotJson = writeJson(currentStatus);
+        systemSecretRecoveryReviewRepository.persist(review);
+        return status(currentSession);
     }
 
     private List<SecretManagementMigrationCheckView> buildMigrationChecks(
@@ -901,6 +949,10 @@ public class SecretManagementService {
 
     public void setSystemSecretReencryptionRequestRepository(SystemSecretReencryptionRequestRepository systemSecretReencryptionRequestRepository) {
         this.systemSecretReencryptionRequestRepository = systemSecretReencryptionRequestRepository;
+    }
+
+    public void setSystemSecretRecoveryReviewRepository(SystemSecretRecoveryReviewRepository systemSecretRecoveryReviewRepository) {
+        this.systemSecretRecoveryReviewRepository = systemSecretRecoveryReviewRepository;
     }
 
     public void setSystemSecretRetirementReviewRepository(SystemSecretRetirementReviewRepository systemSecretRetirementReviewRepository) {
@@ -1545,6 +1597,7 @@ public class SecretManagementService {
             String activeKeyVersion,
             long unavailableKeyRecordCount,
             SystemSecretReencryptionRequest requestState,
+            SecretManagementRecoveryReviewView latestRecoveryReview,
             boolean reauthenticationRequired,
             boolean reauthenticationSatisfied) {
         List<SecretReencryptionRequirementView> requirements = new ArrayList<>();
@@ -1649,6 +1702,26 @@ public class SecretManagementService {
                         : null,
                 requestState == null || !RequestStatus.PENDING.name().equals(requestState.status),
                 false));
+        boolean recoveryReviewSatisfied = !recoveryReviewRequired(requestState)
+                || recoveryReviewRecordedForRequest(requestState, latestRecoveryReview);
+        requirements.add(new SecretReencryptionRequirementView(
+                "latest-recovery-review",
+                "The latest failed or warning-state request was reviewed before retrying",
+                recoveryReviewSatisfied
+                        ? recoveryReviewRequired(requestState)
+                                ? "The latest request that needed recovery guidance was already reviewed and recorded."
+                                : "No recovery review is required for the latest request state."
+                        : "Record the recovery snapshot for the latest failed or warning-state request before retrying re-encryption.",
+                recoveryReviewSatisfied
+                        ? List.of("Keep the latest recovery snapshot together with the exported report and operator notes until the workflow is fully stabilized.")
+                        : List.of(
+                                "Open the recovery checklist for the latest request, confirm the rollback or containment plan, and record the recovery snapshot before retrying.",
+                                "Do not schedule another re-encryption run until the current failed or warning-state request has an auditable recovery review."),
+                List.of(),
+                "secret-management-section",
+                recoveryReviewRequired(requestState) ? "Review latest request" : null,
+                recoveryReviewSatisfied,
+                true));
         requirements.add(new SecretReencryptionRequirementView(
                 "recent-reauthentication",
                 "This browser session was recently re-authenticated for sensitive actions",
@@ -1680,7 +1753,8 @@ public class SecretManagementService {
             SecretProviderHealth providerHealth,
             SecretManagementRotationPlanView rotationPlan,
             long unavailableKeyRecordCount,
-            SystemSecretReencryptionRequest requestState) {
+            SystemSecretReencryptionRequest requestState,
+            SecretManagementRecoveryReviewView latestRecoveryReview) {
         List<SecretManagementRetirementRequirementView> requirements = new ArrayList<>();
         boolean providerReady = providerHealth != null && providerHealth.writable();
         requirements.add(new SecretManagementRetirementRequirementView(
@@ -1751,6 +1825,26 @@ public class SecretManagementService {
                 "secret-management-rotation-plan",
                 "Review rotation plan",
                 noRotationNeeded,
+                true));
+        boolean recoveryReviewSatisfied = !recoveryReviewRequired(requestState)
+                || recoveryReviewRecordedForRequest(requestState, latestRecoveryReview);
+        requirements.add(new SecretManagementRetirementRequirementView(
+                "latest-recovery-review",
+                "The latest failed or warning-state request has a recorded recovery review",
+                recoveryReviewSatisfied
+                        ? recoveryReviewRequired(requestState)
+                                ? "The latest request that needed recovery guidance already has a recorded review snapshot."
+                                : "No recovery review is required for the latest request state."
+                        : "Record the recovery snapshot for the latest failed or warning-state request before retiring any legacy material.",
+                recoveryReviewSatisfied
+                        ? List.of("Keep the recovery snapshot with the exported report until the legacy-key retirement workflow is fully complete.")
+                        : List.of(
+                                "Open the latest recovery checklist, confirm the containment or rollback plan, and record the recovery snapshot first.",
+                                "Only continue toward legacy-key retirement after the failed or warning-state request has an auditable recovery acknowledgement."),
+                List.of(),
+                "secret-management-section",
+                recoveryReviewRequired(requestState) ? "Review latest request" : null,
+                recoveryReviewSatisfied,
                 true));
         boolean latestVerificationPassed = requestState == null || requestState.lastVerificationPassed == null || requestState.lastVerificationPassed;
         requirements.add(new SecretManagementRetirementRequirementView(
@@ -2054,6 +2148,7 @@ public class SecretManagementService {
         SecretReencryptionFollowUpView followUp = readLastFollowUp(requestState);
         SecretReencryptionVerificationView verification = readLastVerification(requestState);
         return new SecretReencryptionRequestStatusView(
+                requestFingerprint(requestState),
                 requestState.status,
                 requestState.requestedAt,
                 requestState.requestedByUserId,
@@ -2164,6 +2259,97 @@ public class SecretManagementService {
                                 review.completionStatus,
                                 review.completionMessage,
                                 completionUnsatisfiedCheckIds == null ? List.of() : completionUnsatisfiedCheckIds));
+    }
+
+    private SecretManagementRecoveryReviewView latestRecoveryReview() {
+        if (systemSecretRecoveryReviewRepository == null) {
+            return null;
+        }
+        return systemSecretRecoveryReviewRepository.findLatest()
+                .map(this::toRecoveryReviewView)
+                .orElse(null);
+    }
+
+    private List<SecretManagementRecoveryReviewView> recentRecoveryReviews() {
+        if (systemSecretRecoveryReviewRepository == null) {
+            return List.of();
+        }
+        return systemSecretRecoveryReviewRepository.listRecent(5).stream()
+                .map(this::toRecoveryReviewView)
+                .toList();
+    }
+
+    private SecretManagementRecoveryReviewView toRecoveryReviewView(SystemSecretRecoveryReview review) {
+        return new SecretManagementRecoveryReviewView(
+                review.id,
+                review.reviewedAt,
+                review.reviewedByUserId,
+                review.reviewedByUsername,
+                review.requestFingerprint,
+                review.latestRequestStatus,
+                review.latestRequestMessage,
+                review.verificationPassed,
+                review.rollbackRecommended,
+                review.mode,
+                review.providerId,
+                review.activeKeyVersion,
+                review.providerWritable,
+                review.unavailableKeyRecordCount);
+    }
+
+    private boolean recoveryReviewRequired(SystemSecretReencryptionRequest requestState) {
+        if (requestState == null || requestState.status == null) {
+            return false;
+        }
+        if (RequestStatus.FAILED.name().equals(requestState.status)) {
+            return true;
+        }
+        return RequestStatus.COMPLETED.name().equals(requestState.status) && Boolean.FALSE.equals(requestState.lastVerificationPassed);
+    }
+
+    private boolean recoveryReviewRequired(SecretReencryptionRequestStatusView requestState) {
+        if (requestState == null || requestState.status() == null) {
+            return false;
+        }
+        if (RequestStatus.FAILED.name().equals(requestState.status())) {
+            return true;
+        }
+        return RequestStatus.COMPLETED.name().equals(requestState.status()) && !requestState.verificationPassed();
+    }
+
+    private boolean recoveryReviewRecordedForRequest(
+            SystemSecretReencryptionRequest requestState,
+            SecretManagementRecoveryReviewView latestRecoveryReview) {
+        return latestRecoveryReview != null && requestFingerprint(requestState).equals(latestRecoveryReview.requestFingerprint());
+    }
+
+    private boolean recoveryRollbackRecommended(
+            SecretManagementStatusView currentStatus,
+            SecretReencryptionRequestStatusView requestState) {
+        return RequestStatus.FAILED.name().equals(requestState.status())
+                || !currentStatus.providerWritable()
+                || currentStatus.unavailableKeyRecordCount() > 0;
+    }
+
+    private String requestFingerprint(SystemSecretReencryptionRequest requestState) {
+        if (requestState == null) {
+            return "";
+        }
+        return String.join("|",
+                valueOrBlank(requestState.status),
+                valueOrBlank(requestState.requestedAt),
+                valueOrBlank(requestState.lastStartedAt),
+                valueOrBlank(requestState.lastCompletedAt),
+                valueOrBlank(requestState.lastFailedAt),
+                Boolean.TRUE.equals(requestState.lastVerificationPassed) ? "passed" : "attention");
+    }
+
+    private String requestFingerprint(SecretReencryptionRequestStatusView requestState) {
+        return requestState == null ? "" : valueOrBlank(requestState.requestFingerprint());
+    }
+
+    private String valueOrBlank(Object value) {
+        return value == null ? "" : String.valueOf(value);
     }
 
     private boolean equalsNullable(Object left, Object right) {

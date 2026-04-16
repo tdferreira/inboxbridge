@@ -35,6 +35,8 @@ const DEFAULT_SECRET_MANAGEMENT_STATUS = {
   keyUsage: [],
   reencryptionReady: false,
   reencryptionRequirements: [],
+  latestRecoveryReview: null,
+  recentRecoveryReviews: [],
   legacyKeyRetirementReady: false,
   retirementRequirements: [],
   latestRetirementReview: null,
@@ -66,6 +68,7 @@ function normalizeSecretManagementStatus(payload) {
     configuredLegacyKeyIds: Array.isArray(payload?.configuredLegacyKeyIds) ? payload.configuredLegacyKeyIds : [],
     keyUsage: Array.isArray(payload?.keyUsage) ? payload.keyUsage : [],
     reencryptionRequirements: Array.isArray(payload?.reencryptionRequirements) ? payload.reencryptionRequirements : [],
+    recentRecoveryReviews: Array.isArray(payload?.recentRecoveryReviews) ? payload.recentRecoveryReviews : [],
     retirementRequirements: Array.isArray(payload?.retirementRequirements) ? payload.retirementRequirements : [],
     recentRetirementReviews: Array.isArray(payload?.recentRetirementReviews) ? payload.recentRetirementReviews : []
   }
@@ -903,6 +906,37 @@ export function useAuthSecurityController({
     return result
   }
 
+  async function handleRecordSecretManagementRecoveryReview() {
+    let result = null
+    await withPending('secretManagementRecoveryReview', async () => {
+      try {
+        const response = await fetch('/api/admin/secret-management/recovery-review', {
+          method: 'POST'
+        })
+        if (!response.ok) {
+          throw new Error(await apiErrorText(response, errorText('recordSecretManagementRecoveryReview')))
+        }
+        const payload = await response.json()
+        setSecretManagementStatus(normalizeSecretManagementStatus(payload))
+        pushNotification({
+          message: translatedNotification('notifications.secretManagementRecoveryReviewRecorded'),
+          targetId: 'secret-management-section',
+          tone: 'success'
+        })
+        result = payload
+      } catch (err) {
+        pushNotification({
+          autoCloseMs: null,
+          copyText: err.message ? pollErrorNotification(err.message) : translatedNotification('errors.recordSecretManagementRecoveryReview'),
+          message: err.message ? pollErrorNotification(err.message) : translatedNotification('errors.recordSecretManagementRecoveryReview'),
+          targetId: 'secret-management-section',
+          tone: 'error'
+        })
+      }
+    })
+    return result
+  }
+
   async function handleVerifySecretManagementRetirementCompletion() {
     let result = null
     await withPending('secretManagementRetirementComplete', async () => {
@@ -1158,6 +1192,7 @@ export function useAuthSecurityController({
     extensionSessions,
     handleReencryptStoredSecrets,
     handleExportSecretManagementReport,
+    handleRecordSecretManagementRecoveryReview,
     handleRecordSecretManagementRetirementReview,
     handleVerifySecretManagementRetirementCompletion,
     handleVerifySecretManagementPassword,

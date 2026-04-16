@@ -9,6 +9,7 @@ import java.util.List;
  * verified successfully.
  */
 public record SecretReencryptionRequestStatusView(
+        String requestFingerprint,
         String status,
         Instant requestedAt,
         Long requestedByUserId,

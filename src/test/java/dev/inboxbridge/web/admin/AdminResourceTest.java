@@ -234,6 +234,19 @@ class AdminResourceTest {
     }
 
     @Test
+    void recordSecretManagementRecoveryReviewReturnsUpdatedSnapshot() {
+        AdminResource resource = new AdminResource();
+        resource.currentUserContext = currentUserContext();
+        resource.secretManagementService = new FakeSecretManagementService();
+
+        SecretManagementStatusView response = resource.recordSecretManagementRecoveryReview();
+
+        assertTrue(response.latestRecoveryReview() != null);
+        assertEquals("admin", response.latestRecoveryReview().reviewedByUsername());
+        assertEquals(1, response.recentRecoveryReviews().size());
+    }
+
+    @Test
     void recordSecretManagementRetirementReviewReturnsUpdatedSnapshot() {
         AdminResource resource = new AdminResource();
         resource.currentUserContext = currentUserContext();
@@ -490,6 +503,8 @@ class AdminResourceTest {
                                     "Review rotation plan",
                                     false,
                                     true)),
+                    null,
+                    java.util.List.of(),
                     new SecretManagementRetirementReviewView(
                             7L,
                             java.time.Instant.parse("2026-04-15T13:00:00Z"),
@@ -629,6 +644,63 @@ class AdminResourceTest {
         }
 
         @Override
+        public SecretManagementStatusView recordRecoveryReview(AppUser actor, UserSession currentSession) {
+            SecretManagementStatusView current = status(currentSession);
+            dev.inboxbridge.dto.SecretManagementRecoveryReviewView review = new dev.inboxbridge.dto.SecretManagementRecoveryReviewView(
+                    9L,
+                    java.time.Instant.parse("2026-04-15T13:30:00Z"),
+                    1L,
+                    "admin",
+                    "reviewed-fingerprint",
+                    "FAILED",
+                    "Secret re-encryption did not complete successfully.",
+                    false,
+                    true,
+                    current.mode(),
+                    current.providerId(),
+                    current.activeKeyVersion(),
+                    current.providerWritable(),
+                    current.unavailableKeyRecordCount());
+            return new SecretManagementStatusView(
+                    current.secureStorageConfigured(),
+                    current.mode(),
+                    current.providerId(),
+                    current.providerHealthy(),
+                    current.providerWritable(),
+                    current.providerStatusMessage(),
+                    current.providerComponents(),
+                    current.modeAssessments(),
+                    current.activeKeyVersion(),
+                    current.activeKeyId(),
+                    current.configuredLegacyKeyIds(),
+                    current.protectedRecordCount(),
+                    current.activeKeyRecordCount(),
+                    current.nonActiveKeyRecordCount(),
+                    current.unavailableKeyRecordCount(),
+                    current.envManagedMailboxSecretsAllowed(),
+                    current.configuredEnvManagedSourceCount(),
+                    current.envManagedGoogleRefreshTokenConfigured(),
+                    current.safeToRetireLegacyKeys(),
+                    current.legacyKeyRetirementReady(),
+                    current.rotationPlan(),
+                    current.reencryptionPreview(),
+                    current.keyUsage(),
+                    current.reencryptionReady(),
+                    current.reencryptionRequirements(),
+                    current.retirementRequirements(),
+                    review,
+                    java.util.List.of(review),
+                    current.latestRetirementReview(),
+                    current.recentRetirementReviews(),
+                    current.reencryptionRequest(),
+                    current.reencryptionCooldown(),
+                    current.immediateReencryptionOverrideAllowed(),
+                    current.reauthenticationRequired(),
+                    current.reauthenticationSatisfied(),
+                    current.reauthenticationExpiresAt());
+        }
+
+        @Override
         public SecretManagementStatusView recordRetirementReview(AppUser actor, UserSession currentSession) {
             return status(currentSession);
         }
@@ -687,6 +759,37 @@ class AdminResourceTest {
                     current.reencryptionReady(),
                     current.reencryptionRequirements(),
                     current.retirementRequirements(),
+                    new dev.inboxbridge.dto.SecretManagementRecoveryReviewView(
+                            9L,
+                            java.time.Instant.parse("2026-04-15T13:30:00Z"),
+                            1L,
+                            "admin",
+                            "reviewed-fingerprint",
+                            "FAILED",
+                            "The OpenBao transit token was rejected during verification.",
+                            false,
+                            true,
+                            current.mode(),
+                            current.providerId(),
+                            current.activeKeyVersion(),
+                            current.providerWritable(),
+                            current.unavailableKeyRecordCount()),
+                    java.util.List.of(
+                            new dev.inboxbridge.dto.SecretManagementRecoveryReviewView(
+                                    9L,
+                                    java.time.Instant.parse("2026-04-15T13:30:00Z"),
+                                    1L,
+                                    "admin",
+                                    "reviewed-fingerprint",
+                                    "FAILED",
+                                    "The OpenBao transit token was rejected during verification.",
+                                    false,
+                                    true,
+                                    current.mode(),
+                                    current.providerId(),
+                                    current.activeKeyVersion(),
+                                    current.providerWritable(),
+                                    current.unavailableKeyRecordCount())),
                     completed,
                     java.util.List.of(completed),
                     current.reencryptionRequest(),

@@ -30,6 +30,7 @@ function renderSection(overrides = {}) {
     validationSteps: ['Refresh the Secret management status and confirm the provider is healthy and writable again.'],
     evidenceItems: ['The last-known-good provider mode and key references saved in your operator runbook.']
   })
+  const onRecordSecretManagementRecoveryReview = vi.fn().mockResolvedValue(true)
   const onSecretReencryptOptionsChange = vi.fn()
   render(
     <SecretManagementSection
@@ -38,6 +39,7 @@ function renderSection(overrides = {}) {
       locale="en"
       onCollapseToggle={vi.fn()}
       onExportSecretManagementReport={onExportSecretManagementReport}
+      onRecordSecretManagementRecoveryReview={onRecordSecretManagementRecoveryReview}
       onRecordSecretManagementRetirementReview={onRecordSecretManagementRetirementReview}
       onVerifySecretManagementRetirementCompletion={onVerifySecretManagementRetirementCompletion}
       onReencryptStoredSecrets={onReencryptStoredSecrets}
@@ -186,6 +188,7 @@ function renderSection(overrides = {}) {
     onExportSecretManagementReport,
     onLoadSecretManagementMigrationGuide,
     onLoadSecretManagementRecoveryGuide,
+    onRecordSecretManagementRecoveryReview,
     onRecordSecretManagementRetirementReview,
     onVerifySecretManagementRetirementCompletion,
     onReencryptStoredSecrets,
@@ -301,10 +304,11 @@ describe('SecretManagementSection', () => {
   })
 
   it('opens the backend-generated recovery checklist when the latest request needs operator follow-up', async () => {
-    const { onLoadSecretManagementRecoveryGuide } = renderSection({
+    const { onLoadSecretManagementRecoveryGuide, onRecordSecretManagementRecoveryReview } = renderSection({
       secretManagementStatus: {
         reencryptionRequest: {
           requestId: 42,
+          requestFingerprint: 'FAILED|2026-04-16T08:00:00Z|2026-04-16T08:10:00Z|attention',
           status: 'FAILED',
           requestedAt: '2026-04-16T08:00:00Z',
           requestedByUsername: 'admin',
@@ -320,6 +324,10 @@ describe('SecretManagementSection', () => {
     expect(screen.getByText('Secret-management recovery checklist')).toBeInTheDocument()
     expect(screen.getByText('The OpenBao transit token was rejected during verification.')).toBeInTheDocument()
     expect(screen.getByText('Preserve the previous provider credentials and all legacy key material until recovery is complete.')).toBeInTheDocument()
+
+    fireEvent.click(screen.getByRole('button', { name: 'Record recovery snapshot' }))
+
+    await waitFor(() => expect(onRecordSecretManagementRecoveryReview).toHaveBeenCalledTimes(1))
   })
 
   it('keeps the confirm action disabled when backend requirements are not satisfied', () => {

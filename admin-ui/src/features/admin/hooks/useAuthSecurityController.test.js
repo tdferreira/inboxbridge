@@ -143,6 +143,38 @@ describe('useAuthSecurityController', () => {
     }))
   })
 
+  it('records a secret-management recovery review and refreshes the status', async () => {
+    fetch
+      .mockResolvedValueOnce({
+        ok: true,
+        json: vi.fn().mockResolvedValue({
+          latestRecoveryReview: {
+            reviewId: 9,
+            reviewedByUsername: 'admin'
+          },
+          recentRecoveryReviews: [{ reviewId: 9 }]
+        })
+      })
+    const { result, pushNotification } = renderController()
+
+    await act(async () => {
+      const payload = await result.current.handleRecordSecretManagementRecoveryReview()
+      expect(payload.latestRecoveryReview.reviewId).toBe(9)
+    })
+
+    expect(fetch).toHaveBeenCalledWith('/api/admin/secret-management/recovery-review', {
+      method: 'POST'
+    })
+    expect(result.current.secretManagementStatus.latestRecoveryReview).toEqual(expect.objectContaining({
+      reviewId: 9,
+      reviewedByUsername: 'admin'
+    }))
+    expect(pushNotification).toHaveBeenCalledWith(expect.objectContaining({
+      tone: 'success',
+      targetId: 'secret-management-section'
+    }))
+  })
+
   it('marks the security dialog dirty when password fields are populated', () => {
     const { result } = renderController()
 

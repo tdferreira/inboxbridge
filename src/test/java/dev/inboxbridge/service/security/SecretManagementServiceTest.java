@@ -326,6 +326,43 @@ class SecretManagementServiceTest {
     }
 
     @Test
+    void recordRecoveryReviewPersistsAnAuditableSnapshotForTheLatestFailedRequest() {
+        SecretManagementService service = configuredService();
+        service.setSystemSecretReencryptionRequestRepository(new InMemorySystemSecretReencryptionRequestRepository(failedRequestState()));
+
+        SecretManagementStatusView updatedStatus = service.recordRecoveryReview(adminUser(), null);
+
+        assertNotNull(updatedStatus.latestRecoveryReview());
+        assertEquals("admin", updatedStatus.latestRecoveryReview().reviewedByUsername());
+        assertEquals("FAILED", updatedStatus.latestRecoveryReview().latestRequestStatus());
+        assertEquals(1, updatedStatus.recentRecoveryReviews().size());
+        assertTrue(updatedStatus.reencryptionRequirements().stream()
+                .anyMatch(requirement -> "latest-recovery-review".equals(requirement.requirementId()) && requirement.satisfied()));
+    }
+
+    @Test
+    void statusBlocksRetryAndRetirementUntilTheLatestFailedRequestHasARecordedRecoveryReview() {
+        SecretManagementService service = configuredService();
+        service.setSystemSecretReencryptionRequestRepository(new InMemorySystemSecretReencryptionRequestRepository(failedRequestState()));
+
+        SecretManagementStatusView blockedStatus = service.status();
+
+        assertFalse(blockedStatus.reencryptionReady());
+        assertFalse(blockedStatus.legacyKeyRetirementReady());
+        assertTrue(blockedStatus.reencryptionRequirements().stream()
+                .anyMatch(requirement -> "latest-recovery-review".equals(requirement.requirementId()) && !requirement.satisfied()));
+        assertTrue(blockedStatus.retirementRequirements().stream()
+                .anyMatch(requirement -> "latest-recovery-review".equals(requirement.requirementId()) && !requirement.satisfied()));
+
+        SecretManagementStatusView acknowledgedStatus = service.recordRecoveryReview(adminUser(), null);
+
+        assertTrue(acknowledgedStatus.reencryptionRequirements().stream()
+                .anyMatch(requirement -> "latest-recovery-review".equals(requirement.requirementId()) && requirement.satisfied()));
+        assertTrue(acknowledgedStatus.retirementRequirements().stream()
+                .anyMatch(requirement -> "latest-recovery-review".equals(requirement.requirementId()) && requirement.satisfied()));
+    }
+
+    @Test
     void recordRetirementReviewPersistsAnAuditableSnapshot() {
         SecretManagementService service = configuredService();
 
@@ -751,6 +788,7 @@ class SecretManagementServiceTest {
         service.setSystemOAuthAppSettingsRepository(new InMemorySystemOAuthAppSettingsRepository(null));
         service.setSystemAuthSecuritySettingRepository(new InMemorySystemAuthSecuritySettingRepository(null));
         service.setSystemSecretReencryptionRequestRepository(new InMemorySystemSecretReencryptionRequestRepository());
+        service.setSystemSecretRecoveryReviewRepository(new InMemorySystemSecretRecoveryReviewRepository());
         service.setSystemSecretRetirementReviewRepository(new InMemorySystemSecretRetirementReviewRepository());
         service.setSecretManagementPolicyConfig(new dev.inboxbridge.config.SecretManagementPolicyConfig() {
             @Override
@@ -862,6 +900,7 @@ class SecretManagementServiceTest {
         service.setSystemOAuthAppSettingsRepository(new InMemorySystemOAuthAppSettingsRepository(systemOAuth));
         service.setSystemAuthSecuritySettingRepository(new InMemorySystemAuthSecuritySettingRepository(authSecurity));
         service.setSystemSecretReencryptionRequestRepository(new InMemorySystemSecretReencryptionRequestRepository());
+        service.setSystemSecretRecoveryReviewRepository(new InMemorySystemSecretRecoveryReviewRepository());
         service.setSystemSecretRetirementReviewRepository(new InMemorySystemSecretRetirementReviewRepository());
         service.setSecretManagementPolicyConfig(new dev.inboxbridge.config.SecretManagementPolicyConfig() {
             @Override
@@ -1169,6 +1208,41 @@ class SecretManagementServiceTest {
 
         @Override
         public void persist(dev.inboxbridge.persistence.SystemSecretRetirementReview entity) {
+            if (entity.id == null) {
+                entity.id = nextId++;
+            }
+            values.removeIf(existing -> existing.id.equals(entity.id));
+            values.add(entity);
+        }
+    }
+
+    private static final class InMemorySystemSecretRecoveryReviewRepository extends dev.inboxbridge.persistence.SystemSecretRecoveryReviewRepository {
+        private final java.util.List<dev.inboxbridge.persistence.SystemSecretRecoveryReview> values = new java.util.ArrayList<>();
+        private long nextId = 1L;
+
+        @Override
+        public Optional<dev.inboxbridge.persistence.SystemSecretRecoveryReview> findLatest() {
+            return values.stream()
+                    .sorted(java.util.Comparator
+                            .comparing((dev.inboxbridge.persistence.SystemSecretRecoveryReview review) -> review.reviewedAt)
+                            .thenComparing(review -> review.id)
+                            .reversed())
+                    .findFirst();
+        }
+
+        @Override
+        public java.util.List<dev.inboxbridge.persistence.SystemSecretRecoveryReview> listRecent(int maxResults) {
+            return values.stream()
+                    .sorted(java.util.Comparator
+                            .comparing((dev.inboxbridge.persistence.SystemSecretRecoveryReview review) -> review.reviewedAt)
+                            .thenComparing(review -> review.id)
+                            .reversed())
+                    .limit(maxResults)
+                    .toList();
+        }
+
+        @Override
+        public void persist(dev.inboxbridge.persistence.SystemSecretRecoveryReview entity) {
             if (entity.id == null) {
                 entity.id = nextId++;
             }

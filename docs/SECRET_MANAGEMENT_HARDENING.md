@@ -724,6 +724,10 @@ Current repository status:
     runs and verification-warning completions, so operators can preserve the
     last-known-good trust path, capture the required evidence, and follow an
     explicit rollback-and-validation procedure from the admin UI
+  - recovery acknowledgement is now persisted as its own operator review
+    snapshot, and InboxBridge blocks re-encryption retries plus legacy-key
+    retirement progression until the latest failed or warning-state request has
+    a recorded recovery review
   - the recovery flow remains read-only by design: InboxBridge does not try to
     mutate `SECRET_PROVIDER_MODE` or infer a rollback target automatically,
     because that decision must stay anchored in the operator's recorded

@@ -34,6 +34,8 @@ public record SecretManagementStatusView(
         boolean reencryptionReady,
         List<SecretReencryptionRequirementView> reencryptionRequirements,
         List<SecretManagementRetirementRequirementView> retirementRequirements,
+        SecretManagementRecoveryReviewView latestRecoveryReview,
+        List<SecretManagementRecoveryReviewView> recentRecoveryReviews,
         SecretManagementRetirementReviewView latestRetirementReview,
         List<SecretManagementRetirementReviewView> recentRetirementReviews,
         SecretReencryptionRequestStatusView reencryptionRequest,

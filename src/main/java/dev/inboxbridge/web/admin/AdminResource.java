@@ -145,6 +145,15 @@ public class AdminResource {
     }
 
     @POST
+    @Path("/secret-management/recovery-review")
+    public SecretManagementStatusView recordSecretManagementRecoveryReview() {
+        return WebResourceSupport.badRequest(() ->
+                secretManagementService.recordRecoveryReview(
+                        currentUserContext.user(),
+                        currentUserContext.session()));
+    }
+
+    @POST
     @Path("/secret-management/retirement-review")
     public SecretManagementStatusView recordSecretManagementRetirementReview() {
         return WebResourceSupport.badRequest(() ->
