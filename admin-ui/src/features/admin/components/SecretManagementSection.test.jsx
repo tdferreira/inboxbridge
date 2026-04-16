@@ -224,6 +224,47 @@ function renderSection(overrides = {}) {
 }
 
 describe('SecretManagementSection', () => {
+  it('keeps migration targets stacked and lets ready targets expand on demand', () => {
+    renderSection({
+      secretManagementStatus: {
+        modeAssessments: [
+          {
+            mode: 'LOCAL',
+            providerId: 'LOCAL',
+            current: true,
+            healthy: true,
+            writable: true,
+            statusMessage: 'Local secret provider is ready.',
+            activeKeyVersion: 'LOCAL:v2',
+            activeKeyId: 'v2',
+            configReferences: ['SECURITY_TOKEN_ENCRYPTION_KEY'],
+            remediationSteps: ['Keep this active provider path available.']
+          },
+          {
+            mode: 'OPENBAO_TRANSIT',
+            providerId: 'OPENBAO_TRANSIT',
+            current: false,
+            healthy: true,
+            writable: true,
+            statusMessage: 'OpenBao transit mode is fully configured and can be used as the next active encryption target.',
+            activeKeyVersion: 'OPENBAO_TRANSIT:inboxbridge',
+            activeKeyId: 'inboxbridge',
+            configReferences: ['SECRET_PROVIDER_MODE', 'SECRET_PROVIDER_OPENBAO_URL'],
+            remediationSteps: ['Switch the deployment to OPENBAO_TRANSIT only after finishing the migration checklist.']
+          }
+        ]
+      }
+    })
+
+    const targetsCard = document.getElementById('secret-management-mode-assessments')
+    expect(targetsCard?.closest('.secret-management-grid')).not.toBeNull()
+    expect(screen.queryByText('Switch the deployment to OPENBAO_TRANSIT only after finishing the migration checklist.')).not.toBeInTheDocument()
+
+    fireEvent.click(screen.getByRole('button', { name: /OpenBao transit mode is fully configured/i }))
+
+    expect(screen.getByText('Switch the deployment to OPENBAO_TRANSIT only after finishing the migration checklist.')).toBeInTheDocument()
+  })
+
   it('opens the legacy-key retirement review dialog', async () => {
     renderSection({
       secretManagementStatus: {

@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import LoadingButton from '@/shared/components/LoadingButton'
 import Banner from '@/shared/components/Banner'
 import CollapsibleSection from '@/shared/components/CollapsibleSection'
@@ -61,6 +61,15 @@ function preferredTargetLabel(target, fallback) {
   return target.activeKeyId || target.activeKeyVersion || target.providerId || target.mode || fallback
 }
 
+function initialExpandedModeCards(modeAssessments = []) {
+  return Object.fromEntries(
+    modeAssessments.map((assessment) => [
+      assessment.mode,
+      Boolean(assessment.current || !assessment.writable)
+    ])
+  )
+}
+
 function SecretManagementSection({
   collapsed,
   collapseLoading,
@@ -103,6 +112,7 @@ function SecretManagementSection({
   const keyUsage = Array.isArray(secretManagementStatus?.keyUsage) ? secretManagementStatus.keyUsage : []
   const providerComponents = Array.isArray(secretManagementStatus?.providerComponents) ? secretManagementStatus.providerComponents : []
   const modeAssessments = Array.isArray(secretManagementStatus?.modeAssessments) ? secretManagementStatus.modeAssessments : []
+  const [expandedModeCards, setExpandedModeCards] = useState(() => initialExpandedModeCards(modeAssessments))
   const rotationPlan = secretManagementStatus?.rotationPlan || null
   const reencryptionRequest = secretManagementStatus?.reencryptionRequest
   const pendingReencryption = reencryptionRequest?.status === 'PENDING'
@@ -129,6 +139,18 @@ function SecretManagementSection({
   const legacyKeyAvailabilityRequirement = Array.isArray(secretManagementStatus?.reencryptionRequirements)
     ? secretManagementStatus.reencryptionRequirements.find((requirement) => requirement?.requirementId === 'legacy-key-availability')
     : null
+
+  useEffect(() => {
+    setExpandedModeCards((current) => {
+      const next = initialExpandedModeCards(modeAssessments)
+      modeAssessments.forEach((assessment) => {
+        if (Object.prototype.hasOwnProperty.call(current, assessment.mode)) {
+          next[assessment.mode] = current[assessment.mode]
+        }
+      })
+      return next
+    })
+  }, [modeAssessments])
 
   async function handleConfirmReencrypt() {
     const result = await onReencryptStoredSecrets?.()
@@ -159,6 +181,13 @@ function SecretManagementSection({
     setRecoveryGuideLoading(false)
   }
 
+  function toggleModeCard(mode) {
+    setExpandedModeCards((current) => ({
+      ...current,
+      [mode]: !current[mode]
+    }))
+  }
+
   return (
     <>
       <CollapsibleSection
@@ -172,7 +201,7 @@ function SecretManagementSection({
         t={t}
         title={t('authSecurity.secretManagementTitle')}
       >
-        <div className="polling-statistics-grid">
+        <div className="polling-statistics-grid secret-management-grid">
           <article className="surface-card polling-statistics-card" id="secret-management-summary" tabIndex="-1">
             <div className="polling-statistics-card-title">{t('authSecurity.secretManagementSummaryTitle')}</div>
             <p className="section-copy">{t('authSecurity.secretManagementCopy')}</p>
@@ -233,6 +262,7 @@ function SecretManagementSection({
             ) : (
               <div className="detail-stack">
                 {modeAssessments.map((assessment) => {
+                  const expanded = expandedModeCards[assessment.mode] ?? Boolean(assessment.current || !assessment.writable)
                   const tone = assessment.current
                     ? 'status-ok'
                     : assessment.writable
@@ -244,40 +274,51 @@ function SecretManagementSection({
                       ? t('authSecurity.secretManagementModeAssessmentReady')
                       : t('authSecurity.secretManagementModeAssessmentNeedsAttention')
                   return (
-                    <div className="muted-box detail-stack" key={assessment.mode}>
-                      <div className="secret-management-provider-component-header">
-                        <strong>{modeAssessmentLabel(assessment.mode, t)}</strong>
-                        <span className={`status-pill ${tone}`}>{statusLabel}</span>
-                      </div>
-                      <span>{assessment.statusMessage}</span>
-                      <div className="polling-statistics-breakdown">
-                        <div><span>{t('authSecurity.secretManagementProvider')}</span><strong>{assessment.providerId || t('common.unavailable')}</strong></div>
-                        <div><span>{t('authSecurity.secretManagementModeAssessmentTarget')}</span><strong>{assessment.activeKeyId || assessment.activeKeyVersion || t('common.unavailable')}</strong></div>
-                      </div>
-                      {Array.isArray(assessment.configReferences) && assessment.configReferences.length > 0 ? (
-                        <div className="detail-stack">
-                          <strong>{t('authSecurity.secretManagementRequirementConfigTitle')}</strong>
-                          <div className="secret-management-config-list">
-                            {assessment.configReferences.map((reference) => (
-                              <code className="secret-management-config-chip" key={`${assessment.mode}:${reference}`}>{reference}</code>
-                            ))}
+                    <article className={`muted-box detail-stack secret-management-mode-card ${expanded ? 'expanded' : 'collapsed'}`} key={assessment.mode}>
+                      <button
+                        aria-expanded={expanded}
+                        className="secret-management-mode-card-toggle"
+                        onClick={() => toggleModeCard(assessment.mode)}
+                        type="button"
+                      >
+                        <div className="secret-management-provider-component-header">
+                          <strong>{modeAssessmentLabel(assessment.mode, t)}</strong>
+                          <span className={`status-pill ${tone}`}>{statusLabel}</span>
+                        </div>
+                        <span>{assessment.statusMessage}</span>
+                      </button>
+                      {expanded ? (
+                        <>
+                          <div className="polling-statistics-breakdown">
+                            <div><span>{t('authSecurity.secretManagementProvider')}</span><strong>{assessment.providerId || t('common.unavailable')}</strong></div>
+                            <div><span>{t('authSecurity.secretManagementModeAssessmentTarget')}</span><strong>{assessment.activeKeyId || assessment.activeKeyVersion || t('common.unavailable')}</strong></div>
                           </div>
-                        </div>
+                          {Array.isArray(assessment.configReferences) && assessment.configReferences.length > 0 ? (
+                            <div className="detail-stack">
+                              <strong>{t('authSecurity.secretManagementRequirementConfigTitle')}</strong>
+                              <div className="secret-management-config-list">
+                                {assessment.configReferences.map((reference) => (
+                                  <code className="secret-management-config-chip" key={`${assessment.mode}:${reference}`}>{reference}</code>
+                                ))}
+                              </div>
+                            </div>
+                          ) : null}
+                          {Array.isArray(assessment.remediationSteps) && assessment.remediationSteps.length > 0 ? (
+                            <div className="detail-stack">
+                              <strong>{t('authSecurity.secretManagementRequirementStepsTitle')}</strong>
+                              <ul className="detail-stack secret-reencryption-detail-list">
+                                {assessment.remediationSteps.map((step) => <li key={`${assessment.mode}:${step}`}>{step}</li>)}
+                              </ul>
+                            </div>
+                          ) : null}
+                          <div>
+                            <button className="secondary" onClick={() => handleOpenMigrationGuide(assessment.mode)} type="button">
+                              {t('authSecurity.secretManagementMigrationGuideAction')}
+                            </button>
+                          </div>
+                        </>
                       ) : null}
-                      {Array.isArray(assessment.remediationSteps) && assessment.remediationSteps.length > 0 ? (
-                        <div className="detail-stack">
-                          <strong>{t('authSecurity.secretManagementRequirementStepsTitle')}</strong>
-                          <ul className="detail-stack secret-reencryption-detail-list">
-                            {assessment.remediationSteps.map((step) => <li key={`${assessment.mode}:${step}`}>{step}</li>)}
-                          </ul>
-                        </div>
-                      ) : null}
-                      <div>
-                        <button className="secondary" onClick={() => handleOpenMigrationGuide(assessment.mode)} type="button">
-                          {t('authSecurity.secretManagementMigrationGuideAction')}
-                        </button>
-                      </div>
-                    </div>
+                    </article>
                   )
                 })}
               </div>
