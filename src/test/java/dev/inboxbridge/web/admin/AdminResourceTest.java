@@ -229,6 +229,10 @@ class AdminResourceTest {
         SecretManagementRecoveryGuideView response = resource.secretManagementRecoveryGuide();
 
         assertEquals("FAILED", response.latestRequestStatus());
+        assertEquals("v2", response.currentTarget().summary());
+        assertEquals("v2", response.latestRequestTarget().summary());
+        assertFalse(response.retryReady());
+        assertEquals(1, response.retryRequirements().size());
         assertTrue(response.rollbackRecommended());
         assertTrue(response.rollbackSteps().stream().anyMatch(step -> step.contains("revert SECRET_PROVIDER_MODE")));
     }
@@ -722,8 +726,30 @@ class AdminResourceTest {
                     "The latest request ended in FAILED state.",
                     "LOCAL",
                     "LOCAL",
+                    new dev.inboxbridge.dto.SecretReencryptionTargetView(
+                            "LOCAL",
+                            "LOCAL",
+                            "LOCAL:v2",
+                            "v2"),
                     "FAILED",
                     "Secret re-encryption did not complete successfully.",
+                    new dev.inboxbridge.dto.SecretReencryptionTargetView(
+                            "LOCAL",
+                            "LOCAL",
+                            "LOCAL:v2",
+                            "v2"),
+                    false,
+                    java.util.List.of(
+                            new dev.inboxbridge.dto.SecretReencryptionRequirementView(
+                                    "latest-recovery-review",
+                                    "Recovery review recorded",
+                                    "Record a recovery review after validating the current decrypt path.",
+                                    java.util.List.of("Record the latest recovery snapshot before you retry."),
+                                    java.util.List.of(),
+                                    "secret-management-recovery-review",
+                                    "Record recovery snapshot",
+                                    false,
+                                    true)),
                     true,
                     java.util.List.of("Do not remove any legacy key material or previous provider credentials while recovery is in progress."),
                     java.util.List.of("If the current provider mode was only recently activated, revert SECRET_PROVIDER_MODE to the last known-good mode recorded in your operator runbook."),

@@ -10,4 +10,17 @@ public record SecretReencryptionTargetView(
         String providerId,
         String activeKeyVersion,
         String activeKeyId) {
+
+    public String summary() {
+        if (activeKeyId != null && !activeKeyId.isBlank()) {
+            return activeKeyId;
+        }
+        if (activeKeyVersion != null && !activeKeyVersion.isBlank()) {
+            return activeKeyVersion;
+        }
+        if (providerId != null && !providerId.isBlank()) {
+            return providerId;
+        }
+        return mode == null ? "" : mode;
+    }
 }

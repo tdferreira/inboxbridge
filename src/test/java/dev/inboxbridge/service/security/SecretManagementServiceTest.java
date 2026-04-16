@@ -308,6 +308,11 @@ class SecretManagementServiceTest {
         SecretManagementRecoveryGuideView guide = service.recoveryGuide(null);
 
         assertEquals("FAILED", guide.latestRequestStatus());
+        assertEquals("v2", guide.currentTarget().summary());
+        assertEquals("v2", guide.latestRequestTarget().summary());
+        assertFalse(guide.retryReady());
+        assertTrue(guide.retryRequirements().stream()
+                .anyMatch(requirement -> "latest-recovery-review".equals(requirement.requirementId()) && !requirement.satisfied()));
         assertTrue(guide.rollbackRecommended());
         assertTrue(guide.containmentSteps().stream().anyMatch(step -> step.contains("Do not remove any legacy key material")));
         assertTrue(guide.rollbackSteps().stream().anyMatch(step -> step.contains("revert SECRET_PROVIDER_MODE")));
@@ -321,9 +326,34 @@ class SecretManagementServiceTest {
         SecretManagementRecoveryGuideView guide = service.recoveryGuide(null);
 
         assertEquals("COMPLETED", guide.latestRequestStatus());
+        assertFalse(guide.retryReady());
+        assertTrue(guide.retryRequirements().stream()
+                .anyMatch(requirement -> "latest-recovery-review".equals(requirement.requirementId()) && !requirement.satisfied()));
         assertFalse(guide.latestRequestMessage().isBlank());
         assertTrue(guide.validationSteps().stream().anyMatch(step -> step.contains("Validate mailbox polling")));
         assertTrue(guide.evidenceItems().stream().anyMatch(item -> item.contains("Current active provider mode")));
+    }
+
+    @Test
+    void blockedRequestRecoveryGuideExplainsTargetDriftAndRequiresReviewBeforeRetry() {
+        SecretManagementService service = configuredService(Duration.ofHours(2), false);
+        SecretReencryptionResultView scheduled = service.reencryptAllStoredSecrets(
+                adminUser(),
+                new dev.inboxbridge.dto.SecretReencryptionRequest(false, false, false, false));
+
+        service.localSecretKeyProvider.setTokenEncryptionKeyId("v3");
+        service.executeDueReencryptionRequestsAt(scheduled.executeAfter().plusSeconds(1));
+
+        SecretManagementRecoveryGuideView guide = service.recoveryGuide(null);
+
+        assertEquals("BLOCKED", guide.latestRequestStatus());
+        assertEquals("v3", guide.currentTarget().summary());
+        assertEquals("v2", guide.latestRequestTarget().summary());
+        assertFalse(guide.retryReady());
+        assertTrue(guide.triggerReason().contains("BLOCKED"));
+        assertTrue(guide.containmentSteps().stream().anyMatch(step -> step.contains("queued request target and the current active target")));
+        assertTrue(guide.retryRequirements().stream()
+                .anyMatch(requirement -> "latest-recovery-review".equals(requirement.requirementId()) && !requirement.satisfied()));
     }
 
     @Test
@@ -706,7 +736,13 @@ class SecretManagementServiceTest {
                         + ",v2:" + base64("fedcba9876543210fedcba9876543210"));
         SecretManagementStatusView recoveredStatus = service.status();
 
-        assertTrue(recoveredStatus.reencryptionReady());
+        assertFalse(recoveredStatus.reencryptionReady());
+        assertTrue(recoveredStatus.reencryptionRequirements().stream()
+                .anyMatch(requirement -> "latest-recovery-review".equals(requirement.requirementId()) && !requirement.satisfied()));
+
+        SecretManagementStatusView acknowledgedStatus = service.recordRecoveryReview(adminUser(), null);
+
+        assertTrue(acknowledgedStatus.reencryptionReady());
 
         SecretReencryptionResultView rescheduled = service.reencryptAllStoredSecrets(
                 adminUser(),
@@ -1119,6 +1155,10 @@ class SecretManagementServiceTest {
         request.status = "FAILED";
         request.requestedAt = Instant.parse("2026-04-15T10:00:00Z");
         request.requestedByUserId = 1L;
+        request.requestedMode = "LOCAL";
+        request.requestedProviderId = "LOCAL";
+        request.requestedActiveKeyVersion = "LOCAL:v2";
+        request.requestedActiveKeyId = "v2";
         request.lastStartedAt = Instant.parse("2026-04-15T10:01:00Z");
         request.lastFailedAt = Instant.parse("2026-04-15T10:02:00Z");
         request.lastErrorMessage = "OpenBao transit health check failed.";
@@ -1132,6 +1172,10 @@ class SecretManagementServiceTest {
         request.status = "COMPLETED";
         request.requestedAt = Instant.parse("2026-04-15T11:00:00Z");
         request.requestedByUserId = 1L;
+        request.requestedMode = "LOCAL";
+        request.requestedProviderId = "LOCAL";
+        request.requestedActiveKeyVersion = "LOCAL:v2";
+        request.requestedActiveKeyId = "v2";
         request.lastStartedAt = Instant.parse("2026-04-15T11:01:00Z");
         request.lastCompletedAt = Instant.parse("2026-04-15T11:02:00Z");
         request.lastResultMessage = "Secret re-encryption completed but post-run verification still requires operator attention.";

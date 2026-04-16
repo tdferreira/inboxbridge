@@ -111,7 +111,14 @@ function SecretManagementSection({
   const canApproveDirectly = approvalReady
     && (!secretManagementStatus?.reauthenticationRequired || secretManagementStatus?.reauthenticationSatisfied)
   const latestRequestPreview = reencryptionRequest?.plannedPreview || null
-  const recoveryGuideAvailable = Boolean(reencryptionRequest && (reencryptionRequest.status === 'FAILED' || (reencryptionRequest.status === 'COMPLETED' && reencryptionRequest.verificationPassed === false)))
+  const recoveryGuideAvailable = Boolean(
+    reencryptionRequest
+      && (
+        reencryptionRequest.status === 'FAILED'
+        || reencryptionRequest.status === 'BLOCKED'
+        || (reencryptionRequest.status === 'COMPLETED' && reencryptionRequest.verificationPassed === false)
+      )
+  )
   const requestedTarget = reencryptionRequest?.requestedTarget || null
   const currentTarget = {
     mode: secretManagementStatus?.mode,

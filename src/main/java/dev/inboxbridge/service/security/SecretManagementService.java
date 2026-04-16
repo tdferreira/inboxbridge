@@ -468,25 +468,47 @@ public class SecretManagementService {
             throw new IllegalStateException("No secret-management request history is available for recovery guidance.");
         }
         boolean failed = "FAILED".equals(requestState.status());
+        boolean blocked = "BLOCKED".equals(requestState.status());
         boolean verificationWarning = "COMPLETED".equals(requestState.status()) && !requestState.verificationPassed();
-        if (!failed && !verificationWarning) {
+        if (!failed && !blocked && !verificationWarning) {
             throw new IllegalStateException("The latest secret-management request does not currently require a recovery checklist.");
         }
         boolean rollbackRecommended = failed
+                || blocked
                 || !currentStatus.providerWritable()
                 || currentStatus.unavailableKeyRecordCount() > 0;
+        List<SecretReencryptionRequirementView> retryRequirements = currentStatus.reencryptionRequirements();
+        boolean retryReady = retryRequirements.stream()
+                .filter(SecretReencryptionRequirementView::blocking)
+                .allMatch(SecretReencryptionRequirementView::satisfied);
         return new SecretManagementRecoveryGuideView(
-                failed ? "Recover from a failed secret-management change" : "Resolve secret-management verification warnings",
+                failed
+                        ? "Recover from a failed secret-management change"
+                        : blocked
+                                ? "Resolve a blocked secret-management request"
+                                : "Resolve secret-management verification warnings",
                 failed
                         ? "The latest secret-management action did not complete successfully. Preserve every trust path that could still decrypt stored data, restore service health, and only retry the migration after validation is clean."
+                        : blocked
+                                ? "The latest secret-management request was blocked before execution because the reviewed target or decryptability guarantees drifted. Restore a safe decrypt path, confirm the active target is still intended, and only retry after the backend readiness checks are clear."
                         : "The latest secret-management action completed, but InboxBridge still sees verification issues that need operator attention before any previous provider path or legacy key material is retired.",
                 failed
                         ? "The latest request ended in FAILED state."
+                        : blocked
+                                ? "The latest request was BLOCKED before execution."
                         : "The latest request completed with verification warnings.",
                 currentStatus.mode(),
                 currentStatus.providerId(),
+                new SecretReencryptionTargetView(
+                        currentStatus.mode(),
+                        currentStatus.providerId(),
+                        currentStatus.activeKeyVersion(),
+                        currentStatus.activeKeyId()),
                 requestState.status(),
                 requestState.message(),
+                requestState.requestedTarget(),
+                retryReady,
+                retryRequirements,
                 rollbackRecommended,
                 buildRecoveryContainmentSteps(currentStatus, requestState),
                 buildRecoveryRollbackSteps(currentStatus, rollbackRecommended),
@@ -645,6 +667,9 @@ public class SecretManagementService {
         if (requestState.message() != null && !requestState.message().isBlank()) {
             steps.add("Preserve the latest backend message exactly as reported: " + requestState.message());
         }
+        if (RequestStatus.BLOCKED.name().equals(requestState.status()) && requestState.requestedTarget() != null) {
+            steps.add("Record both the queued request target and the current active target before retrying so you can confirm whether the provider or key switch was intentional.");
+        }
         if (currentStatus.unavailableKeyRecordCount() > 0) {
             steps.add("Restore any missing legacy key or provider credential first, because some stored records are currently not decryptable.");
         }
@@ -688,6 +713,9 @@ public class SecretManagementService {
                 ? currentStatus.activeKeyVersion()
                 : currentStatus.activeKeyId()));
         items.add("Latest request status: " + requestState.status());
+        if (requestState.requestedTarget() != null) {
+            items.add("Latest request target that was reviewed: " + requestState.requestedTarget().summary());
+        }
         if (requestState.message() != null && !requestState.message().isBlank()) {
             items.add("Latest request message: " + requestState.message());
         }
@@ -2449,6 +2477,9 @@ public class SecretManagementService {
         if (RequestStatus.FAILED.name().equals(requestState.status)) {
             return true;
         }
+        if (RequestStatus.BLOCKED.name().equals(requestState.status)) {
+            return true;
+        }
         return RequestStatus.COMPLETED.name().equals(requestState.status) && Boolean.FALSE.equals(requestState.lastVerificationPassed);
     }
 
@@ -2457,6 +2488,9 @@ public class SecretManagementService {
             return false;
         }
         if (RequestStatus.FAILED.name().equals(requestState.status())) {
+            return true;
+        }
+        if (RequestStatus.BLOCKED.name().equals(requestState.status())) {
             return true;
         }
         return RequestStatus.COMPLETED.name().equals(requestState.status()) && !requestState.verificationPassed();

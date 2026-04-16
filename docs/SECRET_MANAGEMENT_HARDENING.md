@@ -745,6 +745,11 @@ Current repository status:
     current active target and adds explicit stale-request remediation copy, so
     operators can see exactly which reviewed target drifted and whether they
     must restore an older key/provider path before retrying
+  - backend-generated recovery guidance now also treats `BLOCKED` requests as a
+    first-class recovery state: the checklist shows the current target plus the
+    queued target that drifted, surfaces backend-verified retry-readiness
+    requirements, and requires a fresh recovery review before another
+    high-risk re-encryption run can be submitted
   - the recovery flow remains read-only by design: InboxBridge does not try to
     mutate `SECRET_PROVIDER_MODE` or infer a rollback target automatically,
     because that decision must stay anchored in the operator's recorded

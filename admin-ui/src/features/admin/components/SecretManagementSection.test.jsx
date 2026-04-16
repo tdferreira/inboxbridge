@@ -22,8 +22,30 @@ function renderSection(overrides = {}) {
     triggerReason: 'The latest re-encryption request failed while the current provider was no longer writable.',
     currentMode: 'OPENBAO_TRANSIT',
     providerId: 'OPENBAO_TRANSIT',
+    currentTarget: {
+      mode: 'OPENBAO_TRANSIT',
+      providerId: 'OPENBAO_TRANSIT',
+      activeKeyVersion: 'OPENBAO_TRANSIT:inboxbridge',
+      activeKeyId: 'inboxbridge'
+    },
     latestRequestStatus: 'FAILED',
     latestRequestMessage: 'The OpenBao transit token was rejected during verification.',
+    latestRequestTarget: {
+      mode: 'LOCAL',
+      providerId: 'LOCAL',
+      activeKeyVersion: 'LOCAL:v2',
+      activeKeyId: 'v2'
+    },
+    retryReady: false,
+    retryRequirements: [
+      {
+        requirementId: 'latest-recovery-review',
+        title: 'The latest failed or warning-state request was reviewed before retrying',
+        detail: 'Record the recovery snapshot for the latest failed or warning-state request before retrying re-encryption.',
+        satisfied: false,
+        blocking: true
+      }
+    ],
     rollbackRecommended: true,
     containmentSteps: ['Preserve the previous provider credentials and all legacy key material until recovery is complete.'],
     rollbackSteps: ['If you recently switched SECRET_PROVIDER_MODE, revert it to the last known-good mode recorded in your operator runbook.'],
@@ -327,10 +349,30 @@ describe('SecretManagementSection', () => {
     expect(screen.getByText('Secret-management recovery checklist')).toBeInTheDocument()
     expect(screen.getByText('The OpenBao transit token was rejected during verification.')).toBeInTheDocument()
     expect(screen.getByText('Preserve the previous provider credentials and all legacy key material until recovery is complete.')).toBeInTheDocument()
+    expect(screen.getByText('Retry readiness checks')).toBeInTheDocument()
+    expect(screen.getByText('Record the recovery snapshot for the latest failed or warning-state request before retrying re-encryption.')).toBeInTheDocument()
 
     fireEvent.click(screen.getByRole('button', { name: 'Record recovery snapshot' }))
 
     await waitFor(() => expect(onRecordSecretManagementRecoveryReview).toHaveBeenCalledTimes(1))
+  })
+
+  it('offers the recovery checklist for blocked re-encryption requests too', async () => {
+    const { onLoadSecretManagementRecoveryGuide } = renderSection({
+      secretManagementStatus: {
+        reencryptionRequest: {
+          requestFingerprint: 'BLOCKED|2026-04-16T08:00:00Z',
+          status: 'BLOCKED',
+          requestedAt: '2026-04-16T08:00:00Z',
+          verificationPassed: false,
+          message: 'Queued secret re-encryption was blocked because the active secret-management target changed.'
+        }
+      }
+    })
+
+    fireEvent.click(screen.getByRole('button', { name: 'Open recovery checklist' }))
+
+    await waitFor(() => expect(onLoadSecretManagementRecoveryGuide).toHaveBeenCalledTimes(1))
   })
 
   it('lets an operator approve a queued re-encryption after the cooldown window elapses', async () => {

@@ -1,6 +1,13 @@
 import ModalDialog from '@/shared/components/ModalDialog'
 import LoadingButton from '@/shared/components/LoadingButton'
 
+function preferredTargetLabel(target, fallback) {
+  if (!target) {
+    return fallback
+  }
+  return target.activeKeyId || target.activeKeyVersion || target.providerId || target.mode || fallback
+}
+
 export default function SecretRecoveryGuideDialog({
   guide,
   loading = false,
@@ -18,6 +25,7 @@ export default function SecretRecoveryGuideDialog({
   const recentRecoveryReviews = Array.isArray(secretManagementStatus?.recentRecoveryReviews)
     ? secretManagementStatus.recentRecoveryReviews
     : []
+  const retryRequirements = Array.isArray(guide?.retryRequirements) ? guide.retryRequirements : []
 
   return (
     <ModalDialog closeDisabled={loading} onClose={onClose} size="wide" title={guide?.title || t('authSecurity.secretManagementRecoveryGuideTitle')}>
@@ -35,9 +43,37 @@ export default function SecretRecoveryGuideDialog({
           <div className="polling-statistics-breakdown">
             <div><span>{t('authSecurity.secretManagementMode')}</span><strong>{guide?.currentMode || t('common.unavailable')}</strong></div>
             <div><span>{t('authSecurity.secretManagementProvider')}</span><strong>{guide?.providerId || t('common.unavailable')}</strong></div>
+            <div><span>{t('authSecurity.secretManagementCurrentTarget')}</span><strong>{preferredTargetLabel(guide?.currentTarget, t('common.unavailable'))}</strong></div>
             <div><span>{t('authSecurity.secretManagementReencryptLatestRequestTitle')}</span><strong>{guide?.latestRequestStatus || t('common.unavailable')}</strong></div>
+            <div><span>{t('authSecurity.secretManagementQueuedTarget')}</span><strong>{preferredTargetLabel(guide?.latestRequestTarget, t('common.unavailable'))}</strong></div>
             <div><span>{t('authSecurity.secretManagementRecoveryRollbackRecommended')}</span><strong>{guide?.rollbackRecommended ? t('common.yes') : t('common.no')}</strong></div>
+            <div><span>{t('authSecurity.secretManagementRecoveryRetryReady')}</span><strong>{guide?.retryReady ? t('common.yes') : t('common.no')}</strong></div>
           </div>
+        </div>
+
+        <div className="detail-stack">
+          <strong>{t('authSecurity.secretManagementRecoveryRetryChecksTitle')}</strong>
+          {retryRequirements.length > 0 ? (
+            <div className="secret-reencryption-requirements-grid">
+              {retryRequirements.map((requirement) => (
+                <article className="muted-box secret-reencryption-requirement-card" key={requirement.requirementId}>
+                  <div className="secret-reencryption-requirement-toggle">
+                    <div className="secret-reencryption-requirement-copy">
+                      <strong>{requirement.title}</strong>
+                      <span>{requirement.detail}</span>
+                    </div>
+                    <div className="secret-reencryption-requirement-meta">
+                      <span className={`status-pill ${requirement.satisfied ? 'status-ok' : 'tone-bad'}`}>
+                        {requirement.satisfied ? t('authSecurity.secretManagementRequirementSatisfied') : t('authSecurity.secretManagementRequirementNotSatisfied')}
+                      </span>
+                    </div>
+                  </div>
+                </article>
+              ))}
+            </div>
+          ) : (
+            <p className="section-copy">{t('authSecurity.secretManagementRecoveryRetryChecksEmpty')}</p>
+          )}
         </div>
 
         <div className="detail-stack">
