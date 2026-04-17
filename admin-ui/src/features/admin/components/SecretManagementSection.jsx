@@ -65,7 +65,7 @@ function initialExpandedModeCards(modeAssessments = []) {
   return Object.fromEntries(
     modeAssessments.map((assessment) => [
       assessment.mode,
-      Boolean(assessment.current || !assessment.writable)
+      false
     ])
   )
 }
@@ -201,7 +201,7 @@ function SecretManagementSection({
         t={t}
         title={t('authSecurity.secretManagementTitle')}
       >
-        <div className="polling-statistics-grid secret-management-grid">
+        <div className="detail-stack secret-management-grid">
           <article className="surface-card polling-statistics-card" id="secret-management-summary" tabIndex="-1">
             <div className="polling-statistics-card-title">{t('authSecurity.secretManagementSummaryTitle')}</div>
             <p className="section-copy">{t('authSecurity.secretManagementCopy')}</p>
@@ -285,8 +285,10 @@ function SecretManagementSection({
                           <strong>{modeAssessmentLabel(assessment.mode, t)}</strong>
                           <span className={`status-pill ${tone}`}>{statusLabel}</span>
                         </div>
-                        <span>{assessment.statusMessage}</span>
                       </button>
+                      <div className="secret-management-mode-card-summary">
+                        <span>{assessment.statusMessage}</span>
+                      </div>
                       {expanded ? (
                         <>
                           <div className="polling-statistics-breakdown">

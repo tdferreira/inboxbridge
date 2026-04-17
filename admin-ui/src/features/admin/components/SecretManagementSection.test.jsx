@@ -224,7 +224,7 @@ function renderSection(overrides = {}) {
 }
 
 describe('SecretManagementSection', () => {
-  it('keeps migration targets stacked and lets ready targets expand on demand', () => {
+  it('starts migration targets collapsed and lets ready targets expand on demand', () => {
     renderSection({
       secretManagementStatus: {
         modeAssessments: [
@@ -259,8 +259,10 @@ describe('SecretManagementSection', () => {
     const targetsCard = document.getElementById('secret-management-mode-assessments')
     expect(targetsCard?.closest('.secret-management-grid')).not.toBeNull()
     expect(screen.queryByText('Switch the deployment to OPENBAO_TRANSIT only after finishing the migration checklist.')).not.toBeInTheDocument()
+    expect(screen.getByRole('button', { name: /Local key modeCurrent mode/i })).toHaveAttribute('aria-expanded', 'false')
+    expect(screen.getByRole('button', { name: /OpenBao transit modeReady to switch/i })).toHaveAttribute('aria-expanded', 'false')
 
-    fireEvent.click(screen.getByRole('button', { name: /OpenBao transit mode is fully configured/i }))
+    fireEvent.click(screen.getByRole('button', { name: /OpenBao transit modeReady to switch/i }))
 
     expect(screen.getByText('Switch the deployment to OPENBAO_TRANSIT only after finishing the migration checklist.')).toBeInTheDocument()
   })
@@ -356,14 +358,18 @@ describe('SecretManagementSection', () => {
     expect(screen.getByText('Available migration targets')).toBeInTheDocument()
     expect(screen.getByText('Local key mode')).toBeInTheDocument()
     expect(screen.getByText('OpenBao transit mode')).toBeInTheDocument()
-    expect(screen.getAllByText('Target key or provider path').length).toBeGreaterThan(0)
     expect(screen.getByText('Secret provider OPENBAO_TRANSIT requires SECRET_PROVIDER_OPENBAO_URL.')).toBeInTheDocument()
+
+    fireEvent.click(screen.getByRole('button', { name: /Local key modeCurrent mode/i }))
+
+    expect(screen.getAllByText('Target key or provider path').length).toBeGreaterThan(0)
   })
 
   it('opens the backend-generated migration checklist for a target mode', async () => {
     const { onLoadSecretManagementMigrationGuide } = renderSection()
 
-    fireEvent.click(screen.getAllByRole('button', { name: 'Open migration checklist' })[1])
+    fireEvent.click(screen.getByRole('button', { name: /OpenBao transit modeNeeds setup/i }))
+    fireEvent.click(screen.getByRole('button', { name: 'Open migration checklist' }))
 
     await waitFor(() => expect(onLoadSecretManagementMigrationGuide).toHaveBeenCalledWith('OPENBAO_TRANSIT'))
     expect(screen.getByText('Migrate to OpenBao transit mode')).toBeInTheDocument()
@@ -422,7 +428,8 @@ describe('SecretManagementSection', () => {
       })
     })
 
-    fireEvent.click(screen.getAllByRole('button', { name: 'Open migration checklist' })[1])
+    fireEvent.click(screen.getByRole('button', { name: /OpenBao transit modeNeeds setup/i }))
+    fireEvent.click(screen.getByRole('button', { name: 'Open migration checklist' }))
 
     await waitFor(() => expect(onLoadSecretManagementMigrationGuide).toHaveBeenCalledWith('OPENBAO_TRANSIT'))
     expect(screen.getByText('Post-switch re-encryption checks')).toBeInTheDocument()

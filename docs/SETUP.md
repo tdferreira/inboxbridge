@@ -27,7 +27,7 @@ openssl rand -base64 32
 docker compose up --build
 ```
 
-The Docker Compose build path now runs the frontend Vitest suite during the admin UI image build again, so `docker compose up --build` is the reliable end-to-end validation path before manual testing. If you need to skip that suite for a constrained standalone image build, pass `--build-arg RUN_TESTS=false` to `docker build -f admin-ui/Dockerfile ...`.
+`docker compose up --build` is the reliable path for rebuilding the stack before manual testing, but the admin UI image no longer runs the full frontend Vitest suite by default during that build because the suite can hang after printing successful output inside containerized builds. Frontend tests still run in CI, and you can opt into in-image frontend tests with `--build-arg RUN_TESTS=true` when you explicitly want that extra validation step.
 
 `.env.example` contains the minimum local bootstrap values uncommented, so
 for a first run you normally only need to paste the generated encryption key
