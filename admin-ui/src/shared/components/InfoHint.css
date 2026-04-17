@@ -17,6 +17,8 @@
 }
 
 .info-hint-tooltip {
+  display: block;
+  width: max-content;
   min-width: 220px;
   max-width: 280px;
   padding: 10px 12px;
@@ -27,6 +29,9 @@
   line-height: 1.45;
   box-shadow: 0 12px 24px rgba(36, 26, 20, 0.2);
   pointer-events: none;
+  white-space: normal;
+  overflow-wrap: anywhere;
+  word-break: break-word;
 }
 
 .info-hint-tooltip-floating {

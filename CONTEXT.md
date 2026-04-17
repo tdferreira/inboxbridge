@@ -511,7 +511,11 @@ That same section now also shows backend-assessed migration targets for every
 supported secret-management mode (`LOCAL`, `OPENBAO_TRANSIT`,
 `VAULT_TRANSIT`, `SPLIT_KEY`) so operators can compare readiness, writable
 state, active key metadata, required configuration references, and remediation
-steps before they flip `SECRET_PROVIDER_MODE`. It also derives a
+steps before they flip `SECRET_PROVIDER_MODE`. Expanded target cards now also
+include a short mode explainer describing what that secret-management model is,
+its main pros and cons, and the deployment scenarios where it is usually a
+good fit, so operators can compare local-only, transit-backed, and split-key
+custody tradeoffs without leaving the admin UI. It also derives a
 backend-generated migration checklist for any selected target mode, with
 validated preflight checks plus explicit before-switch, switch, and
 post-switch steps. The UI keeps this read-only on purpose: InboxBridge can
@@ -648,6 +652,10 @@ direct handoff into the re-encryption dialog only when the backend says the
 active target is ready for a fresh run. That readiness and those post-switch
 requirements are now part of the migration-guide payload itself instead of
 being inferred separately in the frontend from the broader status response.
+Satisfied preflight cards in that migration checklist now start collapsed by
+default, and each listed server property/settings chip exposes a tooltip with
+what that setting controls plus a concrete example value so operators have
+inline configuration guidance while preparing the next provider mode.
 That re-encryption flow still supports optional cleanup of derived trust
 material in the same admin action: browser-extension sessions can be revoked
 deployment-wide, `/remote` sessions can be invalidated, and cached OAuth

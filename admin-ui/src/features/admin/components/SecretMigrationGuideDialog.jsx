@@ -1,6 +1,16 @@
+import { useEffect, useState } from 'react'
 import ModalDialog from '@/shared/components/ModalDialog'
+import SecretManagementConfigReferenceList from './SecretManagementConfigReferenceList'
 
 const EMPTY_ITEMS = []
+
+function hasRequirementDetails(item) {
+  return Boolean(
+    (Array.isArray(item?.configReferences) && item.configReferences.length > 0)
+      || (Array.isArray(item?.remediationSteps) && item.remediationSteps.length > 0)
+      || (item?.actionTargetId && item?.actionLabel)
+  )
+}
 
 function CheckStatusIcon({ satisfied, t }) {
   const label = satisfied
@@ -46,6 +56,60 @@ export default function SecretMigrationGuideDialog({
     ? guide.postSwitchRequirements
     : EMPTY_ITEMS
   const canContinueToReencryption = Boolean(guide?.current && guide?.continueReady)
+  const checkSignature = JSON.stringify(checks.map((check) => [check?.checkId, Boolean(check?.satisfied)]))
+  const postSwitchRequirementSignature = JSON.stringify(
+    reencryptionRequirements.map((requirement) => [requirement?.requirementId, Boolean(requirement?.satisfied)])
+  )
+  const [expandedCheckIds, setExpandedCheckIds] = useState(() => new Set(
+    checks
+      .filter((check) => !check?.satisfied)
+      .map((check) => check.checkId)
+  ))
+  const [expandedPostSwitchRequirementIds, setExpandedPostSwitchRequirementIds] = useState(() => new Set(
+    reencryptionRequirements
+      .filter((requirement) => !requirement?.satisfied)
+      .map((requirement) => requirement.requirementId)
+  ))
+
+  useEffect(() => {
+    setExpandedCheckIds(new Set(
+      checks
+        .filter((check) => !check?.satisfied)
+        .map((check) => check.checkId)
+    ))
+  }, [checkSignature])
+
+  useEffect(() => {
+    setExpandedPostSwitchRequirementIds(new Set(
+      reencryptionRequirements
+        .filter((requirement) => !requirement?.satisfied)
+        .map((requirement) => requirement.requirementId)
+    ))
+  }, [guide?.current, postSwitchRequirementSignature])
+
+  function toggleCheck(checkId) {
+    setExpandedCheckIds((current) => {
+      const next = new Set(current)
+      if (next.has(checkId)) {
+        next.delete(checkId)
+      } else {
+        next.add(checkId)
+      }
+      return next
+    })
+  }
+
+  function togglePostSwitchRequirement(requirementId) {
+    setExpandedPostSwitchRequirementIds((current) => {
+      const next = new Set(current)
+      if (next.has(requirementId)) {
+        next.delete(requirementId)
+      } else {
+        next.add(requirementId)
+      }
+      return next
+    })
+  }
 
   function focusTarget(targetId) {
     if (!targetId || typeof document === 'undefined') {
@@ -82,32 +146,43 @@ export default function SecretMigrationGuideDialog({
             <span>{t('authSecurity.secretManagementMigrationGuideLoading')}</span>
           ) : (
             <div className="secret-reencryption-requirements-grid">
-              {checks.map((check) => (
-                <article className="muted-box secret-reencryption-requirement-card expanded" key={check.checkId}>
-                  <div className="secret-reencryption-requirement-toggle">
-                    <div className="secret-reencryption-requirement-copy">
-                      <strong>{check.title}</strong>
-                      <span>{check.detail}</span>
-                    </div>
-                    <div className="secret-reencryption-requirement-meta">
-                      <CheckStatusIcon satisfied={check.satisfied} t={t} />
-                      <span className={`status-pill ${check.satisfied ? 'status-ok' : 'tone-bad'}`}>
-                        {check.satisfied ? t('authSecurity.secretManagementRequirementSatisfied') : t('authSecurity.secretManagementRequirementNotSatisfied')}
-                      </span>
-                    </div>
-                  </div>
-                  {Array.isArray(check.configReferences) && check.configReferences.length > 0 ? (
-                    <div className="secret-reencryption-requirement-body detail-stack">
-                      <strong>{t('authSecurity.secretManagementRequirementConfigTitle')}</strong>
-                      <div className="secret-reencryption-config-list">
-                        {check.configReferences.map((reference) => (
-                          <code className="secret-reencryption-config-chip" key={`${check.checkId}:${reference}`}>{reference}</code>
-                        ))}
+              {checks.map((check) => {
+                const expandable = hasRequirementDetails(check)
+                const expanded = expandable && expandedCheckIds.has(check.checkId)
+                return (
+                  <article className={`muted-box secret-reencryption-requirement-card ${expanded ? 'expanded' : ''}`} key={check.checkId}>
+                    <div
+                      {...(expandable ? { 'aria-expanded': expanded } : {})}
+                      className={`secret-reencryption-requirement-toggle ${expandable ? 'is-clickable' : 'is-static'}`}
+                      {...(expandable ? { onClick: () => toggleCheck(check.checkId) } : {})}
+                      {...(expandable ? { role: 'button', tabIndex: 0 } : {})}
+                      onKeyDown={expandable ? (event) => {
+                        if (event.key === 'Enter' || event.key === ' ') {
+                          event.preventDefault()
+                          toggleCheck(check.checkId)
+                        }
+                      } : undefined}
+                    >
+                      <div className="secret-reencryption-requirement-copy">
+                        <strong>{check.title}</strong>
+                        <span>{check.detail}</span>
+                      </div>
+                      <div className="secret-reencryption-requirement-meta">
+                        <CheckStatusIcon satisfied={check.satisfied} t={t} />
+                        <span className={`status-pill ${check.satisfied ? 'status-ok' : 'tone-bad'}`}>
+                          {check.satisfied ? t('authSecurity.secretManagementRequirementSatisfied') : t('authSecurity.secretManagementRequirementNotSatisfied')}
+                        </span>
                       </div>
                     </div>
-                  ) : null}
-                </article>
-              ))}
+                    {expanded && Array.isArray(check.configReferences) && check.configReferences.length > 0 ? (
+                      <div className="secret-reencryption-requirement-body detail-stack">
+                        <strong>{t('authSecurity.secretManagementRequirementConfigTitle')}</strong>
+                        <SecretManagementConfigReferenceList references={check.configReferences} t={t} />
+                      </div>
+                    ) : null}
+                  </article>
+                )
+              })}
             </div>
           )}
         </div>
@@ -138,9 +213,23 @@ export default function SecretMigrationGuideDialog({
             <strong>{t('authSecurity.secretManagementMigrationPostSwitchChecksTitle')}</strong>
             {reencryptionRequirements.length > 0 ? (
               <div className="secret-reencryption-requirements-grid">
-                {reencryptionRequirements.map((requirement) => (
-                  <article className="muted-box secret-reencryption-requirement-card expanded" key={requirement.requirementId}>
-                    <div className="secret-reencryption-requirement-toggle">
+                {reencryptionRequirements.map((requirement) => {
+                  const expandable = hasRequirementDetails(requirement)
+                  const expanded = expandable && expandedPostSwitchRequirementIds.has(requirement.requirementId)
+                  return (
+                  <article className={`muted-box secret-reencryption-requirement-card ${expanded ? 'expanded' : ''}`} key={requirement.requirementId}>
+                    <div
+                      {...(expandable ? { 'aria-expanded': expanded } : {})}
+                      className={`secret-reencryption-requirement-toggle ${expandable ? 'is-clickable' : 'is-static'}`}
+                      {...(expandable ? { role: 'button', tabIndex: 0 } : {})}
+                      onClick={expandable ? () => togglePostSwitchRequirement(requirement.requirementId) : undefined}
+                      onKeyDown={expandable ? (event) => {
+                        if (event.key === 'Enter' || event.key === ' ') {
+                          event.preventDefault()
+                          togglePostSwitchRequirement(requirement.requirementId)
+                        }
+                      } : undefined}
+                    >
                       <div className="secret-reencryption-requirement-copy">
                         <strong>{requirement.title}</strong>
                         <span>{requirement.detail}</span>
@@ -152,6 +241,7 @@ export default function SecretMigrationGuideDialog({
                         </span>
                       </div>
                     </div>
+                    {expanded ? (
                     <div className="secret-reencryption-requirement-body detail-stack">
                       {Array.isArray(requirement.remediationSteps) && requirement.remediationSteps.length > 0 ? (
                         <div className="detail-stack">
@@ -164,11 +254,7 @@ export default function SecretMigrationGuideDialog({
                       {Array.isArray(requirement.configReferences) && requirement.configReferences.length > 0 ? (
                         <div className="detail-stack">
                           <strong>{t('authSecurity.secretManagementRequirementConfigTitle')}</strong>
-                          <div className="secret-reencryption-config-list">
-                            {requirement.configReferences.map((reference) => (
-                              <code className="secret-reencryption-config-chip" key={`${requirement.requirementId}:${reference}`}>{reference}</code>
-                            ))}
-                          </div>
+                          <SecretManagementConfigReferenceList references={requirement.configReferences} t={t} />
                         </div>
                       ) : null}
                       {requirement.actionTargetId && requirement.actionLabel ? (
@@ -181,10 +267,11 @@ export default function SecretMigrationGuideDialog({
                             {requirement.actionLabel}
                           </button>
                         </div>
-                      ) : null}
+                        ) : null}
                     </div>
+                    ) : null}
                   </article>
-                ))}
+                )})}
               </div>
             ) : (
               <span>{t('authSecurity.secretManagementMigrationGuideLoading')}</span>

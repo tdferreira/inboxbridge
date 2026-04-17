@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import ModalDialog from '@/shared/components/ModalDialog'
 import LoadingButton from '@/shared/components/LoadingButton'
+import SecretManagementConfigReferenceList from './SecretManagementConfigReferenceList'
 
 const EMPTY_ITEMS = []
 
@@ -180,11 +181,7 @@ export default function SecretRecoveryGuideDialog({
                         {configReferences.length > 0 ? (
                           <div className="detail-stack">
                             <strong>{t('authSecurity.secretManagementRequirementConfigTitle')}</strong>
-                            <div className="secret-reencryption-config-list">
-                              {configReferences.map((reference) => (
-                                <code className="secret-reencryption-config-chip" key={reference}>{reference}</code>
-                              ))}
-                            </div>
+                            <SecretManagementConfigReferenceList references={configReferences} t={t} />
                           </div>
                         ) : null}
                         {requirement.actionTargetId && requirement.actionLabel ? (

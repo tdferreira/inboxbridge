@@ -1,4 +1,4 @@
-import { fireEvent, render, screen, waitFor } from '@testing-library/react'
+import { fireEvent, render, screen, waitFor, within } from '@testing-library/react'
 import SecretManagementSection from './SecretManagementSection'
 import { translate } from '@/lib/i18n'
 
@@ -396,6 +396,11 @@ describe('SecretManagementSection', () => {
     fireEvent.click(screen.getByRole('button', { name: /Local key modeCurrent mode/i }))
 
     expect(screen.getAllByText('Target key or provider path').length).toBeGreaterThan(0)
+    expect(screen.getByText('Why choose this mode')).toBeInTheDocument()
+    expect(screen.getByText('Keeps every encryption operation inside the InboxBridge host with one locally managed AES-GCM key.')).toBeInTheDocument()
+    expect(screen.getByText('Pros')).toBeInTheDocument()
+    expect(screen.getByText('Cons')).toBeInTheDocument()
+    expect(screen.getByText('Recommended for')).toBeInTheDocument()
   })
 
   it('opens the backend-generated migration checklist for a target mode', async () => {
@@ -408,6 +413,97 @@ describe('SecretManagementSection', () => {
     expect(screen.getByText('Migrate to OpenBao transit mode')).toBeInTheDocument()
     expect(screen.getByText('Backend-validated preflight checks')).toBeInTheDocument()
     expect(screen.getByText('Set SECRET_PROVIDER_MODE=OPENBAO_TRANSIT in the server environment.')).toBeInTheDocument()
+  })
+
+  it('starts satisfied migration preflight checks collapsed', async () => {
+    const { onLoadSecretManagementMigrationGuide } = renderSection({
+      onLoadSecretManagementMigrationGuide: vi.fn().mockResolvedValue({
+        title: 'Review the OpenBao transit operating checklist',
+        summary: 'This mode is already active and healthy.',
+        executionMethod: 'No provider switch is required.',
+        currentMode: 'OPENBAO_TRANSIT',
+        currentProviderId: 'OPENBAO_TRANSIT',
+        targetMode: 'OPENBAO_TRANSIT',
+        targetProviderId: 'OPENBAO_TRANSIT',
+        targetReady: true,
+        current: true,
+        continueReady: true,
+        checks: [
+          {
+            checkId: 'target-ready',
+            title: 'Target mode is configured and writable',
+            satisfied: true,
+            detail: 'InboxBridge can already use the selected target mode as an active encryption path.',
+            configReferences: ['SECRET_PROVIDER_MODE']
+          }
+        ],
+        beforeSwitchSteps: ['Keep the current provider path available until rotation is complete.'],
+        switchSteps: ['No provider-mode switch is needed while this mode remains active.'],
+        afterSwitchSteps: ['Run stored-secret re-encryption when you are ready.'],
+        postSwitchRequirements: []
+      })
+    })
+
+    fireEvent.click(screen.getByRole('button', { name: /OpenBao transit modeNeeds setup/i }))
+    fireEvent.click(screen.getByRole('button', { name: 'Open migration checklist' }))
+
+    await waitFor(() => expect(onLoadSecretManagementMigrationGuide).toHaveBeenCalledWith('OPENBAO_TRANSIT'))
+
+    const dialog = screen.getByRole('dialog')
+    expect(within(dialog).getByRole('button', { name: /Target mode is configured and writable/i })).toHaveAttribute('aria-expanded', 'false')
+    expect(within(dialog).queryByText('SECRET_PROVIDER_MODE')).not.toBeInTheDocument()
+  })
+
+  it('renders non-expandable migration checks as plain status rows', async () => {
+    const { onLoadSecretManagementMigrationGuide } = renderSection({
+      onLoadSecretManagementMigrationGuide: vi.fn().mockResolvedValue({
+        title: 'Review the local-key operating checklist',
+        summary: 'Nothing extra is required for this requirement.',
+        executionMethod: 'No provider switch is required.',
+        currentMode: 'LOCAL',
+        currentProviderId: 'LOCAL',
+        targetMode: 'LOCAL',
+        targetProviderId: 'LOCAL',
+        targetReady: true,
+        current: true,
+        continueReady: true,
+        checks: [
+          {
+            checkId: 'target-ready',
+            title: 'Target mode is configured and writable',
+            satisfied: true,
+            detail: 'InboxBridge can already use the selected target mode as an active encryption path.',
+            configReferences: []
+          }
+        ],
+        beforeSwitchSteps: ['Keep the current provider path available until rotation is complete.'],
+        switchSteps: ['No provider-mode switch is needed while this mode remains active.'],
+        afterSwitchSteps: ['Run stored-secret re-encryption when you are ready.'],
+        postSwitchRequirements: [
+          {
+            requirementId: 'no-overlap',
+            title: 'No queued secret re-encryption request will overlap this provider switch',
+            detail: 'No secret re-encryption request is pending. No queued secret re-encryption request will overlap this provider switch.',
+            remediationSteps: [],
+            configReferences: [],
+            actionTargetId: null,
+            actionLabel: null,
+            satisfied: true,
+            blocking: false
+          }
+        ]
+      })
+    })
+
+    fireEvent.click(screen.getByRole('button', { name: /Local key modeCurrent mode/i }))
+    fireEvent.click(screen.getByRole('button', { name: 'Open migration checklist' }))
+
+    await waitFor(() => expect(onLoadSecretManagementMigrationGuide).toHaveBeenCalledWith('LOCAL'))
+
+    const dialog = screen.getByRole('dialog')
+    expect(within(dialog).queryByRole('button', { name: /Target mode is configured and writable/i })).not.toBeInTheDocument()
+    expect(within(dialog).queryByRole('button', { name: /No queued secret re-encryption request will overlap this provider switch/i })).not.toBeInTheDocument()
+    expect(within(dialog).getByText('No secret re-encryption request is pending. No queued secret re-encryption request will overlap this provider switch.')).toBeInTheDocument()
   })
 
   it('lets the operator continue into re-encryption once the target mode is already active and ready', async () => {

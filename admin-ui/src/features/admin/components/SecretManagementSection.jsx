@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react'
 import LoadingButton from '@/shared/components/LoadingButton'
 import Banner from '@/shared/components/Banner'
 import CollapsibleSection from '@/shared/components/CollapsibleSection'
+import SecretManagementConfigReferenceList from './SecretManagementConfigReferenceList'
 import SecretMigrationGuideDialog from './SecretMigrationGuideDialog'
 import SecretRecoveryGuideDialog from './SecretRecoveryGuideDialog'
 import SecretReencryptionDialog from './SecretReencryptionDialog'
@@ -52,6 +53,25 @@ function modeAssessmentLabel(mode, t) {
   const translationKey = `authSecurity.secretManagementMode${mode}`
   const translated = t(translationKey)
   return translated === translationKey ? mode : translated
+}
+
+function modeAssessmentGuide(mode, t) {
+  const keyBase = `authSecurity.secretManagementMode${mode}`
+  return {
+    description: t(`${keyBase}Description`),
+    pros: [
+      t(`${keyBase}Pro1`),
+      t(`${keyBase}Pro2`)
+    ],
+    cons: [
+      t(`${keyBase}Con1`),
+      t(`${keyBase}Con2`)
+    ],
+    recommended: [
+      t(`${keyBase}Recommended1`),
+      t(`${keyBase}Recommended2`)
+    ]
+  }
 }
 
 function preferredTargetLabel(target, fallback) {
@@ -280,11 +300,13 @@ function SecretManagementSection({
                     </div>
                     <span>{component.detail}</span>
                     {Array.isArray(component.configReferences) && component.configReferences.length > 0 ? (
-                      <div className="secret-management-config-list">
-                        {component.configReferences.map((reference) => (
-                          <code className="secret-management-config-chip" key={`${component.componentId}:${reference}`}>{reference}</code>
-                        ))}
-                      </div>
+                      <SecretManagementConfigReferenceList
+                        chipClassName="secret-management-config-chip"
+                        chipWrapClassName="secret-management-config-chip-wrap"
+                        listClassName="secret-management-config-list"
+                        references={component.configReferences}
+                        t={t}
+                      />
                     ) : null}
                   </div>
                 ))}
@@ -311,6 +333,7 @@ function SecretManagementSection({
                     : assessment.writable
                       ? t('authSecurity.secretManagementModeAssessmentReady')
                       : t('authSecurity.secretManagementModeAssessmentNeedsAttention')
+                  const guide = modeAssessmentGuide(assessment.mode, t)
                   return (
                     <article className={`muted-box detail-stack secret-management-mode-card ${expanded ? 'expanded' : 'collapsed'}`} key={assessment.mode}>
                       <button
@@ -333,14 +356,38 @@ function SecretManagementSection({
                             <div><span>{t('authSecurity.secretManagementProvider')}</span><strong>{assessment.providerId || t('common.unavailable')}</strong></div>
                             <div><span>{t('authSecurity.secretManagementModeAssessmentTarget')}</span><strong>{assessment.activeKeyId || assessment.activeKeyVersion || t('common.unavailable')}</strong></div>
                           </div>
+                          <div className="muted-box detail-stack secret-management-mode-guide">
+                            <strong>{t('authSecurity.secretManagementModeGuideTitle')}</strong>
+                            <span>{guide.description}</span>
+                            <div className="detail-stack">
+                              <strong>{t('authSecurity.secretManagementModeGuideProsTitle')}</strong>
+                              <ul className="detail-stack secret-reencryption-detail-list">
+                                {guide.pros.map((item) => <li key={`${assessment.mode}:pro:${item}`}>{item}</li>)}
+                              </ul>
+                            </div>
+                            <div className="detail-stack">
+                              <strong>{t('authSecurity.secretManagementModeGuideConsTitle')}</strong>
+                              <ul className="detail-stack secret-reencryption-detail-list">
+                                {guide.cons.map((item) => <li key={`${assessment.mode}:con:${item}`}>{item}</li>)}
+                              </ul>
+                            </div>
+                            <div className="detail-stack">
+                              <strong>{t('authSecurity.secretManagementModeGuideRecommendedTitle')}</strong>
+                              <ul className="detail-stack secret-reencryption-detail-list">
+                                {guide.recommended.map((item) => <li key={`${assessment.mode}:recommended:${item}`}>{item}</li>)}
+                              </ul>
+                            </div>
+                          </div>
                           {Array.isArray(assessment.configReferences) && assessment.configReferences.length > 0 ? (
                             <div className="detail-stack">
                               <strong>{t('authSecurity.secretManagementRequirementConfigTitle')}</strong>
-                              <div className="secret-management-config-list">
-                                {assessment.configReferences.map((reference) => (
-                                  <code className="secret-management-config-chip" key={`${assessment.mode}:${reference}`}>{reference}</code>
-                                ))}
-                              </div>
+                              <SecretManagementConfigReferenceList
+                                chipClassName="secret-management-config-chip"
+                                chipWrapClassName="secret-management-config-chip-wrap"
+                                listClassName="secret-management-config-list"
+                                references={assessment.configReferences}
+                                t={t}
+                              />
                             </div>
                           ) : null}
                           {Array.isArray(assessment.remediationSteps) && assessment.remediationSteps.length > 0 ? (

@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react'
 import Banner from '@/shared/components/Banner'
 import LoadingButton from '@/shared/components/LoadingButton'
 import ModalDialog from '@/shared/components/ModalDialog'
+import SecretManagementConfigReferenceList from './SecretManagementConfigReferenceList'
 import './SecretReencryptionDialog.css'
 
 function RequirementStatusIcon({ satisfied, t }) {
@@ -171,11 +172,7 @@ function SecretRetirementDialog({
                       {configReferences.length > 0 ? (
                         <div className="detail-stack">
                           <strong>{t('authSecurity.secretManagementRequirementConfigTitle')}</strong>
-                          <div className="secret-reencryption-config-list">
-                            {configReferences.map((reference) => (
-                              <code className="secret-reencryption-config-chip" key={reference}>{reference}</code>
-                            ))}
-                          </div>
+                          <SecretManagementConfigReferenceList references={configReferences} t={t} />
                         </div>
                       ) : null}
                       {requirement.actionTargetId && requirement.actionLabel ? (
