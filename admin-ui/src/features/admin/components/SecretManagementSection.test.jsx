@@ -352,6 +352,39 @@ describe('SecretManagementSection', () => {
     })
   })
 
+  it('warns when env-managed mailbox secrets are still allowed in deployment config', () => {
+    renderSection({
+      secretManagementStatus: {
+        envManagedMailboxSecretsAllowed: true,
+        configuredEnvManagedSourceCount: 1,
+        envManagedGoogleRefreshTokenConfigured: false
+      }
+    })
+
+    expect(screen.getByText('Plaintext mailbox secrets still exist in deployment config')).toBeInTheDocument()
+    expect(screen.getByText("InboxBridge can still read mailbox secrets directly from deployment environment settings. Move those source or Gmail credentials into InboxBridge's encrypted UI-managed storage, then disable env-managed mailbox secrets for this deployment.")).toBeInTheDocument()
+  })
+
+  it('warns when blocked env-managed mailbox secrets are still present in deployment config', () => {
+    renderSection()
+
+    expect(screen.getByText('Plaintext mailbox secrets still exist in deployment config')).toBeInTheDocument()
+    expect(screen.getByText('InboxBridge is already blocking env-managed mailbox secrets, but plaintext mailbox secret values are still present in the deployment environment. Remove those stale .env values so backups, support bundles, and copied deployment files do not keep carrying unused credentials.')).toBeInTheDocument()
+  })
+
+  it('shows a success state once env-managed mailbox secrets are fully cleaned up', () => {
+    renderSection({
+      secretManagementStatus: {
+        envManagedMailboxSecretsAllowed: false,
+        configuredEnvManagedSourceCount: 0,
+        envManagedGoogleRefreshTokenConfigured: false
+      }
+    })
+
+    expect(screen.getByText('No plaintext mailbox secrets are currently detected in deployment config')).toBeInTheDocument()
+    expect(screen.getByText("InboxBridge is already relying on encrypted UI-managed mailbox storage for this deployment, with no detected mailbox-secret fallback left in the deployment environment.")).toBeInTheDocument()
+  })
+
   it('renders backend-assessed secret-management migration targets', () => {
     renderSection()
 

@@ -70,6 +70,35 @@ function initialExpandedModeCards(modeAssessments = []) {
   )
 }
 
+function envSecretExposureNotice(secretManagementStatus, t) {
+  const configuredEnvManagedSourceCount = secretManagementStatus?.configuredEnvManagedSourceCount ?? 0
+  const envManagedGoogleRefreshTokenConfigured = Boolean(secretManagementStatus?.envManagedGoogleRefreshTokenConfigured)
+  const envManagedMailboxSecretsAllowed = Boolean(secretManagementStatus?.envManagedMailboxSecretsAllowed)
+  const hasEnvManagedMailboxSecrets = configuredEnvManagedSourceCount > 0 || envManagedGoogleRefreshTokenConfigured
+
+  if (envManagedMailboxSecretsAllowed) {
+    return hasEnvManagedMailboxSecrets
+      ? {
+          tone: 'warning',
+          title: t('authSecurity.secretManagementEnvWarningTitle'),
+          body: t('authSecurity.secretManagementEnvWarningAllowedBody')
+        }
+      : null
+  }
+
+  return hasEnvManagedMailboxSecrets
+    ? {
+        tone: 'warning',
+        title: t('authSecurity.secretManagementEnvWarningTitle'),
+        body: t('authSecurity.secretManagementEnvWarningBlockedBody')
+      }
+    : {
+        tone: 'success',
+        title: t('authSecurity.secretManagementEnvCleanTitle'),
+        body: t('authSecurity.secretManagementEnvCleanBody')
+      }
+}
+
 function SecretManagementSection({
   collapsed,
   collapseLoading,
@@ -139,6 +168,7 @@ function SecretManagementSection({
   const legacyKeyAvailabilityRequirement = Array.isArray(secretManagementStatus?.reencryptionRequirements)
     ? secretManagementStatus.reencryptionRequirements.find((requirement) => requirement?.requirementId === 'legacy-key-availability')
     : null
+  const envSecretNotice = envSecretExposureNotice(secretManagementStatus, t)
 
   useEffect(() => {
     setExpandedModeCards((current) => {
@@ -218,6 +248,14 @@ function SecretManagementSection({
               <div><span>{t('authSecurity.secretManagementLegacyKeys')}</span><strong>{formatKeyIds(secretManagementStatus?.configuredLegacyKeyIds, t)}</strong></div>
               <div><span>{t('authSecurity.secretManagementRetirementStatus')}</span><strong>{t(secretManagementStatus?.safeToRetireLegacyKeys ? 'authSecurity.secretManagementSafeToRetire' : 'authSecurity.secretManagementKeepLegacyKeys')}</strong></div>
             </div>
+            {envSecretNotice ? (
+              <Banner tone={envSecretNotice.tone}>
+                <div className="detail-stack">
+                  <strong>{envSecretNotice.title}</strong>
+                  <span>{envSecretNotice.body}</span>
+                </div>
+              </Banner>
+            ) : null}
             <p className="section-copy">{t('authSecurity.secretManagementEnvPolicyHelp')}</p>
           </article>
 

@@ -778,6 +778,19 @@ Current repository status:
 - warn operators when `.env` still contains mailbox credentials
 - optionally add a hardening flag to disable env-managed mailbox secrets
 - keep generic `.env` configuration support
+- current status:
+  - the hardening policy flag now exists through
+    `SECURITY_ALLOW_ENV_MANAGED_MAILBOX_SECRETS`
+  - the admin `Security -> Secret management` summary already surfaces whether
+    env-managed mailbox secrets are allowed, how many env-managed sources are
+    still configured, and whether a `.env` Gmail refresh-token fallback is
+    still present
+  - the summary now also renders an explicit warning banner when plaintext
+    mailbox secrets are still present in deployment config, including the case
+    where policy already blocks them but stale `.env` values remain
+  - once those fallback values are fully removed, the same summary flips to a
+    positive confirmation banner that the deployment is now relying only on
+    encrypted UI-managed mailbox storage for mailbox-secret custody
 
 ## Failure Semantics
 
