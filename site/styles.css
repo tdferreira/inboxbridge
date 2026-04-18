@@ -72,6 +72,7 @@ a {
   text-decoration: none;
   flex: 1 1 auto;
   min-width: 0;
+  cursor: pointer;
 }
 
 .brand-mark {
@@ -84,12 +85,14 @@ a {
   background: linear-gradient(135deg, var(--accent), #f7c58f);
   color: white;
   box-shadow: var(--shadow);
+  cursor: pointer;
 }
 
 .brand-mark-image {
   object-fit: cover;
   background: none;
   padding: 0;
+  cursor: pointer;
 }
 
 .brand-copy strong,
@@ -310,10 +313,44 @@ a {
   gap: 0.85rem;
 }
 
-.hero-card-grid article {
+.hero-card-grid .compact-card {
   padding: 1rem;
   border-radius: 22px;
   background: rgba(255, 255, 255, 0.72);
+}
+
+.collapsible-card {
+  overflow: hidden;
+  cursor: pointer;
+}
+
+.collapsible-card summary {
+  cursor: pointer;
+  list-style: none;
+  display: grid;
+  gap: 0.2rem;
+}
+
+.collapsible-card summary::-webkit-details-marker {
+  display: none;
+}
+
+.collapsible-card summary::after {
+  content: '+';
+  align-self: start;
+  justify-self: end;
+  margin-top: -2.15rem;
+  color: var(--accent);
+  font-size: 1.15rem;
+  line-height: 1;
+}
+
+.collapsible-card[open] summary::after {
+  content: '-';
+}
+
+.collapsible-card-body {
+  padding-top: 0.65rem;
 }
 
 .hero-card-grid h2 {
@@ -360,6 +397,10 @@ a {
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));
   gap: 1rem;
+}
+
+.secret-management-grid {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
 }
 
 .faq-grid {
@@ -797,6 +838,23 @@ a {
 .how-card {
   padding: 1.1rem;
   border-radius: 24px;
+}
+
+.feature-card summary,
+.how-card summary,
+.arch-card summary,
+.architecture-detail-card summary,
+.compact-card summary {
+  outline: none;
+}
+
+.feature-card summary:focus-visible,
+.how-card summary:focus-visible,
+.arch-card summary:focus-visible,
+.architecture-detail-card summary:focus-visible,
+.compact-card summary:focus-visible {
+  border-radius: 14px;
+  box-shadow: 0 0 0 2px color-mix(in srgb, var(--accent) 35%, transparent);
 }
 
 .feature-card h3,

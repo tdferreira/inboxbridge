@@ -328,6 +328,12 @@ definitions and the shared `GMAIL_REFRESH_TOKEN` fallback from `.env`. Generic
 bootstrap settings such as database, public URL, TLS, and scheduler defaults
 still remain in `.env`.
 
+For stronger deployment-level secret custody and rotation planning after
+bootstrap, use `Administration -> Authentication Security -> Secret management`
+in the admin UI. That area shows provider health, migration targets for
+`LOCAL`, `OPENBAO_TRANSIT`, `VAULT_TRANSIT`, and `SPLIT_KEY`, plus guided
+re-encryption and recovery workflows.
+
 Example env-managed source:
 
 ```dotenv

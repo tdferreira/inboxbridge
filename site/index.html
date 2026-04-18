@@ -70,26 +70,42 @@
           </div>
           <aside class="hero-card">
             <div class="hero-card-grid">
-              <article>
-                <div class="mini-kicker">Sources</div>
-                <h2>IMAP, POP3, OAuth</h2>
-                <p>Import from classic mailboxes, Outlook OAuth sources, and supported Google-based flows.</p>
-              </article>
-              <article>
-                <div class="mini-kicker">Destinations</div>
-                <h2>Gmail API or IMAP APPEND</h2>
-                <p>Deliver into Gmail, Outlook, Yahoo, Proton Bridge, or other IMAP APPEND targets.</p>
-              </article>
-              <article>
-                <div class="mini-kicker">Realtime</div>
-                <h2>IMAP IDLE when it matters</h2>
-                <p>Use long-lived IMAP IDLE watchers with per-folder checkpoints for near-real-time imports.</p>
-              </article>
-              <article>
-                <div class="mini-kicker">Control</div>
-                <h2>Admin UI, remote, and extensions</h2>
-                <p>Use the full admin UI for setup, the lighter remote surface for phone-friendly control, or browser extensions for quick poll, status, and error visibility.</p>
-              </article>
+              <details class="compact-card" data-collapsible-card>
+                <summary>
+                  <div class="mini-kicker">Sources</div>
+                  <h2>IMAP, POP3, OAuth</h2>
+                </summary>
+                <div class="collapsible-card-body">
+                  <p>Import from classic mailboxes, Outlook OAuth sources, and supported Google-based flows.</p>
+                </div>
+              </details>
+              <details class="compact-card" data-collapsible-card>
+                <summary>
+                  <div class="mini-kicker">Destinations</div>
+                  <h2>Gmail API or IMAP APPEND</h2>
+                </summary>
+                <div class="collapsible-card-body">
+                  <p>Deliver into Gmail, Outlook, Yahoo, Proton Bridge, or other IMAP APPEND targets.</p>
+                </div>
+              </details>
+              <details class="compact-card" data-collapsible-card>
+                <summary>
+                  <div class="mini-kicker">Realtime</div>
+                  <h2>IMAP IDLE when it matters</h2>
+                </summary>
+                <div class="collapsible-card-body">
+                  <p>Use long-lived IMAP IDLE watchers with per-folder checkpoints for near-real-time imports.</p>
+                </div>
+              </details>
+              <details class="compact-card" data-collapsible-card>
+                <summary>
+                  <div class="mini-kicker">Control</div>
+                  <h2>Admin UI, remote, and extensions</h2>
+                </summary>
+                <div class="collapsible-card-body">
+                  <p>Use the full admin UI for setup, the lighter remote surface for phone-friendly control, or browser extensions for quick poll, status, and error visibility.</p>
+                </div>
+              </details>
             </div>
           </aside>
         </div>
@@ -109,21 +125,87 @@
             </p>
           </div>
           <div class="feature-grid">
-            <article class="feature-card">
-              <div class="mini-kicker">Raw message import</div>
-              <h3>Preserves the original message content</h3>
-              <p>InboxBridge carries the raw message bytes through the pipeline and appends them into IMAP destinations or hands them to the Gmail API.</p>
-            </article>
-            <article class="feature-card">
-              <div class="mini-kicker">Source flexibility</div>
-              <h3>Polling for everything, IDLE for IMAP</h3>
-              <p>POP3 stays on polling with durable UIDL checkpoints. IMAP can poll one or many folders or opt into per-folder IMAP IDLE with scheduler fallback if a watcher stays unhealthy.</p>
-            </article>
-            <article class="feature-card">
-              <div class="mini-kicker">Operator choice</div>
-              <h3>Web UI, remote, and browser companion</h3>
-              <p>Most users can configure mailboxes in the web UI, use the lighter remote surface on a phone, or install browser extensions for quick poll-now, recent-import visibility, and error awareness without opening the full dashboard.</p>
-            </article>
+            <details class="feature-card collapsible-card" data-collapsible-card>
+              <summary>
+                <div class="mini-kicker">Raw message import</div>
+                <h3>Preserves the original message content</h3>
+              </summary>
+              <div class="collapsible-card-body">
+                <p>InboxBridge carries the raw message bytes through the pipeline and appends them into IMAP destinations or hands them to the Gmail API.</p>
+              </div>
+            </details>
+            <details class="feature-card collapsible-card" data-collapsible-card>
+              <summary>
+                <div class="mini-kicker">Source flexibility</div>
+                <h3>Polling for everything, IDLE for IMAP</h3>
+              </summary>
+              <div class="collapsible-card-body">
+                <p>POP3 stays on polling with durable UIDL checkpoints. IMAP can poll one or many folders or opt into per-folder IMAP IDLE with scheduler fallback if a watcher stays unhealthy.</p>
+              </div>
+            </details>
+            <details class="feature-card collapsible-card" data-collapsible-card>
+              <summary>
+                <div class="mini-kicker">Operator choice</div>
+                <h3>Web UI, remote, and browser companion</h3>
+              </summary>
+              <div class="collapsible-card-body">
+                <p>Most users can configure mailboxes in the web UI, use the lighter remote surface on a phone, or install browser extensions for quick poll-now, recent-import visibility, and error awareness without opening the full dashboard.</p>
+              </div>
+            </details>
+          </div>
+        </div>
+      </section>
+
+      <section class="section" id="secret-management">
+        <div class="shell">
+          <div class="section-header">
+            <div>
+              <div class="eyebrow">Stronger secret management</div>
+              <h2>Choose the custody model that fits your deployment.</h2>
+            </div>
+            <p>
+              InboxBridge can keep encrypted secrets on a local AES-GCM key path, move the active wrapping path into
+              OpenBao Transit or Vault Transit, or use split-key mode for an extra trust boundary. Operators can review
+              health, migration readiness, and guided re-encryption from the admin UI before changing the active path.
+            </p>
+          </div>
+          <div class="feature-grid secret-management-grid">
+            <details class="feature-card collapsible-card" data-collapsible-card>
+              <summary>
+                <div class="mini-kicker">Local key mode</div>
+                <h3>Smallest moving-parts footprint</h3>
+              </summary>
+              <div class="collapsible-card-body">
+                <p>Best for laptops, Raspberry Pi systems, homelabs, and other single-host deployments where you want strong encrypted storage without adding a separate secret service.</p>
+              </div>
+            </details>
+            <details class="feature-card collapsible-card" data-collapsible-card>
+              <summary>
+                <div class="mini-kicker">OpenBao or Vault Transit</div>
+                <h3>Externalize active key custody</h3>
+              </summary>
+              <div class="collapsible-card-body">
+                <p>Move the active wrapping path into a transit service when you want stronger separation between the InboxBridge host and the key-management boundary.</p>
+              </div>
+            </details>
+            <details class="feature-card collapsible-card" data-collapsible-card>
+              <summary>
+                <div class="mini-kicker">Split-key mode</div>
+                <h3>Two trust boundaries instead of one</h3>
+              </summary>
+              <div class="collapsible-card-body">
+                <p>Combine a local inner key with an external transit provider when you want higher security and are willing to accept a more operationally demanding recovery model.</p>
+              </div>
+            </details>
+            <details class="feature-card collapsible-card" data-collapsible-card>
+              <summary>
+                <div class="mini-kicker">Rotation workflow</div>
+                <h3>Guided migration and re-encryption</h3>
+              </summary>
+              <div class="collapsible-card-body">
+                <p>The admin UI exposes provider diagnostics, migration targets, rotation plans, recovery guidance, cooldown-gated approvals, and safe re-encryption so operators can rotate without guesswork.</p>
+              </div>
+            </details>
           </div>
         </div>
       </section>
@@ -142,16 +224,20 @@
           </div>
           <div class="architecture-stack">
             <div class="architecture-diagram">
-              <article class="arch-card arch-card-sources">
-                <div class="mini-kicker">Sources</div>
-                <h3>IMAP and POP3 accounts</h3>
-                <p>Classic mailbox pull for everything, with multi-folder IMAP polling and optional IMAP IDLE watchers for eligible folders.</p>
-                <ul class="arch-list">
-                  <li>Multi-folder IMAP polling</li>
-                  <li>IMAP IDLE</li>
-                  <li>POP3 UIDL checkpoints</li>
-                </ul>
-              </article>
+              <details class="arch-card arch-card-sources collapsible-card" data-collapsible-card>
+                <summary>
+                  <div class="mini-kicker">Sources</div>
+                  <h3>IMAP and POP3 accounts</h3>
+                </summary>
+                <div class="collapsible-card-body">
+                  <p>Classic mailbox pull for everything, with multi-folder IMAP polling and optional IMAP IDLE watchers for eligible folders.</p>
+                  <ul class="arch-list">
+                    <li>Multi-folder IMAP polling</li>
+                    <li>IMAP IDLE</li>
+                    <li>POP3 UIDL checkpoints</li>
+                  </ul>
+                </div>
+              </details>
 
               <div class="arch-flow" aria-hidden="true">
                 <div class="flow-node">Detect</div>
@@ -163,16 +249,20 @@
                 <div class="flow-node">Import</div>
               </div>
 
-              <article class="arch-card arch-card-core">
-                <div class="mini-kicker">InboxBridge core</div>
-                <h3>Quarkus backend + PostgreSQL</h3>
-                <p>Tracks per-folder checkpoints, dedupe, encrypted UI-managed secrets, live poll state, and post-import actions.</p>
-                <ul class="arch-list">
-                  <li>IMAP and POP checkpoints</li>
-                  <li>Import history</li>
-                  <li>Token encryption</li>
-                </ul>
-              </article>
+              <details class="arch-card arch-card-core collapsible-card" data-collapsible-card>
+                <summary>
+                  <div class="mini-kicker">InboxBridge core</div>
+                  <h3>Quarkus backend + PostgreSQL</h3>
+                </summary>
+                <div class="collapsible-card-body">
+                  <p>Tracks per-folder checkpoints, dedupe, encrypted UI-managed secrets, live poll state, and post-import actions.</p>
+                  <ul class="arch-list">
+                    <li>IMAP and POP checkpoints</li>
+                    <li>Import history</li>
+                    <li>Token encryption</li>
+                  </ul>
+                </div>
+              </details>
 
               <div class="arch-flow arch-flow-final" aria-hidden="true">
                 <div class="flow-node">Route</div>
@@ -184,16 +274,20 @@
                 <div class="flow-node">Append</div>
               </div>
 
-              <article class="arch-card arch-card-destination">
-                <div class="mini-kicker">Destination</div>
-                <h3>One mailbox, many imported sources</h3>
-                <p>Deliver into Gmail through the Gmail API or into IMAP APPEND destinations such as Outlook and other providers.</p>
-                <ul class="arch-list">
-                  <li>Gmail API</li>
-                  <li>IMAP APPEND</li>
-                  <li>Source labels and folders</li>
-                </ul>
-              </article>
+              <details class="arch-card arch-card-destination collapsible-card" data-collapsible-card>
+                <summary>
+                  <div class="mini-kicker">Destination</div>
+                  <h3>One mailbox, many imported sources</h3>
+                </summary>
+                <div class="collapsible-card-body">
+                  <p>Deliver into Gmail through the Gmail API or into IMAP APPEND destinations such as Outlook and other providers.</p>
+                  <ul class="arch-list">
+                    <li>Gmail API</li>
+                    <li>IMAP APPEND</li>
+                    <li>Source labels and folders</li>
+                  </ul>
+                </div>
+              </details>
             </div>
 
             <div class="architecture-caption">
@@ -221,41 +315,57 @@
                 and encrypted secrets instead of maintaining its own searchable content archive.
               </p>
               <div class="architecture-detail-diagram">
-                <article class="architecture-detail-card architecture-detail-card-surface">
-                  <div class="mini-kicker">Browser surfaces</div>
-                  <h3>Admin UI, InboxBridge Go, and extensions</h3>
-                  <p>Operators sign in, configure accounts, and trigger imports from the full admin workspace, the lighter remote surface, or browser extensions that expose quick poll and status controls.</p>
-                </article>
+                <details class="architecture-detail-card architecture-detail-card-surface collapsible-card" data-collapsible-card>
+                  <summary>
+                    <div class="mini-kicker">Browser surfaces</div>
+                    <h3>Admin UI, InboxBridge Go, and extensions</h3>
+                  </summary>
+                  <div class="collapsible-card-body">
+                    <p>Operators sign in, configure accounts, and trigger imports from the full admin workspace, the lighter remote surface, or browser extensions that expose quick poll and status controls.</p>
+                  </div>
+                </details>
 
                 <div class="architecture-detail-flow architecture-detail-flow-ui" aria-hidden="true">
                   <span class="architecture-detail-arrow">HTTPS / TLS</span>
                 </div>
 
-                <article class="architecture-detail-card architecture-detail-card-backend">
-                  <div class="mini-kicker">Runtime coordinator</div>
-                  <h3>Quarkus polling and IDLE engine</h3>
-                  <p>InboxBridge manages IMAP polling, IMAP IDLE watchers, destination delivery, rate limits, retries, and source-side follow-up actions.</p>
-                </article>
+                <details class="architecture-detail-card architecture-detail-card-backend collapsible-card" data-collapsible-card>
+                  <summary>
+                    <div class="mini-kicker">Runtime coordinator</div>
+                    <h3>Quarkus polling and IDLE engine</h3>
+                  </summary>
+                  <div class="collapsible-card-body">
+                    <p>InboxBridge manages IMAP polling, IMAP IDLE watchers, destination delivery, rate limits, retries, and source-side follow-up actions.</p>
+                  </div>
+                </details>
 
                 <div class="architecture-detail-flow architecture-detail-flow-providers" aria-hidden="true">
                   <span class="architecture-detail-arrow">IMAPS / POP3S / HTTPS</span>
                 </div>
 
-                <article class="architecture-detail-card architecture-detail-card-providers">
-                  <div class="mini-kicker">External providers</div>
-                  <h3>Source and destination mailbox services</h3>
-                  <p>InboxBridge connects over encrypted IMAP, POP3, Gmail API, and OAuth flows while the deployment owner keeps control over where the service runs.</p>
-                </article>
+                <details class="architecture-detail-card architecture-detail-card-providers collapsible-card" data-collapsible-card>
+                  <summary>
+                    <div class="mini-kicker">External providers</div>
+                    <h3>Source and destination mailbox services</h3>
+                  </summary>
+                  <div class="collapsible-card-body">
+                    <p>InboxBridge connects over encrypted IMAP, POP3, Gmail API, and OAuth flows while the deployment owner keeps control over where the service runs.</p>
+                  </div>
+                </details>
 
                 <div class="architecture-detail-flow architecture-detail-flow-db" aria-hidden="true">
                   <span class="architecture-detail-arrow">Encrypted secrets + metadata</span>
                 </div>
 
-                <article class="architecture-detail-card architecture-detail-card-storage">
-                  <div class="mini-kicker">Durable state</div>
-                  <h3>PostgreSQL for dedupe and encrypted secrets</h3>
-                  <p>PostgreSQL stores encrypted UI-managed secrets, IMAP checkpoints, dedupe identifiers, runtime settings, and notifications, not a second copy of mailbox contents for InboxBridge to browse.</p>
-                </article>
+                <details class="architecture-detail-card architecture-detail-card-storage collapsible-card" data-collapsible-card>
+                  <summary>
+                    <div class="mini-kicker">Durable state</div>
+                    <h3>PostgreSQL for dedupe and encrypted secrets</h3>
+                  </summary>
+                  <div class="collapsible-card-body">
+                    <p>PostgreSQL stores encrypted UI-managed secrets, IMAP checkpoints, dedupe identifiers, runtime settings, and notifications, not a second copy of mailbox contents for InboxBridge to browse.</p>
+                  </div>
+                </details>
               </div>
               <div class="architecture-detail-highlights">
                 <div class="eyebrow">Security highlights</div>
@@ -267,26 +377,42 @@
                 </p>
               </div>
               <div class="architecture-detail-grid">
-                <article class="architecture-detail-card architecture-detail-card-transport">
-                  <div class="mini-kicker">Transport security</div>
-                  <h3>Encrypted communication end to end</h3>
-                  <p>Mailbox access is designed around TLS-protected IMAP, POP3, HTTPS, and provider API traffic, so InboxBridge is not meant to shuttle credentials or mail over plaintext links.</p>
-                </article>
-                <article class="architecture-detail-card architecture-detail-card-data">
-                  <div class="mini-kicker">Data minimization</div>
-                  <h3>Operational state instead of a shadow archive</h3>
-                  <p>InboxBridge stores the operational identifiers it needs for dedupe, checkpoints, configuration, and encrypted secret handling. It is not designed to retain its own searchable copy of email content.</p>
-                </article>
-                <article class="architecture-detail-card architecture-detail-card-deploy">
-                  <div class="mini-kicker">Deployment control</div>
-                  <h3>Run it where you trust the machine</h3>
-                  <p>That can be your laptop, desktop, homelab server, Raspberry Pi, virtual private server, or dedicated host. The security win is that the software runs on infrastructure you control instead of a third-party mailbox aggregation service.</p>
-                </article>
-                <article class="architecture-detail-card architecture-detail-card-trust">
-                  <div class="mini-kicker">Source of trust</div>
-                  <h3>Credentials stay with the operator</h3>
-                  <p>InboxBridge is strongest when the operator controls the runtime, backups, disk access, and network boundary. That is the core difference between self-hosting and handing mailbox credentials to an external SaaS bridge.</p>
-                </article>
+                <details class="architecture-detail-card architecture-detail-card-transport collapsible-card" data-collapsible-card>
+                  <summary>
+                    <div class="mini-kicker">Transport security</div>
+                    <h3>Encrypted communication end to end</h3>
+                  </summary>
+                  <div class="collapsible-card-body">
+                    <p>Mailbox access is designed around TLS-protected IMAP, POP3, HTTPS, and provider API traffic, so InboxBridge is not meant to shuttle credentials or mail over plaintext links.</p>
+                  </div>
+                </details>
+                <details class="architecture-detail-card architecture-detail-card-data collapsible-card" data-collapsible-card>
+                  <summary>
+                    <div class="mini-kicker">Data minimization</div>
+                    <h3>Operational state instead of a shadow archive</h3>
+                  </summary>
+                  <div class="collapsible-card-body">
+                    <p>InboxBridge stores the operational identifiers it needs for dedupe, checkpoints, configuration, and encrypted secret handling. It is not designed to retain its own searchable copy of email content.</p>
+                  </div>
+                </details>
+                <details class="architecture-detail-card architecture-detail-card-deploy collapsible-card" data-collapsible-card>
+                  <summary>
+                    <div class="mini-kicker">Deployment control</div>
+                    <h3>Run it where you trust the machine</h3>
+                  </summary>
+                  <div class="collapsible-card-body">
+                    <p>That can be your laptop, desktop, homelab server, Raspberry Pi, virtual private server, or dedicated host. The security win is that the software runs on infrastructure you control instead of a third-party mailbox aggregation service.</p>
+                  </div>
+                </details>
+                <details class="architecture-detail-card architecture-detail-card-trust collapsible-card" data-collapsible-card>
+                  <summary>
+                    <div class="mini-kicker">Source of trust</div>
+                    <h3>Credentials stay with the operator</h3>
+                  </summary>
+                  <div class="collapsible-card-body">
+                    <p>InboxBridge is strongest when the operator controls the runtime, backups, disk access, and network boundary. That is the core difference between self-hosting and handing mailbox credentials to an external SaaS bridge.</p>
+                  </div>
+                </details>
               </div>
             </div>
           </details>
@@ -305,21 +431,33 @@
             </p>
           </div>
           <div class="how-grid">
-            <article class="how-card">
-              <div class="mini-kicker">1</div>
-              <h3>Connect sources</h3>
-              <p>Configure one or more source mailboxes from the UI or `.env`. IMAP sources can use either scheduled polling or IMAP IDLE.</p>
-            </article>
-            <article class="how-card">
-              <div class="mini-kicker">2</div>
-              <h3>Import safely</h3>
-              <p>InboxBridge records dedupe state in PostgreSQL and can optionally mark, move, delete, or mark-read handled IMAP source messages.</p>
-            </article>
-            <article class="how-card">
-              <div class="mini-kicker">3</div>
-              <h3>Deliver centrally</h3>
-              <p>Messages are delivered into Gmail or IMAP APPEND destinations so the destination mailbox becomes the single place to triage mail.</p>
-            </article>
+            <details class="how-card collapsible-card" data-collapsible-card>
+              <summary>
+                <div class="mini-kicker">1</div>
+                <h3>Connect sources</h3>
+              </summary>
+              <div class="collapsible-card-body">
+                <p>Configure one or more source mailboxes from the UI or `.env`. IMAP sources can use either scheduled polling or IMAP IDLE.</p>
+              </div>
+            </details>
+            <details class="how-card collapsible-card" data-collapsible-card>
+              <summary>
+                <div class="mini-kicker">2</div>
+                <h3>Import safely</h3>
+              </summary>
+              <div class="collapsible-card-body">
+                <p>InboxBridge records dedupe state in PostgreSQL and can optionally mark, move, delete, or mark-read handled IMAP source messages.</p>
+              </div>
+            </details>
+            <details class="how-card collapsible-card" data-collapsible-card>
+              <summary>
+                <div class="mini-kicker">3</div>
+                <h3>Deliver centrally</h3>
+              </summary>
+              <div class="collapsible-card-body">
+                <p>Messages are delivered into Gmail or IMAP APPEND destinations so the destination mailbox becomes the single place to triage mail.</p>
+              </div>
+            </details>
           </div>
         </div>
       </section>

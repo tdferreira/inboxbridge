@@ -242,6 +242,7 @@ The remote page uses its own scoped session model instead of reusing the main ad
 ## Security Notes
 
 - UI-managed OAuth tokens and mailbox secrets are intended to be stored encrypted in PostgreSQL.
+- InboxBridge now supports stronger deployment-level secret custody through `LOCAL`, `OPENBAO_TRANSIT`, `VAULT_TRANSIT`, and the first `SPLIT_KEY` implementation, with admin-side migration targets, provider diagnostics, rotation plans, and guided re-encryption under `Administration -> Authentication Security -> Secret management`.
 - Browser-based Google and Microsoft OAuth exchange requires `SECURITY_TOKEN_ENCRYPTION_KEY`.
 - `.env` values are operator-managed configuration and are not encrypted by InboxBridge.
 - Passkeys work best on one stable hostname rather than a mix of unrelated hostnames or raw IP addresses.
