@@ -668,6 +668,12 @@ checks and encryption operations instead of silently falling back to local-key
 behavior. `SPLIT_KEY` now also works end-to-end with a local inner key plus a
 transit secondary provider, and the admin secret-management status plus bulk
 re-encryption workflow understand those composite key versions during rotation.
+The backend test suite now also includes real provider-backed migration
+coverage with Testcontainers: OpenBao and Vault transit dev containers are
+provisioned live so the secret-management tests verify `LOCAL`,
+`OPENBAO_TRANSIT`, and `VAULT_TRANSIT` re-encryption paths in both directions,
+including cross-provider `OPENBAO_TRANSIT <-> VAULT_TRANSIT` migrations rather
+than relying only on stubbed transit clients.
 
 ### 8. HTTPS by default in Docker Compose
 

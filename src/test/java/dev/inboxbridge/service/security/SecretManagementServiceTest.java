@@ -538,6 +538,21 @@ class SecretManagementServiceTest {
     }
 
     @Test
+    void reencryptAllStoredSecretsCanMigrateTransitCiphertextBackToLocalMode() {
+        SecretManagementService service = configuredTransitRolloverService(SecretProviderMode.OPENBAO_TRANSIT, null);
+        service.secretProviderResolver.setProviderMode("LOCAL");
+
+        SecretReencryptionResultView result = service.reencryptAllStoredSecrets();
+
+        assertEquals("COMPLETED", result.operationStatus());
+        assertEquals("LOCAL:v2", result.activeKeyVersion());
+        assertEquals(2, result.totalRecordsUpdated());
+        assertEquals(2, result.totalSecretValuesReencrypted());
+        assertEquals(2, result.totalFullReencryptionCount());
+        assertEquals(0, result.totalMetadataRewrapCount());
+    }
+
+    @Test
     void reencryptAllStoredSecretsCanMigrateLocalRecordsIntoTransitProvider() {
         SecretManagementService service = configuredService();
         StubTransitSecretProvider transitSecretProvider = new StubTransitSecretProvider(true);

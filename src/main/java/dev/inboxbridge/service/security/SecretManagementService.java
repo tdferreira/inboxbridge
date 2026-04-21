@@ -1594,13 +1594,26 @@ public class SecretManagementService {
             return RewriteOutcome.SKIPPED;
         }
         boolean metadataRewrapCandidate = secretEncryptionService.canMetadataRewrapToActive(ciphertext, nonce, keyVersion);
-        if (!metadataRewrapCandidate && (nonce == null || nonce.isBlank())) {
+        if (!metadataRewrapCandidate
+                && storedKeyVersionRequiresLocalNonce(keyVersion)
+                && (nonce == null || nonce.isBlank())) {
             return RewriteOutcome.SKIPPED;
         }
         if (!metadataRewrapCandidate && secretEncryptionService.keyVersion().equals(keyVersion)) {
             return RewriteOutcome.SKIPPED;
         }
         return metadataRewrapCandidate ? RewriteOutcome.METADATA_REWRAP : RewriteOutcome.FULL_REENCRYPTION;
+    }
+
+    /**
+     * Only locally encrypted payloads require a persisted nonce. Transit-backed
+     * providers store their entire envelope inside the ciphertext field, so a
+     * blank nonce must not suppress full re-encryption when migrating between
+     * providers or back to local mode.
+     */
+    private boolean storedKeyVersionRequiresLocalNonce(String keyVersion) {
+        String providerId = StoredSecretKeyReference.parse(keyVersion).providerId();
+        return LocalSecretKeyProvider.PROVIDER_ID.equals(providerId);
     }
 
     private SecretReencryptionFollowUpView runFollowUpActions(SecretReencryptionRequest request) {
