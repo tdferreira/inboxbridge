@@ -674,12 +674,25 @@ provisioned live so the secret-management tests verify `LOCAL`,
 `OPENBAO_TRANSIT`, and `VAULT_TRANSIT` re-encryption paths in both directions,
 including cross-provider `OPENBAO_TRANSIT <-> VAULT_TRANSIT` migrations rather
 than relying only on stubbed transit clients.
+That provider-backed coverage now also reaches the admin HTTP layer: a
+PostgreSQL-backed Quarkus integration test boots live Vault/OpenBao transit
+containers, seeds legacy local-key ciphertext into the real tables, and then
+drives `/api/admin/secret-management`, `/report`, `/migration-guide`,
+password re-auth, and `/re-encrypt` through the real browser-session auth flow
+to prove the operator workflow works end-to-end on top of the same transit
+providers.
 The test suite now also has a dedicated PostgreSQL-backed Quarkus path for
 selected persistence regressions. Because `%test` still pins H2 for the fast
 default suite, PostgreSQL-specific Quarkus tests should activate the `pgtest`
 config profile plus `PostgresTestResource`, letting Quarkus augment against
 PostgreSQL from the start while Testcontainers supplies the live JDBC endpoint
-for Flyway and repository/service validation.
+for Flyway and repository/service validation. That Postgres-backed path now
+also covers authenticated HTTP flows end-to-end: browser login plus persisted
+`/api/app/ui-preferences`, browser-managed extension-session listing/revocation
+paired with extension bearer-token auth on `/api/extension/status`, `/api/remote`
+session login plus device-location persistence, and the admin secret-management
+status/report/password re-auth endpoints, all against real PostgreSQL-backed
+Quarkus boot rather than only in-memory doubles.
 
 ### 8. HTTPS by default in Docker Compose
 
