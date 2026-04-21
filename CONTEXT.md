@@ -712,6 +712,11 @@ revoked in the real PostgreSQL-backed stores. The same suite now also covers
 mixed browser/remote account-session listing reflects the real persisted state
 and that targeted browser or remote-session revocations invalidate only the
 selected session while the acting browser session stays valid.
+That PostgreSQL-backed authenticated path now also covers the real
+`/api/app/destination-config` and `/api/app/email-accounts` reads end to end by
+seeding encrypted destination and source mailbox configuration with the active
+secret provider, then verifying the authenticated HTTP responses reflect the
+persisted PostgreSQL-backed state.
 
 ### 8. HTTPS by default in Docker Compose
 

@@ -49,6 +49,7 @@ import dev.inboxbridge.persistence.UserSessionRepository;
 import dev.inboxbridge.persistence.UserUiPreference;
 import dev.inboxbridge.persistence.UserUiPreferenceRepository;
 import dev.inboxbridge.service.admin.AppUserService;
+import dev.inboxbridge.service.security.SecretEncryptionService;
 import dev.inboxbridge.testsupport.PostgresQuarkusTestProfile;
 import dev.inboxbridge.testsupport.PostgresTestResource;
 import io.quarkus.narayana.jta.QuarkusTransaction;
@@ -77,6 +78,9 @@ class PostgresAuthenticatedEndpointsQuarkusTest {
 
     @Inject
     AppUserService appUserService;
+
+    @Inject
+    SecretEncryptionService secretEncryptionService;
 
     @Inject
     UserUiPreferenceRepository userUiPreferenceRepository;
@@ -315,6 +319,48 @@ class PostgresAuthenticatedEndpointsQuarkusTest {
         assertNotNull(sessions.getFirst().deviceLocationCapturedAt);
         assertNotNull(sessions.getFirst().deviceLatitude);
         assertNotNull(sessions.getFirst().deviceLongitude);
+    }
+
+    @Test
+    void destinationAndEmailAccountEndpointsReadPersistedPostgresConfiguration() {
+        ConfiguredMailboxUserFixture fixture = QuarkusTransaction.requiringNew().call(this::seedConfiguredMailboxUser);
+        BrowserSession session = loginBrowser(fixture.username(), fixture.password());
+
+        given()
+                .cookie(SESSION_COOKIE, session.sessionToken())
+                .when().get("/api/app/destination-config")
+                .then()
+                .statusCode(200)
+                .body("configured", equalTo(true))
+                .body("provider", equalTo("GENERIC_IMAP"))
+                .body("host", equalTo("imap.destination-config.test"))
+                .body("port", equalTo(993))
+                .body("tls", equalTo(true))
+                .body("authMethod", equalTo("PASSWORD"))
+                .body("username", equalTo("destination-config@example.com"))
+                .body("folder", equalTo("Archive/InboxBridge"));
+
+        given()
+                .cookie(SESSION_COOKIE, session.sessionToken())
+                .when().get("/api/app/email-accounts")
+                .then()
+                .statusCode(200)
+                .body("size()", equalTo(1))
+                .body("[0].emailAccountId", equalTo(fixture.sourceId()))
+                .body("[0].enabled", equalTo(true))
+                .body("[0].protocol", equalTo("IMAP"))
+                .body("[0].host", equalTo("imap.source-config.test"))
+                .body("[0].port", equalTo(993))
+                .body("[0].tls", equalTo(true))
+                .body("[0].authMethod", equalTo("PASSWORD"))
+                .body("[0].username", equalTo("source-config@example.com"))
+                .body("[0].folder", equalTo("Projects/InboxBridge"))
+                .body("[0].customLabel", equalTo("Config endpoint source"))
+                .body("[0].fetchMode", equalTo("POLLING"))
+                .body("[0].postPollAction", equalTo("MOVE"))
+                .body("[0].postPollTargetFolder", equalTo("Processed"))
+                .body("[0].passwordConfigured", equalTo(true))
+                .body("[0].oauthRefreshTokenConfigured", equalTo(false));
     }
 
     @Test
@@ -855,6 +901,66 @@ class PostgresAuthenticatedEndpointsQuarkusTest {
         return new ManagedUserFixture(managedUser.id, managedUser.username, "ModeSwitch#123");
     }
 
+    private ConfiguredMailboxUserFixture seedConfiguredMailboxUser() {
+        AppUser configuredUser = appUserService.createUser(new dev.inboxbridge.dto.CreateUserRequest(
+                "configured-mailbox-user@example.com",
+                "Configured#123",
+                "USER"));
+        Instant now = Instant.now();
+        String sourceId = "configured-source-" + configuredUser.id;
+        SecretEncryptionService.EncryptedValue encryptedDestinationPassword = secretEncryptionService.encrypt(
+                "DestinationConfig#123",
+                "user-destination:" + configuredUser.id + ":password");
+        SecretEncryptionService.EncryptedValue encryptedSourcePassword = secretEncryptionService.encrypt(
+                "SourceConfig#123",
+                "user-bridge:" + configuredUser.id + ":" + sourceId + ":password");
+        String activeKeyVersion = secretEncryptionService.keyVersion();
+
+        UserMailDestinationConfig destinationConfig = new UserMailDestinationConfig();
+        destinationConfig.userId = configuredUser.id;
+        destinationConfig.provider = "GENERIC_IMAP";
+        destinationConfig.host = "imap.destination-config.test";
+        destinationConfig.port = 993;
+        destinationConfig.tls = true;
+        destinationConfig.authMethod = "PASSWORD";
+        destinationConfig.oauthProvider = "NONE";
+        destinationConfig.username = "destination-config@example.com";
+        destinationConfig.passwordCiphertext = encryptedDestinationPassword.ciphertextBase64();
+        destinationConfig.passwordNonce = encryptedDestinationPassword.nonceBase64();
+        destinationConfig.folderName = "Archive/InboxBridge";
+        destinationConfig.keyVersion = activeKeyVersion;
+        destinationConfig.updatedAt = now;
+        userMailDestinationConfigRepository.persist(destinationConfig);
+
+        UserEmailAccount sourceAccount = new UserEmailAccount();
+        sourceAccount.userId = configuredUser.id;
+        sourceAccount.emailAccountId = sourceId;
+        sourceAccount.enabled = true;
+        sourceAccount.enableAfterOauthConnect = false;
+        sourceAccount.protocol = InboxBridgeConfig.Protocol.IMAP;
+        sourceAccount.host = "imap.source-config.test";
+        sourceAccount.port = 993;
+        sourceAccount.tls = true;
+        sourceAccount.authMethod = InboxBridgeConfig.AuthMethod.PASSWORD;
+        sourceAccount.oauthProvider = InboxBridgeConfig.OAuthProvider.NONE;
+        sourceAccount.username = "source-config@example.com";
+        sourceAccount.passwordCiphertext = encryptedSourcePassword.ciphertextBase64();
+        sourceAccount.passwordNonce = encryptedSourcePassword.nonceBase64();
+        sourceAccount.keyVersion = activeKeyVersion;
+        sourceAccount.folderName = "Projects/InboxBridge";
+        sourceAccount.unreadOnly = true;
+        sourceAccount.fetchMode = SourceFetchMode.POLLING;
+        sourceAccount.customLabel = "Config endpoint source";
+        sourceAccount.markReadAfterPoll = false;
+        sourceAccount.postPollAction = SourcePostPollAction.MOVE;
+        sourceAccount.postPollTargetFolder = "Processed";
+        sourceAccount.createdAt = now;
+        sourceAccount.updatedAt = now;
+        userEmailAccountRepository.persist(sourceAccount);
+
+        return new ConfiguredMailboxUserFixture(configuredUser.username, "Configured#123", sourceId);
+    }
+
     private void persistCredential(String provider, String subjectKey, Instant now) {
         OAuthCredential credential = new OAuthCredential();
         credential.provider = provider;
@@ -965,5 +1071,8 @@ class PostgresAuthenticatedEndpointsQuarkusTest {
     }
 
     private record ManagedUserFixture(Long userId, String username, String password) {
+    }
+
+    private record ConfiguredMailboxUserFixture(String username, String password, String sourceId) {
     }
 }
