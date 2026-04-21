@@ -433,6 +433,60 @@ class PostgresAuthenticatedEndpointsQuarkusTest {
         });
     }
 
+    @Test
+    void revokeOtherSessionsRevokesBrowserAndRemoteSessionsButKeepsCurrentBrowserSession() {
+        BrowserSession currentBrowserSession = loginBrowserAsAdmin();
+        BrowserSession otherBrowserSession = loginBrowserAsAdmin();
+        RemoteBrowserSession remoteSession = loginRemoteAsAdmin();
+
+        given()
+                .cookie(SESSION_COOKIE, currentBrowserSession.sessionToken())
+                .cookie(CSRF_COOKIE, currentBrowserSession.csrfToken())
+                .header(CSRF_HEADER, currentBrowserSession.csrfToken())
+                .when().post("/api/account/sessions/revoke-others")
+                .then()
+                .statusCode(204);
+
+        given()
+                .cookie(SESSION_COOKIE, currentBrowserSession.sessionToken())
+                .when().get("/api/app/ui-preferences")
+                .then()
+                .statusCode(200);
+
+        given()
+                .cookie(SESSION_COOKIE, otherBrowserSession.sessionToken())
+                .when().get("/api/app/ui-preferences")
+                .then()
+                .statusCode(401);
+
+        given()
+                .cookie(REMOTE_SESSION_COOKIE, remoteSession.sessionToken())
+                .when().get("/api/remote/auth/me")
+                .then()
+                .statusCode(401);
+
+        QuarkusTransaction.requiringNew().run(() -> {
+            AppUser admin = adminUser();
+            List<UserSession> browserSessions = userSessionRepository.listRecentByUserId(admin.id, 10);
+            List<RemoteSession> remoteSessions = remoteSessionRepository.listRecentByUserId(admin.id, 10);
+
+            assertTrue(browserSessions.size() >= 2);
+            assertFalse(remoteSessions.isEmpty());
+            assertTrue(userSessionRepository.listActiveByUserId(admin.id, Instant.now()).stream()
+                    .anyMatch((session) -> session.tokenHash.equals(currentBrowserSession.sessionTokenHash())));
+            assertNotNull(browserSessions.stream()
+                    .filter((session) -> session.tokenHash.equals(otherBrowserSession.sessionTokenHash()))
+                    .findFirst()
+                    .orElseThrow()
+                    .revokedAt);
+            assertNotNull(remoteSessions.stream()
+                    .filter((session) -> session.tokenHash.equals(remoteSession.sessionTokenHash()))
+                    .findFirst()
+                    .orElseThrow()
+                    .revokedAt);
+        });
+    }
+
     private BrowserSession loginBrowserAsAdmin() {
         return loginBrowser("admin", "nimda");
     }
@@ -452,7 +506,7 @@ class PostgresAuthenticatedEndpointsQuarkusTest {
         String csrfToken = response.extract().cookie(CSRF_COOKIE);
         assertNotNull(sessionToken);
         assertNotNull(csrfToken);
-        return new BrowserSession(sessionToken, csrfToken);
+        return new BrowserSession(sessionToken, csrfToken, sha256(sessionToken));
     }
 
     private RemoteBrowserSession loginRemoteAsAdmin() {
@@ -471,7 +525,7 @@ class PostgresAuthenticatedEndpointsQuarkusTest {
         String csrfToken = response.extract().cookie(REMOTE_CSRF_COOKIE);
         assertNotNull(sessionToken);
         assertNotNull(csrfToken);
-        return new RemoteBrowserSession(sessionToken, csrfToken);
+        return new RemoteBrowserSession(sessionToken, csrfToken, sha256(sessionToken));
     }
 
     private ExtensionAuthSession loginExtensionAsAdmin(String label, String browserFamily, String extensionVersion) {
@@ -498,6 +552,15 @@ class PostgresAuthenticatedEndpointsQuarkusTest {
 
     private AppUser adminUser() {
         return appUserService.findByUsername("admin").orElseThrow();
+    }
+
+    private String sha256(String value) {
+        try {
+            java.security.MessageDigest digest = java.security.MessageDigest.getInstance("SHA-256");
+            return java.util.Base64.getEncoder().encodeToString(digest.digest(value.getBytes(java.nio.charset.StandardCharsets.UTF_8)));
+        } catch (java.security.NoSuchAlgorithmException e) {
+            throw new IllegalStateException("Could not hash session token for assertions", e);
+        }
     }
 
     private DeletedUserFixture seedOwnedUserData() {
@@ -803,10 +866,10 @@ class PostgresAuthenticatedEndpointsQuarkusTest {
         assertTrue(oAuthCredentialRepository.findByProviderAndSubject("MICROSOFT", "destination-microsoft:" + fixture.userId()).isEmpty());
     }
 
-    private record BrowserSession(String sessionToken, String csrfToken) {
+    private record BrowserSession(String sessionToken, String csrfToken, String sessionTokenHash) {
     }
 
-    private record RemoteBrowserSession(String sessionToken, String csrfToken) {
+    private record RemoteBrowserSession(String sessionToken, String csrfToken, String sessionTokenHash) {
     }
 
     private record ExtensionAuthSession(String accessToken, String refreshToken) {

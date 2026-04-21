@@ -703,7 +703,11 @@ application-mode switching end-to-end: it creates a secondary user, logs them
 in through the real browser-session auth flow, disables multi-user mode through
 `/api/admin/users/mode`, verifies the secondary account is deactivated and its
 browser session is revoked, then re-enables multi-user mode and proves the
-eligible account is restored without reviving the revoked session.
+eligible account is restored without reviving the revoked session. It also
+covers `/api/account/sessions/revoke-others` end to end by creating multiple
+browser sessions plus a remote session for the same user, proving the current
+browser session remains valid while the other browser and remote sessions are
+revoked in the real PostgreSQL-backed stores.
 
 ### 8. HTTPS by default in Docker Compose
 
