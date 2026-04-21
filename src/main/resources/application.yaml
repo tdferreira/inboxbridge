@@ -165,3 +165,20 @@ security:
         strategy: drop-and-create
     flyway:
       migrate-at-start: false
+
+"%pgtest":
+  quarkus:
+    http:
+      insecure-requests: enabled
+      ssl-port: 0
+      ssl:
+        certificate:
+          files: ""
+          key-files: ""
+    datasource:
+      db-kind: postgresql
+    hibernate-orm:
+      schema-management:
+        strategy: validate
+    flyway:
+      migrate-at-start: true
