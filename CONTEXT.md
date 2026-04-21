@@ -707,7 +707,11 @@ eligible account is restored without reviving the revoked session. It also
 covers `/api/account/sessions/revoke-others` end to end by creating multiple
 browser sessions plus a remote session for the same user, proving the current
 browser session remains valid while the other browser and remote sessions are
-revoked in the real PostgreSQL-backed stores.
+revoked in the real PostgreSQL-backed stores. The same suite now also covers
+`/api/account/sessions` plus `/api/account/sessions/{id}/revoke`, proving the
+mixed browser/remote account-session listing reflects the real persisted state
+and that targeted browser or remote-session revocations invalidate only the
+selected session while the acting browser session stays valid.
 
 ### 8. HTTPS by default in Docker Compose
 

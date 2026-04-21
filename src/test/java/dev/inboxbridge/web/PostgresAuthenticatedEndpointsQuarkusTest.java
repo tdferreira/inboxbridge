@@ -487,6 +487,75 @@ class PostgresAuthenticatedEndpointsQuarkusTest {
         });
     }
 
+    @Test
+    void accountSessionsEndpointListsAndRevokesSpecificBrowserAndRemoteSessions() {
+        BrowserSession currentBrowserSession = loginBrowserAsAdmin();
+        BrowserSession otherBrowserSession = loginBrowserAsAdmin();
+        RemoteBrowserSession remoteSession = loginRemoteAsAdmin();
+
+        UserSession persistedOtherBrowserSession = QuarkusTransaction.requiringNew()
+                .call(() -> findBrowserSessionByHash(otherBrowserSession.sessionTokenHash()));
+        RemoteSession persistedRemoteSession = QuarkusTransaction.requiringNew()
+                .call(() -> findRemoteSessionByHash(remoteSession.sessionTokenHash()));
+
+        given()
+                .cookie(SESSION_COOKIE, currentBrowserSession.sessionToken())
+                .when().get("/api/account/sessions")
+                .then()
+                .statusCode(200)
+                .body("activeSessions.find { it.id == " + persistedOtherBrowserSession.id + " && it.sessionType == 'BROWSER' }.current", equalTo(false))
+                .body("activeSessions.find { it.id == " + persistedRemoteSession.id + " && it.sessionType == 'REMOTE' }.current", equalTo(false))
+                .body("activeSessions.find { it.current == true }.sessionType", equalTo("BROWSER"))
+                .body("recentLogins.find { it.id == " + persistedOtherBrowserSession.id + " && it.sessionType == 'BROWSER' }.active", equalTo(true))
+                .body("recentLogins.find { it.id == " + persistedRemoteSession.id + " && it.sessionType == 'REMOTE' }.active", equalTo(true));
+
+        given()
+                .cookie(SESSION_COOKIE, currentBrowserSession.sessionToken())
+                .cookie(CSRF_COOKIE, currentBrowserSession.csrfToken())
+                .header(CSRF_HEADER, currentBrowserSession.csrfToken())
+                .queryParam("type", "BROWSER")
+                .when().post("/api/account/sessions/{sessionId}/revoke", persistedOtherBrowserSession.id)
+                .then()
+                .statusCode(204);
+
+        given()
+                .cookie(SESSION_COOKIE, currentBrowserSession.sessionToken())
+                .cookie(CSRF_COOKIE, currentBrowserSession.csrfToken())
+                .header(CSRF_HEADER, currentBrowserSession.csrfToken())
+                .queryParam("type", "REMOTE")
+                .when().post("/api/account/sessions/{sessionId}/revoke", persistedRemoteSession.id)
+                .then()
+                .statusCode(204);
+
+        given()
+                .cookie(SESSION_COOKIE, currentBrowserSession.sessionToken())
+                .when().get("/api/app/ui-preferences")
+                .then()
+                .statusCode(200);
+
+        given()
+                .cookie(SESSION_COOKIE, otherBrowserSession.sessionToken())
+                .when().get("/api/app/ui-preferences")
+                .then()
+                .statusCode(401);
+
+        given()
+                .cookie(REMOTE_SESSION_COOKIE, remoteSession.sessionToken())
+                .when().get("/api/remote/auth/me")
+                .then()
+                .statusCode(401);
+
+        QuarkusTransaction.requiringNew().run(() -> {
+            UserSession reloadedBrowserSession = findBrowserSessionByHash(otherBrowserSession.sessionTokenHash());
+            RemoteSession reloadedRemoteSession = findRemoteSessionByHash(remoteSession.sessionTokenHash());
+
+            assertNotNull(reloadedBrowserSession.revokedAt);
+            assertNotNull(reloadedRemoteSession.revokedAt);
+            assertTrue(userSessionRepository.listActiveByUserId(adminUser().id, Instant.now()).stream()
+                    .anyMatch((session) -> session.tokenHash.equals(currentBrowserSession.sessionTokenHash())));
+        });
+    }
+
     private BrowserSession loginBrowserAsAdmin() {
         return loginBrowser("admin", "nimda");
     }
@@ -561,6 +630,20 @@ class PostgresAuthenticatedEndpointsQuarkusTest {
         } catch (java.security.NoSuchAlgorithmException e) {
             throw new IllegalStateException("Could not hash session token for assertions", e);
         }
+    }
+
+    private UserSession findBrowserSessionByHash(String tokenHash) {
+        return userSessionRepository.listRecentByUserId(adminUser().id, 20).stream()
+                .filter((session) -> session.tokenHash.equals(tokenHash))
+                .findFirst()
+                .orElseThrow();
+    }
+
+    private RemoteSession findRemoteSessionByHash(String tokenHash) {
+        return remoteSessionRepository.listRecentByUserId(adminUser().id, 20).stream()
+                .filter((session) -> session.tokenHash.equals(tokenHash))
+                .findFirst()
+                .orElseThrow();
     }
 
     private DeletedUserFixture seedOwnedUserData() {
