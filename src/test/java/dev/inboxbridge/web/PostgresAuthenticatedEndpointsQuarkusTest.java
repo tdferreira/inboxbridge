@@ -8,21 +8,50 @@ import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
+import java.time.Instant;
 import java.util.List;
 import java.util.Map;
 
 import org.junit.jupiter.api.Test;
 
+import dev.inboxbridge.config.InboxBridgeConfig;
+import dev.inboxbridge.domain.SourceFetchMode;
+import dev.inboxbridge.domain.SourcePostPollAction;
 import dev.inboxbridge.persistence.AppUser;
 import dev.inboxbridge.persistence.ExtensionSession;
 import dev.inboxbridge.persistence.ExtensionSessionRepository;
+import dev.inboxbridge.persistence.ImportedMessage;
+import dev.inboxbridge.persistence.ImportedMessageRepository;
+import dev.inboxbridge.persistence.OAuthCredential;
+import dev.inboxbridge.persistence.OAuthCredentialRepository;
 import dev.inboxbridge.persistence.RemoteSession;
 import dev.inboxbridge.persistence.RemoteSessionRepository;
+import dev.inboxbridge.persistence.SourceImapCheckpoint;
+import dev.inboxbridge.persistence.SourceImapCheckpointRepository;
+import dev.inboxbridge.persistence.SourcePollEvent;
+import dev.inboxbridge.persistence.SourcePollEventRepository;
+import dev.inboxbridge.persistence.SourcePollingSetting;
+import dev.inboxbridge.persistence.SourcePollingSettingRepository;
+import dev.inboxbridge.persistence.SourcePollingState;
+import dev.inboxbridge.persistence.SourcePollingStateRepository;
+import dev.inboxbridge.persistence.UserEmailAccount;
+import dev.inboxbridge.persistence.UserEmailAccountRepository;
+import dev.inboxbridge.persistence.UserGmailConfig;
+import dev.inboxbridge.persistence.UserGmailConfigRepository;
+import dev.inboxbridge.persistence.UserMailDestinationConfig;
+import dev.inboxbridge.persistence.UserMailDestinationConfigRepository;
+import dev.inboxbridge.persistence.UserPasskey;
+import dev.inboxbridge.persistence.UserPasskeyRepository;
+import dev.inboxbridge.persistence.UserPollingSetting;
+import dev.inboxbridge.persistence.UserPollingSettingRepository;
+import dev.inboxbridge.persistence.UserSession;
+import dev.inboxbridge.persistence.UserSessionRepository;
 import dev.inboxbridge.persistence.UserUiPreference;
 import dev.inboxbridge.persistence.UserUiPreferenceRepository;
 import dev.inboxbridge.service.admin.AppUserService;
 import dev.inboxbridge.testsupport.PostgresQuarkusTestProfile;
 import dev.inboxbridge.testsupport.PostgresTestResource;
+import io.quarkus.narayana.jta.QuarkusTransaction;
 import io.quarkus.test.common.QuarkusTestResource;
 import io.quarkus.test.junit.QuarkusTest;
 import io.quarkus.test.junit.TestProfile;
@@ -53,10 +82,46 @@ class PostgresAuthenticatedEndpointsQuarkusTest {
     UserUiPreferenceRepository userUiPreferenceRepository;
 
     @Inject
+    UserEmailAccountRepository userEmailAccountRepository;
+
+    @Inject
+    UserMailDestinationConfigRepository userMailDestinationConfigRepository;
+
+    @Inject
+    UserGmailConfigRepository userGmailConfigRepository;
+
+    @Inject
+    UserPollingSettingRepository userPollingSettingRepository;
+
+    @Inject
+    UserPasskeyRepository userPasskeyRepository;
+
+    @Inject
+    UserSessionRepository userSessionRepository;
+
+    @Inject
     ExtensionSessionRepository extensionSessionRepository;
 
     @Inject
     RemoteSessionRepository remoteSessionRepository;
+
+    @Inject
+    SourcePollingSettingRepository sourcePollingSettingRepository;
+
+    @Inject
+    SourcePollingStateRepository sourcePollingStateRepository;
+
+    @Inject
+    SourceImapCheckpointRepository sourceImapCheckpointRepository;
+
+    @Inject
+    SourcePollEventRepository sourcePollEventRepository;
+
+    @Inject
+    ImportedMessageRepository importedMessageRepository;
+
+    @Inject
+    OAuthCredentialRepository oAuthCredentialRepository;
 
     @Test
     void browserSessionCanPersistUiPreferencesThroughTheRealHttpSurface() {
@@ -292,6 +357,25 @@ class PostgresAuthenticatedEndpointsQuarkusTest {
                 .body("reauthenticationExpiresAt", notNullValue());
     }
 
+    @Test
+    void adminDeleteUserEndpointRemovesOwnedDataAcrossPostgresTables() {
+        DeletedUserFixture fixture = QuarkusTransaction.requiringNew().call(this::seedOwnedUserData);
+        BrowserSession session = loginBrowserAsAdmin();
+
+        assertOwnedUserDataPresent(fixture);
+
+        given()
+                .cookie(SESSION_COOKIE, session.sessionToken())
+                .cookie(CSRF_COOKIE, session.csrfToken())
+                .header(CSRF_HEADER, session.csrfToken())
+                .when().delete("/api/admin/users/{userId}", fixture.userId())
+                .then()
+                .statusCode(200)
+                .body("deleted", equalTo(true));
+
+        QuarkusTransaction.requiringNew().run(() -> assertOwnedUserDataDeleted(fixture));
+    }
+
     private BrowserSession loginBrowserAsAdmin() {
         ValidatableResponse response = given()
                 .contentType("application/json")
@@ -355,6 +439,299 @@ class PostgresAuthenticatedEndpointsQuarkusTest {
         return appUserService.findByUsername("admin").orElseThrow();
     }
 
+    private DeletedUserFixture seedOwnedUserData() {
+        AppUser doomedUser = appUserService.createUser(new dev.inboxbridge.dto.CreateUserRequest(
+                "delete-me@example.com",
+                "DeleteMe#123",
+                "USER"));
+        Instant now = Instant.now();
+        String sourceId = "delete-source-" + doomedUser.id;
+        String destinationKey = "destination:delete-" + doomedUser.id;
+        String destinationIdentityKey = destinationKey + ":identity";
+
+        UserEmailAccount sourceAccount = new UserEmailAccount();
+        sourceAccount.userId = doomedUser.id;
+        sourceAccount.emailAccountId = sourceId;
+        sourceAccount.enabled = true;
+        sourceAccount.enableAfterOauthConnect = false;
+        sourceAccount.protocol = InboxBridgeConfig.Protocol.IMAP;
+        sourceAccount.host = "imap.delete-me.test";
+        sourceAccount.port = 993;
+        sourceAccount.tls = true;
+        sourceAccount.authMethod = InboxBridgeConfig.AuthMethod.PASSWORD;
+        sourceAccount.oauthProvider = InboxBridgeConfig.OAuthProvider.NONE;
+        sourceAccount.username = "delete-me@example.com";
+        sourceAccount.passwordCiphertext = "ciphertext-source";
+        sourceAccount.passwordNonce = "nonce-source";
+        sourceAccount.folderName = "INBOX";
+        sourceAccount.unreadOnly = true;
+        sourceAccount.fetchMode = SourceFetchMode.POLLING;
+        sourceAccount.customLabel = "Delete me source";
+        sourceAccount.markReadAfterPoll = false;
+        sourceAccount.postPollAction = SourcePostPollAction.NONE;
+        sourceAccount.createdAt = now;
+        sourceAccount.updatedAt = now;
+        userEmailAccountRepository.persist(sourceAccount);
+
+        UserMailDestinationConfig destinationConfig = new UserMailDestinationConfig();
+        destinationConfig.userId = doomedUser.id;
+        destinationConfig.provider = "GENERIC_IMAP";
+        destinationConfig.host = "imap.destination.test";
+        destinationConfig.port = 993;
+        destinationConfig.tls = true;
+        destinationConfig.authMethod = "PASSWORD";
+        destinationConfig.oauthProvider = "NONE";
+        destinationConfig.username = "destination@example.com";
+        destinationConfig.passwordCiphertext = "ciphertext-destination";
+        destinationConfig.passwordNonce = "nonce-destination";
+        destinationConfig.folderName = "INBOX";
+        destinationConfig.keyVersion = "LOCAL";
+        destinationConfig.updatedAt = now;
+        userMailDestinationConfigRepository.persist(destinationConfig);
+
+        UserGmailConfig gmailConfig = new UserGmailConfig();
+        gmailConfig.userId = doomedUser.id;
+        gmailConfig.destinationUser = "delete-me@gmail.test";
+        gmailConfig.linkedMailboxAddress = "linked@example.com";
+        gmailConfig.clientIdCiphertext = "ciphertext-client-id";
+        gmailConfig.clientIdNonce = "nonce-client-id";
+        gmailConfig.clientSecretCiphertext = "ciphertext-client-secret";
+        gmailConfig.clientSecretNonce = "nonce-client-secret";
+        gmailConfig.refreshTokenCiphertext = "ciphertext-refresh";
+        gmailConfig.refreshTokenNonce = "nonce-refresh";
+        gmailConfig.keyVersion = "LOCAL";
+        gmailConfig.redirectUri = "https://localhost/oauth/callback";
+        gmailConfig.createMissingLabels = true;
+        gmailConfig.neverMarkSpam = true;
+        gmailConfig.processForCalendar = false;
+        gmailConfig.updatedAt = now;
+        userGmailConfigRepository.persist(gmailConfig);
+
+        UserPollingSetting userPollingSetting = new UserPollingSetting();
+        userPollingSetting.userId = doomedUser.id;
+        userPollingSetting.pollEnabledOverride = Boolean.TRUE;
+        userPollingSetting.pollIntervalOverride = "PT15M";
+        userPollingSetting.fetchWindowOverride = 25;
+        userPollingSetting.updatedAt = now;
+        userPollingSettingRepository.persist(userPollingSetting);
+
+        UserUiPreference uiPreference = new UserUiPreference();
+        uiPreference.userId = doomedUser.id;
+        uiPreference.persistLayout = true;
+        uiPreference.layoutEditEnabled = true;
+        uiPreference.quickSetupCollapsed = false;
+        uiPreference.quickSetupDismissed = false;
+        uiPreference.quickSetupPinnedVisible = true;
+        uiPreference.adminQuickSetupDismissed = false;
+        uiPreference.adminQuickSetupPinnedVisible = true;
+        uiPreference.destinationMailboxCollapsed = false;
+        uiPreference.userPollingCollapsed = false;
+        uiPreference.userStatsCollapsed = false;
+        uiPreference.sourceEmailAccountsCollapsed = false;
+        uiPreference.adminQuickSetupCollapsed = false;
+        uiPreference.systemDashboardCollapsed = false;
+        uiPreference.oauthAppsCollapsed = false;
+        uiPreference.globalStatsCollapsed = false;
+        uiPreference.userManagementCollapsed = false;
+        uiPreference.userSectionOrder = "destination,sourceEmailAccounts";
+        uiPreference.adminSectionOrder = "globalStats,userManagement";
+        uiPreference.language = "en";
+        uiPreference.themeMode = "SYSTEM";
+        uiPreference.dateFormat = "YYYY-MM-DD HH:mm";
+        uiPreference.timezoneMode = "AUTO";
+        uiPreference.timezone = "UTC";
+        uiPreference.notificationHistory = "[]";
+        uiPreference.updatedAt = now;
+        userUiPreferenceRepository.persist(uiPreference);
+
+        UserPasskey passkey = new UserPasskey();
+        passkey.userId = doomedUser.id;
+        passkey.label = "Delete me key";
+        passkey.credentialId = "credential-" + doomedUser.id;
+        passkey.publicKeyCose = "pk-cose";
+        passkey.signatureCount = 1;
+        passkey.discoverable = true;
+        passkey.backupEligible = false;
+        passkey.backedUp = false;
+        passkey.createdAt = now;
+        userPasskeyRepository.persist(passkey);
+
+        UserSession browserSession = new UserSession();
+        browserSession.userId = doomedUser.id;
+        browserSession.tokenHash = "user-session-token-" + doomedUser.id;
+        browserSession.csrfTokenHash = "user-session-csrf-" + doomedUser.id;
+        browserSession.createdAt = now;
+        browserSession.expiresAt = now.plusSeconds(3600);
+        browserSession.lastSeenAt = now;
+        browserSession.clientIp = "127.0.0.1";
+        browserSession.loginMethod = UserSession.LoginMethod.PASSWORD;
+        userSessionRepository.persist(browserSession);
+
+        extensionSessionRepository.persist(extensionSession(doomedUser.id, now));
+        remoteSessionRepository.persist(remoteSession(doomedUser.id, now));
+
+        SourcePollingSetting sourcePollingSetting = new SourcePollingSetting();
+        sourcePollingSetting.sourceId = sourceId;
+        sourcePollingSetting.ownerUserId = doomedUser.id;
+        sourcePollingSetting.pollEnabledOverride = Boolean.TRUE;
+        sourcePollingSetting.pollIntervalOverride = "PT5M";
+        sourcePollingSetting.fetchWindowOverride = 10;
+        sourcePollingSetting.updatedAt = now;
+        sourcePollingSettingRepository.persist(sourcePollingSetting);
+
+        SourcePollingState sourcePollingState = new SourcePollingState();
+        sourcePollingState.sourceId = sourceId;
+        sourcePollingState.nextPollAt = now.plusSeconds(300);
+        sourcePollingState.consecutiveFailures = 1;
+        sourcePollingState.lastFailureReason = "temporary";
+        sourcePollingState.lastFailureAt = now;
+        sourcePollingState.lastSuccessAt = now.minusSeconds(60);
+        sourcePollingState.imapFolderName = "INBOX";
+        sourcePollingState.imapCheckpointDestinationKey = destinationKey;
+        sourcePollingState.imapUidValidity = 1L;
+        sourcePollingState.imapLastSeenUid = 42L;
+        sourcePollingState.updatedAt = now;
+        sourcePollingStateRepository.persist(sourcePollingState);
+
+        SourceImapCheckpoint sourceImapCheckpoint = new SourceImapCheckpoint();
+        sourceImapCheckpoint.sourceId = sourceId;
+        sourceImapCheckpoint.destinationKey = destinationKey;
+        sourceImapCheckpoint.folderName = "INBOX";
+        sourceImapCheckpoint.uidValidity = 1L;
+        sourceImapCheckpoint.lastSeenUid = 42L;
+        sourceImapCheckpoint.updatedAt = now;
+        sourceImapCheckpointRepository.persist(sourceImapCheckpoint);
+
+        SourcePollEvent sourcePollEvent = new SourcePollEvent();
+        sourcePollEvent.sourceId = sourceId;
+        sourcePollEvent.triggerName = "manual";
+        sourcePollEvent.status = "SUCCESS";
+        sourcePollEvent.startedAt = now.minusSeconds(30);
+        sourcePollEvent.finishedAt = now;
+        sourcePollEvent.fetchedCount = 1;
+        sourcePollEvent.importedCount = 1;
+        sourcePollEvent.importedBytes = 512L;
+        sourcePollEvent.duplicateCount = 0;
+        sourcePollEvent.spamJunkMessageCount = 0;
+        sourcePollEvent.actorUsername = "admin";
+        sourcePollEvent.executionSurface = "admin-ui";
+        sourcePollEvent.errorMessage = null;
+        sourcePollEventRepository.persist(sourcePollEvent);
+
+        ImportedMessage importedMessage = new ImportedMessage();
+        importedMessage.sourceAccountId = sourceId;
+        importedMessage.sourceMessageKey = "message-1";
+        importedMessage.messageIdHeader = "<message-1@example.test>";
+        importedMessage.rawSha256 = "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef";
+        importedMessage.destinationKey = destinationKey;
+        importedMessage.destinationIdentityKey = destinationIdentityKey;
+        importedMessage.gmailMessageId = "gmail-message-1";
+        importedMessage.gmailThreadId = "gmail-thread-1";
+        importedMessage.importedAt = now;
+        importedMessageRepository.persist(importedMessage);
+
+        persistCredential("GOOGLE", "source-google:" + sourceId, now);
+        persistCredential("MICROSOFT", sourceId, now);
+        persistCredential("GOOGLE", "user-gmail:" + doomedUser.id, now);
+        persistCredential("MICROSOFT", "destination-microsoft:" + doomedUser.id, now);
+
+        return new DeletedUserFixture(doomedUser.id, sourceId);
+    }
+
+    private void persistCredential(String provider, String subjectKey, Instant now) {
+        OAuthCredential credential = new OAuthCredential();
+        credential.provider = provider;
+        credential.subjectKey = subjectKey;
+        credential.keyVersion = "LOCAL";
+        credential.refreshTokenCiphertext = "ciphertext";
+        credential.refreshTokenNonce = "nonce";
+        credential.accessTokenCiphertext = "ciphertext-access";
+        credential.accessTokenNonce = "nonce-access";
+        credential.accessExpiresAt = now.plusSeconds(3600);
+        credential.tokenScope = "scope";
+        credential.tokenType = "Bearer";
+        credential.createdAt = now;
+        credential.updatedAt = now;
+        oAuthCredentialRepository.persist(credential);
+    }
+
+    private ExtensionSession extensionSession(Long userId, Instant now) {
+        ExtensionSession session = new ExtensionSession();
+        session.userId = userId;
+        session.label = "Delete me extension";
+        session.browserFamily = "chrome";
+        session.extensionVersion = "1.0.0";
+        session.tokenHash = "extension-token-" + userId;
+        session.tokenPrefix = "ibx_delete";
+        session.accessExpiresAt = now.plusSeconds(3600);
+        session.refreshTokenHash = "extension-refresh-" + userId;
+        session.createdAt = now;
+        session.lastUsedAt = now;
+        session.expiresAt = now.plusSeconds(7200);
+        return session;
+    }
+
+    private RemoteSession remoteSession(Long userId, Instant now) {
+        RemoteSession session = new RemoteSession();
+        session.userId = userId;
+        session.tokenHash = "remote-token-" + userId;
+        session.csrfTokenHash = "remote-csrf-" + userId;
+        session.createdAt = now;
+        session.expiresAt = now.plusSeconds(3600);
+        session.lastSeenAt = now;
+        session.clientIp = "127.0.0.1";
+        session.locationLabel = "Lisbon";
+        session.userAgent = "JUnit";
+        session.loginMethod = UserSession.LoginMethod.PASSWORD;
+        return session;
+    }
+
+    private void assertOwnedUserDataPresent(DeletedUserFixture fixture) {
+        QuarkusTransaction.requiringNew().run(() -> {
+            assertTrue(appUserService.findById(fixture.userId()).isPresent());
+            assertEquals(1, userEmailAccountRepository.listByUserId(fixture.userId()).size());
+            assertTrue(userMailDestinationConfigRepository.findByUserId(fixture.userId()).isPresent());
+            assertTrue(userGmailConfigRepository.findByUserId(fixture.userId()).isPresent());
+            assertTrue(userPollingSettingRepository.findByUserId(fixture.userId()).isPresent());
+            assertTrue(userUiPreferenceRepository.findByUserId(fixture.userId()).isPresent());
+            assertEquals(1, userPasskeyRepository.countByUserId(fixture.userId()));
+            assertEquals(1, userSessionRepository.listRecentByUserId(fixture.userId(), 10).size());
+            assertEquals(1, extensionSessionRepository.listByUserId(fixture.userId()).size());
+            assertEquals(1, remoteSessionRepository.listRecentByUserId(fixture.userId(), 10).size());
+            assertTrue(sourcePollingSettingRepository.findBySourceId(fixture.sourceId()).isPresent());
+            assertTrue(sourcePollingStateRepository.findBySourceId(fixture.sourceId()).isPresent());
+            assertTrue(sourceImapCheckpointRepository.findByScope(fixture.sourceId(), fixture.destinationKey(), "INBOX").isPresent());
+            assertTrue(sourcePollEventRepository.findLatestBySourceId(fixture.sourceId()).isPresent());
+            assertEquals(1, importedMessageRepository.countByDestinationKeyAndSourceAccountId(fixture.destinationKey(), fixture.sourceId()));
+            assertTrue(oAuthCredentialRepository.findByProviderAndSubject("GOOGLE", "source-google:" + fixture.sourceId()).isPresent());
+            assertTrue(oAuthCredentialRepository.findByProviderAndSubject("MICROSOFT", fixture.sourceId()).isPresent());
+            assertTrue(oAuthCredentialRepository.findByProviderAndSubject("GOOGLE", "user-gmail:" + fixture.userId()).isPresent());
+            assertTrue(oAuthCredentialRepository.findByProviderAndSubject("MICROSOFT", "destination-microsoft:" + fixture.userId()).isPresent());
+        });
+    }
+
+    private void assertOwnedUserDataDeleted(DeletedUserFixture fixture) {
+        assertTrue(appUserService.findById(fixture.userId()).isEmpty());
+        assertEquals(0, userEmailAccountRepository.listByUserId(fixture.userId()).size());
+        assertTrue(userMailDestinationConfigRepository.findByUserId(fixture.userId()).isEmpty());
+        assertTrue(userGmailConfigRepository.findByUserId(fixture.userId()).isEmpty());
+        assertTrue(userPollingSettingRepository.findByUserId(fixture.userId()).isEmpty());
+        assertTrue(userUiPreferenceRepository.findByUserId(fixture.userId()).isEmpty());
+        assertEquals(0, userPasskeyRepository.countByUserId(fixture.userId()));
+        assertEquals(0, userSessionRepository.listRecentByUserId(fixture.userId(), 10).size());
+        assertEquals(0, extensionSessionRepository.listByUserId(fixture.userId()).size());
+        assertEquals(0, remoteSessionRepository.listRecentByUserId(fixture.userId(), 10).size());
+        assertTrue(sourcePollingSettingRepository.findBySourceId(fixture.sourceId()).isEmpty());
+        assertTrue(sourcePollingStateRepository.findBySourceId(fixture.sourceId()).isEmpty());
+        assertTrue(sourceImapCheckpointRepository.findByScope(fixture.sourceId(), fixture.destinationKey(), "INBOX").isEmpty());
+        assertTrue(sourcePollEventRepository.findLatestBySourceId(fixture.sourceId()).isEmpty());
+        assertEquals(0, importedMessageRepository.countByDestinationKeyAndSourceAccountId(fixture.destinationKey(), fixture.sourceId()));
+        assertTrue(oAuthCredentialRepository.findByProviderAndSubject("GOOGLE", "source-google:" + fixture.sourceId()).isEmpty());
+        assertTrue(oAuthCredentialRepository.findByProviderAndSubject("MICROSOFT", fixture.sourceId()).isEmpty());
+        assertTrue(oAuthCredentialRepository.findByProviderAndSubject("GOOGLE", "user-gmail:" + fixture.userId()).isEmpty());
+        assertTrue(oAuthCredentialRepository.findByProviderAndSubject("MICROSOFT", "destination-microsoft:" + fixture.userId()).isEmpty());
+    }
+
     private record BrowserSession(String sessionToken, String csrfToken) {
     }
 
@@ -362,5 +739,11 @@ class PostgresAuthenticatedEndpointsQuarkusTest {
     }
 
     private record ExtensionAuthSession(String accessToken, String refreshToken) {
+    }
+
+    private record DeletedUserFixture(Long userId, String sourceId) {
+        private String destinationKey() {
+            return "destination:delete-" + userId;
+        }
     }
 }

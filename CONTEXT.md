@@ -692,7 +692,13 @@ also covers authenticated HTTP flows end-to-end: browser login plus persisted
 paired with extension bearer-token auth on `/api/extension/status`, `/api/remote`
 session login plus device-location persistence, and the admin secret-management
 status/report/password re-auth endpoints, all against real PostgreSQL-backed
-Quarkus boot rather than only in-memory doubles.
+Quarkus boot rather than only in-memory doubles. It now also covers the admin
+user-deletion endpoint end-to-end with real PostgreSQL cleanup verification,
+seeding user-owned browser sessions, remote sessions, extension sessions, source
+accounts, source checkpoints, poll events, imported-message dedupe rows, OAuth
+credentials, passkeys, destination config, Gmail config, and user preferences,
+then proving `/api/admin/users/{id}` removes or cascades all of that state
+correctly.
 
 ### 8. HTTPS by default in Docker Compose
 
