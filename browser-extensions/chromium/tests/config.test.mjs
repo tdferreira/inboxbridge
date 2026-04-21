@@ -70,6 +70,53 @@ test('loadConfig refreshes expiring access tokens and persists the rotated sessi
   assert.equal(persistedPayload.inboxbridgeExtensionConfig.theme, 'dark-blue')
 })
 
+test('loadConfig prefers the canonical username over display name after refresh rotation', async () => {
+  const store = createConfigStore({
+    containsApiPermission: async () => false,
+    containsOriginPermission: async () => true,
+    currentTime: () => new Date('2026-04-12T10:00:00Z').getTime(),
+    decryptJson: async () => ({
+      accessToken: 'access-1',
+      accessTokenExpiresAt: '2026-04-12T10:00:30Z',
+      refreshToken: 'refresh-1',
+      refreshTokenExpiresAt: '2026-05-12T10:00:00Z',
+      username: 'admin'
+    }),
+    encryptJson: async (value) => ({ ciphertext: JSON.stringify(value), iv: 'iv' }),
+    queryTabs: async () => [],
+    refreshExtensionAuth: async () => ({
+      session: {
+        publicBaseUrl: 'https://mail.example.com',
+        tokens: {
+          accessToken: 'access-2',
+          accessExpiresAt: '2026-04-12T11:00:00Z',
+          refreshToken: 'refresh-2',
+          refreshExpiresAt: '2026-05-12T11:00:00Z'
+        },
+        user: {
+          username: 'admin',
+          displayName: 'InboxBridge'
+        }
+      }
+    }),
+    requestApiPermission: async () => true,
+    requestOriginPermission: async () => true,
+    storageGet: async () => ({
+      inboxbridgeExtensionConfig: {
+        serverUrl: 'https://mail.example.com',
+        theme: 'dark',
+        auth: { ciphertext: 'encrypted', iv: 'iv' }
+      }
+    }),
+    storageRemove: async () => {},
+    storageSet: async () => {}
+  })
+
+  const config = await store.loadConfig()
+
+  assert.equal(config.username, 'admin')
+})
+
 test('detectServerUrl prefers the last real InboxBridge browser tab over extension pages', async () => {
   const store = createConfigStore({
     containsApiPermission: async () => false,

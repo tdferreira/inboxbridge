@@ -124,7 +124,7 @@ export function createOptionsController({
 
   function syncAuthenticationUi(config = currentConfig) {
     const signedIn = isSignedIn(config)
-    const userLabel = config?.username || 'InboxBridge'
+    const userLabel = config?.username?.trim() || 'InboxBridge'
     setIdleButtonLabel(saveButton, t(signedIn ? 'settings.signOut' : 'settings.signIn'))
     setIdleButtonLabel(detectButton, t('settings.useCurrentTab'))
     if (authSummaryCard) {
@@ -179,6 +179,47 @@ export function createOptionsController({
     syncAuthenticationUi(currentConfig)
   }
 
+  async function refreshSignedInIdentity(config) {
+    if (!config?.serverUrl || !config?.token) {
+      return
+    }
+    try {
+      const status = await fetchStatus(config.serverUrl, config.token)
+      const refreshedConfig = {
+        ...config,
+        userLanguage: status.user?.language,
+        userThemeMode: status.user?.themeMode,
+        username: status.user?.username || status.user?.displayName || config.username
+      }
+      await saveUserPreferences?.(status.user)
+      if (refreshedConfig.username !== config.username
+        || refreshedConfig.userLanguage !== config.userLanguage
+        || refreshedConfig.userThemeMode !== config.userThemeMode) {
+        await saveConfig?.(refreshedConfig)
+      }
+      applyConfigState(refreshedConfig)
+    } catch (error) {
+      if (!isInvalidExtensionAuthError(error)) {
+        return
+      }
+      await clearConfig()
+      applyConfigState({
+        language: config.language,
+        notifyErrors: config.notifyErrors,
+        notifyManualPollSuccess: config.notifyManualPollSuccess,
+        serverUrl: config.serverUrl,
+        theme: config.theme,
+        token: '',
+        refreshToken: '',
+        userLanguage: config.userLanguage,
+        userThemeMode: config.userThemeMode,
+        username: config.username
+      })
+      await sendMessage({ type: 'refresh-status' })
+      await sendMessage({ type: 'refresh-context-menus' })
+    }
+  }
+
   async function initialize() {
     const config = await loadConfig()
     const theme = config?.theme || 'user'
@@ -207,6 +248,7 @@ export function createOptionsController({
     if (config?.username) {
       usernameInput.value = config.username
     }
+    await refreshSignedInIdentity({ ...config, language, theme })
   }
 
   async function connect(event) {
@@ -269,7 +311,7 @@ export function createOptionsController({
       await sendMessage({ type: 'refresh-status' })
       await sendMessage({ type: 'refresh-context-menus' })
       showStatus(statusBanner, 'success', t('status.connectedAs', {
-        username: normalized.username || 'InboxBridge'
+        username: normalized.username?.trim() || 'InboxBridge'
       }))
     })
   }
@@ -312,7 +354,7 @@ export function createOptionsController({
         userThemeMode: status.user?.themeMode
       })
       showStatus(statusBanner, 'success', t('status.connectedAs', {
-        username: status.user?.displayName || status.user?.username || config.username || 'InboxBridge'
+        username: status.user?.username || status.user?.displayName || config.username?.trim() || 'InboxBridge'
       }))
     })
   }

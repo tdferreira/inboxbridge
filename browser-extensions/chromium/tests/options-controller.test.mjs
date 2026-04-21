@@ -243,6 +243,119 @@ test('options controller completes the passkey flow when InboxBridge requires it
   })
 })
 
+test('options controller shows the canonical username instead of the display name after sign-in', async () => {
+  const elements = createOptionsElements()
+  const controller = createOptionsController({
+    deps: {
+      applyThemePreference() {},
+      clearConfig: async () => {},
+      completeBrowserSignIn: async () => {
+        throw new Error('browser sign-in should not be called')
+      },
+      ensureNotificationPermission: async () => true,
+      ensureTabPermission: async () => true,
+      detectServerUrl: async () => null,
+      ensureOriginPermission: async () => true,
+      fetchStatus: async () => ({
+        user: {
+          username: 'admin',
+          displayName: 'InboxBridge'
+        }
+      }),
+      getBrowserMetadata: () => ({ browserFamily: 'chromium', extensionVersion: '0.1.0', label: 'Chromium browser extension' }),
+      hideStatus() {},
+      localizeOptionsPage() {},
+      loadConfig: async () => ({ serverUrl: 'https://mail.example.com', username: 'admin', token: 'access-1' }),
+      loginExtension: async () => null,
+      normalizeServerUrl: (value) => value.trim(),
+      resolveLanguagePreference: () => 'en',
+      saveConfig: async () => {},
+      saveLanguagePreference: async () => {},
+      saveNotificationPreferences: async () => {},
+      saveThemePreference: async () => {},
+      saveUserPreferences: async () => {},
+      sendMessage: async () => {},
+      sessionToConfig: () => null,
+      showStatus(target, tone, text) {
+        target.hidden = false
+        target.className = `status-banner ${tone}`
+        target.textContent = text
+      },
+      translate: (_locale, key, params = {}) => {
+        if (key === 'settings.signOut') return 'Sign out'
+        if (key === 'settings.signedInAs') return `Logged in as ${params.username}.`
+        if (key === 'status.connectedAs') return `Connected as ${params.username}.`
+        return key
+      },
+      targetDocument: {}
+    },
+    elements
+  })
+
+  controller.bind()
+  await controller.initialize()
+  await elements.testButton.click()
+
+  assert.equal(elements.authSummaryText.textContent, 'Logged in as admin.')
+  assert.equal(elements.statusBanner.textContent, 'Connected as admin.')
+})
+
+test('options controller refreshes a stale saved signed-in label during initialization', async () => {
+  const elements = createOptionsElements()
+  let savedConfig = null
+  const controller = createOptionsController({
+    deps: {
+      applyThemePreference() {},
+      clearConfig: async () => {},
+      completeBrowserSignIn: async () => {
+        throw new Error('browser sign-in should not be called')
+      },
+      ensureNotificationPermission: async () => true,
+      ensureTabPermission: async () => true,
+      detectServerUrl: async () => null,
+      ensureOriginPermission: async () => true,
+      fetchStatus: async () => ({
+        user: {
+          username: 'admin',
+          displayName: 'InboxBridge',
+          language: 'en',
+          themeMode: 'DARK_BLUE'
+        }
+      }),
+      getBrowserMetadata: () => ({ browserFamily: 'chromium', extensionVersion: '0.1.0', label: 'Chromium browser extension' }),
+      hideStatus() {},
+      localizeOptionsPage() {},
+      loadConfig: async () => ({ serverUrl: 'https://mail.example.com', username: 'InboxBridge', token: 'access-1', theme: 'user', language: 'user' }),
+      loginExtension: async () => null,
+      normalizeServerUrl: (value) => value.trim(),
+      resolveLanguagePreference: () => 'en',
+      saveConfig: async (config) => {
+        savedConfig = config
+      },
+      saveLanguagePreference: async () => {},
+      saveNotificationPreferences: async () => {},
+      saveThemePreference: async () => {},
+      saveUserPreferences: async () => {},
+      sendMessage: async () => {},
+      sessionToConfig: () => null,
+      showStatus() {},
+      translate: (_locale, key, params = {}) => {
+        if (key === 'settings.signOut') return 'Sign out'
+        if (key === 'settings.signedInAs') return `Logged in as ${params.username}.`
+        return key
+      },
+      targetDocument: {}
+    },
+    elements
+  })
+
+  controller.bind()
+  await controller.initialize()
+
+  assert.equal(elements.authSummaryText.textContent, 'Logged in as admin.')
+  assert.equal(savedConfig.username, 'admin')
+})
+
 test('options controller requests origin permission for the canonical public URL returned by InboxBridge', async () => {
   const elements = createOptionsElements()
   const requestedOrigins = []

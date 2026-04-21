@@ -54,6 +54,13 @@ describe('workspacePreferences', () => {
     ])
   })
 
+  it('defaults authentication security and secret management to collapsed', () => {
+    const normalized = normalizeUiPreferences({})
+
+    expect(normalized.authSecurityCollapsed).toBe(true)
+    expect(normalized.secretManagementCollapsed).toBe(true)
+  })
+
   it('keeps admin quick setup visibility preferences separate from the user workspace guide', () => {
     const normalized = normalizeUiPreferences({
       persistLayout: true,
@@ -82,6 +89,8 @@ describe('workspacePreferences', () => {
     expect(normalized.quickSetupPinnedVisible).toBe(false)
     expect(normalized.adminQuickSetupDismissed).toBe(false)
     expect(normalized.adminQuickSetupPinnedVisible).toBe(false)
+    expect(normalized.authSecurityCollapsed).toBe(true)
+    expect(normalized.secretManagementCollapsed).toBe(true)
   })
 
   it('captures and reapplies only layout-specific preferences', () => {

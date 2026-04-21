@@ -359,6 +359,7 @@ export function normalizeServerUrl(value) {
 }
 
 function mapSessionToConfig(serverUrl, session) {
+  const resolvedUsername = session?.user?.username || session?.user?.displayName || ''
   return {
     accessTokenExpiresAt: session?.tokens?.accessExpiresAt || null,
     language: LANGUAGE_FOLLOW_USER,
@@ -368,7 +369,7 @@ function mapSessionToConfig(serverUrl, session) {
     token: session?.tokens?.accessToken || '',
     userLanguage: normalizeStoredUserLanguage(session?.user?.language),
     userThemeMode: normalizeStoredUserThemeMode(session?.user?.themeMode),
-    username: session?.user?.username || session?.user?.displayName || ''
+    username: resolvedUsername
   }
 }
 
