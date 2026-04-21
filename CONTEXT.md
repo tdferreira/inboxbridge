@@ -698,7 +698,12 @@ seeding user-owned browser sessions, remote sessions, extension sessions, source
 accounts, source checkpoints, poll events, imported-message dedupe rows, OAuth
 credentials, passkeys, destination config, Gmail config, and user preferences,
 then proving `/api/admin/users/{id}` removes or cascades all of that state
-correctly.
+correctly. The same PostgreSQL-backed authenticated suite also covers
+application-mode switching end-to-end: it creates a secondary user, logs them
+in through the real browser-session auth flow, disables multi-user mode through
+`/api/admin/users/mode`, verifies the secondary account is deactivated and its
+browser session is revoked, then re-enables multi-user mode and proves the
+eligible account is restored without reviving the revoked session.
 
 ### 8. HTTPS by default in Docker Compose
 

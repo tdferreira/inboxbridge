@@ -376,12 +376,73 @@ class PostgresAuthenticatedEndpointsQuarkusTest {
         QuarkusTransaction.requiringNew().run(() -> assertOwnedUserDataDeleted(fixture));
     }
 
+    @Test
+    void switchingApplicationModeRevokesOtherBrowserSessionsAndRestoresEligibleUsers() {
+        ManagedUserFixture managedUser = QuarkusTransaction.requiringNew().call(this::seedManagedUserForModeSwitch);
+        BrowserSession managedUserSession = loginBrowser(managedUser.username(), managedUser.password());
+        BrowserSession adminSession = loginBrowserAsAdmin();
+
+        given()
+                .cookie(SESSION_COOKIE, adminSession.sessionToken())
+                .cookie(CSRF_COOKIE, adminSession.csrfToken())
+                .header(CSRF_HEADER, adminSession.csrfToken())
+                .contentType("application/json")
+                .body(Map.of("multiUserEnabled", false))
+                .when().put("/api/admin/users/mode")
+                .then()
+                .statusCode(200)
+                .body("effectiveMultiUserEnabled", equalTo(false))
+                .body("multiUserEnabledOverride", equalTo(false));
+
+        given()
+                .cookie(SESSION_COOKIE, managedUserSession.sessionToken())
+                .when().get("/api/app/ui-preferences")
+                .then()
+                .statusCode(401);
+
+        QuarkusTransaction.requiringNew().run(() -> {
+            AppUser reloadedManagedUser = appUserService.findById(managedUser.userId()).orElseThrow();
+            AppUser admin = adminUser();
+
+            assertFalse(reloadedManagedUser.active);
+            assertTrue(reloadedManagedUser.disabledBySingleUserMode);
+            assertTrue(admin.active);
+            assertFalse(admin.disabledBySingleUserMode);
+            assertEquals(0, userSessionRepository.listActiveByUserId(managedUser.userId(), Instant.now()).size());
+            assertNotNull(userSessionRepository.listRecentByUserId(managedUser.userId(), 10).getFirst().revokedAt);
+        });
+
+        given()
+                .cookie(SESSION_COOKIE, adminSession.sessionToken())
+                .cookie(CSRF_COOKIE, adminSession.csrfToken())
+                .header(CSRF_HEADER, adminSession.csrfToken())
+                .contentType("application/json")
+                .body(Map.of("multiUserEnabled", true))
+                .when().put("/api/admin/users/mode")
+                .then()
+                .statusCode(200)
+                .body("effectiveMultiUserEnabled", equalTo(true))
+                .body("multiUserEnabledOverride", equalTo(true));
+
+        QuarkusTransaction.requiringNew().run(() -> {
+            AppUser reloadedManagedUser = appUserService.findById(managedUser.userId()).orElseThrow();
+
+            assertTrue(reloadedManagedUser.active);
+            assertFalse(reloadedManagedUser.disabledBySingleUserMode);
+            assertEquals(0, userSessionRepository.listActiveByUserId(managedUser.userId(), Instant.now()).size());
+        });
+    }
+
     private BrowserSession loginBrowserAsAdmin() {
+        return loginBrowser("admin", "nimda");
+    }
+
+    private BrowserSession loginBrowser(String username, String password) {
         ValidatableResponse response = given()
                 .contentType("application/json")
                 .body(Map.of(
-                        "username", "admin",
-                        "password", "nimda"))
+                        "username", username,
+                        "password", password))
                 .when().post("/api/auth/login")
                 .then()
                 .statusCode(200)
@@ -638,6 +699,16 @@ class PostgresAuthenticatedEndpointsQuarkusTest {
         return new DeletedUserFixture(doomedUser.id, sourceId);
     }
 
+    private ManagedUserFixture seedManagedUserForModeSwitch() {
+        AppUser managedUser = appUserService.createUser(new dev.inboxbridge.dto.CreateUserRequest(
+                "mode-switch-user@example.com",
+                "ModeSwitch#123",
+                "USER"));
+        managedUser.mustChangePassword = false;
+        managedUser.updatedAt = Instant.now();
+        return new ManagedUserFixture(managedUser.id, managedUser.username, "ModeSwitch#123");
+    }
+
     private void persistCredential(String provider, String subjectKey, Instant now) {
         OAuthCredential credential = new OAuthCredential();
         credential.provider = provider;
@@ -745,5 +816,8 @@ class PostgresAuthenticatedEndpointsQuarkusTest {
         private String destinationKey() {
             return "destination:delete-" + userId;
         }
+    }
+
+    private record ManagedUserFixture(Long userId, String username, String password) {
     }
 }
