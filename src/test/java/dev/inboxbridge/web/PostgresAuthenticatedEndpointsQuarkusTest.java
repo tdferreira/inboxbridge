@@ -364,6 +364,40 @@ class PostgresAuthenticatedEndpointsQuarkusTest {
     }
 
     @Test
+    void pollingSettingsEndpointsReadPersistedUserAndSourceOverrides() {
+        ConfiguredMailboxUserFixture fixture = QuarkusTransaction.requiringNew().call(this::seedConfiguredMailboxUser);
+        BrowserSession session = loginBrowser(fixture.username(), fixture.password());
+
+        given()
+                .cookie(SESSION_COOKIE, session.sessionToken())
+                .when().get("/api/app/polling-settings")
+                .then()
+                .statusCode(200)
+                .body("pollEnabledOverride", equalTo(false))
+                .body("effectivePollEnabled", equalTo(false))
+                .body("pollIntervalOverride", equalTo("PT20M"))
+                .body("effectivePollInterval", equalTo("PT20M"))
+                .body("fetchWindowOverride", equalTo(30))
+                .body("effectiveFetchWindow", equalTo(30));
+
+        given()
+                .cookie(SESSION_COOKIE, session.sessionToken())
+                .when().get("/api/app/email-accounts/{emailAccountId}/polling-settings", fixture.sourceId())
+                .then()
+                .statusCode(200)
+                .body("sourceId", equalTo(fixture.sourceId()))
+                .body("basePollEnabled", equalTo(false))
+                .body("pollEnabledOverride", equalTo(true))
+                .body("effectivePollEnabled", equalTo(true))
+                .body("basePollInterval", equalTo("PT20M"))
+                .body("pollIntervalOverride", equalTo("PT5M"))
+                .body("effectivePollInterval", equalTo("PT5M"))
+                .body("baseFetchWindow", equalTo(30))
+                .body("fetchWindowOverride", equalTo(8))
+                .body("effectiveFetchWindow", equalTo(8));
+    }
+
+    @Test
     void adminSecretManagementEndpointsStayReachableWithRealPostgresPersistence() {
         BrowserSession session = loginBrowserAsAdmin();
 
@@ -902,8 +936,9 @@ class PostgresAuthenticatedEndpointsQuarkusTest {
     }
 
     private ConfiguredMailboxUserFixture seedConfiguredMailboxUser() {
+        String fixtureSuffix = Long.toUnsignedString(System.nanoTime());
         AppUser configuredUser = appUserService.createUser(new dev.inboxbridge.dto.CreateUserRequest(
-                "configured-mailbox-user@example.com",
+                "configured-mailbox-user-" + fixtureSuffix + "@example.com",
                 "Configured#123",
                 "USER"));
         Instant now = Instant.now();
@@ -957,6 +992,23 @@ class PostgresAuthenticatedEndpointsQuarkusTest {
         sourceAccount.createdAt = now;
         sourceAccount.updatedAt = now;
         userEmailAccountRepository.persist(sourceAccount);
+
+        UserPollingSetting userPollingSetting = new UserPollingSetting();
+        userPollingSetting.userId = configuredUser.id;
+        userPollingSetting.pollEnabledOverride = Boolean.FALSE;
+        userPollingSetting.pollIntervalOverride = "PT20M";
+        userPollingSetting.fetchWindowOverride = 30;
+        userPollingSetting.updatedAt = now;
+        userPollingSettingRepository.persist(userPollingSetting);
+
+        SourcePollingSetting sourcePollingSetting = new SourcePollingSetting();
+        sourcePollingSetting.sourceId = sourceId;
+        sourcePollingSetting.ownerUserId = configuredUser.id;
+        sourcePollingSetting.pollEnabledOverride = Boolean.TRUE;
+        sourcePollingSetting.pollIntervalOverride = "PT5M";
+        sourcePollingSetting.fetchWindowOverride = 8;
+        sourcePollingSetting.updatedAt = now;
+        sourcePollingSettingRepository.persist(sourcePollingSetting);
 
         return new ConfiguredMailboxUserFixture(configuredUser.username, "Configured#123", sourceId);
     }

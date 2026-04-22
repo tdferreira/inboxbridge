@@ -716,7 +716,11 @@ That PostgreSQL-backed authenticated path now also covers the real
 `/api/app/destination-config` and `/api/app/email-accounts` reads end to end by
 seeding encrypted destination and source mailbox configuration with the active
 secret provider, then verifying the authenticated HTTP responses reflect the
-persisted PostgreSQL-backed state.
+persisted PostgreSQL-backed state. It also now covers
+`/api/app/polling-settings` and `/api/app/email-accounts/{id}/polling-settings`
+end to end by seeding persisted user-level and source-level polling overrides
+and verifying the authenticated HTTP responses return the inherited/effective
+values from the real PostgreSQL-backed stores.
 
 ### 8. HTTPS by default in Docker Compose
 
