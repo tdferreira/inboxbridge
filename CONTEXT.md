@@ -720,7 +720,13 @@ persisted PostgreSQL-backed state. It also now covers
 `/api/app/polling-settings` and `/api/app/email-accounts/{id}/polling-settings`
 end to end by seeding persisted user-level and source-level polling overrides
 and verifying the authenticated HTTP responses return the inherited/effective
-values from the real PostgreSQL-backed stores.
+values from the real PostgreSQL-backed stores. The same pgtest authenticated
+suite now also covers the browser-extension browser-handoff flow end to end:
+it starts a PKCE handoff request, verifies the anonymous redeem stays pending,
+completes the handoff through the real browser-session auth path, redeems it
+for extension-scoped rotating tokens, verifies those tokens work against
+`/api/extension/status`, and confirms the resulting extension session is visible
+through the authenticated browser-session management surface.
 
 ### 8. HTTPS by default in Docker Compose
 

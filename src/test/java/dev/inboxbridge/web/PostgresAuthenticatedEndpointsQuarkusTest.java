@@ -221,10 +221,8 @@ class PostgresAuthenticatedEndpointsQuarkusTest {
                 .when().get("/api/extension/sessions")
                 .then()
                 .statusCode(200)
-                .body("size()", equalTo(1))
-                .body("[0].label", equalTo("QA laptop"))
-                .body("[0].browserFamily", equalTo("firefox"))
-                .body("[0].extensionVersion", equalTo("0.7.0"));
+                .body("find { it.label == 'QA laptop' }.browserFamily", equalTo("firefox"))
+                .body("find { it.label == 'QA laptop' }.extensionVersion", equalTo("0.7.0"));
 
         ValidatableResponse refreshResponse = given()
                 .contentType("application/json")
@@ -254,9 +252,101 @@ class PostgresAuthenticatedEndpointsQuarkusTest {
                 .statusCode(401);
 
         List<ExtensionSession> sessions = extensionSessionRepository.listByUserId(adminUser().id);
-        assertEquals(1, sessions.size());
-        assertNotNull(sessions.getFirst().revokedAt);
+        assertNotNull(sessions.stream()
+                .filter((session) -> "QA laptop".equals(session.label))
+                .findFirst()
+                .orElseThrow()
+                .revokedAt);
         assertFalse(refreshedRefreshToken.isBlank());
+    }
+
+    @Test
+    void extensionBrowserHandoffCompletesAndRedeemsAgainstRealBrowserSessionState() {
+        BrowserSession browserSession = loginBrowserAsAdmin();
+        String codeVerifier = "pgtest-browser-handoff-verifier";
+        String codeChallenge = pkceS256(codeVerifier);
+
+        ValidatableResponse startResponse = given()
+                .contentType("application/json")
+                .body(Map.of(
+                        "codeChallenge", codeChallenge,
+                        "codeChallengeMethod", "S256",
+                        "label", "Browser handoff session",
+                        "browserFamily", "chromium",
+                        "extensionVersion", "1.2.3"))
+                .when().post("/api/extension/auth/browser-handoff/start")
+                .then()
+                .statusCode(200)
+                .body("requestId", notNullValue())
+                .body("browserUrl", notNullValue())
+                .body("expiresAt", notNullValue());
+
+        String requestId = startResponse.extract().path("requestId");
+
+        given()
+                .contentType("application/json")
+                .body(Map.of(
+                        "requestId", requestId,
+                        "codeVerifier", codeVerifier))
+                .when().post("/api/extension/auth/browser-handoff/redeem")
+                .then()
+                .statusCode(200)
+                .body("status", equalTo("PENDING"))
+                .body("session", equalTo(null));
+
+        given()
+                .cookie(SESSION_COOKIE, browserSession.sessionToken())
+                .cookie(CSRF_COOKIE, browserSession.csrfToken())
+                .header(CSRF_HEADER, browserSession.csrfToken())
+                .contentType("application/json")
+                .body(Map.of("requestId", requestId))
+                .when().post("/api/extension/auth/browser-handoff/complete")
+                .then()
+                .statusCode(200)
+                .body("status", equalTo("COMPLETED"));
+
+        ValidatableResponse redeemResponse = given()
+                .contentType("application/json")
+                .body(Map.of(
+                        "requestId", requestId,
+                        "codeVerifier", codeVerifier))
+                .when().post("/api/extension/auth/browser-handoff/redeem")
+                .then()
+                .statusCode(200)
+                .body("status", equalTo("AUTHENTICATED"))
+                .body("session.label", equalTo("Browser handoff session"))
+                .body("session.browserFamily", equalTo("chromium"))
+                .body("session.extensionVersion", equalTo("1.2.3"))
+                .body("session.tokens.accessToken", notNullValue())
+                .body("session.tokens.refreshToken", notNullValue());
+
+        String accessToken = redeemResponse.extract().path("session.tokens.accessToken");
+
+        given()
+                .header("Authorization", "Bearer " + accessToken)
+                .when().get("/api/extension/status")
+                .then()
+                .statusCode(200)
+                .body("user.username", equalTo("admin"));
+
+        given()
+                .cookie(SESSION_COOKIE, browserSession.sessionToken())
+                .when().get("/api/extension/sessions")
+                .then()
+                .statusCode(200)
+                .body("find { it.label == 'Browser handoff session' }.browserFamily", equalTo("chromium"))
+                .body("find { it.label == 'Browser handoff session' }.extensionVersion", equalTo("1.2.3"));
+
+        given()
+                .contentType("application/json")
+                .body(Map.of(
+                        "requestId", requestId,
+                        "codeVerifier", codeVerifier))
+                .when().post("/api/extension/auth/browser-handoff/redeem")
+                .then()
+                .statusCode(200)
+                .body("status", equalTo("EXPIRED"))
+                .body("session", equalTo(null));
     }
 
     @Test
@@ -709,6 +799,16 @@ class PostgresAuthenticatedEndpointsQuarkusTest {
             return java.util.Base64.getEncoder().encodeToString(digest.digest(value.getBytes(java.nio.charset.StandardCharsets.UTF_8)));
         } catch (java.security.NoSuchAlgorithmException e) {
             throw new IllegalStateException("Could not hash session token for assertions", e);
+        }
+    }
+
+    private String pkceS256(String value) {
+        try {
+            java.security.MessageDigest digest = java.security.MessageDigest.getInstance("SHA-256");
+            return java.util.Base64.getUrlEncoder().withoutPadding()
+                    .encodeToString(digest.digest(value.getBytes(java.nio.charset.StandardCharsets.UTF_8)));
+        } catch (java.security.NoSuchAlgorithmException e) {
+            throw new IllegalStateException("Could not derive PKCE challenge for assertions", e);
         }
     }
 
