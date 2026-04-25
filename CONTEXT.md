@@ -730,7 +730,10 @@ through the authenticated browser-session management surface. It also now
 covers `/api/remote/control` end to end for a configured non-admin user,
 proving the remote-session view reflects persisted source readiness,
 destination readiness, and effective source polling overrides from the real
-PostgreSQL-backed stores.
+PostgreSQL-backed stores. The same pgtest authenticated suite now also covers
+the idle remote live-poll endpoints (`/api/remote/poll/live`, `/pause`,
+`/resume`, and `/stop`) so the remote-session surface is locked when no active
+live poll run exists.
 
 ### 8. HTTPS by default in Docker Compose
 

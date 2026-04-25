@@ -445,6 +445,52 @@ class PostgresAuthenticatedEndpointsQuarkusTest {
     }
 
     @Test
+    void remoteLivePollEndpointsReturnIdleSnapshotWhenNoRunIsActive() {
+        ConfiguredMailboxUserFixture fixture = QuarkusTransaction.requiringNew().call(this::seedConfiguredMailboxUser);
+        RemoteBrowserSession remoteSession = loginRemote(fixture.username(), fixture.password());
+
+        given()
+                .cookie(REMOTE_SESSION_COOKIE, remoteSession.sessionToken())
+                .when().get("/api/remote/poll/live")
+                .then()
+                .statusCode(200)
+                .body("running", equalTo(false))
+                .body("state", equalTo("IDLE"))
+                .body("viewerCanControl", equalTo(false))
+                .body("sources.size()", equalTo(0));
+
+        given()
+                .cookie(REMOTE_SESSION_COOKIE, remoteSession.sessionToken())
+                .cookie(REMOTE_CSRF_COOKIE, remoteSession.csrfToken())
+                .header(CSRF_HEADER, remoteSession.csrfToken())
+                .when().post("/api/remote/poll/live/pause")
+                .then()
+                .statusCode(200)
+                .body("running", equalTo(false))
+                .body("state", equalTo("IDLE"));
+
+        given()
+                .cookie(REMOTE_SESSION_COOKIE, remoteSession.sessionToken())
+                .cookie(REMOTE_CSRF_COOKIE, remoteSession.csrfToken())
+                .header(CSRF_HEADER, remoteSession.csrfToken())
+                .when().post("/api/remote/poll/live/resume")
+                .then()
+                .statusCode(200)
+                .body("running", equalTo(false))
+                .body("state", equalTo("IDLE"));
+
+        given()
+                .cookie(REMOTE_SESSION_COOKIE, remoteSession.sessionToken())
+                .cookie(REMOTE_CSRF_COOKIE, remoteSession.csrfToken())
+                .header(CSRF_HEADER, remoteSession.csrfToken())
+                .when().post("/api/remote/poll/live/stop")
+                .then()
+                .statusCode(200)
+                .body("running", equalTo(false))
+                .body("state", equalTo("IDLE"));
+    }
+
+    @Test
     void destinationAndEmailAccountEndpointsReadPersistedPostgresConfiguration() {
         ConfiguredMailboxUserFixture fixture = QuarkusTransaction.requiringNew().call(this::seedConfiguredMailboxUser);
         BrowserSession session = loginBrowser(fixture.username(), fixture.password());
