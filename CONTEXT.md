@@ -726,7 +726,11 @@ it starts a PKCE handoff request, verifies the anonymous redeem stays pending,
 completes the handoff through the real browser-session auth path, redeems it
 for extension-scoped rotating tokens, verifies those tokens work against
 `/api/extension/status`, and confirms the resulting extension session is visible
-through the authenticated browser-session management surface.
+through the authenticated browser-session management surface. It also now
+covers `/api/remote/control` end to end for a configured non-admin user,
+proving the remote-session view reflects persisted source readiness,
+destination readiness, and effective source polling overrides from the real
+PostgreSQL-backed stores.
 
 ### 8. HTTPS by default in Docker Compose
 

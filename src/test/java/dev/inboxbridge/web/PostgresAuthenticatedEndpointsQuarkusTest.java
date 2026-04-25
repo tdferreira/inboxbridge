@@ -412,6 +412,39 @@ class PostgresAuthenticatedEndpointsQuarkusTest {
     }
 
     @Test
+    void remoteControlEndpointReflectsPersistedMailboxAndPollingState() {
+        ConfiguredMailboxUserFixture fixture = QuarkusTransaction.requiringNew().call(this::seedConfiguredMailboxUser);
+        RemoteBrowserSession remoteSession = loginRemote(fixture.username(), fixture.password());
+
+        given()
+                .cookie(REMOTE_SESSION_COOKIE, remoteSession.sessionToken())
+                .when().get("/api/remote/control")
+                .then()
+                .statusCode(200)
+                .body("session.username", equalTo(fixture.username()))
+                .body("session.role", equalTo("USER"))
+                .body("session.canRunUserPoll", equalTo(true))
+                .body("session.canRunAllUsersPoll", equalTo(false))
+                .body("session.language", equalTo("en"))
+                .body("hasOwnSourceEmailAccounts", equalTo(true))
+                .body("hasReadyDestinationMailbox", equalTo(true))
+                .body("setupRequired", equalTo(false))
+                .body("sources.size()", equalTo(1))
+                .body("sources[0].sourceId", equalTo(fixture.sourceId()))
+                .body("sources[0].scope", equalTo("USER"))
+                .body("sources[0].ownerLabel", equalTo(fixture.username()))
+                .body("sources[0].effectivePollEnabled", equalTo(true))
+                .body("sources[0].effectivePollInterval", equalTo("PT5M"))
+                .body("sources[0].effectiveFetchWindow", equalTo(8))
+                .body("sources[0].protocol", equalTo("IMAP"))
+                .body("sources[0].host", equalTo("imap.source-config.test"))
+                .body("sources[0].folder", equalTo("Projects/InboxBridge"))
+                .body("sources[0].customLabel", equalTo("Config endpoint source"))
+                .body("sources[0].postPollAction", equalTo("MOVE"))
+                .body("sources[0].postPollTargetFolder", equalTo("Processed"));
+    }
+
+    @Test
     void destinationAndEmailAccountEndpointsReadPersistedPostgresConfiguration() {
         ConfiguredMailboxUserFixture fixture = QuarkusTransaction.requiringNew().call(this::seedConfiguredMailboxUser);
         BrowserSession session = loginBrowser(fixture.username(), fixture.password());
@@ -749,16 +782,19 @@ class PostgresAuthenticatedEndpointsQuarkusTest {
     }
 
     private RemoteBrowserSession loginRemoteAsAdmin() {
+        return loginRemote("admin", "nimda");
+    }
+
+    private RemoteBrowserSession loginRemote(String username, String password) {
         ValidatableResponse response = given()
                 .contentType("application/json")
                 .body(Map.of(
-                        "username", "admin",
-                        "password", "nimda"))
+                        "username", username,
+                        "password", password))
                 .when().post("/api/remote/auth/login")
                 .then()
                 .statusCode(200)
-                .body("username", equalTo("admin"))
-                .body("role", equalTo("ADMIN"));
+                .body("username", equalTo(username));
 
         String sessionToken = response.extract().cookie(REMOTE_SESSION_COOKIE);
         String csrfToken = response.extract().cookie(REMOTE_CSRF_COOKIE);
