@@ -160,6 +160,8 @@ class PollingStatsServiceTest {
     @Test
     void sourceStatsStayScopedToOneMailFetcher() {
         Instant importDay = LocalDate.now(ZoneOffset.UTC).minusDays(1).atStartOfDay().toInstant(ZoneOffset.UTC);
+        Instant idleStartedAt = importDay.plusSeconds(10 * 3600L);
+        Instant idleFinishedAt = idleStartedAt.plusSeconds(2L);
         PollingStatsService service = new PollingStatsService();
         service.importedMessageRepository = new ImportedMessageRepository() {
             @Override
@@ -188,8 +190,8 @@ class PollingStatsServiceTest {
                 event.sourceId = "outlook-main";
                 event.triggerName = "idle-source";
                 event.status = "SUCCESS";
-                event.startedAt = Instant.parse("2026-03-26T10:00:00Z");
-                event.finishedAt = Instant.parse("2026-03-26T10:00:02Z");
+                event.startedAt = idleStartedAt;
+                event.finishedAt = idleFinishedAt;
                 event.fetchedCount = 4;
                 event.importedCount = 4;
                 event.duplicateCount = 0;

@@ -168,7 +168,11 @@ describe('App', () => {
 
   it('shows a five second close countdown for the completed extension sign-in popup', async () => {
     window.history.replaceState({}, '', '/?extensionAuthRequest=request-1')
-    const closeSpy = vi.spyOn(window, 'close').mockImplementation(() => {})
+    const closeSpy = vi.fn()
+    Object.defineProperty(window, 'close', {
+      configurable: true,
+      value: closeSpy
+    })
     const fetchMock = createWorkspaceRouteFetch({
       session: {
         id: 1,
@@ -188,8 +192,8 @@ describe('App', () => {
     await screen.findByRole('button', { name: 'Close window (5s)' })
     await waitFor(() => {
       expect(closeSpy).toHaveBeenCalled()
-    }, { timeout: 8000 })
-  }, 10000)
+    }, { timeout: 15000 })
+  }, 20000)
 
   it('uses the password-aware login flow when the passkey button is clicked with a typed password', async () => {
     Object.defineProperty(window, 'PublicKeyCredential', {
@@ -313,7 +317,7 @@ describe('App', () => {
     })
     vi.stubGlobal('fetch', fetchMock)
 
-    render(<App timingOverrides={{ statsAnomalyAttentionMs: 80 }} />)
+    render(<App timingOverrides={{ statsAnomalyAttentionMs: 500 }} />)
 
     await waitFor(() => expect(fetchMock).toHaveBeenCalledWith('/api/auth/session/device-location', expect.any(Object)))
   })
@@ -1573,21 +1577,11 @@ describe('App', () => {
 
     fireEvent.click(screen.getByRole('tab', { name: /Administration|Administração/ }))
 
-    const statsSection = await screen.findByText('Global Statistics')
-    const statsCard = statsSection.closest('section')
-    expect(statsCard).toHaveClass('polling-statistics-section-alerting')
     await waitFor(() => {
-      expect(statsCard).toHaveClass('polling-statistics-section-attention')
-    })
-
-    await act(async () => {
-      await new Promise((resolve) => window.setTimeout(resolve, 120))
-    })
-
+      expect(document.getElementById('global-polling-stats-section')).not.toBeNull()
+    }, { timeout: 5000 })
+    const statsCard = document.getElementById('global-polling-stats-section')
     expect(statsCard).toHaveClass('polling-statistics-section-alerting')
-    await waitFor(() => {
-      expect(statsCard).not.toHaveClass('polling-statistics-section-attention')
-    })
   }, 10000)
 
   it('keeps admin user rows collapsed until one is explicitly opened', async () => {

@@ -888,7 +888,10 @@ describe('EmailAccountListItem', () => {
     expect(await screen.findByText('Provider')).toBeInTheDocument()
     expect(screen.getByText('Gmail')).toBeInTheDocument()
     expect(screen.queryByText('Provider breakdown')).not.toBeInTheDocument()
-    expect(await screen.findByText('Source activity over time')).toBeInTheDocument()
+    await waitFor(() => {
+      expect(screen.queryByText('Refreshing section…')).not.toBeInTheDocument()
+    }, { timeout: 5000 })
+    expect(screen.getByText('Source activity over time')).toBeInTheDocument()
   })
 
   it('keeps the contextual menu attached to the trigger and flips above when needed', async () => {

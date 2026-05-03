@@ -1,5 +1,6 @@
 import { fireEvent, render, screen, waitFor, within } from '@testing-library/react'
 import SecretManagementSection from './SecretManagementSection'
+import SecretReencryptionDialog from './SecretReencryptionDialog'
 import { translate } from '@/lib/i18n'
 
 function renderSection(overrides = {}) {
@@ -752,7 +753,7 @@ describe('SecretManagementSection', () => {
     expect(screen.getByText('The current backend requirements also show that some older records are no longer decryptable with the active configuration. Restore the previous key or provider path as a legacy decrypt path before retrying.')).toBeInTheDocument()
   })
 
-  it('keeps the confirm action disabled when backend requirements are not satisfied', () => {
+  it('keeps the confirm action disabled when backend requirements are not satisfied', async () => {
     const { onSecretReencryptOptionsChange } = renderSection({
       secretManagementStatus: {
         unavailableKeyRecordCount: 1,
@@ -822,6 +823,11 @@ describe('SecretManagementSection', () => {
     fireEvent.click(screen.getByRole('checkbox', { name: 'I understand a failed or interrupted re-encryption can leave stored secrets unrecoverable until the missing key material is restored.' }))
 
     expect(screen.getAllByRole('button', { name: 'Re-encrypt stored secrets' }).at(-1)).toBeDisabled()
+
+    fireEvent.click(screen.getByRole('button', { name: 'Cancel' }))
+    await waitFor(() => {
+      expect(screen.queryByRole('dialog')).not.toBeInTheDocument()
+    })
   })
 
   it('allows re-encryption when requirements and acknowledgements are complete', async () => {
@@ -840,6 +846,11 @@ describe('SecretManagementSection', () => {
 
     await waitFor(() => {
       expect(onReencryptStoredSecrets).toHaveBeenCalledTimes(1)
+    })
+
+    fireEvent.click(screen.getByRole('button', { name: 'Cancel' }))
+    await waitFor(() => {
+      expect(screen.queryByRole('dialog')).not.toBeInTheDocument()
     })
   })
 
@@ -868,32 +879,22 @@ describe('SecretManagementSection', () => {
   it('requires sensitive-session re-authentication before confirming when server policy demands it', async () => {
     const onVerifySecretManagementPassword = vi.fn().mockResolvedValue(true)
     render(
-      <SecretManagementSection
-        collapsed={false}
-        collapseLoading={false}
-        locale="en"
-        onCollapseToggle={vi.fn()}
-        onReencryptStoredSecrets={vi.fn().mockResolvedValue(true)}
-        onSecretReencryptOptionsChange={vi.fn()}
-        onVerifySecretManagementPassword={onVerifySecretManagementPassword}
-        onVerifySecretManagementPasskey={vi.fn()}
+      <SecretReencryptionDialog
+        onApproveQueuedReencryption={vi.fn()}
+        onClose={vi.fn()}
+        onConfirm={vi.fn()}
+        onOptionsChange={vi.fn()}
+        onVerifyPasskey={vi.fn()}
+        onVerifyPassword={onVerifySecretManagementPassword}
         session={{ hasPassword: true, passkeyCount: 1 }}
         secretManagementStatus={{
-          secureStorageConfigured: true,
           mode: 'LOCAL',
           providerId: 'LOCAL',
           activeKeyVersion: 'LOCAL:v2',
           activeKeyId: 'LOCAL:v2',
           configuredLegacyKeyIds: ['LOCAL:v1'],
-          protectedRecordCount: 14,
-          nonActiveKeyRecordCount: 0,
           unavailableKeyRecordCount: 0,
-          envManagedMailboxSecretsAllowed: false,
-          configuredEnvManagedSourceCount: 2,
-          envManagedGoogleRefreshTokenConfigured: true,
-          safeToRetireLegacyKeys: false,
-          keyUsage: [],
-          reencryptionReady: false,
+          reencryptionPreview: null,
           reencryptionRequirements: [
             {
               requirementId: 'provider-health',
@@ -901,8 +902,8 @@ describe('SecretManagementSection', () => {
               detail: 'Local secret provider is ready.',
               remediationSteps: ['Verify the current provider endpoint from the server host.'],
               configReferences: ['SECURITY_TOKEN_ENCRYPTION_KEY'],
-            actionTargetId: 'secret-management-provider-diagnostics',
-            actionLabel: 'Review provider diagnostics',
+              actionTargetId: 'secret-management-provider-diagnostics',
+              actionLabel: 'Review provider diagnostics',
               satisfied: true,
               blocking: true
             },
@@ -910,9 +911,7 @@ describe('SecretManagementSection', () => {
               requirementId: 'recent-reauthentication',
               title: 'This browser session was recently re-authenticated for sensitive actions',
               detail: 'Re-authenticate this browser session with the current password or a passkey before re-encrypting stored secrets.',
-              remediationSteps: [
-                'Use Verify with current password or Verify with passkey in this dialog before confirming re-encryption.'
-              ],
+              remediationSteps: ['Use Verify with current password or Verify with passkey in this dialog before confirming re-encryption.'],
               configReferences: ['inboxbridge.security.secret-management.reauthentication-ttl'],
               actionTargetId: 'secret-reencryption-reauthentication',
               actionLabel: 'Open session verification',
@@ -921,7 +920,6 @@ describe('SecretManagementSection', () => {
             }
           ],
           reencryptionRequest: null,
-          reencryptionCooldown: 'PT12H',
           immediateReencryptionOverrideAllowed: false,
           reauthenticationRequired: true,
           reauthenticationSatisfied: false,
@@ -936,8 +934,6 @@ describe('SecretManagementSection', () => {
         t={(key, params) => translate('en', key, params)}
       />
     )
-
-    fireEvent.click(screen.getByRole('button', { name: 'Re-encrypt stored secrets' }))
 
     expect(screen.getByText('Sensitive session verification')).toBeInTheDocument()
     expect(screen.getByRole('button', { name: 'Verify with current password' })).toBeInTheDocument()
@@ -959,43 +955,35 @@ describe('SecretManagementSection', () => {
   })
 
   it('shows verification output in the dialog after the backend completes re-encryption', async () => {
-    const onReencryptStoredSecrets = vi.fn().mockResolvedValue({
-      operationStatus: 'COMPLETED',
-      message: 'Secret re-encryption completed and post-run verification passed.',
-      executeAfter: '2026-04-15T14:00:00Z',
-      totalFullReencryptionCount: 1,
-      totalMetadataRewrapCount: 2,
-      verification: {
-        passed: true,
-        messages: ['All stored secret records now use the active key version.'],
-        operatorSaveItems: ['Save the active key version and the current legacy-key list in your recovery notes.']
-      }
-    })
-
     render(
-      <SecretManagementSection
-        collapsed={false}
-        collapseLoading={false}
-        locale="en"
-        onCollapseToggle={vi.fn()}
-        onReencryptStoredSecrets={onReencryptStoredSecrets}
-        onSecretReencryptOptionsChange={vi.fn()}
+      <SecretReencryptionDialog
+        onApproveQueuedReencryption={vi.fn()}
+        onClose={vi.fn()}
+        onConfirm={vi.fn()}
+        onOptionsChange={vi.fn()}
+        onVerifyPasskey={vi.fn()}
+        onVerifyPassword={vi.fn()}
+        reencryptionResult={{
+          operationStatus: 'COMPLETED',
+          message: 'Secret re-encryption completed and post-run verification passed.',
+          executeAfter: '2026-04-15T14:00:00Z',
+          totalFullReencryptionCount: 1,
+          totalMetadataRewrapCount: 2,
+          verification: {
+            passed: true,
+            messages: ['All stored secret records now use the active key version.'],
+            operatorSaveItems: ['Save the active key version and the current legacy-key list in your recovery notes.']
+          }
+        }}
+        session={{ hasPassword: true, passkeyCount: 1 }}
         secretManagementStatus={{
-          secureStorageConfigured: true,
           mode: 'LOCAL',
           providerId: 'LOCAL',
           activeKeyVersion: 'LOCAL:v2',
           activeKeyId: 'LOCAL:v2',
           configuredLegacyKeyIds: ['LOCAL:v1'],
-          protectedRecordCount: 14,
-          nonActiveKeyRecordCount: 0,
           unavailableKeyRecordCount: 0,
-          envManagedMailboxSecretsAllowed: false,
-          configuredEnvManagedSourceCount: 2,
-          envManagedGoogleRefreshTokenConfigured: true,
-          safeToRetireLegacyKeys: true,
-          keyUsage: [],
-          reencryptionReady: true,
+          reencryptionPreview: null,
           reencryptionRequirements: [
             {
               requirementId: 'provider-health',
@@ -1010,7 +998,6 @@ describe('SecretManagementSection', () => {
             }
           ],
           reencryptionRequest: null,
-          reencryptionCooldown: 'PT12H',
           immediateReencryptionOverrideAllowed: false,
           reauthenticationRequired: false,
           reauthenticationSatisfied: true,
@@ -1022,22 +1009,11 @@ describe('SecretManagementSection', () => {
           revokeRemoteSessions: false,
           clearCachedOAuthAccessTokens: false
         }}
-        onVerifySecretManagementPassword={vi.fn()}
-        onVerifySecretManagementPasskey={vi.fn()}
-        session={{ hasPassword: true, passkeyCount: 1 }}
         t={(key, params) => translate('en', key, params)}
       />
     )
 
-    fireEvent.click(screen.getByRole('button', { name: 'Re-encrypt stored secrets' }))
-    fireEvent.click(screen.getByRole('checkbox', { name: 'I already configured and validated the new active key or secret-management provider.' }))
-    fireEvent.click(screen.getByRole('checkbox', { name: 'I will keep legacy keys available until re-encryption finishes and the key-usage summary shows they are no longer needed.' }))
-    fireEvent.click(screen.getByRole('checkbox', { name: 'I understand a failed or interrupted re-encryption can leave stored secrets unrecoverable until the missing key material is restored.' }))
-    fireEvent.click(screen.getAllByRole('button', { name: 'Re-encrypt stored secrets' }).at(-1))
-
-    await waitFor(() => {
-      expect(screen.getByText('All stored secret records now use the active key version.')).toBeInTheDocument()
-    })
+    expect(screen.getByText('All stored secret records now use the active key version.')).toBeInTheDocument()
     expect(screen.getByText('Save before retiring legacy keys')).toBeInTheDocument()
     expect(screen.getByText('Save the active key version and the current legacy-key list in your recovery notes.')).toBeInTheDocument()
     const fullRow = screen.getByText('Secrets rewritten through full re-encryption').closest('div')

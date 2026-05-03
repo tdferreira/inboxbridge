@@ -40,7 +40,10 @@ class PollingLivePresentationServiceTest {
         assertEquals(List.of("alice-source"), aliceView.sources().stream().map((source) -> source.sourceId()).toList());
         assertEquals("alice-source", aliceView.activeSourceId());
         assertFalse(aliceView.viewerCanControl());
-        assertNull(charlieView);
+        assertNotNull(charlieView);
+        assertFalse(charlieView.running());
+        assertEquals("IDLE", charlieView.state());
+        assertTrue(charlieView.sources().isEmpty());
     }
 
     @Test

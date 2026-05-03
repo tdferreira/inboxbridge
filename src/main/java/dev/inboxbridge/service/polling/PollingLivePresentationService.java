@@ -43,7 +43,7 @@ public class PollingLivePresentationService {
                         source.finishedAt))
                 .toList();
         if (!admin && sources.isEmpty()) {
-            return null;
+            return new PollLiveView(false, null, "IDLE", null, null, false, null, null, null, List.of());
         }
         boolean viewerCanControl = admin || (state.actorUserId != null && state.actorUserId.equals(viewerId));
         return new PollLiveView(
