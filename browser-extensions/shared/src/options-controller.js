@@ -199,6 +199,9 @@ export function createOptionsController({
       }
       applyConfigState(refreshedConfig)
     } catch (error) {
+      if (config.refreshFailed && config.refreshToken) {
+        return
+      }
       if (!isInvalidExtensionAuthError(error)) {
         return
       }

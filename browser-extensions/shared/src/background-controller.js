@@ -163,6 +163,15 @@ export function registerBackgroundController({
         status = await fetchStatus(config.serverUrl, config.token)
       } catch (error) {
         if (isInvalidExtensionAuthError(error)) {
+          if (config.refreshFailed && config.refreshToken) {
+            const message = config.refreshErrorMessage || 'InboxBridge could not refresh the saved extension sign-in yet.'
+            await applyToolbarState(null, {
+              kind: 'transport',
+              message
+            })
+            await broadcastStatus(null, message, config.serverUrl)
+            throw error
+          }
           await clearInvalidAuthState(config.serverUrl, error.message)
           return null
         }

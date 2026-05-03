@@ -2,6 +2,7 @@ import test from 'node:test'
 import assert from 'node:assert/strict'
 
 import { createConfigStore, normalizeServerUrl } from '../../shared/src/config.js'
+import { createInvalidExtensionAuthError } from '../../shared/src/auth-errors.js'
 
 test('normalizeServerUrl trims and preserves https origins', () => {
   assert.equal(normalizeServerUrl(' https://mail.example.com/ '), 'https://mail.example.com')
@@ -115,6 +116,167 @@ test('loadConfig prefers the canonical username over display name after refresh 
   const config = await store.loadConfig()
 
   assert.equal(config.username, 'admin')
+})
+
+test('loadConfig keeps saved auth when access-token refresh has a transient failure', async () => {
+  let persistedPayload = null
+  const store = createConfigStore({
+    containsApiPermission: async () => false,
+    containsOriginPermission: async () => true,
+    currentTime: () => new Date('2026-04-12T10:00:00Z').getTime(),
+    decryptJson: async () => ({
+      accessToken: 'access-1',
+      accessTokenExpiresAt: '2026-04-12T10:00:30Z',
+      refreshToken: 'refresh-1',
+      refreshTokenExpiresAt: '2026-05-12T10:00:00Z',
+      username: 'alice'
+    }),
+    encryptJson: async (value) => ({ ciphertext: JSON.stringify(value), iv: 'iv' }),
+    queryTabs: async () => [],
+    refreshExtensionAuth: async () => {
+      throw new TypeError('Failed to fetch')
+    },
+    requestApiPermission: async () => true,
+    requestOriginPermission: async () => true,
+    storageGet: async () => ({
+      inboxbridgeExtensionConfig: {
+        serverUrl: 'https://mail.example.com',
+        theme: 'dark',
+        notifyErrors: true,
+        auth: { ciphertext: 'encrypted', iv: 'iv' }
+      }
+    }),
+    storageRemove: async () => {},
+    storageSet: async (value) => {
+      persistedPayload = value
+    }
+  })
+
+  const config = await store.loadConfig()
+
+  assert.equal(config.token, 'access-1')
+  assert.equal(config.refreshToken, 'refresh-1')
+  assert.equal(config.refreshFailed, true)
+  assert.equal(config.notifyErrors, true)
+  assert.equal(persistedPayload, null)
+})
+
+test('loadConfig keeps newer rotated auth when an older concurrent refresh is rejected', async () => {
+  const storedConfigs = [
+    {
+      serverUrl: 'https://mail.example.com',
+      theme: 'dark',
+      auth: { version: 'old' }
+    },
+    {
+      serverUrl: 'https://mail.example.com',
+      theme: 'dark',
+      auth: { version: 'new' }
+    }
+  ]
+  let storageReads = 0
+  let persistedPayload = null
+  const store = createConfigStore({
+    containsApiPermission: async () => false,
+    containsOriginPermission: async () => true,
+    currentTime: () => new Date('2026-04-12T10:00:00Z').getTime(),
+    decryptJson: async (payload) => payload.version === 'new'
+      ? {
+          accessToken: 'access-2',
+          accessTokenExpiresAt: '2026-04-12T11:00:00Z',
+          refreshToken: 'refresh-2',
+          refreshTokenExpiresAt: '2026-05-12T11:00:00Z',
+          username: 'alice'
+        }
+      : {
+          accessToken: 'access-1',
+          accessTokenExpiresAt: '2026-04-12T10:00:30Z',
+          refreshToken: 'refresh-1',
+          refreshTokenExpiresAt: '2026-05-12T10:00:00Z',
+          username: 'alice'
+        },
+    encryptJson: async (value) => ({ ciphertext: JSON.stringify(value), iv: 'iv' }),
+    queryTabs: async () => [],
+    refreshExtensionAuth: async () => {
+      throw createInvalidExtensionAuthError()
+    },
+    requestApiPermission: async () => true,
+    requestOriginPermission: async () => true,
+    storageGet: async () => {
+      const config = storedConfigs[Math.min(storageReads, storedConfigs.length - 1)]
+      storageReads += 1
+      return { inboxbridgeExtensionConfig: config }
+    },
+    storageRemove: async () => {},
+    storageSet: async (value) => {
+      persistedPayload = value
+    }
+  })
+
+  const config = await store.loadConfig()
+
+  assert.equal(config.token, 'access-2')
+  assert.equal(config.refreshToken, 'refresh-2')
+  assert.equal(config.username, 'alice')
+  assert.equal(persistedPayload, null)
+})
+
+test('loadConfig clears auth only when refresh is rejected and no newer token exists', async () => {
+  let persistedPayload = null
+  const store = createConfigStore({
+    containsApiPermission: async () => false,
+    containsOriginPermission: async () => true,
+    currentTime: () => new Date('2026-04-12T10:00:00Z').getTime(),
+    decryptJson: async () => ({
+      accessToken: 'access-1',
+      accessTokenExpiresAt: '2026-04-12T10:00:30Z',
+      refreshToken: 'refresh-1',
+      refreshTokenExpiresAt: '2026-05-12T10:00:00Z',
+      username: 'alice'
+    }),
+    encryptJson: async (value) => ({ ciphertext: JSON.stringify(value), iv: 'iv' }),
+    queryTabs: async () => [],
+    refreshExtensionAuth: async () => {
+      throw createInvalidExtensionAuthError()
+    },
+    requestApiPermission: async () => true,
+    requestOriginPermission: async () => true,
+    storageGet: async () => ({
+      inboxbridgeExtensionConfig: {
+        serverUrl: 'https://mail.example.com',
+        language: 'pt-PT',
+        theme: 'dark',
+        notifyErrors: true,
+        notifyManualPollSuccess: true,
+        userLanguage: 'en',
+        userThemeMode: 'DARK_BLUE',
+        auth: { ciphertext: 'encrypted', iv: 'iv' }
+      }
+    }),
+    storageRemove: async () => {},
+    storageSet: async (value) => {
+      persistedPayload = value
+    }
+  })
+
+  const config = await store.loadConfig()
+
+  assert.equal(config.token, undefined)
+  assert.equal(config.refreshToken, undefined)
+  assert.equal(config.serverUrl, 'https://mail.example.com')
+  assert.equal(config.notifyErrors, true)
+  assert.equal(config.notifyManualPollSuccess, true)
+  assert.deepEqual(persistedPayload, {
+    inboxbridgeExtensionConfig: {
+      language: 'pt-PT',
+      notifyErrors: true,
+      notifyManualPollSuccess: true,
+      serverUrl: 'https://mail.example.com',
+      theme: 'dark-blue',
+      userLanguage: 'en',
+      userThemeMode: 'DARK_BLUE'
+    }
+  })
 })
 
 test('detectServerUrl prefers the last real InboxBridge browser tab over extension pages', async () => {

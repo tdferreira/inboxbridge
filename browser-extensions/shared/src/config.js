@@ -8,6 +8,7 @@ import {
   storageRemove,
   storageSet
 } from './browser.js'
+import { isInvalidExtensionAuthError } from './auth-errors.js'
 import { refreshExtensionAuth } from './api.js'
 import { LANGUAGE_FOLLOW_USER, normalizeLanguagePreference, normalizeSupportedLanguage } from './i18n.js'
 import { decryptJson, encryptJson } from './secure-store.js'
@@ -128,25 +129,34 @@ export function createConfigStore({
         normalized.notifyManualPollSuccess = notifyManualPollSuccess
         normalized.theme = theme
         await saveConfig(normalized)
-      } catch {
-        await storageSet({
-          [STORAGE_KEY]: {
-            serverUrl: config.serverUrl || '',
-            language,
-            theme,
-            userLanguage: normalizeStoredUserLanguage(config.userLanguage),
-            userThemeMode: normalizeStoredUserThemeMode(config.userThemeMode)
+      } catch (error) {
+        if (!isInvalidExtensionAuthError(error)) {
+          return {
+            ...normalized,
+            refreshErrorMessage: error.message,
+            refreshFailed: true
           }
-        })
-        return {
+        }
+
+        const latest = await loadLatestConfigIfRefreshTokenRotated(normalized.refreshToken)
+        if (latest) {
+          return {
+            ...latest,
+            language,
+            notifyErrors,
+            notifyManualPollSuccess,
+            theme
+          }
+        }
+
+        const nonSensitive = nonSensitiveConfig(config, {
           language,
           notifyErrors,
           notifyManualPollSuccess,
-          serverUrl: config.serverUrl || '',
-          theme,
-          userLanguage: normalizeStoredUserLanguage(config.userLanguage),
-          userThemeMode: normalizeStoredUserThemeMode(config.userThemeMode)
-        }
+          theme
+        })
+        await storageSet({ [STORAGE_KEY]: nonSensitive })
+        return nonSensitive
       }
     }
     return normalized
@@ -314,6 +324,51 @@ export function createConfigStore({
     saveThemePreference,
     saveUserPreferences,
     sessionToConfig: mapSessionToConfig
+  }
+
+  async function loadLatestConfigIfRefreshTokenRotated(attemptedRefreshToken) {
+    try {
+      const latestStored = await storageGet(STORAGE_KEY)
+      const latestConfig = latestStored?.[STORAGE_KEY] || null
+      if (!latestConfig?.auth) {
+        return null
+      }
+      const latestAuth = await decryptJson(latestConfig.auth)
+      if (!latestAuth?.refreshToken || latestAuth.refreshToken === attemptedRefreshToken) {
+        return null
+      }
+      return {
+        accessTokenExpiresAt: latestAuth.accessTokenExpiresAt || null,
+        language: normalizeLanguagePreference(latestConfig.language),
+        notifyErrors: normalizeNotificationSetting(latestConfig.notifyErrors, DEFAULT_NOTIFICATION_SETTINGS.notifyErrors),
+        notifyManualPollSuccess: normalizeNotificationSetting(
+          latestConfig.notifyManualPollSuccess,
+          DEFAULT_NOTIFICATION_SETTINGS.notifyManualPollSuccess
+        ),
+        refreshToken: latestAuth.refreshToken || '',
+        refreshTokenExpiresAt: latestAuth.refreshTokenExpiresAt || null,
+        serverUrl: latestConfig.serverUrl || '',
+        theme: normalizeThemePreference(latestConfig.theme),
+        token: latestAuth.accessToken || '',
+        userLanguage: normalizeStoredUserLanguage(latestConfig.userLanguage),
+        userThemeMode: normalizeStoredUserThemeMode(latestConfig.userThemeMode),
+        username: latestAuth.username || ''
+      }
+    } catch {
+      return null
+    }
+  }
+}
+
+function nonSensitiveConfig(config, preferences) {
+  return {
+    language: preferences.language,
+    notifyErrors: preferences.notifyErrors,
+    notifyManualPollSuccess: preferences.notifyManualPollSuccess,
+    serverUrl: config.serverUrl || '',
+    theme: preferences.theme,
+    userLanguage: normalizeStoredUserLanguage(config.userLanguage),
+    userThemeMode: normalizeStoredUserThemeMode(config.userThemeMode)
   }
 }
 

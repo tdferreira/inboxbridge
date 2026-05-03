@@ -33,7 +33,7 @@ browser-extensions/
 
 ## Current status
 
-- Chromium: implemented manual-install target with direct extension sign-in, rotating refresh tokens, and encrypted local auth storage
+- Chromium: implemented manual-install target with direct extension sign-in, rotating refresh tokens, and encrypted local auth storage. Transient refresh failures keep the encrypted auth bundle and retry later; only an explicit invalid-token response clears the saved sign-in.
 - Firefox: implemented manual-install target with the same shared auth/storage flow and matching optional-permission setup
 - Safari: folder reserved, implementation pending
 - GitHub releases should include packaged Chromium `.zip` and Firefox `.xpi` artifacts in addition to the main backend/admin-ui release archive.

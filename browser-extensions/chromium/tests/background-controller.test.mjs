@@ -329,6 +329,68 @@ test('background controller clears saved auth when a revoked token rejects polli
   })
 })
 
+test('background controller keeps auth when an expired access token follows a transient refresh failure', async () => {
+  let cleared = 0
+  let iconState = null
+  let broadcast = null
+
+  const controller = registerBackgroundController({
+    deps: {
+      applyBadge: async () => {},
+      applyIcon: async (_status, errorState = null) => {
+        iconState = errorState
+      },
+      clearBadge: async () => {},
+      clearConfig: async () => {
+        cleared += 1
+      },
+      createAlarm() {},
+      createContextMenu: async () => {},
+      createNotification: async () => {},
+      fetchStatus: async () => {
+        throw createInvalidExtensionAuthError()
+      },
+      loadCachedStatus: async () => ({ status: null }),
+      loadConfig: async () => ({
+        refreshErrorMessage: 'InboxBridge could not be reached at https://mail.example.com.',
+        refreshFailed: true,
+        refreshToken: 'ibx_refresh',
+        serverUrl: 'https://mail.example.com',
+        token: 'expired-access-token'
+      }),
+      mergeLivePollIntoStatus: (status) => status,
+      onAlarm() {},
+      onContextMenuClicked() {},
+      onInstalled() {},
+      onMessage() {},
+      openOptionsPage: async () => {},
+      removeAllContextMenus: async () => {},
+      runPoll: async () => ({ accepted: false }),
+      saveCachedStatus: async () => {},
+      saveUserPreferences: async () => {},
+      sendMessage: async (message) => {
+        broadcast = message
+      },
+      resolveLanguagePreference: () => 'en',
+      shouldOverlayLiveStatus: () => false,
+      shouldRefreshStatusFromLiveEvent: () => false,
+      subscribeExtensionEvents() {
+        return { close() {}, completed: Promise.resolve() }
+      },
+      translate: (_locale, key, params = {}) => key.replace('{count}', params.count ?? '')
+    }
+  })
+
+  await assert.rejects(() => controller.refreshBadgeFromServer(), /saved InboxBridge sign-in/)
+
+  assert.equal(cleared, 0)
+  assert.deepEqual(iconState, {
+    kind: 'transport',
+    message: 'InboxBridge could not be reached at https://mail.example.com.'
+  })
+  assert.equal(broadcast.errorMessage, 'InboxBridge could not be reached at https://mail.example.com.')
+})
+
 test('background controller registers browser-action context menu entries and can trigger polling', async () => {
   let contextMenuListener
   let messageListener
