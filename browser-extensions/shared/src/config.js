@@ -77,6 +77,7 @@ export function createConfigStore({
   refreshExtensionAuth,
   requestApiPermission,
   requestOriginPermission,
+  sleep = (ms) => new Promise((resolve) => globalThis.setTimeout(resolve, ms)),
   storageGet,
   storageRemove,
   storageSet
@@ -138,7 +139,7 @@ export function createConfigStore({
           }
         }
 
-        const latest = await loadLatestConfigIfRefreshTokenRotated(normalized.refreshToken)
+        const latest = await waitForRotatedRefreshToken(normalized.refreshToken)
         if (latest) {
           return {
             ...latest,
@@ -357,6 +358,21 @@ export function createConfigStore({
     } catch {
       return null
     }
+  }
+
+  async function waitForRotatedRefreshToken(attemptedRefreshToken) {
+    const immediate = await loadLatestConfigIfRefreshTokenRotated(attemptedRefreshToken)
+    if (immediate) {
+      return immediate
+    }
+    for (let attempt = 0; attempt < 2; attempt += 1) {
+      await sleep(150)
+      const latest = await loadLatestConfigIfRefreshTokenRotated(attemptedRefreshToken)
+      if (latest) {
+        return latest
+      }
+    }
+    return null
   }
 }
 

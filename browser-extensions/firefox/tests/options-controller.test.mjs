@@ -46,7 +46,7 @@ test('firefox options controller switches to sign-out mode after loading an auth
       detectServerUrl: async () => null,
       ensureOriginPermission: async () => true,
       fetchStatus: async () => ({ user: { username: 'alice' } }),
-      getBrowserMetadata: () => ({ browserFamily: 'firefox', extensionVersion: '0.1.0', label: 'Firefox browser extension' }),
+      getBrowserMetadata: () => ({ browserFamily: 'firefox', extensionVersion: '0.2.0', label: 'Firefox browser extension' }),
       hideStatus() {},
       localizeOptionsPage() {},
       loadConfig: async () => ({ serverUrl: 'https://mail.example.com', username: 'alice', token: 'access-1' }),
@@ -110,7 +110,7 @@ test('firefox options controller refreshes a stale saved signed-in label during 
           themeMode: 'DARK_BLUE'
         }
       }),
-      getBrowserMetadata: () => ({ browserFamily: 'firefox', extensionVersion: '0.1.0', label: 'Firefox browser extension' }),
+      getBrowserMetadata: () => ({ browserFamily: 'firefox', extensionVersion: '0.2.0', label: 'Firefox browser extension' }),
       hideStatus() {},
       localizeOptionsPage() {},
       loadConfig: async () => ({ serverUrl: 'https://mail.example.com', username: 'InboxBridge', token: 'access-1', theme: 'user', language: 'user' }),
@@ -162,7 +162,7 @@ test('firefox options controller requests tabs permission before detecting the c
       detectServerUrl: async () => 'https://mail.example.com',
       ensureOriginPermission: async () => true,
       fetchStatus: async () => ({ user: { username: 'alice' } }),
-      getBrowserMetadata: () => ({ browserFamily: 'firefox', extensionVersion: '0.1.0', label: 'Firefox browser extension' }),
+      getBrowserMetadata: () => ({ browserFamily: 'firefox', extensionVersion: '0.2.0', label: 'Firefox browser extension' }),
       hideStatus() {},
       localizeOptionsPage() {},
       loadConfig: async () => null,
@@ -214,7 +214,7 @@ test('firefox options controller persists the explicit theme variants', async ()
       detectServerUrl: async () => null,
       ensureOriginPermission: async () => true,
       fetchStatus: async () => ({ user: { username: 'alice' } }),
-      getBrowserMetadata: () => ({ browserFamily: 'firefox', extensionVersion: '0.1.0', label: 'Firefox browser extension' }),
+      getBrowserMetadata: () => ({ browserFamily: 'firefox', extensionVersion: '0.2.0', label: 'Firefox browser extension' }),
       hideStatus() {},
       localizeOptionsPage() {},
       loadConfig: async () => ({ serverUrl: 'https://mail.example.com', theme: 'user', userThemeMode: 'SYSTEM' }),
@@ -284,7 +284,7 @@ test('firefox options controller completes passkey sign-in and clears the passwo
       detectServerUrl: async () => null,
       ensureOriginPermission: async () => true,
       fetchStatus: async () => ({ user: { username: 'alice' } }),
-      getBrowserMetadata: () => ({ browserFamily: 'firefox', extensionVersion: '0.1.0', label: 'Firefox browser extension' }),
+      getBrowserMetadata: () => ({ browserFamily: 'firefox', extensionVersion: '0.2.0', label: 'Firefox browser extension' }),
       hideStatus(target) {
         target.hidden = true
       },
@@ -351,7 +351,7 @@ test('firefox options controller completes passkey sign-in and clears the passwo
   assert.equal(elements.passwordInput.value, '')
   assert.deepEqual(browserSignInPayload, {
     browserFamily: 'firefox',
-    extensionVersion: '0.1.0',
+    extensionVersion: '0.2.0',
     label: 'Firefox browser extension',
     serverUrl: 'https://mail.example.com'
   })
@@ -376,7 +376,7 @@ test('firefox options controller prefers the account username over display name 
           displayName: 'InboxBridge'
         }
       }),
-      getBrowserMetadata: () => ({ browserFamily: 'firefox', extensionVersion: '0.1.0', label: 'Firefox browser extension' }),
+      getBrowserMetadata: () => ({ browserFamily: 'firefox', extensionVersion: '0.2.0', label: 'Firefox browser extension' }),
       hideStatus() {},
       localizeOptionsPage() {},
       loadConfig: async () => ({ serverUrl: 'https://mail.example.com', username: 'admin', token: 'access-1' }),
@@ -433,7 +433,7 @@ test('firefox options controller requests origin permission for the canonical pu
         return true
       },
       fetchStatus: async () => ({ user: { username: 'alice' } }),
-      getBrowserMetadata: () => ({ browserFamily: 'firefox', extensionVersion: '0.1.0', label: 'Firefox browser extension' }),
+      getBrowserMetadata: () => ({ browserFamily: 'firefox', extensionVersion: '0.2.0', label: 'Firefox browser extension' }),
       hideStatus() {},
       localizeOptionsPage() {},
       loadConfig: async () => null,
@@ -507,7 +507,7 @@ test('firefox options controller marks required sign-in fields invalid when they
       detectServerUrl: async () => null,
       ensureOriginPermission: async () => true,
       fetchStatus: async () => ({ user: { username: 'alice' } }),
-      getBrowserMetadata: () => ({ browserFamily: 'firefox', extensionVersion: '0.1.0', label: 'Firefox browser extension' }),
+      getBrowserMetadata: () => ({ browserFamily: 'firefox', extensionVersion: '0.2.0', label: 'Firefox browser extension' }),
       hideStatus(target) {
         target.hidden = true
       },

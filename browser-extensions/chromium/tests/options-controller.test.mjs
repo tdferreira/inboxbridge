@@ -51,7 +51,7 @@ test('options controller initializes saved config and signs in with rotated exte
       detectServerUrl: async () => null,
       ensureOriginPermission: async () => true,
       fetchStatus: async () => ({ user: { username: 'alice' } }),
-      getBrowserMetadata: () => ({ browserFamily: 'chromium', extensionVersion: '0.1.0', label: 'Chromium browser extension' }),
+      getBrowserMetadata: () => ({ browserFamily: 'chromium', extensionVersion: '0.2.0', label: 'Chromium browser extension' }),
       hideStatus(target) {
         target.hidden = true
       },
@@ -193,7 +193,7 @@ test('options controller completes the passkey flow when InboxBridge requires it
       detectServerUrl: async () => null,
       ensureOriginPermission: async () => true,
       fetchStatus: async () => ({ user: { username: 'alice' } }),
-      getBrowserMetadata: () => ({ browserFamily: 'firefox', extensionVersion: '0.1.0', label: 'Firefox browser extension' }),
+      getBrowserMetadata: () => ({ browserFamily: 'firefox', extensionVersion: '0.2.0', label: 'Firefox browser extension' }),
       hideStatus() {},
       localizeOptionsPage() {},
       loadConfig: async () => null,
@@ -237,7 +237,7 @@ test('options controller completes the passkey flow when InboxBridge requires it
 
   assert.deepEqual(browserSignInPayload, {
     browserFamily: 'firefox',
-    extensionVersion: '0.1.0',
+    extensionVersion: '0.2.0',
     label: 'Firefox browser extension',
     serverUrl: 'https://mail.example.com'
   })
@@ -262,7 +262,7 @@ test('options controller shows the canonical username instead of the display nam
           displayName: 'InboxBridge'
         }
       }),
-      getBrowserMetadata: () => ({ browserFamily: 'chromium', extensionVersion: '0.1.0', label: 'Chromium browser extension' }),
+      getBrowserMetadata: () => ({ browserFamily: 'chromium', extensionVersion: '0.2.0', label: 'Chromium browser extension' }),
       hideStatus() {},
       localizeOptionsPage() {},
       loadConfig: async () => ({ serverUrl: 'https://mail.example.com', username: 'admin', token: 'access-1' }),
@@ -300,6 +300,101 @@ test('options controller shows the canonical username instead of the display nam
   assert.equal(elements.statusBanner.textContent, 'Connected as admin.')
 })
 
+test('options controller reuses a newer rotated token instead of clearing auth after a stale 401', async () => {
+  const elements = createOptionsElements()
+  let cleared = 0
+  let loadCount = 0
+  const messages = []
+  let fetchAttempts = 0
+  const controller = createOptionsController({
+    deps: {
+      applyThemePreference() {},
+      clearConfig: async () => {
+        cleared += 1
+      },
+      completeBrowserSignIn: async () => {
+        throw new Error('browser sign-in should not be called')
+      },
+      ensureNotificationPermission: async () => true,
+      ensureTabPermission: async () => true,
+      detectServerUrl: async () => null,
+      ensureOriginPermission: async () => true,
+      fetchStatus: async (_serverUrl, token) => {
+        fetchAttempts += 1
+        if (fetchAttempts === 1) {
+          assert.equal(token, 'access-stale')
+          throw createInvalidExtensionAuthError()
+        }
+        assert.equal(token, 'access-fresh')
+        return {
+          user: {
+            username: 'admin',
+            displayName: 'InboxBridge'
+          }
+        }
+      },
+      getBrowserMetadata: () => ({ browserFamily: 'chromium', extensionVersion: '0.2.0', label: 'Chromium browser extension' }),
+      hideStatus() {},
+      localizeOptionsPage() {},
+      loadConfig: async () => {
+        loadCount += 1
+        if (loadCount === 1) {
+          return {
+            language: 'user',
+            refreshToken: 'refresh-stale',
+            serverUrl: 'https://mail.example.com',
+            theme: 'user',
+            token: 'access-stale',
+            username: 'admin'
+          }
+        }
+        return {
+          language: 'user',
+          refreshToken: 'refresh-fresh',
+          serverUrl: 'https://mail.example.com',
+          theme: 'user',
+          token: 'access-fresh',
+          username: 'admin'
+        }
+      },
+      loginExtension: async () => null,
+      normalizeServerUrl: (value) => value.trim(),
+      resolveLanguagePreference: () => 'en',
+      saveConfig: async () => {},
+      saveLanguagePreference: async () => {},
+      saveNotificationPreferences: async () => {},
+      saveThemePreference: async () => {},
+      saveUserPreferences: async () => {},
+      sendMessage: async (message) => {
+        messages.push(message)
+      },
+      sessionToConfig: () => null,
+      showStatus(target, tone, text) {
+        target.hidden = false
+        target.className = `status-banner ${tone}`
+        target.textContent = text
+      },
+      translate: (_locale, key, params = {}) => {
+        if (key === 'settings.signOut') return 'Sign out'
+        if (key === 'settings.signedInAs') return `Logged in as ${params.username}.`
+        if (key === 'status.connectedAs') return `Connected as ${params.username}.`
+        return key
+      },
+      targetDocument: {}
+    },
+    elements
+  })
+
+  controller.bind()
+  await controller.initialize()
+  await elements.testButton.click()
+
+  assert.equal(cleared, 0)
+  assert.equal(elements.authSummaryText.textContent, 'Logged in as admin.')
+  assert.equal(elements.statusBanner.textContent, 'Connected as admin.')
+  assert.deepEqual(messages, [])
+})
+
 test('options controller refreshes a stale saved signed-in label during initialization', async () => {
   const elements = createOptionsElements()
   let savedConfig = null
@@ -322,7 +417,7 @@ test('options controller refreshes a stale saved signed-in label during initiali
           themeMode: 'DARK_BLUE'
         }
       }),
-      getBrowserMetadata: () => ({ browserFamily: 'chromium', extensionVersion: '0.1.0', label: 'Chromium browser extension' }),
+      getBrowserMetadata: () => ({ browserFamily: 'chromium', extensionVersion: '0.2.0', label: 'Chromium browser extension' }),
       hideStatus() {},
       localizeOptionsPage() {},
       loadConfig: async () => ({ serverUrl: 'https://mail.example.com', username: 'InboxBridge', token: 'access-1', theme: 'user', language: 'user' }),
@@ -375,7 +470,7 @@ test('options controller requests origin permission for the canonical public URL
         return true
       },
       fetchStatus: async () => ({ user: { username: 'alice' } }),
-      getBrowserMetadata: () => ({ browserFamily: 'chromium', extensionVersion: '0.1.0', label: 'Chromium browser extension' }),
+      getBrowserMetadata: () => ({ browserFamily: 'chromium', extensionVersion: '0.2.0', label: 'Chromium browser extension' }),
       hideStatus() {},
       localizeOptionsPage() {},
       loadConfig: async () => null,
@@ -449,7 +544,7 @@ test('options controller marks required sign-in fields invalid when they are mis
       detectServerUrl: async () => null,
       ensureOriginPermission: async () => true,
       fetchStatus: async () => ({ user: { username: 'alice' } }),
-      getBrowserMetadata: () => ({ browserFamily: 'chromium', extensionVersion: '0.1.0', label: 'Chromium browser extension' }),
+      getBrowserMetadata: () => ({ browserFamily: 'chromium', extensionVersion: '0.2.0', label: 'Chromium browser extension' }),
       hideStatus(target) {
         target.hidden = true
       },
@@ -517,7 +612,7 @@ test('options controller signs out from the primary action and unlocks the conne
       detectServerUrl: async () => null,
       ensureOriginPermission: async () => true,
       fetchStatus: async () => ({ user: { username: 'alice' } }),
-      getBrowserMetadata: () => ({ browserFamily: 'chromium', extensionVersion: '0.1.0', label: 'Chromium browser extension' }),
+      getBrowserMetadata: () => ({ browserFamily: 'chromium', extensionVersion: '0.2.0', label: 'Chromium browser extension' }),
       hideStatus() {},
       localizeOptionsPage() {},
       loadConfig: async () => ({ serverUrl: 'https://mail.example.com', username: 'alice', token: 'access-1' }),
@@ -594,7 +689,7 @@ test('options controller clears config and refreshes badge from cache', async ()
       detectServerUrl: async () => null,
       ensureOriginPermission: async () => true,
       fetchStatus: async () => ({ user: { username: 'alice' } }),
-      getBrowserMetadata: () => ({ browserFamily: 'chromium', extensionVersion: '0.1.0', label: 'Chromium browser extension' }),
+      getBrowserMetadata: () => ({ browserFamily: 'chromium', extensionVersion: '0.2.0', label: 'Chromium browser extension' }),
       hideStatus() {},
       localizeOptionsPage() {},
       loadConfig: async () => null,
@@ -648,7 +743,7 @@ test('options controller requests tabs permission before reading the active tab 
       detectServerUrl: async () => 'https://mail.example.com',
       ensureOriginPermission: async () => true,
       fetchStatus: async () => ({ user: { username: 'alice' } }),
-      getBrowserMetadata: () => ({ browserFamily: 'chromium', extensionVersion: '0.1.0', label: 'Chromium browser extension' }),
+      getBrowserMetadata: () => ({ browserFamily: 'chromium', extensionVersion: '0.2.0', label: 'Chromium browser extension' }),
       hideStatus() {},
       localizeOptionsPage() {},
       loadConfig: async () => null,
@@ -706,7 +801,7 @@ test('options controller requests notification permission before enabling browse
       detectServerUrl: async () => null,
       ensureOriginPermission: async () => true,
       fetchStatus: async () => ({ user: { username: 'alice' } }),
-      getBrowserMetadata: () => ({ browserFamily: 'chromium', extensionVersion: '0.1.0', label: 'Chromium browser extension' }),
+      getBrowserMetadata: () => ({ browserFamily: 'chromium', extensionVersion: '0.2.0', label: 'Chromium browser extension' }),
       hideStatus() {},
       localizeOptionsPage() {},
       loadConfig: async () => null,
@@ -761,7 +856,7 @@ test('options controller refreshes background context menus when the language ch
       detectServerUrl: async () => null,
       ensureOriginPermission: async () => true,
       fetchStatus: async () => ({ user: { username: 'alice' } }),
-      getBrowserMetadata: () => ({ browserFamily: 'chromium', extensionVersion: '0.1.0', label: 'Chromium browser extension' }),
+      getBrowserMetadata: () => ({ browserFamily: 'chromium', extensionVersion: '0.2.0', label: 'Chromium browser extension' }),
       hideStatus() {},
       localizeOptionsPage() {},
       loadConfig: async () => ({ language: 'user' }),
@@ -816,7 +911,7 @@ test('options controller explains when tabs permission is denied', async () => {
       detectServerUrl: async () => 'https://mail.example.com',
       ensureOriginPermission: async () => true,
       fetchStatus: async () => ({ user: { username: 'alice' } }),
-      getBrowserMetadata: () => ({ browserFamily: 'chromium', extensionVersion: '0.1.0', label: 'Chromium browser extension' }),
+      getBrowserMetadata: () => ({ browserFamily: 'chromium', extensionVersion: '0.2.0', label: 'Chromium browser extension' }),
       hideStatus() {},
       localizeOptionsPage() {},
       loadConfig: async () => null,
@@ -869,7 +964,7 @@ test('options controller persists the selected theme immediately', async () => {
       detectServerUrl: async () => null,
       ensureOriginPermission: async () => true,
       fetchStatus: async () => ({ user: { username: 'alice' } }),
-      getBrowserMetadata: () => ({ browserFamily: 'chromium', extensionVersion: '0.1.0', label: 'Chromium browser extension' }),
+      getBrowserMetadata: () => ({ browserFamily: 'chromium', extensionVersion: '0.2.0', label: 'Chromium browser extension' }),
       hideStatus() {},
       localizeOptionsPage() {},
       loadConfig: async () => ({ serverUrl: 'https://mail.example.com', theme: 'user', userThemeMode: 'SYSTEM' }),

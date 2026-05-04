@@ -221,6 +221,86 @@ test('loadConfig keeps newer rotated auth when an older concurrent refresh is re
   assert.equal(persistedPayload, null)
 })
 
+test('loadConfig waits briefly for a concurrently rotated token before clearing auth', async () => {
+  let persistedPayload = null
+  let sleepCalls = 0
+  let storageReads = 0
+  const store = createConfigStore({
+    containsApiPermission: async () => false,
+    containsOriginPermission: async () => true,
+    currentTime: () => new Date('2026-04-12T10:00:00Z').getTime(),
+    decryptJson: async (auth) => {
+      if (auth?.ciphertext === 'encrypted-fresh') {
+        return {
+          accessToken: 'access-2',
+          accessTokenExpiresAt: '2026-04-12T11:00:00Z',
+          refreshToken: 'refresh-2',
+          refreshTokenExpiresAt: '2026-05-12T11:00:00Z',
+          username: 'alice'
+        }
+      }
+      return {
+        accessToken: 'access-1',
+        accessTokenExpiresAt: '2026-04-12T10:00:30Z',
+        refreshToken: 'refresh-1',
+        refreshTokenExpiresAt: '2026-05-12T10:00:00Z',
+        username: 'alice'
+      }
+    },
+    encryptJson: async (value) => ({ ciphertext: JSON.stringify(value), iv: 'iv' }),
+    queryTabs: async () => [],
+    refreshExtensionAuth: async () => {
+      throw createInvalidExtensionAuthError()
+    },
+    requestApiPermission: async () => true,
+    requestOriginPermission: async () => true,
+    sleep: async () => {
+      sleepCalls += 1
+    },
+    storageGet: async () => {
+      storageReads += 1
+      if (storageReads <= 2) {
+        return {
+          inboxbridgeExtensionConfig: {
+            serverUrl: 'https://mail.example.com',
+            language: 'pt-PT',
+            theme: 'dark',
+            notifyErrors: true,
+            notifyManualPollSuccess: true,
+            userLanguage: 'en',
+            userThemeMode: 'DARK_BLUE',
+            auth: { ciphertext: 'encrypted', iv: 'iv' }
+          }
+        }
+      }
+      return {
+        inboxbridgeExtensionConfig: {
+          serverUrl: 'https://mail.example.com',
+          language: 'pt-PT',
+          theme: 'dark',
+          notifyErrors: true,
+          notifyManualPollSuccess: true,
+          userLanguage: 'en',
+          userThemeMode: 'DARK_BLUE',
+          auth: { ciphertext: 'encrypted-fresh', iv: 'iv-fresh' }
+        }
+      }
+    },
+    storageRemove: async () => {},
+    storageSet: async (value) => {
+      persistedPayload = value
+    }
+  })
+
+  const config = await store.loadConfig()
+
+  assert.equal(config.token, 'access-2')
+  assert.equal(config.refreshToken, 'refresh-2')
+  assert.equal(config.username, 'alice')
+  assert.equal(sleepCalls, 1)
+  assert.equal(persistedPayload, null)
+})
+
 test('loadConfig clears auth only when refresh is rejected and no newer token exists', async () => {
   let persistedPayload = null
   const store = createConfigStore({

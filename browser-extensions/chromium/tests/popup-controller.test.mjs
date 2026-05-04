@@ -417,3 +417,99 @@ test('popup controller clears saved auth and shows sign-in state after a revoked
     { type: 'refresh-context-menus' }
   ])
 })
+
+test('popup controller reuses a newer rotated token instead of clearing auth after a stale 401', async () => {
+  const elements = createPopupElements()
+  let cleared = 0
+  let loadCount = 0
+  let fetchAttempts = 0
+  const messages = []
+  const controller = createPopupController({
+    deps: {
+      applyThemePreference() {},
+      clearConfig: async () => {
+        cleared += 1
+      },
+      clearStatusBanner() {},
+      deriveStatusView(_serverUrl, status) {
+        return {
+          attentionCount: '',
+          connectionCopy: `Connected to ${status.user.username}`,
+          errorSources: [],
+          healthy: true,
+          metrics: { imported: '0', fetched: '0', duplicates: '0', errors: '0' },
+          runPollDisabled: false,
+          statusLabel: 'Healthy',
+          statusTone: 'success',
+          updatedText: 'just now'
+        }
+      },
+      disconnectedView(message) {
+        return {
+          attentionCount: '',
+          connectionCopy: message,
+          errorSources: [],
+          healthy: true,
+          metrics: { imported: '-', fetched: '-', duplicates: '-', errors: '-' },
+          runPollDisabled: true,
+          statusLabel: 'Disconnected',
+          statusTone: 'neutral',
+          updatedText: 'No InboxBridge status available'
+        }
+      },
+      escapeHtml(value) {
+        return value
+      },
+      fetchStatus: async (_serverUrl, token) => {
+        fetchAttempts += 1
+        if (fetchAttempts === 1) {
+          assert.equal(token, 'access-stale')
+          throw createInvalidExtensionAuthError()
+        }
+        assert.equal(token, 'access-fresh')
+        return { user: { username: 'alice' } }
+      },
+      localizePopupPage() {},
+      loadConfig: async () => {
+        loadCount += 1
+        if (loadCount === 1) {
+          return {
+            refreshToken: 'refresh-stale',
+            serverUrl: 'https://mail.example.com',
+            token: 'access-stale'
+          }
+        }
+        return {
+          refreshToken: 'refresh-fresh',
+          serverUrl: 'https://mail.example.com',
+          token: 'access-fresh'
+        }
+      },
+      onMessage() {},
+      openOptionsPage: async () => {},
+      openTab: async () => {},
+      resolveLanguagePreference: () => 'en',
+      runPoll: async () => ({ accepted: true, started: true }),
+      saveUserPreferences: async () => {},
+      sendMessage: async (message) => {
+        messages.push(message)
+      },
+      showStatusBanner() {},
+      targetDocument: {},
+      translate: (_locale, key) => {
+        if (key === 'popup.signIn') return 'Sign in'
+        if (key === 'popup.runPoll') return 'Run poll now'
+        return key
+      }
+    },
+    elements
+  })
+
+  controller.initialize()
+  await controller.refreshPopup()
+
+  assert.equal(cleared, 0)
+  assert.equal(elements.runPollButton.textContent, 'Run poll now')
+  assert.equal(elements.connectionCopy.textContent, 'Connected to alice')
+  assert.deepEqual(messages, [{ type: 'refresh-status' }])
+})

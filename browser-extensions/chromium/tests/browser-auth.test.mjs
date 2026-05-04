@@ -54,7 +54,7 @@ test('browser auth opens the InboxBridge page and redeems the completed session'
   let redeemAttempts = 0
   const session = await completeBrowserSignIn({
     browserFamily: 'chromium',
-    extensionVersion: '0.1.0',
+    extensionVersion: '0.2.0',
     label: 'Chromium browser extension',
     openWindow: async (url) => {
       openedUrl = url

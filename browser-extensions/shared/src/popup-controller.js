@@ -83,6 +83,28 @@ export function createPopupController({
     applyThemePreference?.(targetDocument, currentConfig.theme || 'user', currentConfig.userThemeMode || 'SYSTEM')
   }
 
+  async function recoverRotatedConfig(config) {
+    const latest = await loadConfig().catch(() => null)
+    if (!latest?.serverUrl || !latest?.token) {
+      return null
+    }
+    if (latest.serverUrl !== config?.serverUrl) {
+      return null
+    }
+    const tokenRotated = latest.token && latest.token !== config?.token
+    const refreshRotated = latest.refreshToken && latest.refreshToken !== config?.refreshToken
+    if (!tokenRotated && !refreshRotated) {
+      return null
+    }
+    return {
+      ...latest,
+      language: config?.language ?? latest.language,
+      theme: config?.theme ?? latest.theme,
+      userLanguage: config?.userLanguage ?? latest.userLanguage,
+      userThemeMode: config?.userThemeMode ?? latest.userThemeMode
+    }
+  }
+
   async function refreshPopup({ preserveBanner = false, showFeedback = false } = {}) {
     if (showFeedback) {
       return withBusy(refreshStatusButton, t('status.refreshing'), async () => {
@@ -99,7 +121,7 @@ export function createPopupController({
       if (!preserveBanner) {
         clearStatusBanner(popupStatus)
       }
-      const config = await loadConfig()
+      let config = await loadConfig()
       applyConfigState(config)
       if (!config?.serverUrl || !config?.token) {
         setPrimaryAction('signin')
@@ -110,7 +132,27 @@ export function createPopupController({
         return
       }
       setPrimaryAction('poll')
-      const status = await fetchStatus(config.serverUrl, config.token)
+      let status
+      for (let attempt = 0; attempt < 2; attempt += 1) {
+        try {
+          status = await fetchStatus(config.serverUrl, config.token)
+          break
+        } catch (error) {
+          if (!isInvalidExtensionAuthError(error)) {
+            throw error
+          }
+          if (attempt === 0) {
+            const recovered = await recoverRotatedConfig(config)
+            if (recovered) {
+              config = recovered
+              applyConfigState(recovered)
+              continue
+            }
+          }
+          await handleInvalidAuth(error)
+          return
+        }
+      }
       await saveUserPreferences?.(status.user)
       applyConfigState({
         ...config,
@@ -157,14 +199,25 @@ export function createPopupController({
       }
       await sendMessage({ type: 'manual-poll-triggered', serverUrl: config.serverUrl })
       let result
-      try {
-        result = await runPoll(config.serverUrl, config.token)
-      } catch (error) {
-        if (isInvalidExtensionAuthError(error)) {
+      for (let attempt = 0; attempt < 2; attempt += 1) {
+        try {
+          result = await runPoll(config.serverUrl, config.token)
+          break
+        } catch (error) {
+          if (!isInvalidExtensionAuthError(error)) {
+            throw error
+          }
+          if (attempt === 0) {
+            const recovered = await recoverRotatedConfig(config)
+            if (recovered) {
+              config = recovered
+              applyConfigState(recovered)
+              continue
+            }
+          }
           await handleInvalidAuth(error)
           return
         }
-        throw error
       }
       if (!result.accepted || !result.started) {
         showStatusBanner(popupStatus, 'warning', result.message || 'InboxBridge could not start a poll right now.')

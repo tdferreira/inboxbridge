@@ -179,7 +179,29 @@ export function createOptionsController({
     syncAuthenticationUi(currentConfig)
   }
 
-  async function refreshSignedInIdentity(config) {
+  async function recoverRotatedConfig(config) {
+    const latest = await loadConfig().catch(() => null)
+    if (!latest?.serverUrl || !latest?.token) {
+      return null
+    }
+    if (latest.serverUrl !== config?.serverUrl) {
+      return null
+    }
+    const tokenRotated = latest.token && latest.token !== config?.token
+    const refreshRotated = latest.refreshToken && latest.refreshToken !== config?.refreshToken
+    if (!tokenRotated && !refreshRotated) {
+      return null
+    }
+    return {
+      ...latest,
+      language: config?.language ?? latest.language,
+      notifyErrors: config?.notifyErrors ?? latest.notifyErrors,
+      notifyManualPollSuccess: config?.notifyManualPollSuccess ?? latest.notifyManualPollSuccess,
+      theme: config?.theme ?? latest.theme
+    }
+  }
+
+  async function refreshSignedInIdentity(config, allowRecovery = true) {
     if (!config?.serverUrl || !config?.token) {
       return
     }
@@ -204,6 +226,13 @@ export function createOptionsController({
       }
       if (!isInvalidExtensionAuthError(error)) {
         return
+      }
+      if (allowRecovery) {
+        const recovered = await recoverRotatedConfig(config)
+        if (recovered) {
+          applyConfigState(recovered)
+          return refreshSignedInIdentity(recovered, false)
+        }
       }
       await clearConfig()
       applyConfigState({
@@ -321,15 +350,34 @@ export function createOptionsController({
 
   async function testConnection() {
     await withBusy(testButton, async () => {
-      const config = await loadConfig()
-      if (!config?.serverUrl || !config?.token) {
+      const initialConfig = await loadConfig()
+      if (!initialConfig?.serverUrl || !initialConfig?.token) {
         throw new Error(t('status.signInFirst'))
       }
+      let config = initialConfig
       let status
-      try {
-        status = await fetchStatus(config.serverUrl, config.token)
-      } catch (error) {
-        if (isInvalidExtensionAuthError(error)) {
+      for (let attempt = 0; attempt < 2; attempt += 1) {
+        try {
+          status = await fetchStatus(config.serverUrl, config.token)
+          break
+        } catch (error) {
+          if (!isInvalidExtensionAuthError(error)) {
+            throw error
+          }
+          if (attempt === 0) {
+            const recovered = await recoverRotatedConfig({
+              ...config,
+              language: currentConfig.language,
+              notifyErrors: currentConfig.notifyErrors,
+              notifyManualPollSuccess: currentConfig.notifyManualPollSuccess,
+              theme: currentConfig.theme
+            })
+            if (recovered) {
+              config = recovered
+              applyConfigState(recovered)
+              continue
+            }
+          }
           await clearConfig()
           passwordInput.value = ''
           clearRequiredFieldErrors()
@@ -347,8 +395,8 @@ export function createOptionsController({
           })
           await sendMessage({ type: 'refresh-status' })
           await sendMessage({ type: 'refresh-context-menus' })
+          throw error
         }
-        throw error
       }
       await saveUserPreferences?.(status.user)
       applyConfigState({
