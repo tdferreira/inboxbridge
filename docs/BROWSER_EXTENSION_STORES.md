@@ -8,6 +8,8 @@ The release workflow always:
 - builds and packages the Chromium extension as a `.zip`
 - builds and packages the Firefox extension as an `.xpi`
 - uploads those artifacts to the GitHub release alongside the backend and admin UI bundle
+- writes a release-notes section that explains what each published artifact is and links to the matching installation/setup docs at the released tag
+- keeps the release-specific commit history visible by including the generated GitHub changelog plus an explicit compare/changelog link
 
 When the corresponding GitHub secrets are configured, the same workflow also
 submits extension updates to:
@@ -103,10 +105,35 @@ release workflow:
 
 1. Builds backend, admin UI, Chromium extension, and Firefox extension.
 2. Uploads the packaged artifacts to the GitHub release.
-3. If Chrome secrets are present, uploads and publishes the Chromium package to Chrome Web Store.
-4. If Edge secrets are present, uploads the Chromium package to Edge Add-ons and submits the draft.
-5. If Firefox secrets are present, submits the Firefox package to AMO with `web-ext sign`.
-6. Writes a short store-submission summary to the GitHub Actions job summary.
+3. Publishes a release-notes `Install And Artifacts` section that maps the backend/admin bundle, checksum, Chromium package, and Firefox package to their install/setup docs for that exact tag.
+4. Keeps the release-specific commit history visible by linking directly to the compare/changelog view and appending GitHub's generated release notes body.
+5. If Chrome secrets are present, uploads and publishes the Chromium package to Chrome Web Store.
+6. If Edge secrets are present, uploads the Chromium package to Edge Add-ons and submits the draft.
+7. If Firefox secrets are present, submits the Firefox package to AMO with `web-ext sign`.
+8. Writes a short store-submission summary to the GitHub Actions job summary.
+
+## Release-note documentation approach
+
+GitHub Release pages should stay short and navigational instead of duplicating
+the full install guide in every version.
+
+Current policy:
+
+- the release page explains what each artifact is for
+- the release page links to stable install/setup docs inside the repository at
+  the exact released tag
+- the release page preserves the release-specific commit history, either inline
+  through generated notes or at minimum through an explicit compare/changelog link
+- the full operational instructions stay in the docs themselves so fixes and
+  clarifications happen in one canonical place
+
+The current release notes link to:
+
+- `README.md` for the high-level quick start
+- `docs/SETUP.md` for the self-hosted install and upgrade path
+- `docs/OAUTH_SETUP.md` and `docs/TRUST_LOCAL_CA.md` for common operator setup follow-ups
+- `browser-extensions/README.md`, `browser-extensions/chromium/README.md`, and `browser-extensions/firefox/README.md` for extension installation
+- this document for browser-store submission behavior
 
 ## Current package mapping
 

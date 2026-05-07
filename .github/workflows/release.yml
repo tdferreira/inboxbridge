@@ -27,6 +27,7 @@ jobs:
         run: |
           TAG_NAME="${{ github.event_name == 'workflow_dispatch' && inputs.tag_name || github.ref_name }}"
           echo "tag_name=${TAG_NAME}" >> "$GITHUB_OUTPUT"
+          echo "docs_base_url=https://github.com/${{ github.repository }}/blob/${TAG_NAME}" >> "$GITHUB_OUTPUT"
 
       - name: Set up Java
         uses: actions/setup-java@v5
@@ -84,11 +85,84 @@ jobs:
           cd ..
           sha256sum "inboxbridge-${TAG_NAME}.zip" > "inboxbridge-${TAG_NAME}.sha256"
 
+      - name: Refresh packaged artifact metadata
+        id: packaged_artifacts
+        run: |
+          TAG_NAME="${{ steps.release_meta.outputs.tag_name }}"
+          echo "release_bundle=inboxbridge-${TAG_NAME}.zip" >> "$GITHUB_OUTPUT"
+          echo "release_checksum=inboxbridge-${TAG_NAME}.sha256" >> "$GITHUB_OUTPUT"
+          echo "chrome_package=$(find browser-extensions/chromium/dist/packages -maxdepth 1 -type f -name '*.zip' | head -n 1)" >> "$GITHUB_OUTPUT"
+          echo "firefox_package=$(find browser-extensions/firefox/dist/packages -maxdepth 1 -type f -name '*.xpi' | head -n 1)" >> "$GITHUB_OUTPUT"
+
+      - name: Generate release notes
+        id: release_notes
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          TAG_NAME="${{ steps.release_meta.outputs.tag_name }}"
+          DOCS_BASE_URL="${{ steps.release_meta.outputs.docs_base_url }}"
+          RELEASE_BUNDLE="${{ steps.packaged_artifacts.outputs.release_bundle }}"
+          RELEASE_CHECKSUM="${{ steps.packaged_artifacts.outputs.release_checksum }}"
+          CHROME_PACKAGE="${{ steps.packaged_artifacts.outputs.chrome_package }}"
+          FIREFOX_PACKAGE="${{ steps.packaged_artifacts.outputs.firefox_package }}"
+          CHROME_FILENAME="$(basename "${CHROME_PACKAGE}")"
+          FIREFOX_FILENAME="$(basename "${FIREFOX_PACKAGE}")"
+
+          gh api \
+            --method POST \
+            -H "Accept: application/vnd.github+json" \
+            "/repos/${{ github.repository }}/releases/generate-notes" \
+            -f tag_name="${TAG_NAME}" \
+            > generated-release-notes.json
+
+          jq -r '.body' generated-release-notes.json > generated-release-notes-body.md
+          CHANGELOG_URL="$(grep -Eo 'https://github.com/[^ )]+/compare/[^ )]+' generated-release-notes-body.md | tail -n 1 || true)"
+
+          cat > release-notes.md <<EOF
+          ## Install And Artifacts
+
+          ### Main InboxBridge bundle
+
+          - \`${RELEASE_BUNDLE}\`: full self-hosted release bundle with the backend runtime, admin UI build, Docker Compose files, and the bundled documentation set.
+          - \`${RELEASE_CHECKSUM}\`: SHA-256 checksum file for verifying the main release archive before unpacking.
+
+          Install and upgrade documentation:
+
+          - [Project overview and quick start](${DOCS_BASE_URL}/README.md)
+          - [Full setup and upgrade path](${DOCS_BASE_URL}/docs/SETUP.md)
+          - [OAuth provider setup](${DOCS_BASE_URL}/docs/OAUTH_SETUP.md)
+          - [Trust the local CA / HTTPS setup](${DOCS_BASE_URL}/docs/TRUST_LOCAL_CA.md)
+
+          ### Browser extensions
+
+          - \`${CHROME_FILENAME}\`: packaged Chromium extension for Chrome, Edge, and other Chromium-based browsers.
+          - \`${FIREFOX_FILENAME}\`: packaged Firefox extension artifact for manual installation or AMO signing/submission flows.
+
+          Extension installation and packaging documentation:
+
+          - [Browser extensions overview](${DOCS_BASE_URL}/browser-extensions/README.md)
+          - [Chromium extension install and setup](${DOCS_BASE_URL}/browser-extensions/chromium/README.md)
+          - [Firefox extension install and setup](${DOCS_BASE_URL}/browser-extensions/firefox/README.md)
+          - [Browser store release workflow](${DOCS_BASE_URL}/docs/BROWSER_EXTENSION_STORES.md)
+
+          ## Commit History
+
+          - [View the full commit history and changelog for this release](${CHANGELOG_URL})
+
+          ---
+
+          EOF
+
+          cat generated-release-notes-body.md >> release-notes.md
+          echo "notes_file=release-notes.md" >> "$GITHUB_OUTPUT"
+
       - name: Publish GitHub release
         env:
           GITHUB_TOKEN: ${{ github.token }}
         run: |
           TAG_NAME="${{ steps.release_meta.outputs.tag_name }}"
+          NOTES_FILE="${{ steps.release_notes.outputs.notes_file }}"
           if gh release view "${TAG_NAME}" >/dev/null 2>&1; then
             gh release upload "${TAG_NAME}" \
               "inboxbridge-${TAG_NAME}.zip" \
@@ -96,21 +170,18 @@ jobs:
               browser-extensions/chromium/dist/packages/*.zip \
               browser-extensions/firefox/dist/packages/*.xpi \
               --clobber
+            gh release edit "${TAG_NAME}" \
+              --title "${TAG_NAME}" \
+              --notes-file "${NOTES_FILE}"
           else
             gh release create "${TAG_NAME}" \
               "inboxbridge-${TAG_NAME}.zip" \
               "inboxbridge-${TAG_NAME}.sha256" \
               browser-extensions/chromium/dist/packages/*.zip \
               browser-extensions/firefox/dist/packages/*.xpi \
-              --generate-notes \
-              --title "${TAG_NAME}"
+              --title "${TAG_NAME}" \
+              --notes-file "${NOTES_FILE}"
           fi
-
-      - name: Refresh packaged artifact metadata
-        id: packaged_artifacts
-        run: |
-          echo "chrome_package=$(find browser-extensions/chromium/dist/packages -maxdepth 1 -type f -name '*.zip' | head -n 1)" >> "$GITHUB_OUTPUT"
-          echo "firefox_package=$(find browser-extensions/firefox/dist/packages -maxdepth 1 -type f -name '*.xpi' | head -n 1)" >> "$GITHUB_OUTPUT"
 
       - name: Resolve optional store submission flags
         id: store_flags
