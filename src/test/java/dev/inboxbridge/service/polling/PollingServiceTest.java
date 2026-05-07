@@ -1583,10 +1583,20 @@ class PollingServiceTest {
         }
 
         @Override
+        public List<RuntimeEmailAccount> listEnabledForManualPolling() {
+            return emailAccounts;
+        }
+
+        @Override
         public List<RuntimeEmailAccount> listEnabledForUser(dev.inboxbridge.persistence.AppUser actor) {
             return emailAccounts.stream()
                     .filter(emailAccount -> actor != null && actor.id != null && actor.id.equals(emailAccount.ownerUserId()))
                     .toList();
+        }
+
+        @Override
+        public List<RuntimeEmailAccount> listEnabledForUserManualPolling(dev.inboxbridge.persistence.AppUser actor) {
+            return listEnabledForUser(actor);
         }
     }
 

@@ -450,6 +450,15 @@ class UserConfigResourceTest {
     private static final class FakeRuntimeEmailAccountService extends RuntimeEmailAccountService {
         @Override
         public Optional<dev.inboxbridge.domain.RuntimeEmailAccount> findAccessibleForUser(AppUser actor, String sourceId) {
+            return runtimeAccount(actor, sourceId);
+        }
+
+        @Override
+        public Optional<dev.inboxbridge.domain.RuntimeEmailAccount> findAccessibleForUserManualPolling(AppUser actor, String sourceId) {
+            return runtimeAccount(actor, sourceId);
+        }
+
+        private Optional<dev.inboxbridge.domain.RuntimeEmailAccount> runtimeAccount(AppUser actor, String sourceId) {
             return Optional.of(new dev.inboxbridge.domain.RuntimeEmailAccount(
                     sourceId,
                     "USER",
