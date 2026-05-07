@@ -66,6 +66,15 @@ public class RuntimeEmailAccountService {
     }
 
     @Transactional
+    public Optional<RuntimeEmailAccount> findAccessibleForUserManualPolling(AppUser actor, String sourceId) {
+        Optional<UserEmailAccount> emailAccount = userEmailAccountService.findByEmailAccountId(sourceId);
+        if (emailAccount.isEmpty() || !emailAccount.get().userId.equals(actor.id)) {
+            return Optional.empty();
+        }
+        return toRuntimeEmailAccount(emailAccount.get(), false);
+    }
+
+    @Transactional
     public Optional<RuntimeEmailAccount> findUserManagedById(String sourceId) {
         return userEmailAccountService.findByEmailAccountId(sourceId)
                 .flatMap(this::toRuntimeEmailAccount);
@@ -111,6 +120,37 @@ public class RuntimeEmailAccountService {
         return emailAccounts;
     }
 
+    @Transactional
+    public List<RuntimeEmailAccount> listEnabledForManualPolling() {
+        List<RuntimeEmailAccount> emailAccounts = new ArrayList<>();
+        MailDestinationTarget systemTarget = systemDestinationTarget();
+
+        for (EnvSourceService.IndexedSource indexedSource : envSourceService.configuredSources()) {
+            InboxBridgeConfig.Source source = indexedSource.source();
+            if (!source.enabled()) {
+                continue;
+            }
+            emailAccounts.add(toRuntimeEmailAccount(source, systemTarget));
+        }
+
+        for (UserEmailAccount emailAccount : userEmailAccountService.listEnabledBridges()) {
+            toRuntimeEmailAccount(emailAccount, false).ifPresent(emailAccounts::add);
+        }
+        return emailAccounts;
+    }
+
+    @Transactional
+    public List<RuntimeEmailAccount> listEnabledForUserManualPolling(AppUser actor) {
+        List<RuntimeEmailAccount> emailAccounts = new ArrayList<>();
+        for (UserEmailAccount emailAccount : userEmailAccountService.listEnabledBridges()) {
+            if (!emailAccount.userId.equals(actor.id)) {
+                continue;
+            }
+            toRuntimeEmailAccount(emailAccount, false).ifPresent(emailAccounts::add);
+        }
+        return emailAccounts;
+    }
+
     private MailDestinationTarget systemDestinationTarget() {
         return new GmailApiDestinationTarget(
                 "gmail-destination",
@@ -152,12 +192,16 @@ public class RuntimeEmailAccountService {
     }
 
     private Optional<RuntimeEmailAccount> toRuntimeEmailAccount(UserEmailAccount emailAccount) {
+        return toRuntimeEmailAccount(emailAccount, true);
+    }
+
+    private Optional<RuntimeEmailAccount> toRuntimeEmailAccount(UserEmailAccount emailAccount, boolean requireDestination) {
         Optional<AppUser> owner = appUserRepository.findByIdOptional(emailAccount.userId);
         if (owner.isEmpty() || !owner.get().active || !owner.get().approved) {
             return Optional.empty();
         }
         Optional<MailDestinationTarget> destinationTarget = userMailDestinationConfigService.resolveForUser(emailAccount.userId, owner.get().username);
-        if (destinationTarget.isEmpty()) {
+        if (destinationTarget.isEmpty() && requireDestination) {
             return Optional.empty();
         }
         return Optional.of(new RuntimeEmailAccount(
@@ -183,6 +227,6 @@ public class RuntimeEmailAccountService {
                         emailAccount.markReadAfterPoll,
                         emailAccount.postPollAction == null ? SourcePostPollAction.NONE : emailAccount.postPollAction,
                         Optional.ofNullable(emailAccount.postPollTargetFolder)),
-                destinationTarget.get()));
+                destinationTarget.orElse(null)));
     }
 }

@@ -21,19 +21,22 @@ browser-extensions/
 - Extension language and theme defaults should now follow the signed-in InboxBridge user preferences, while the extension Settings page can still override either preference locally for that browser profile.
 - The Settings page can also optionally enable browser notifications for grouped source-error alerts and for successful manual polls started from the extension; notifications remain behaviorally opt-in even though the browser permission is declared in the extension manifest for reliable cross-browser delivery.
 - Right-clicking the browser toolbar icon should expose direct actions for opening Settings and starting a manual polling run without opening the popup first.
+- Manual polling from the popup applies an immediate optimistic running indicator while the trigger call is in flight, but the popup must cancel that indicator when the backend rejects the run, mark the trigger as returned when it succeeds, and then let an authoritative idle status clear the running state instead of resurrecting it during the next background refresh.
 - The popup should show an explicit signed-out state when no extension session is stored, with a direct `Sign in` call-to-action that opens Settings, while the Settings page owns the actual username/password flow and triggers the browser-window handoff for passkey-backed sign-in.
 - During the browser-window handoff, the finishing sign-in page should show a visible five-second close countdown when it was opened as a popup, and the Settings form should mark missing required URL/username/password fields inline instead of failing silently.
 - The Settings action formerly labeled `Use current tab` is now `Detect URL from active tabs`: it scans the current browser window for an already open InboxBridge tab and copies that origin into the URL field, preferring the most recently used matching tab when several are open.
 - Once the extension is signed in, the Settings page switches its primary action to `Sign out`, replaces the credential form with a compact `Logged in as …` summary, and restores the form only after the browser session is disconnected again.
 - A successful background status refresh should stay authoritative for the badge; popup-broadcast or live-SSE follow-up failures must not replace a good status with a generic `?` badge.
-- The toolbar presentation now uses both the browser badge and dynamic icon overlays: polling adds a blue live indicator, source or transport errors add a red alert marker, and signed-out state adds a gray prompt marker while preserving the base InboxBridge icon underneath.
+- The toolbar presentation now uses both the browser badge and dynamic icon overlays: polling adds a blue live indicator, source or transport errors add a red alert marker, and signed-out state adds a gray prompt marker while preserving the base InboxBridge icon underneath. Icon rendering is monotonic, so a slower stale polling render must not overwrite a newer healthy/default icon update.
 - `chromium/` contains the current implemented Manifest V3 target for Chrome, Edge, and other Chromium-based browsers, including its build/package scripts and target-specific documentation.
 - `firefox/` is reserved for the Firefox target and its packaging/signing preparation.
 - `safari/` is reserved for Safari packaging and Apple-specific wrapper/export work once the Chromium and Firefox targets are stable.
 
 ## Current status
 
-- Chromium: implemented manual-install target with direct extension sign-in, rotating refresh tokens, and encrypted local auth storage. Transient refresh failures keep the encrypted auth bundle and retry later; only an explicit invalid-token response clears the saved sign-in.
+- Chromium: implemented manual-install target with direct extension sign-in, rotating refresh tokens, and encrypted local auth storage. Transient refresh failures keep the encrypted auth bundle and retry later; stale background tokens re-check storage for a newer rotated token before clearing auth, and only a confirmed invalid-token response clears the saved sign-in.
+  Extension auth diagnostics are intentionally token-safe: the browser console records refresh attempts, transient failures, stale-token recovery, and auth-clearing decisions with URLs, usernames, and expiry timestamps, but never raw access or refresh tokens.
+  Backend refresh-token rotation is serialized per persisted session so multiple extension contexts waking after browser or OS restart cannot rotate the same refresh token in parallel and invalidate each other.
 - Firefox: implemented manual-install target with the same shared auth/storage flow and matching optional-permission setup
 - Safari: folder reserved, implementation pending
 - GitHub releases should include packaged Chromium `.zip` and Firefox `.xpi` artifacts in addition to the main backend/admin-ui release archive.

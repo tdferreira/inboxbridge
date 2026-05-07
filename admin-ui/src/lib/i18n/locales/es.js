@@ -190,6 +190,7 @@ const dictionary = {
   "common.nextPollWindowError": "La fuente {emailAccountId} está esperando su próxima ventana de sondeo en {value}.",
   "common.sourceDisabledError": "La fuente {emailAccountId} está desactivada.",
   "common.sourcePollingDisabledError": "El sondeo está desactivado para la fuente {emailAccountId}.",
+  "common.destinationMailboxNotConfiguredError": "La fuente {emailAccountId} no puede ejecutarse porque Mi buzón de destino no está configurado. Conecta el buzón que debe recibir el correo importado antes de ejecutar el sondeo.",
   "common.gmailAccountNotLinkedError": "La fuente {emailAccountId} no puede ejecutarse porque Mi buzón de destino no está conectado.",
   "common.gmailAccessRevokedError": "La fuente {emailAccountId} ya no tiene acceso a Gmail. Vuelve a conectarla desde Mi buzón de destino.",
   "common.microsoftAccessRevokedError": "La fuente {emailAccountId} ya no tiene acceso a Microsoft OAuth. Vuelve a conectarla desde esta cuenta de correo.",

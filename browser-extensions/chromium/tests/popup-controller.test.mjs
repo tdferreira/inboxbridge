@@ -331,9 +331,93 @@ test('popup controller marks extension-started manual polls for later browser no
   resolveRunPoll()
   await startPollPromise
 
+  assert.deepEqual(messages, [
+    { type: 'refresh-status' },
+    { type: 'manual-poll-triggered', serverUrl: 'https://mail.example.com' },
+    { type: 'manual-poll-trigger-returned' },
+    { type: 'refresh-status' }
+  ])
   assert.equal(elements.statusPill.textContent, 'Polling')
   assert.equal(elements.updatedAt.textContent, 'Polling now')
   assert.equal(deriveCalls >= 2, true)
+})
+
+test('popup controller cancels the optimistic poll overlay when the poll cannot start', async () => {
+  const elements = createPopupElements()
+  const messages = []
+  const banners = []
+  const controller = createPopupController({
+    deps: {
+      clearStatusBanner() {},
+      deriveStatusView(_serverUrl, status) {
+        return {
+          attentionCount: '',
+          connectionCopy: 'Connected to alice',
+          errorSources: [],
+          healthy: true,
+          metrics: { imported: '0', fetched: '0', duplicates: '0', errors: '0' },
+          runPollDisabled: Boolean(status?.poll?.running),
+          statusLabel: status?.poll?.running ? 'Polling' : 'Healthy',
+          statusTone: 'success',
+          updatedText: status?.poll?.running ? 'Polling now' : 'just now'
+        }
+      },
+      disconnectedView(message) {
+        return {
+          attentionCount: '',
+          connectionCopy: message,
+          errorSources: [],
+          healthy: true,
+          metrics: { imported: '-', fetched: '-', duplicates: '-', errors: '-' },
+          runPollDisabled: true,
+          statusLabel: 'Disconnected',
+          statusTone: 'neutral',
+          updatedText: 'No InboxBridge status available'
+        }
+      },
+      escapeHtml(value) {
+        return value
+      },
+      fetchStatus: async () => ({ user: { username: 'alice' }, poll: { running: false } }),
+      localizePopupPage() {},
+      loadConfig: async () => ({ serverUrl: 'https://mail.example.com', token: 'ibx_token' }),
+      onMessage() {},
+      openOptionsPage: async () => {},
+      openTab: async () => {},
+      resolveLanguagePreference: () => 'en',
+      runPoll: async () => ({
+        accepted: false,
+        message: 'Source outlook-main cannot run because Destination mailbox is not configured. Open My Destination Mailbox and connect the mailbox that should receive imported mail before running polling.',
+        reason: 'destination_mailbox_not_configured',
+        started: false
+      }),
+      saveUserPreferences: async () => {},
+      sendMessage: async (message) => {
+        messages.push(message)
+      },
+      showStatusBanner(_target, tone, text) {
+        banners.push({ tone, text })
+      },
+      targetDocument: {},
+      translate: (_locale, key) => key
+    },
+    elements
+  })
+
+  controller.initialize()
+  await controller.refreshPopup()
+  await controller.startPoll()
+
+  assert.deepEqual(messages, [
+    { type: 'refresh-status' },
+    { type: 'manual-poll-triggered', serverUrl: 'https://mail.example.com' },
+    { type: 'manual-poll-cancelled' },
+    { type: 'refresh-status' }
+  ])
+  assert.deepEqual(banners.at(-1), {
+    tone: 'warning',
+    text: 'Source outlook-main cannot run because Destination mailbox is not configured. Open My Destination Mailbox and connect the mailbox that should receive imported mail before running polling.'
+  })
 })
 
 test('popup controller clears saved auth and shows sign-in state after a revoked token response', async () => {

@@ -28,6 +28,9 @@ public class PollingSourceExecutionService {
             "The linked Microsoft account no longer grants InboxBridge access. Reconnect it from this mail account.";
     private static final String GOOGLE_SOURCE_ACCESS_REVOKED_MESSAGE =
             "The linked Google account no longer grants InboxBridge access. Reconnect it from this mail account.";
+    private static final String DESTINATION_MAILBOX_NOT_CONFIGURED_CODE = "destination_mailbox_not_configured";
+    private static final String DESTINATION_MAILBOX_NOT_CONFIGURED_MESSAGE =
+            "Destination mailbox is not configured. Open My Destination Mailbox and connect the mailbox that should receive imported mail before running polling.";
     private static final String STOPPED_BY_USER_MESSAGE = "Stopped by user.";
 
     private static final Logger LOG = Logger.getLogger(PollingSourceExecutionService.class);
@@ -89,6 +92,20 @@ public class PollingSourceExecutionService {
         try (PollCancellationService.Scope ignored = pollCancellationService == null
                 ? PollCancellationService.Scope.noop()
                 : pollCancellationService.bind(liveRunId, emailAccount.id())) {
+            if (emailAccount.destination() == null) {
+                error = "Source " + emailAccount.id()
+                        + " cannot run because " + DESTINATION_MAILBOX_NOT_CONFIGURED_MESSAGE;
+                errorDetail = new PollRunError(DESTINATION_MAILBOX_NOT_CONFIGURED_CODE, emailAccount.id(), error, null);
+                shouldRecordFailure = true;
+                return new SourceExecutionOutcome(
+                        fetched,
+                        imported,
+                        importedBytes,
+                        duplicates,
+                        spamJunkMessageCount,
+                        List.copyOf(spamJunkFolderSummaries),
+                        errorDetail);
+            }
             MailDestinationService destinationService = destinationService(emailAccount.destination());
             if (!destinationService.isLinked(emailAccount.destination())) {
                 error = "Source " + emailAccount.id() + " cannot run because "

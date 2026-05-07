@@ -55,6 +55,40 @@ class PollingSourceExecutionServiceTest {
     }
 
     @Test
+    void executeRecordsDestinationMissingAsSourcePollEvent() {
+        RecordingMailSourceClient mailSourceClient = new RecordingMailSourceClient();
+        RecordingSourcePollingStateService pollingStateService = new RecordingSourcePollingStateService();
+        RecordingSourcePollEventService sourcePollEventService = new RecordingSourcePollEventService();
+        PollingSourceExecutionService service = service(
+                mailSourceClient,
+                new LinkedDestinationService(true),
+                pollingStateService,
+                sourcePollEventService,
+                null);
+
+        PollingSourceExecutionService.SourceExecutionOutcome outcome = service.execute(
+                runtimePopAccountWithoutDestination(),
+                "user-ui",
+                settings(),
+                null,
+                "alice",
+                "MY_INBOXBRIDGE");
+
+        assertEquals(0, outcome.fetched());
+        assertEquals(0, outcome.imported());
+        assertEquals("destination_mailbox_not_configured", outcome.error().code());
+        assertFalse(mailSourceClient.fetchCalled);
+        assertTrue(pollingStateService.successSourceIds.isEmpty());
+        assertEquals(List.of("source-pop"), pollingStateService.failureSourceIds);
+        assertEquals(List.of("source-pop"), sourcePollEventService.sourceIds);
+        assertEquals(List.of("user-ui"), sourcePollEventService.triggers);
+        assertEquals(List.of("MY_INBOXBRIDGE"), sourcePollEventService.executionSurfaces);
+        assertEquals(List.of("alice"), sourcePollEventService.actorUsernames);
+        assertEquals(1, sourcePollEventService.errors.size());
+        assertTrue(sourcePollEventService.errors.getFirst().contains("Destination mailbox is not configured"));
+    }
+
+    @Test
     void executeTreatsAlreadyImportedMessagesAsDuplicatesAndRecordsPopCheckpoint() {
         RecordingMailSourceClient mailSourceClient = new RecordingMailSourceClient();
         mailSourceClient.messages = List.of(new FetchedMessage(
@@ -144,6 +178,30 @@ class PollingSourceExecutionServiceTest {
                 Optional.empty(),
                 SourcePostPollSettings.none(),
                 destinationTarget());
+    }
+
+    private static RuntimeEmailAccount runtimePopAccountWithoutDestination() {
+        return new RuntimeEmailAccount(
+                "source-pop",
+                "USER",
+                7L,
+                "alice",
+                true,
+                InboxBridgeConfig.Protocol.POP3,
+                "pop.example.test",
+                995,
+                true,
+                InboxBridgeConfig.AuthMethod.PASSWORD,
+                InboxBridgeConfig.OAuthProvider.NONE,
+                "alice@example.test",
+                "secret",
+                "",
+                Optional.of("INBOX"),
+                false,
+                SourceFetchMode.POLLING,
+                Optional.empty(),
+                SourcePostPollSettings.none(),
+                null);
     }
 
     private static ImapAppendDestinationTarget destinationTarget() {
@@ -248,11 +306,18 @@ class PollingSourceExecutionServiceTest {
 
     private static final class RecordingSourcePollingStateService extends SourcePollingStateService {
         private final List<String> successSourceIds = new java.util.ArrayList<>();
+        private final List<String> failureSourceIds = new java.util.ArrayList<>();
         private final List<String> recordedPopCheckpoints = new java.util.ArrayList<>();
 
         @Override
         public void recordSuccess(String sourceId, Instant finishedAt, PollingSettingsService.EffectivePollingSettings settings) {
             successSourceIds.add(sourceId);
+        }
+
+        @Override
+        public CooldownDecision recordFailure(String sourceId, Instant finishedAt, String error) {
+            failureSourceIds.add(sourceId);
+            return null;
         }
 
         @Override
@@ -277,6 +342,36 @@ class PollingSourceExecutionServiceTest {
                 String executionSurface,
                 String error,
                 PollDecisionSnapshot decisionSnapshot) {
+        }
+    }
+
+    private static final class RecordingSourcePollEventService extends SourcePollEventService {
+        private final List<String> sourceIds = new java.util.ArrayList<>();
+        private final List<String> triggers = new java.util.ArrayList<>();
+        private final List<String> actorUsernames = new java.util.ArrayList<>();
+        private final List<String> executionSurfaces = new java.util.ArrayList<>();
+        private final List<String> errors = new java.util.ArrayList<>();
+
+        @Override
+        public void record(
+                String sourceId,
+                String trigger,
+                Instant startedAt,
+                Instant finishedAt,
+                int fetched,
+                int imported,
+                long importedBytes,
+                int duplicates,
+                int spamJunkMessageCount,
+                String actorUsername,
+                String executionSurface,
+                String error,
+                PollDecisionSnapshot decisionSnapshot) {
+            sourceIds.add(sourceId);
+            triggers.add(trigger);
+            actorUsernames.add(actorUsername);
+            executionSurfaces.add(executionSurface);
+            errors.add(error);
         }
     }
 

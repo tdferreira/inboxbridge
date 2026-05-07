@@ -20,6 +20,7 @@ export function registerBackgroundController({
     createContextMenu = async () => {},
     createAlarm,
     fetchStatus,
+    logger = console,
     loadCachedStatus,
     loadConfig,
     mergeLivePollIntoStatus,
@@ -163,6 +164,10 @@ export function registerBackgroundController({
         status = await fetchStatus(config.serverUrl, config.token)
       } catch (error) {
         if (isInvalidExtensionAuthError(error)) {
+          logWarn(logger, 'Status request rejected the saved extension access token.', {
+            refreshFailed: Boolean(config.refreshFailed),
+            serverUrl: config.serverUrl || ''
+          })
           if (config.refreshFailed && config.refreshToken) {
             const message = config.refreshErrorMessage || 'InboxBridge could not refresh the saved extension sign-in yet.'
             await applyToolbarState(null, {
@@ -171,6 +176,13 @@ export function registerBackgroundController({
             })
             await broadcastStatus(null, message, config.serverUrl)
             throw error
+          }
+          const recovered = await recoverRotatedConfig(config)
+          if (recovered) {
+            logInfo(logger, 'Recovered newer extension auth after stale background status token.', {
+              serverUrl: recovered.serverUrl || ''
+            })
+            return refreshBadgeFromServer()
           }
           await clearInvalidAuthState(config.serverUrl, error.message)
           return null
@@ -205,6 +217,26 @@ export function registerBackgroundController({
   async function refreshBadgeFromCache() {
     const cached = await loadCachedStatus()
     await applyToolbarState(cached?.status || null)
+  }
+
+  async function recoverRotatedConfig(config) {
+    const latest = await loadConfig().catch(() => null)
+    if (!latest?.serverUrl || !latest?.token) {
+      logInfo(logger, 'No newer extension auth was available during stale-token recovery.', {
+        serverUrl: config?.serverUrl || ''
+      })
+      return null
+    }
+    if (latest.serverUrl !== config?.serverUrl) {
+      logWarn(logger, 'Ignored newer extension auth because the server URL changed during stale-token recovery.', {
+        attemptedServerUrl: config?.serverUrl || '',
+        latestServerUrl: latest.serverUrl || ''
+      })
+      return null
+    }
+    const tokenRotated = latest.token && latest.token !== config?.token
+    const refreshRotated = latest.refreshToken && latest.refreshToken !== config?.refreshToken
+    return tokenRotated || refreshRotated ? latest : null
   }
 
   async function configureContextMenus() {
@@ -248,7 +280,8 @@ export function registerBackgroundController({
     }
     pendingManualPollNotification = {
       lastCompletedRunAt: lastStatus?.summary?.lastCompletedRunAt || null,
-      requestedAt: Date.now()
+      requestedAt: Date.now(),
+      triggerReturned: false
     }
     await primePendingManualPollOverlay(config.serverUrl)
     schedulePendingManualPollCheck()
@@ -257,12 +290,23 @@ export function registerBackgroundController({
       result = await runPoll(config.serverUrl, config.token)
     } catch (error) {
       if (isInvalidExtensionAuthError(error)) {
+        logWarn(logger, 'Manual poll rejected the saved extension access token.', {
+          serverUrl: config.serverUrl || ''
+        })
+        const recovered = await recoverRotatedConfig(config)
+        if (recovered) {
+          logInfo(logger, 'Recovered newer extension auth after stale background manual-poll token.', {
+            serverUrl: recovered.serverUrl || ''
+          })
+          return triggerManualPollFromBackground()
+        }
         await clearInvalidAuthState(config.serverUrl, error.message)
         return { accepted: false, openedOptions: false, signedOut: true }
       }
       throw error
     }
     if (result?.accepted && result?.started) {
+      markManualPollTriggerReturned()
       await refreshBadgeFromServer()
     } else {
       expirePendingManualPollOverlay()
@@ -309,10 +353,21 @@ export function registerBackgroundController({
     if (message?.type === 'manual-poll-triggered') {
       pendingManualPollNotification = {
         lastCompletedRunAt: lastStatus?.summary?.lastCompletedRunAt || null,
-        requestedAt: Date.now()
+        requestedAt: Date.now(),
+        triggerReturned: false
       }
       void primePendingManualPollOverlay(message.serverUrl || '')
       schedulePendingManualPollCheck()
+      sendResponse?.({ ok: true })
+      return false
+    }
+    if (message?.type === 'manual-poll-trigger-returned') {
+      markManualPollTriggerReturned()
+      sendResponse?.({ ok: true })
+      return false
+    }
+    if (message?.type === 'manual-poll-cancelled') {
+      expirePendingManualPollOverlay()
       sendResponse?.({ ok: true })
       return false
     }
@@ -436,6 +491,11 @@ export function registerBackgroundController({
     if (completedAt && completedAt !== pendingManualPollNotification.lastCompletedRunAt) {
       return status
     }
+    if (pendingManualPollNotification.triggerReturned) {
+      pendingManualPollNotification = null
+      clearPendingManualPollCheck()
+      return status
+    }
     return {
       ...status,
       poll: {
@@ -448,7 +508,21 @@ export function registerBackgroundController({
     }
   }
 
+  function markManualPollTriggerReturned() {
+    if (!pendingManualPollNotification) {
+      return
+    }
+    pendingManualPollNotification = {
+      ...pendingManualPollNotification,
+      triggerReturned: true
+    }
+  }
+
   async function clearInvalidAuthState(serverUrl, message) {
+    logWarn(logger, 'Clearing saved extension auth state.', {
+      message: message || 'The saved InboxBridge sign-in is no longer valid.',
+      serverUrl: serverUrl || ''
+    })
     closeLiveSubscription()
     lastStatus = null
     lastErrorNotificationKey = ''
@@ -503,4 +577,20 @@ function formatErrorSources(status, locale, translate) {
 
 function interpolateFallback(key, params) {
   return Object.entries(params || {}).reduce((value, [name, token]) => value.replace(`{${name}}`, token), key)
+}
+
+function logInfo(logger, message, details = {}) {
+  try {
+    logger?.info?.('[InboxBridge extension background]', message, details)
+  } catch {
+    // Diagnostics must never disrupt badge or auth state handling.
+  }
+}
+
+function logWarn(logger, message, details = {}) {
+  try {
+    logger?.warn?.('[InboxBridge extension background]', message, details)
+  } catch {
+    // Diagnostics must never disrupt badge or auth state handling.
+  }
 }

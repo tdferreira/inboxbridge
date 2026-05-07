@@ -700,7 +700,7 @@ export function useEmailAccountsController({
 
   function notificationTargetForPollErrors(errorDetails = [], messages = [], fallbackTarget = 'source-email-accounts-section') {
     const details = Array.isArray(errorDetails) ? errorDetails : []
-    if (details.some((detail) => detail?.code === 'gmail_account_not_linked' || detail?.code === 'gmail_access_revoked')) {
+    if (details.some((detail) => detail?.code === 'destination_mailbox_not_configured' || detail?.code === 'gmail_account_not_linked' || detail?.code === 'gmail_access_revoked')) {
       return 'destination-mailbox-section'
     }
     const sourceTarget = details
@@ -711,7 +711,8 @@ export function useEmailAccountsController({
     }
     const rawMessages = Array.isArray(messages) ? messages : []
     if (rawMessages.some((message) => typeof message === 'string'
-      && (message.includes('The Gmail destination is not linked for this account')
+      && (message.includes('Destination mailbox is not configured')
+        || message.includes('The Gmail destination is not linked for this account')
         || message.includes('The linked Gmail account no longer grants InboxBridge access')))) {
       return 'destination-mailbox-section'
     }

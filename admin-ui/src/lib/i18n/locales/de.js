@@ -190,6 +190,7 @@ const dictionary = {
   "common.nextPollWindowError": "Die Quelle {emailAccountId} wartet bis {value} auf ihr nächstes Abruffenster.",
   "common.sourceDisabledError": "Die Quelle {emailAccountId} ist deaktiviert.",
   "common.sourcePollingDisabledError": "Der Abruf ist für die Quelle {emailAccountId} deaktiviert.",
+  "common.destinationMailboxNotConfiguredError": "Die Quelle {emailAccountId} kann nicht ausgeführt werden, weil Mein Zielpostfach nicht konfiguriert ist. Verbinde das Postfach, das importierte E-Mails erhalten soll, bevor du den Abruf startest.",
   "common.gmailAccountNotLinkedError": "Die Quelle {emailAccountId} kann nicht ausgeführt werden, weil Mein Zielpostfach nicht verbunden ist.",
   "common.gmailAccessRevokedError": "Die Quelle {emailAccountId} hat keinen Gmail-Zugriff mehr. Verbinde sie erneut über Mein Zielpostfach.",
   "common.microsoftAccessRevokedError": "Die Quelle {emailAccountId} hat keinen Microsoft-OAuth-Zugriff mehr. Verbinde sie erneut über dieses E-Mail-Konto.",

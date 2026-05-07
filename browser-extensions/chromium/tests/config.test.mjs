@@ -44,6 +44,7 @@ test('loadConfig refreshes expiring access tokens and persists the rotated sessi
     }),
     requestApiPermission: async () => true,
     requestOriginPermission: async () => true,
+    sleep: async () => {},
     storageGet: async () => ({
       inboxbridgeExtensionConfig: {
         serverUrl: 'https://mail.example.com',
@@ -102,6 +103,7 @@ test('loadConfig prefers the canonical username over display name after refresh 
     }),
     requestApiPermission: async () => true,
     requestOriginPermission: async () => true,
+    sleep: async () => {},
     storageGet: async () => ({
       inboxbridgeExtensionConfig: {
         serverUrl: 'https://mail.example.com',
@@ -138,6 +140,7 @@ test('loadConfig keeps saved auth when access-token refresh has a transient fail
     },
     requestApiPermission: async () => true,
     requestOriginPermission: async () => true,
+    sleep: async () => {},
     storageGet: async () => ({
       inboxbridgeExtensionConfig: {
         serverUrl: 'https://mail.example.com',
@@ -303,6 +306,7 @@ test('loadConfig waits briefly for a concurrently rotated token before clearing 
 
 test('loadConfig clears auth only when refresh is rejected and no newer token exists', async () => {
   let persistedPayload = null
+  const warnings = []
   const store = createConfigStore({
     containsApiPermission: async () => false,
     containsOriginPermission: async () => true,
@@ -315,12 +319,17 @@ test('loadConfig clears auth only when refresh is rejected and no newer token ex
       username: 'alice'
     }),
     encryptJson: async (value) => ({ ciphertext: JSON.stringify(value), iv: 'iv' }),
+    logger: {
+      info: () => {},
+      warn: (...args) => warnings.push(args)
+    },
     queryTabs: async () => [],
     refreshExtensionAuth: async () => {
       throw createInvalidExtensionAuthError()
     },
     requestApiPermission: async () => true,
     requestOriginPermission: async () => true,
+    sleep: async () => {},
     storageGet: async () => ({
       inboxbridgeExtensionConfig: {
         serverUrl: 'https://mail.example.com',
@@ -357,6 +366,9 @@ test('loadConfig clears auth only when refresh is rejected and no newer token ex
       userThemeMode: 'DARK_BLUE'
     }
   })
+  assert.equal(warnings.some((entry) => entry[1] === 'Cleared saved extension auth after confirmed invalid refresh token.'), true)
+  assert.equal(JSON.stringify(warnings).includes('refresh-1'), false)
+  assert.equal(JSON.stringify(warnings).includes('access-1'), false)
 })
 
 test('detectServerUrl prefers the last real InboxBridge browser tab over extension pages', async () => {

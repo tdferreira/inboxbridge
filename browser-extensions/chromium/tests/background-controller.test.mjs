@@ -277,6 +277,7 @@ test('background controller marks signed-out toolbar state when extension auth i
 test('background controller clears saved auth when a revoked token rejects polling', async () => {
   let cleared = 0
   let iconState = null
+  const warnings = []
 
   const controller = registerBackgroundController({
     deps: {
@@ -292,6 +293,10 @@ test('background controller clears saved auth when a revoked token rejects polli
       createContextMenu: async () => {},
       createNotification: async () => {},
       fetchStatus: async () => ({ summary: { errorSourceCount: 0 }, sources: [] }),
+      logger: {
+        info: () => {},
+        warn: (...args) => warnings.push(args)
+      },
       loadCachedStatus: async () => ({ status: null }),
       loadConfig: async () => ({
         serverUrl: 'https://mail.example.com',
@@ -327,6 +332,8 @@ test('background controller clears saved auth when a revoked token rejects polli
     kind: 'signed-out',
     message: 'Open Settings to sign in and connect this browser extension to InboxBridge.'
   })
+  assert.equal(warnings.some((entry) => entry[1] === 'Clearing saved extension auth state.'), true)
+  assert.equal(JSON.stringify(warnings).includes('ibx_token'), false)
 })
 
 test('background controller keeps auth when an expired access token follows a transient refresh failure', async () => {
@@ -389,6 +396,77 @@ test('background controller keeps auth when an expired access token follows a tr
     message: 'InboxBridge could not be reached at https://mail.example.com.'
   })
   assert.equal(broadcast.errorMessage, 'InboxBridge could not be reached at https://mail.example.com.')
+})
+
+test('background controller reuses newer rotated auth before clearing a stale status token', async () => {
+  let cleared = 0
+  let loadCount = 0
+  const appliedStatuses = []
+
+  const controller = registerBackgroundController({
+    deps: {
+      applyBadge: async (status) => {
+        appliedStatuses.push(status)
+      },
+      applyIcon: async () => {},
+      clearBadge: async () => {},
+      clearConfig: async () => {
+        cleared += 1
+      },
+      createAlarm() {},
+      createContextMenu: async () => {},
+      createNotification: async () => {},
+      fetchStatus: async (_serverUrl, token) => {
+        if (token === 'stale-access') {
+          throw createInvalidExtensionAuthError()
+        }
+        return {
+          poll: { running: false, canRun: true, state: 'IDLE' },
+          summary: { errorSourceCount: 0 },
+          sources: []
+        }
+      },
+      loadCachedStatus: async () => ({ status: null }),
+      loadConfig: async () => {
+        loadCount += 1
+        return loadCount <= 3
+          ? {
+              refreshToken: 'stale-refresh',
+              serverUrl: 'https://mail.example.com',
+              token: 'stale-access'
+            }
+          : {
+              refreshToken: 'fresh-refresh',
+              serverUrl: 'https://mail.example.com',
+              token: 'fresh-access'
+            }
+      },
+      mergeLivePollIntoStatus: (status) => status,
+      onAlarm() {},
+      onContextMenuClicked() {},
+      onInstalled() {},
+      onMessage() {},
+      openOptionsPage: async () => {},
+      removeAllContextMenus: async () => {},
+      runPoll: async () => ({ accepted: false }),
+      saveCachedStatus: async () => {},
+      saveUserPreferences: async () => {},
+      sendMessage: async () => {},
+      resolveLanguagePreference: () => 'en',
+      shouldOverlayLiveStatus: () => false,
+      shouldRefreshStatusFromLiveEvent: () => false,
+      subscribeExtensionEvents() {
+        return { close() {}, completed: Promise.resolve() }
+      },
+      translate: (_locale, key, params = {}) => key.replace('{count}', params.count ?? '')
+    }
+  })
+
+  await new Promise((resolve) => setImmediate(resolve))
+  await controller.refreshBadgeFromServer()
+
+  assert.equal(cleared, 0)
+  assert.equal(appliedStatuses.at(-1).poll.running, false)
 })
 
 test('background controller registers browser-action context menu entries and can trigger polling', async () => {
@@ -575,6 +653,78 @@ test('background controller applies an optimistic running state as soon as the p
   assert.deepEqual(response, { ok: true })
   assert.equal(appliedStatuses.some((status) => status?.poll?.running === true), true)
   assert.equal(broadcasts.some((message) => message?.type === 'extension-status-updated' && message?.status?.poll?.running === true), true)
+})
+
+test('background controller clears optimistic running state when the popup cancels a manual poll', async () => {
+  let messageListener
+  const appliedStatuses = []
+  const broadcasts = []
+
+  const controller = registerBackgroundController({
+    deps: {
+      applyBadge: async (status) => {
+        appliedStatuses.push(status)
+      },
+      applyIcon: async () => {},
+      clearBadge: async () => {},
+      createAlarm() {},
+      createContextMenu: async () => {},
+      createNotification: async () => {},
+      fetchStatus: async () => ({
+        poll: { running: false, canRun: true, state: 'IDLE' },
+        summary: { errorSourceCount: 0, lastCompletedRunAt: '2026-04-12T18:30:00Z' },
+        sources: []
+      }),
+      loadCachedStatus: async () => ({
+        status: {
+          poll: { running: false, canRun: true, state: 'IDLE' },
+          summary: { errorSourceCount: 0, lastCompletedRunAt: '2026-04-12T18:30:00Z' },
+          sources: []
+        }
+      }),
+      loadConfig: async () => ({
+        serverUrl: 'https://mail.example.com',
+        token: 'ibx_token'
+      }),
+      mergeLivePollIntoStatus: (status) => status,
+      onAlarm() {},
+      onContextMenuClicked() {},
+      onInstalled() {},
+      onMessage(listener) {
+        messageListener = listener
+      },
+      openOptionsPage: async () => {},
+      removeAllContextMenus: async () => {},
+      runPoll: async () => ({ accepted: true, started: true }),
+      saveCachedStatus: async () => {},
+      saveUserPreferences: async () => {},
+      sendMessage: async (message) => {
+        broadcasts.push(message)
+      },
+      setTimeoutFn() {
+        return 1
+      },
+      resolveLanguagePreference: () => 'en',
+      shouldOverlayLiveStatus: () => false,
+      shouldRefreshStatusFromLiveEvent: () => false,
+      subscribeExtensionEvents() {
+        return { close() {}, completed: Promise.resolve() }
+      },
+      translate: (_locale, key) => key
+    }
+  })
+
+  await new Promise((resolve) => setImmediate(resolve))
+  await controller.refreshBadgeFromServer()
+  messageListener({ type: 'manual-poll-triggered', serverUrl: 'https://mail.example.com' }, null, () => {})
+  await new Promise((resolve) => setImmediate(resolve))
+  messageListener({ type: 'manual-poll-cancelled' }, null, () => {})
+  await new Promise((resolve) => setImmediate(resolve))
+
+  assert.equal(appliedStatuses.some((status) => status?.poll?.running === true), true)
+  assert.equal(appliedStatuses.at(-1).poll.running, false)
+  assert.equal(appliedStatuses.at(-1).poll.canRun, true)
+  assert.equal(broadcasts.at(-1).status.poll.running, false)
 })
 
 test('background controller avoids recreating duplicate context menu ids when refreshes overlap', async () => {
@@ -891,7 +1041,7 @@ test('background controller polls status after a manual poll starts when no live
   }
 })
 
-test('background controller keeps the syncing icon active until the backend reports a newer completed run', async () => {
+test('background controller lets idle status clear the optimistic icon after the trigger returns', async () => {
   const appliedStatuses = []
   let refreshCount = 0
 
@@ -974,6 +1124,83 @@ test('background controller keeps the syncing icon active until the backend repo
   assert.equal(appliedStatuses[0].poll.running, false)
   assert.equal(appliedStatuses.some((status) => status?.poll?.running === true && status?.poll?.canRun === false), true)
   assert.equal(appliedStatuses.at(-1).poll.running, false)
+  assert.equal(appliedStatuses.at(-1).poll.canRun, true)
+})
+
+test('background controller does not resurrect running after popup reports the trigger returned', async () => {
+  let messageListener
+  const appliedStatuses = []
+  const scheduled = []
+
+  const controller = registerBackgroundController({
+    deps: {
+      applyBadge: async (status) => {
+        appliedStatuses.push(status)
+      },
+      applyIcon: async () => {},
+      clearBadge: async () => {},
+      createAlarm() {},
+      createContextMenu: async () => {},
+      createNotification: async () => {},
+      fetchStatus: async () => ({
+        poll: { running: false, canRun: true, state: 'IDLE' },
+        summary: {
+          errorSourceCount: 0,
+          lastCompletedRunAt: '2026-04-12T18:30:00Z'
+        },
+        sources: []
+      }),
+      loadCachedStatus: async () => ({
+        status: {
+          poll: { running: false, canRun: true, state: 'IDLE' },
+          summary: {
+            errorSourceCount: 0,
+            lastCompletedRunAt: '2026-04-12T18:30:00Z'
+          },
+          sources: []
+        }
+      }),
+      loadConfig: async () => ({
+        serverUrl: 'https://mail.example.com',
+        token: 'ibx_token'
+      }),
+      mergeLivePollIntoStatus: (status) => status,
+      onAlarm() {},
+      onContextMenuClicked() {},
+      onInstalled() {},
+      onMessage(listener) {
+        messageListener = listener
+      },
+      openOptionsPage: async () => {},
+      removeAllContextMenus: async () => {},
+      runPoll: async () => ({ accepted: true, started: true }),
+      saveCachedStatus: async () => {},
+      saveUserPreferences: async () => {},
+      sendMessage: async () => {},
+      setTimeoutFn(fn) {
+        scheduled.push(fn)
+        return scheduled.length
+      },
+      resolveLanguagePreference: () => 'en',
+      shouldOverlayLiveStatus: () => false,
+      shouldRefreshStatusFromLiveEvent: () => false,
+      subscribeExtensionEvents() {
+        return { close() {}, completed: Promise.resolve() }
+      },
+      translate: (_locale, key) => key
+    }
+  })
+
+  await new Promise((resolve) => setImmediate(resolve))
+  await controller.refreshBadgeFromServer()
+  messageListener({ type: 'manual-poll-triggered', serverUrl: 'https://mail.example.com' }, null, () => {})
+  await new Promise((resolve) => setImmediate(resolve))
+  messageListener({ type: 'manual-poll-trigger-returned' }, null, () => {})
+  await scheduled.shift()()
+
+  assert.equal(appliedStatuses.some((status) => status?.poll?.running === true), true)
+  assert.equal(appliedStatuses.at(-1).poll.running, false)
+  assert.equal(appliedStatuses.at(-1).poll.canRun, true)
 })
 
 test('background controller clears a stale pending manual poll overlay after the retry budget is exhausted', async () => {

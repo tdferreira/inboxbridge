@@ -206,6 +206,7 @@ const dictionary = {
   "common.nextPollWindowError": "Source {emailAccountId} is waiting for its next poll window at {value}.",
   "common.sourceDisabledError": "Source {emailAccountId} is disabled.",
   "common.sourcePollingDisabledError": "Source {emailAccountId} has polling disabled.",
+  "common.destinationMailboxNotConfiguredError": "Source {emailAccountId} cannot run because My Destination Mailbox is not configured. Connect the mailbox that should receive imported mail before running polling.",
   "common.gmailAccountNotLinkedError": "Source {emailAccountId} cannot run because My Destination Mailbox is not connected.",
   "common.gmailAccessRevokedError": "Source {emailAccountId} can no longer access Gmail. Reconnect it from My Destination Mailbox.",
   "common.microsoftAccessRevokedError": "Source {emailAccountId} can no longer access Microsoft OAuth. Reconnect it from this mail account.",

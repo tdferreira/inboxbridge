@@ -16,6 +16,7 @@ Current shared modules include:
 - toolbar icon-state derivation and dynamic icon overlay rendering
 - browser-notification permission handling plus grouped error/manual-poll notification orchestration
 - light browser API wrappers that are still compatible with the current targets
+- token-safe extension-auth diagnostics for refresh attempts, stale-token recovery, and confirmed auth clearing
 
 When Firefox or Safari need browser-specific behavior, keep the shared contract here stable and move only the target-specific adapter logic into the corresponding target folder.
 

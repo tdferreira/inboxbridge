@@ -793,6 +793,7 @@ const dictionary = {
   "common.nextPollWindowError": "A fonte {emailAccountId} está aguardando a próxima janela de verificação em {value}.",
   "common.sourceDisabledError": "A fonte {emailAccountId} está desativada.",
   "common.sourcePollingDisabledError": "A verificação está desativada para a fonte {emailAccountId}.",
+  "common.destinationMailboxNotConfiguredError": "A fonte {emailAccountId} não pode ser executada porque Minha caixa de destino não está configurada. Conecte a caixa que deve receber os emails importados antes de executar a verificação.",
   "common.gmailAccountNotLinkedError": "A fonte {emailAccountId} não pode ser executada porque Minha caixa de destino não está conectada.",
   "common.gmailAccessRevokedError": "A fonte {emailAccountId} não tem mais acesso ao Gmail. Reconecte-a em Minha caixa de destino.",
   "common.microsoftAccessRevokedError": "A fonte {emailAccountId} não tem mais acesso ao Microsoft OAuth. Reconecte-a nesta conta de email.",

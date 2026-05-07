@@ -168,6 +168,18 @@ describe('notifications helpers', () => {
     expect(resolveNotificationContent(content, 'pt-PT')).toContain('A fonte gmail-main não pode ser executada')
   })
 
+  it('resolves missing destination mailbox poll errors in the active locale', () => {
+    const content = pollErrorNotification({
+      code: 'destination_mailbox_not_configured',
+      sourceId: 'outlook-main'
+    })
+
+    expect(resolveNotificationContent(content, 'en')).toBe(
+      'Source outlook-main cannot run because My Destination Mailbox is not configured. Connect the mailbox that should receive imported mail before running polling.'
+    )
+    expect(resolveNotificationContent(content, 'pt-PT')).toContain('A minha caixa de destino não está configurada')
+  })
+
   it('derives the same deduplication key for repeated translated error notifications', () => {
     const left = notificationDeduplicationKey({
       message: translatedNotification('errors.loadApplicationData'),

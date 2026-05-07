@@ -556,6 +556,8 @@ export function formatPollError(message, locale = 'en', timeZone = getCurrentFor
         return translate(locale, 'common.sourceDisabledError', { emailAccountId })
       case 'source_polling_disabled':
         return translate(locale, 'common.sourcePollingDisabledError', { emailAccountId })
+      case 'destination_mailbox_not_configured':
+        return translate(locale, 'common.destinationMailboxNotConfiguredError', { emailAccountId })
       case 'gmail_account_not_linked':
         return translate(locale, 'common.gmailAccountNotLinkedError', { emailAccountId })
       case 'gmail_access_revoked':
@@ -603,6 +605,11 @@ export function formatPollError(message, locale = 'en', timeZone = getCurrentFor
   const sourcePollingDisabledMatch = text.match(/^Source (.+?) is skipped because polling is disabled for this fetcher\.$/)
   if (sourcePollingDisabledMatch) {
     return translate(locale, 'common.sourcePollingDisabledError', { emailAccountId: sourcePollingDisabledMatch[1] })
+  }
+
+  const destinationMailboxNotConfiguredMatch = text.match(/^Source (.+?) cannot run because Destination mailbox is not configured\..+$/)
+  if (destinationMailboxNotConfiguredMatch) {
+    return translate(locale, 'common.destinationMailboxNotConfiguredError', { emailAccountId: destinationMailboxNotConfiguredMatch[1] })
   }
 
   const gmailAccountNotLinkedMatch = text.match(/^Source (.+?) failed: The Gmail account is not linked for this destination\..+$/)

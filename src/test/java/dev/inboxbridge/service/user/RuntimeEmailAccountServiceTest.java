@@ -3,6 +3,7 @@ package dev.inboxbridge.service.user;
 import dev.inboxbridge.service.mail.EnvSourceService;
 import dev.inboxbridge.service.oauth.SystemOAuthAppSettingsService;
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertNull;
 
 import java.time.Duration;
 import java.time.Instant;
@@ -222,6 +223,209 @@ class RuntimeEmailAccountServiceTest {
         };
 
         assertEquals(List.of("active-user-bridge"), service.listEnabledForPolling().stream().map(bridge -> bridge.id()).toList());
+    }
+
+    @Test
+    void manualPollingKeepsEnabledUserSourcesWhenDestinationIsMissing() {
+        RuntimeEmailAccountService service = new RuntimeEmailAccountService();
+        service.config = testConfig();
+        service.systemOAuthAppSettingsService = systemOAuthSettings();
+        service.envSourceService = new EnvSourceService() {
+            @Override
+            public List<IndexedSource> configuredSources() {
+                return List.of();
+            }
+        };
+        service.userEmailAccountService = new UserEmailAccountService() {
+            @Override
+            public List<UserEmailAccount> listEnabledBridges() {
+                return List.of(userBridge(1L, "source-without-destination"));
+            }
+
+            @Override
+            public String decryptPassword(UserEmailAccount bridge) {
+                return "secret";
+            }
+
+            @Override
+            public String decryptRefreshToken(UserEmailAccount bridge) {
+                return "";
+            }
+        };
+        service.userMailDestinationConfigService = new UserMailDestinationConfigService() {
+            @Override
+            public Optional<MailDestinationTarget> resolveForUser(Long userId, String ownerUsername) {
+                return Optional.empty();
+            }
+        };
+        service.appUserRepository = new AppUserRepository() {
+            @Override
+            public Optional<AppUser> findByIdOptional(Long id) {
+                return Optional.of(user(1L, true, true, "alice"));
+            }
+        };
+
+        AppUser actor = user(1L, true, true, "alice");
+
+        assertEquals(List.of(), service.listEnabledForPolling());
+        assertEquals(List.of(), service.listEnabledForUser(actor));
+        assertEquals(
+                List.of("source-without-destination"),
+                service.listEnabledForUserManualPolling(actor).stream().map(bridge -> bridge.id()).toList());
+        assertNull(service.listEnabledForUserManualPolling(actor).getFirst().destination());
+    }
+
+    private static InboxBridgeConfig testConfig() {
+        return new InboxBridgeConfig() {
+            @Override
+            public boolean pollEnabled() {
+                return true;
+            }
+
+            @Override
+            public String pollInterval() {
+                return "5m";
+            }
+
+            @Override
+            public int fetchWindow() {
+                return 50;
+            }
+
+            @Override
+            public Duration sourceHostMinSpacing() {
+                return Duration.ofSeconds(1);
+            }
+
+            @Override
+            public int sourceHostMaxConcurrency() {
+                return 2;
+            }
+
+            @Override
+            public Duration destinationProviderMinSpacing() {
+                return Duration.ofMillis(250);
+            }
+
+            @Override
+            public int destinationProviderMaxConcurrency() {
+                return 1;
+            }
+
+            @Override
+            public Duration throttleLeaseTtl() {
+                return Duration.ofMinutes(2);
+            }
+
+            @Override
+            public int adaptiveThrottleMaxMultiplier() {
+                return 6;
+            }
+
+            @Override
+            public double successJitterRatio() {
+                return 0.2d;
+            }
+
+            @Override
+            public Duration maxSuccessJitter() {
+                return Duration.ofSeconds(30);
+            }
+
+            @Override
+            public boolean multiUserEnabled() {
+                return true;
+            }
+
+            @Override
+            public Security security() {
+                return null;
+            }
+
+            @Override
+            public Gmail gmail() {
+                return new Gmail() {
+                    @Override
+                    public String destinationUser() {
+                        return "me";
+                    }
+
+                    @Override
+                    public String clientId() {
+                        return "client-id";
+                    }
+
+                    @Override
+                    public String clientSecret() {
+                        return "client-secret";
+                    }
+
+                    @Override
+                    public String refreshToken() {
+                        return "refresh-token";
+                    }
+
+                    @Override
+                    public String redirectUri() {
+                        return "https://localhost:3000/api/google-oauth/callback";
+                    }
+
+                    @Override
+                    public boolean createMissingLabels() {
+                        return true;
+                    }
+
+                    @Override
+                    public boolean neverMarkSpam() {
+                        return false;
+                    }
+
+                    @Override
+                    public boolean processForCalendar() {
+                        return false;
+                    }
+                };
+            }
+
+            @Override
+            public Microsoft microsoft() {
+                return null;
+            }
+
+            @Override
+            public List<Source> sources() {
+                return List.of();
+            }
+        };
+    }
+
+    private static SystemOAuthAppSettingsService systemOAuthSettings() {
+        return new SystemOAuthAppSettingsService() {
+            @Override
+            public String googleDestinationUser() {
+                return "me";
+            }
+
+            @Override
+            public String googleClientId() {
+                return "client-id";
+            }
+
+            @Override
+            public String googleClientSecret() {
+                return "client-secret";
+            }
+
+            @Override
+            public String googleRefreshToken() {
+                return "refresh-token";
+            }
+
+            @Override
+            public String googleRedirectUri() {
+                return "https://localhost:3000/api/google-oauth/callback";
+            }
+        };
     }
 
     private static AppUser user(Long id, boolean active, boolean approved, String username) {

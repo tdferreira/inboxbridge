@@ -250,7 +250,7 @@ public class UserConfigResource {
     public PollRunResult runEmailAccountPoll(@PathParam("emailAccountId") String emailAccountId) {
         return WebResourceSupport.badRequest(() ->
                 pollingService.runPollForSource(
-                        runtimeEmailAccountService.findAccessibleForUser(currentUserContext.user(), emailAccountId)
+                        runtimeEmailAccountService.findAccessibleForUserManualPolling(currentUserContext.user(), emailAccountId)
                                 .orElseThrow(() -> new IllegalArgumentException("Unknown mail fetcher id")),
                         "app-fetcher",
                         currentUserContext.user(),

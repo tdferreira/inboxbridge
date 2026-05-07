@@ -74,6 +74,17 @@ public class ExtensionStatusResource {
                     "poll_busy",
                     "Another polling run is already active.");
         }
+        if (!result.getErrorDetails().isEmpty()
+                && result.getFetched() == 0
+                && result.getImported() == 0
+                && result.getDuplicates() == 0) {
+            PollRunError firstError = result.getErrorDetails().getFirst();
+            return new ExtensionPollTriggerResultView(
+                    false,
+                    false,
+                    firstError.code(),
+                    firstError.message());
+        }
         return new ExtensionPollTriggerResultView(
                 true,
                 result.getStartedAt() != null,

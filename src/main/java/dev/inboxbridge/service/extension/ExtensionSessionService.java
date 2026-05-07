@@ -16,6 +16,7 @@ import dev.inboxbridge.persistence.ExtensionSessionRepository;
 import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.inject.Inject;
 import jakarta.transaction.Transactional;
+import org.jboss.logging.Logger;
 
 /**
  * Mints, authenticates, rotates, lists, and revokes browser-extension tokens
@@ -24,6 +25,7 @@ import jakarta.transaction.Transactional;
 @ApplicationScoped
 public class ExtensionSessionService {
 
+    private static final Logger LOG = Logger.getLogger(ExtensionSessionService.class);
     private static final SecureRandom SECURE_RANDOM = new SecureRandom();
 
     @Inject
@@ -56,6 +58,15 @@ public class ExtensionSessionService {
         session.expiresAt = now.plus(extensionSecurityConfig.refreshTokenTtl());
 
         repository.persist(session);
+        LOG.infof(
+                "Created browser-extension session id=%s userId=%s browser=%s version=%s accessExpiresAt=%s refreshExpiresAt=%s tokenFingerprint=%s",
+                session.id,
+                session.userId,
+                session.browserFamily,
+                session.extensionVersion,
+                session.accessExpiresAt,
+                session.expiresAt,
+                tokenFingerprint(accessToken.rawToken()));
         return new CreatedExtensionAuthSession(accessToken.rawToken(), refreshToken.rawToken(), session);
     }
 
@@ -73,6 +84,7 @@ public class ExtensionSessionService {
         }
         if (session.get().revokedAt == null) {
             session.get().revokedAt = Instant.now();
+            LOG.infof("Revoked browser-extension session id=%s userId=%s", session.get().id, user.id);
         }
         return true;
     }
@@ -82,6 +94,9 @@ public class ExtensionSessionService {
         Instant now = Instant.now();
         List<ExtensionSession> activeSessions = repository.listActiveByUserId(user.id, now);
         activeSessions.forEach((session) -> session.revokedAt = now);
+        if (!activeSessions.isEmpty()) {
+            LOG.infof("Revoked %d browser-extension session(s) for userId=%s", activeSessions.size(), user.id);
+        }
         return activeSessions.stream()
                 .map(session -> session.id)
                 .toList();
@@ -92,34 +107,75 @@ public class ExtensionSessionService {
         Instant now = Instant.now();
         List<ExtensionSession> activeSessions = repository.listAllActive(now);
         activeSessions.forEach((session) -> session.revokedAt = now);
+        if (!activeSessions.isEmpty()) {
+            LOG.infof("Revoked %d active browser-extension session(s) across all users", activeSessions.size());
+        }
         return activeSessions.size();
     }
 
     @Transactional
     public Optional<AuthenticatedExtensionSession> authenticate(String rawToken) {
         if (rawToken == null || rawToken.isBlank()) {
+            LOG.warn("Rejected browser-extension access token authentication because the bearer token was empty");
             return Optional.empty();
         }
 
         Instant now = Instant.now();
-        return repository.findByTokenHash(hashToken(rawToken))
-                .filter(session -> session.accessTokenActive(now))
-                .map(session -> {
-                    session.lastUsedAt = now;
-                    return new AuthenticatedExtensionSession(session.id, session.userId, session.label);
+        String tokenHash = hashToken(rawToken);
+        String fingerprint = tokenFingerprint(rawToken);
+        Optional<ExtensionSession> found = repository.findByTokenHash(tokenHash);
+        if (found.isEmpty()) {
+            LOG.warnf("Rejected browser-extension access token authentication because no session matched tokenFingerprint=%s", fingerprint);
+            return Optional.empty();
+        }
+        ExtensionSession session = found.get();
+        if (!session.accessTokenActive(now)) {
+            LOG.warnf(
+                    "Rejected browser-extension access token authentication for session id=%s userId=%s reason=%s accessExpiresAt=%s refreshExpiresAt=%s revokedAt=%s tokenFingerprint=%s",
+                    session.id,
+                    session.userId,
+                    inactiveReason(session, now, true),
+                    session.accessExpiresAt,
+                    session.expiresAt,
+                    session.revokedAt,
+                    fingerprint);
+            return Optional.empty();
+        }
+        return Optional.of(session)
+                .map(activeSession -> {
+                    activeSession.lastUsedAt = now;
+                    return new AuthenticatedExtensionSession(activeSession.id, activeSession.userId, activeSession.label);
                 });
     }
 
     @Transactional
     public Optional<CreatedExtensionAuthSession> refresh(String rawRefreshToken) {
         if (rawRefreshToken == null || rawRefreshToken.isBlank()) {
+            LOG.warn("Rejected browser-extension refresh because the refresh token was empty");
             return Optional.empty();
         }
 
         Instant now = Instant.now();
-        return repository.findByRefreshTokenHash(hashToken(rawRefreshToken))
-                .filter(session -> session.active(now))
-                .map(session -> rotateSessionTokens(session, now));
+        String refreshHash = hashToken(rawRefreshToken);
+        String fingerprint = tokenFingerprint(rawRefreshToken);
+        Optional<ExtensionSession> found = repository.findByRefreshTokenHashForUpdate(refreshHash);
+        if (found.isEmpty()) {
+            LOG.warnf("Rejected browser-extension refresh because no session matched refreshFingerprint=%s", fingerprint);
+            return Optional.empty();
+        }
+        ExtensionSession session = found.get();
+        if (!session.active(now)) {
+            LOG.warnf(
+                    "Rejected browser-extension refresh for session id=%s userId=%s reason=%s refreshExpiresAt=%s revokedAt=%s refreshFingerprint=%s",
+                    session.id,
+                    session.userId,
+                    inactiveReason(session, now, false),
+                    session.expiresAt,
+                    session.revokedAt,
+                    fingerprint);
+            return Optional.empty();
+        }
+        return Optional.of(rotateSessionTokens(session, now, fingerprint));
     }
 
     /**
@@ -135,7 +191,7 @@ public class ExtensionSessionService {
         }
     }
 
-    private CreatedExtensionAuthSession rotateSessionTokens(ExtensionSession session, Instant now) {
+    private CreatedExtensionAuthSession rotateSessionTokens(ExtensionSession session, Instant now, String previousRefreshFingerprint) {
         TokenMaterial accessToken = generateToken();
         TokenMaterial refreshToken = generateToken();
         session.tokenHash = accessToken.tokenHash();
@@ -144,6 +200,16 @@ public class ExtensionSessionService {
         session.refreshTokenHash = refreshToken.tokenHash();
         session.lastUsedAt = now;
         session.expiresAt = now.plus(extensionSecurityConfig.refreshTokenTtl());
+        LOG.infof(
+                "Rotated browser-extension tokens for session id=%s userId=%s browser=%s version=%s previousRefreshFingerprint=%s newAccessExpiresAt=%s newRefreshExpiresAt=%s newAccessFingerprint=%s",
+                session.id,
+                session.userId,
+                session.browserFamily,
+                session.extensionVersion,
+                previousRefreshFingerprint,
+                session.accessExpiresAt,
+                session.expiresAt,
+                tokenFingerprint(accessToken.rawToken()));
         return new CreatedExtensionAuthSession(accessToken.rawToken(), refreshToken.rawToken(), session);
     }
 
@@ -160,6 +226,24 @@ public class ExtensionSessionService {
 
     private String tokenPrefix(String rawToken) {
         return rawToken.length() <= 12 ? rawToken : rawToken.substring(0, 12);
+    }
+
+    private String tokenFingerprint(String rawToken) {
+        String hash = hashToken(rawToken);
+        return hash.length() <= 16 ? hash : hash.substring(0, 16);
+    }
+
+    private String inactiveReason(ExtensionSession session, Instant now, boolean includeAccessToken) {
+        if (session.revokedAt != null) {
+            return "revoked";
+        }
+        if (session.expiresAt != null && !session.expiresAt.isAfter(now)) {
+            return "refresh_expired";
+        }
+        if (includeAccessToken && session.accessExpiresAt != null && !session.accessExpiresAt.isAfter(now)) {
+            return "access_expired";
+        }
+        return "inactive";
     }
 
     private ExtensionSessionView toView(ExtensionSession session) {

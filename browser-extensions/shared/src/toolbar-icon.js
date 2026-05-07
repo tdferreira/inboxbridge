@@ -7,6 +7,7 @@ const DEFAULT_ICON_PATHS = Object.freeze({
 })
 
 const iconImageCache = new Map()
+let iconUpdateSequence = 0
 
 /**
  * Maps the current extension status into a toolbar icon variant. The default
@@ -31,8 +32,12 @@ export function toolbarIconStateForStatus(status, errorState = null) {
 }
 
 export async function setToolbarIconForState(state, deps = {}) {
+  const updateSequence = ++iconUpdateSequence
   const imageData = await loadToolbarIconImageData(state, deps)
   if (!imageData) {
+    return false
+  }
+  if (updateSequence !== iconUpdateSequence) {
     return false
   }
   await (deps.setIcon || setIcon)(imageData)

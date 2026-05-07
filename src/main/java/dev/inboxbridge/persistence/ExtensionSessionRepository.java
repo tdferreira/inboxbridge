@@ -6,6 +6,7 @@ import java.util.Optional;
 
 import io.quarkus.hibernate.orm.panache.PanacheRepository;
 import jakarta.enterprise.context.ApplicationScoped;
+import jakarta.persistence.LockModeType;
 
 @ApplicationScoped
 public class ExtensionSessionRepository implements PanacheRepository<ExtensionSession> {
@@ -16,6 +17,12 @@ public class ExtensionSessionRepository implements PanacheRepository<ExtensionSe
 
     public Optional<ExtensionSession> findByRefreshTokenHash(String refreshTokenHash) {
         return find("refreshTokenHash", refreshTokenHash).firstResultOptional();
+    }
+
+    public Optional<ExtensionSession> findByRefreshTokenHashForUpdate(String refreshTokenHash) {
+        return find("refreshTokenHash", refreshTokenHash)
+                .withLock(LockModeType.PESSIMISTIC_WRITE)
+                .firstResultOptional();
     }
 
     public List<ExtensionSession> listByUserId(Long userId) {

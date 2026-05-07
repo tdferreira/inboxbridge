@@ -147,6 +147,44 @@ describe('usePollingControllers', () => {
     }))
   })
 
+  it('routes missing destination mailbox poll errors to the destination section', async () => {
+    fetch.mockResolvedValue({
+      ok: true,
+      json: async () => ({
+        fetched: 0,
+        imported: 0,
+        duplicates: 0,
+        errors: [],
+        errorDetails: [
+          {
+            code: 'destination_mailbox_not_configured',
+            sourceId: 'outlook-main',
+            message: 'Source outlook-main cannot run because Destination mailbox is not configured. Open My Destination Mailbox and connect the mailbox that should receive imported mail before running polling.'
+          }
+        ],
+        spamJunkMessageCount: 0
+      })
+    })
+
+    const { result, pushNotification } = renderController()
+
+    await act(async () => {
+      await result.current.runUserPoll()
+    })
+
+    expect(pushNotification).toHaveBeenLastCalledWith(expect.objectContaining({
+      message: expect.objectContaining({
+        kind: 'pollError',
+        value: expect.objectContaining({
+          code: 'destination_mailbox_not_configured',
+          sourceId: 'outlook-main'
+        })
+      }),
+      targetId: 'destination-mailbox-section',
+      tone: 'error'
+    }))
+  })
+
   it('publishes only the final global poll notification after a successful run', async () => {
     fetch.mockResolvedValue({
       ok: true,

@@ -205,7 +205,10 @@ export function createPopupController({
           break
         } catch (error) {
           if (!isInvalidExtensionAuthError(error)) {
-            throw error
+            await cancelManualPollOverlay()
+            showStatusBanner(popupStatus, 'warning', error.message || 'InboxBridge could not start a poll right now.')
+            await refreshPopup({ preserveBanner: true })
+            return
           }
           if (attempt === 0) {
             const recovered = await recoverRotatedConfig(config)
@@ -215,17 +218,29 @@ export function createPopupController({
               continue
             }
           }
+          await cancelManualPollOverlay()
           await handleInvalidAuth(error)
           return
         }
       }
       if (!result.accepted || !result.started) {
+        await cancelManualPollOverlay()
         showStatusBanner(popupStatus, 'warning', result.message || 'InboxBridge could not start a poll right now.')
         await refreshPopup({ preserveBanner: true })
       } else {
         showStatusBanner(popupStatus, 'success', result.message || 'InboxBridge started your polling run.')
+        await sendMessage?.({ type: 'manual-poll-trigger-returned' })
+        await sendMessage?.({ type: 'refresh-status' })
       }
     })
+  }
+
+  async function cancelManualPollOverlay() {
+    try {
+      await sendMessage?.({ type: 'manual-poll-cancelled' })
+    } catch {
+      // The background worker may be asleep; the periodic refresh still clears stale optimistic state.
+    }
   }
 
   async function openConfiguredTab(suffix = '') {

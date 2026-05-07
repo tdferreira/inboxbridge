@@ -99,7 +99,7 @@ public class PollingService {
     public PollRunResult runPollForAllUsers(AppUser actor, String trigger) {
         return runPollInternal(
                 trigger,
-                runtimeEmailAccountService.listEnabledForPolling(),
+                runtimeEmailAccountService.listEnabledForManualPolling(),
                 actor,
                 actorRateLimitKey(actor),
                 true,
@@ -112,7 +112,7 @@ public class PollingService {
     public PollRunResult runPollForUser(AppUser actor, String trigger) {
         return runPollInternal(
                 trigger,
-                runtimeEmailAccountService.listEnabledForUser(actor),
+                runtimeEmailAccountService.listEnabledForUserManualPolling(actor),
                 actor,
                 actorRateLimitKey(actor),
                 true,

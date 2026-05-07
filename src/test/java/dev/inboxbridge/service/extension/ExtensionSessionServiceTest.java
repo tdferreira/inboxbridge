@@ -83,6 +83,7 @@ class ExtensionSessionServiceTest {
         var refreshed = service.refresh(created.refreshToken());
 
         assertTrue(refreshed.isPresent());
+        assertEquals(1, repository.lockedRefreshLookups);
         assertNotEquals(previousAccessHash, repository.byId.get(created.session().id).tokenHash);
         assertNotEquals(previousRefreshHash, repository.byId.get(created.session().id).refreshTokenHash);
         assertTrue(service.authenticate(created.accessToken()).isEmpty());
@@ -124,6 +125,7 @@ class ExtensionSessionServiceTest {
 
     static final class InMemoryExtensionSessionRepository extends ExtensionSessionRepository {
         final Map<Long, ExtensionSession> byId = new HashMap<>();
+        int lockedRefreshLookups = 0;
         long nextId = 1L;
 
         @Override
@@ -144,6 +146,12 @@ class ExtensionSessionServiceTest {
             return byId.values().stream()
                     .filter(session -> refreshTokenHash.equals(session.refreshTokenHash))
                     .findFirst();
+        }
+
+        @Override
+        public Optional<ExtensionSession> findByRefreshTokenHashForUpdate(String refreshTokenHash) {
+            lockedRefreshLookups += 1;
+            return findByRefreshTokenHash(refreshTokenHash);
         }
 
         @Override

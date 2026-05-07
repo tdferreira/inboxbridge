@@ -52,6 +52,68 @@ class ExtensionStatusResourceTest {
     }
 
     @Test
+    void pollReturnsNotStartedWhenPollingServiceRejectsBeforeWorkStarts() {
+        ExtensionStatusResource resource = new ExtensionStatusResource();
+        CurrentUserContext currentUserContext = new CurrentUserContext();
+        AppUser user = new AppUser();
+        user.id = 7L;
+        user.username = "alice";
+        currentUserContext.setUser(user);
+        resource.currentUserContext = currentUserContext;
+        resource.pollingService = new PollingService() {
+            @Override
+            public PollRunResult runPollForUser(AppUser actor, String trigger) {
+                PollRunResult result = new PollRunResult();
+                result.addError(new PollRunError(
+                        "manual_poll_rate_limited",
+                        null,
+                        "Manual polling is temporarily rate limited.",
+                        null));
+                return result;
+            }
+        };
+
+        var response = resource.poll();
+
+        assertFalse(response.accepted());
+        assertFalse(response.started());
+        assertEquals("manual_poll_rate_limited", response.reason());
+        assertEquals("Manual polling is temporarily rate limited.", response.message());
+    }
+
+    @Test
+    void pollReturnsDestinationConfigurationErrorWhenUserDestinationIsMissing() {
+        ExtensionStatusResource resource = new ExtensionStatusResource();
+        CurrentUserContext currentUserContext = new CurrentUserContext();
+        AppUser user = new AppUser();
+        user.id = 7L;
+        user.username = "alice";
+        currentUserContext.setUser(user);
+        resource.currentUserContext = currentUserContext;
+        resource.pollingService = new PollingService() {
+            @Override
+            public PollRunResult runPollForUser(AppUser actor, String trigger) {
+                PollRunResult result = new PollRunResult();
+                result.addError(new PollRunError(
+                        "destination_mailbox_not_configured",
+                        "source-pop",
+                        "Source source-pop cannot run because Destination mailbox is not configured. Open My Destination Mailbox and connect the mailbox that should receive imported mail before running polling.",
+                        null));
+                return result;
+            }
+        };
+
+        var response = resource.poll();
+
+        assertFalse(response.accepted());
+        assertFalse(response.started());
+        assertEquals("destination_mailbox_not_configured", response.reason());
+        assertEquals(
+                "Source source-pop cannot run because Destination mailbox is not configured. Open My Destination Mailbox and connect the mailbox that should receive imported mail before running polling.",
+                response.message());
+    }
+
+    @Test
     void statusDelegatesToExtensionStatusServiceForAuthenticatedUser() {
         ExtensionStatusResource resource = new ExtensionStatusResource();
         CurrentUserContext currentUserContext = new CurrentUserContext();

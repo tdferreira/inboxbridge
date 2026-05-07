@@ -16,6 +16,8 @@ import { normalizeThemePreference } from './theme.js'
 
 const STORAGE_KEY = 'inboxbridgeExtensionConfig'
 const REFRESH_SKEW_MS = 60_000
+const ROTATED_REFRESH_RECOVERY_ATTEMPTS = 10
+const ROTATED_REFRESH_RECOVERY_DELAY_MS = 200
 const DEFAULT_NOTIFICATION_SETTINGS = Object.freeze({
   notifyErrors: false,
   notifyManualPollSuccess: false
@@ -73,6 +75,7 @@ export function createConfigStore({
   currentTime = () => Date.now(),
   decryptJson,
   encryptJson,
+  logger = console,
   queryTabs,
   refreshExtensionAuth,
   requestApiPermission,
@@ -122,6 +125,7 @@ export function createConfigStore({
       username: auth.username || ''
     }
     if (shouldRefresh(normalized, currentTime())) {
+      logInfo(logger, 'Refreshing expiring extension access token.', authLogDetails(normalized))
       try {
         const refreshed = await refreshExtensionAuth(normalized.serverUrl, normalized.refreshToken)
         normalized = mapSessionToConfig(normalized.serverUrl, refreshed?.session)
@@ -130,8 +134,13 @@ export function createConfigStore({
         normalized.notifyManualPollSuccess = notifyManualPollSuccess
         normalized.theme = theme
         await saveConfig(normalized)
+        logInfo(logger, 'Saved rotated extension auth tokens.', authLogDetails(normalized))
       } catch (error) {
         if (!isInvalidExtensionAuthError(error)) {
+          logWarn(logger, 'Keeping saved extension auth after transient refresh failure.', {
+            ...authLogDetails(normalized),
+            errorMessage: error.message
+          })
           return {
             ...normalized,
             refreshErrorMessage: error.message,
@@ -141,6 +150,7 @@ export function createConfigStore({
 
         const latest = await waitForRotatedRefreshToken(normalized.refreshToken)
         if (latest) {
+          logInfo(logger, 'Recovered a newer extension refresh token written by another extension context.', authLogDetails(latest))
           return {
             ...latest,
             language,
@@ -157,6 +167,10 @@ export function createConfigStore({
           theme
         })
         await storageSet({ [STORAGE_KEY]: nonSensitive })
+        logWarn(logger, 'Cleared saved extension auth after confirmed invalid refresh token.', {
+          serverUrl: nonSensitive.serverUrl || '',
+          username: normalized.username || ''
+        })
         return nonSensitive
       }
     }
@@ -365,8 +379,11 @@ export function createConfigStore({
     if (immediate) {
       return immediate
     }
-    for (let attempt = 0; attempt < 2; attempt += 1) {
-      await sleep(150)
+    for (let attempt = 0; attempt < ROTATED_REFRESH_RECOVERY_ATTEMPTS; attempt += 1) {
+      await sleep(ROTATED_REFRESH_RECOVERY_DELAY_MS)
+      logInfo(logger, 'Waiting for a concurrently rotated extension refresh token.', {
+        attempt: attempt + 1
+      })
       const latest = await loadLatestConfigIfRefreshTokenRotated(attemptedRefreshToken)
       if (latest) {
         return latest
@@ -441,6 +458,31 @@ function mapSessionToConfig(serverUrl, session) {
     userLanguage: normalizeStoredUserLanguage(session?.user?.language),
     userThemeMode: normalizeStoredUserThemeMode(session?.user?.themeMode),
     username: resolvedUsername
+  }
+}
+
+function authLogDetails(config) {
+  return {
+    accessTokenExpiresAt: config?.accessTokenExpiresAt || null,
+    refreshTokenExpiresAt: config?.refreshTokenExpiresAt || null,
+    serverUrl: config?.serverUrl || '',
+    username: config?.username || ''
+  }
+}
+
+function logInfo(logger, message, details = {}) {
+  try {
+    logger?.info?.('[InboxBridge extension auth]', message, details)
+  } catch {
+    // Diagnostics must never disrupt extension auth handling.
+  }
+}
+
+function logWarn(logger, message, details = {}) {
+  try {
+    logger?.warn?.('[InboxBridge extension auth]', message, details)
+  } catch {
+    // Diagnostics must never disrupt extension auth handling.
   }
 }
 
