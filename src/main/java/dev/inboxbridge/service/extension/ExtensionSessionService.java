@@ -3,6 +3,7 @@ package dev.inboxbridge.service.extension;
 import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
 import java.security.SecureRandom;
+import java.time.Duration;
 import java.time.Instant;
 import java.util.Base64;
 import java.util.List;
@@ -27,6 +28,7 @@ public class ExtensionSessionService {
 
     private static final Logger LOG = Logger.getLogger(ExtensionSessionService.class);
     private static final SecureRandom SECURE_RANDOM = new SecureRandom();
+    static final Duration REVOKED_SESSION_VISIBLE_HISTORY = Duration.ofDays(30);
 
     @Inject
     ExtensionSessionRepository repository;
@@ -71,7 +73,8 @@ public class ExtensionSessionService {
     }
 
     public List<ExtensionSessionView> listSessions(AppUser user) {
-        return repository.listByUserId(user.id).stream()
+        Instant revokedAfter = Instant.now().minus(REVOKED_SESSION_VISIBLE_HISTORY);
+        return repository.listVisibleByUserId(user.id, revokedAfter).stream()
                 .map(this::toView)
                 .toList();
     }

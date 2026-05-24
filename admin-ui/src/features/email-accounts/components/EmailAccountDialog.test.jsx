@@ -155,6 +155,111 @@ describe('EmailAccountDialog', () => {
     expect(options.find((option) => option.value === 'Label_Projects')?.label).toBe('Imported/Projects')
   })
 
+  it('edits folder label mappings with source-folder and Gmail-label pickers', () => {
+    let emailAccountForm = {
+      originalEmailAccountId: 'fetcher-a',
+      emailAccountId: 'fetcher-a',
+      enabled: true,
+      protocol: 'IMAP',
+      host: 'imap.example.com',
+      port: 993,
+      tls: true,
+      authMethod: 'PASSWORD',
+      oauthProvider: 'NONE',
+      username: 'person@example.com',
+      password: '',
+      oauthRefreshToken: '',
+      folder: 'INBOX, Projects/2026',
+      unreadOnly: false,
+      customLabel: '',
+      folderLabelMappings: 'INBOX=Label_Inbox',
+      markReadAfterPoll: false,
+      postPollAction: 'NONE',
+      postPollTargetFolder: ''
+    }
+    const onApplyPreset = vi.fn()
+    const onFolderInputActivity = vi.fn()
+    const onFolderInputFocus = vi.fn()
+    const { container, rerender } = renderUi()
+
+    expect(screen.getAllByText('INBOX').length).toBeGreaterThan(0)
+    expect(screen.getByText('Imported/Inbox')).toBeInTheDocument()
+    expect([...container.querySelectorAll('#email-account-folder-label-source-options option')].map((option) => option.value)).toEqual(['INBOX', 'Projects/2026', 'Spam'])
+    expect([...container.querySelectorAll('#email-account-folder-label-gmail-options option')].map((option) => option.value)).toEqual(['INBOX', 'SPAM', 'Label_Inbox', 'Label_Projects'])
+
+    fireEvent.focus(screen.getByLabelText('Source folder'))
+    fireEvent.change(screen.getByLabelText('Source folder'), { target: { value: 'Projects/2026' } })
+    fireEvent.change(screen.getByLabelText('Gmail label'), { target: { value: 'Label_Projects' } })
+    fireEvent.click(screen.getByRole('button', { name: 'Add mapping' }))
+
+    expect(onFolderInputFocus).toHaveBeenCalled()
+    expect(onFolderInputActivity).toHaveBeenCalledWith('Projects/2026')
+    expect(emailAccountForm.folderLabelMappings).toBe('INBOX=Label_Inbox\nProjects/2026=Label_Projects')
+    expect(screen.getAllByText('Projects/2026').length).toBeGreaterThan(0)
+    expect(screen.getByText('Imported/Projects')).toBeInTheDocument()
+
+    fireEvent.change(screen.getByLabelText('Source folder'), { target: { value: 'INBOX' } })
+    fireEvent.change(screen.getByLabelText('Gmail label'), { target: { value: 'Label_Projects' } })
+    expect(screen.getByRole('button', { name: 'Update mapping' })).toBeInTheDocument()
+    fireEvent.click(screen.getByRole('button', { name: 'Update mapping' }))
+
+    expect(emailAccountForm.folderLabelMappings).toBe('Projects/2026=Label_Projects\nINBOX=Label_Projects')
+
+    fireEvent.click(screen.getByRole('button', { name: 'Remove mapping for Projects/2026' }))
+
+    expect(emailAccountForm.folderLabelMappings).toBe('INBOX=Label_Projects')
+
+    function renderUi() {
+      return render(
+        <EmailAccountDialog
+          emailAccountFolders={['INBOX', 'Projects/2026', 'Spam']}
+          emailAccountForm={emailAccountForm}
+          destinationConfig={{ provider: 'GMAIL_API' }}
+          gmailLabelOptions={[
+            { id: 'Label_Inbox', name: 'Imported/Inbox', type: 'user' },
+            { id: 'Label_Projects', name: 'Imported/Projects', type: 'user' }
+          ]}
+          onApplyPreset={onApplyPreset}
+          onEmailAccountFormChange={(updater) => {
+            emailAccountForm = typeof updater === 'function' ? updater(emailAccountForm) : updater
+            rerenderUi()
+          }}
+          onFolderInputActivity={onFolderInputActivity}
+          onFolderInputFocus={onFolderInputFocus}
+          onClose={vi.fn()}
+          onSave={vi.fn((event) => event.preventDefault())}
+          saveLoading={false}
+          t={(key, params) => translate('en', key, params)}
+        />
+      )
+    }
+
+    function rerenderUi() {
+      rerender(
+        <EmailAccountDialog
+          emailAccountFolders={['INBOX', 'Projects/2026', 'Spam']}
+          emailAccountForm={emailAccountForm}
+          destinationConfig={{ provider: 'GMAIL_API' }}
+          gmailLabelOptions={[
+            { id: 'Label_Inbox', name: 'Imported/Inbox', type: 'user' },
+            { id: 'Label_Projects', name: 'Imported/Projects', type: 'user' }
+          ]}
+          onApplyPreset={onApplyPreset}
+          onEmailAccountFormChange={(updater) => {
+            emailAccountForm = typeof updater === 'function' ? updater(emailAccountForm) : updater
+            rerenderUi()
+          }}
+          onFolderInputActivity={onFolderInputActivity}
+          onFolderInputFocus={onFolderInputFocus}
+          onClose={vi.fn()}
+          onSave={vi.fn((event) => event.preventDefault())}
+          saveLoading={false}
+          t={(key, params) => translate('en', key, params)}
+        />
+      )
+    }
+  })
+
   it('hides custom label when the current destination does not support labels', () => {
     render(
       <EmailAccountDialog
@@ -524,6 +629,145 @@ describe('EmailAccountDialog', () => {
     }
   })
 
+  it('lets IMAP users select multiple spam and junk source folders', () => {
+    let emailAccountForm = {
+      originalEmailAccountId: '',
+      emailAccountId: 'source-a',
+      enabled: true,
+      protocol: 'IMAP',
+      host: 'imap.example.com',
+      port: 993,
+      tls: true,
+      authMethod: 'PASSWORD',
+      oauthProvider: 'NONE',
+      username: 'user@example.com',
+      password: '',
+      oauthRefreshToken: '',
+      folder: 'INBOX',
+      unreadOnly: false,
+      fetchMode: 'POLLING',
+      customLabel: '',
+      spamJunkStrategy: 'IMPORT_AND_ROUTE',
+      spamJunkSourceFolder: '',
+      markReadAfterPoll: false,
+      postPollAction: 'NONE',
+      postPollTargetFolder: ''
+    }
+    const { rerender } = render(
+      <EmailAccountDialog
+        emailAccountForm={emailAccountForm}
+        emailAccountFolders={['INBOX', 'Spam', 'Junk', 'Archive']}
+        onApplyPreset={vi.fn()}
+        onEmailAccountFormChange={(updater) => {
+          emailAccountForm = typeof updater === 'function' ? updater(emailAccountForm) : updater
+          rerenderUi()
+        }}
+        onClose={vi.fn()}
+        onSave={vi.fn((event) => event.preventDefault())}
+        saveLoading={false}
+        testResult={{ tone: 'success', message: 'Connection test succeeded.' }}
+        t={(key, params) => translate('en', key, params)}
+      />
+    )
+
+    const spamJunkInput = screen.getByRole('combobox', { name: 'Source spam and junk folders' })
+    fireEvent.change(spamJunkInput, { target: { value: 'Sp' } })
+    fireEvent.keyDown(spamJunkInput, { key: 'Enter' })
+    fireEvent.change(spamJunkInput, { target: { value: 'Ju' } })
+    fireEvent.keyDown(spamJunkInput, { key: 'Enter' })
+
+    expect(emailAccountForm.spamJunkSourceFolder).toBe('Spam, Junk')
+    expect(screen.getByText('Folder discovery loaded. Pick every spam or junk folder you want to import.')).toBeInTheDocument()
+
+    function rerenderUi() {
+      rerender(
+        <EmailAccountDialog
+          emailAccountForm={emailAccountForm}
+          emailAccountFolders={['INBOX', 'Spam', 'Junk', 'Archive']}
+          onApplyPreset={vi.fn()}
+          onEmailAccountFormChange={(updater) => {
+            emailAccountForm = typeof updater === 'function' ? updater(emailAccountForm) : updater
+            rerenderUi()
+          }}
+          onClose={vi.fn()}
+          onSave={vi.fn((event) => event.preventDefault())}
+          saveLoading={false}
+          testResult={{ tone: 'success', message: 'Connection test succeeded.' }}
+          t={(key, params) => translate('en', key, params)}
+        />
+      )
+    }
+  })
+
+  it('hides spam and junk source folders while the spam/junk strategy ignores them', () => {
+    let emailAccountForm = {
+      originalEmailAccountId: '',
+      emailAccountId: 'source-a',
+      enabled: true,
+      protocol: 'IMAP',
+      host: 'imap.example.com',
+      port: 993,
+      tls: true,
+      authMethod: 'PASSWORD',
+      oauthProvider: 'NONE',
+      username: 'user@example.com',
+      password: '',
+      oauthRefreshToken: '',
+      folder: 'INBOX',
+      unreadOnly: false,
+      fetchMode: 'POLLING',
+      customLabel: '',
+      spamJunkStrategy: 'IGNORE',
+      spamJunkSourceFolder: 'Spam, Junk',
+      markReadAfterPoll: false,
+      postPollAction: 'NONE',
+      postPollTargetFolder: ''
+    }
+    const { rerender } = render(
+      <EmailAccountDialog
+        emailAccountForm={emailAccountForm}
+        emailAccountFolders={['INBOX', 'Spam', 'Junk']}
+        onApplyPreset={vi.fn()}
+        onEmailAccountFormChange={(updater) => {
+          emailAccountForm = typeof updater === 'function' ? updater(emailAccountForm) : updater
+          rerenderUi()
+        }}
+        onClose={vi.fn()}
+        onSave={vi.fn((event) => event.preventDefault())}
+        saveLoading={false}
+        testResult={{ tone: 'success', message: 'Connection test succeeded.' }}
+        t={(key, params) => translate('en', key, params)}
+      />
+    )
+
+    expect(screen.queryByRole('combobox', { name: 'Source spam and junk folders' })).not.toBeInTheDocument()
+
+    fireEvent.change(screen.getByRole('combobox', { name: /Spam\/Junk strategy/ }), {
+      target: { value: 'IMPORT_NORMAL' }
+    })
+
+    expect(screen.getByRole('combobox', { name: 'Source spam and junk folders' })).toBeInTheDocument()
+
+    function rerenderUi() {
+      rerender(
+        <EmailAccountDialog
+          emailAccountForm={emailAccountForm}
+          emailAccountFolders={['INBOX', 'Spam', 'Junk']}
+          onApplyPreset={vi.fn()}
+          onEmailAccountFormChange={(updater) => {
+            emailAccountForm = typeof updater === 'function' ? updater(emailAccountForm) : updater
+            rerenderUi()
+          }}
+          onClose={vi.fn()}
+          onSave={vi.fn((event) => event.preventDefault())}
+          saveLoading={false}
+          testResult={{ tone: 'success', message: 'Connection test succeeded.' }}
+          t={(key, params) => translate('en', key, params)}
+        />
+      )
+    }
+  })
+
   it('forwards folder typing activity so the outer dialog controller can enrich folders', () => {
     const onFolderInputActivity = vi.fn()
     const onFolderInputFocus = vi.fn()
@@ -838,7 +1082,7 @@ describe('EmailAccountDialog', () => {
       />
     )
 
-    expect(screen.getByText('Retrieving folders from server…')).toBeInTheDocument()
+    expect(screen.getAllByText('Retrieving folders from server…').length).toBeGreaterThan(0)
   })
 
   it('scrolls the latest test result card into view', () => {

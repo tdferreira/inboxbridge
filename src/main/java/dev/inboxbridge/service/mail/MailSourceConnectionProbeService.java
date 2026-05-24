@@ -195,6 +195,23 @@ public class MailSourceConnectionProbeService {
             store = session.getStore(mailSessionFactory.imapStoreProtocol(bridge.tls()));
             registerStore(store);
             mailSourceConnectionService.connectStore(store, bridge);
+            if (!bridge.spamJunkSourceFolders().isEmpty()) {
+                int totalMessages = 0;
+                for (String folderName : bridge.spamJunkSourceFolders()) {
+                    folder = store.getFolder(folderName);
+                    registerFolder(folder);
+                    if (!folder.exists()) {
+                        continue;
+                    }
+                    folder.open(Folder.READ_ONLY);
+                    totalMessages += folder.getMessageCount();
+                    closeQuietly(folder);
+                    folder = null;
+                }
+                return Optional.of(new MailSourceClient.MailboxCountProbe(
+                        String.join(", ", bridge.spamJunkSourceFolders()),
+                        totalMessages));
+            }
             Optional<MailSourceClient.MailboxCountProbe> probe = mailSourceFolderService.probeSpamOrJunkFolder(store);
             if (probe.isEmpty()) {
                 return Optional.empty();

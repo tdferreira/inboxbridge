@@ -131,7 +131,7 @@ inboxbridge:
       custom-label: ${MAIL_ACCOUNT_0__CUSTOM_LABEL:Imported/Source0}
       folder-label-mappings: ${MAIL_ACCOUNT_0__FOLDER_LABEL_MAPPINGS:}
       spam-junk-strategy: ${MAIL_ACCOUNT_0__SPAM_JUNK_STRATEGY:IGNORE}
-      spam-junk-source-folder: ${MAIL_ACCOUNT_0__SPAM_JUNK_SOURCE_FOLDER:}
+      spam-junk-source-folder: ${MAIL_ACCOUNT_0__SPAM_JUNK_SOURCE_FOLDERS:${MAIL_ACCOUNT_0__SPAM_JUNK_SOURCE_FOLDER:}}
 
 security:
   provider-mode: ${SECRET_PROVIDER_MODE:LOCAL}

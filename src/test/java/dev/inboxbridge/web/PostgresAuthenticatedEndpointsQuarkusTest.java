@@ -9,8 +9,9 @@ import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
-import java.time.Instant;
 import java.security.KeyPairGenerator;
+import java.time.Duration;
+import java.time.Instant;
 import java.util.Base64;
 import java.util.List;
 import java.util.Map;
@@ -259,11 +260,23 @@ class PostgresAuthenticatedEndpointsQuarkusTest {
                 .statusCode(401);
 
         List<ExtensionSession> sessions = extensionSessionRepository.listByUserId(adminUser().id);
-        assertNotNull(sessions.stream()
+        ExtensionSession revokedSession = sessions.stream()
                 .filter((session) -> "QA laptop".equals(session.label))
                 .findFirst()
-                .orElseThrow()
-                .revokedAt);
+                .orElseThrow();
+        assertNotNull(revokedSession.revokedAt);
+        QuarkusTransaction.requiringNew().run(() -> {
+            ExtensionSession staleRevokedSession = extensionSessionRepository.findByIdOptional(revokedSession.id).orElseThrow();
+            staleRevokedSession.revokedAt = Instant.now().minus(Duration.ofDays(30)).minusSeconds(60);
+        });
+        List<Map<String, Object>> visibleExtensionSessions = given()
+                .cookie(SESSION_COOKIE, browserSession.sessionToken())
+                .when().get("/api/extension/sessions")
+                .then()
+                .statusCode(200)
+                .extract().jsonPath().getList("$");
+        assertTrue(visibleExtensionSessions.stream()
+                .noneMatch((session) -> "QA laptop".equals(session.get("label"))));
         assertFalse(refreshedRefreshToken.isBlank());
     }
 

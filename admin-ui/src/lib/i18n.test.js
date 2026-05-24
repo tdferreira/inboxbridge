@@ -55,6 +55,7 @@ describe('i18n catalog', () => {
       'common.oauthRefreshTokenMissingError',
       'common.dismissNotification',
       'common.focusSection',
+      'dialogs.unsavedChanges',
       'auth.challengeLoading',
       'auth.challengeAnswerLabel',
       'auth.challengeHelp',

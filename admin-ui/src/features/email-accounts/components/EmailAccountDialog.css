@@ -31,6 +31,65 @@
   text-decoration: underline;
 }
 
+.fetcher-folder-label-mapping-editor {
+  display: grid;
+  gap: 12px;
+}
+
+.fetcher-folder-label-mapping-editor > .field-label-row {
+  justify-self: start;
+}
+
+.fetcher-folder-label-mapping-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) auto;
+  gap: 12px;
+  align-items: end;
+}
+
+.fetcher-folder-label-mapping-add {
+  min-height: 46px;
+  margin-bottom: 0;
+}
+
+.fetcher-folder-label-mapping-pills {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  min-height: 32px;
+}
+
+.fetcher-folder-label-mapping-pill {
+  max-width: 100%;
+  min-height: 0;
+  text-transform: none;
+  letter-spacing: 0;
+  overflow-wrap: anywhere;
+}
+
+.fetcher-folder-label-mapping-remove {
+  border: none;
+  background: transparent;
+  padding: 0 0 0 2px;
+  min-height: 0;
+  min-width: 1.1rem;
+  width: auto;
+  height: auto;
+  color: inherit;
+  cursor: pointer;
+  font-size: 1rem;
+  line-height: 1;
+  align-self: stretch;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.fetcher-folder-label-mapping-empty {
+  color: var(--text-soft);
+  font-size: 0.9rem;
+}
+
 .form-field-pair {
   display: grid;
   gap: 14px;
@@ -86,6 +145,10 @@
 
 @media (max-width: 760px) {
   .form-field-pair {
+    grid-template-columns: 1fr;
+  }
+
+  .fetcher-folder-label-mapping-row {
     grid-template-columns: 1fr;
   }
 

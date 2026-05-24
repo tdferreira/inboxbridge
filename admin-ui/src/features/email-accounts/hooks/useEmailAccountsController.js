@@ -362,10 +362,13 @@ export function useEmailAccountsController({
       const folderPayload = await response.json()
       const folders = Array.isArray(folderPayload?.folders) ? folderPayload.folders : []
       setEmailAccountFolders(folders)
-      if (folderPayload?.suggestedSpamJunkFolder && !formOverride.spamJunkSourceFolder) {
+      const suggestedSpamJunkFolders = Array.isArray(folderPayload?.suggestedSpamJunkFolders) && folderPayload.suggestedSpamJunkFolders.length > 0
+        ? folderPayload.suggestedSpamJunkFolders
+        : (folderPayload?.suggestedSpamJunkFolder ? [folderPayload.suggestedSpamJunkFolder] : [])
+      if (suggestedSpamJunkFolders.length > 0 && !formOverride.spamJunkSourceFolder) {
         setEmailAccountForm((current) => ({
           ...current,
-          spamJunkSourceFolder: current.spamJunkSourceFolder || folderPayload.suggestedSpamJunkFolder
+          spamJunkSourceFolder: current.spamJunkSourceFolder || suggestedSpamJunkFolders.join(', ')
         }))
       }
       setEmailAccountFolderLoadError('')

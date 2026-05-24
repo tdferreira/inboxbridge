@@ -226,7 +226,7 @@ These are the settings most operators care about first:
 - `SECURITY_PASSKEY_*`: passkey/WebAuthn settings
 - `MAIL_ACCOUNT_<n>__...`: optional env-managed source mailbox definitions
 - `MAIL_ACCOUNT_<n>__FOLDER_LABEL_MAPPINGS`: optional IMAP-folder-to-Gmail-label overrides such as `INBOX=Imported/Inbox;Junk=SPAM`
-- `MAIL_ACCOUNT_<n>__SPAM_JUNK_STRATEGY` and `MAIL_ACCOUNT_<n>__SPAM_JUNK_SOURCE_FOLDER`: optional IMAP spam/junk import controls; `IMPORT_AND_ROUTE` preserves source spam/junk messages in Gmail `SPAM` or the destination spam/junk folder
+- `MAIL_ACCOUNT_<n>__SPAM_JUNK_STRATEGY` and `MAIL_ACCOUNT_<n>__SPAM_JUNK_SOURCE_FOLDERS`: optional IMAP spam/junk import controls; `IMPORT_AND_ROUTE` preserves messages from every configured source spam or junk folder in Gmail `SPAM` or the destination spam/junk folder. The older singular `MAIL_ACCOUNT_<n>__SPAM_JUNK_SOURCE_FOLDER` still works for one-folder configs.
 - `GOOGLE_*`: shared Google OAuth app settings for Gmail destination flows
 - `MICROSOFT_*`: shared Microsoft OAuth app settings for Outlook flows
 - `TLS_FRONTEND_CERT_HOSTNAMES` and `TLS_BACKEND_CERT_HOSTNAMES`: extra hostnames to include in generated local certificates

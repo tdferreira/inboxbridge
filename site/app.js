@@ -184,11 +184,11 @@ function createPillbox(root) {
     hiddenInput,
     render() {
       renderValues()
-      textInput.placeholder = translate(language, 'env.placeholder.sourceFolderPillbox')
-      textInput.setAttribute('aria-label', translate(language, 'env.field.sourceFolder'))
+      textInput.placeholder = translate(language, root.dataset.pillboxPlaceholderKey || 'env.placeholder.sourceFolderPillbox')
+      textInput.setAttribute('aria-label', translate(language, root.dataset.pillboxFieldKey || 'env.field.sourceFolder'))
       const help = root.querySelector('.site-pillbox-help')
       if (help) {
-        help.textContent = translate(language, 'env.hint.sourceFolderPillbox')
+        help.textContent = translate(language, root.dataset.pillboxHelpKey || 'env.hint.sourceFolderPillbox')
       }
     }
   }
@@ -414,7 +414,7 @@ function applyTranslations() {
   setFieldText('sourceCustomLabel', 'env.field.sourceCustomLabel', 'env.hint.sourceCustomLabel', 'env.placeholder.sourceCustomLabel')
   setFieldText('sourceFolderLabelMappings', 'env.field.sourceFolderLabelMappings', 'env.hint.sourceFolderLabelMappings', 'env.placeholder.sourceFolderLabelMappings')
   setFieldText('sourceSpamJunkStrategy', 'env.field.sourceSpamJunkStrategy', 'env.hint.sourceSpamJunkStrategy')
-  setFieldText('sourceSpamJunkSourceFolder', 'env.field.sourceSpamJunkSourceFolder', 'env.hint.sourceSpamJunkSourceFolder', 'env.placeholder.sourceSpamJunkSourceFolder')
+  setFieldText('sourceSpamJunkSourceFolderPillbox', 'env.field.sourceSpamJunkSourceFolder', 'env.hint.sourceSpamJunkSourceFolder', 'env.placeholder.sourceSpamJunkSourceFolderPillbox')
   setCheckboxText('multiUserEnabled', 'env.field.multiUser', 'env.hint.multiUser')
   setCheckboxText('sourceUnreadOnly', 'env.field.sourceUnreadOnly', 'env.hint.sourceUnreadOnly')
 

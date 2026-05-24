@@ -233,7 +233,7 @@ MAIL_ACCOUNT_0__FETCH_MODE=IDLE
 MAIL_ACCOUNT_0__CUSTOM_LABEL=Imported/Outlook
 MAIL_ACCOUNT_0__FOLDER_LABEL_MAPPINGS=INBOX=Imported/Inbox;Archive=Imported/Archive
 MAIL_ACCOUNT_0__SPAM_JUNK_STRATEGY=IMPORT_AND_ROUTE
-MAIL_ACCOUNT_0__SPAM_JUNK_SOURCE_FOLDER=Junk
+MAIL_ACCOUNT_0__SPAM_JUNK_SOURCE_FOLDERS=Spam,Junk
 ```
 
 `MAIL_ACCOUNT_0__CUSTOM_LABEL` is the default Gmail label for that source.
@@ -243,9 +243,12 @@ folder side is matched against the actual source IMAP folder of each imported
 message.
 `MAIL_ACCOUNT_0__SPAM_JUNK_STRATEGY` is optional. The default `IGNORE` leaves
 spam/junk folders alone. `IMPORT_NORMAL` imports the configured
-`MAIL_ACCOUNT_0__SPAM_JUNK_SOURCE_FOLDER` as normal mail. `IMPORT_AND_ROUTE`
-imports that folder and routes Gmail destinations to `SPAM`; IMAP destinations
-append those messages to the destination spam/junk folder configured in the UI.
+`MAIL_ACCOUNT_0__SPAM_JUNK_SOURCE_FOLDERS` as normal mail. `IMPORT_AND_ROUTE`
+imports those folders and routes Gmail destinations to `SPAM`; IMAP
+destinations append those messages to the destination spam/junk folder
+configured in the UI. The older singular
+`MAIL_ACCOUNT_0__SPAM_JUNK_SOURCE_FOLDER` remains supported for one-folder
+configs.
 
 ## Configuration Backups
 

@@ -225,7 +225,7 @@ export function generateEnvText(rawInput = {}) {
         lines.push(`MAIL_ACCOUNT_0__SPAM_JUNK_STRATEGY=${config.sourceSpamJunkStrategy}`)
       }
       if (config.sourceSpamJunkSourceFolder) {
-        lines.push(`MAIL_ACCOUNT_0__SPAM_JUNK_SOURCE_FOLDER=${config.sourceSpamJunkSourceFolder}`)
+        lines.push(`MAIL_ACCOUNT_0__SPAM_JUNK_SOURCE_FOLDERS=${config.sourceSpamJunkSourceFolder}`)
       }
     }
 

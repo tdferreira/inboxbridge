@@ -1,5 +1,6 @@
 package dev.inboxbridge.domain;
 
+import java.util.ArrayList;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Optional;
@@ -281,15 +282,32 @@ public record RuntimeEmailAccount(
     public List<String> sourceFolders() {
         LinkedHashSet<String> folders = new LinkedHashSet<>(SourceMailboxFolders.forSource(protocol, folder));
         if (protocol == InboxBridgeConfig.Protocol.IMAP && spamJunkStrategy.importsSpamJunk()) {
-            spamJunkSourceFolder
-                    .filter(value -> !value.isBlank())
-                    .ifPresent(value -> {
-                        boolean alreadyPresent = folders.stream()
-                                .anyMatch(existing -> MailboxFolderRoleDetector.sameFolder(existing, value));
-                        if (!alreadyPresent) {
-                            folders.add(value.trim());
-                        }
-                    });
+            for (String spamJunkFolder : spamJunkSourceFolders()) {
+                boolean alreadyPresent = folders.stream()
+                        .anyMatch(existing -> MailboxFolderRoleDetector.sameFolder(existing, spamJunkFolder));
+                if (!alreadyPresent) {
+                    folders.add(spamJunkFolder);
+                }
+            }
+        }
+        return List.copyOf(folders);
+    }
+
+    public List<String> spamJunkSourceFolders() {
+        if (spamJunkSourceFolder.isEmpty() || spamJunkSourceFolder.orElse("").isBlank()) {
+            return List.of();
+        }
+        List<String> folders = new ArrayList<>();
+        for (String token : spamJunkSourceFolder.orElse("").split("[,\\n\\r]+")) {
+            String folderName = token.trim();
+            if (folderName.isEmpty()) {
+                continue;
+            }
+            boolean alreadyPresent = folders.stream()
+                    .anyMatch(existing -> MailboxFolderRoleDetector.sameFolder(existing, folderName));
+            if (!alreadyPresent) {
+                folders.add(folderName);
+            }
         }
         return List.copyOf(folders);
     }
@@ -301,8 +319,8 @@ public record RuntimeEmailAccount(
     public boolean isSpamJunkSourceFolder(Optional<String> sourceFolder) {
         return protocol == InboxBridgeConfig.Protocol.IMAP
                 && spamJunkStrategy.importsSpamJunk()
-                && sourceFolder.flatMap(folderName -> spamJunkSourceFolder
-                        .filter(spamFolder -> MailboxFolderRoleDetector.sameFolder(folderName, spamFolder)))
+                && sourceFolder.filter(folderName -> spamJunkSourceFolders().stream()
+                        .anyMatch(spamFolder -> MailboxFolderRoleDetector.sameFolder(folderName, spamFolder)))
                         .isPresent();
     }
 

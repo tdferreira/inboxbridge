@@ -101,6 +101,44 @@ describe('UserPollingSettingsDialog', () => {
     expect(screen.getByText('Effective Values')).toBeInTheDocument()
   })
 
+  it('uses a translated unsaved-changes prompt when Escape closes a dirty dialog', () => {
+    const confirmSpy = vi.spyOn(window, 'confirm').mockReturnValue(false)
+    const onClose = vi.fn()
+
+    render(
+      <UserPollingSettingsDialog
+        isDirty
+        onClose={onClose}
+        onPollingFormChange={vi.fn()}
+        onResetPollingSettings={vi.fn()}
+        onSavePollingSettings={vi.fn((event) => event.preventDefault())}
+        pollingSettings={{
+          defaultPollEnabled: true,
+          effectivePollEnabled: true,
+          defaultPollInterval: '5m',
+          effectivePollInterval: '5m',
+          defaultFetchWindow: 50,
+          effectiveFetchWindow: 50
+        }}
+        pollingSettingsForm={{
+          pollEnabledMode: 'DEFAULT',
+          pollIntervalOverride: '10m',
+          fetchWindowOverride: ''
+        }}
+        pollingSettingsLoading={false}
+        t={(key, params) => translate('en', key, params)}
+      />
+    )
+
+    fireEvent.keyDown(document, { key: 'Escape' })
+
+    expect(confirmSpy).toHaveBeenCalledWith('Discard the current changes and close this dialog?')
+    expect(confirmSpy).not.toHaveBeenCalledWith('dialogs.unsavedChanges')
+    expect(onClose).not.toHaveBeenCalled()
+
+    confirmSpy.mockRestore()
+  })
+
   it('documents fetch window backfill behavior in the help copy', () => {
     expect(translate('en', 'userPolling.fetchWindowHelp')).toContain('does not page backward across older mail automatically')
     expect(translate('en', 'userPolling.fetchWindowHelp')).toContain('temporarily raise the window')

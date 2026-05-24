@@ -23,6 +23,30 @@ function serializeFolderSelection(folders) {
   return folders.join(', ')
 }
 
+function parseFolderLabelMappings(value) {
+  if (!value || !value.trim()) {
+    return []
+  }
+  return value
+    .split(/[;\n\r]+/)
+    .map((entry) => entry.trim())
+    .filter(Boolean)
+    .map((entry) => {
+      const separator = entry.indexOf('=')
+      if (separator <= 0 || separator === entry.length - 1) {
+        return null
+      }
+      const folder = entry.slice(0, separator).trim()
+      const label = entry.slice(separator + 1).trim()
+      return folder && label ? { folder, label } : null
+    })
+    .filter(Boolean)
+}
+
+function serializeFolderLabelMappings(mappings) {
+  return mappings.map((mapping) => `${mapping.folder}=${mapping.label}`).join('\n')
+}
+
 function EmailAccountDialog({
   availableOAuthProviders = [],
   destinationConfig = null,
@@ -75,9 +99,14 @@ function EmailAccountDialog({
   const detectedFolders = supportsFolder ? emailAccountFolders : []
   const currentFolder = emailAccountForm.folder || ''
   const selectedFolderValues = useMemo(() => parseFolderSelection(currentFolder), [currentFolder])
+  const selectedSpamJunkFolderValues = useMemo(
+    () => parseFolderSelection(emailAccountForm.spamJunkSourceFolder || ''),
+    [emailAccountForm.spamJunkSourceFolder]
+  )
   const connectionValidated = testResult?.tone === 'success'
   const tlsLockedToSecure = Boolean(testResult?.tlsRecommended && emailAccountForm.tls)
   const folderSuggestionsLoaded = supportsFolder && detectedFolders.length > 0
+  const shouldShowSpamJunkSourceFolders = supportsFolder && (emailAccountForm.spamJunkStrategy || 'IGNORE') !== 'IGNORE'
   const folderSuggestionsValidated = supportsFolder && connectionValidated && folderSuggestionsLoaded
   const gmailLabelSuggestions = useMemo(() => {
     const suggestions = new Map([
@@ -104,6 +133,8 @@ function EmailAccountDialog({
   const currentPostPollTargetFolder = emailAccountForm.postPollTargetFolder || ''
   const currentPostPollTargetDetected = detectedFolders.includes(currentPostPollTargetFolder)
   const [manualPostPollTargetEntry, setManualPostPollTargetEntry] = useState(detectedFolders.length === 0)
+  const [draftMappingFolder, setDraftMappingFolder] = useState('')
+  const [draftMappingLabel, setDraftMappingLabel] = useState('')
   const [showUntestedSaveDialog, setShowUntestedSaveDialog] = useState(false)
   const [showFolderErrorState, setShowFolderErrorState] = useState(false)
   const testResultRef = useRef(null)
@@ -126,6 +157,14 @@ function EmailAccountDialog({
   const dialogTitle = emailAccountForm.emailAccountId ? t('emailAccounts.editDialogTitle', { emailAccountId: emailAccountForm.emailAccountId }) : t('emailAccounts.addDialogTitle')
   const initialSnapshotRef = useRef(JSON.stringify(emailAccountForm))
   const isDirty = initialSnapshotRef.current !== JSON.stringify(emailAccountForm)
+  const folderLabelMappings = useMemo(
+    () => parseFolderLabelMappings(emailAccountForm.folderLabelMappings || ''),
+    [emailAccountForm.folderLabelMappings]
+  )
+  const canCommitFolderLabelMapping = draftMappingFolder.trim() && draftMappingLabel.trim()
+  const editingFolderLabelMapping = folderLabelMappings.some(
+    (mapping) => mapping.folder.toLowerCase() === draftMappingFolder.trim().toLowerCase()
+  )
 
   useEffect(() => {
     setSelectedPreset(inferredPresetId)
@@ -177,6 +216,13 @@ function EmailAccountDialog({
     }))
   }
 
+  function updateSpamJunkFolders(nextFolders) {
+    onEmailAccountFormChange((current) => ({
+      ...current,
+      spamJunkSourceFolder: serializeFolderSelection(nextFolders)
+    }))
+  }
+
   function useDetectedPostPollTargetOptions() {
     if (!defaultDetectedFolder) {
       return
@@ -186,6 +232,38 @@ function EmailAccountDialog({
       postPollTargetFolder: currentPostPollTargetDetected ? current.postPollTargetFolder : defaultDetectedFolder
     }))
     setManualPostPollTargetEntry(false)
+  }
+
+  function updateFolderLabelMappings(nextMappings) {
+    onEmailAccountFormChange((current) => ({
+      ...current,
+      folderLabelMappings: serializeFolderLabelMappings(nextMappings)
+    }))
+  }
+
+  function commitFolderLabelMapping() {
+    const folder = draftMappingFolder.trim()
+    const label = draftMappingLabel.trim()
+    if (!folder || !label) {
+      return
+    }
+    const nextMappings = [
+      ...folderLabelMappings.filter((mapping) => mapping.folder.toLowerCase() !== folder.toLowerCase()),
+      { folder, label }
+    ]
+    updateFolderLabelMappings(nextMappings)
+    setDraftMappingFolder('')
+    setDraftMappingLabel('')
+  }
+
+  function removeFolderLabelMapping(folder) {
+    updateFolderLabelMappings(
+      folderLabelMappings.filter((mapping) => mapping.folder.toLowerCase() !== folder.toLowerCase())
+    )
+  }
+
+  function displayLabelName(labelId) {
+    return gmailLabelSuggestions.find((label) => label.id === labelId)?.name || labelId
   }
 
   function renderTestResultRow(labelKey, value, helpKey) {
@@ -338,11 +416,11 @@ function EmailAccountDialog({
               inputId="email-account-folder-pillbox"
               loading={emailAccountFoldersLoading}
               onChange={updateDetectedFolders}
-            onInputActivity={onFolderInputActivity}
-            onInputFocus={onFolderInputFocus}
-            invalid={folderSaveError}
-            options={detectedFolders}
-            placeholder={t('emailAccounts.folderAutocompletePlaceholder')}
+              onInputActivity={onFolderInputActivity}
+              onInputFocus={onFolderInputFocus}
+              invalid={folderSaveError}
+              options={detectedFolders}
+              placeholder={t('emailAccounts.folderAutocompletePlaceholder')}
               removeLabel={(folder) => t('emailAccounts.folderRemoveSelected', { folder })}
               validationActive={folderSuggestionsLoaded}
               valueTone={(folder) => detectedFolders.some((candidate) => candidate.toLowerCase() === folder.toLowerCase()) ? 'success' : 'error'}
@@ -357,14 +435,13 @@ function EmailAccountDialog({
           </div>
         ) : null}
         {supportsFolder ? (
-          <div className="form-field-pair full">
-            <FormField helpText={t('emailAccounts.spamJunkStrategyHelp')} label={t('emailAccounts.spamJunkStrategy')}>
+          <>
+            <FormField className="full" helpText={t('emailAccounts.spamJunkStrategyHelp')} label={t('emailAccounts.spamJunkStrategy')}>
               <select
                 value={emailAccountForm.spamJunkStrategy || 'IGNORE'}
                 onChange={(event) => onEmailAccountFormChange((current) => ({
                   ...current,
-                  spamJunkStrategy: event.target.value,
-                  spamJunkSourceFolder: event.target.value === 'IGNORE' ? current.spamJunkSourceFolder : current.spamJunkSourceFolder
+                  spamJunkStrategy: event.target.value
                 }))}
               >
                 <option value="IGNORE">{t('emailAccounts.spamJunkStrategy.ignore')}</option>
@@ -372,19 +449,38 @@ function EmailAccountDialog({
                 <option value="IMPORT_AND_ROUTE">{t('emailAccounts.spamJunkStrategy.importAndRoute')}</option>
               </select>
             </FormField>
-            <FormField helpText={t('emailAccounts.spamJunkSourceFolderHelp')} label={t('emailAccounts.spamJunkSourceFolder')}>
-              <input
-                list="email-account-spam-junk-folder-options"
-                value={emailAccountForm.spamJunkSourceFolder || ''}
-                onChange={(event) => onEmailAccountFormChange((current) => ({ ...current, spamJunkSourceFolder: event.target.value }))}
-              />
-              <datalist id="email-account-spam-junk-folder-options">
-                {emailAccountFolders.map((folder) => (
-                  <option key={folder} value={folder} />
-                ))}
-              </datalist>
-            </FormField>
-          </div>
+            {shouldShowSpamJunkSourceFolders ? (
+              <div className="fetcher-folder-control full">
+                <label className="field-label-row" htmlFor="email-account-spam-junk-folder-pillbox">
+                  <span>{t('emailAccounts.spamJunkSourceFolder')}</span>
+                  <InfoHint text={t('emailAccounts.spamJunkSourceFolderHelp')} />
+                </label>
+                <PillboxInput
+                  allowCustomValues={!folderSuggestionsLoaded}
+                  helperText={emailAccountFoldersLoading
+                    ? t('common.retrievingFoldersFromServer')
+                    : folderSuggestionsLoaded
+                      ? t('emailAccounts.spamJunkSourceFolderValidationReady')
+                      : ''}
+                  inputAriaLabel={t('emailAccounts.spamJunkSourceFolder')}
+                  inputId="email-account-spam-junk-folder-pillbox"
+                  loading={emailAccountFoldersLoading}
+                  onChange={updateSpamJunkFolders}
+                  onInputActivity={onFolderInputActivity}
+                  onInputFocus={onFolderInputFocus}
+                  options={detectedFolders}
+                  placeholder={t('emailAccounts.spamJunkSourceFolderPlaceholder')}
+                  removeLabel={(folder) => t('emailAccounts.spamJunkSourceFolderRemoveSelected', { folder })}
+                  validationActive={folderSuggestionsLoaded}
+                  valueTone={(folder) => detectedFolders.some((candidate) => candidate.toLowerCase() === folder.toLowerCase()) ? 'success' : 'error'}
+                  valueValidationLabel={(folder, tone) => tone === 'success'
+                    ? t('emailAccounts.folderExists', { folder })
+                    : t('emailAccounts.folderMissing', { folder })}
+                  values={selectedSpamJunkFolderValues}
+                />
+              </div>
+            ) : null}
+          </>
         ) : null}
         {supportsCustomLabel ? (
           <>
@@ -396,14 +492,72 @@ function EmailAccountDialog({
                 ))}
               </datalist>
             </FormField>
-            <FormField helpText={t('emailAccounts.folderLabelMappingsHelp')} label={t('emailAccounts.folderLabelMappings')}>
-              <textarea
-                rows={3}
-                value={emailAccountForm.folderLabelMappings || ''}
-                onChange={(event) => onEmailAccountFormChange((current) => ({ ...current, folderLabelMappings: event.target.value }))}
-                placeholder={t('emailAccounts.folderLabelMappingsPlaceholder')}
-              />
-            </FormField>
+            <div className="fetcher-folder-label-mapping-editor full">
+              <span className="field-label-row">
+                <span>{t('emailAccounts.folderLabelMappings')}</span>
+                <InfoHint text={t('emailAccounts.folderLabelMappingsHelp')} />
+              </span>
+              <div className="fetcher-folder-label-mapping-row">
+                <FormField helpText="" label={t('emailAccounts.folderLabelMappingSourceFolder')}>
+                  <input
+                    list="email-account-folder-label-source-options"
+                    placeholder={t('emailAccounts.folderLabelMappingFolderPlaceholder')}
+                    value={draftMappingFolder}
+                    onChange={(event) => {
+                      onFolderInputActivity?.(event.target.value)
+                      setDraftMappingFolder(event.target.value)
+                    }}
+                    onFocus={onFolderInputFocus}
+                  />
+                  <datalist id="email-account-folder-label-source-options">
+                    {detectedFolders.map((folder) => (
+                      <option key={folder} value={folder} />
+                    ))}
+                  </datalist>
+                </FormField>
+                <FormField helpText="" label={t('emailAccounts.folderLabelMappingLabel')}>
+                  <input
+                    aria-busy={gmailLabelOptionsLoading}
+                    list="email-account-folder-label-gmail-options"
+                    placeholder={t('emailAccounts.folderLabelMappingLabelPlaceholder')}
+                    value={draftMappingLabel}
+                    onChange={(event) => setDraftMappingLabel(event.target.value)}
+                  />
+                  <datalist id="email-account-folder-label-gmail-options">
+                    {gmailLabelSuggestions.map((label) => (
+                      <option key={label.id} label={label.name} value={label.id} />
+                    ))}
+                  </datalist>
+                </FormField>
+                <button
+                  className="secondary fetcher-folder-label-mapping-add"
+                  disabled={!canCommitFolderLabelMapping}
+                  onClick={commitFolderLabelMapping}
+                  type="button"
+                >
+                  {t(editingFolderLabelMapping ? 'emailAccounts.folderLabelMappingUpdate' : 'emailAccounts.folderLabelMappingAdd')}
+                </button>
+              </div>
+              <div aria-label={t('emailAccounts.folderLabelMappingsCurrent')} className="fetcher-folder-label-mapping-pills">
+                {folderLabelMappings.length > 0 ? folderLabelMappings.map((mapping) => (
+                  <span className="status-pill tone-neutral fetcher-folder-label-mapping-pill" key={mapping.folder}>
+                    <span>{mapping.folder}</span>
+                    <span aria-hidden="true">-&gt;</span>
+                    <span>{displayLabelName(mapping.label)}</span>
+                    <button
+                      aria-label={t('emailAccounts.folderLabelMappingRemove', { folder: mapping.folder })}
+                      className="fetcher-folder-label-mapping-remove"
+                      onClick={() => removeFolderLabelMapping(mapping.folder)}
+                      type="button"
+                    >
+                      ×
+                    </button>
+                  </span>
+                )) : (
+                  <span className="fetcher-folder-label-mapping-empty">{t('emailAccounts.folderLabelMappingsEmpty')}</span>
+                )}
+              </div>
+            </div>
           </>
         ) : null}
         {supportsPostPollActions ? (

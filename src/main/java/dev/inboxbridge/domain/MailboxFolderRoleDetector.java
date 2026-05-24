@@ -12,13 +12,18 @@ public final class MailboxFolderRoleDetector {
     }
 
     public static Optional<String> suggestSpamJunkFolder(List<String> folders) {
+        List<String> suggestions = suggestSpamJunkFolders(folders);
+        return suggestions.isEmpty() ? Optional.empty() : Optional.of(suggestions.getFirst());
+    }
+
+    public static List<String> suggestSpamJunkFolders(List<String> folders) {
         if (folders == null || folders.isEmpty()) {
-            return Optional.empty();
+            return List.of();
         }
         return folders.stream()
                 .filter(folder -> folder != null && !folder.isBlank())
                 .filter(MailboxFolderRoleDetector::isLikelySpamOrJunkFolder)
-                .findFirst();
+                .toList();
     }
 
     public static boolean isLikelySpamOrJunkFolder(String folderName) {

@@ -29,6 +29,13 @@ public class ExtensionSessionRepository implements PanacheRepository<ExtensionSe
         return list("userId = ?1 order by createdAt desc", userId);
     }
 
+    public List<ExtensionSession> listVisibleByUserId(Long userId, Instant revokedAfter) {
+        return list(
+                "userId = ?1 and (revokedAt is null or revokedAt >= ?2) order by createdAt desc",
+                userId,
+                revokedAfter);
+    }
+
     public Optional<ExtensionSession> findByIdAndUserId(Long id, Long userId) {
         return find("id = ?1 and userId = ?2", id, userId).firstResultOptional();
     }

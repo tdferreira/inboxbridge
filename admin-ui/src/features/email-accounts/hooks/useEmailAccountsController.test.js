@@ -201,6 +201,57 @@ describe('useEmailAccountsController', () => {
     global.fetch = originalFetch
   })
 
+  it('prefills all detected spam and junk source folders after folder discovery', async () => {
+    const originalFetch = global.fetch
+    global.fetch = vi.fn()
+      .mockResolvedValueOnce({
+        ok: true,
+        json: async () => ({
+          message: 'Connection test succeeded.',
+          protocol: 'IMAP',
+          host: 'imap.example.com',
+          port: 993,
+          tls: true,
+          authMethod: 'PASSWORD',
+          oauthProvider: 'NONE',
+          authenticated: true,
+          folder: 'INBOX',
+          folderAccessible: true
+        })
+      })
+      .mockResolvedValueOnce({
+        ok: true,
+        json: async () => ({
+          folders: ['INBOX', 'Spam', 'Junk', 'Archive'],
+          suggestedSpamJunkFolder: 'Spam',
+          suggestedSpamJunkFolders: ['Spam', 'Junk']
+        })
+      })
+
+    const { result } = renderController()
+
+    act(() => {
+      result.current.handleEmailAccountFormChange({
+        ...DEFAULT_EMAIL_ACCOUNT_FORM,
+        emailAccountId: 'fetcher-a',
+        host: 'imap.example.com',
+        username: 'user@example.com',
+        password: 'secret'
+      })
+    })
+
+    await act(async () => {
+      await result.current.testEmailAccountConnection()
+    })
+
+    await waitFor(() => {
+      expect(result.current.emailAccountFolders).toEqual(['INBOX', 'Spam', 'Junk', 'Archive'])
+      expect(result.current.emailAccountForm.spamJunkSourceFolder).toBe('Spam, Junk')
+    })
+
+    global.fetch = originalFetch
+  })
+
   it('loads real Gmail label options when opening the source dialog for a Gmail destination', async () => {
     const originalFetch = global.fetch
     global.fetch = vi.fn().mockResolvedValue({

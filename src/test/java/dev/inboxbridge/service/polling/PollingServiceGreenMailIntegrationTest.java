@@ -467,15 +467,18 @@ class PollingServiceGreenMailIntegrationTest {
     void fullPollingPathRoutesConfiguredSourceSpamFolderToDestinationJunkFolder() throws Exception {
         appendMessage(sourceMail, SOURCE_USERNAME, SOURCE_PASSWORD, "INBOX", "inbox-alpha", "Inbox message", "<poll-spam-route-inbox@example.com>");
         appendMessage(sourceMail, SOURCE_USERNAME, SOURCE_PASSWORD, "Spam", "spam-alpha", "Spam false positive", "<poll-spam-route-spam@example.com>");
+        appendMessage(sourceMail, SOURCE_USERNAME, SOURCE_PASSWORD, "Junk", "junk-alpha", "Junk false positive", "<poll-spam-route-junk@example.com>");
 
         PollRunResult result = pollService(runtimeAccountWithSpamJunkRouting()).runPoll("greenmail-integration:spam-junk-routing");
 
-        assertEquals(2, result.getFetched());
-        assertEquals(2, result.getImported());
+        assertEquals(3, result.getFetched());
+        assertEquals(3, result.getImported());
         assertEquals(0, result.getDuplicates());
+        assertEquals(2, result.getSpamJunkMessageCount());
+        assertEquals(List.of("greenmail-spam-source -> Spam, Junk (2)"), result.getSpamJunkFolderSummaries());
         assertTrue(result.getErrorDetails().isEmpty());
         assertEquals(List.of("inbox-alpha"), listSubjects(destinationMail, DESTINATION_USERNAME, DESTINATION_PASSWORD, DESTINATION_FOLDER));
-        assertEquals(List.of("spam-alpha"), listSubjects(destinationMail, DESTINATION_USERNAME, DESTINATION_PASSWORD, "Junk"));
+        assertEquals(List.of("junk-alpha", "spam-alpha"), sortedSubjects(listSubjects(destinationMail, DESTINATION_USERNAME, DESTINATION_PASSWORD, "Junk")));
     }
 
     @Test
@@ -1103,7 +1106,7 @@ class PollingServiceGreenMailIntegrationTest {
                 Optional.of("Imported/Test"),
                 Optional.empty(),
                 SourceSpamJunkStrategy.IMPORT_AND_ROUTE,
-                Optional.of("Spam"),
+                Optional.of("Spam, Junk"),
                 SourcePostPollSettings.none(),
                 new ImapAppendDestinationTarget(
                         "user-destination:7",

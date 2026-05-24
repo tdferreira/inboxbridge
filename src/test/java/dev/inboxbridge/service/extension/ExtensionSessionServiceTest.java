@@ -22,6 +22,32 @@ import dev.inboxbridge.persistence.ExtensionSessionRepository;
 class ExtensionSessionServiceTest {
 
     @Test
+    void listSessionsKeepsActiveAndRecentRevokedSessionsOnly() {
+        ExtensionSessionService service = configuredService();
+
+        AppUser user = new AppUser();
+        user.id = 11L;
+        AppUser otherUser = new AppUser();
+        otherUser.id = 12L;
+
+        var active = service.createAuthenticatedSession(user, "Firefox", "firefox", "0.1.0");
+        active.session().createdAt = Instant.parse("2026-04-12T10:00:00Z");
+        var recentRevoked = service.createAuthenticatedSession(user, "Chrome", "chromium", "0.1.0");
+        recentRevoked.session().createdAt = Instant.parse("2026-04-12T11:00:00Z");
+        recentRevoked.session().revokedAt = Instant.now().minus(ExtensionSessionService.REVOKED_SESSION_VISIBLE_HISTORY).plusSeconds(60);
+        var staleRevoked = service.createAuthenticatedSession(user, "Edge", "edge", "0.1.0");
+        staleRevoked.session().createdAt = Instant.parse("2026-04-12T12:00:00Z");
+        staleRevoked.session().revokedAt = Instant.now().minus(ExtensionSessionService.REVOKED_SESSION_VISIBLE_HISTORY).minusSeconds(60);
+        service.createAuthenticatedSession(otherUser, "Other profile", "chromium", "0.1.0");
+
+        List<Long> visibleSessionIds = service.listSessions(user).stream()
+                .map(view -> view.id())
+                .toList();
+
+        assertEquals(List.of(recentRevoked.session().id, active.session().id), visibleSessionIds);
+    }
+
+    @Test
     void revokeAllSessionsRevokesEveryActiveSessionForTheCurrentUser() {
         ExtensionSessionService service = configuredService();
         InMemoryExtensionSessionRepository repository = (InMemoryExtensionSessionRepository) service.repository;
@@ -158,6 +184,15 @@ class ExtensionSessionServiceTest {
         public List<ExtensionSession> listByUserId(Long userId) {
             return byId.values().stream()
                     .filter(session -> userId.equals(session.userId))
+                    .sorted((left, right) -> right.createdAt.compareTo(left.createdAt))
+                    .toList();
+        }
+
+        @Override
+        public List<ExtensionSession> listVisibleByUserId(Long userId, Instant revokedAfter) {
+            return byId.values().stream()
+                    .filter(session -> userId.equals(session.userId))
+                    .filter(session -> session.revokedAt == null || !session.revokedAt.isBefore(revokedAfter))
                     .sorted((left, right) -> right.createdAt.compareTo(left.createdAt))
                     .toList();
         }

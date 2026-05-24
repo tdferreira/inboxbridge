@@ -777,7 +777,7 @@ public class UserEmailAccountService {
             throw new IllegalArgumentException("Spam/junk folder import is only supported for IMAP accounts");
         }
         if (strategy.importsSpamJunk() && blankToNull(requestedSpamJunkFolder) == null) {
-            throw new IllegalArgumentException("A spam/junk source folder is required when importing spam or junk messages");
+            throw new IllegalArgumentException("At least one spam/junk source folder is required when importing spam or junk messages");
         }
         return strategy;
     }
@@ -787,10 +787,10 @@ public class UserEmailAccountService {
             return;
         }
         if (candidate.folder().isPresent()
-                && candidate.spamJunkSourceFolder().filter(spamFolder ->
+                && candidate.spamJunkSourceFolders().stream().anyMatch(spamFolder ->
                         candidate.folder().stream().anyMatch(folder ->
-                                dev.inboxbridge.domain.MailboxFolderRoleDetector.sameFolder(folder, spamFolder))).isPresent()) {
-            throw new IllegalArgumentException("The primary source folder and spam/junk source folder must be different");
+                                dev.inboxbridge.domain.MailboxFolderRoleDetector.sameFolder(folder, spamFolder)))) {
+            throw new IllegalArgumentException("The primary source folders and spam/junk source folders must be different");
         }
     }
 

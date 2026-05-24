@@ -18,9 +18,11 @@ class RuntimeEmailAccountTest {
         RuntimeEmailAccount account = account(
                 Optional.of("INBOX, Projects/2026"),
                 SourceSpamJunkStrategy.IMPORT_AND_ROUTE,
-                Optional.of("Junk"));
+                Optional.of("Spam, Junk"));
 
-        assertEquals(List.of("INBOX", "Projects/2026", "Junk"), account.sourceFolders());
+        assertEquals(List.of("INBOX", "Projects/2026", "Spam", "Junk"), account.sourceFolders());
+        assertEquals(List.of("Spam", "Junk"), account.spamJunkSourceFolders());
+        assertTrue(account.routesSpamJunkFolder(Optional.of("spam")));
         assertTrue(account.routesSpamJunkFolder(Optional.of("junk")));
         assertFalse(account.routesSpamJunkFolder(Optional.of("INBOX")));
     }

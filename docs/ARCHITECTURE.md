@@ -82,8 +82,8 @@ InboxBridge is larger than a single-purpose importer:
 - `GmailApiMailDestinationService` is the Gmail API destination boundary. It
   resolves the default source label plus any folder-specific label mapping such
   as `Projects/2026=Imported/Projects`, then sends the raw message to the Gmail
-  import API. When a source's spam/junk strategy routes a configured spam/junk
-  source folder, Gmail receives the `SPAM` system label instead of `INBOX`.
+  import API. When a source's spam/junk strategy routes any configured spam or
+  junk source folder, Gmail receives the `SPAM` system label instead of `INBOX`.
 - `ImapAppendMailDestinationService` is the IMAP APPEND destination boundary.
   Normal imports append to the configured destination folder; routed spam/junk
   imports append to the configured destination spam/junk folder.

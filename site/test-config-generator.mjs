@@ -20,7 +20,7 @@ const configuredInput = {
   sourceFolder: 'INBOX, Projects/2026',
   sourceFolderLabelMappings: 'INBOX=Imported/Inbox;Projects/2026=Imported/Projects',
   sourceSpamJunkStrategy: 'IMPORT_AND_ROUTE',
-  sourceSpamJunkSourceFolder: 'Junk',
+  sourceSpamJunkSourceFolder: 'Spam, Junk',
   sourceUnreadOnly: true
 }
 
@@ -46,7 +46,7 @@ assert.match(envText, /MAIL_ACCOUNT_0__FETCH_MODE=IDLE/)
 assert.match(envText, /MAIL_ACCOUNT_0__FOLDER=INBOX, Projects\/2026/)
 assert.match(envText, /MAIL_ACCOUNT_0__FOLDER_LABEL_MAPPINGS=INBOX=Imported\/Inbox;Projects\/2026=Imported\/Projects/)
 assert.match(envText, /MAIL_ACCOUNT_0__SPAM_JUNK_STRATEGY=IMPORT_AND_ROUTE/)
-assert.match(envText, /MAIL_ACCOUNT_0__SPAM_JUNK_SOURCE_FOLDER=Junk/)
+assert.match(envText, /MAIL_ACCOUNT_0__SPAM_JUNK_SOURCE_FOLDERS=Spam, Junk/)
 assert.doesNotMatch(envText, /MAIL_ACCOUNT_0__PASSWORD=/)
 
 const popEnv = generateEnvText({
@@ -203,6 +203,8 @@ assert.match(siteHtml, /data-pillbox-hidden-input="sourceFolder"/)
 assert.match(siteHtml, /id="sourceFolderLabelMappings"/)
 assert.match(siteHtml, /id="sourceSpamJunkStrategy"/)
 assert.match(siteHtml, /id="sourceSpamJunkSourceFolder"/)
+assert.match(siteHtml, /id="sourceSpamJunkSourceFolderPillbox"/)
+assert.match(siteHtml, /data-pillbox-hidden-input="sourceSpamJunkSourceFolder"/)
 assert.match(siteHtml, /class="site-pillbox-input"/)
 assert.match(siteHtml, /comma-separated IMAP folder list/)
 assert.match(siteHtml, /id="sourceFetchMode"/)
