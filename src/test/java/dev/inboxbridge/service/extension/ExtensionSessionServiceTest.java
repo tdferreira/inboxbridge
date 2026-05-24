@@ -48,7 +48,7 @@ class ExtensionSessionServiceTest {
     }
 
     @Test
-    void revokeAllSessionsRevokesEveryActiveSessionForTheCurrentUser() {
+    void revokeAllSessionsRevokesEveryUnrevokedSessionForTheCurrentUser() {
         ExtensionSessionService service = configuredService();
         InMemoryExtensionSessionRepository repository = (InMemoryExtensionSessionRepository) service.repository;
 
@@ -59,19 +59,22 @@ class ExtensionSessionServiceTest {
 
         var first = service.createAuthenticatedSession(user, "Chrome", "chromium", "0.1.0");
         var second = service.createAuthenticatedSession(user, "Firefox", "firefox", "0.1.0");
+        var expired = service.createAuthenticatedSession(user, "Expired", "chromium", "0.1.0");
         var other = service.createAuthenticatedSession(otherUser, "Edge", "edge", "0.1.0");
         second.session().revokedAt = Instant.parse("2026-04-13T00:00:00Z");
+        expired.session().expiresAt = Instant.now().minusSeconds(60);
 
         List<Long> revokedIds = service.revokeAllSessions(user);
 
-        assertEquals(List.of(first.session().id), revokedIds);
+        assertEquals(List.of(expired.session().id, first.session().id), revokedIds);
         assertNotNull(repository.byId.get(first.session().id).revokedAt);
+        assertNotNull(repository.byId.get(expired.session().id).revokedAt);
         assertEquals(Instant.parse("2026-04-13T00:00:00Z"), repository.byId.get(second.session().id).revokedAt);
         assertTrue(repository.byId.get(other.session().id).revokedAt == null);
     }
 
     @Test
-    void revokeAllSessionsForAllUsersRevokesEveryActiveSession() {
+    void revokeAllSessionsForAllUsersRevokesEveryUnrevokedSession() {
         ExtensionSessionService service = configuredService();
         InMemoryExtensionSessionRepository repository = (InMemoryExtensionSessionRepository) service.repository;
 
@@ -81,13 +84,16 @@ class ExtensionSessionServiceTest {
         bob.id = 12L;
 
         var aliceSession = service.createAuthenticatedSession(alice, "Chrome", "chromium", "0.1.0");
+        var expiredAliceSession = service.createAuthenticatedSession(alice, "Expired", "chromium", "0.1.0");
         var bobSession = service.createAuthenticatedSession(bob, "Firefox", "firefox", "0.1.0");
+        expiredAliceSession.session().expiresAt = Instant.now().minusSeconds(60);
         bobSession.session().revokedAt = Instant.parse("2026-04-13T00:00:00Z");
 
         int revoked = service.revokeAllSessionsForAllUsers();
 
-        assertEquals(1, revoked);
+        assertEquals(2, revoked);
         assertNotNull(repository.byId.get(aliceSession.session().id).revokedAt);
+        assertNotNull(repository.byId.get(expiredAliceSession.session().id).revokedAt);
         assertEquals(Instant.parse("2026-04-13T00:00:00Z"), repository.byId.get(bobSession.session().id).revokedAt);
     }
 
@@ -208,20 +214,18 @@ class ExtensionSessionServiceTest {
         }
 
         @Override
-        public List<ExtensionSession> listActiveByUserId(Long userId, Instant now) {
+        public List<ExtensionSession> listUnrevokedByUserId(Long userId) {
             return byId.values().stream()
                     .filter(session -> userId.equals(session.userId))
                     .filter(session -> session.revokedAt == null)
-                    .filter(session -> session.expiresAt == null || session.expiresAt.isAfter(now))
                     .sorted((left, right) -> right.createdAt.compareTo(left.createdAt))
                     .toList();
         }
 
         @Override
-        public List<ExtensionSession> listAllActive(Instant now) {
+        public List<ExtensionSession> listAllUnrevoked() {
             return byId.values().stream()
                     .filter(session -> session.revokedAt == null)
-                    .filter(session -> session.expiresAt == null || session.expiresAt.isAfter(now))
                     .sorted((left, right) -> right.createdAt.compareTo(left.createdAt))
                     .toList();
         }

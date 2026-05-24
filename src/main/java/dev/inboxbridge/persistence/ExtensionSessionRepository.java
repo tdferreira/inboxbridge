@@ -40,11 +40,11 @@ public class ExtensionSessionRepository implements PanacheRepository<ExtensionSe
         return find("id = ?1 and userId = ?2", id, userId).firstResultOptional();
     }
 
-    public List<ExtensionSession> listActiveByUserId(Long userId, Instant now) {
-        return list("userId = ?1 and revokedAt is null and (expiresAt is null or expiresAt > ?2) order by createdAt desc", userId, now);
+    public List<ExtensionSession> listUnrevokedByUserId(Long userId) {
+        return list("userId = ?1 and revokedAt is null order by createdAt desc", userId);
     }
 
-    public List<ExtensionSession> listAllActive(Instant now) {
-        return list("revokedAt is null and (expiresAt is null or expiresAt > ?1) order by createdAt desc", now);
+    public List<ExtensionSession> listAllUnrevoked() {
+        return list("revokedAt is null order by createdAt desc");
     }
 }

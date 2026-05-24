@@ -95,12 +95,12 @@ public class ExtensionSessionService {
     @Transactional
     public List<Long> revokeAllSessions(AppUser user) {
         Instant now = Instant.now();
-        List<ExtensionSession> activeSessions = repository.listActiveByUserId(user.id, now);
-        activeSessions.forEach((session) -> session.revokedAt = now);
-        if (!activeSessions.isEmpty()) {
-            LOG.infof("Revoked %d browser-extension session(s) for userId=%s", activeSessions.size(), user.id);
+        List<ExtensionSession> unrevokedSessions = repository.listUnrevokedByUserId(user.id);
+        unrevokedSessions.forEach((session) -> session.revokedAt = now);
+        if (!unrevokedSessions.isEmpty()) {
+            LOG.infof("Revoked %d browser-extension session(s) for userId=%s", unrevokedSessions.size(), user.id);
         }
-        return activeSessions.stream()
+        return unrevokedSessions.stream()
                 .map(session -> session.id)
                 .toList();
     }
@@ -108,12 +108,12 @@ public class ExtensionSessionService {
     @Transactional
     public int revokeAllSessionsForAllUsers() {
         Instant now = Instant.now();
-        List<ExtensionSession> activeSessions = repository.listAllActive(now);
-        activeSessions.forEach((session) -> session.revokedAt = now);
-        if (!activeSessions.isEmpty()) {
-            LOG.infof("Revoked %d active browser-extension session(s) across all users", activeSessions.size());
+        List<ExtensionSession> unrevokedSessions = repository.listAllUnrevoked();
+        unrevokedSessions.forEach((session) -> session.revokedAt = now);
+        if (!unrevokedSessions.isEmpty()) {
+            LOG.infof("Revoked %d browser-extension session(s) across all users", unrevokedSessions.size());
         }
-        return activeSessions.size();
+        return unrevokedSessions.size();
     }
 
     @Transactional

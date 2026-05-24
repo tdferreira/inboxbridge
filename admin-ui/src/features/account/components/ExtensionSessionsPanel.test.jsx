@@ -80,4 +80,33 @@ describe('ExtensionSessionsPanel', () => {
     expect(screen.getByText((value) => value.includes('2026-04-12 10:05:00'))).toBeInTheDocument()
     expect(screen.getByText((value) => value.includes('2026-04-12 10:15:00'))).toBeInTheDocument()
   })
+
+  it('separates active extension access from recently revoked sessions', () => {
+    render(
+      <ExtensionSessionsPanel
+        locale="en"
+        onRevokeAllSessions={vi.fn()}
+        onRevokeSession={vi.fn()}
+        revokeAllLoading={false}
+        revokeLoadingId={null}
+        sessions={[
+          {
+            id: 42,
+            label: 'Firefox profile',
+            browserFamily: 'firefox',
+            extensionVersion: '0.2.0',
+            createdAt: '2026-04-12T10:00:00Z',
+            lastUsedAt: '2026-04-12T10:05:00Z',
+            revokedAt: '2026-04-12T10:15:00Z'
+          }
+        ]}
+        t={(key, params = {}) => params.value ? `${key}:${params.value}` : key}
+      />
+    )
+
+    expect(screen.getByText('extensionSessions.noneActive')).toBeInTheDocument()
+    expect(screen.getByText('extensionSessions.recentRevokedTitle')).toBeInTheDocument()
+    expect(screen.getByText('Firefox profile')).toBeInTheDocument()
+    expect(screen.getByText('extensionSessions.revokeAll')).toBeDisabled()
+  })
 })
