@@ -88,6 +88,19 @@ function setCheckboxText(fieldId, labelKey, hintKey) {
   }
 }
 
+function setSelectOptionText(fieldId, bindings) {
+  const select = document.getElementById(fieldId)
+  if (!select) {
+    return
+  }
+  bindings.forEach(([value, labelKey]) => {
+    const option = Array.from(select.options).find((candidate) => candidate.value === value)
+    if (option) {
+      option.textContent = translate(language, labelKey)
+    }
+  })
+}
+
 function parsePillboxValue(value) {
   return String(value || '')
     .split(',')
@@ -414,6 +427,11 @@ function applyTranslations() {
   setFieldText('sourceCustomLabel', 'env.field.sourceCustomLabel', 'env.hint.sourceCustomLabel', 'env.placeholder.sourceCustomLabel')
   setFieldText('sourceFolderLabelMappings', 'env.field.sourceFolderLabelMappings', 'env.hint.sourceFolderLabelMappings', 'env.placeholder.sourceFolderLabelMappings')
   setFieldText('sourceSpamJunkStrategy', 'env.field.sourceSpamJunkStrategy', 'env.hint.sourceSpamJunkStrategy')
+  setSelectOptionText('sourceSpamJunkStrategy', [
+    ['IGNORE', 'env.option.sourceSpamJunkStrategy.ignore'],
+    ['IMPORT_NORMAL', 'env.option.sourceSpamJunkStrategy.importNormal'],
+    ['IMPORT_AND_ROUTE', 'env.option.sourceSpamJunkStrategy.importAndRoute']
+  ])
   setFieldText('sourceSpamJunkSourceFolderPillbox', 'env.field.sourceSpamJunkSourceFolder', 'env.hint.sourceSpamJunkSourceFolder', 'env.placeholder.sourceSpamJunkSourceFolderPillbox')
   setCheckboxText('multiUserEnabled', 'env.field.multiUser', 'env.hint.multiUser')
   setCheckboxText('sourceUnreadOnly', 'env.field.sourceUnreadOnly', 'env.hint.sourceUnreadOnly')
