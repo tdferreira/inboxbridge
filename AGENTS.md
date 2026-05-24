@@ -36,6 +36,25 @@ Use these task routes:
 
 This repository also includes Codex-native helper skills under [`.codex/skills`](.codex/skills). Those files are primarily for Codex and are not portable to every AI tool, so any agent that does not understand Codex skills should treat this `AGENTS.md` file as the portable source of workflow instructions and use the `.codex/skills` files only as optional extra references.
 
+## Interaction modes
+
+Default agent behavior in this repository should be direct, honest, and willing
+to challenge weak reasoning instead of agreeing reflexively.
+
+Baseline expectations:
+
+- do not agree by default
+- test assumptions before endorsing an idea
+- point out weak logic, blind spots, and missing constraints early
+- keep praise specific and evidence-based instead of automatic
+- when something will not work, say so clearly and early
+
+If a user explicitly asks for stronger pushback, harsher assumption-testing, or
+devil's-advocate feedback beyond that baseline, agents may use the Codex skill
+`inboxbridge-high-skepticism-mode` under [`.codex/skills`](.codex/skills) as
+an intensified interaction mode rather than treating that skill as the default
+home of the repository's general communication policy.
+
 ## Security rules
 
 - This project aims for the maximum practical security standards that make sense in its context. Agents should prefer the more secure design when choosing between implementation options, especially around authentication, authorization, mailbox access, session handling, network exposure, secret storage, encryption at rest, and browser/server trust boundaries.
