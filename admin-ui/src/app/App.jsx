@@ -93,7 +93,8 @@ const DEFAULT_DESTINATION_CONFIG = {
   oauthProvider: 'NONE',
   username: '',
   password: '',
-  folder: 'INBOX'
+  folder: 'INBOX',
+  spamJunkFolder: ''
 }
 const DEFAULT_SYSTEM_OAUTH_SETTINGS = {
   effectiveMultiUserEnabled: true,
@@ -437,6 +438,8 @@ function AppContent({ timings = DEFAULT_APP_TIMINGS }) {
   const emailAccounts = useEmailAccountsController({
     activeBatchPollSourceIds,
     authOptions,
+    destinationConfig,
+    destinationMeta,
     errorText,
     isPending,
     language,

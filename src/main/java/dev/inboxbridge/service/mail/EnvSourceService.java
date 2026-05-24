@@ -73,7 +73,10 @@ public class EnvSourceService {
                 || source.oauthRefreshToken().isPresent() && !source.oauthRefreshToken().orElse("").isBlank()
                 || !DEFAULT_FOLDER.equals(source.folder().orElse(DEFAULT_FOLDER))
                 || source.unreadOnly()
-                || !DEFAULT_CUSTOM_LABEL.equals(source.customLabel().orElse(DEFAULT_CUSTOM_LABEL));
+                || !DEFAULT_CUSTOM_LABEL.equals(source.customLabel().orElse(DEFAULT_CUSTOM_LABEL))
+                || source.folderLabelMappings().isPresent() && !source.folderLabelMappings().orElse("").isBlank()
+                || source.spamJunkStrategy() != dev.inboxbridge.domain.SourceSpamJunkStrategy.IGNORE
+                || source.spamJunkSourceFolder().isPresent() && !source.spamJunkSourceFolder().orElse("").isBlank();
     }
 
     public record IndexedSource(int index, InboxBridgeConfig.Source source) {

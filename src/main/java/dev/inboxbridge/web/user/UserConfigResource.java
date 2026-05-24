@@ -13,6 +13,7 @@ import dev.inboxbridge.dto.UpdateUserUiPreferenceRequest;
 import dev.inboxbridge.dto.DestinationMailboxFolderOptionsView;
 import dev.inboxbridge.dto.EmailAccountConnectionTestResult;
 import dev.inboxbridge.dto.PollingTimelineBundleView;
+import dev.inboxbridge.dto.GmailLabelOptionView;
 import dev.inboxbridge.dto.UserEmailAccountView;
 import dev.inboxbridge.dto.UserMailDestinationView;
 import dev.inboxbridge.dto.SourcePollingSettingsView;
@@ -111,6 +112,13 @@ public class UserConfigResource {
     @Consumes(MediaType.APPLICATION_JSON)
     public EmailAccountConnectionTestResult testDestinationConnection(UpdateUserMailDestinationRequest request) {
         return WebResourceSupport.badRequest(() -> userMailDestinationConfigService.testConnectionForUser(currentUserContext.user(), request));
+    }
+
+    @GET
+    @Path("/destination-config/gmail-labels")
+    public List<GmailLabelOptionView> gmailLabels() {
+        return WebResourceSupport.badRequest(() ->
+                userMailDestinationConfigService.listGmailLabelsForUser(currentUserContext.user()));
     }
 
     @GET

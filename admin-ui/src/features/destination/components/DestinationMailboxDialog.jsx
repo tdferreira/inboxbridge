@@ -57,6 +57,7 @@ function DestinationMailboxDialog({
         : (configured && destinationMeta?.linked && savedDestinationStillMatchesDraft ? destinationFolders : []))
     : []
   const currentFolder = resolvedDestinationConfig.folder || ''
+  const currentSpamJunkFolder = resolvedDestinationConfig.spamJunkFolder || ''
   const currentFolderDetected = detectedFolders.includes(currentFolder)
   const defaultDetectedFolder = detectedFolders.find((folder) => folder.toUpperCase() === 'INBOX') || detectedFolders[0] || ''
   const [manualFolderEntry, setManualFolderEntry] = useState(detectedFolders.length === 0)
@@ -154,7 +155,8 @@ function DestinationMailboxDialog({
       oauthProvider: preset.values?.oauthProvider ?? 'NONE',
       username: preset.values?.username ?? '',
       password: '',
-      folder: preset.values?.folder ?? 'INBOX'
+      folder: preset.values?.folder ?? 'INBOX',
+      spamJunkFolder: ''
     }))
   }
 
@@ -209,8 +211,12 @@ function DestinationMailboxDialog({
       if (!isGmailProvider && onLoadFolders) {
         setPreviewFoldersLoading(true)
         void onLoadFolders(nextConfig, { suppressErrors: true })
-          .then((folders) => {
+          .then((payload) => {
+            const folders = Array.isArray(payload) ? payload : (Array.isArray(payload?.folders) ? payload.folders : [])
             setPreviewFolders(Array.isArray(folders) ? folders : [])
+            if (payload?.suggestedSpamJunkFolder && !resolvedDestinationConfig.spamJunkFolder) {
+              setDestinationConfig((current) => ({ ...current, spamJunkFolder: current.spamJunkFolder || payload.suggestedSpamJunkFolder }))
+            }
             setFolderLoadError('')
           })
           .catch((error) => {
@@ -305,6 +311,9 @@ function DestinationMailboxDialog({
                 <div className="muted-box fetcher-transport-warning folder-load-error-card">{folderLoadError}</div>
               ) : null}
             </div>
+            <FormField helpText={t('destination.spamJunkFolderHelp')} label={t('destination.spamJunkFolder')}>
+              <input aria-label={t('destination.spamJunkFolder')} placeholder={t('destination.spamJunkFolderNone')} value={currentSpamJunkFolder} onChange={(event) => setDestinationConfig((current) => ({ ...current, spamJunkFolder: event.target.value }))} />
+            </FormField>
             {!resolvedDestinationConfig.tls ? (
               <div className="muted-box full fetcher-transport-warning">
                 <strong>{t('destination.insecureTransportWarningTitle')}</strong><br />

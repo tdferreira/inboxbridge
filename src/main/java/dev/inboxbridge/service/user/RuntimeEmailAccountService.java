@@ -187,6 +187,9 @@ public class RuntimeEmailAccountService {
                 source.unreadOnly(),
                 source.fetchMode(),
                 source.customLabel(),
+                source.folderLabelMappings(),
+                source.spamJunkStrategy(),
+                source.spamJunkSourceFolder(),
                 SourcePostPollSettings.none(),
                 destinationTarget);
     }
@@ -223,6 +226,11 @@ public class RuntimeEmailAccountService {
                 emailAccount.unreadOnly,
                 emailAccount.fetchMode == null ? SourceFetchMode.POLLING : emailAccount.fetchMode,
                 Optional.ofNullable(emailAccount.customLabel),
+                Optional.ofNullable(emailAccount.folderLabelMappings),
+                emailAccount.spamJunkStrategy == null
+                        ? dev.inboxbridge.domain.SourceSpamJunkStrategy.IGNORE
+                        : emailAccount.spamJunkStrategy,
+                Optional.ofNullable(emailAccount.spamJunkSourceFolder),
                 new SourcePostPollSettings(
                         emailAccount.markReadAfterPoll,
                         emailAccount.postPollAction == null ? SourcePostPollAction.NONE : emailAccount.postPollAction,

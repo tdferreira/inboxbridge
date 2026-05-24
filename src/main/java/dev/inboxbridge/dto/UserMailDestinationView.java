@@ -17,5 +17,45 @@ public record UserMailDestinationView(
         String authMethod,
         String oauthProvider,
         String username,
-        String folder) {
+        String folder,
+        String spamJunkFolder) {
+
+    public UserMailDestinationView(
+            String provider,
+            String deliveryMode,
+            boolean configured,
+            boolean linked,
+            boolean passwordConfigured,
+            boolean oauthConnected,
+            boolean sharedGoogleClientConfigured,
+            boolean sharedMicrosoftClientConfigured,
+            String googleRedirectUri,
+            String microsoftRedirectUri,
+            String host,
+            Integer port,
+            boolean tls,
+            String authMethod,
+            String oauthProvider,
+            String username,
+            String folder) {
+        this(
+                provider,
+                deliveryMode,
+                configured,
+                linked,
+                passwordConfigured,
+                oauthConnected,
+                sharedGoogleClientConfigured,
+                sharedMicrosoftClientConfigured,
+                googleRedirectUri,
+                microsoftRedirectUri,
+                host,
+                port,
+                tls,
+                authMethod,
+                oauthProvider,
+                username,
+                folder,
+                "");
+    }
 }

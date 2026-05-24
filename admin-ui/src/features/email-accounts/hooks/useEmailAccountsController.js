@@ -48,6 +48,9 @@ function buildEmailAccountRequestPayload(emailAccountForm) {
     unreadOnly: emailAccountForm.unreadOnly,
     fetchMode: emailAccountForm.fetchMode,
     customLabel: emailAccountForm.customLabel,
+    folderLabelMappings: emailAccountForm.folderLabelMappings,
+    spamJunkStrategy: emailAccountForm.spamJunkStrategy,
+    spamJunkSourceFolder: emailAccountForm.spamJunkSourceFolder,
     markReadAfterPoll: emailAccountForm.markReadAfterPoll,
     postPollAction: emailAccountForm.postPollAction,
     postPollTargetFolder: emailAccountForm.postPollTargetFolder
@@ -113,6 +116,8 @@ function pruneFetcherStats(currentStats, userEmailAccounts, systemEmailAccounts)
 export function useEmailAccountsController({
   activeBatchPollSourceIds = [],
   authOptions,
+  destinationConfig = null,
+  destinationMeta = null,
   errorText,
   isPending,
   language,
@@ -129,6 +134,8 @@ export function useEmailAccountsController({
   const [emailAccountFolders, setEmailAccountFolders] = useState([])
   const [emailAccountFoldersLoading, setEmailAccountFoldersLoading] = useState(false)
   const [emailAccountFolderLoadError, setEmailAccountFolderLoadError] = useState('')
+  const [gmailLabelOptions, setGmailLabelOptions] = useState([])
+  const [gmailLabelOptionsLoading, setGmailLabelOptionsLoading] = useState(false)
   const [emailAccountTestResult, setEmailAccountTestResult] = useState(null)
   const [userEmailAccounts, setUserEmailAccounts] = useState([])
   const [expandedFetcherLoadingId, setExpandedFetcherLoadingId] = useState(null)
@@ -170,6 +177,9 @@ export function useEmailAccountsController({
         unreadOnly: emailAccount.unreadOnly,
         fetchMode: emailAccount.fetchMode,
         customLabel: emailAccount.customLabel,
+        folderLabelMappings: emailAccount.folderLabelMappings,
+        spamJunkStrategy: emailAccount.spamJunkStrategy,
+        spamJunkSourceFolder: emailAccount.spamJunkSourceFolder,
         markReadAfterPoll: emailAccount.markReadAfterPoll,
         postPollAction: emailAccount.postPollAction,
         postPollTargetFolder: emailAccount.postPollTargetFolder,
@@ -216,6 +226,8 @@ export function useEmailAccountsController({
   const fetcherPollingLoading = fetcherPollingTarget
     ? isPending(`fetcherPollingSave:${fetcherPollingTarget.emailAccountId}`) || isPending(`fetcherPollingLoad:${fetcherPollingTarget.emailAccountId}`)
     : false
+  const destinationProvider = destinationMeta?.provider || destinationConfig?.provider || null
+  const destinationSupportsGmailLabels = destinationProvider === 'GMAIL_API'
 
   function applyLoadedEmailAccounts(emailAccountsPayload, adminEmailAccounts = []) {
     const nextUserEmailAccounts = Array.isArray(emailAccountsPayload)
@@ -284,6 +296,9 @@ export function useEmailAccountsController({
       unreadOnly: emailAccount.unreadOnly,
       fetchMode: emailAccount.fetchMode || 'POLLING',
       customLabel: emailAccount.customLabel,
+      folderLabelMappings: emailAccount.folderLabelMappings || '',
+      spamJunkStrategy: emailAccount.spamJunkStrategy || 'IGNORE',
+      spamJunkSourceFolder: emailAccount.spamJunkSourceFolder || '',
       markReadAfterPoll: emailAccount.markReadAfterPoll ?? false,
       postPollAction: emailAccount.postPollAction || 'NONE',
       postPollTargetFolder: emailAccount.postPollTargetFolder || ''
@@ -294,10 +309,34 @@ export function useEmailAccountsController({
   function closeFetcherDialog() {
     setEmailAccountFolders([])
     setEmailAccountFolderLoadError('')
+    setGmailLabelOptions([])
+    setGmailLabelOptionsLoading(false)
     setEmailAccountTestResult(null)
     folderFetchSuccessSignatureRef.current = ''
     folderFetchAttemptRef.current = { signature: '', startedAt: 0 }
     setShowFetcherDialog(false)
+  }
+
+  async function loadGmailLabelOptions() {
+    if (gmailLabelOptionsLoading || gmailLabelOptions.length > 0) {
+      return gmailLabelOptions
+    }
+    setGmailLabelOptionsLoading(true)
+    try {
+      const response = await fetch('/api/app/destination-config/gmail-labels')
+      if (!response.ok) {
+        throw new Error(await apiErrorText(response, errorText('loadGmailLabels')))
+      }
+      const payload = await response.json()
+      const labels = Array.isArray(payload) ? payload : []
+      setGmailLabelOptions(labels)
+      return labels
+    } catch {
+      setGmailLabelOptions([])
+      return []
+    } finally {
+      setGmailLabelOptionsLoading(false)
+    }
   }
 
   async function loadEmailAccountFolders(formOverride = emailAccountForm, options = {}) {
@@ -323,6 +362,12 @@ export function useEmailAccountsController({
       const folderPayload = await response.json()
       const folders = Array.isArray(folderPayload?.folders) ? folderPayload.folders : []
       setEmailAccountFolders(folders)
+      if (folderPayload?.suggestedSpamJunkFolder && !formOverride.spamJunkSourceFolder) {
+        setEmailAccountForm((current) => ({
+          ...current,
+          spamJunkSourceFolder: current.spamJunkSourceFolder || folderPayload.suggestedSpamJunkFolder
+        }))
+      }
       setEmailAccountFolderLoadError('')
       folderFetchSuccessSignatureRef.current = signature
       return folders
@@ -828,6 +873,9 @@ export function useEmailAccountsController({
             unreadOnly: fetcher.unreadOnly,
             fetchMode: fetcher.fetchMode || 'POLLING',
             customLabel: fetcher.customLabel,
+            folderLabelMappings: fetcher.folderLabelMappings || '',
+            spamJunkStrategy: fetcher.spamJunkStrategy || 'IGNORE',
+            spamJunkSourceFolder: fetcher.spamJunkSourceFolder || '',
             markReadAfterPoll: fetcher.markReadAfterPoll,
             postPollAction: fetcher.postPollAction,
             postPollTargetFolder: fetcher.postPollTargetFolder
@@ -886,6 +934,13 @@ export function useEmailAccountsController({
     ensureEmailAccountFoldersForForm(emailAccountForm, { suppressErrors: true }).catch(() => {})
   }, [emailAccountForm.originalEmailAccountId, emailAccountForm.protocol, showFetcherDialog])
 
+  useEffect(() => {
+    if (!showFetcherDialog || !destinationSupportsGmailLabels) {
+      return
+    }
+    loadGmailLabelOptions().catch(() => {})
+  }, [destinationSupportsGmailLabels, showFetcherDialog])
+
   return {
     applyEmailAccountPreset: applyEmailAccountPresetSelection,
     applyLoadedEmailAccounts,
@@ -908,6 +963,8 @@ export function useEmailAccountsController({
     fetcherPollingTarget: showFetcherPollingDialog ? fetcherPollingTarget : null,
     fetcherStatsById,
     fetcherStatsLoadingId,
+    gmailLabelOptions,
+    gmailLabelOptionsLoading,
     handleEmailAccountFormChange,
     handleFolderInputActivity,
     handleFolderInputFocus,

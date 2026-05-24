@@ -17,6 +17,7 @@ import jakarta.persistence.UniqueConstraint;
 import dev.inboxbridge.config.InboxBridgeConfig;
 import dev.inboxbridge.domain.SourceFetchMode;
 import dev.inboxbridge.domain.SourcePostPollAction;
+import dev.inboxbridge.domain.SourceSpamJunkStrategy;
 
 @Entity
 @Table(name = "user_email_account",
@@ -96,6 +97,16 @@ public class UserEmailAccount extends PanacheEntityBase {
 
     @Column(name = "custom_label", length = 255)
     public String customLabel;
+
+    @Column(name = "folder_label_mappings", length = 2048)
+    public String folderLabelMappings;
+
+    @Enumerated(EnumType.STRING)
+    @Column(name = "spam_junk_strategy", nullable = false, length = 40)
+    public SourceSpamJunkStrategy spamJunkStrategy = SourceSpamJunkStrategy.IGNORE;
+
+    @Column(name = "spam_junk_source_folder", length = 255)
+    public String spamJunkSourceFolder;
 
     @Column(name = "mark_read_after_poll", nullable = false)
     public boolean markReadAfterPoll;

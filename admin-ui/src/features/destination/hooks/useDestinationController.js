@@ -30,7 +30,8 @@ export function useDestinationController({
       oauthProvider: resolvedConfig.oauthProvider,
       username: resolvedConfig.username,
       password: resolvedConfig.password,
-      folder: resolvedConfig.folder
+      folder: resolvedConfig.folder,
+      spamJunkFolder: resolvedConfig.spamJunkFolder
     }
   }
 
@@ -140,7 +141,9 @@ export function useDestinationController({
         throw new Error(await errorText('loadDestinationFolders', response))
       }
       const payload = await response.json()
-      return Array.isArray(payload?.folders) ? payload.folders : []
+      const folders = Array.isArray(payload?.folders) ? payload.folders : []
+      folders.suggestedSpamJunkFolder = payload?.suggestedSpamJunkFolder || ''
+      return folders
     } catch (err) {
       if (!suppressErrors) {
         pushNotification({

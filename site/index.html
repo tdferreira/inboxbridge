@@ -773,8 +773,28 @@
                       </div>
                     </div>
                     <div class="field full">
-                      <label for="sourceCustomLabel"><span class="label-copy">Custom label</span><button class="info-hint" type="button" aria-label="Custom label help" data-hint="Optional label text that can help identify where imported mail came from on Gmail-style destinations.">i</button></label>
+                      <label for="sourceCustomLabel"><span class="label-copy">Default label</span><button class="info-hint" type="button" aria-label="Default label help" data-hint="Optional default Gmail label that can help identify where imported mail came from.">i</button></label>
                       <input id="sourceCustomLabel" name="sourceCustomLabel" placeholder="Optional Gmail label" />
+                    </div>
+                    <div class="field full" data-imap-only>
+                      <label for="sourceFolderLabelMappings"><span class="label-copy">Folder label mappings</span><button class="info-hint" type="button" aria-label="Folder label mappings help" data-hint="Optional Gmail label overrides for specific IMAP folders. Use folder=Gmail/Label entries separated by semicolons.">i</button></label>
+                      <input id="sourceFolderLabelMappings" name="sourceFolderLabelMappings" placeholder="INBOX=Imported/Inbox;Junk=SPAM" />
+                    </div>
+                    <div class="field full" data-imap-only>
+                      <div class="dual-input-row dual-input-row-imap">
+                        <div class="nested-field">
+                          <label for="sourceSpamJunkStrategy"><span class="label-copy">Spam/Junk strategy</span><button class="info-hint" type="button" aria-label="Spam/Junk strategy help" data-hint="Optional strategy for importing source spam or junk folders instead of silently leaving false positives behind.">i</button></label>
+                          <select id="sourceSpamJunkStrategy" name="sourceSpamJunkStrategy">
+                            <option value="IGNORE">IGNORE</option>
+                            <option value="IMPORT_NORMAL">IMPORT_NORMAL</option>
+                            <option value="IMPORT_AND_ROUTE">IMPORT_AND_ROUTE</option>
+                          </select>
+                        </div>
+                        <div class="nested-field">
+                          <label for="sourceSpamJunkSourceFolder"><span class="label-copy">Source spam/junk folder</span><button class="info-hint" type="button" aria-label="Source spam/junk folder help" data-hint="Set this when importing the source spam or junk folder. Common values are Spam, Junk, or Junk Email.">i</button></label>
+                          <input id="sourceSpamJunkSourceFolder" name="sourceSpamJunkSourceFolder" placeholder="Junk" />
+                        </div>
+                      </div>
                     </div>
                     <div class="field full">
                       <label class="checkbox" for="sourceUnreadOnly">

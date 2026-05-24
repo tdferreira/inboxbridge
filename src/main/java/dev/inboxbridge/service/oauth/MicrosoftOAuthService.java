@@ -20,6 +20,7 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import dev.inboxbridge.config.InboxBridgeConfig;
 import dev.inboxbridge.domain.RuntimeEmailAccount;
 import dev.inboxbridge.domain.SourceFetchMode;
+import dev.inboxbridge.domain.SourcePostPollSettings;
 import dev.inboxbridge.dto.MicrosoftOAuthSourceOption;
 import dev.inboxbridge.dto.MicrosoftTokenExchangeResponse;
 import dev.inboxbridge.dto.MicrosoftTokenResponse;
@@ -298,6 +299,8 @@ public class MicrosoftOAuthService {
                 source.unreadOnly(),
                 source.fetchMode(),
                 source.customLabel(),
+                source.folderLabelMappings(),
+                SourcePostPollSettings.none(),
                 null));
     }
 

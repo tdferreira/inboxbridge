@@ -75,7 +75,7 @@ describe('EmailAccountDialog', () => {
   })
 
   it('shows custom label when the destination is not configured yet', () => {
-    render(
+    const { container } = render(
       <EmailAccountDialog
         emailAccountForm={{
           originalEmailAccountId: 'fetcher-a',
@@ -108,7 +108,51 @@ describe('EmailAccountDialog', () => {
       />
     )
 
-    expect(screen.getByText('Custom Label')).toBeInTheDocument()
+    expect(screen.getByText('Default label')).toBeInTheDocument()
+    expect(screen.getByText('Folder label mappings')).toBeInTheDocument()
+    expect([...container.querySelectorAll('#gmail-label-options option')].map((option) => option.value)).toEqual(['INBOX', 'SPAM'])
+  })
+
+  it('offers linked Gmail label IDs in the custom label picker', () => {
+    const { container } = render(
+      <EmailAccountDialog
+        emailAccountForm={{
+          originalEmailAccountId: 'fetcher-a',
+          emailAccountId: '',
+          enabled: true,
+          protocol: 'IMAP',
+          host: '',
+          port: 993,
+          tls: true,
+          authMethod: 'PASSWORD',
+          oauthProvider: 'NONE',
+          username: '',
+          password: '',
+          oauthRefreshToken: '',
+          folder: 'INBOX',
+          unreadOnly: false,
+          customLabel: '',
+          markReadAfterPoll: false,
+          postPollAction: 'NONE',
+          postPollTargetFolder: ''
+        }}
+        destinationConfig={{ provider: 'GMAIL_API' }}
+        gmailLabelOptions={[
+          { id: 'Label_Projects', name: 'Imported/Projects', type: 'user' },
+          { id: 'CATEGORY_PERSONAL', name: 'Personal', type: 'system' }
+        ]}
+        onApplyPreset={vi.fn()}
+        onEmailAccountFormChange={vi.fn()}
+        onClose={vi.fn()}
+        onSave={vi.fn((event) => event.preventDefault())}
+        saveLoading={false}
+        t={(key, params) => translate('en', key, params)}
+      />
+    )
+
+    const options = [...container.querySelectorAll('#gmail-label-options option')]
+    expect(options.map((option) => option.value)).toEqual(['INBOX', 'SPAM', 'Label_Projects', 'CATEGORY_PERSONAL'])
+    expect(options.find((option) => option.value === 'Label_Projects')?.label).toBe('Imported/Projects')
   })
 
   it('hides custom label when the current destination does not support labels', () => {
@@ -130,6 +174,7 @@ describe('EmailAccountDialog', () => {
           folder: 'INBOX',
           unreadOnly: false,
           customLabel: 'Imported/DEI',
+          folderLabelMappings: 'INBOX=Imported/Inbox',
           markReadAfterPoll: false,
           postPollAction: 'NONE',
           postPollTargetFolder: ''
@@ -145,7 +190,8 @@ describe('EmailAccountDialog', () => {
       />
     )
 
-    expect(screen.queryByLabelText('Custom Label')).not.toBeInTheDocument()
+    expect(screen.queryByLabelText('Default label')).not.toBeInTheDocument()
+    expect(screen.queryByLabelText('Folder label mappings')).not.toBeInTheDocument()
   })
 
   it('uses source-specific folder guidance and the updated TLS availability help', () => {
@@ -327,7 +373,8 @@ describe('EmailAccountDialog', () => {
     expect(screen.getByRole('dialog', { name: 'Adicionar conta de email' })).toBeInTheDocument()
     expect(screen.getByLabelText(/Predefinição do fornecedor/)).toBeInTheDocument()
     expect(screen.getByLabelText(/Método de autenticação/)).toBeInTheDocument()
-    expect(screen.getByLabelText(/Etiqueta personalizada/)).toBeInTheDocument()
+    expect(screen.getByLabelText(/Etiqueta predefinida/)).toBeInTheDocument()
+    expect(screen.getByLabelText(/Mapeamentos pasta-etiqueta/)).toBeInTheDocument()
     expect(screen.getByRole('button', { name: 'Adicionar' })).toBeInTheDocument()
   })
 
@@ -1250,7 +1297,7 @@ describe('EmailAccountDialog', () => {
     )
 
     expect(screen.queryByRole('button', { name: 'Add' })).not.toBeInTheDocument()
-    expect(screen.queryByLabelText('Custom Label')).not.toBeInTheDocument()
+    expect(screen.queryByLabelText('Default label')).not.toBeInTheDocument()
 
     rerender(
       <EmailAccountDialog

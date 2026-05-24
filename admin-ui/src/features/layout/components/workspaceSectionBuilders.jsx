@@ -147,6 +147,8 @@ export function buildUserWorkspaceSections({
           emailAccountForm={emailAccounts.emailAccountForm}
           emailAccountFolders={emailAccounts.emailAccountFolders}
           emailAccountFoldersLoading={emailAccounts.emailAccountFoldersLoading}
+          gmailLabelOptions={emailAccounts.gmailLabelOptions}
+          gmailLabelOptionsLoading={emailAccounts.gmailLabelOptionsLoading}
           fetcherDialogOpen={emailAccounts.showFetcherDialog}
           fetcherPollLoadingIds={emailAccounts.fetcherPollLoadingIds}
           fetcherPollingDialog={emailAccounts.fetcherPollingTarget}

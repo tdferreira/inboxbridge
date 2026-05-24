@@ -201,6 +201,54 @@ describe('useEmailAccountsController', () => {
     global.fetch = originalFetch
   })
 
+  it('loads real Gmail label options when opening the source dialog for a Gmail destination', async () => {
+    const originalFetch = global.fetch
+    global.fetch = vi.fn().mockResolvedValue({
+      ok: true,
+      json: async () => [
+        { id: 'Label_Projects', name: 'Imported/Projects', type: 'user' },
+        { id: 'SPAM', name: 'Spam', type: 'system' }
+      ]
+    })
+
+    const { result } = renderController({
+      destinationConfig: { provider: 'GMAIL_API' }
+    })
+
+    act(() => {
+      result.current.openAddFetcherDialog()
+    })
+
+    await waitFor(() => {
+      expect(global.fetch).toHaveBeenCalledWith('/api/app/destination-config/gmail-labels')
+      expect(result.current.gmailLabelOptions).toEqual([
+        { id: 'Label_Projects', name: 'Imported/Projects', type: 'user' },
+        { id: 'SPAM', name: 'Spam', type: 'system' }
+      ])
+    })
+
+    global.fetch = originalFetch
+  })
+
+  it('does not load Gmail labels for non-Gmail destinations', async () => {
+    const originalFetch = global.fetch
+    global.fetch = vi.fn()
+    const { result } = renderController({
+      destinationMeta: { provider: 'GENERIC_IMAP' }
+    })
+
+    act(() => {
+      result.current.openAddFetcherDialog()
+    })
+
+    await new Promise((resolve) => setTimeout(resolve, 0))
+
+    expect(global.fetch).not.toHaveBeenCalled()
+    expect(result.current.gmailLabelOptions).toEqual([])
+
+    global.fetch = originalFetch
+  })
+
   it('auto-enables TLS after the connection test verifies a secure endpoint', async () => {
     const originalFetch = global.fetch
     global.fetch = vi.fn()

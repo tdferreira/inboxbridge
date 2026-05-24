@@ -48,14 +48,35 @@ flow may require mailbox-read scopes separately because it is authenticating a
 different Google account for reading, not the destination Gmail account for
 importing.
 
-### High-level steps
+### Google Cloud checklist with direct links
 
-1. Create a Google Cloud project
-2. Enable the Gmail API
-3. Configure the OAuth consent screen
-4. Create an OAuth client
-5. Add the redirect URI
-6. Start the flow from the InboxBridge admin UI
+1. Open [Google Cloud project creation](https://console.cloud.google.com/projectcreate) and create or choose the project that should own the InboxBridge OAuth client.
+2. Open the [Gmail API library page](https://console.cloud.google.com/apis/library/gmail.googleapis.com) and enable the Gmail API for that project.
+3. Open [Google Auth Platform branding](https://console.cloud.google.com/auth/branding) and fill in the app name, support email, and developer contact details.
+4. Open [Google Auth Platform audience](https://console.cloud.google.com/auth/audience), keep the app in testing while you are setting up, and add each Gmail account that should be allowed to consent as a test user.
+5. Open [Google Auth Platform clients](https://console.cloud.google.com/auth/clients), create an OAuth client, and choose `Web application`.
+6. Add this authorized redirect URI:
+
+```text
+https://localhost:3000/api/google-oauth/callback
+```
+
+For a real deployment, replace `localhost:3000` with the exact public HTTPS
+origin where the InboxBridge frontend is served:
+
+```text
+https://<your-domain>/api/google-oauth/callback
+```
+
+7. Copy the generated `Client ID` and the newly visible `Client secret`.
+8. Paste them into `Administration -> OAuth Apps -> Google OAuth`.
+9. Start the Gmail destination connection from `My Destination Mailbox`.
+
+Official Google references:
+
+- [Create access credentials](https://developers.google.com/workspace/guides/create-credentials)
+- [Using OAuth 2.0 for web server applications](https://developers.google.com/identity/protocols/oauth2/web-server)
+- [Manage OAuth clients](https://support.google.com/cloud/answer/15549257)
 
 ### Can InboxBridge create the Google OAuth client automatically?
 

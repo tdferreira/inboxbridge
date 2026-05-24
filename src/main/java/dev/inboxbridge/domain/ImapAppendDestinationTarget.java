@@ -14,7 +14,37 @@ public record ImapAppendDestinationTarget(
         InboxBridgeConfig.OAuthProvider oauthProvider,
         String username,
         String password,
-        String folder) implements MailDestinationTarget {
+        String folder,
+        String spamJunkFolder) implements MailDestinationTarget {
+
+    public ImapAppendDestinationTarget(
+            String subjectKey,
+            Long userId,
+            String ownerUsername,
+            String providerId,
+            String host,
+            int port,
+            boolean tls,
+            InboxBridgeConfig.AuthMethod authMethod,
+            InboxBridgeConfig.OAuthProvider oauthProvider,
+            String username,
+            String password,
+            String folder) {
+        this(
+                subjectKey,
+                userId,
+                ownerUsername,
+                providerId,
+                host,
+                port,
+                tls,
+                authMethod,
+                oauthProvider,
+                username,
+                password,
+                folder,
+                null);
+    }
 
     @Override
     public String deliveryMode() {

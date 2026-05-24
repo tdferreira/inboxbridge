@@ -5,6 +5,7 @@ import java.util.List;
 import java.util.Optional;
 
 import dev.inboxbridge.domain.SourceFetchMode;
+import dev.inboxbridge.domain.SourceSpamJunkStrategy;
 import io.smallrye.config.ConfigMapping;
 import io.smallrye.config.WithDefault;
 
@@ -252,6 +253,13 @@ public interface InboxBridgeConfig {
         SourceFetchMode fetchMode();
 
         Optional<String> customLabel();
+
+        Optional<String> folderLabelMappings();
+
+        @WithDefault("IGNORE")
+        SourceSpamJunkStrategy spamJunkStrategy();
+
+        Optional<String> spamJunkSourceFolder();
     }
 
     enum Protocol {

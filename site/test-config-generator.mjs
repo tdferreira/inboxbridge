@@ -18,6 +18,9 @@ const configuredInput = {
   sourceUsername: 'owner@example.com',
   sourceOauthRefreshToken: 'refresh-token',
   sourceFolder: 'INBOX, Projects/2026',
+  sourceFolderLabelMappings: 'INBOX=Imported/Inbox;Projects/2026=Imported/Projects',
+  sourceSpamJunkStrategy: 'IMPORT_AND_ROUTE',
+  sourceSpamJunkSourceFolder: 'Junk',
   sourceUnreadOnly: true
 }
 
@@ -41,6 +44,9 @@ assert.match(envText, /MAIL_ACCOUNT_0__AUTH_METHOD=OAUTH2/)
 assert.match(envText, /MAIL_ACCOUNT_0__OAUTH_PROVIDER=MICROSOFT/)
 assert.match(envText, /MAIL_ACCOUNT_0__FETCH_MODE=IDLE/)
 assert.match(envText, /MAIL_ACCOUNT_0__FOLDER=INBOX, Projects\/2026/)
+assert.match(envText, /MAIL_ACCOUNT_0__FOLDER_LABEL_MAPPINGS=INBOX=Imported\/Inbox;Projects\/2026=Imported\/Projects/)
+assert.match(envText, /MAIL_ACCOUNT_0__SPAM_JUNK_STRATEGY=IMPORT_AND_ROUTE/)
+assert.match(envText, /MAIL_ACCOUNT_0__SPAM_JUNK_SOURCE_FOLDER=Junk/)
 assert.doesNotMatch(envText, /MAIL_ACCOUNT_0__PASSWORD=/)
 
 const popEnv = generateEnvText({
@@ -194,6 +200,9 @@ assert.match(siteHtml, /id="sourcePassword"/)
 assert.match(siteHtml, /id="sourceFolder"/)
 assert.match(siteHtml, /id="sourceFolderPillbox"/)
 assert.match(siteHtml, /data-pillbox-hidden-input="sourceFolder"/)
+assert.match(siteHtml, /id="sourceFolderLabelMappings"/)
+assert.match(siteHtml, /id="sourceSpamJunkStrategy"/)
+assert.match(siteHtml, /id="sourceSpamJunkSourceFolder"/)
 assert.match(siteHtml, /class="site-pillbox-input"/)
 assert.match(siteHtml, /comma-separated IMAP folder list/)
 assert.match(siteHtml, /id="sourceFetchMode"/)

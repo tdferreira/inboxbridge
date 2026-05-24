@@ -10,6 +10,7 @@ import java.util.Locale;
 import java.util.Optional;
 import java.util.Set;
 
+import dev.inboxbridge.domain.MailboxFolderRoleDetector;
 import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.mail.Flags;
 import jakarta.mail.Folder;
@@ -149,7 +150,7 @@ public class MailSourceFolderService {
         }
         return candidates.stream()
                 .map(this::normalizeFolderToken)
-                .anyMatch(SPAM_OR_JUNK_FOLDER_NAMES::contains);
+                .anyMatch(token -> MailboxFolderRoleDetector.isLikelySpamOrJunkFolder(token));
     }
 
     private boolean hasSpamOrJunkSpecialUse(Folder folder) {
@@ -161,7 +162,7 @@ public class MailSourceFolderService {
             }
             for (String attribute : attributes) {
                 String normalized = String.valueOf(attribute).trim().toLowerCase(Locale.ROOT);
-                if (SPAM_OR_JUNK_SPECIAL_USE_ATTRIBUTES.contains(normalized)) {
+                if (MailboxFolderRoleDetector.SPAM_OR_JUNK_SPECIAL_USE_ATTRIBUTES.contains(normalized)) {
                     return true;
                 }
             }
@@ -188,19 +189,4 @@ public class MailSourceFolderService {
         } catch (MessagingException ignored) {
         }
     }
-
-    private static final Set<String> SPAM_OR_JUNK_FOLDER_NAMES = Set.of(
-            "spam",
-            "junk",
-            "junkemail",
-            "junkeemail",
-            "junkmail",
-            "bulkmail",
-            "correonodeseado",
-            "correoindeseado",
-            "indesejados");
-
-    private static final Set<String> SPAM_OR_JUNK_SPECIAL_USE_ATTRIBUTES = Set.of(
-            "\\junk",
-            "\\spam");
 }

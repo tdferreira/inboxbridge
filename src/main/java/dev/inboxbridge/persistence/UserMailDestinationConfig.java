@@ -59,6 +59,9 @@ public class UserMailDestinationConfig extends PanacheEntityBase {
     @Column(name = "folder_name", length = 255)
     public String folderName;
 
+    @Column(name = "spam_junk_folder_name", length = 255)
+    public String spamJunkFolderName;
+
     @Column(name = "key_version", length = 64)
     public String keyVersion;
 

@@ -19,8 +19,10 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.node.ObjectNode;
 
 import dev.inboxbridge.config.InboxBridgeConfig;
+import dev.inboxbridge.dto.GmailLabelOptionView;
 import dev.inboxbridge.domain.GmailApiDestinationTarget;
 import dev.inboxbridge.domain.GmailTarget;
+import dev.inboxbridge.domain.SourceFolderLabelMappings;
 import dev.inboxbridge.service.oauth.GoogleOAuthService;
 import dev.inboxbridge.service.oauth.SystemOAuthAppSettingsService;
 import dev.inboxbridge.service.oauth.UserGmailConfigService;
@@ -60,17 +62,89 @@ public class GmailLabelService {
     }
 
     public List<String> resolveLabelIds(GmailApiDestinationTarget target, Optional<String> customLabel) {
+        return resolveLabelIds(target, customLabel, Optional.empty(), Optional.empty());
+    }
+
+    public List<String> resolveLabelIds(
+            GmailApiDestinationTarget target,
+            Optional<String> customLabel,
+            Optional<String> folderLabelMappings,
+            Optional<String> sourceFolder) {
+        return resolveLabelIds(target, customLabel, folderLabelMappings, sourceFolder, false);
+    }
+
+    public List<String> resolveLabelIds(
+            GmailApiDestinationTarget target,
+            Optional<String> customLabel,
+            Optional<String> folderLabelMappings,
+            Optional<String> sourceFolder,
+            boolean routeToSpam) {
         List<String> labelIds = new ArrayList<>();
-        labelIds.add("INBOX");
+        labelIds.add(routeToSpam ? "SPAM" : "INBOX");
         labelIds.add("UNREAD");
 
         customLabel.filter(label -> !label.isBlank())
                 .ifPresent(label -> labelIds.add(resolveCustomLabelId(target, label)));
+        SourceFolderLabelMappings.parse(folderLabelMappings)
+                .labelFor(sourceFolder)
+                .ifPresent(label -> {
+                    String labelId = resolveCustomLabelId(target, label);
+                    if (!labelIds.contains(labelId)) {
+                        labelIds.add(labelId);
+                    }
+                });
         return labelIds;
     }
 
     public List<String> resolveLabelIds(GmailTarget target, Optional<String> customLabel) {
         return resolveLabelIds(asDestinationTarget(target), customLabel);
+    }
+
+    public List<GmailLabelOptionView> listLabelOptions(GmailApiDestinationTarget target) {
+        try {
+            HttpResponse<String> response = sendAuthorizedRequestWithRetry(
+                    target,
+                    accessToken -> HttpRequest.newBuilder(URI.create("https://gmail.googleapis.com/gmail/v1/users/" + urlEncode(target.destinationUser()) + "/labels"))
+                            .timeout(Duration.ofSeconds(20))
+                            .header("Authorization", "Bearer " + accessToken)
+                            .GET()
+                            .build());
+            if (response.statusCode() / 100 != 2) {
+                throw new IllegalStateException("Failed to list Gmail labels: " + response.statusCode() + " - " + response.body());
+            }
+            JsonNode root = objectMapper.readTree(response.body());
+            List<GmailLabelOptionView> labels = new ArrayList<>();
+            for (JsonNode label : root.withArray("labels")) {
+                labels.add(new GmailLabelOptionView(
+                        label.path("id").asText(),
+                        label.path("name").asText(),
+                        label.path("type").asText()));
+            }
+            labels.sort(java.util.Comparator.comparing(GmailLabelOptionView::name, String.CASE_INSENSITIVE_ORDER));
+            return labels;
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+            throw new IllegalStateException("Failed to list Gmail labels", e);
+        } catch (IOException e) {
+            throw new IllegalStateException("Failed to list Gmail labels", e);
+        }
+    }
+
+    public List<String> resolveLabelIds(
+            GmailTarget target,
+            Optional<String> customLabel,
+            Optional<String> folderLabelMappings,
+            Optional<String> sourceFolder) {
+        return resolveLabelIds(asDestinationTarget(target), customLabel, folderLabelMappings, sourceFolder);
+    }
+
+    public List<String> resolveLabelIds(
+            GmailTarget target,
+            Optional<String> customLabel,
+            Optional<String> folderLabelMappings,
+            Optional<String> sourceFolder,
+            boolean routeToSpam) {
+        return resolveLabelIds(asDestinationTarget(target), customLabel, folderLabelMappings, sourceFolder, routeToSpam);
     }
 
     private String resolveCustomLabelId(GmailApiDestinationTarget target, String labelName) {

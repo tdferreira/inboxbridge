@@ -77,6 +77,8 @@ By default, the local Docker setup serves the app over HTTPS with generated self
 - Per-user notification history that survives refreshes and sign-in cycles
 - Optional post-poll actions for IMAP sources such as mark as read, mark as forwarded, delete, or move to folder
 - Per-source IMAP fetch mode: scheduled polling or real-time IMAP IDLE across one or more configured folders
+- Optional per-folder Gmail label mappings such as `INBOX=Imported/Inbox;Junk=SPAM`
+- Two-tier admin configuration backups: redacted review snapshots and public-key-encrypted secret exports
 - Live polling over authenticated SSE with bounded parallel workers
 - A mobile-friendly `/remote` page for quick poll control without opening the full workspace
 
@@ -89,6 +91,27 @@ InboxBridge currently does not:
 - include production-grade metrics, circuit breakers, or external secret-vault integration
 
 ## Quick Start
+
+### Gmailify-style path in about 15 minutes
+
+If your goal is simply “read one source mailbox and import it into Gmail,” use
+this path first:
+
+1. Copy `.env.example` to `.env`, generate `SECURITY_TOKEN_ENCRYPTION_KEY`,
+   and start Docker Compose.
+2. Open `https://localhost:3000` and sign in as `admin` / `nimda`.
+3. Change the bootstrap password.
+4. Create a Google Cloud OAuth web client using the direct checklist in
+   [Google Cloud Setup For Gmail API](docs/SETUP.md#google-cloud-setup-for-gmail-api).
+5. Paste the Google client ID and secret into `Administration -> OAuth Apps`.
+6. Open `My Destination Mailbox`, connect Gmail, and complete Google consent.
+7. Open `My Source Email Accounts`, add your IMAP source, choose folders, and
+   optionally add Gmail labels or per-folder label mappings.
+8. Run a poll and confirm the imported mail appears in Gmail.
+
+That route keeps `.env` small and stores UI-managed mailbox secrets encrypted.
+If you prefer a config-file-only deployment, see
+[Config-file-only source setup](#config-file-only-source-setup).
 
 ### 1. Prepare the environment
 
@@ -202,6 +225,8 @@ These are the settings most operators care about first:
 - `SECURITY_TOKEN_ENCRYPTION_LEGACY_KEYS`: optional comma-separated `keyId:base64Key` list used to keep older encrypted records decryptable during key rotation
 - `SECURITY_PASSKEY_*`: passkey/WebAuthn settings
 - `MAIL_ACCOUNT_<n>__...`: optional env-managed source mailbox definitions
+- `MAIL_ACCOUNT_<n>__FOLDER_LABEL_MAPPINGS`: optional IMAP-folder-to-Gmail-label overrides such as `INBOX=Imported/Inbox;Junk=SPAM`
+- `MAIL_ACCOUNT_<n>__SPAM_JUNK_STRATEGY` and `MAIL_ACCOUNT_<n>__SPAM_JUNK_SOURCE_FOLDER`: optional IMAP spam/junk import controls; `IMPORT_AND_ROUTE` preserves source spam/junk messages in Gmail `SPAM` or the destination spam/junk folder
 - `GOOGLE_*`: shared Google OAuth app settings for Gmail destination flows
 - `MICROSOFT_*`: shared Microsoft OAuth app settings for Outlook flows
 - `TLS_FRONTEND_CERT_HOSTNAMES` and `TLS_BACKEND_CERT_HOSTNAMES`: extra hostnames to include in generated local certificates
@@ -238,6 +263,57 @@ It is useful when you want to:
 - expose a simpler control surface behind your normal HTTPS access controls
 
 The remote page uses its own scoped session model instead of reusing the main admin UI session.
+
+## Config-file-only Source Setup
+
+InboxBridge's recommended day-to-day path is the web UI because it can encrypt
+stored mailbox secrets. If you prefer a small, auditable deployment file for a
+personal instance, you can still define source accounts in `.env`:
+
+```dotenv
+MAIL_ACCOUNT_0__ID=outlook-main
+MAIL_ACCOUNT_0__ENABLED=true
+MAIL_ACCOUNT_0__PROTOCOL=IMAP
+MAIL_ACCOUNT_0__HOST=outlook.office365.com
+MAIL_ACCOUNT_0__PORT=993
+MAIL_ACCOUNT_0__TLS=true
+MAIL_ACCOUNT_0__AUTH_METHOD=PASSWORD
+MAIL_ACCOUNT_0__OAUTH_PROVIDER=NONE
+MAIL_ACCOUNT_0__USERNAME=person@example.com
+MAIL_ACCOUNT_0__PASSWORD=replace-me-app-password
+MAIL_ACCOUNT_0__FOLDER=INBOX,Archive
+MAIL_ACCOUNT_0__FETCH_MODE=IDLE
+MAIL_ACCOUNT_0__CUSTOM_LABEL=Imported/Outlook
+MAIL_ACCOUNT_0__FOLDER_LABEL_MAPPINGS=INBOX=Imported/Inbox;Archive=Imported/Archive
+```
+
+Use `.env` accounts when you want file-based operation and accept that those
+mailbox secrets are operator-managed plaintext configuration. Use UI-managed
+accounts when you want encrypted secret storage, connection testing, folder
+discovery, live diagnostics, and browser OAuth flows.
+
+## Compared With Tiny Gmail-only Importers
+
+Projects such as [Turbogmailify](https://github.com/YoRyan/turbogmailify)
+optimize for a very small Gmail-only tool configured by a file. That is a good
+fit when you want the smallest possible audit surface and do not need a web UI,
+PostgreSQL, multi-user operation, POP3, IMAP destinations, encrypted
+browser-managed setup, live controls, or operator diagnostics.
+
+InboxBridge is intentionally broader. It is a better fit when you want the same
+self-hosted “one Gmail inbox, many source accounts” workflow plus:
+
+- Gmail API or IMAP APPEND destinations
+- IMAP and POP3 sources
+- multi-folder IMAP polling and per-folder IMAP IDLE
+- POP3 UIDL checkpoints
+- encrypted UI-managed passwords and OAuth refresh tokens
+- redacted and encrypted backup exports for operator-controlled recovery planning
+- a full admin UI, `/remote`, browser extensions, and live troubleshooting
+
+The tradeoff is real: InboxBridge has more moving parts. The win is that those
+parts support safer setup, more providers, more control surfaces, and better
+visibility when imports fail.
 
 ## Security Notes
 

@@ -16,6 +16,9 @@ const DEFAULTS = {
   sourceUnreadOnly: false,
   sourceFolder: 'INBOX',
   sourceFetchMode: 'POLLING',
+  sourceFolderLabelMappings: '',
+  sourceSpamJunkStrategy: 'IGNORE',
+  sourceSpamJunkSourceFolder: '',
   googleRedirectPath: '/api/google-oauth/callback',
   microsoftRedirectPath: '/api/microsoft-oauth/callback'
 }
@@ -134,6 +137,9 @@ export function buildEnvConfig(input = {}) {
     sourcePassword: normalizeString(input.sourcePassword),
     sourceOauthRefreshToken: normalizeString(input.sourceOauthRefreshToken),
     sourceFolder,
+    sourceFolderLabelMappings: normalizeString(input.sourceFolderLabelMappings),
+    sourceSpamJunkStrategy: withDefault(input.sourceSpamJunkStrategy, DEFAULTS.sourceSpamJunkStrategy).toUpperCase(),
+    sourceSpamJunkSourceFolder: normalizeString(input.sourceSpamJunkSourceFolder),
     sourceUnreadOnly: normalizeBoolean(input.sourceUnreadOnly, DEFAULTS.sourceUnreadOnly),
     sourceFetchMode,
     sourceCustomLabel: normalizeString(input.sourceCustomLabel)
@@ -212,6 +218,15 @@ export function generateEnvText(rawInput = {}) {
         `MAIL_ACCOUNT_0__UNREAD_ONLY=${config.sourceUnreadOnly}`,
         `MAIL_ACCOUNT_0__FETCH_MODE=${config.sourceFetchMode}`
       )
+      if (config.sourceFolderLabelMappings) {
+        lines.push(`MAIL_ACCOUNT_0__FOLDER_LABEL_MAPPINGS=${config.sourceFolderLabelMappings}`)
+      }
+      if (config.sourceSpamJunkStrategy !== 'IGNORE') {
+        lines.push(`MAIL_ACCOUNT_0__SPAM_JUNK_STRATEGY=${config.sourceSpamJunkStrategy}`)
+      }
+      if (config.sourceSpamJunkSourceFolder) {
+        lines.push(`MAIL_ACCOUNT_0__SPAM_JUNK_SOURCE_FOLDER=${config.sourceSpamJunkSourceFolder}`)
+      }
     }
 
     if (config.sourceCustomLabel) {

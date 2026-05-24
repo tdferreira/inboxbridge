@@ -67,6 +67,96 @@ class GmailLabelServiceTest {
     }
 
     @Test
+    void resolveLabelIdsAddsFolderSpecificLabelForMatchedSourceFolder() {
+        GmailLabelService service = new GmailLabelService();
+        service.googleOAuthService = new FakeGoogleOAuthService("token", "token");
+        service.objectMapper = new ObjectMapper();
+        service.userGmailConfigService = new FakeUserGmailConfigService();
+        service.httpClient = new FakeHttpClient(
+                new FakeHttpResponse(200, "{\"labels\":[{\"name\":\"Imported/Default\",\"id\":\"Label_Default\"},{\"name\":\"Imported/Projects\",\"id\":\"Label_Projects\"}]}"),
+                new FakeHttpResponse(200, "{\"labels\":[{\"name\":\"Imported/Default\",\"id\":\"Label_Default\"},{\"name\":\"Imported/Projects\",\"id\":\"Label_Projects\"}]}"));
+
+        List<String> labels = service.resolveLabelIds(
+                new GmailTarget(
+                        "user-gmail:12",
+                        12L,
+                        "john-doe",
+                        "me",
+                        "client",
+                        "secret",
+                        "",
+                        "https://localhost:3000/api/google-oauth/callback",
+                        true,
+                        false,
+                        false),
+                Optional.of("Imported/Default"),
+                Optional.of("Projects/2026=Imported/Projects"),
+                Optional.of("projects/2026"));
+
+        assertIterableEquals(List.of("INBOX", "UNREAD", "Label_Default", "Label_Projects"), labels);
+    }
+
+    @Test
+    void resolveLabelIdsDoesNotDuplicateFolderSpecificLabel() {
+        GmailLabelService service = new GmailLabelService();
+        service.googleOAuthService = new FakeGoogleOAuthService("token", "token");
+        service.objectMapper = new ObjectMapper();
+        service.userGmailConfigService = new FakeUserGmailConfigService();
+        service.httpClient = new FakeHttpClient(
+                new FakeHttpResponse(200, "{\"labels\":[{\"name\":\"Imported/Inbox\",\"id\":\"Label_1\"}]}"),
+                new FakeHttpResponse(200, "{\"labels\":[{\"name\":\"Imported/Inbox\",\"id\":\"Label_1\"}]}"));
+
+        List<String> labels = service.resolveLabelIds(
+                new GmailTarget(
+                        "user-gmail:13",
+                        13L,
+                        "john-doe",
+                        "me",
+                        "client",
+                        "secret",
+                        "",
+                        "https://localhost:3000/api/google-oauth/callback",
+                        true,
+                        false,
+                        false),
+                Optional.of("Imported/Inbox"),
+                Optional.of("INBOX=Imported/Inbox"),
+                Optional.of("INBOX"));
+
+        assertIterableEquals(List.of("INBOX", "UNREAD", "Label_1"), labels);
+    }
+
+    @Test
+    void resolveLabelIdsUsesSpamSystemLabelInsteadOfInboxWhenRoutingSpamJunk() {
+        GmailLabelService service = new GmailLabelService();
+        service.googleOAuthService = new FakeGoogleOAuthService("token", "token");
+        service.objectMapper = new ObjectMapper();
+        service.userGmailConfigService = new FakeUserGmailConfigService();
+        service.httpClient = new FakeHttpClient(
+                new FakeHttpResponse(200, "{\"labels\":[{\"name\":\"Imported/Default\",\"id\":\"Label_Default\"}]}"));
+
+        List<String> labels = service.resolveLabelIds(
+                new GmailTarget(
+                        "user-gmail:13",
+                        13L,
+                        "john-doe",
+                        "me",
+                        "client",
+                        "secret",
+                        "",
+                        "https://localhost:3000/api/google-oauth/callback",
+                        true,
+                        false,
+                        false),
+                Optional.of("Imported/Default"),
+                Optional.empty(),
+                Optional.of("Junk"),
+                true);
+
+        assertIterableEquals(List.of("SPAM", "UNREAD", "Label_Default"), labels);
+    }
+
+    @Test
     void resolveLabelIdsMarksUserGmailLinkRevokedAfterRepeatedUnauthorizedResponses() {
         GmailLabelService service = new GmailLabelService();
         service.googleOAuthService = new FakeGoogleOAuthService("stale-token", "fresh-token");

@@ -81,7 +81,8 @@ export const DESTINATION_PROVIDER_PRESETS = [
       oauthProvider: 'MICROSOFT',
       username: '',
       password: '',
-      folder: 'INBOX'
+      folder: 'INBOX',
+      spamJunkFolder: ''
     }
   },
   {
@@ -97,7 +98,8 @@ export const DESTINATION_PROVIDER_PRESETS = [
       oauthProvider: 'NONE',
       username: '',
       password: '',
-      folder: 'INBOX'
+      folder: 'INBOX',
+      spamJunkFolder: ''
     }
   },
   {
@@ -113,7 +115,8 @@ export const DESTINATION_PROVIDER_PRESETS = [
       oauthProvider: 'NONE',
       username: '',
       password: '',
-      folder: 'INBOX'
+      folder: 'INBOX',
+      spamJunkFolder: ''
     }
   },
   {
@@ -129,7 +132,8 @@ export const DESTINATION_PROVIDER_PRESETS = [
       oauthProvider: 'NONE',
       username: '',
       password: '',
-      folder: 'INBOX'
+      folder: 'INBOX',
+      spamJunkFolder: ''
     }
   }
 ]
@@ -184,7 +188,8 @@ export function normalizeDestinationProviderConfig(config = {}) {
       authMethod: 'OAUTH2',
       oauthProvider: 'MICROSOFT',
       password: '',
-      folder: config.folder || preset.values.folder
+      folder: config.folder || preset.values.folder,
+      spamJunkFolder: config.spamJunkFolder || ''
     }
   }
 
@@ -194,7 +199,8 @@ export function normalizeDestinationProviderConfig(config = {}) {
       provider,
       authMethod: 'OAUTH2',
       oauthProvider: 'GOOGLE',
-      password: ''
+      password: '',
+      spamJunkFolder: ''
     }
   }
 

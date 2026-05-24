@@ -1,5 +1,6 @@
 package dev.inboxbridge.domain;
 
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Optional;
 
@@ -24,8 +25,20 @@ public record RuntimeEmailAccount(
         boolean unreadOnly,
         SourceFetchMode fetchMode,
         Optional<String> customLabel,
+        Optional<String> folderLabelMappings,
+        SourceSpamJunkStrategy spamJunkStrategy,
+        Optional<String> spamJunkSourceFolder,
         SourcePostPollSettings postPollSettings,
         MailDestinationTarget destination) {
+
+    public RuntimeEmailAccount {
+        folder = folder == null ? Optional.empty() : folder;
+        customLabel = customLabel == null ? Optional.empty() : customLabel;
+        folderLabelMappings = folderLabelMappings == null ? Optional.empty() : folderLabelMappings;
+        spamJunkStrategy = spamJunkStrategy == null ? SourceSpamJunkStrategy.IGNORE : spamJunkStrategy;
+        spamJunkSourceFolder = spamJunkSourceFolder == null ? Optional.empty() : spamJunkSourceFolder;
+        postPollSettings = postPollSettings == null ? SourcePostPollSettings.none() : postPollSettings;
+    }
 
     public RuntimeEmailAccount(
             String id,
@@ -65,6 +78,9 @@ public record RuntimeEmailAccount(
                 unreadOnly,
                 SourceFetchMode.POLLING,
                 customLabel,
+                Optional.empty(),
+                SourceSpamJunkStrategy.IGNORE,
+                Optional.empty(),
                 SourcePostPollSettings.none(),
                 destination);
     }
@@ -108,6 +124,9 @@ public record RuntimeEmailAccount(
                 unreadOnly,
                 SourceFetchMode.POLLING,
                 customLabel,
+                Optional.empty(),
+                SourceSpamJunkStrategy.IGNORE,
+                Optional.empty(),
                 postPollSettings,
                 destination);
     }
@@ -151,7 +170,105 @@ public record RuntimeEmailAccount(
                 unreadOnly,
                 fetchMode,
                 customLabel,
+                Optional.empty(),
+                SourceSpamJunkStrategy.IGNORE,
+                Optional.empty(),
                 SourcePostPollSettings.none(),
+                destination);
+    }
+
+    public RuntimeEmailAccount(
+            String id,
+            String ownerKind,
+            Long ownerUserId,
+            String ownerUsername,
+            boolean enabled,
+            InboxBridgeConfig.Protocol protocol,
+            String host,
+            int port,
+            boolean tls,
+            InboxBridgeConfig.AuthMethod authMethod,
+            InboxBridgeConfig.OAuthProvider oauthProvider,
+            String username,
+            String password,
+            String oauthRefreshToken,
+            Optional<String> folder,
+            boolean unreadOnly,
+            SourceFetchMode fetchMode,
+            Optional<String> customLabel,
+            SourcePostPollSettings postPollSettings,
+            MailDestinationTarget destination) {
+        this(
+                id,
+                ownerKind,
+                ownerUserId,
+                ownerUsername,
+                enabled,
+                protocol,
+                host,
+                port,
+                tls,
+                authMethod,
+                oauthProvider,
+                username,
+                password,
+                oauthRefreshToken,
+                folder,
+                unreadOnly,
+                fetchMode,
+                customLabel,
+                Optional.empty(),
+                SourceSpamJunkStrategy.IGNORE,
+                Optional.empty(),
+                postPollSettings,
+                destination);
+    }
+
+    public RuntimeEmailAccount(
+            String id,
+            String ownerKind,
+            Long ownerUserId,
+            String ownerUsername,
+            boolean enabled,
+            InboxBridgeConfig.Protocol protocol,
+            String host,
+            int port,
+            boolean tls,
+            InboxBridgeConfig.AuthMethod authMethod,
+            InboxBridgeConfig.OAuthProvider oauthProvider,
+            String username,
+            String password,
+            String oauthRefreshToken,
+            Optional<String> folder,
+            boolean unreadOnly,
+            SourceFetchMode fetchMode,
+            Optional<String> customLabel,
+            Optional<String> folderLabelMappings,
+            SourcePostPollSettings postPollSettings,
+            MailDestinationTarget destination) {
+        this(
+                id,
+                ownerKind,
+                ownerUserId,
+                ownerUsername,
+                enabled,
+                protocol,
+                host,
+                port,
+                tls,
+                authMethod,
+                oauthProvider,
+                username,
+                password,
+                oauthRefreshToken,
+                folder,
+                unreadOnly,
+                fetchMode,
+                customLabel,
+                folderLabelMappings,
+                SourceSpamJunkStrategy.IGNORE,
+                Optional.empty(),
+                postPollSettings,
                 destination);
     }
 
@@ -162,10 +279,34 @@ public record RuntimeEmailAccount(
      * always resolves to the single INBOX maildrop.
      */
     public List<String> sourceFolders() {
-        return SourceMailboxFolders.forSource(protocol, folder);
+        LinkedHashSet<String> folders = new LinkedHashSet<>(SourceMailboxFolders.forSource(protocol, folder));
+        if (protocol == InboxBridgeConfig.Protocol.IMAP && spamJunkStrategy.importsSpamJunk()) {
+            spamJunkSourceFolder
+                    .filter(value -> !value.isBlank())
+                    .ifPresent(value -> {
+                        boolean alreadyPresent = folders.stream()
+                                .anyMatch(existing -> MailboxFolderRoleDetector.sameFolder(existing, value));
+                        if (!alreadyPresent) {
+                            folders.add(value.trim());
+                        }
+                    });
+        }
+        return List.copyOf(folders);
     }
 
     public String primaryFolder() {
         return SourceMailboxFolders.primary(protocol, folder);
+    }
+
+    public boolean isSpamJunkSourceFolder(Optional<String> sourceFolder) {
+        return protocol == InboxBridgeConfig.Protocol.IMAP
+                && spamJunkStrategy.importsSpamJunk()
+                && sourceFolder.flatMap(folderName -> spamJunkSourceFolder
+                        .filter(spamFolder -> MailboxFolderRoleDetector.sameFolder(folderName, spamFolder)))
+                        .isPresent();
+    }
+
+    public boolean routesSpamJunkFolder(Optional<String> sourceFolder) {
+        return spamJunkStrategy.routesSpamJunk() && isSpamJunkSourceFolder(sourceFolder);
     }
 }

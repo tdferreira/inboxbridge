@@ -1,6 +1,7 @@
 package dev.inboxbridge.web;
 
 import static io.restassured.RestAssured.given;
+import static org.hamcrest.Matchers.containsString;
 import static org.hamcrest.Matchers.equalTo;
 import static org.hamcrest.Matchers.notNullValue;
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -9,6 +10,8 @@ import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.time.Instant;
+import java.security.KeyPairGenerator;
+import java.util.Base64;
 import java.util.List;
 import java.util.Map;
 
@@ -18,6 +21,7 @@ import dev.inboxbridge.config.InboxBridgeConfig;
 import dev.inboxbridge.domain.SourceFetchMode;
 import dev.inboxbridge.domain.SourcePostPollAction;
 import dev.inboxbridge.persistence.AppUser;
+import dev.inboxbridge.persistence.ConfigBackupExportAuditRepository;
 import dev.inboxbridge.persistence.ExtensionSession;
 import dev.inboxbridge.persistence.ExtensionSessionRepository;
 import dev.inboxbridge.persistence.ImportedMessage;
@@ -126,6 +130,9 @@ class PostgresAuthenticatedEndpointsQuarkusTest {
 
     @Inject
     OAuthCredentialRepository oAuthCredentialRepository;
+
+    @Inject
+    ConfigBackupExportAuditRepository configBackupExportAuditRepository;
 
     @Test
     void browserSessionCanPersistUiPreferencesThroughTheRealHttpSurface() {
@@ -525,6 +532,7 @@ class PostgresAuthenticatedEndpointsQuarkusTest {
                 .body("[0].username", equalTo("source-config@example.com"))
                 .body("[0].folder", equalTo("Projects/InboxBridge"))
                 .body("[0].customLabel", equalTo("Config endpoint source"))
+                .body("[0].folderLabelMappings", equalTo("Projects/InboxBridge=Imported/Projects"))
                 .body("[0].fetchMode", equalTo("POLLING"))
                 .body("[0].postPollAction", equalTo("MOVE"))
                 .body("[0].postPollTargetFolder", equalTo("Processed"))
@@ -604,6 +612,75 @@ class PostgresAuthenticatedEndpointsQuarkusTest {
                 .body("reauthenticationRequired", equalTo(true))
                 .body("reauthenticationSatisfied", equalTo(true))
                 .body("reauthenticationExpiresAt", notNullValue());
+    }
+
+    @Test
+    void adminConfigBackupEndpointsRequireAdminAndFreshReauthenticationForSecretExports() throws Exception {
+        ManagedUserFixture managedUser = QuarkusTransaction.requiringNew().call(this::seedManagedUserForConfigBackupAccessTest);
+        BrowserSession userSession = loginBrowser(managedUser.username(), managedUser.password());
+        BrowserSession adminSession = loginBrowserAsAdmin();
+        long auditCountBefore = configBackupExportAuditRepository.count();
+        String publicKeyPem = publicKeyPem();
+
+        given()
+                .cookie(SESSION_COOKIE, userSession.sessionToken())
+                .when().get("/api/admin/config-backups/safe")
+                .then()
+                .statusCode(403);
+
+        given()
+                .cookie(SESSION_COOKIE, adminSession.sessionToken())
+                .when().get("/api/admin/config-backups/safe")
+                .then()
+                .statusCode(200)
+                .body("includesSecrets", equalTo(false))
+                .body("data.includesSecrets", equalTo(false))
+                .body("warning", equalTo("Secrets are redacted. This backup is safe for configuration review but cannot restore mailbox access."));
+
+        assertEquals(auditCountBefore + 1, configBackupExportAuditRepository.count());
+
+        given()
+                .cookie(SESSION_COOKIE, adminSession.sessionToken())
+                .cookie(CSRF_COOKIE, adminSession.csrfToken())
+                .header(CSRF_HEADER, adminSession.csrfToken())
+                .contentType("application/json")
+                .body(Map.of(
+                        "publicKeyPem", publicKeyPem,
+                        "riskAcknowledged", true))
+                .when().post("/api/admin/config-backups/encrypted-secrets")
+                .then()
+                .statusCode(400);
+
+        given()
+                .cookie(SESSION_COOKIE, adminSession.sessionToken())
+                .cookie(CSRF_COOKIE, adminSession.csrfToken())
+                .header(CSRF_HEADER, adminSession.csrfToken())
+                .contentType("application/json")
+                .body(Map.of("password", "nimda"))
+                .when().post("/api/admin/secret-management/re-auth/password")
+                .then()
+                .statusCode(200)
+                .body("reauthenticationSatisfied", equalTo(true));
+
+        given()
+                .cookie(SESSION_COOKIE, adminSession.sessionToken())
+                .cookie(CSRF_COOKIE, adminSession.csrfToken())
+                .header(CSRF_HEADER, adminSession.csrfToken())
+                .contentType("application/json")
+                .body(Map.of(
+                        "publicKeyPem", publicKeyPem,
+                        "riskAcknowledged", true))
+                .when().post("/api/admin/config-backups/encrypted-secrets")
+                .then()
+                .statusCode(200)
+                .body("algorithm", equalTo("RSA-OAEP-SHA256 + AES-256-GCM"))
+                .body("publicKeyFingerprint", notNullValue())
+                .body("encryptedKey", notNullValue())
+                .body("nonce", notNullValue())
+                .body("ciphertext", notNullValue())
+                .body("warning", containsString("Anyone who decrypts the file can access configured mailboxes"));
+
+        assertEquals(auditCountBefore + 2, configBackupExportAuditRepository.count());
     }
 
     @Test
@@ -894,6 +971,14 @@ class PostgresAuthenticatedEndpointsQuarkusTest {
         }
     }
 
+    private String publicKeyPem() throws Exception {
+        KeyPairGenerator generator = KeyPairGenerator.getInstance("RSA");
+        generator.initialize(2048);
+        String encoded = Base64.getMimeEncoder(64, "\n".getBytes(java.nio.charset.StandardCharsets.UTF_8))
+                .encodeToString(generator.generateKeyPair().getPublic().getEncoded());
+        return "-----BEGIN PUBLIC KEY-----\n" + encoded + "\n-----END PUBLIC KEY-----";
+    }
+
     private UserSession findBrowserSessionByHash(String tokenHash) {
         return userSessionRepository.listRecentByUserId(adminUser().id, 20).stream()
                 .filter((session) -> session.tokenHash.equals(tokenHash))
@@ -1117,6 +1202,17 @@ class PostgresAuthenticatedEndpointsQuarkusTest {
         return new ManagedUserFixture(managedUser.id, managedUser.username, "ModeSwitch#123");
     }
 
+    private ManagedUserFixture seedManagedUserForConfigBackupAccessTest() {
+        String username = "config-backup-user-" + Long.toUnsignedString(System.nanoTime()) + "@example.com";
+        AppUser managedUser = appUserService.createUser(new dev.inboxbridge.dto.CreateUserRequest(
+                username,
+                "ConfigBackup#123",
+                "USER"));
+        managedUser.mustChangePassword = false;
+        managedUser.updatedAt = Instant.now();
+        return new ManagedUserFixture(managedUser.id, managedUser.username, "ConfigBackup#123");
+    }
+
     private ConfiguredMailboxUserFixture seedConfiguredMailboxUser() {
         String fixtureSuffix = Long.toUnsignedString(System.nanoTime());
         AppUser configuredUser = appUserService.createUser(new dev.inboxbridge.dto.CreateUserRequest(
@@ -1168,6 +1264,7 @@ class PostgresAuthenticatedEndpointsQuarkusTest {
         sourceAccount.unreadOnly = true;
         sourceAccount.fetchMode = SourceFetchMode.POLLING;
         sourceAccount.customLabel = "Config endpoint source";
+        sourceAccount.folderLabelMappings = "Projects/InboxBridge=Imported/Projects";
         sourceAccount.markReadAfterPoll = false;
         sourceAccount.postPollAction = SourcePostPollAction.MOVE;
         sourceAccount.postPollTargetFolder = "Processed";

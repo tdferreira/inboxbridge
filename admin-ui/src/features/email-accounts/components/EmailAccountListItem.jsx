@@ -48,6 +48,17 @@ function describePostPollAction(fetcher, t) {
   }
 }
 
+function describeSpamJunkStrategy(fetcher, t) {
+  switch (fetcher.spamJunkStrategy) {
+    case 'IMPORT_NORMAL':
+      return t('emailAccounts.spamJunkStrategy.importNormal')
+    case 'IMPORT_AND_ROUTE':
+      return t('emailAccounts.spamJunkStrategy.importAndRoute')
+    default:
+      return t('emailAccounts.spamJunkStrategy.ignore')
+  }
+}
+
 function humanizeFailureCategory(value) {
   if (!value) return null
   return value
@@ -255,6 +266,9 @@ function EmailAccountListItem({
             <div><dt>{t('emailAccount.folder')}</dt><dd>{fetcher.folder || 'INBOX'}</dd></div>
             <div><dt>{t('emailAccounts.fetchMode')}</dt><dd>{t(`emailAccounts.fetchMode.${(fetcher.fetchMode || 'POLLING').toLowerCase()}`)}</dd></div>
             <div><dt>{t('emailAccount.customLabel')}</dt><dd>{fetcher.customLabel || t('users.notSet')}</dd></div>
+            <div><dt>{t('emailAccount.folderLabelMappings')}</dt><dd>{fetcher.folderLabelMappings || t('users.notSet')}</dd></div>
+            <div><dt>{t('emailAccount.spamJunkStrategy')}</dt><dd>{describeSpamJunkStrategy(fetcher, t)}</dd></div>
+            <div><dt>{t('emailAccount.spamJunkSourceFolder')}</dt><dd>{fetcher.spamJunkSourceFolder || t('users.notSet')}</dd></div>
             <div><dt>{t('emailAccount.markReadAfterPoll')}</dt><dd>{fetcher.markReadAfterPoll ? t('common.yes') : t('common.no')}</dd></div>
             <div><dt>{t('emailAccount.postPollAction')}</dt><dd>{describePostPollAction(fetcher, t)}</dd></div>
             {fetcher.authMethod === 'OAUTH2' ? (

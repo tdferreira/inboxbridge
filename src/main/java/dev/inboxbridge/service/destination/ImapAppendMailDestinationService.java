@@ -77,7 +77,7 @@ public class ImapAppendMailDestinationService implements MailDestinationService 
 
     @Override
     public MailImportResponse importMessage(MailDestinationTarget target, RuntimeEmailAccount bridge, FetchedMessage message) {
-        ImapAppendDestinationTarget imapTarget = (ImapAppendDestinationTarget) target;
+        ImapAppendDestinationTarget imapTarget = destinationTargetForMessage((ImapAppendDestinationTarget) target, bridge, message);
         Session session = mailSessionFactory().destinationImapSession(imapTarget);
         Store store = null;
         Folder folder = null;
@@ -101,6 +101,32 @@ public class ImapAppendMailDestinationService implements MailDestinationService 
             closeQuietly(folder);
             closeQuietly(store);
         }
+    }
+
+    private ImapAppendDestinationTarget destinationTargetForMessage(
+            ImapAppendDestinationTarget target,
+            RuntimeEmailAccount bridge,
+            FetchedMessage message) {
+        if (bridge == null
+                || !bridge.routesSpamJunkFolder(message.folderName())
+                || target.spamJunkFolder() == null
+                || target.spamJunkFolder().isBlank()) {
+            return target;
+        }
+        return new ImapAppendDestinationTarget(
+                target.subjectKey(),
+                target.userId(),
+                target.ownerUsername(),
+                target.providerId(),
+                target.host(),
+                target.port(),
+                target.tls(),
+                target.authMethod(),
+                target.oauthProvider(),
+                target.username(),
+                target.password(),
+                target.spamJunkFolder().trim(),
+                target.spamJunkFolder());
     }
 
     public List<String> listFolders(ImapAppendDestinationTarget target) {

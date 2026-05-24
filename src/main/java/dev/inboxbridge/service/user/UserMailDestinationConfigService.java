@@ -11,6 +11,7 @@ import dev.inboxbridge.domain.ImapAppendDestinationTarget;
 import dev.inboxbridge.domain.MailDestinationTarget;
 import dev.inboxbridge.dto.DestinationMailboxFolderOptionsView;
 import dev.inboxbridge.dto.EmailAccountConnectionTestResult;
+import dev.inboxbridge.dto.GmailLabelOptionView;
 import dev.inboxbridge.dto.UpdateUserMailDestinationRequest;
 import dev.inboxbridge.dto.UserGmailConfigView;
 import dev.inboxbridge.dto.UserMailDestinationView;
@@ -19,6 +20,7 @@ import dev.inboxbridge.persistence.UserMailDestinationConfig;
 import dev.inboxbridge.persistence.UserMailDestinationConfigRepository;
 import dev.inboxbridge.service.security.SecretEncryptionService;
 import dev.inboxbridge.service.destination.ImapAppendMailDestinationService;
+import dev.inboxbridge.service.destination.GmailLabelService;
 import dev.inboxbridge.service.destination.MailboxConflictService;
 import dev.inboxbridge.service.mail.SourceTransportSecurityService;
 import dev.inboxbridge.service.oauth.GoogleOAuthService;
@@ -60,6 +62,9 @@ public class UserMailDestinationConfigService {
     ImapAppendMailDestinationService imapAppendMailDestinationService;
 
     @Inject
+    GmailLabelService gmailLabelService;
+
+    @Inject
     MailboxConflictService mailboxConflictService;
 
     @Inject
@@ -88,6 +93,7 @@ public class UserMailDestinationConfigService {
                     InboxBridgeConfig.AuthMethod.OAUTH2.name(),
                     InboxBridgeConfig.OAuthProvider.GOOGLE.name(),
                     null,
+                    null,
                     null);
         }
 
@@ -113,7 +119,8 @@ public class UserMailDestinationConfigService {
                 config.authMethod,
                 config.oauthProvider,
                 config.username,
-                config.folderName == null || config.folderName.isBlank() ? "INBOX" : config.folderName);
+                config.folderName == null || config.folderName.isBlank() ? "INBOX" : config.folderName,
+                config.spamJunkFolderName == null ? "" : config.spamJunkFolderName);
     }
 
     public Optional<MailDestinationTarget> resolveForUser(Long userId, String ownerUsername) {
@@ -160,7 +167,8 @@ public class UserMailDestinationConfigService {
                 InboxBridgeConfig.OAuthProvider.valueOf(config.oauthProvider),
                 requireNonBlank(config.username, "Destination username"),
                 password,
-                config.folderName == null || config.folderName.isBlank() ? "INBOX" : config.folderName));
+                config.folderName == null || config.folderName.isBlank() ? "INBOX" : config.folderName,
+                config.spamJunkFolderName));
     }
 
     public boolean isAnyDestinationConfigured(Long userId) {
@@ -209,7 +217,8 @@ public class UserMailDestinationConfigService {
                         target.oauthProvider(),
                         target.username(),
                         target.password(),
-                        target.folder())
+                        target.folder(),
+                        target.spamJunkFolder())
                 : target;
         if (effectiveTarget.authMethod() == InboxBridgeConfig.AuthMethod.OAUTH2
                 && !imapAppendMailDestinationService.isLinked(effectiveTarget)) {
@@ -248,6 +257,15 @@ public class UserMailDestinationConfigService {
                                 + effectiveTarget.port() + " and switched this destination to TLS automatically.");
     }
 
+    public List<GmailLabelOptionView> listGmailLabelsForUser(AppUser user) {
+        MailDestinationTarget target = resolveForUser(user.id, user.username)
+                .orElseThrow(() -> new IllegalStateException("Connect a Gmail destination before loading labels."));
+        if (!(target instanceof GmailApiDestinationTarget gmailTarget)) {
+            throw new IllegalStateException("Gmail labels are only available for Gmail API destinations.");
+        }
+        return gmailLabelService.listLabelOptions(gmailTarget);
+    }
+
     @Transactional
     public UserMailDestinationView update(AppUser user, UpdateUserMailDestinationRequest request) {
         String provider = normalizeProvider(request.provider());
@@ -281,6 +299,7 @@ public class UserMailDestinationConfigService {
         config.authMethod = nextAuthMethod;
         config.oauthProvider = nextOAuthProvider;
         config.folderName = blankToDefault(request.folder(), "INBOX");
+        config.spamJunkFolderName = blankToNull(request.spamJunkFolder());
 
         if (InboxBridgeConfig.AuthMethod.PASSWORD.name().equals(config.authMethod)) {
             config.username = requireNonBlank(request.username(), "Destination username");
@@ -330,6 +349,7 @@ public class UserMailDestinationConfigService {
         config.passwordCiphertext = null;
         config.passwordNonce = null;
         config.folderName = null;
+        config.spamJunkFolderName = null;
     }
 
     private void unlinkReplacedOAuthDestination(
@@ -434,6 +454,10 @@ public class UserMailDestinationConfigService {
         return value == null || value.isBlank() ? fallback : value.trim();
     }
 
+    private String blankToNull(String value) {
+        return value == null || value.isBlank() ? null : value.trim();
+    }
+
     private ImapAppendDestinationTarget previewImapTarget(AppUser user, UpdateUserMailDestinationRequest request) {
         String provider = normalizeProvider(request.provider());
         if (PROVIDER_GMAIL.equals(provider)) {
@@ -468,7 +492,8 @@ public class UserMailDestinationConfigService {
                 oauthProvider,
                 requireNonBlank(request.username(), "Destination username"),
                 password,
-                blankToDefault(request.folder(), "INBOX"));
+                blankToDefault(request.folder(), "INBOX"),
+                blankToNull(request.spamJunkFolder()));
     }
 
     private Optional<ImapAppendDestinationTarget> upgradeTargetToTlsIfRecommended(ImapAppendDestinationTarget target) {
@@ -491,7 +516,8 @@ public class UserMailDestinationConfigService {
                         target.oauthProvider(),
                         target.username(),
                         target.password(),
-                        target.folder()));
+                        target.folder(),
+                        target.spamJunkFolder()));
     }
 
     private void enforceDestinationTransportSecurity(UserMailDestinationConfig config) {

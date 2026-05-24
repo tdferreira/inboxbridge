@@ -17,6 +17,9 @@ export const DEFAULT_EMAIL_ACCOUNT_FORM = {
   unreadOnly: false,
   fetchMode: 'POLLING',
   customLabel: '',
+  folderLabelMappings: '',
+  spamJunkStrategy: 'IGNORE',
+  spamJunkSourceFolder: '',
   markReadAfterPoll: false,
   postPollAction: 'NONE',
   postPollTargetFolder: ''
@@ -55,6 +58,8 @@ export function normalizeEmailAccountForm(nextEmailAccountForm, authOptions = {}
 
   if (next.protocol !== 'IMAP') {
     next.fetchMode = 'POLLING'
+    next.spamJunkStrategy = 'IGNORE'
+    next.spamJunkSourceFolder = ''
     next.markReadAfterPoll = false
     next.postPollAction = 'NONE'
     next.postPollTargetFolder = ''

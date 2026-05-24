@@ -157,6 +157,7 @@ public class SourceTransportSecurityService {
                 account.unreadOnly(),
                 account.fetchMode(),
                 account.customLabel(),
+                account.folderLabelMappings(),
                 account.postPollSettings(),
                 account.destination());
     }

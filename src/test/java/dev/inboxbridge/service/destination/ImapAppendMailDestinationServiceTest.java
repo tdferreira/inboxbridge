@@ -24,6 +24,10 @@ import dev.inboxbridge.config.InboxBridgeConfig;
 import dev.inboxbridge.config.MailClientConfig;
 import dev.inboxbridge.domain.FetchedMessage;
 import dev.inboxbridge.domain.ImapAppendDestinationTarget;
+import dev.inboxbridge.domain.RuntimeEmailAccount;
+import dev.inboxbridge.domain.SourceFetchMode;
+import dev.inboxbridge.domain.SourcePostPollSettings;
+import dev.inboxbridge.domain.SourceSpamJunkStrategy;
 import dev.inboxbridge.dto.EmailAccountConnectionTestResult;
 import dev.inboxbridge.service.mail.MailSessionFactory;
 import dev.inboxbridge.service.user.UserMailDestinationConfigService;
@@ -101,6 +105,66 @@ class ImapAppendMailDestinationServiceTest {
         assertEquals("IMAP", result.protocol());
         assertEquals("INBOX", result.folder());
         assertTrue(result.folderAccessible());
+    }
+
+    @Test
+    void importMessageRoutesConfiguredSpamJunkSourceFolderToDestinationSpamJunkFolder() throws Exception {
+        ImapAppendMailDestinationService service = createService();
+        ImapAppendDestinationTarget target = new ImapAppendDestinationTarget(
+                "user-destination:7",
+                7L,
+                "alice",
+                UserMailDestinationConfigService.PROVIDER_CUSTOM,
+                HOST,
+                greenMail.getImaps().getPort(),
+                true,
+                InboxBridgeConfig.AuthMethod.PASSWORD,
+                InboxBridgeConfig.OAuthProvider.NONE,
+                USERNAME,
+                PASSWORD,
+                "INBOX",
+                "Junk");
+        RuntimeEmailAccount source = new RuntimeEmailAccount(
+                "source",
+                "USER",
+                7L,
+                "alice",
+                true,
+                InboxBridgeConfig.Protocol.IMAP,
+                HOST,
+                993,
+                true,
+                InboxBridgeConfig.AuthMethod.PASSWORD,
+                InboxBridgeConfig.OAuthProvider.NONE,
+                USERNAME,
+                PASSWORD,
+                "",
+                Optional.of("INBOX"),
+                false,
+                SourceFetchMode.POLLING,
+                Optional.empty(),
+                Optional.empty(),
+                SourceSpamJunkStrategy.IMPORT_AND_ROUTE,
+                Optional.of("Spam"),
+                SourcePostPollSettings.none(),
+                target);
+
+        service.importMessage(
+                target,
+                source,
+                new FetchedMessage(
+                        "source",
+                        "spam-message-key",
+                        Optional.empty(),
+                        Instant.now(),
+                        Optional.of("Spam"),
+                        1L,
+                        10L,
+                        null,
+                        messageBytes("spam false positive", "<spam-route@example.com>")));
+
+        assertEquals(List.of("spam false positive"), listSubjects("Junk"));
+        assertEquals(List.of(), listSubjects("INBOX"));
     }
 
     @Test

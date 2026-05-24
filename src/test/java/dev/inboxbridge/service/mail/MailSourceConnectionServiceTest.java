@@ -200,6 +200,21 @@ class MailSourceConnectionServiceTest {
             public Optional<String> customLabel() {
                 return Optional.empty();
             }
+
+            @Override
+            public Optional<String> folderLabelMappings() {
+                return Optional.empty();
+            }
+
+            @Override
+            public dev.inboxbridge.domain.SourceSpamJunkStrategy spamJunkStrategy() {
+                return dev.inboxbridge.domain.SourceSpamJunkStrategy.IGNORE;
+            }
+
+            @Override
+            public Optional<String> spamJunkSourceFolder() {
+                return Optional.empty();
+            }
         };
     }
 

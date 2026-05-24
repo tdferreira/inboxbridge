@@ -15,8 +15,10 @@ import dev.inboxbridge.dto.UpdateUserEmailAccountRequest;
 import dev.inboxbridge.dto.UserEmailAccountView;
 import dev.inboxbridge.domain.RuntimeEmailAccount;
 import dev.inboxbridge.domain.SourceFetchMode;
+import dev.inboxbridge.domain.SourceFolderLabelMappings;
 import dev.inboxbridge.domain.SourcePostPollAction;
 import dev.inboxbridge.domain.SourcePostPollSettings;
+import dev.inboxbridge.domain.SourceSpamJunkStrategy;
 import dev.inboxbridge.persistence.AppUser;
 import dev.inboxbridge.persistence.AppUserRepository;
 import dev.inboxbridge.persistence.ImportedMessageRepository;
@@ -163,6 +165,9 @@ public class UserEmailAccountService {
                                 candidate.unreadOnly(),
                                 candidate.fetchMode(),
                                 candidate.customLabel(),
+                                candidate.folderLabelMappings(),
+                                candidate.spamJunkStrategy(),
+                                candidate.spamJunkSourceFolder(),
                                 candidate.postPollSettings(),
                                 candidate.destination()))
                 : null;
@@ -244,8 +249,13 @@ public class UserEmailAccountService {
                 request.unreadOnly() != null && request.unreadOnly(),
                 resolveFetchMode(protocol, request.fetchMode()),
                 Optional.ofNullable(blankToNull(request.customLabel())),
+                Optional.ofNullable(blankToNull(request.folderLabelMappings())),
+                parseSpamJunkStrategy(protocol, request.spamJunkStrategy(), request.spamJunkSourceFolder()),
+                Optional.ofNullable(blankToNull(request.spamJunkSourceFolder())),
                 resolvePostPollSettings(protocol, request.markReadAfterPoll(), request.postPollAction(), request.postPollTargetFolder()),
                 null);
+        validateSpamJunkSettings(candidate);
+        SourceFolderLabelMappings.parse(candidate.folderLabelMappings());
         if (candidate.enabled() && mailboxConflictService.conflictsWithCurrentDestination(user.id, candidate)) {
             throw new IllegalArgumentException(MailboxConflictService.SOURCE_DESTINATION_CONFLICT_MESSAGE);
         }
@@ -301,6 +311,12 @@ public class UserEmailAccountService {
         emailAccount.unreadOnly = request.unreadOnly() != null && request.unreadOnly();
         emailAccount.fetchMode = resolveFetchMode(emailAccount.protocol, request.fetchMode());
         emailAccount.customLabel = blankToNull(request.customLabel());
+        emailAccount.folderLabelMappings = blankToNull(request.folderLabelMappings());
+        emailAccount.spamJunkStrategy = parseSpamJunkStrategy(
+                emailAccount.protocol,
+                request.spamJunkStrategy(),
+                request.spamJunkSourceFolder());
+        emailAccount.spamJunkSourceFolder = blankToNull(request.spamJunkSourceFolder());
         SourcePostPollSettings postPollSettings = resolvePostPollSettings(
                 emailAccount.protocol,
                 request.markReadAfterPoll(),
@@ -333,8 +349,13 @@ public class UserEmailAccountService {
                 emailAccount.unreadOnly,
                 emailAccount.fetchMode,
                 Optional.ofNullable(emailAccount.customLabel),
+                Optional.ofNullable(emailAccount.folderLabelMappings),
+                storedSpamJunkStrategy(emailAccount),
+                Optional.ofNullable(emailAccount.spamJunkSourceFolder),
                 postPollSettings,
                 null);
+        validateSpamJunkSettings(candidate);
+        SourceFolderLabelMappings.parse(candidate.folderLabelMappings());
         enforceUniqueSourceMailbox(user.id, emailAccount, candidate);
         enforceSourceTransportSecurity(candidate);
         if (candidate.enabled() && mailboxConflictService.conflictsWithCurrentDestination(user.id, candidate)) {
@@ -399,6 +420,9 @@ public class UserEmailAccountService {
                 emailAccount.unreadOnly,
                 emailAccount.fetchMode == null ? SourceFetchMode.POLLING : emailAccount.fetchMode,
                 Optional.ofNullable(emailAccount.customLabel),
+                Optional.ofNullable(emailAccount.folderLabelMappings),
+                storedSpamJunkStrategy(emailAccount),
+                Optional.ofNullable(emailAccount.spamJunkSourceFolder),
                 storedPostPollSettings(emailAccount),
                 null);
         // UI-managed OAuth sources save disabled until a provider grant exists.
@@ -483,6 +507,9 @@ public class UserEmailAccountService {
                 emailAccount.unreadOnly,
                 (emailAccount.fetchMode == null ? SourceFetchMode.POLLING : emailAccount.fetchMode).name(),
                 emailAccount.customLabel == null ? "" : emailAccount.customLabel,
+                emailAccount.folderLabelMappings == null ? "" : emailAccount.folderLabelMappings,
+                storedSpamJunkStrategy(emailAccount).name(),
+                emailAccount.spamJunkSourceFolder == null ? "" : emailAccount.spamJunkSourceFolder,
                 emailAccount.markReadAfterPoll,
                 storedPostPollAction(emailAccount).name(),
                 emailAccount.postPollTargetFolder == null ? "" : emailAccount.postPollTargetFolder,
@@ -517,6 +544,9 @@ public class UserEmailAccountService {
                 emailAccount.unreadOnly,
                 emailAccount.fetchMode == null ? SourceFetchMode.POLLING : emailAccount.fetchMode,
                 Optional.ofNullable(emailAccount.customLabel),
+                Optional.ofNullable(emailAccount.folderLabelMappings),
+                storedSpamJunkStrategy(emailAccount),
+                Optional.ofNullable(emailAccount.spamJunkSourceFolder),
                 storedPostPollSettings(emailAccount),
                 destinationTarget);
     }
@@ -727,6 +757,41 @@ public class UserEmailAccountService {
 
     private SourcePostPollAction storedPostPollAction(UserEmailAccount emailAccount) {
         return emailAccount.postPollAction == null ? SourcePostPollAction.NONE : emailAccount.postPollAction;
+    }
+
+    private SourceSpamJunkStrategy storedSpamJunkStrategy(UserEmailAccount emailAccount) {
+        return emailAccount.spamJunkStrategy == null ? SourceSpamJunkStrategy.IGNORE : emailAccount.spamJunkStrategy;
+    }
+
+    private SourceSpamJunkStrategy parseSpamJunkStrategy(
+            InboxBridgeConfig.Protocol protocol,
+            String requestedStrategy,
+            String requestedSpamJunkFolder) {
+        SourceSpamJunkStrategy strategy;
+        try {
+            strategy = SourceSpamJunkStrategy.from(requestedStrategy);
+        } catch (IllegalArgumentException invalid) {
+            throw new IllegalArgumentException("Unknown spam/junk strategy");
+        }
+        if (protocol != InboxBridgeConfig.Protocol.IMAP && strategy != SourceSpamJunkStrategy.IGNORE) {
+            throw new IllegalArgumentException("Spam/junk folder import is only supported for IMAP accounts");
+        }
+        if (strategy.importsSpamJunk() && blankToNull(requestedSpamJunkFolder) == null) {
+            throw new IllegalArgumentException("A spam/junk source folder is required when importing spam or junk messages");
+        }
+        return strategy;
+    }
+
+    private void validateSpamJunkSettings(RuntimeEmailAccount candidate) {
+        if (!candidate.spamJunkStrategy().importsSpamJunk()) {
+            return;
+        }
+        if (candidate.folder().isPresent()
+                && candidate.spamJunkSourceFolder().filter(spamFolder ->
+                        candidate.folder().stream().anyMatch(folder ->
+                                dev.inboxbridge.domain.MailboxFolderRoleDetector.sameFolder(folder, spamFolder))).isPresent()) {
+            throw new IllegalArgumentException("The primary source folder and spam/junk source folder must be different");
+        }
     }
 
     private SourceFetchMode resolveFetchMode(InboxBridgeConfig.Protocol protocol, String requestedMode) {

@@ -39,6 +39,9 @@ function formState(formElement) {
     sourcePassword: formElement.sourcePassword.value,
     sourceOauthRefreshToken: formElement.sourceOauthRefreshToken.value,
     sourceFolder: formElement.sourceFolder.value,
+    sourceFolderLabelMappings: formElement.sourceFolderLabelMappings.value,
+    sourceSpamJunkStrategy: formElement.sourceSpamJunkStrategy.value,
+    sourceSpamJunkSourceFolder: formElement.sourceSpamJunkSourceFolder.value,
     sourceUnreadOnly: formElement.sourceUnreadOnly.checked,
     sourceFetchMode: formElement.sourceFetchMode.value,
     sourceCustomLabel: formElement.sourceCustomLabel.value
@@ -409,6 +412,9 @@ function applyTranslations() {
   setFieldText('sourceFolderPillbox', 'env.field.sourceFolder', 'env.hint.sourceFolder')
   setFieldText('sourceFetchMode', 'env.field.sourceFetchMode', 'env.hint.sourceFetchMode')
   setFieldText('sourceCustomLabel', 'env.field.sourceCustomLabel', 'env.hint.sourceCustomLabel', 'env.placeholder.sourceCustomLabel')
+  setFieldText('sourceFolderLabelMappings', 'env.field.sourceFolderLabelMappings', 'env.hint.sourceFolderLabelMappings', 'env.placeholder.sourceFolderLabelMappings')
+  setFieldText('sourceSpamJunkStrategy', 'env.field.sourceSpamJunkStrategy', 'env.hint.sourceSpamJunkStrategy')
+  setFieldText('sourceSpamJunkSourceFolder', 'env.field.sourceSpamJunkSourceFolder', 'env.hint.sourceSpamJunkSourceFolder', 'env.placeholder.sourceSpamJunkSourceFolder')
   setCheckboxText('multiUserEnabled', 'env.field.multiUser', 'env.hint.multiUser')
   setCheckboxText('sourceUnreadOnly', 'env.field.sourceUnreadOnly', 'env.hint.sourceUnreadOnly')
 

@@ -31,6 +31,8 @@ function EmailAccountDialog({
   emailAccountFolders = [],
   emailAccountFoldersLoading = false,
   emailAccountFolderLoadError = '',
+  gmailLabelOptions = [],
+  gmailLabelOptionsLoading = false,
   duplicateIdError = '',
   microsoftOAuthAvailable = true,
   onApplyPreset,
@@ -77,6 +79,18 @@ function EmailAccountDialog({
   const tlsLockedToSecure = Boolean(testResult?.tlsRecommended && emailAccountForm.tls)
   const folderSuggestionsLoaded = supportsFolder && detectedFolders.length > 0
   const folderSuggestionsValidated = supportsFolder && connectionValidated && folderSuggestionsLoaded
+  const gmailLabelSuggestions = useMemo(() => {
+    const suggestions = new Map([
+      ['INBOX', { id: 'INBOX', name: 'INBOX' }],
+      ['SPAM', { id: 'SPAM', name: 'SPAM' }]
+    ])
+    for (const label of gmailLabelOptions) {
+      const id = label?.id || ''
+      if (!id) continue
+      suggestions.set(id, { id, name: label.name || id })
+    }
+    return [...suggestions.values()]
+  }, [gmailLabelOptions])
   const invalidDetectedFolders = useMemo(
     () => folderSuggestionsLoaded
       ? selectedFolderValues.filter((folder) => !detectedFolders.some((candidate) => candidate.toLowerCase() === folder.toLowerCase()))
@@ -342,10 +356,55 @@ function EmailAccountDialog({
             ) : null}
           </div>
         ) : null}
+        {supportsFolder ? (
+          <div className="form-field-pair full">
+            <FormField helpText={t('emailAccounts.spamJunkStrategyHelp')} label={t('emailAccounts.spamJunkStrategy')}>
+              <select
+                value={emailAccountForm.spamJunkStrategy || 'IGNORE'}
+                onChange={(event) => onEmailAccountFormChange((current) => ({
+                  ...current,
+                  spamJunkStrategy: event.target.value,
+                  spamJunkSourceFolder: event.target.value === 'IGNORE' ? current.spamJunkSourceFolder : current.spamJunkSourceFolder
+                }))}
+              >
+                <option value="IGNORE">{t('emailAccounts.spamJunkStrategy.ignore')}</option>
+                <option value="IMPORT_NORMAL">{t('emailAccounts.spamJunkStrategy.importNormal')}</option>
+                <option value="IMPORT_AND_ROUTE">{t('emailAccounts.spamJunkStrategy.importAndRoute')}</option>
+              </select>
+            </FormField>
+            <FormField helpText={t('emailAccounts.spamJunkSourceFolderHelp')} label={t('emailAccounts.spamJunkSourceFolder')}>
+              <input
+                list="email-account-spam-junk-folder-options"
+                value={emailAccountForm.spamJunkSourceFolder || ''}
+                onChange={(event) => onEmailAccountFormChange((current) => ({ ...current, spamJunkSourceFolder: event.target.value }))}
+              />
+              <datalist id="email-account-spam-junk-folder-options">
+                {emailAccountFolders.map((folder) => (
+                  <option key={folder} value={folder} />
+                ))}
+              </datalist>
+            </FormField>
+          </div>
+        ) : null}
         {supportsCustomLabel ? (
-          <FormField helpText={t('emailAccounts.customLabelHelp')} label={t('emailAccounts.customLabel')}>
-            <input value={emailAccountForm.customLabel} onChange={(event) => onEmailAccountFormChange((current) => ({ ...current, customLabel: event.target.value }))} />
-          </FormField>
+          <>
+            <FormField helpText={t('emailAccounts.customLabelHelp')} label={t('emailAccounts.customLabel')}>
+              <input aria-busy={gmailLabelOptionsLoading} list="gmail-label-options" value={emailAccountForm.customLabel} onChange={(event) => onEmailAccountFormChange((current) => ({ ...current, customLabel: event.target.value }))} />
+              <datalist id="gmail-label-options">
+                {gmailLabelSuggestions.map((label) => (
+                  <option key={label.id} label={label.name} value={label.id} />
+                ))}
+              </datalist>
+            </FormField>
+            <FormField helpText={t('emailAccounts.folderLabelMappingsHelp')} label={t('emailAccounts.folderLabelMappings')}>
+              <textarea
+                rows={3}
+                value={emailAccountForm.folderLabelMappings || ''}
+                onChange={(event) => onEmailAccountFormChange((current) => ({ ...current, folderLabelMappings: event.target.value }))}
+                placeholder={t('emailAccounts.folderLabelMappingsPlaceholder')}
+              />
+            </FormField>
+          </>
         ) : null}
         {supportsPostPollActions ? (
           <>

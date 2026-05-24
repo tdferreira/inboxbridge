@@ -173,6 +173,7 @@ public class RemoteControlService {
                                 source.unreadOnly(),
                                 source.fetchMode(),
                                 source.customLabel(),
+                                source.folderLabelMappings(),
                                 SourcePostPollSettings.none(),
                                 null)));
                 ImportStats importStats = importStatsBySource.getOrDefault(source.id(), ImportStats.EMPTY);

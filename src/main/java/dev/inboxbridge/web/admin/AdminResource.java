@@ -11,6 +11,9 @@ import dev.inboxbridge.dto.PollRunResult;
 import dev.inboxbridge.dto.PollingTimelineBundleView;
 import dev.inboxbridge.dto.SecretReencryptionResultView;
 import dev.inboxbridge.dto.SecretReencryptionRequest;
+import dev.inboxbridge.dto.ConfigBackupExportRequest;
+import dev.inboxbridge.dto.EncryptedConfigBackupView;
+import dev.inboxbridge.dto.SafeConfigBackupView;
 import dev.inboxbridge.dto.SecretManagementMigrationGuideView;
 import dev.inboxbridge.dto.SecretManagementRecoveryGuideView;
 import dev.inboxbridge.dto.SecretManagementStatusView;
@@ -36,6 +39,7 @@ import dev.inboxbridge.service.polling.PollingSettingsService;
 import dev.inboxbridge.service.polling.PollingService;
 import dev.inboxbridge.service.polling.SourcePollingSettingsService;
 import dev.inboxbridge.service.security.SecretManagementService;
+import dev.inboxbridge.service.security.ConfigBackupService;
 import dev.inboxbridge.service.user.RuntimeEmailAccountService;
 import dev.inboxbridge.web.WebResourceSupport;
 import jakarta.inject.Inject;
@@ -93,6 +97,9 @@ public class AdminResource {
     @Inject
     SecretManagementService secretManagementService;
 
+    @Inject
+    ConfigBackupService configBackupService;
+
     @GET
     @Path("/dashboard")
     public AdminDashboardResponse dashboard(@jakarta.ws.rs.HeaderParam(TIMEZONE_HEADER) String timezone) {
@@ -128,6 +135,23 @@ public class AdminResource {
     @Path("/secret-management/report")
     public SecretManagementReportView secretManagementReport() {
         return secretManagementService.exportReport(currentUserContext.session());
+    }
+
+    @GET
+    @Path("/config-backups/safe")
+    public SafeConfigBackupView safeConfigBackup() {
+        return configBackupService.safeBackup(currentUserContext.user());
+    }
+
+    @POST
+    @Path("/config-backups/encrypted-secrets")
+    @Consumes(MediaType.APPLICATION_JSON)
+    public EncryptedConfigBackupView encryptedConfigBackup(ConfigBackupExportRequest request) {
+        return WebResourceSupport.badRequest(() ->
+                configBackupService.encryptedSecretsBackup(
+                        currentUserContext.user(),
+                        currentUserContext.session(),
+                        request));
     }
 
     @GET

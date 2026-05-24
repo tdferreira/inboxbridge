@@ -35,12 +35,15 @@ import com.icegreen.greenmail.util.ServerSetup;
 import dev.inboxbridge.config.InboxBridgeConfig;
 import dev.inboxbridge.config.MailClientConfig;
 import dev.inboxbridge.domain.FetchedMessage;
+import dev.inboxbridge.domain.GmailApiDestinationTarget;
 import dev.inboxbridge.domain.ImapAppendDestinationTarget;
 import dev.inboxbridge.domain.MailDestinationTarget;
 import dev.inboxbridge.domain.RuntimeEmailAccount;
 import dev.inboxbridge.domain.SourceFetchMode;
+import dev.inboxbridge.domain.SourceFolderLabelMappings;
 import dev.inboxbridge.domain.SourcePostPollAction;
 import dev.inboxbridge.domain.SourcePostPollSettings;
+import dev.inboxbridge.domain.SourceSpamJunkStrategy;
 import dev.inboxbridge.dto.MailImportResponse;
 import dev.inboxbridge.dto.PollRunResult;
 import dev.inboxbridge.persistence.ImportedMessage;
@@ -431,6 +434,48 @@ class PollingServiceGreenMailIntegrationTest {
         assertEquals(
                 List.of("inbox-alpha", "project-beta", "project-gamma"),
                 listSubjects(destinationMail, DESTINATION_USERNAME, DESTINATION_PASSWORD, DESTINATION_FOLDER));
+    }
+
+    @Test
+    void greenmailImapFolderNamesDriveGmailFolderLabelMappings() throws Exception {
+        appendMessage(sourceMail, SOURCE_USERNAME, SOURCE_PASSWORD, "INBOX", "inbox-alpha", "Inbox message", "<gmail-label-inbox@example.com>");
+        appendMessage(sourceMail, SOURCE_USERNAME, SOURCE_PASSWORD, "Projects/2026", "project-beta", "Project message", "<gmail-label-project@example.com>");
+        RecordingGmailMappingDestinationService destinationService = new RecordingGmailMappingDestinationService();
+        RuntimeEmailAccount account = runtimeGmailApiAccount(
+                "INBOX, Projects/2026",
+                "INBOX=Imported/Inbox;Projects/2026=Imported/Projects");
+
+        PollRunResult result = pollService(
+                List.of(account),
+                new RecordingImportedMessageRepository(),
+                new InMemoryReadyCheckpointSourcePollingStateService(),
+                destinationService)
+                .runPoll("greenmail-integration:gmail-folder-label-mapping");
+
+        assertEquals(2, result.getFetched());
+        assertEquals(2, result.getImported());
+        assertTrue(result.getErrorDetails().isEmpty());
+        assertEquals(
+                List.of("INBOX -> Imported/Inbox", "Projects/2026 -> Imported/Projects"),
+                destinationService.imports.stream()
+                        .map(ImportedFolderLabel::display)
+                        .sorted()
+                        .toList());
+    }
+
+    @Test
+    void fullPollingPathRoutesConfiguredSourceSpamFolderToDestinationJunkFolder() throws Exception {
+        appendMessage(sourceMail, SOURCE_USERNAME, SOURCE_PASSWORD, "INBOX", "inbox-alpha", "Inbox message", "<poll-spam-route-inbox@example.com>");
+        appendMessage(sourceMail, SOURCE_USERNAME, SOURCE_PASSWORD, "Spam", "spam-alpha", "Spam false positive", "<poll-spam-route-spam@example.com>");
+
+        PollRunResult result = pollService(runtimeAccountWithSpamJunkRouting()).runPoll("greenmail-integration:spam-junk-routing");
+
+        assertEquals(2, result.getFetched());
+        assertEquals(2, result.getImported());
+        assertEquals(0, result.getDuplicates());
+        assertTrue(result.getErrorDetails().isEmpty());
+        assertEquals(List.of("inbox-alpha"), listSubjects(destinationMail, DESTINATION_USERNAME, DESTINATION_PASSWORD, DESTINATION_FOLDER));
+        assertEquals(List.of("spam-alpha"), listSubjects(destinationMail, DESTINATION_USERNAME, DESTINATION_PASSWORD, "Junk"));
     }
 
     @Test
@@ -842,10 +887,18 @@ class PollingServiceGreenMailIntegrationTest {
             List<RuntimeEmailAccount> runtimeAccounts,
             RecordingImportedMessageRepository importedMessageRepository,
             SourcePollingStateService sourcePollingStateService) {
-        PollingService service = new PollingService();
-        MailSourceClient mailSourceClient = standaloneMailSourceClient(sourcePollingStateService);
         ImapAppendMailDestinationService destinationService = new ImapAppendMailDestinationService();
         configureDestinationMailSessionFactory(destinationService);
+        return pollService(runtimeAccounts, importedMessageRepository, sourcePollingStateService, destinationService);
+    }
+
+    private PollingService pollService(
+            List<RuntimeEmailAccount> runtimeAccounts,
+            RecordingImportedMessageRepository importedMessageRepository,
+            SourcePollingStateService sourcePollingStateService,
+            MailDestinationService destinationService) {
+        PollingService service = new PollingService();
+        MailSourceClient mailSourceClient = standaloneMailSourceClient(sourcePollingStateService);
         ImportDeduplicationService deduplicationService = new ImportDeduplicationService(
                 importedMessageRepository,
                 new MimeHashService());
@@ -989,6 +1042,83 @@ class PollingServiceGreenMailIntegrationTest {
                         DESTINATION_USERNAME,
                         DESTINATION_PASSWORD,
                         destinationFolder));
+    }
+
+    private RuntimeEmailAccount runtimeGmailApiAccount(String sourceFolders, String folderLabelMappings) {
+        return new RuntimeEmailAccount(
+                "greenmail-gmail-source",
+                "USER",
+                7L,
+                "alice",
+                true,
+                InboxBridgeConfig.Protocol.IMAP,
+                "127.0.0.1",
+                sourceMail.getImap().getPort(),
+                false,
+                InboxBridgeConfig.AuthMethod.PASSWORD,
+                InboxBridgeConfig.OAuthProvider.NONE,
+                SOURCE_USERNAME,
+                SOURCE_PASSWORD,
+                "",
+                Optional.of(sourceFolders),
+                false,
+                SourceFetchMode.POLLING,
+                Optional.of("Imported/Default"),
+                Optional.of(folderLabelMappings),
+                SourcePostPollSettings.none(),
+                new GmailApiDestinationTarget(
+                        "gmail-user:7",
+                        7L,
+                        "alice",
+                        "GMAIL_API",
+                        "alice@gmail.example",
+                        "client-id",
+                        "client-secret",
+                        "refresh-token",
+                        "https://localhost/oauth/google/callback",
+                        true,
+                        false,
+                        false));
+    }
+
+    private RuntimeEmailAccount runtimeAccountWithSpamJunkRouting() {
+        return new RuntimeEmailAccount(
+                "greenmail-spam-source",
+                "USER",
+                7L,
+                "alice",
+                true,
+                InboxBridgeConfig.Protocol.IMAP,
+                "127.0.0.1",
+                sourceMail.getImap().getPort(),
+                false,
+                InboxBridgeConfig.AuthMethod.PASSWORD,
+                InboxBridgeConfig.OAuthProvider.NONE,
+                SOURCE_USERNAME,
+                SOURCE_PASSWORD,
+                "",
+                Optional.of("INBOX"),
+                false,
+                SourceFetchMode.POLLING,
+                Optional.of("Imported/Test"),
+                Optional.empty(),
+                SourceSpamJunkStrategy.IMPORT_AND_ROUTE,
+                Optional.of("Spam"),
+                SourcePostPollSettings.none(),
+                new ImapAppendDestinationTarget(
+                        "user-destination:7",
+                        7L,
+                        "alice",
+                        UserMailDestinationConfigService.PROVIDER_CUSTOM,
+                        "127.0.0.1",
+                        destinationMail.getImaps().getPort(),
+                        true,
+                        InboxBridgeConfig.AuthMethod.PASSWORD,
+                        InboxBridgeConfig.OAuthProvider.NONE,
+                        DESTINATION_USERNAME,
+                        DESTINATION_PASSWORD,
+                        DESTINATION_FOLDER,
+                        "Junk"));
     }
 
     private RuntimeEmailAccount runtimeAccount(
@@ -1584,6 +1714,41 @@ class PollingServiceGreenMailIntegrationTest {
     private static final class NoopSourcePollEventService extends SourcePollEventService {
         @Override
         public void record(String sourceId, String trigger, Instant startedAt, Instant finishedAt, int fetched, int imported, long importedBytes, int duplicates, int spamJunkMessageCount, String actorUsername, String executionSurface, String error, PollDecisionSnapshot decisionSnapshot) {
+        }
+    }
+
+    private record ImportedFolderLabel(String folderName, String labelName) {
+        private String display() {
+            return folderName + " -> " + labelName;
+        }
+    }
+
+    private static final class RecordingGmailMappingDestinationService implements MailDestinationService {
+        private final List<ImportedFolderLabel> imports = new java.util.concurrent.CopyOnWriteArrayList<>();
+
+        @Override
+        public boolean supports(MailDestinationTarget target) {
+            return target instanceof GmailApiDestinationTarget;
+        }
+
+        @Override
+        public boolean isLinked(MailDestinationTarget target) {
+            return true;
+        }
+
+        @Override
+        public String notLinkedMessage(MailDestinationTarget target) {
+            return "Gmail destination is not linked.";
+        }
+
+        @Override
+        public MailImportResponse importMessage(MailDestinationTarget target, RuntimeEmailAccount bridge, FetchedMessage message) {
+            String folderName = message.folderName().orElse(bridge.folder().orElse("INBOX"));
+            String labelName = SourceFolderLabelMappings.parse(bridge.folderLabelMappings())
+                    .labelFor(Optional.of(folderName))
+                    .orElse(bridge.customLabel().orElse(""));
+            imports.add(new ImportedFolderLabel(folderName, labelName));
+            return new MailImportResponse("gmail-message-" + imports.size(), null);
         }
     }
 

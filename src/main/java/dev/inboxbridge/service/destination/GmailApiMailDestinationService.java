@@ -62,7 +62,12 @@ public class GmailApiMailDestinationService implements MailDestinationService {
     public MailImportResponse importMessage(MailDestinationTarget target, RuntimeEmailAccount bridge, FetchedMessage message) {
         GmailApiDestinationTarget gmailTarget = (GmailApiDestinationTarget) target;
         GmailTarget compatibilityTarget = asCompatibilityTarget(gmailTarget);
-        List<String> labelIds = gmailLabelService.resolveLabelIds(compatibilityTarget, bridge.customLabel());
+        List<String> labelIds = gmailLabelService.resolveLabelIds(
+                compatibilityTarget,
+                bridge.customLabel(),
+                bridge.folderLabelMappings(),
+                message.folderName().or(() -> java.util.Optional.of(bridge.primaryFolder())),
+                bridge.routesSpamJunkFolder(message.folderName()));
         GmailImportResponse response = gmailImportService.importMessage(compatibilityTarget, message.rawMessage(), labelIds);
         return new MailImportResponse(response.id(), response.threadId());
     }

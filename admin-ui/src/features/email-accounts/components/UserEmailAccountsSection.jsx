@@ -17,6 +17,8 @@ function UserEmailAccountsSection({
   emailAccountFolders,
   emailAccountFoldersLoading,
   emailAccountFolderLoadError = '',
+  gmailLabelOptions = [],
+  gmailLabelOptionsLoading = false,
   fetchers,
   fetcherDialogOpen,
   fetcherPollLoadingIds = [],
@@ -129,6 +131,8 @@ function UserEmailAccountsSection({
             emailAccountFolders={emailAccountFolders}
             emailAccountFoldersLoading={emailAccountFoldersLoading}
             emailAccountFolderLoadError={emailAccountFolderLoadError}
+            gmailLabelOptions={gmailLabelOptions}
+            gmailLabelOptionsLoading={gmailLabelOptionsLoading}
             duplicateIdError={duplicateIdError}
             onApplyPreset={onApplyPreset}
             onEmailAccountFormChange={onEmailAccountFormChange}

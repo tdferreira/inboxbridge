@@ -123,6 +123,9 @@ public class AdminDashboardService {
                                     source.unreadOnly(),
                                     source.fetchMode(),
                                     source.customLabel(),
+                                    source.folderLabelMappings(),
+                                    source.spamJunkStrategy(),
+                                    source.spamJunkSourceFolder(),
                                     SourcePostPollSettings.none(),
                                     null));
                     return new AdminEmailAccountSummary(
@@ -141,6 +144,9 @@ public class AdminDashboardService {
                             source.unreadOnly(),
                             source.fetchMode().name(),
                             source.customLabel().orElse(""),
+                            source.folderLabelMappings().orElse(""),
+                            source.spamJunkStrategy().name(),
+                            source.spamJunkSourceFolder().orElse(""),
                             false,
                             "NONE",
                             "",

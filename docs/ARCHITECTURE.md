@@ -68,6 +68,36 @@ The worker count is intentionally bounded, so InboxBridge can overlap unrelated
 mailboxes without abandoning the existing provider-throttle rules that protect
 source and destination hosts from being hammered.
 
+## Mailflow auditability notes
+
+The mailflow critical path is intentionally easy to trace even though
+InboxBridge is larger than a single-purpose importer:
+
+- `MailSourceFetchService` reads source folders and produces `FetchedMessage`
+  records that include the source folder, source key, checkpoint metadata, and
+  raw RFC822 bytes.
+- `PollingSourceExecutionService` owns the per-source decision path: destination
+  link checks, dedupe checks, source/destination throttles, import attempts,
+  checkpoint updates, and post-poll source actions.
+- `GmailApiMailDestinationService` is the Gmail API destination boundary. It
+  resolves the default source label plus any folder-specific label mapping such
+  as `Projects/2026=Imported/Projects`, then sends the raw message to the Gmail
+  import API. When a source's spam/junk strategy routes a configured spam/junk
+  source folder, Gmail receives the `SPAM` system label instead of `INBOX`.
+- `ImapAppendMailDestinationService` is the IMAP APPEND destination boundary.
+  Normal imports append to the configured destination folder; routed spam/junk
+  imports append to the configured destination spam/junk folder.
+- PostgreSQL stores operational state: dedupe identifiers, source checkpoints,
+  poll events, settings, notifications, sessions, and encrypted UI-managed
+  secrets. It is not intended to be a searchable copy of mailbox contents.
+
+The main audit tradeoff is explicit: InboxBridge has more code than a tiny
+Gmail-only config-file importer because it also supports UI-managed encrypted
+setup, multiple destination types, POP3, per-folder IMAP IDLE, multi-user
+isolation, live controls, and operator diagnostics. When reviewing mailflow
+behavior, start with the five classes above before expanding into UI or admin
+surfaces.
+
 One implementation constraint matters here: virtual-thread workers do not carry
 the original request context with them, so any repository-backed helper they
 call must open its own short `@Transactional` read/write boundary instead of
@@ -139,6 +169,11 @@ infrastructure details:
   shared by auth, OAuth, and user-managed mailbox configuration has an explicit
   security-focused home instead of staying in the flat top-level `service`
   package.
+- `ConfigBackupService` also lives under `dev.inboxbridge.service.security`.
+  It exposes a redacted config snapshot plus a secret-bearing export encrypted
+  to an operator-provided RSA public key after fresh sensitive-action
+  reauthentication. The encrypted export is returned directly and never stored
+  server-side; only export metadata is audit-logged.
 - `RemoteControlService`, `RemoteSessionService`,
   `RemoteServiceTokenAuthService`, and `RemotePollRateLimitService` now live
   together under `dev.inboxbridge.service.remote`, while

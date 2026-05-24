@@ -151,6 +151,69 @@ class UserEmailAccountServiceTest {
     }
 
     @Test
+    void upsertPersistsFolderLabelMappings() {
+        UserEmailAccountService service = service();
+        AppUser owner = user(1L);
+
+        UserEmailAccountView view = service.upsert(owner, new UpdateUserEmailAccountRequest(
+                null,
+                "fetcher-a",
+                true,
+                "IMAP",
+                "imap.example.com",
+                993,
+                true,
+                "PASSWORD",
+                "NONE",
+                "user@example.com",
+                "Secret#123",
+                "",
+                "INBOX, Projects/2026",
+                false,
+                "POLLING",
+                "Imported/Test",
+                "INBOX=Imported/Inbox\nProjects/2026=Imported/Projects",
+                false,
+                "NONE",
+                ""));
+
+        UserEmailAccount stored = service.repository.findByEmailAccountId("fetcher-a").orElseThrow();
+        assertEquals("INBOX=Imported/Inbox\nProjects/2026=Imported/Projects", stored.folderLabelMappings);
+        assertEquals("INBOX=Imported/Inbox\nProjects/2026=Imported/Projects", view.folderLabelMappings());
+    }
+
+    @Test
+    void upsertRejectsMalformedFolderLabelMappings() {
+        UserEmailAccountService service = service();
+
+        IllegalArgumentException error = assertThrows(
+                IllegalArgumentException.class,
+                () -> service.upsert(user(1L), new UpdateUserEmailAccountRequest(
+                        null,
+                        "fetcher-a",
+                        true,
+                        "IMAP",
+                        "imap.example.com",
+                        993,
+                        true,
+                        "PASSWORD",
+                        "NONE",
+                        "user@example.com",
+                        "Secret#123",
+                        "",
+                        "INBOX",
+                        false,
+                        "POLLING",
+                        "Imported/Test",
+                        "INBOX",
+                        false,
+                        "NONE",
+                        "")));
+
+        assertEquals("Folder label mappings must use folder=Gmail/Label entries.", error.getMessage());
+    }
+
+    @Test
     void createRejectsDuplicateOauthSourceMailboxForSameUser() {
         UserEmailAccountService service = service();
         AppUser owner = user(1L);

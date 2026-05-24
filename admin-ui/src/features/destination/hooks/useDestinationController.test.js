@@ -201,7 +201,7 @@ describe('useDestinationController', () => {
   })
 
   it('loads destination folders from the preview endpoint', async () => {
-    fetch.mockResolvedValue({ ok: true, json: async () => ({ folders: ['INBOX', 'Archive'] }) })
+    fetch.mockResolvedValue({ ok: true, json: async () => ({ folders: ['INBOX', 'Archive'], suggestedSpamJunkFolder: 'Junk' }) })
     const { result } = renderController()
 
     let folders
@@ -210,7 +210,8 @@ describe('useDestinationController', () => {
     })
 
     expect(fetch).toHaveBeenCalledWith('/api/app/destination-config/folders', expect.objectContaining({ method: 'POST' }))
-    expect(folders).toEqual(['INBOX', 'Archive'])
+    expect([...folders]).toEqual(['INBOX', 'Archive'])
+    expect(folders.suggestedSpamJunkFolder).toBe('Junk')
   })
 
   it('saves before authenticating a newly added Gmail destination from the modal flow', async () => {

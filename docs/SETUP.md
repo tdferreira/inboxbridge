@@ -169,11 +169,12 @@ That means:
 
 Create the Google Cloud side like this:
 
-1. Create or choose a Google Cloud project.
-2. Enable the Gmail API.
-3. Configure the OAuth consent screen.
-4. Create a Web OAuth client.
-5. Add this redirect URI:
+1. Open [Google Cloud project creation](https://console.cloud.google.com/projectcreate) and create or choose a project.
+2. Open the [Gmail API library page](https://console.cloud.google.com/apis/library/gmail.googleapis.com) and enable the Gmail API for that project.
+3. Open [Google Auth Platform branding](https://console.cloud.google.com/auth/branding) and fill in the app name, support email, and developer contact details.
+4. Open [Google Auth Platform audience](https://console.cloud.google.com/auth/audience), keep the app in testing while you are setting up, and add the Gmail accounts that should be allowed to consent as test users.
+5. Open [Google Auth Platform clients](https://console.cloud.google.com/auth/clients), create an OAuth client, and choose `Web application`.
+6. Add this authorized redirect URI:
 
 ```text
 https://localhost:3000/api/google-oauth/callback
@@ -185,7 +186,10 @@ Or, for a real deployment:
 https://<your-domain>/api/google-oauth/callback
 ```
 
-Then fill these deployment-level values in `.env`:
+7. Copy the generated `Client ID` and newly visible `Client secret`.
+8. Paste them into `Administration -> OAuth Apps -> Google OAuth`, or fill
+   these deployment-level values in `.env` if you intentionally manage shared
+   OAuth app settings there:
 
 ```dotenv
 GOOGLE_CLIENT_ID=replace-me
@@ -199,6 +203,81 @@ Notes:
 - Most users should connect their Gmail account from the admin UI instead of placing a Gmail refresh token in `.env`.
 - `GMAIL_DESTINATION_USER` should usually stay `me`.
 - the destination Gmail flow asks only for the Gmail import/label scopes it actually needs; reading Gmail mailboxes through OAuth applies only to source email accounts that explicitly use Google OAuth
+
+Official Google references:
+
+- [Create access credentials](https://developers.google.com/workspace/guides/create-credentials)
+- [Using OAuth 2.0 for web server applications](https://developers.google.com/identity/protocols/oauth2/web-server)
+- [Manage OAuth clients](https://support.google.com/cloud/answer/15549257)
+
+## Config-file-only IMAP source recipe
+
+The admin UI is the recommended setup path because it can encrypt UI-managed
+mailbox passwords and OAuth refresh tokens. For a personal deployment where you
+prefer one auditable config file and accept plaintext operator-managed mailbox
+secrets, define an env-managed source in `.env`:
+
+```dotenv
+MAIL_ACCOUNT_0__ID=outlook-main
+MAIL_ACCOUNT_0__ENABLED=true
+MAIL_ACCOUNT_0__PROTOCOL=IMAP
+MAIL_ACCOUNT_0__HOST=outlook.office365.com
+MAIL_ACCOUNT_0__PORT=993
+MAIL_ACCOUNT_0__TLS=true
+MAIL_ACCOUNT_0__AUTH_METHOD=PASSWORD
+MAIL_ACCOUNT_0__OAUTH_PROVIDER=NONE
+MAIL_ACCOUNT_0__USERNAME=person@example.com
+MAIL_ACCOUNT_0__PASSWORD=replace-me-app-password
+MAIL_ACCOUNT_0__FOLDER=INBOX,Archive
+MAIL_ACCOUNT_0__FETCH_MODE=IDLE
+MAIL_ACCOUNT_0__CUSTOM_LABEL=Imported/Outlook
+MAIL_ACCOUNT_0__FOLDER_LABEL_MAPPINGS=INBOX=Imported/Inbox;Archive=Imported/Archive
+MAIL_ACCOUNT_0__SPAM_JUNK_STRATEGY=IMPORT_AND_ROUTE
+MAIL_ACCOUNT_0__SPAM_JUNK_SOURCE_FOLDER=Junk
+```
+
+`MAIL_ACCOUNT_0__CUSTOM_LABEL` is the default Gmail label for that source.
+`MAIL_ACCOUNT_0__FOLDER_LABEL_MAPPINGS` is optional and only affects Gmail API
+destinations. Use `folder=Gmail/Label` entries separated by semicolons; the
+folder side is matched against the actual source IMAP folder of each imported
+message.
+`MAIL_ACCOUNT_0__SPAM_JUNK_STRATEGY` is optional. The default `IGNORE` leaves
+spam/junk folders alone. `IMPORT_NORMAL` imports the configured
+`MAIL_ACCOUNT_0__SPAM_JUNK_SOURCE_FOLDER` as normal mail. `IMPORT_AND_ROUTE`
+imports that folder and routes Gmail destinations to `SPAM`; IMAP destinations
+append those messages to the destination spam/junk folder configured in the UI.
+
+## Configuration Backups
+
+InboxBridge has two admin-only backup export tiers.
+
+Use the safe tier for reviews, support handoff, and change tracking:
+
+The endpoint is intended for an authenticated admin session. If you call it
+with `curl`, include the session cookie from an active admin login.
+
+```bash
+curl -sk https://localhost:8443/api/admin/config-backups/safe
+```
+
+That response redacts mailbox passwords, OAuth refresh tokens, client secrets,
+and other secret material. It is useful for understanding what is configured,
+but it cannot restore mailbox access by itself.
+
+Use the encrypted secret tier only for controlled recovery storage. It requires:
+
+- an authenticated admin browser session
+- fresh passkey or password reauthentication through the existing secret-management step-up flow
+- explicit acknowledgement that the export grants mailbox access to anyone who can decrypt it
+- an operator-owned RSA public key in PEM format
+
+The server encrypts the full snapshot to that public key with
+`RSA-OAEP-SHA256 + AES-256-GCM`, returns the encrypted payload directly, and
+does not store the secret-bearing export server-side. InboxBridge audit-logs the
+export metadata and public-key fingerprint only.
+
+Treat the decrypted file like mailbox credentials. Store it offline, restrict
+access tightly, and rotate mailbox passwords or OAuth grants if it is exposed.
 
 ## Microsoft Setup For Outlook Source And Destination Accounts
 
