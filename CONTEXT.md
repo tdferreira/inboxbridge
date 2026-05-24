@@ -120,7 +120,7 @@ The backend polling path is now split more intentionally too: `PollingService` s
 ## Technical stack
 
 - Java 25
-- Quarkus 3.33.1 (LTS)
+- Quarkus 3.33.1.1 (LTS)
 - React 19 + Vite 8
 - PostgreSQL 16
 - Flyway

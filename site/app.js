@@ -437,6 +437,7 @@ function syncConditionalFields(formElement) {
   const authMethod = formElement.sourceAuthMethod.value
   const isImap = protocol === 'IMAP'
   const isOauth = authMethod === 'OAUTH2'
+  const importsSpamJunk = formElement.sourceSpamJunkStrategy.value !== 'IGNORE'
 
   formElement.querySelectorAll('[data-imap-only]').forEach((element) => {
     element.hidden = !isImap
@@ -446,6 +447,9 @@ function syncConditionalFields(formElement) {
   })
   formElement.querySelectorAll('[data-oauth-only]').forEach((element) => {
     element.hidden = !isOauth
+  })
+  formElement.querySelectorAll('[data-spam-junk-source-field]').forEach((element) => {
+    element.hidden = !isImap || !importsSpamJunk
   })
 }
 

@@ -781,34 +781,30 @@
                       <input id="sourceFolderLabelMappings" name="sourceFolderLabelMappings" placeholder="INBOX=Imported/Inbox;Junk=SPAM" />
                     </div>
                     <div class="field full" data-imap-only>
-                      <div class="dual-input-row dual-input-row-imap">
-                        <div class="nested-field">
-                          <label for="sourceSpamJunkStrategy"><span class="label-copy">Spam/Junk strategy</span><button class="info-hint" type="button" aria-label="Spam/Junk strategy help" data-hint="Optional strategy for importing source spam or junk folders instead of silently leaving false positives behind.">i</button></label>
-                          <select id="sourceSpamJunkStrategy" name="sourceSpamJunkStrategy">
-                            <option value="IGNORE">IGNORE</option>
-                            <option value="IMPORT_NORMAL">IMPORT_NORMAL</option>
-                            <option value="IMPORT_AND_ROUTE">IMPORT_AND_ROUTE</option>
-                          </select>
+                      <label for="sourceSpamJunkStrategy"><span class="label-copy">Spam/Junk strategy</span><button class="info-hint" type="button" aria-label="Spam/Junk strategy help" data-hint="Optional strategy for importing source spam or junk folders instead of silently leaving false positives behind.">i</button></label>
+                      <select id="sourceSpamJunkStrategy" name="sourceSpamJunkStrategy">
+                        <option value="IGNORE">IGNORE</option>
+                        <option value="IMPORT_NORMAL">IMPORT_NORMAL</option>
+                        <option value="IMPORT_AND_ROUTE">IMPORT_AND_ROUTE</option>
+                      </select>
+                    </div>
+                    <div class="field full" data-imap-only data-spam-junk-source-field hidden>
+                      <label for="sourceSpamJunkSourceFolderPillbox"><span class="label-copy">Source spam and junk folders</span><button class="info-hint" type="button" aria-label="Source spam and junk folders help" data-hint="Set every source spam or junk folder to import. Common values are Spam, Junk, or Junk Email.">i</button></label>
+                      <div class="site-pillbox" data-pillbox data-pillbox-hidden-input="sourceSpamJunkSourceFolder" data-pillbox-field-key="env.field.sourceSpamJunkSourceFolder" data-pillbox-help-key="env.hint.sourceSpamJunkSourceFolderPillbox" data-pillbox-placeholder-key="env.placeholder.sourceSpamJunkSourceFolderPillbox">
+                        <div class="site-pillbox-shell" data-pillbox-shell>
+                          <div class="site-pillbox-values" data-pillbox-values></div>
+                          <input
+                            id="sourceSpamJunkSourceFolderPillbox"
+                            class="site-pillbox-input"
+                            data-pillbox-input
+                            type="text"
+                            autocomplete="off"
+                            placeholder="Add Spam, Junk, or Junk Email"
+                          />
                         </div>
-                        <div class="nested-field">
-                          <label for="sourceSpamJunkSourceFolderPillbox"><span class="label-copy">Source spam and junk folders</span><button class="info-hint" type="button" aria-label="Source spam and junk folders help" data-hint="Set every source spam or junk folder to import. Common values are Spam, Junk, or Junk Email.">i</button></label>
-                          <div class="site-pillbox" data-pillbox data-pillbox-hidden-input="sourceSpamJunkSourceFolder" data-pillbox-field-key="env.field.sourceSpamJunkSourceFolder" data-pillbox-help-key="env.hint.sourceSpamJunkSourceFolderPillbox" data-pillbox-placeholder-key="env.placeholder.sourceSpamJunkSourceFolderPillbox">
-                            <div class="site-pillbox-shell" data-pillbox-shell>
-                              <div class="site-pillbox-values" data-pillbox-values></div>
-                              <input
-                                id="sourceSpamJunkSourceFolderPillbox"
-                                class="site-pillbox-input"
-                                data-pillbox-input
-                                type="text"
-                                autocomplete="off"
-                                placeholder="Add Spam, Junk, or Junk Email"
-                              />
-                            </div>
-                            <p class="site-pillbox-help">Add every spam or junk folder. The generator writes them as a comma-separated list.</p>
-                          </div>
-                          <input id="sourceSpamJunkSourceFolder" name="sourceSpamJunkSourceFolder" type="hidden" />
-                        </div>
+                        <p class="site-pillbox-help">Add every spam or junk folder. The generator writes them as a comma-separated list.</p>
                       </div>
+                      <input id="sourceSpamJunkSourceFolder" name="sourceSpamJunkSourceFolder" type="hidden" />
                     </div>
                     <div class="field full">
                       <label class="checkbox" for="sourceUnreadOnly">

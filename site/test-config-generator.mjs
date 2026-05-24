@@ -49,6 +49,14 @@ assert.match(envText, /MAIL_ACCOUNT_0__SPAM_JUNK_STRATEGY=IMPORT_AND_ROUTE/)
 assert.match(envText, /MAIL_ACCOUNT_0__SPAM_JUNK_SOURCE_FOLDERS=Spam, Junk/)
 assert.doesNotMatch(envText, /MAIL_ACCOUNT_0__PASSWORD=/)
 
+const ignoredSpamJunkEnv = generateEnvText({
+  ...configuredInput,
+  sourceSpamJunkStrategy: 'IGNORE',
+  sourceSpamJunkSourceFolder: 'Spam, Junk'
+})
+assert.doesNotMatch(ignoredSpamJunkEnv, /MAIL_ACCOUNT_0__SPAM_JUNK_STRATEGY=/)
+assert.doesNotMatch(ignoredSpamJunkEnv, /MAIL_ACCOUNT_0__SPAM_JUNK_SOURCE_FOLDERS=/)
+
 const popEnv = generateEnvText({
   publicHostname: 'localhost',
   publicPort: '3000',
@@ -119,6 +127,7 @@ assert.notEqual(translate('es', 'band.remember.three'), translate('en', 'band.re
 
 const siteHtml = fs.readFileSync(new URL('./index.html', import.meta.url), 'utf8')
 const siteCss = fs.readFileSync(new URL('./styles.css', import.meta.url), 'utf8')
+const siteJs = fs.readFileSync(new URL('./app.js', import.meta.url), 'utf8')
 assert.match(siteHtml, /data-language-picker/)
 assert.match(siteHtml, /POP UIDL checkpoints/)
 assert.match(siteHtml, /multi-folder IMAP/)
@@ -205,11 +214,14 @@ assert.match(siteHtml, /id="sourceSpamJunkStrategy"/)
 assert.match(siteHtml, /id="sourceSpamJunkSourceFolder"/)
 assert.match(siteHtml, /id="sourceSpamJunkSourceFolderPillbox"/)
 assert.match(siteHtml, /data-pillbox-hidden-input="sourceSpamJunkSourceFolder"/)
+assert.match(siteHtml, /data-spam-junk-source-field hidden/)
 assert.match(siteHtml, /class="site-pillbox-input"/)
 assert.match(siteHtml, /comma-separated IMAP folder list/)
 assert.match(siteHtml, /id="sourceFetchMode"/)
 assert.match(siteHtml, /data-password-only/)
 assert.match(siteHtml, /syncStaticConditionalFields/)
+assert.match(siteJs, /importsSpamJunk/)
+assert.match(siteJs, /data-spam-junk-source-field/)
 assert.match(siteHtml, /class="info-hint"/)
 assert.match(siteHtml, /Public hostname help/)
 assert.match(siteHtml, /Public port help/)
