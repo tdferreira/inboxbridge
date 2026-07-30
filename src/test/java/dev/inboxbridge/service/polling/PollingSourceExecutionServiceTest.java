@@ -135,6 +135,65 @@ class PollingSourceExecutionServiceTest {
         assertEquals(0, deduplicationService.recordImportCalls);
     }
 
+    @Test
+    void executeSkipsGmailInvalidAttachmentAndRecordsCheckpointWithoutApplyingSourceAction() {
+        RecordingMailSourceClient mailSourceClient = new RecordingMailSourceClient();
+        mailSourceClient.messages = List.of(fetchedPopMessage("uidl-invalid", "invalid"));
+        RecordingSourcePollingStateService pollingStateService = new RecordingSourcePollingStateService();
+        PollingSourceExecutionService service = service(
+                mailSourceClient,
+                new InvalidAttachmentDestinationService(),
+                pollingStateService,
+                new NoopSourcePollEventService(),
+                null);
+
+        PollingSourceExecutionService.SourceExecutionOutcome outcome = service.execute(
+                runtimePopAccount(),
+                "manual-api",
+                settings(),
+                null,
+                "alice",
+                "MY_INBOXBRIDGE");
+
+        assertEquals(1, outcome.fetched());
+        assertEquals(0, outcome.imported());
+        assertEquals("gmail_invalid_attachment", outcome.error().code());
+        assertEquals(List.of("uidl-invalid"), pollingStateService.recordedPopCheckpoints);
+        assertEquals(List.of("source-pop"), pollingStateService.successSourceIds);
+        assertTrue(pollingStateService.failureSourceIds.isEmpty());
+        assertEquals(0, mailSourceClient.postPollApplied);
+    }
+
+    @Test
+    void executeKeepsTransientDestinationFailureRetriable() {
+        RecordingMailSourceClient mailSourceClient = new RecordingMailSourceClient();
+        mailSourceClient.messages = List.of(
+                fetchedPopMessage("uidl-first", "first"),
+                fetchedPopMessage("uidl-second", "second"));
+        RecordingSourcePollingStateService pollingStateService = new RecordingSourcePollingStateService();
+        PollingSourceExecutionService service = service(
+                mailSourceClient,
+                new TransientlyFailingDestinationService(),
+                pollingStateService,
+                new NoopSourcePollEventService(),
+                null);
+
+        PollingSourceExecutionService.SourceExecutionOutcome outcome = service.execute(
+                runtimePopAccount(),
+                "manual-api",
+                settings(),
+                null,
+                "alice",
+                "MY_INBOXBRIDGE");
+
+        assertEquals(1, outcome.fetched());
+        assertEquals(0, outcome.imported());
+        assertEquals("generic", outcome.error().code());
+        assertTrue(pollingStateService.recordedPopCheckpoints.isEmpty());
+        assertTrue(pollingStateService.successSourceIds.isEmpty());
+        assertEquals(List.of("source-pop"), pollingStateService.failureSourceIds);
+    }
+
     private static PollingSourceExecutionService service(
             RecordingMailSourceClient mailSourceClient,
             MailDestinationService destinationService,
@@ -154,6 +213,19 @@ class PollingSourceExecutionServiceTest {
 
     private static PollingSettingsService.EffectivePollingSettings settings() {
         return new PollingSettingsService.EffectivePollingSettings(true, "PT5M", Duration.ofMinutes(5), 25);
+    }
+
+    private static FetchedMessage fetchedPopMessage(String uidl, String body) {
+        return new FetchedMessage(
+                "source-pop",
+                "source-pop:uidl:" + uidl,
+                Optional.of("<" + uidl + "@example.com>"),
+                Instant.parse("2026-04-07T10:00:00Z"),
+                Optional.empty(),
+                null,
+                null,
+                uidl,
+                body.getBytes());
     }
 
     private static RuntimeEmailAccount runtimePopAccount() {
@@ -301,6 +373,36 @@ class PollingSourceExecutionServiceTest {
         public MailImportResponse importMessage(MailDestinationTarget target, RuntimeEmailAccount bridge, FetchedMessage message) {
             importCalls++;
             return super.importMessage(target, bridge, message);
+        }
+    }
+
+    private static final class InvalidAttachmentDestinationService extends LinkedDestinationService {
+        private InvalidAttachmentDestinationService() {
+            super(true);
+        }
+
+        @Override
+        public MailImportResponse importMessage(
+                MailDestinationTarget target,
+                RuntimeEmailAccount bridge,
+                FetchedMessage message) {
+            throw new GmailInvalidAttachmentException(
+                    400,
+                    "{\"error\":{\"status\":\"INVALID_ARGUMENT\",\"message\":\"Invalid attachment. Please check https://support.google.com/mail/answer/6590.\"}}");
+        }
+    }
+
+    private static final class TransientlyFailingDestinationService extends LinkedDestinationService {
+        private TransientlyFailingDestinationService() {
+            super(true);
+        }
+
+        @Override
+        public MailImportResponse importMessage(
+                MailDestinationTarget target,
+                RuntimeEmailAccount bridge,
+                FetchedMessage message) {
+            throw new IllegalStateException("Temporary destination outage");
         }
     }
 

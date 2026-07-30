@@ -99,6 +99,66 @@ class GmailImportServiceTest {
     }
 
     @Test
+    void importMessageClassifiesGmailInvalidAttachmentResponseAsPermanentMessageRejection() {
+        GmailImportService service = new GmailImportService();
+        service.googleOAuthService = new FakeGoogleOAuthService("access-token");
+        service.objectMapper = new ObjectMapper();
+        service.userGmailConfigService = new FakeUserGmailConfigService();
+        service.httpClient = new FakeHttpClient(new FakeHttpResponse(400, """
+                {
+                  "error": {
+                    "code": 400,
+                    "message": "Invalid attachment. Please check https://support.google.com/mail/answer/6590.",
+                    "errors": [
+                      {
+                        "message": "Invalid attachment. Please check https://support.google.com/mail/answer/6590.",
+                        "domain": "global",
+                        "reason": "invalidArgument"
+                      }
+                    ],
+                    "status": "INVALID_ARGUMENT"
+                  }
+                }
+                """));
+
+        GmailInvalidAttachmentException error = assertThrows(
+                GmailInvalidAttachmentException.class,
+                () -> service.importMessage(userTarget(), "bad attachment".getBytes(), List.of("INBOX")));
+
+        assertEquals(400, error.statusCode());
+    }
+
+    @Test
+    void importMessageKeepsOtherBadRequestsFatal() {
+        GmailImportService service = new GmailImportService();
+        service.googleOAuthService = new FakeGoogleOAuthService("access-token");
+        service.objectMapper = new ObjectMapper();
+        service.userGmailConfigService = new FakeUserGmailConfigService();
+        service.httpClient = new FakeHttpClient(new FakeHttpResponse(400, """
+                {
+                  "error": {
+                    "code": 400,
+                    "message": "Invalid label",
+                    "errors": [
+                      {
+                        "message": "Invalid label",
+                        "domain": "global",
+                        "reason": "invalidArgument"
+                      }
+                    ],
+                    "status": "INVALID_ARGUMENT"
+                  }
+                }
+                """));
+
+        IllegalStateException error = assertThrows(
+                IllegalStateException.class,
+                () -> service.importMessage(userTarget(), "valid message".getBytes(), List.of("missing-label")));
+
+        assertEquals(IllegalStateException.class, error.getClass());
+    }
+
+    @Test
     void importMessageForSystemTargetFailsClearlyWhenEnvRefreshTokenIsBlockedByPolicy() {
         GmailImportService service = new GmailImportService();
         service.googleOAuthService = new FakeGoogleOAuthService("expired-token");
@@ -196,6 +256,21 @@ class GmailImportServiceTest {
         public Microsoft microsoft() { return null; }
         @Override
         public List<Source> sources() { return List.of(); }
+    }
+
+    private static GmailTarget userTarget() {
+        return new GmailTarget(
+                "user-gmail:8",
+                8L,
+                "john-doe",
+                "me",
+                "client",
+                "secret",
+                "",
+                "https://localhost:3000/api/google-oauth/callback",
+                true,
+                false,
+                false);
     }
 
     private static final class FakeGoogleOAuthService extends GoogleOAuthService {

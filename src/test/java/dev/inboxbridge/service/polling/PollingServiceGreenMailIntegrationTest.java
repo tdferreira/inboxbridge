@@ -464,6 +464,44 @@ class PollingServiceGreenMailIntegrationTest {
     }
 
     @Test
+    void gmailInvalidAttachmentDoesNotBlockLaterGreenmailMessages() throws Exception {
+        appendMessage(
+                sourceMail,
+                SOURCE_USERNAME,
+                SOURCE_PASSWORD,
+                "INBOX",
+                "blocked-attachment",
+                "Gmail rejects this message",
+                "<blocked-attachment@example.com>",
+                Instant.parse("2026-07-21T09:40:00Z"));
+        appendMessage(
+                sourceMail,
+                SOURCE_USERNAME,
+                SOURCE_PASSWORD,
+                "INBOX",
+                "valid-after-blocked",
+                "Gmail accepts this message",
+                "<valid-after-blocked@example.com>",
+                Instant.parse("2026-07-21T09:41:00Z"));
+        RejectingInvalidAttachmentDestinationService destinationService =
+                new RejectingInvalidAttachmentDestinationService("<blocked-attachment@example.com>");
+
+        PollRunResult result = pollService(
+                List.of(runtimeGmailApiAccount("INBOX", "INBOX=Imported/Inbox")),
+                new RecordingImportedMessageRepository(),
+                new InMemoryReadyCheckpointSourcePollingStateService(),
+                destinationService)
+                .runPoll("greenmail-integration:gmail-invalid-attachment");
+
+        assertEquals(2, result.getFetched());
+        assertEquals(1, result.getImported());
+        assertEquals(List.of("gmail_invalid_attachment"), result.getErrorDetails().stream()
+                .map(error -> error.code())
+                .toList());
+        assertEquals(List.of("<valid-after-blocked@example.com>"), destinationService.importedMessageIds);
+    }
+
+    @Test
     void fullPollingPathRoutesConfiguredSourceSpamFolderToDestinationJunkFolder() throws Exception {
         appendMessage(sourceMail, SOURCE_USERNAME, SOURCE_PASSWORD, "INBOX", "inbox-alpha", "Inbox message", "<poll-spam-route-inbox@example.com>");
         appendMessage(sourceMail, SOURCE_USERNAME, SOURCE_PASSWORD, "Spam", "spam-alpha", "Spam false positive", "<poll-spam-route-spam@example.com>");
@@ -1232,6 +1270,18 @@ class PollingServiceGreenMailIntegrationTest {
             String subject,
             String body,
             String messageId) throws Exception {
+        appendMessage(greenMail, username, password, folderName, subject, body, messageId, Instant.now());
+    }
+
+    private static void appendMessage(
+            GreenMailExtension greenMail,
+            String username,
+            String password,
+            String folderName,
+            String subject,
+            String body,
+            String messageId,
+            Instant sentAt) throws Exception {
         Properties properties = new Properties();
         properties.put("mail.store.protocol", "imap");
         Session session = Session.getInstance(properties);
@@ -1251,7 +1301,7 @@ class PollingServiceGreenMailIntegrationTest {
             message.setRecipients(Message.RecipientType.TO, InternetAddress.parse(username));
             message.setSubject(subject, StandardCharsets.UTF_8.name());
             message.setText(body, StandardCharsets.UTF_8.name());
-            message.setSentDate(java.util.Date.from(Instant.now()));
+            message.setSentDate(java.util.Date.from(sentAt));
             message.saveChanges();
             message.setHeader("Message-ID", messageId);
             folder.appendMessages(new Message[] { message });
@@ -1752,6 +1802,45 @@ class PollingServiceGreenMailIntegrationTest {
                     .orElse(bridge.customLabel().orElse(""));
             imports.add(new ImportedFolderLabel(folderName, labelName));
             return new MailImportResponse("gmail-message-" + imports.size(), null);
+        }
+    }
+
+    private static final class RejectingInvalidAttachmentDestinationService implements MailDestinationService {
+        private final String rejectedMessageId;
+        private final List<String> importedMessageIds = new java.util.concurrent.CopyOnWriteArrayList<>();
+
+        private RejectingInvalidAttachmentDestinationService(String rejectedMessageId) {
+            this.rejectedMessageId = rejectedMessageId;
+        }
+
+        @Override
+        public boolean supports(MailDestinationTarget target) {
+            return target instanceof GmailApiDestinationTarget;
+        }
+
+        @Override
+        public boolean isLinked(MailDestinationTarget target) {
+            return true;
+        }
+
+        @Override
+        public String notLinkedMessage(MailDestinationTarget target) {
+            return "Gmail destination is not linked.";
+        }
+
+        @Override
+        public MailImportResponse importMessage(
+                MailDestinationTarget target,
+                RuntimeEmailAccount bridge,
+                FetchedMessage message) {
+            String messageId = message.messageIdHeader().orElseThrow();
+            if (rejectedMessageId.equals(messageId)) {
+                throw new GmailInvalidAttachmentException(
+                        400,
+                        "{\"error\":{\"status\":\"INVALID_ARGUMENT\",\"message\":\"Invalid attachment. Please check https://support.google.com/mail/answer/6590.\"}}");
+            }
+            importedMessageIds.add(messageId);
+            return new MailImportResponse("gmail-message-" + importedMessageIds.size(), null);
         }
     }
 

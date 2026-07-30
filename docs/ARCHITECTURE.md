@@ -407,6 +407,16 @@ for unsafe `/api/...` requests too:
 
 When the destination provider is Gmail, `messages.import` is the right API for this use case because it imports a raw MIME message into the mailbox without re-sending it to the world. That preserves the original sender, headers, dates, attachments, and threading signals much better than forwarding.
 
+The Gmail HTTP boundary classifies only the provider's specific
+`400 INVALID_ARGUMENT` invalid-attachment response for policy 6590 as a
+permanent message rejection. `PollingSourceExecutionService` records that
+message's source checkpoint, reports the rejection, and keeps processing later
+messages in the same batch. It does not apply successful-import source actions
+to the rejected message. Other Gmail bad requests and transient destination
+failures still abort the source run without advancing the failed message's
+checkpoint, preserving normal retry behavior for configuration and provider
+failures.
+
 ## Dedupe strategy
 
 Current dedupe uses two keys:

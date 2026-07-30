@@ -80,6 +80,9 @@ public class GmailImportService {
                             .POST(HttpRequest.BodyPublishers.ofString(payload.toString(), StandardCharsets.UTF_8))
                             .build());
             if (response.statusCode() / 100 != 2) {
+                if (isInvalidAttachmentResponse(response.statusCode(), response.body())) {
+                    throw new GmailInvalidAttachmentException(response.statusCode(), response.body());
+                }
                 throw new IllegalStateException("Failed to import Gmail message: " + response.statusCode() + " - " + response.body());
             }
             JsonNode root = objectMapper.readTree(response.body());
@@ -90,6 +93,54 @@ public class GmailImportService {
         } catch (IOException e) {
             throw new IllegalStateException("Failed to import Gmail message", e);
         }
+    }
+
+    private boolean isInvalidAttachmentResponse(int statusCode, String responseBody) {
+        if (statusCode != 400 || responseBody == null || responseBody.isBlank()) {
+            return false;
+        }
+        try {
+            JsonNode error = objectMapper.readTree(responseBody).path("error");
+            boolean invalidArgument = "INVALID_ARGUMENT".equalsIgnoreCase(error.path("status").asText())
+                    || hasInvalidArgumentReason(error.path("errors"));
+            return invalidArgument && hasInvalidAttachmentMessage(error);
+        } catch (IOException ignored) {
+            return false;
+        }
+    }
+
+    private boolean hasInvalidArgumentReason(JsonNode errors) {
+        if (!errors.isArray()) {
+            return false;
+        }
+        for (JsonNode error : errors) {
+            if ("invalidArgument".equalsIgnoreCase(error.path("reason").asText())) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    private boolean hasInvalidAttachmentMessage(JsonNode error) {
+        if (isInvalidAttachmentMessage(error.path("message").asText())) {
+            return true;
+        }
+        JsonNode errors = error.path("errors");
+        if (!errors.isArray()) {
+            return false;
+        }
+        for (JsonNode detail : errors) {
+            if (isInvalidAttachmentMessage(detail.path("message").asText())) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    private boolean isInvalidAttachmentMessage(String message) {
+        return message != null
+                && (message.contains("Invalid attachment")
+                        || message.contains("support.google.com/mail/answer/6590"));
     }
 
     public GmailImportResponse importMessage(GmailTarget target, byte[] rawMessage, List<String> labelIds) {

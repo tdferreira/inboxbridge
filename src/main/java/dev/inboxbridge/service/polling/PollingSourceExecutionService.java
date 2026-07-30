@@ -1,6 +1,7 @@
 package dev.inboxbridge.service.polling;
 import dev.inboxbridge.service.destination.DestinationIdentityKeys;
 import dev.inboxbridge.service.destination.GmailApiMailDestinationService;
+import dev.inboxbridge.service.destination.GmailInvalidAttachmentException;
 import dev.inboxbridge.service.destination.MailDestinationService;
 import dev.inboxbridge.service.mail.MailSourceClient;
 
@@ -31,6 +32,7 @@ public class PollingSourceExecutionService {
     private static final String DESTINATION_MAILBOX_NOT_CONFIGURED_CODE = "destination_mailbox_not_configured";
     private static final String DESTINATION_MAILBOX_NOT_CONFIGURED_MESSAGE =
             "Destination mailbox is not configured. Open My Destination Mailbox and connect the mailbox that should receive imported mail before running polling.";
+    private static final String GMAIL_INVALID_ATTACHMENT_CODE = "gmail_invalid_attachment";
     private static final String STOPPED_BY_USER_MESSAGE = "Stopped by user.";
 
     private static final Logger LOG = Logger.getLogger(PollingSourceExecutionService.class);
@@ -82,6 +84,8 @@ public class PollingSourceExecutionService {
         String error = null;
         boolean shouldRecordFailure = false;
         boolean stoppedByUser = false;
+        boolean completedBatch = false;
+        int invalidAttachmentCount = 0;
         PollThrottleService.ThrottleLease sourceLease = PollThrottleService.ThrottleLease.noopLease();
         long sourceThrottleWaitMillis = 0L;
         long destinationThrottleWaitMillis = 0L;
@@ -174,10 +178,39 @@ public class PollingSourceExecutionService {
                     importedBytes += message.rawMessage().length;
                     publishLiveProgress(liveRunId, emailAccount.id(), messages.size(), totalBytes, processedBytes, fetched, imported, duplicates);
                 } catch (RuntimeException destinationError) {
+                    if (destinationError instanceof GmailInvalidAttachmentException) {
+                        recordSourceCheckpoint(emailAccount, message);
+                        invalidAttachmentCount++;
+                        LOG.warnf(
+                                "Skipping source message %s from %s because Gmail permanently rejected an invalid attachment",
+                                message.sourceMessageKey(),
+                                emailAccount.id());
+                        publishLiveProgress(
+                                liveRunId,
+                                emailAccount.id(),
+                                messages.size(),
+                                totalBytes,
+                                processedBytes,
+                                fetched,
+                                imported,
+                                duplicates);
+                        continue;
+                    }
                     destinationThrottleAudit = recordDestinationThrottleFailure(emailAccount.destination(), destinationError);
                     throw destinationError;
                 } finally {
                     releaseThrottle(destinationLease);
+                }
+            }
+            if (!stoppedByUser) {
+                completedBatch = true;
+                if (invalidAttachmentCount > 0) {
+                    error = invalidAttachmentMessage(emailAccount.id(), invalidAttachmentCount);
+                    errorDetail = new PollRunError(
+                            GMAIL_INVALID_ATTACHMENT_CODE,
+                            emailAccount.id(),
+                            error,
+                            null);
                 }
             }
         } catch (RuntimeException e) {
@@ -222,7 +255,7 @@ public class PollingSourceExecutionService {
                     pollingLiveService.markSourceStopped(liveRunId, emailAccount.id(), fetched, imported, duplicates);
                 }
             } else {
-                if (error == null) {
+                if (completedBatch) {
                     sourcePollingStateService.recordSuccess(emailAccount.id(), finishedAt, settings);
                     sourceThrottleAudit = recordSourceThrottleSuccess(emailAccount);
                 } else if (shouldRecordFailure) {
@@ -265,6 +298,13 @@ public class PollingSourceExecutionService {
                 spamJunkMessageCount,
                 List.copyOf(spamJunkFolderSummaries),
                 errorDetail);
+    }
+
+    private String invalidAttachmentMessage(String sourceId, int invalidAttachmentCount) {
+        String messageWord = invalidAttachmentCount == 1 ? "message" : "messages";
+        return "Source " + sourceId + " skipped " + invalidAttachmentCount + " " + messageWord
+                + " because Gmail rejected invalid attachments under Gmail policy 6590. "
+                + "InboxBridge continued processing the remaining mail.";
     }
 
     private boolean awaitLiveCheckpoint(String liveRunId) {

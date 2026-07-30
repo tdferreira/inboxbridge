@@ -398,6 +398,7 @@ Why:
 - keeps the operational fetcher list unified in the UI while still separating writable DB state from read-only env state
 
 Gmail API integration now retries once after a `401` by clearing the cached Google access token and refreshing it again before surfacing the error, so transient stale-token failures during label lookup or message import do not force an unnecessary reconnect.
+Gmail import now also treats the specific `400 INVALID_ARGUMENT` response for an invalid attachment under Gmail policy 6590 as a permanent, message-local rejection: InboxBridge reports the skipped message, advances its source checkpoint, and continues importing the rest of the fetched batch. Other Gmail `400` responses and transient destination failures remain fatal for that source run so configuration or provider problems are still retried instead of silently discarding mail.
 
 ### 4. Gmail `users.messages.import`
 
