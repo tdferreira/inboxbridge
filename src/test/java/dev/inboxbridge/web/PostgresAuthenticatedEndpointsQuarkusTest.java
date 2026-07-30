@@ -55,6 +55,7 @@ import dev.inboxbridge.persistence.UserUiPreference;
 import dev.inboxbridge.persistence.UserUiPreferenceRepository;
 import dev.inboxbridge.service.admin.AppUserService;
 import dev.inboxbridge.service.security.SecretEncryptionService;
+import dev.inboxbridge.testsupport.LocalSecretStorageTestResource;
 import dev.inboxbridge.testsupport.PostgresQuarkusTestProfile;
 import dev.inboxbridge.testsupport.PostgresTestResource;
 import io.quarkus.narayana.jta.QuarkusTransaction;
@@ -73,6 +74,7 @@ import jakarta.inject.Inject;
 @QuarkusTest
 @TestProfile(PostgresQuarkusTestProfile.class)
 @QuarkusTestResource(value = PostgresTestResource.class, restrictToAnnotatedClass = true)
+@QuarkusTestResource(value = LocalSecretStorageTestResource.class, restrictToAnnotatedClass = true)
 class PostgresAuthenticatedEndpointsQuarkusTest {
 
     private static final String SESSION_COOKIE = "inboxbridge_session";
