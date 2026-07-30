@@ -1,6 +1,7 @@
 package dev.inboxbridge.service.polling;
 
 import java.time.Instant;
+import java.util.Optional;
 
 import dev.inboxbridge.domain.FetchedMessage;
 import dev.inboxbridge.domain.MailDestinationTarget;
@@ -48,6 +49,16 @@ public class ImportDeduplicationService {
     }
 
     @Transactional
+    public DuplicateStatus duplicateStatus(FetchedMessage message, MailDestinationTarget target) {
+        if (importedMessageRepository == null) {
+            return new DuplicateStatus(alreadyImported(message, target), false);
+        }
+        return findMatchingImport(message, target)
+                .map(imported -> new DuplicateStatus(true, imported.contentSanitized))
+                .orElseGet(() -> new DuplicateStatus(false, false));
+    }
+
+    @Transactional
     public void recordImport(FetchedMessage message, MailDestinationTarget target, MailImportResponse importResponse) {
         ImportedMessage entity = new ImportedMessage();
         entity.sourceAccountId = message.sourceAccountId();
@@ -58,8 +69,34 @@ public class ImportDeduplicationService {
         entity.destinationIdentityKey = DestinationIdentityKeys.forTarget(target);
         entity.gmailMessageId = importResponse.destinationMessageId();
         entity.gmailThreadId = importResponse.destinationThreadId();
+        entity.contentSanitized = importResponse.sanitized();
         entity.importedAt = Instant.now();
         importedMessageRepository.persist(entity);
+    }
+
+    private Optional<ImportedMessage> findMatchingImport(FetchedMessage message, MailDestinationTarget target) {
+        String destinationIdentityKey = DestinationIdentityKeys.forTarget(target);
+        Optional<ImportedMessage> bySourceKey = importedMessageRepository.findBySourceMessageKey(
+                destinationIdentityKey,
+                message.sourceAccountId(),
+                message.sourceMessageKey());
+        if (bySourceKey.isPresent()) {
+            return bySourceKey;
+        }
+        Optional<ImportedMessage> byRawMime = importedMessageRepository.findByRawSha256(
+                destinationIdentityKey,
+                mimeHashService.sha256Hex(message.rawMessage()));
+        if (byRawMime.isPresent()) {
+            return byRawMime;
+        }
+        String normalizedMessageIdHeader = normalizeMessageIdHeader(message.messageIdHeader().orElse(null));
+        if (normalizedMessageIdHeader == null) {
+            return Optional.empty();
+        }
+        return importedMessageRepository.findByMessageIdHeader(
+                destinationIdentityKey,
+                message.sourceAccountId(),
+                normalizedMessageIdHeader);
     }
 
     private String normalizeMessageIdHeader(String messageIdHeader) {
@@ -75,5 +112,10 @@ public class ImportDeduplicationService {
             return unwrapped.isEmpty() ? null : unwrapped;
         }
         return trimmed;
+    }
+
+    public record DuplicateStatus(
+            boolean alreadyImported,
+            boolean preserveSourceOriginal) {
     }
 }

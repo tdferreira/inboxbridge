@@ -87,6 +87,27 @@ class ImportDeduplicationServiceTest {
         assertFalse(service.alreadyImported(second, target));
     }
 
+    @Test
+    void sanitizedImportKeepsOriginalMimeIdentityAndPreservesSourceOnDuplicateReplay() {
+        InMemoryImportedMessageRepository repository = new InMemoryImportedMessageRepository();
+        MimeHashService mimeHashService = new MimeHashService();
+        ImportDeduplicationService service = new ImportDeduplicationService(repository, mimeHashService);
+        ImapAppendDestinationTarget target = destination("user-destination:7", "first@example.com");
+        FetchedMessage original = message("source-1", "source-1:uid:10", "original body");
+
+        service.recordImport(
+                original,
+                target,
+                new MailImportResponse("dest-1", "thread-1", List.of("malware.exe")));
+
+        ImportDeduplicationService.DuplicateStatus duplicate = service.duplicateStatus(original, target);
+        assertTrue(duplicate.alreadyImported());
+        assertTrue(duplicate.preserveSourceOriginal());
+        assertTrue(repository.importedMessages.getFirst().contentSanitized);
+        assertTrue(repository.importedMessages.getFirst().rawSha256.equals(
+                mimeHashService.sha256Hex(original.rawMessage())));
+    }
+
     private ImportDeduplicationService service() {
         ImportDeduplicationService service = new ImportDeduplicationService();
         service.importedMessageRepository = new InMemoryImportedMessageRepository();
@@ -157,6 +178,38 @@ class ImportDeduplicationServiceTest {
                     destinationIdentityKey.equals(message.destinationIdentityKey)
                             && sourceAccountId.equals(message.sourceAccountId)
                             && messageIdHeader.equals(message.messageIdHeader));
+        }
+
+        @Override
+        public Optional<ImportedMessage> findBySourceMessageKey(
+                String destinationIdentityKey,
+                String sourceAccountId,
+                String sourceMessageKey) {
+            return importedMessages.stream().filter(message ->
+                    destinationIdentityKey.equals(message.destinationIdentityKey)
+                            && sourceAccountId.equals(message.sourceAccountId)
+                            && sourceMessageKey.equals(message.sourceMessageKey))
+                    .findFirst();
+        }
+
+        @Override
+        public Optional<ImportedMessage> findByRawSha256(String destinationIdentityKey, String rawSha256) {
+            return importedMessages.stream().filter(message ->
+                    destinationIdentityKey.equals(message.destinationIdentityKey)
+                            && rawSha256.equals(message.rawSha256))
+                    .findFirst();
+        }
+
+        @Override
+        public Optional<ImportedMessage> findByMessageIdHeader(
+                String destinationIdentityKey,
+                String sourceAccountId,
+                String messageIdHeader) {
+            return importedMessages.stream().filter(message ->
+                    destinationIdentityKey.equals(message.destinationIdentityKey)
+                            && sourceAccountId.equals(message.sourceAccountId)
+                            && messageIdHeader.equals(message.messageIdHeader))
+                    .findFirst();
         }
 
         @Override

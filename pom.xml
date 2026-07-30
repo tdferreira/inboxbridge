@@ -21,6 +21,7 @@
         <surefire-plugin.version>3.5.6</surefire-plugin.version>
         <failsafe-plugin.version>3.5.6</failsafe-plugin.version>
         <angus-mail.version>2.0.5</angus-mail.version>
+        <commons-compress.version>1.28.0</commons-compress.version>
         <testcontainers.version>1.21.4</testcontainers.version>
     </properties>
 
@@ -77,6 +78,11 @@
             <groupId>org.eclipse.angus</groupId>
             <artifactId>angus-mail</artifactId>
             <version>${angus-mail.version}</version>
+        </dependency>
+        <dependency>
+            <groupId>org.apache.commons</groupId>
+            <artifactId>commons-compress</artifactId>
+            <version>${commons-compress.version}</version>
         </dependency>
         <dependency>
             <groupId>com.yubico</groupId>

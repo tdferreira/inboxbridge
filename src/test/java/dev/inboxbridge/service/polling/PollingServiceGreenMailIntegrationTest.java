@@ -11,8 +11,11 @@ import dev.inboxbridge.service.user.UserMailDestinationConfigService;
 import dev.inboxbridge.service.user.UserPollingSettingsService;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertArrayEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
+import java.io.ByteArrayInputStream;
+import java.io.ByteArrayOutputStream;
 import java.nio.charset.StandardCharsets;
 import java.time.Duration;
 import java.time.Instant;
@@ -22,10 +25,14 @@ import java.util.List;
 import java.util.Optional;
 import java.util.Properties;
 import java.util.Random;
+import java.util.zip.ZipEntry;
+import java.util.zip.ZipOutputStream;
 
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.RegisterExtension;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.EnumSource;
 import org.eclipse.angus.mail.pop3.POP3Folder;
 
 import com.icegreen.greenmail.junit5.GreenMailExtension;
@@ -36,6 +43,7 @@ import dev.inboxbridge.config.InboxBridgeConfig;
 import dev.inboxbridge.config.MailClientConfig;
 import dev.inboxbridge.domain.FetchedMessage;
 import dev.inboxbridge.domain.GmailApiDestinationTarget;
+import dev.inboxbridge.domain.GmailTarget;
 import dev.inboxbridge.domain.ImapAppendDestinationTarget;
 import dev.inboxbridge.domain.MailDestinationTarget;
 import dev.inboxbridge.domain.RuntimeEmailAccount;
@@ -46,6 +54,7 @@ import dev.inboxbridge.domain.SourcePostPollSettings;
 import dev.inboxbridge.domain.SourceSpamJunkStrategy;
 import dev.inboxbridge.dto.MailImportResponse;
 import dev.inboxbridge.dto.PollRunResult;
+import dev.inboxbridge.dto.GmailImportResponse;
 import dev.inboxbridge.persistence.ImportedMessage;
 import dev.inboxbridge.persistence.ImportedMessageRepository;
 import dev.inboxbridge.persistence.SourceImapCheckpoint;
@@ -56,10 +65,13 @@ import jakarta.enterprise.inject.Instance;
 import jakarta.enterprise.util.TypeLiteral;
 import jakarta.mail.Folder;
 import jakarta.mail.Message;
+import jakarta.mail.Multipart;
 import jakarta.mail.Session;
 import jakarta.mail.Store;
 import jakarta.mail.internet.InternetAddress;
+import jakarta.mail.internet.MimeBodyPart;
 import jakarta.mail.internet.MimeMessage;
+import jakarta.mail.internet.MimeMultipart;
 
 class PollingServiceGreenMailIntegrationTest {
 
@@ -499,6 +511,170 @@ class PollingServiceGreenMailIntegrationTest {
                 .map(error -> error.code())
                 .toList());
         assertEquals(List.of("<valid-after-blocked@example.com>"), destinationService.importedMessageIds);
+    }
+
+    @Test
+    void productionShapedGenericGmailInvalidAttachmentDoesNotBlockLaterGreenmailMessages() throws Exception {
+        appendMessage(
+                sourceMail,
+                SOURCE_USERNAME,
+                SOURCE_PASSWORD,
+                "INBOX",
+                "generic-blocked-attachment",
+                "Gmail rejects this message",
+                "<generic-blocked-attachment@example.com>",
+                Instant.parse("2026-07-30T15:47:00Z"));
+        appendMessage(
+                sourceMail,
+                SOURCE_USERNAME,
+                SOURCE_PASSWORD,
+                "INBOX",
+                "valid-after-generic-blocked",
+                "Gmail accepts this message",
+                "<valid-after-generic-blocked@example.com>",
+                Instant.parse("2026-07-30T15:48:00Z"));
+        GenericInvalidAttachmentGmailImportService importService =
+                new GenericInvalidAttachmentGmailImportService("<generic-blocked-attachment@example.com>");
+        GmailApiMailDestinationService destinationService = new GmailApiMailDestinationService(
+                importService,
+                new FixedGmailLabelService(),
+                new GmailMessageSanitizer());
+
+        PollRunResult result = pollService(
+                List.of(runtimeGmailApiAccount("INBOX", "INBOX=Imported/Inbox")),
+                new RecordingImportedMessageRepository(),
+                new InMemoryReadyCheckpointSourcePollingStateService(),
+                destinationService)
+                .runPoll("greenmail-integration:gmail-generic-invalid-attachment");
+
+        assertEquals(2, result.getFetched());
+        assertEquals(1, result.getImported());
+        assertEquals(List.of("gmail_invalid_attachment"), result.getErrorDetails().stream()
+                .map(error -> error.code())
+                .toList());
+        assertEquals(List.of("<valid-after-generic-blocked@example.com>"), importService.importedMessageIds);
+    }
+
+    @Test
+    void gmailInvalidAttachmentIsRetriedAsSanitizedCopyWhileOriginalStaysInGreenmail() throws Exception {
+        appendMessageWithAttachment(
+                sourceMail,
+                SOURCE_USERNAME,
+                SOURCE_PASSWORD,
+                "INBOX",
+                "sanitize-blocked-attachment",
+                "Original body",
+                "<sanitize-blocked-attachment@example.com>",
+                "malware.exe",
+                "dangerous");
+        RetryingSanitizedGmailImportService importService = new RetryingSanitizedGmailImportService();
+        GmailApiMailDestinationService destinationService = new GmailApiMailDestinationService(
+                importService,
+                new FixedGmailLabelService(),
+                new GmailMessageSanitizer());
+        RecordingImportedMessageRepository importedMessageRepository = new RecordingImportedMessageRepository();
+        RuntimeEmailAccount account = runtimeGmailApiAccount(
+                "INBOX",
+                "INBOX=Imported/Inbox",
+                new SourcePostPollSettings(false, SourcePostPollAction.DELETE, Optional.empty()));
+
+        PollRunResult result = pollService(
+                List.of(account),
+                importedMessageRepository,
+                new InMemoryReadyCheckpointSourcePollingStateService(),
+                destinationService)
+                .runPoll("greenmail-integration:gmail-sanitized-attachment");
+
+        assertEquals(1, result.getFetched());
+        assertEquals(1, result.getImported());
+        assertTrue(result.getErrorDetails().isEmpty());
+        assertEquals(2, importService.rawMessages.size());
+        assertTrue(containsSanitizedHeader(importService.rawMessages.get(1)));
+        assertTrue(!containsAttachmentNamed(importService.rawMessages.get(1), "malware.exe"));
+        assertEquals(
+                List.of("sanitize-blocked-attachment"),
+                listSubjects(sourceMail, SOURCE_USERNAME, SOURCE_PASSWORD, "INBOX"));
+        assertTrue(importedMessageRepository.importedMessages.getFirst().contentSanitized);
+    }
+
+    @ParameterizedTest
+    @EnumSource(ProtectedMessageKind.class)
+    void cryptographicallyProtectedMessagesAreNeverRewrittenOrRetried(ProtectedMessageKind protection) throws Exception {
+        String subject = "protected-" + protection.name().toLowerCase(java.util.Locale.ROOT);
+        appendProtectedMessageWithAttachment(
+                sourceMail,
+                SOURCE_USERNAME,
+                SOURCE_PASSWORD,
+                "INBOX",
+                subject,
+                "<" + subject + "@example.com>",
+                protection);
+        byte[] sourceRawMessage = readRawMessage(
+                sourceMail,
+                SOURCE_USERNAME,
+                SOURCE_PASSWORD,
+                "INBOX",
+                subject);
+        AlwaysRejectingGmailImportService importService = new AlwaysRejectingGmailImportService();
+        GmailApiMailDestinationService destinationService = new GmailApiMailDestinationService(
+                importService,
+                new FixedGmailLabelService(),
+                new GmailMessageSanitizer());
+        RuntimeEmailAccount account = runtimeGmailApiAccount(
+                "INBOX",
+                "INBOX=Imported/Inbox",
+                new SourcePostPollSettings(false, SourcePostPollAction.DELETE, Optional.empty()));
+
+        PollRunResult result = pollService(
+                List.of(account),
+                new RecordingImportedMessageRepository(),
+                new InMemoryReadyCheckpointSourcePollingStateService(),
+                destinationService)
+                .runPoll("greenmail-integration:gmail-protected-invalid-attachment");
+
+        assertEquals(1, result.getFetched());
+        assertEquals(0, result.getImported());
+        assertEquals(List.of("gmail_invalid_attachment"), result.getErrorDetails().stream()
+                .map(error -> error.code())
+                .toList());
+        assertEquals(1, importService.rawMessages.size());
+        assertArrayEquals(sourceRawMessage, importService.rawMessages.getFirst());
+        assertEquals(List.of(subject), listSubjects(sourceMail, SOURCE_USERNAME, SOURCE_PASSWORD, "INBOX"));
+    }
+
+    @Test
+    void prohibitedFileInsideNestedArchiveIsRemovedThroughGreenmailPollingPath() throws Exception {
+        byte[] nestedArchive = zipEntry("scripts/payload.js", "dangerous".getBytes(StandardCharsets.UTF_8));
+        byte[] outerArchive = zipEntry("nested.zip", nestedArchive);
+        appendMessageWithAttachment(
+                sourceMail,
+                SOURCE_USERNAME,
+                SOURCE_PASSWORD,
+                "INBOX",
+                "sanitize-nested-archive",
+                "Original body",
+                "<sanitize-nested-archive@example.com>",
+                "documents.zip",
+                "application/zip",
+                outerArchive);
+        RetryingSanitizedGmailImportService importService = new RetryingSanitizedGmailImportService();
+        GmailApiMailDestinationService destinationService = new GmailApiMailDestinationService(
+                importService,
+                new FixedGmailLabelService(),
+                new GmailMessageSanitizer());
+
+        PollRunResult result = pollService(
+                List.of(runtimeGmailApiAccount("INBOX", "INBOX=Imported/Inbox")),
+                new RecordingImportedMessageRepository(),
+                new InMemoryReadyCheckpointSourcePollingStateService(),
+                destinationService)
+                .runPoll("greenmail-integration:gmail-sanitized-nested-archive");
+
+        assertEquals(1, result.getImported());
+        assertTrue(result.getErrorDetails().isEmpty());
+        assertEquals(2, importService.rawMessages.size());
+        assertTrue(!containsAttachmentNamed(importService.rawMessages.get(1), "documents.zip"));
+        assertTrue(rawTextContent(importService.rawMessages.get(1)).contains("nested.zip!/scripts/payload.js"));
     }
 
     @Test
@@ -1086,6 +1262,13 @@ class PollingServiceGreenMailIntegrationTest {
     }
 
     private RuntimeEmailAccount runtimeGmailApiAccount(String sourceFolders, String folderLabelMappings) {
+        return runtimeGmailApiAccount(sourceFolders, folderLabelMappings, SourcePostPollSettings.none());
+    }
+
+    private RuntimeEmailAccount runtimeGmailApiAccount(
+            String sourceFolders,
+            String folderLabelMappings,
+            SourcePostPollSettings postPollSettings) {
         return new RuntimeEmailAccount(
                 "greenmail-gmail-source",
                 "USER",
@@ -1106,7 +1289,7 @@ class PollingServiceGreenMailIntegrationTest {
                 SourceFetchMode.POLLING,
                 Optional.of("Imported/Default"),
                 Optional.of(folderLabelMappings),
-                SourcePostPollSettings.none(),
+                postPollSettings,
                 new GmailApiDestinationTarget(
                         "gmail-user:7",
                         7L,
@@ -1271,6 +1454,215 @@ class PollingServiceGreenMailIntegrationTest {
             String body,
             String messageId) throws Exception {
         appendMessage(greenMail, username, password, folderName, subject, body, messageId, Instant.now());
+    }
+
+    private static void appendMessageWithAttachment(
+            GreenMailExtension greenMail,
+            String username,
+            String password,
+            String folderName,
+            String subject,
+            String body,
+            String messageId,
+            String attachmentName,
+            String attachmentContent) throws Exception {
+        appendMessageWithAttachment(
+                greenMail,
+                username,
+                password,
+                folderName,
+                subject,
+                body,
+                messageId,
+                attachmentName,
+                "application/octet-stream",
+                attachmentContent.getBytes(StandardCharsets.UTF_8));
+    }
+
+    private static void appendMessageWithAttachment(
+            GreenMailExtension greenMail,
+            String username,
+            String password,
+            String folderName,
+            String subject,
+            String body,
+            String messageId,
+            String attachmentName,
+            String attachmentContentType,
+            byte[] attachmentContent) throws Exception {
+        Properties properties = new Properties();
+        properties.put("mail.store.protocol", "imap");
+        Session session = Session.getInstance(properties);
+        Store store = session.getStore("imap");
+        Folder folder = null;
+        try {
+            store.connect("127.0.0.1", greenMail.getImap().getPort(), username, password);
+            folder = store.getFolder(folderName);
+            if (!folder.exists()) {
+                folder.create(Folder.HOLDS_MESSAGES);
+            }
+            folder.open(Folder.READ_WRITE);
+            MimeMessage message = new MimeMessage(session);
+            message.setFrom(new InternetAddress("sender@example.com"));
+            message.setRecipients(Message.RecipientType.TO, InternetAddress.parse(username));
+            message.setSubject(subject, StandardCharsets.UTF_8.name());
+            MimeBodyPart text = new MimeBodyPart();
+            text.setText(body, StandardCharsets.UTF_8.name());
+            MimeBodyPart attachment = new MimeBodyPart();
+            attachment.setContent(attachmentContent, attachmentContentType);
+            attachment.setFileName(attachmentName);
+            MimeMultipart multipart = new MimeMultipart("mixed");
+            multipart.addBodyPart(text);
+            multipart.addBodyPart(attachment);
+            message.setContent(multipart);
+            message.saveChanges();
+            message.setHeader("Message-ID", messageId);
+            folder.appendMessages(new Message[] { message });
+        } finally {
+            closeQuietly(folder);
+            closeQuietly(store);
+        }
+    }
+
+    private static byte[] zipEntry(String name, byte[] content) throws Exception {
+        ByteArrayOutputStream output = new ByteArrayOutputStream();
+        try (ZipOutputStream zip = new ZipOutputStream(output)) {
+            zip.putNextEntry(new ZipEntry(name));
+            zip.write(content);
+            zip.closeEntry();
+        }
+        return output.toByteArray();
+    }
+
+    private static void appendProtectedMessageWithAttachment(
+            GreenMailExtension greenMail,
+            String username,
+            String password,
+            String folderName,
+            String subject,
+            String messageId,
+            ProtectedMessageKind protection) throws Exception {
+        Properties properties = new Properties();
+        properties.put("mail.store.protocol", "imap");
+        Session session = Session.getInstance(properties);
+        Store store = session.getStore("imap");
+        Folder folder = null;
+        try {
+            store.connect("127.0.0.1", greenMail.getImap().getPort(), username, password);
+            folder = store.getFolder(folderName);
+            if (!folder.exists()) {
+                folder.create(Folder.HOLDS_MESSAGES);
+            }
+            folder.open(Folder.READ_WRITE);
+            MimeMessage message = new MimeMessage(session);
+            message.setFrom(new InternetAddress("sender@example.com"));
+            message.setRecipients(Message.RecipientType.TO, InternetAddress.parse(username));
+            message.setSubject(subject, StandardCharsets.UTF_8.name());
+
+            MimeBodyPart protectedPart = new MimeBodyPart();
+            protectedPart.setContent(
+                    "cryptographically protected content",
+                    protection.mimeType());
+            MimeBodyPart attachment = new MimeBodyPart();
+            attachment.setContent(
+                    "dangerous".getBytes(StandardCharsets.UTF_8),
+                    "application/octet-stream");
+            attachment.setFileName("malware.exe");
+            MimeMultipart multipart = new MimeMultipart("mixed");
+            multipart.addBodyPart(protectedPart);
+            multipart.addBodyPart(attachment);
+            message.setContent(multipart);
+            message.saveChanges();
+            message.setHeader("Message-ID", messageId);
+            if (protection.headerName() != null) {
+                message.setHeader(protection.headerName(), protection.headerValue());
+            }
+            folder.appendMessages(new Message[] { message });
+        } finally {
+            closeQuietly(folder);
+            closeQuietly(store);
+        }
+    }
+
+    private static byte[] readRawMessage(
+            GreenMailExtension greenMail,
+            String username,
+            String password,
+            String folderName,
+            String subject) throws Exception {
+        Properties properties = new Properties();
+        properties.put("mail.store.protocol", "imap");
+        Session session = Session.getInstance(properties);
+        Store store = session.getStore("imap");
+        Folder folder = null;
+        try {
+            store.connect("127.0.0.1", greenMail.getImap().getPort(), username, password);
+            folder = store.getFolder(folderName);
+            folder.open(Folder.READ_ONLY);
+            for (Message message : folder.getMessages()) {
+                if (subject.equals(message.getSubject())) {
+                    ByteArrayOutputStream output = new ByteArrayOutputStream();
+                    message.writeTo(output);
+                    return output.toByteArray();
+                }
+            }
+            throw new IllegalStateException("Expected source message " + subject);
+        } finally {
+            closeQuietly(folder);
+            closeQuietly(store);
+        }
+    }
+
+    private static boolean containsSanitizedHeader(byte[] rawMessage) throws Exception {
+        MimeMessage message = new MimeMessage(
+                Session.getInstance(new Properties()),
+                new ByteArrayInputStream(rawMessage));
+        return "gmail-invalid-attachment".equals(message.getHeader("X-InboxBridge-Sanitized", null));
+    }
+
+    private static boolean containsAttachmentNamed(byte[] rawMessage, String filename) throws Exception {
+        MimeMessage message = new MimeMessage(
+                Session.getInstance(new Properties()),
+                new ByteArrayInputStream(rawMessage));
+        return containsAttachmentNamed(message, filename);
+    }
+
+    private static boolean containsAttachmentNamed(jakarta.mail.Part part, String filename) throws Exception {
+        if (filename.equals(part.getFileName())) {
+            return true;
+        }
+        if (!part.isMimeType("multipart/*")) {
+            return false;
+        }
+        Multipart multipart = (Multipart) part.getContent();
+        for (int index = 0; index < multipart.getCount(); index++) {
+            if (containsAttachmentNamed(multipart.getBodyPart(index), filename)) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    private static String rawTextContent(byte[] rawMessage) throws Exception {
+        MimeMessage message = new MimeMessage(
+                Session.getInstance(new Properties()),
+                new ByteArrayInputStream(rawMessage));
+        return textContent(message);
+    }
+
+    private static String textContent(jakarta.mail.Part part) throws Exception {
+        if (part.isMimeType("text/*")) {
+            return part.getContent().toString();
+        }
+        if (!part.isMimeType("multipart/*")) {
+            return "";
+        }
+        StringBuilder text = new StringBuilder();
+        Multipart multipart = (Multipart) part.getContent();
+        for (int index = 0; index < multipart.getCount(); index++) {
+            text.append(textContent(multipart.getBodyPart(index)));
+        }
+        return text.toString();
     }
 
     private static void appendMessage(
@@ -1607,6 +1999,38 @@ class PollingServiceGreenMailIntegrationTest {
         }
 
         @Override
+        public Optional<ImportedMessage> findBySourceMessageKey(
+                String destinationIdentityKey,
+                String sourceAccountId,
+                String sourceMessageKey) {
+            return importedMessages.stream().filter((message) ->
+                    destinationIdentityKey.equals(message.destinationIdentityKey)
+                            && sourceAccountId.equals(message.sourceAccountId)
+                            && sourceMessageKey.equals(message.sourceMessageKey))
+                    .findFirst();
+        }
+
+        @Override
+        public Optional<ImportedMessage> findByRawSha256(String destinationIdentityKey, String rawSha256) {
+            return importedMessages.stream().filter((message) ->
+                    destinationIdentityKey.equals(message.destinationIdentityKey)
+                            && rawSha256.equals(message.rawSha256))
+                    .findFirst();
+        }
+
+        @Override
+        public Optional<ImportedMessage> findByMessageIdHeader(
+                String destinationIdentityKey,
+                String sourceAccountId,
+                String messageIdHeader) {
+            return importedMessages.stream().filter((message) ->
+                    destinationIdentityKey.equals(message.destinationIdentityKey)
+                            && sourceAccountId.equals(message.sourceAccountId)
+                            && messageIdHeader.equals(message.messageIdHeader))
+                    .findFirst();
+        }
+
+        @Override
         public void persist(ImportedMessage entity) {
             importedMessages.add(entity);
         }
@@ -1802,6 +2226,131 @@ class PollingServiceGreenMailIntegrationTest {
                     .orElse(bridge.customLabel().orElse(""));
             imports.add(new ImportedFolderLabel(folderName, labelName));
             return new MailImportResponse("gmail-message-" + imports.size(), null);
+        }
+    }
+
+    private static final class FixedGmailLabelService extends GmailLabelService {
+        @Override
+        public List<String> resolveLabelIds(
+                GmailTarget target,
+                Optional<String> customLabel,
+                Optional<String> folderLabelMappings,
+                Optional<String> sourceFolder,
+                boolean routeToSpam) {
+            return List.of("INBOX");
+        }
+    }
+
+    private static final class RetryingSanitizedGmailImportService extends GmailImportService {
+        private final List<byte[]> rawMessages = new java.util.concurrent.CopyOnWriteArrayList<>();
+
+        @Override
+        public GmailImportResponse importMessage(
+                GmailTarget target,
+                byte[] rawMessage,
+                List<String> labelIds) {
+            rawMessages.add(rawMessage.clone());
+            if (rawMessages.size() == 1) {
+                throw new GmailInvalidAttachmentException(
+                        400,
+                        "{\"error\":{\"status\":\"INVALID_ARGUMENT\",\"message\":\"Invalid attachment. Please check https://support.google.com/mail/answer/6590.\"}}");
+            }
+            return new GmailImportResponse("gmail-message-sanitized", "thread-sanitized");
+        }
+    }
+
+    private static final class AlwaysRejectingGmailImportService extends GmailImportService {
+        private final List<byte[]> rawMessages = new java.util.concurrent.CopyOnWriteArrayList<>();
+
+        @Override
+        public GmailImportResponse importMessage(
+                GmailTarget target,
+                byte[] rawMessage,
+                List<String> labelIds) {
+            rawMessages.add(rawMessage.clone());
+            throw new GmailInvalidAttachmentException(
+                    400,
+                    "{\"error\":{\"status\":\"INVALID_ARGUMENT\",\"message\":\"Invalid attachment. Please check https://support.google.com/mail/answer/6590.\"}}");
+        }
+    }
+
+    private static final class GenericInvalidAttachmentGmailImportService extends GmailImportService {
+        private final String rejectedMessageId;
+        private final List<String> importedMessageIds = new java.util.concurrent.CopyOnWriteArrayList<>();
+
+        private GenericInvalidAttachmentGmailImportService(String rejectedMessageId) {
+            this.rejectedMessageId = rejectedMessageId;
+        }
+
+        @Override
+        public GmailImportResponse importMessage(
+                GmailTarget target,
+                byte[] rawMessage,
+                List<String> labelIds) {
+            String messageId = rawHeader(rawMessage, "Message-ID");
+            if (rejectedMessageId.equals(messageId)) {
+                throw new IllegalStateException("""
+                        Failed to import Gmail message: 400 - {
+                          "error": {
+                            "code": 400,
+                            "message": "Invalid attachment. Please check https://support.google.com/mail/answer/6590.",
+                            "errors": [
+                              {
+                                "message": "Invalid attachment. Please check https://support.google.com/mail/answer/6590.",
+                                "domain": "global",
+                                "reason": "invalidArgument"
+                              }
+                            ],
+                            "status": "INVALID_ARGUMENT"
+                          }
+                        }""");
+            }
+            importedMessageIds.add(messageId);
+            return new GmailImportResponse("gmail-message-" + importedMessageIds.size(), null);
+        }
+
+        private String rawHeader(byte[] rawMessage, String headerName) {
+            try {
+                MimeMessage message = new MimeMessage(
+                        Session.getInstance(new Properties()),
+                        new ByteArrayInputStream(rawMessage));
+                return message.getHeader(headerName, null);
+            } catch (Exception error) {
+                throw new IllegalStateException("Unable to inspect test message", error);
+            }
+        }
+    }
+
+    private enum ProtectedMessageKind {
+        DKIM("text/plain", "DKIM-Signature",
+                "v=1; a=rsa-sha256; d=example.com; s=test; bh=bodyhash; b=signature"),
+        ARC("text/plain", "ARC-Message-Signature",
+                "i=1; a=rsa-sha256; d=example.com; s=test; bh=bodyhash; b=signature"),
+        SMIME_SIGNED("application/pkcs7-mime; smime-type=signed-data", null, null),
+        SMIME_ENCRYPTED("application/pkcs7-mime; smime-type=enveloped-data", null, null),
+        PGP_MIME_SIGNED("application/pgp-signature", null, null),
+        PGP_MIME_ENCRYPTED("application/pgp-encrypted", null, null);
+
+        private final String mimeType;
+        private final String headerName;
+        private final String headerValue;
+
+        ProtectedMessageKind(String mimeType, String headerName, String headerValue) {
+            this.mimeType = mimeType;
+            this.headerName = headerName;
+            this.headerValue = headerValue;
+        }
+
+        private String mimeType() {
+            return mimeType;
+        }
+
+        private String headerName() {
+            return headerName;
+        }
+
+        private String headerValue() {
+            return headerValue;
         }
     }
 

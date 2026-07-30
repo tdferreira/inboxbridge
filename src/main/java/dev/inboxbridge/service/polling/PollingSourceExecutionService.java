@@ -159,8 +159,12 @@ public class PollingSourceExecutionService {
                 }
                 fetched++;
                 processedBytes += message.rawMessage().length;
-                if (importDeduplicationService.alreadyImported(message, emailAccount.destination())) {
-                    mailSourceClient.applyPostPollSettings(emailAccount, message);
+                ImportDeduplicationService.DuplicateStatus duplicateStatus =
+                        importDeduplicationService.duplicateStatus(message, emailAccount.destination());
+                if (duplicateStatus.alreadyImported()) {
+                    if (!duplicateStatus.preserveSourceOriginal()) {
+                        mailSourceClient.applyPostPollSettings(emailAccount, message);
+                    }
                     recordSourceCheckpoint(emailAccount, message);
                     duplicates++;
                     publishLiveProgress(liveRunId, emailAccount.id(), messages.size(), totalBytes, processedBytes, fetched, imported, duplicates);
@@ -171,14 +175,22 @@ public class PollingSourceExecutionService {
                 try {
                     MailImportResponse importResponse = destinationService.importMessage(emailAccount.destination(), emailAccount, message);
                     importDeduplicationService.recordImport(message, emailAccount.destination(), importResponse);
-                    mailSourceClient.applyPostPollSettings(emailAccount, message);
+                    if (importResponse.sanitized()) {
+                        LOG.warnf(
+                                "Imported source message %s from %s after removing Gmail-prohibited attachments %s; preserving the original source message",
+                                message.sourceMessageKey(),
+                                emailAccount.id(),
+                                importResponse.removedAttachmentNames());
+                    } else {
+                        mailSourceClient.applyPostPollSettings(emailAccount, message);
+                    }
                     recordSourceCheckpoint(emailAccount, message);
                     destinationThrottleAudit = recordDestinationThrottleSuccess(emailAccount.destination());
                     imported++;
                     importedBytes += message.rawMessage().length;
                     publishLiveProgress(liveRunId, emailAccount.id(), messages.size(), totalBytes, processedBytes, fetched, imported, duplicates);
                 } catch (RuntimeException destinationError) {
-                    if (destinationError instanceof GmailInvalidAttachmentException) {
+                    if (GmailInvalidAttachmentException.isPolicyRejection(destinationError)) {
                         recordSourceCheckpoint(emailAccount, message);
                         invalidAttachmentCount++;
                         LOG.warnf(

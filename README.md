@@ -78,6 +78,11 @@ By default, the local Docker setup serves the app over HTTPS with generated self
 - Optional post-poll actions for IMAP sources such as mark as read, mark as forwarded, delete, or move to folder
 - Per-source IMAP fetch mode: scheduled polling or real-time IMAP IDLE across one or more configured folders
 - Optional per-folder Gmail label mappings such as `INBOX=Imported/Inbox;Junk=SPAM`
+- Gmail invalid-attachment recovery for unsigned mail: when policy 6590 rejects
+  a message, InboxBridge can remove directly prohibited attachments or supported
+  ZIP/TAR/compressed archives containing them, add a visible removal notice, and
+  retry once. DKIM/ARC, S/MIME, and PGP/MIME protected messages are never
+  rewritten.
 - Two-tier admin configuration backups: redacted review snapshots and public-key-encrypted secret exports
 - Live polling over authenticated SSE with bounded parallel workers
 - A mobile-friendly `/remote` page for quick poll control without opening the full workspace

@@ -26,7 +26,22 @@ public class GmailApiMailDestinationService implements MailDestinationService {
     GmailLabelService gmailLabelService;
 
     @Inject
+    GmailMessageSanitizer gmailMessageSanitizer;
+
+    @Inject
     OAuthCredentialService oAuthCredentialService;
+
+    public GmailApiMailDestinationService() {
+    }
+
+    public GmailApiMailDestinationService(
+            GmailImportService gmailImportService,
+            GmailLabelService gmailLabelService,
+            GmailMessageSanitizer gmailMessageSanitizer) {
+        this.gmailImportService = gmailImportService;
+        this.gmailLabelService = gmailLabelService;
+        this.gmailMessageSanitizer = gmailMessageSanitizer;
+    }
 
     @Override
     public boolean supports(MailDestinationTarget target) {
@@ -68,8 +83,29 @@ public class GmailApiMailDestinationService implements MailDestinationService {
                 bridge.folderLabelMappings(),
                 message.folderName().or(() -> java.util.Optional.of(bridge.primaryFolder())),
                 bridge.routesSpamJunkFolder(message.folderName()));
-        GmailImportResponse response = gmailImportService.importMessage(compatibilityTarget, message.rawMessage(), labelIds);
-        return new MailImportResponse(response.id(), response.threadId());
+        try {
+            GmailImportResponse response = gmailImportService.importMessage(compatibilityTarget, message.rawMessage(), labelIds);
+            return new MailImportResponse(response.id(), response.threadId());
+        } catch (RuntimeException originalRejection) {
+            if (!GmailInvalidAttachmentException.isPolicyRejection(originalRejection)) {
+                throw originalRejection;
+            }
+            GmailMessageSanitizer.SanitizedMessage sanitizedMessage = sanitizer()
+                    .sanitize(message.rawMessage())
+                    .orElseThrow(() -> originalRejection);
+            GmailImportResponse response = gmailImportService.importMessage(
+                    compatibilityTarget,
+                    sanitizedMessage.rawMessage(),
+                    labelIds);
+            return new MailImportResponse(
+                    response.id(),
+                    response.threadId(),
+                    sanitizedMessage.removedAttachmentNames());
+        }
+    }
+
+    private GmailMessageSanitizer sanitizer() {
+        return gmailMessageSanitizer == null ? new GmailMessageSanitizer() : gmailMessageSanitizer;
     }
 
     private GmailTarget asCompatibilityTarget(GmailApiDestinationTarget target) {

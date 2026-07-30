@@ -409,13 +409,40 @@ When the destination provider is Gmail, `messages.import` is the right API for t
 
 The Gmail HTTP boundary classifies only the provider's specific
 `400 INVALID_ARGUMENT` invalid-attachment response for policy 6590 as a
-permanent message rejection. `PollingSourceExecutionService` records that
-message's source checkpoint, reports the rejection, and keeps processing later
-messages in the same batch. It does not apply successful-import source actions
-to the rejected message. Other Gmail bad requests and transient destination
-failures still abort the source run without advancing the failed message's
-checkpoint, preserving normal retry behavior for configuration and provider
-failures.
+message-local attachment rejection. The destination and polling boundaries use
+the same strict recognition rule for typed, wrapped, or production-shaped
+generic exceptions: a generic match requires the Gmail import `400` prefix,
+invalid-attachment text, and the policy-6590 URL. This keeps provider/runtime
+exception translation from aborting the source batch without swallowing
+unrelated Gmail bad requests. `GmailApiMailDestinationService` first submits
+the original raw MIME unchanged. If Gmail returns that exact rejection,
+`GmailMessageSanitizer` may create one explicitly marked derivative:
+
+- the message must not contain DKIM or ARC integrity headers
+- neither the root MIME tree nor an attached `message/rfc822` tree may contain
+  S/MIME or PGP/MIME signed/encrypted entities
+- directly prohibited filename extensions are removed case-insensitively
+- ZIP, TAR, TAR.GZ/TGZ, TAR.BZ2/TBZ/TBZ2, GZip, and BZip2 content is inspected
+  recursively for prohibited filenames; when found, the containing source
+  attachment is removed rather than rewriting the archive
+- archive traversal is bounded by nesting depth, total entries, nested archive
+  size, and expanded bytes; malformed or over-limit content fails closed and
+  leaves the original bytes untouched
+- each removed attachment is replaced with a visible text notice, and the
+  derivative receives
+  `X-InboxBridge-Sanitized: gmail-invalid-attachment`
+
+Only that derivative is retried, and only once. If sanitization is unsafe,
+finds no removable attachment, or Gmail rejects the derivative too,
+`PollingSourceExecutionService` records the source checkpoint, reports the
+message-local rejection, and keeps processing later messages in the batch. A
+successful derivative import stores dedupe identity from the original raw MIME
+plus `imported_message.content_sanitized = true`; source-side post-poll actions
+remain disabled on both the initial import and any later duplicate replay so
+the original message stays available in the source mailbox. Other Gmail bad
+requests and transient destination failures still abort the source run without
+advancing the failed message's checkpoint, preserving normal retry behavior
+for configuration and provider failures.
 
 ## Dedupe strategy
 

@@ -36,6 +36,22 @@ public class ImportedMessageRepository implements PanacheRepository<ImportedMess
                 .firstResultOptional();
     }
 
+    public Optional<ImportedMessage> findByRawSha256(String destinationIdentityKey, String rawSha256) {
+        return find("destinationIdentityKey = ?1 and rawSha256 = ?2", destinationIdentityKey, rawSha256)
+                .firstResultOptional();
+    }
+
+    public Optional<ImportedMessage> findByMessageIdHeader(
+            String destinationIdentityKey,
+            String sourceAccountId,
+            String messageIdHeader) {
+        return find("destinationIdentityKey = ?1 and sourceAccountId = ?2 and messageIdHeader = ?3",
+                destinationIdentityKey,
+                sourceAccountId,
+                messageIdHeader)
+                .firstResultOptional();
+    }
+
     public List<Object[]> summarizeBySource() {
         return getEntityManager().createQuery(
                 "select im.sourceAccountId, count(im), max(im.importedAt) from ImportedMessage im group by im.sourceAccountId",

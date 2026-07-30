@@ -136,6 +136,36 @@ class PollingSourceExecutionServiceTest {
     }
 
     @Test
+    void executePreservesOriginalSourceWhenSanitizedImportIsSeenAgainAsDuplicate() {
+        RecordingMailSourceClient mailSourceClient = new RecordingMailSourceClient();
+        mailSourceClient.messages = List.of(fetchedPopMessage("uidl-sanitized-duplicate", "original raw message"));
+        RecordingSourcePollingStateService pollingStateService = new RecordingSourcePollingStateService();
+        RecordingImportDeduplicationService deduplicationService =
+                new RecordingImportDeduplicationService(true, true);
+        PollingSourceExecutionService service = new PollingSourceExecutionService(
+                mailSourceClient,
+                deduplicationService,
+                new SingleMailDestinationServices(new RecordingDestinationService(true)),
+                new NoopSourcePollEventService(),
+                pollingStateService,
+                null,
+                null,
+                null);
+
+        PollingSourceExecutionService.SourceExecutionOutcome outcome = service.execute(
+                runtimePopAccount(),
+                "manual-api",
+                settings(),
+                null,
+                "alice",
+                "MY_INBOXBRIDGE");
+
+        assertEquals(1, outcome.duplicates());
+        assertEquals(0, mailSourceClient.postPollApplied);
+        assertEquals(List.of("uidl-sanitized-duplicate"), pollingStateService.recordedPopCheckpoints);
+    }
+
+    @Test
     void executeSkipsGmailInvalidAttachmentAndRecordsCheckpointWithoutApplyingSourceAction() {
         RecordingMailSourceClient mailSourceClient = new RecordingMailSourceClient();
         mailSourceClient.messages = List.of(fetchedPopMessage("uidl-invalid", "invalid"));
@@ -161,6 +191,33 @@ class PollingSourceExecutionServiceTest {
         assertEquals(List.of("uidl-invalid"), pollingStateService.recordedPopCheckpoints);
         assertEquals(List.of("source-pop"), pollingStateService.successSourceIds);
         assertTrue(pollingStateService.failureSourceIds.isEmpty());
+        assertEquals(0, mailSourceClient.postPollApplied);
+    }
+
+    @Test
+    void executeRecordsSanitizedImportWithoutApplyingSourceAction() {
+        RecordingMailSourceClient mailSourceClient = new RecordingMailSourceClient();
+        mailSourceClient.messages = List.of(fetchedPopMessage("uidl-sanitized", "original raw message"));
+        RecordingSourcePollingStateService pollingStateService = new RecordingSourcePollingStateService();
+        PollingSourceExecutionService service = service(
+                mailSourceClient,
+                new SanitizedDestinationService(),
+                pollingStateService,
+                new NoopSourcePollEventService(),
+                null);
+
+        PollingSourceExecutionService.SourceExecutionOutcome outcome = service.execute(
+                runtimePopAccount(),
+                "manual-api",
+                settings(),
+                null,
+                "alice",
+                "MY_INBOXBRIDGE");
+
+        assertEquals(1, outcome.fetched());
+        assertEquals(1, outcome.imported());
+        assertEquals(List.of("uidl-sanitized"), pollingStateService.recordedPopCheckpoints);
+        assertEquals(List.of("source-pop"), pollingStateService.successSourceIds);
         assertEquals(0, mailSourceClient.postPollApplied);
     }
 
@@ -317,15 +374,26 @@ class PollingSourceExecutionServiceTest {
 
     private static final class RecordingImportDeduplicationService extends ImportDeduplicationService {
         private final boolean alreadyImported;
+        private final boolean preserveSourceOriginal;
         private int recordImportCalls;
 
         private RecordingImportDeduplicationService(boolean alreadyImported) {
+            this(alreadyImported, false);
+        }
+
+        private RecordingImportDeduplicationService(boolean alreadyImported, boolean preserveSourceOriginal) {
             this.alreadyImported = alreadyImported;
+            this.preserveSourceOriginal = preserveSourceOriginal;
         }
 
         @Override
         public boolean alreadyImported(FetchedMessage fetchedMessage, MailDestinationTarget destinationTarget) {
             return alreadyImported;
+        }
+
+        @Override
+        public DuplicateStatus duplicateStatus(FetchedMessage fetchedMessage, MailDestinationTarget destinationTarget) {
+            return new DuplicateStatus(alreadyImported, preserveSourceOriginal);
         }
 
         @Override
@@ -389,6 +457,23 @@ class PollingSourceExecutionServiceTest {
             throw new GmailInvalidAttachmentException(
                     400,
                     "{\"error\":{\"status\":\"INVALID_ARGUMENT\",\"message\":\"Invalid attachment. Please check https://support.google.com/mail/answer/6590.\"}}");
+        }
+    }
+
+    private static final class SanitizedDestinationService extends LinkedDestinationService {
+        private SanitizedDestinationService() {
+            super(true);
+        }
+
+        @Override
+        public MailImportResponse importMessage(
+                MailDestinationTarget target,
+                RuntimeEmailAccount bridge,
+                FetchedMessage message) {
+            return new MailImportResponse(
+                    "destination-message",
+                    "thread-1",
+                    List.of("malware.exe"));
         }
     }
 

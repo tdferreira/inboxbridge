@@ -55,6 +55,9 @@ public class ImportedMessage extends PanacheEntityBase {
     @Column(name = "gmail_thread_id", length = 255)
     public String gmailThreadId;
 
+    @Column(name = "content_sanitized", nullable = false)
+    public boolean contentSanitized;
+
     @Column(name = "imported_at", nullable = false)
     public Instant importedAt;
 }
