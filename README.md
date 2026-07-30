@@ -356,7 +356,7 @@ AI assistance was used to help design, implement, refactor, test, and document p
 ## Technology Stack
 
 - Java 25
-- Quarkus 3.33.2
+- Quarkus 3.33.3
 - React 19
 - Vite 8
 - PostgreSQL 16

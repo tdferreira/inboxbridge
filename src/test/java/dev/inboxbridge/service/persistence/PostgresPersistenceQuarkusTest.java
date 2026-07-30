@@ -30,7 +30,7 @@ import jakarta.inject.Inject;
 
 @QuarkusTest
 @TestProfile(PostgresQuarkusTestProfile.class)
-@QuarkusTestResource(PostgresTestResource.class)
+@QuarkusTestResource(value = PostgresTestResource.class, restrictToAnnotatedClass = true)
 class PostgresPersistenceQuarkusTest {
 
     @Inject

@@ -104,6 +104,9 @@ Start with [`docs/ARCHITECTURE.md`](../../../docs/ARCHITECTURE.md),
   adds real value.
 - Keep packaged `@QuarkusIntegrationTest` smoke coverage for important runtime
   surfaces and startup health.
+- Restrict class-specific `@QuarkusTestResource` declarations with
+  `restrictToAnnotatedClass = true`; otherwise Failsafe discovery can leak
+  PostgreSQL or transit-provider settings into the packaged H2 smoke runtime.
 - For any mailbox, IMAP, POP3, destination-import, IDLE, dedupe, or
   protocol-facing change, add or update GreenMail-backed integration coverage.
 - Expected warning/error paths in tests must be asserted, not blindly silenced.

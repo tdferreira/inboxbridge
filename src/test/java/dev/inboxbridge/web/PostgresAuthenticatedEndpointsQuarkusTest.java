@@ -72,7 +72,7 @@ import jakarta.inject.Inject;
  */
 @QuarkusTest
 @TestProfile(PostgresQuarkusTestProfile.class)
-@QuarkusTestResource(PostgresTestResource.class)
+@QuarkusTestResource(value = PostgresTestResource.class, restrictToAnnotatedClass = true)
 class PostgresAuthenticatedEndpointsQuarkusTest {
 
     private static final String SESSION_COOKIE = "inboxbridge_session";
