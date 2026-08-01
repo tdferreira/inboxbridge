@@ -326,6 +326,28 @@ code {
   gap: 18px;
 }
 
+.application-version {
+  margin: 0.35rem 0 0;
+  color: var(--muted);
+  font-size: 0.82rem;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+}
+
+.application-version-update {
+  display: inline-grid;
+  width: 1.1rem;
+  height: 1.1rem;
+  margin-left: 0.45rem;
+  place-items: center;
+  border-radius: 999px;
+  background: var(--danger);
+  color: #fff;
+  font-size: 0.75rem;
+  line-height: 1;
+  text-decoration: none;
+}
+
 .notification-stack {
   position: fixed;
   top: 18px;

@@ -74,8 +74,10 @@ jobs:
         run: |
           TAG_NAME="${{ steps.release_meta.outputs.tag_name }}"
           mkdir -p release-assets
-          cp README.md LICENSE docker-compose.yml .env.example release-assets/
+          cp README.md LICENSE docker-compose.yml .env.example Dockerfile pom.xml release-assets/
           cp -R docs release-assets/docs
+          cp -R docker src release-assets/
+          rsync -a --exclude=node_modules --exclude=dist --exclude=coverage admin-ui/ release-assets/admin-ui/
           cp -R target/quarkus-app "release-assets/inboxbridge-backend"
           cp -R admin-ui/dist "release-assets/inboxbridge-admin-ui"
           cp browser-extensions/chromium/dist/packages/*.zip "release-assets/"
@@ -130,7 +132,8 @@ jobs:
           Install and upgrade documentation:
 
           - [Project overview and quick start](${DOCS_BASE_URL}/README.md)
-          - [Full setup and upgrade path](${DOCS_BASE_URL}/docs/SETUP.md)
+          - [Upgrade an existing installation](${DOCS_BASE_URL}/docs/SETUP.md#upgrade-an-existing-installation)
+          - [Full setup guide](${DOCS_BASE_URL}/docs/SETUP.md)
           - [OAuth provider setup](${DOCS_BASE_URL}/docs/OAUTH_SETUP.md)
           - [Trust the local CA / HTTPS setup](${DOCS_BASE_URL}/docs/TRUST_LOCAL_CA.md)
 

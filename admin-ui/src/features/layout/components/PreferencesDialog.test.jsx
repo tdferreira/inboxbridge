@@ -66,6 +66,7 @@ describe('PreferencesDialog', () => {
     expect(screen.getByRole('button', { name: 'Language' })).toHaveTextContent('🇬🇧')
     expect(screen.getByDisplayValue('Follow system')).toBeInTheDocument()
     expect(dateFormatSelect()).toHaveDisplayValue(automaticLabel)
+    expect(screen.getByText(/^Version \d+\.\d+\.\d+$/)).toBeInTheDocument()
   })
 
   it('lets the user switch the theme mode', () => {

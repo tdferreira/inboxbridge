@@ -91,6 +91,7 @@ describe('RemoteApp', () => {
 
     expect(await screen.findByRole('button', { name: 'Sign in' })).toBeInTheDocument()
     expect(screen.getByRole('button', { name: 'Sign in' })).toBeInTheDocument()
+    expect(screen.getByText(/^Version \d+\.\d+\.\d+$/).parentElement).toHaveClass('remote-auth-version')
   })
 
   it('shows only one InboxBridge Go title on the remote login screen', async () => {

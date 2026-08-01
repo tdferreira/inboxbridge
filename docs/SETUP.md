@@ -105,6 +105,74 @@ For passkeys/WebAuthn, prefer one canonical hostname everywhere instead of mixin
 
 After the stack creates or refreshes the generated certs, trust `certs/ca.crt` on every browser/device that will open InboxBridge. Otherwise the browser will still treat the site as having a TLS error even if the hostname is present in the SAN list.
 
+## Back Up And Recover Your Deployment
+
+Back up both the PostgreSQL data and the deployment configuration before every
+upgrade and on a regular schedule. The database stores encrypted mailbox and
+OAuth secrets, while `.env` contains the key material needed to decrypt them.
+A database-only backup is therefore not sufficient for recovery. Keep both
+backup files encrypted and outside the InboxBridge host when practical.
+
+Create a backup while the stack is running:
+
+```bash
+mkdir -p backups
+umask 077
+docker compose exec -T postgres pg_dump --format=custom -U inboxbridge inboxbridge > backups/inboxbridge-before-upgrade.dump
+tar -czf backups/inboxbridge-config-before-upgrade.tar.gz .env certs
+sha256sum backups/inboxbridge-before-upgrade.dump backups/inboxbridge-config-before-upgrade.tar.gz > backups/inboxbridge-before-upgrade.sha256
+```
+
+If the PostgreSQL volume or database has been deleted, recover it from a
+matching backup before starting the InboxBridge backend. Restore the `.env`
+and `certs/` archive first. Without the original encryption key and any
+required legacy keys, encrypted mailbox credentials and OAuth tokens cannot be
+recovered.
+
+```bash
+tar -xzf backups/inboxbridge-config-before-upgrade.tar.gz
+docker compose up -d postgres
+docker compose exec postgres pg_isready -U inboxbridge -d inboxbridge
+docker compose exec -T postgres pg_restore --exit-on-error --no-owner -U inboxbridge -d inboxbridge < backups/inboxbridge-before-upgrade.dump
+docker compose up --build -d
+```
+
+The restore commands assume PostgreSQL is a new, empty database after the
+volume loss. If a database still exists, stop the stack and get help before
+overwriting it; restoring an older dump over a newer live schema can discard
+data. After recovery, confirm the expected InboxBridge version, users, source
+accounts, and recent import history before allowing normal polling to resume.
+
+## Upgrade An Existing Installation
+
+Every GitHub Release includes the versioned InboxBridge bundle, a SHA-256
+checksum, and a direct link to this exact version of the guide. Upgrade in the
+same deployment directory so Docker Compose keeps using the existing
+PostgreSQL volume. Do not use `docker compose down -v`: that removes the data
+volume rather than upgrading it.
+
+1. Record the version shown on the current InboxBridge sign-in screen or in Preferences and download the newer release bundle plus its `.sha256` file from [GitHub Releases](https://github.com/tdferreira/inboxbridge/releases).
+2. Create and verify the paired database/configuration backup described in [Back Up And Recover Your Deployment](#back-up-and-recover-your-deployment).
+3. Verify the release download from the directory containing both files, then stop the stack without deleting volumes:
+
+   ```bash
+   sha256sum -c inboxbridge-vX.Y.Z.sha256
+   docker compose down
+   ```
+
+4. Extract the new bundle into the existing deployment directory. It deliberately does not include your `.env` or generated certificates, so those local files remain in place:
+
+   ```bash
+   unzip -o inboxbridge-vX.Y.Z.zip
+   docker compose up --build -d
+   ```
+
+5. Open the admin UI and confirm that its displayed version is `X.Y.Z`. Docker Compose starts PostgreSQL first and InboxBridge applies its database migrations during startup; do not restore an older database schema over a successful newer migration. If the version does not change, confirm that the browser is not using a cached page and inspect `docker compose ps` / `docker compose logs inboxbridge inboxbridge-admin`.
+
+Browser extensions are separate release artifacts. Upgrade an installed
+extension from its browser store when available, or follow the extension
+installation documentation in the release notes for manual installation.
+
 ## Secret Rotation Safety
 
 Secret rotation is now intentionally high-friction:

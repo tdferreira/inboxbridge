@@ -22,6 +22,10 @@
   position: relative;
 }
 
+.preferences-version {
+  justify-self: end;
+}
+
 .preferences-token-suggestion-token {
   font-weight: 700;
 }

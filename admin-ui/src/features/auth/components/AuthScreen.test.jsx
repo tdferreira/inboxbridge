@@ -115,6 +115,7 @@ describe('AuthScreen', () => {
     }
 
     fireEvent.change(screen.getByLabelText('Username'), { target: { value: 'ops-admin' } })
+    expect(screen.getByText(/^Version \d+\.\d+\.\d+$/).parentElement).toHaveClass('auth-screen-version')
     fireEvent.submit(screen.getByRole('button', { name: 'Sign in' }).closest('form'))
     fireEvent.click(screen.getByRole('button', { name: 'Sign in with passkey' }))
     fireEvent.click(screen.getByRole('button', { name: 'Register for access' }))

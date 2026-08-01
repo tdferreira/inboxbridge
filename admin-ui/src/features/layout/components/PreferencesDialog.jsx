@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import AutocompleteInput from '@/shared/components/AutocompleteInput'
+import ApplicationVersion from '@/shared/components/ApplicationVersion'
 import InfoHint from '@/shared/components/InfoHint'
 import LanguageMenuButton from '@/shared/components/LanguageMenuButton'
 import ModalDialog from '@/shared/components/ModalDialog'
@@ -307,6 +308,7 @@ function PreferencesDialog({
             </button>
           </div>
           {savingLayout ? <div className="section-copy">{t('common.savingLayoutPreference')}</div> : null}
+          <ApplicationVersion className="preferences-version" t={t} />
         </div>
       </ModalDialog>
       {showCustomDateFormatDialog ? (

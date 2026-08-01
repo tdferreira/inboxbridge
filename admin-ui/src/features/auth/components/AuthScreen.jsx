@@ -4,6 +4,7 @@ import LanguageMenuButton from '@/shared/components/LanguageMenuButton'
 import LoadingButton from '@/shared/components/LoadingButton'
 import ModalDialog from '@/shared/components/ModalDialog'
 import PasswordField from '@/shared/components/PasswordField'
+import ApplicationVersion from '@/shared/components/ApplicationVersion'
 import RegistrationCaptchaField from './RegistrationCaptchaField'
 import './AuthScreen.css'
 
@@ -133,6 +134,9 @@ function AuthScreen({
 
         {authError ? <Banner copyLabel={t('common.copyError')} copyText={authError} dismissLabel={t('common.dismissNotification')} focusLabel={t('common.focusSection')} tone="error">{authError}</Banner> : null}
         {notice ? <Banner tone="success">{notice}</Banner> : null}
+        <div className="auth-screen-version">
+          <ApplicationVersion t={t} />
+        </div>
       </main>
       {multiUserEnabled && registerOpen ? (
         <ModalDialog

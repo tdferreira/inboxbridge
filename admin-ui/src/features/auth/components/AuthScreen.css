@@ -37,6 +37,10 @@
   justify-self: start;
 }
 
+.auth-screen-version {
+  justify-self: end;
+}
+
 .auth-captcha-block {
   display: grid;
   gap: 12px;

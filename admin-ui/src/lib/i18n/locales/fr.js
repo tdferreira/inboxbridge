@@ -1,4 +1,8 @@
 const dictionary = {
+  "app.version": "Version {version}",
+  "app.updateAvailable": "La version {version} est disponible. Ouvrir la page de publication.",
+  "notifications.releaseUpdateAvailable": "InboxBridge {latestVersion} est disponible. Vous utilisez {currentVersion}.",
+  "notifications.openRelease": "Ouvrir la publication InboxBridge disponible",
   "auth.title": "InboxBridge",
   "auth.username": "Nom d’utilisateur",
   "auth.password": "Mot de passe",

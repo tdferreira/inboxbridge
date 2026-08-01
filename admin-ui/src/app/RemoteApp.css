@@ -30,6 +30,12 @@
   padding: 32px;
 }
 
+.remote-auth-version {
+  display: flex;
+  justify-content: flex-end;
+  margin-top: 16px;
+}
+
 .remote-auth-language-picker {
   justify-self: end;
   margin-bottom: 4px;

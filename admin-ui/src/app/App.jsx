@@ -55,6 +55,8 @@ import { statsTimezoneHeader } from '@/lib/statsTimezone'
 import { readStoredTimeZonePreference, resolveEffectiveTimeZone, resetCurrentFormattingTimeZone, setCurrentFormattingTimeZone } from '@/lib/timeZonePreferences'
 import { DATE_FORMAT_AUTO, formatDate, resetCurrentFormattingDateFormat, setCurrentFormattingDateFormat } from '@/lib/formatters'
 import { applyDocumentTheme, readStoredThemePreference } from '@/lib/themePreferences'
+import { applicationVersion } from '@/shared/components/ApplicationVersion'
+import { checkForReleaseUpdate } from '@/lib/releaseUpdate'
 
 const DEFAULT_AUTH_SECURITY_FORM = {
   loginFailureThresholdOverride: '',
@@ -279,6 +281,7 @@ function AppContent({ timings = DEFAULT_APP_TIMINGS }) {
   const [authSecuritySettingsForm, setAuthSecuritySettingsForm] = useState(DEFAULT_AUTH_SECURITY_FORM)
   const [authSecuritySettingsDirty, setAuthSecuritySettingsDirty] = useState(false)
   const [dismissedPersistentNotifications, setDismissedPersistentNotifications] = useState({})
+  const [releaseUpdate, setReleaseUpdate] = useState(null)
   const [language, setLanguage] = useState(() => normalizeLocale(window.localStorage.getItem('inboxbridge.language') || navigator.language))
   const [showSystemOAuthAppsDialog, setShowSystemOAuthAppsDialog] = useState(false)
   const [showAuthSecurityDialog, setShowAuthSecurityDialog] = useState(false)
@@ -1226,6 +1229,19 @@ function AppContent({ timings = DEFAULT_APP_TIMINGS }) {
   }, [session?.id])
 
   useEffect(() => {
+    if (!session?.id) {
+      setReleaseUpdate(null)
+      return
+    }
+    if (import.meta.env.MODE === 'test') return undefined
+    let cancelled = false
+    void checkForReleaseUpdate(applicationVersion).then((update) => {
+      if (!cancelled) setReleaseUpdate(update)
+    })
+    return () => { cancelled = true }
+  }, [session?.id])
+
+  useEffect(() => {
     selectedUserLoaderRef.current = userManagement.loadSelectedUserConfiguration
   }, [userManagement.loadSelectedUserConfiguration])
 
@@ -1682,8 +1698,20 @@ function AppContent({ timings = DEFAULT_APP_TIMINGS }) {
         persistentKey: 'mustChangePassword'
       })
     }
+    if (releaseUpdate && !dismissedPersistentNotifications.releaseUpdate) {
+      items.push({
+        id: `release-update-${releaseUpdate.latestVersion}`,
+        message: translatedNotification('notifications.releaseUpdateAvailable', {
+          currentVersion: releaseUpdate.currentVersion,
+          latestVersion: releaseUpdate.latestVersion
+        }),
+        releaseUrl: releaseUpdate.releaseUrl,
+        tone: 'warning',
+        persistentKey: 'releaseUpdate'
+      })
+    }
     return items
-  }, [dismissedPersistentNotifications.mustChangePassword, session?.mustChangePassword, t])
+  }, [dismissedPersistentNotifications.mustChangePassword, dismissedPersistentNotifications.releaseUpdate, releaseUpdate, session?.mustChangePassword])
 
   const visibleNotifications = useMemo(
     () => {
@@ -2116,9 +2144,11 @@ function AppContent({ timings = DEFAULT_APP_TIMINGS }) {
                 }
                 dismissNotification(notification.id)
               }}
-              onFocus={notification.targetId ? () => focusTarget(notification.targetId) : undefined}
+              onFocus={notification.releaseUrl
+                ? () => window.open(notification.releaseUrl, '_blank', 'noopener,noreferrer')
+                : notification.targetId ? () => focusTarget(notification.targetId) : undefined}
               dismissLabel={t('common.dismissNotification')}
-              focusLabel={t('common.focusSection')}
+              focusLabel={notification.releaseUrl ? t('notifications.openRelease') : t('common.focusSection')}
               tone={notification.tone}
               repeatCount={notification.repeatCount}
               title={notificationTimestamp(notification)}

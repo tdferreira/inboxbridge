@@ -384,4 +384,4 @@ AI assistance was used to help design, implement, refactor, test, and document p
 
 ## Current Version
 
-For the latest published InboxBridge version, see the [GitHub Releases page](https://github.com/tdferreira/inboxbridge/releases).
+For the latest published InboxBridge version, see the [GitHub Releases page](https://github.com/tdferreira/inboxbridge/releases). A running instance displays its embedded UI version on both sign-in screens and in Preferences after main-app sign-in. Use the [upgrade guide](docs/SETUP.md#upgrade-an-existing-installation) for release-by-release deployment steps.

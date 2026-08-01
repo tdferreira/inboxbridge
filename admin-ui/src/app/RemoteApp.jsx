@@ -8,6 +8,7 @@ import LanguageMenuButton from '@/shared/components/LanguageMenuButton'
 import LoadingButton from '@/shared/components/LoadingButton'
 import LoadingScreen from '@/shared/components/LoadingScreen'
 import PasswordField from '@/shared/components/PasswordField'
+import ApplicationVersion from '@/shared/components/ApplicationVersion'
 import RemotePreferencesDialog from './RemotePreferencesDialog'
 import { apiErrorText } from '@/lib/api'
 import { normalizePasskeyError, parseGetOptions, passkeysSupported, serializeCredential } from '@/lib/passkeys'
@@ -735,6 +736,9 @@ function RemoteApp({ timingOverrides = null }) {
           </form>
           {!passkeysSupported() ? <div className="muted-box remote-note">{t('auth.passkeySupport')}</div> : null}
           {authError ? <Banner copyLabel={t('common.copyError')} copyText={authError} tone="error">{authError}</Banner> : null}
+          <div className="remote-auth-version">
+            <ApplicationVersion t={t} />
+          </div>
         </main>
       </div>
     )
