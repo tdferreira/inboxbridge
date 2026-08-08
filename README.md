@@ -25,7 +25,7 @@ InboxBridge can:
 - manage source accounts either from `.env` or through the web interface
 - store UI-managed secrets and OAuth tokens encrypted in PostgreSQL
 - support multi-user or single-user deployments
-- provide a browser-based admin UI plus a lightweight `/remote` control page for phones and quick access
+- provide a full admin UI, a lightweight `/remote` control page, and browser extensions for quick poll status and control
 - show live polling progress with pause, resume, stop, retry, and queue reprioritization controls
 - let IMAP sources opt into real-time IMAP IDLE watching with durable UID checkpoints and scheduler fallback if a watcher stays unhealthy
 - keep durable POP3 UIDL checkpoints so scheduled polling can resume from newer POP mail instead of always re-reading only the latest tail window
@@ -86,6 +86,7 @@ By default, the local Docker setup serves the app over HTTPS with generated self
 - Two-tier admin configuration backups: redacted review snapshots and public-key-encrypted secret exports
 - Live polling over authenticated SSE with bounded parallel workers
 - A mobile-friendly `/remote` page for quick poll control without opening the full workspace
+- Chromium and Firefox extensions for toolbar status, manual polling, live activity indicators, and optional notifications
 
 ## What It Does Not Aim To Be
 
@@ -269,6 +270,46 @@ It is useful when you want to:
 
 The remote page uses its own scoped session model instead of reusing the main admin UI session.
 
+## Browser Extensions
+
+InboxBridge also provides browser-toolbar extensions for Chrome, Edge, other
+Chromium-based browsers, and Firefox. They are a compact companion to your
+self-hosted InboxBridge instance: they do not read or modify mail in the
+browser, and they do not replace the admin UI for mailbox configuration.
+
+From the extension, you can:
+
+- see the latest per-user poll summary and sources that need attention
+- start a user-scoped manual poll from the popup or toolbar context menu
+- follow live polling state through the toolbar icon and badge
+- receive optional grouped notifications for source errors and successful
+  extension-started polls
+- use the signed-in InboxBridge language and theme, or choose local overrides
+
+Each extension signs in directly to the configured HTTPS InboxBridge origin.
+Password accounts authenticate in extension Settings, while passkey-backed
+accounts complete a secure handoff through the normal InboxBridge sign-in page.
+Extension access is kept separate from the main browser session, uses
+short-lived access tokens with rotating refresh tokens, and stores its local
+authentication bundle encrypted. Host and active-tab access are requested only
+when needed, and connected extensions can be reviewed or revoked under
+`Security -> Sessions -> Browser extensions`.
+
+Current browser support:
+
+- **Chrome, Edge, and other Chromium browsers:** implemented; available as a
+  manual-install build and packaged `.zip`
+- **Firefox:** implemented; available as a temporary manual-install build and
+  packaged `.xpi` for signing or distribution
+- **Safari:** planned; the Apple-specific packaging target is not implemented
+  yet
+
+See the [browser-extension overview](browser-extensions/README.md) for the
+support matrix and the [Chromium](browser-extensions/chromium/README.md) or
+[Firefox](browser-extensions/firefox/README.md) guide for build, installation,
+and setup instructions. Release builds also publish the packaged Chromium and
+Firefox artifacts alongside the main InboxBridge bundle.
+
 ## Config-file-only Source Setup
 
 InboxBridge's recommended day-to-day path is the web UI because it can encrypt
@@ -375,6 +416,7 @@ AI assistance was used to help design, implement, refactor, test, and document p
 - Architecture: [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md)
 - Local certificate trust: [docs/TRUST_LOCAL_CA.md](docs/TRUST_LOCAL_CA.md)
 - Admin UI notes: [admin-ui/README.md](admin-ui/README.md)
+- Browser extensions: [browser-extensions/README.md](browser-extensions/README.md)
 
 ## Community
 

@@ -2,6 +2,17 @@
 
 This workspace groups the browser-extension targets for InboxBridge.
 
+## Install and setup
+
+| Browser | Status | Instructions |
+| --- | --- | --- |
+| Chrome, Edge, and other Chromium browsers | Implemented | [Install](chromium/README.md#manual-install-in-chromium-browsers) · [Set up](chromium/README.md#setup) |
+| Firefox | Implemented | [Install](firefox/README.md#manual-install-in-firefox) · [Set up](firefox/README.md#setup) |
+| Safari | Planned | Installation and setup instructions will be added when the Apple-specific target is implemented. |
+
+The Chromium and Firefox guides also include the commands for building an
+unpacked extension and creating its distributable package.
+
 ## Layout
 
 ```text
@@ -29,7 +40,7 @@ browser-extensions/
 - A successful background status refresh should stay authoritative for the badge; popup-broadcast or live-SSE follow-up failures must not replace a good status with a generic `?` badge.
 - The toolbar presentation now uses both the browser badge and dynamic icon overlays: polling adds a blue live indicator, source or transport errors add a red alert marker, and signed-out state adds a gray prompt marker while preserving the base InboxBridge icon underneath. Icon rendering is monotonic, so a slower stale polling render must not overwrite a newer healthy/default icon update.
 - `chromium/` contains the current implemented Manifest V3 target for Chrome, Edge, and other Chromium-based browsers, including its build/package scripts and target-specific documentation.
-- `firefox/` is reserved for the Firefox target and its packaging/signing preparation.
+- `firefox/` contains the implemented Firefox target plus its packaging/signing preparation and target-specific documentation.
 - `safari/` is reserved for Safari packaging and Apple-specific wrapper/export work once the Chromium and Firefox targets are stable.
 
 ## Current status
@@ -40,6 +51,4 @@ browser-extensions/
 - Firefox: implemented manual-install target with the same shared auth/storage flow and matching optional-permission setup
 - Safari: folder reserved, implementation pending
 - GitHub releases should include packaged Chromium `.zip` and Firefox `.xpi` artifacts in addition to the main backend/admin-ui release archive.
-- The GitHub release workflow can now also submit extension updates to Chrome Web Store, Microsoft Edge Add-ons, and Firefox AMO when the corresponding store credentials have been configured as repository secrets. See [docs/BROWSER_EXTENSION_STORES.md](/Users/tdferreira/Developer/inboxbridge/docs/BROWSER_EXTENSION_STORES.md).
-
-For the current manual-install MVP, start with [chromium/README.md](/Users/tdferreira/Developer/inboxbridge/browser-extensions/chromium/README.md).
+- The GitHub release workflow can now also submit extension updates to Chrome Web Store, Microsoft Edge Add-ons, and Firefox AMO when the corresponding store credentials have been configured as repository secrets. See [browser-extension store publishing](../docs/BROWSER_EXTENSION_STORES.md).
