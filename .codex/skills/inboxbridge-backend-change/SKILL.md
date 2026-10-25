@@ -44,3 +44,11 @@ best practices, folder structure, or package-boundary reviews, also load
 - Architecture or runtime model: [`docs/ARCHITECTURE.md`](../../../docs/ARCHITECTURE.md)
 - Product/runtime memory: [`CONTEXT.md`](../../../CONTEXT.md)
 - Operator-facing behavior/setup: [`README.md`](../../../README.md), [`docs/SETUP.md`](../../../docs/SETUP.md), [`docs/OAUTH_SETUP.md`](../../../docs/OAUTH_SETUP.md)
+
+## Security regression invariants
+
+- Public OAuth exchanges require state from an authorized start; never restore code-only or source-ID fallback.
+- Extension handoffs require explicit browser consent bound to request/user, bounded pending state and atomic one-time PKCE redemption. Passkey verification/deletion holds the ceremony row lock.
+- ALTCHA replay identity is the verified signed nonce through signed expiry, never serialized payload formatting or client IP.
+- Client-IP forwarding is trusted only from explicitly configured immediate proxies. Do not implicitly trust private networks or prioritize caller-supplied vendor headers.
+- Keep conditional legacy password-hash upgrades safe against concurrent resets. See `docs/SECURITY_REVIEW.md` for the audit and regression commands.

@@ -121,7 +121,7 @@ The backend polling path is now split more intentionally too: `PollingService` s
 ## Technical stack
 
 - Java 25
-- Quarkus 3.33.3 (LTS)
+- Quarkus 3.40.1.1 (LTS)
 - React 19 + Vite 8
 - PostgreSQL 16
 - Flyway
@@ -260,13 +260,15 @@ System polling behavior:
 - the `Automatic` date-format option in Preferences now displays the effective locale-derived pattern inline so users can see which default format their selected language currently maps to before saving
 - that timezone preference still applies consistently across those same surfaces, so each account can see the same local-time view even if different users on the same instance live in different regions
 - statistics rendering now uses `Recharts 3.x`, giving the polling dashboards shared hover tooltips and more maintainable chart behavior than the previous custom SVG chart
-- the frontend package set is intentionally kept on current stable major versions, including React 19, Vite 8, Vitest 4, jsdom 29, and Recharts 3.x
+- the frontend package set is intentionally kept on current stable major versions, including React 19, Vite 8, Vitest 5, jsdom 30, and Recharts 3.x
+- the 2026-10-25 dependency refresh incorporates or supersedes all 17 open Dependabot proposals. Quarkus moves directly to 3.40.1.1 LTS rather than the older proposed 3.39 line; Maven Compiler, Surefire/Failsafe, GreenMail, WebAuthn, ALTCHA, JSON, all frontend direct dependencies, and transitive frontend packages are refreshed to current stable releases. Platform-managed backend dependencies remain aligned through the Quarkus BOM. The Maven builder now tracks `maven:3.10-eclipse-temurin-25` to match the Java 25 runtime, Nginx is `1.31.8-alpine`, and build/release workflows use `actions/setup-java@v6`.
+- jsdom 30 requires Node `^22.22.2 || ^24.15.0 || >=26.0.0`; the admin package declares that engine constraint, and Docker/CI continue using current Node 24 LTS images. ALTCHA 2.1 exposes challenge expiry as `Number`; the response DTO preserves that signed numeric value, with regression coverage for serialized challenge verification, replay rejection, expiry tampering, and the browser's PBKDF2 counter encoding. Remote SSE tests wait explicitly for their event stream before sending events to avoid the races observed in Dependabot CI.
 - the frontend Docker build and GitHub Actions workflows now use Node 24 LTS as the baseline instead of Node 22 or local Node 25 Current, so local test/runtime quirks from Node 25 should not define the supported admin-ui environment
 - admin-ui test commands now run through `admin-ui/scripts/run-vitest.mjs`, which adds `--no-webstorage` only when the local runtime is Node 25+ so Node's built-in Web Storage does not override jsdom's browser-like storage during Vitest runs; Docker and CI stay on Node 24 LTS without that flag, and the workaround should be revisited when the Node 25 + Vitest/jsdom interaction is resolved upstream
 - the normal `cd admin-ui && npm run test:run` frontend suite now uses forked Vitest workers with a default `50%` worker cap instead of forcing one worker, while CI and coverage runs stay single-worker to remain more memory-stable on stricter environments
 - the admin-ui Docker image installs the committed frontend lockfile with `npm ci`, excludes host `node_modules` and `dist` output from the build context, and no longer runs the full Vitest suite by default during `docker compose up --build`; CI remains the authoritative always-on frontend test path, while the Dockerfile keeps an opt-in `RUN_TESTS=true` build argument for explicit in-image validation because the full suite can hang after printing successful output inside container builds
 - the top-level `App` and `/remote` `RemoteApp` now define their production polling/watchdog/anomaly timing defaults in explicit timing maps so tests can inject much shorter intervals without changing the shipped runtime behavior; this keeps the slowest app-level live-poll and anomaly pulse regressions in the sub-second range instead of waiting on the real multi-second timers
-- `.github/dependabot.yml` now documents the repository policy of usually staying on approved LTS baselines for Node and Quarkus, but Dependabot itself cannot automatically follow "latest LTS" semantics for future releases; Node and Quarkus line changes should therefore be reviewed manually and only adopted intentionally
+- Dependency selection now follows the standing policy in `AGENTS.md` and `docs/DEPENDENCIES.md`: latest patched LTS for the existing distribution when available, latest compatible stable otherwise, with a security exception for a major applicable flaw in the latest LTS. This applies to frontend, backend, GitHub Actions, package managers, build/runtime images, bootstrap images, and integration-test images. Dependabot cannot express the dynamic lifecycle/security checks and does not discover every renamed coordinate or image string in test code.
 - the frontend now also ships a dedicated `/remote` remote-control route with a tiny mobile-first polling UI, its own manifest/service-worker assets, and source-level poll actions without opening the full admin workspace
 - the `/remote` route now also hydrates the current live poll snapshot on load, subscribes to a remote-scoped SSE stream for per-source progress, and surfaces pause/resume/stop plus per-source `Move Next` / `Retry` controls whenever the remote viewer is allowed to manage the active run
 - disabled source accounts are excluded from the `/remote` source list entirely so that quick-access surface only shows mailboxes that can actually be triggered there
@@ -1204,7 +1206,20 @@ src/main/resources/db/migration
 
 ## Current validation status
 
-Validated on 2026-04-01:
+The full dependency policy, dated version inventory, advisory results, and upstream packaging gaps are recorded in [`docs/DEPENDENCIES.md`](docs/DEPENDENCIES.md). The follow-up audit also upgrades Maven to 3.10, Nginx to 1.31.8 with Alpine package patches, Testcontainers to 2.0.5 through its own BOM and renamed modules/API, Quarkus test artifacts to their current names, OpenBao tests to 2.7.1, and Vault Community tests to 2.2.1. npm 12.2.1 is declared by the frontend `packageManager` field and installed explicitly by Docker and CI; CI checks for the latest Java 25 and Node 24 patches. Upstream Pebble binaries are retained in the Maven/application images; their four HIGH Go stdlib matches remain visible because deleting an unused binary was not an application vulnerability fix.
+
+The audit found no OSV advisories for the final 326 backend dependency entries and no npm audit findings for the application. Image scans are a separate check: the patched Nginx runtime and Alpine bootstrap have no high/critical matches, while the Java runtime retains four HIGH matches in the unused upstream Pebble binary. Temurin patch lag, npm/plugin/shaded build-tool findings, and PostgreSQL/OpenBao image findings remain documented. Do not describe every upstream image as vulnerability-free or silently perform a PostgreSQL major/data-volume migration; 18.6 is available, while the running database remains on the current 16.15 patch.
+
+Validated on 2026-10-25 after the dependency refresh and source security fixes:
+
+- Java 25: `mvn -Dit.test='*QuarkusIT' verify` passes 749 backend tests, including GreenMail, PostgreSQL, OpenBao, and Vault integrations, plus 34 packaged REST smoke tests, with no failures or skips.
+- Node 24 LTS: the full frontend suite passes 655 tests in 104 files; V8 coverage and the production build also pass with Vitest 5. `npm outdated --json` returns no outdated direct dependencies and `npm audit` reports zero vulnerabilities.
+- Chromium and Firefox extension suites pass 81 and 11 tests respectively; `node site/test-config-generator.mjs` passes.
+- The TLS bootstrap service now tracks supported Alpine 3.24 instead of the retired 3.20 line. Disposable-container checks pass for certificate generation, hostname matching, trust chains, and reuse. PostgreSQL stays on major 16 to preserve the existing data-volume format.
+- With Compose 5.6.1, the existing `build.network: host` setting requires an explicit Bake entitlement. If `docker compose build` requests `--allow=network.host`, use the generated Bake file path documented in `CONTRIBUTING.md`, then recreate the application services through Compose.
+- Fresh images were built with updated base images and the stack was force-recreated through Compose. HTTPS checks using `certs/ca.crt` confirm backend/database health is `UP` and the main UI, `/remote`, and registration challenge endpoint all return HTTP 200.
+
+Earlier validation notes (2026-04-01):
 
 - full backend Maven suite passes with `mvn -q test` when run in an environment that allows the GreenMail integration tests to bind local ports
 - the expected failure-path unit tests now capture and assert their intentionally induced warning/error records through a scoped test logger helper, so `mvn -q test` stays free of warning/error log lines without silently hiding unexpected extra records from those same logger paths
@@ -1320,3 +1335,51 @@ Current live config issue in this workspace:
 - The main app and `/remote` now both watch the authenticated poll SSE stream for staleness during active runs; if no snapshot, progress event, or keepalive arrives for about 45 seconds, they intentionally drop the stream connection and fall back to the existing snapshot-refresh path so `RUNNING...` does not linger indefinitely after a silent SSE failure.
 - When that authenticated live stream is unavailable from the start, the main app and `/remote` still keep polling their live snapshot endpoints in the background so a poll started from another browser surface can appear without waiting for a manual refresh.
 - Manual polling now preserves enabled user sources even when the user's destination mailbox is missing, records a per-source `destination_mailbox_not_configured` event, and returns a clear setup error in both My InboxBridge and browser extension manual runs; scheduler runs still skip destination-less user sources so background ticks do not create noisy history.
+
+## Security review (2026-10-25)
+
+- `docs/SECURITY_REVIEW.md` records source findings, scanner triage, regression checks and limits. Do not describe the project as vulnerability-free; upstream image/tool findings remain tracked in `docs/DEPENDENCIES.md`. The upstream Pebble binary is retained and its four HIGH matches remain visible.
+- Public Google/Microsoft code exchange requires a valid one-time state from an authorized start; code-only/source-ID fallback must not return. Extension browser handoffs require explicit approval bound to request/user, enforce PKCE shape, cap pending state and serialize one-time redemption.
+- ALTCHA replay keys derive from the verified signed nonce and survive until signed expiry. JSON reformatting, unsigned solution metadata and concurrent requests cannot permit reuse. PBKDF2-SHA256 now uses 600,000 iterations; successful verification conditionally upgrades legacy hashes without overwriting password resets. Passkey ceremony verification/deletion holds a database row lock.
+- Client-IP attribution trusts only `SECURITY_AUTH_TRUSTED_PROXY_ADDRESSES` (default loopback plus `inboxbridge-admin`), never whole private networks. Nginx replaces forwarded IPs and removes alternative vendor headers. Only liveness status is public in `/api/health/summary`.
+- Compose publishes only Nginx. Fresh installations copied from `.env.example` explicitly select `PUBLIC_BIND_ADDRESS=127.0.0.1`; existing installations without the variable retain their prior all-interface binding so configured LAN/tailnet URLs remain reachable. Change the bootstrap password before enabling remote interfaces. Java UID/GID 10001 and Nginx UID/GID 101 run without capabilities or privilege escalation; each sees only its own TLS leaf directory and public CA. Only cert-init sees the CA signing key. Nginx uses internal ports 8080/8443.
+- API bodies are limited to 256 KiB and backend headers to 16 KiB. Nginx applies per-IP authentication burst limits, excluding normal app/SSE traffic. A future multi-instance deployment needs shared atomic CAPTCHA/handoff state.
+- Actions are pinned to verified release commit SHAs. Release context is passed as environment data, semantic version tags are validated, and web-ext is pinned. CI additionally runs packaged Quarkus checks, workflow security tests, disposable certificate isolation checks and both extension suites. Run `scripts/security/test-runtime.py` against the local rebuilt stack; it uses the public CA and anonymous requests only.
+
+### Existing LAN/tailnet ingress regression (2026-10-25)
+
+The initial security change silently defaulted every deployment to loopback,
+which broke the existing Tailscale hostname with a browser `Failed to fetch`
+error. The database volume and saved user/mailbox configuration were intact.
+Keep local-only bootstrap explicit in `.env.example`, while retaining the old
+all-interface Compose fallback when existing deployments lack the new variable.
+The Compose ingress tests cover both cases plus an operator-selected address
+and port. Runtime checks accept `--base-url` and verify a malformed login POST
+without submitting credentials or consuming failed-login attempts. Verify the
+operator's actual hostname as well as localhost after any ingress change.
+
+### Full regression revalidation (2026-10-25)
+
+The final Java 25/Node 24 pass completed 749 backend tests, 34 packaged API
+checks, 655 frontend tests with coverage/build, 81 Chromium tests and 11 Firefox
+tests, all passing with no skipped tests. Workflow and Compose ingress checks
+pass three tests each; disposable TLS bootstrap checks and the public-site
+generator check pass. Runtime security checks pass six tests each through
+localhost and the configured Tailscale hostname after fresh application image
+builds and forced recreation of both applications. Browser checks also render
+the main and `/remote` sign-in pages over Tailscale and the main localhost page.
+
+A new PostgreSQL HTTP regression seeds a legacy 210,000-iteration password
+hash, signs in with the unchanged password, verifies its upgrade to 600,000
+iterations, signs in again and confirms the first session remains valid. Tests
+use isolated databases; the deployment retains its original volume and its
+three users, five source accounts and one destination. No credentials were
+reset and no manual live mailbox import was triggered for validation.
+
+Live Sapo polling currently reports server-side authentication rejection.
+Historical Sapo poll failures predate this deployment, but retained history
+does not identify the original authentication cause. Do not claim all live
+provider connections work solely because the automated mailflow suite passes.
+Physical user passkey interaction and live Google/Microsoft consent remain
+manual checks; automated authentication/session/ownership/configuration and
+GreenMail regression coverage passes.

@@ -61,3 +61,19 @@ The proposed commit message must include:
 - Repo memory and validation notes: [`CONTEXT.md`](../../../CONTEXT.md)
 - Workflow rules: [`AGENTS.md`](../../../AGENTS.md)
 - Public-site validation target: [`site/test-config-generator.mjs`](../../../site/test-config-generator.mjs)
+
+## Runtime security checks
+
+Run `python3 scripts/security/test-workflows.py` for workflow changes,
+`sh scripts/security/test-cert-init.sh` for bootstrap/mount changes, and
+`python3 scripts/security/test-runtime.py` after local deployment when changing
+the ingress/auth/container boundary. The public URL remains localhost:3000;
+backend 8443 is internal. Fresh `.env.example` installs explicitly bind the
+frontend to loopback; existing deployments without the bind variable retain
+the prior LAN/tailnet reachability. Run `test-compose-ports.py` for ingress
+changes and `test-runtime.py --base-url https://OPERATOR_HOST:3000` against the
+actual operator URL as well as localhost.
+Certificate bootstrap must precede the unprivileged services so separate leaf
+mounts have correct permissions. Preserve CA-key isolation. The scanner and
+remaining findings are documented in `docs/SECURITY_REVIEW.md` and
+`docs/DEPENDENCIES.md`; never report zero vulnerabilities from a clean scan.

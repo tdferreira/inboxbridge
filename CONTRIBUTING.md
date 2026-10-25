@@ -60,6 +60,13 @@ Please follow these rules when contributing:
 
 ## Validation
 
+Dependency updates follow the [LTS and security policy](docs/DEPENDENCIES.md).
+Review all ecosystems and images, including package managers and test containers,
+and verify the software inside floating image tags. Preserve framework BOM
+compatibility, record advisory applicability and upstream gaps, and plan database
+major migrations separately. `admin-ui/package.json` declares the npm version
+used by Docker and CI; use that package manager when validating installs.
+
 Before opening a pull request, run the relevant checks locally.
 
 Backend:
@@ -74,12 +81,33 @@ Quarkus-managed component-test layer for shared CDI/config helpers. Prefer the
 lightest test style that still covers the behavior you changed, but keep
 protocol-facing mailbox changes covered by GreenMail.
 
+For a dependency refresh or a full backend validation, use Java 25 and run:
+
+```bash
+mvn -q -Dit.test='*QuarkusIT' verify
+```
+
+This also runs all packaged-runtime smoke tests with the H2 build profile.
+Docker must be available for the PostgreSQL, OpenBao, and Vault test containers.
+Run backend builds sequentially because they share `target/quarkus-app`.
+
 Frontend:
 
 ```bash
 cd admin-ui
 npm test -- --run
 npm run build
+```
+
+Use current Node 24 LTS (at least 24.15.0). `npm run test:coverage` runs the
+same full frontend suite with V8 coverage enabled.
+
+Complete repository validation also includes the browser extensions and public site:
+
+```bash
+npm --prefix browser-extensions/chromium test
+npm --prefix browser-extensions/firefox test
+node site/test-config-generator.mjs
 ```
 
 End-to-end local stack:
@@ -89,6 +117,19 @@ docker compose up --build
 ```
 
 If your change touches runnable services, please leave the stack in a state that is ready for manual testing.
+
+Recent Compose/Bake versions may require explicit permission for this repository's
+`build.network: host` setting. If a rebuild reports
+`pass "--allow=network.host"`, build the existing stack with:
+
+```bash
+docker compose build --print inboxbridge inboxbridge-admin > /tmp/inboxbridge-bake.json
+docker buildx bake -f /tmp/inboxbridge-bake.json --allow=network.host --pull --load
+docker compose up -d --force-recreate --no-deps inboxbridge inboxbridge-admin
+```
+
+The final command assumes PostgreSQL and certificate initialization are already
+ready; on a new deployment, start the dependencies through Compose first.
 
 ## Pull Requests
 
@@ -116,3 +157,31 @@ Maintainers may decline changes that:
 AI-assisted contributions are welcome, but contributors remain responsible for reviewing, testing, and understanding what they submit.
 
 If AI tooling was used in a meaningful way, say so in the pull request description when it helps reviewers understand how the change was produced.
+
+## Security regression checks
+
+See [the source security review](docs/SECURITY_REVIEW.md) for scan scope, triage
+and remaining upstream findings. Run `python3 scripts/security/test-workflows.py`
+and `sh scripts/security/test-cert-init.sh` when changing CI/release or TLS
+bootstrap. The latter uses disposable certificates in a Docker tmpfs. After
+rebuilding the local stack, `python3 scripts/security/test-runtime.py` checks
+anonymous HTTPS access, security headers, OAuth state rejection, request size
+limits, unprivileged UIDs, certificate mount isolation and unpublished backend/DB
+ports. It uses `certs/ca.crt`, never deployment private keys or valid credentials.
+
+Reproduce source analysis with
+`sh scripts/security/scan-source.sh /tmp/inboxbridge-source-semgrep.json`. The
+script scans an explicit production-source snapshot excluding local environment
+files, certificates, dependencies and generated/test assets. Docker/network and
+Python 3 are required; scanner findings still require applicability review.
+Fresh installations copied from `.env.example` select loopback explicitly.
+Existing installations without `PUBLIC_BIND_ADDRESS` retain their prior
+all-interface binding. Set this variable explicitly for the intended local, LAN
+or tailnet interface, after replacing the bootstrap password. The backend's
+8443 port is internal to Compose.
+
+Run `python3 scripts/security/test-compose-ports.py` to verify legacy, fresh
+and explicitly configured bindings without reading the deployment's `.env`.
+Use `python3 scripts/security/test-runtime.py --base-url https://YOUR_HOST:3000`
+to verify the operator's actual URL as well as localhost; testing localhost
+alone does not prove a LAN/tailnet address remains reachable.
