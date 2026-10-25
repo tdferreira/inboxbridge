@@ -9,6 +9,10 @@ import jakarta.enterprise.context.ApplicationScoped;
 @ApplicationScoped
 public class AppUserRepository implements PanacheRepository<AppUser> {
 
+    public long upgradePasswordHash(Long userId, String previousHash, String upgradedHash) {
+        return update("passwordHash = ?1 where id = ?2 and passwordHash = ?3", upgradedHash, userId, previousHash);
+    }
+
     public Optional<AppUser> findByUsername(String username) {
         return find("username", username).firstResultOptional();
     }

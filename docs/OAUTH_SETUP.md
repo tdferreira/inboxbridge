@@ -162,6 +162,11 @@ at least the checks below.
    - Confirm the browser trusts the certificate chain and the callback host
      matches the configured Google redirect URI exactly.
 
+Every public code exchange requires the unexpired, one-time `state` created
+when an authorized user starts the flow. A code or source ID alone is rejected;
+restart the flow if state is missing. This prevents callback requests from
+selecting shared credentials or another user's mailbox directly.
+
 Example manual exchange:
 
 ```bash

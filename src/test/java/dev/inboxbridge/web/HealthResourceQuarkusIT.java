@@ -2,6 +2,8 @@ package dev.inboxbridge.web;
 
 import static io.restassured.RestAssured.given;
 import static org.hamcrest.Matchers.is;
+import static org.hamcrest.Matchers.hasKey;
+import static org.hamcrest.Matchers.not;
 
 import org.junit.jupiter.api.Test;
 
@@ -20,12 +22,12 @@ class HealthResourceQuarkusIT {
     }
 
     @Test
-    void applicationHealthSummaryReportsUpAndStartsEmpty() {
+    void publicHealthSummaryReportsLivenessWithoutMailboxStatistics() {
         given()
                 .when().get("/api/health/summary")
                 .then()
                 .statusCode(200)
                 .body("status", is("UP"))
-                .body("importedMessages", is(0));
+                .body("$", not(hasKey("importedMessages")));
     }
 }

@@ -35,6 +35,43 @@ import dev.inboxbridge.service.oauth.OAuthCredentialService;
 class AppUserServiceTest {
 
     @Test
+    void successfulPasswordVerificationUpgradesLegacyHashesAtomically() {
+        var service = service();
+        AppUser user = new AppUser();
+        user.id = 7L;
+        user.passwordHash = "pbkdf2$210000$MDEyMzQ1Njc4OWFiY2RlZg==$5/EWREJlVVJn83iPfVPTZQzCf1TyjiiDFDRMqYxkZpc=";
+        String legacy = user.passwordHash;
+        service.repository = new AppUserRepository() {
+            @Override
+            public long upgradePasswordHash(Long id, String previous, String upgraded) {
+                assertEquals(7L, id);
+                assertEquals(legacy, previous);
+                assertTrue(upgraded.startsWith("pbkdf2$600000$"));
+                return 1;
+            }
+        };
+        assertTrue(service.passwordMatches(user, "Legacy#123"));
+        assertTrue(user.passwordHash.startsWith("pbkdf2$600000$"));
+    }
+
+    @Test
+    void legacyHashUpgradeCannotOverwriteAConcurrentPasswordReset() {
+        var service = service();
+        AppUser user = new AppUser();
+        user.id = 7L;
+        user.passwordHash = "pbkdf2$210000$MDEyMzQ1Njc4OWFiY2RlZg==$5/EWREJlVVJn83iPfVPTZQzCf1TyjiiDFDRMqYxkZpc=";
+        String legacy = user.passwordHash;
+        service.repository = new AppUserRepository() {
+            @Override
+            public long upgradePasswordHash(Long id, String previous, String upgraded) {
+                return 0;
+            }
+        };
+        assertFalse(service.passwordMatches(user, "Legacy#123"));
+        assertEquals(legacy, user.passwordHash);
+    }
+
+    @Test
     void registerUserCreatesPendingInactiveAccount() {
         AppUserService service = service();
 

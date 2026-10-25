@@ -2,8 +2,6 @@ package dev.inboxbridge.web;
 
 import java.util.Map;
 
-import dev.inboxbridge.persistence.ImportedMessageRepository;
-import jakarta.inject.Inject;
 import jakarta.ws.rs.GET;
 import jakarta.ws.rs.Path;
 import jakarta.ws.rs.Produces;
@@ -13,13 +11,9 @@ import jakarta.ws.rs.core.MediaType;
 @Produces(MediaType.APPLICATION_JSON)
 public class HealthResource {
 
-    @Inject
-    ImportedMessageRepository importedMessageRepository;
-
     @GET
     public Map<String, Object> summary() {
-        return Map.of(
-                "status", "UP",
-                "importedMessages", importedMessageRepository.count());
+        // Public liveness must not expose cross-user mailbox activity.
+        return Map.of("status", "UP");
     }
 }

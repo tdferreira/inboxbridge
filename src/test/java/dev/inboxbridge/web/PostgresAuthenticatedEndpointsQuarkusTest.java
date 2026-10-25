@@ -77,6 +77,51 @@ import jakarta.inject.Inject;
 @QuarkusTestResource(value = LocalSecretStorageTestResource.class, restrictToAnnotatedClass = true)
 class PostgresAuthenticatedEndpointsQuarkusTest {
 
+    @Inject
+    dev.inboxbridge.persistence.PasskeyCeremonyRepository passkeyCeremonyRepository;
+
+    @Test
+    void concurrentTransactionsCannotConsumeTheSamePasskeyCeremony() throws Exception {
+        String ceremonyId = java.util.UUID.randomUUID().toString();
+        QuarkusTransaction.requiringNew().run(() -> {
+            var ceremony = new dev.inboxbridge.persistence.PasskeyCeremony();
+            ceremony.id = ceremonyId;
+            ceremony.ceremonyType = dev.inboxbridge.persistence.PasskeyCeremony.CeremonyType.AUTHENTICATION;
+            ceremony.requestJson = "{}";
+            ceremony.createdAt = Instant.now();
+            ceremony.expiresAt = ceremony.createdAt.plusSeconds(60);
+            passkeyCeremonyRepository.persist(ceremony);
+        });
+        var ready = new java.util.concurrent.CountDownLatch(2);
+        var start = new java.util.concurrent.CountDownLatch(1);
+        java.util.concurrent.Callable<Boolean> consume = () -> {
+            ready.countDown();
+            assertTrue(start.await(10, java.util.concurrent.TimeUnit.SECONDS));
+            return QuarkusTransaction.requiringNew().call(() -> {
+                var ceremony = passkeyCeremonyRepository.findValid(ceremonyId,
+                        dev.inboxbridge.persistence.PasskeyCeremony.CeremonyType.AUTHENTICATION, Instant.now());
+                ceremony.ifPresent(passkeyCeremonyRepository::delete);
+                return ceremony.isPresent();
+            });
+        };
+        try (var executor = java.util.concurrent.Executors.newFixedThreadPool(2)) {
+            var first = executor.submit(consume);
+            var second = executor.submit(consume);
+            assertTrue(ready.await(10, java.util.concurrent.TimeUnit.SECONDS));
+            start.countDown();
+            assertEquals(1, (first.get(20, java.util.concurrent.TimeUnit.SECONDS) ? 1 : 0)
+                    + (second.get(20, java.util.concurrent.TimeUnit.SECONDS) ? 1 : 0));
+        }
+    }
+
+    @Test
+    void publicOAuthExchangeCannotSelectASharedOrAnotherUsersMailboxWithoutState() {
+        given().contentType("application/json").body(Map.of("code", "attacker-code"))
+                .when().post("/api/google-oauth/exchange").then().statusCode(400);
+        given().contentType("application/json").body(Map.of("code", "attacker-code", "sourceId", "another-user"))
+                .when().post("/api/microsoft-oauth/exchange").then().statusCode(400);
+    }
+
     private static final String SESSION_COOKIE = "inboxbridge_session";
     private static final String CSRF_COOKIE = "inboxbridge_csrf";
     private static final String REMOTE_SESSION_COOKIE = "inboxbridge_remote_session";
@@ -136,6 +181,39 @@ class PostgresAuthenticatedEndpointsQuarkusTest {
 
     @Inject
     ConfigBackupExportAuditRepository configBackupExportAuditRepository;
+
+    @Test
+    void existingPasswordStillSignsInAndPreservesTheSessionAfterHashUpgrade() {
+        String username = "legacy-login-" + java.util.UUID.randomUUID() + "@example.test";
+        String legacyHash = "pbkdf2$210000$MDEyMzQ1Njc4OWFiY2RlZg==$5/EWREJlVVJn83iPfVPTZQzCf1TyjiiDFDRMqYxkZpc=";
+        Long userId = QuarkusTransaction.requiringNew().call(() -> {
+            AppUser user = appUserService.createUser(new dev.inboxbridge.dto.CreateUserRequest(
+                    username, "Legacy#123", "USER"));
+            user.passwordHash = legacyHash;
+            user.mustChangePassword = false;
+            return user.id;
+        });
+        try {
+            assertEquals(legacyHash, QuarkusTransaction.requiringNew().call(
+                    () -> appUserService.findById(userId).orElseThrow().passwordHash));
+
+            BrowserSession firstSession = loginBrowser(username, "Legacy#123");
+
+            String upgradedHash = QuarkusTransaction.requiringNew().call(
+                    () -> appUserService.findById(userId).orElseThrow().passwordHash);
+            assertTrue(upgradedHash.startsWith("pbkdf2$600000$"));
+            given().cookie(SESSION_COOKIE, firstSession.sessionToken())
+                    .when().get("/api/auth/me").then().statusCode(200)
+                    .body("username", equalTo(username));
+
+            // The upgrade preserves the password and does not revoke an existing session.
+            loginBrowser(username, "Legacy#123");
+            given().cookie(SESSION_COOKIE, firstSession.sessionToken())
+                    .when().get("/api/auth/me").then().statusCode(200);
+        } finally {
+            QuarkusTransaction.requiringNew().run(() -> appUserService.deleteUser(null, userId));
+        }
+    }
 
     @Test
     void browserSessionCanPersistUiPreferencesThroughTheRealHttpSurface() {

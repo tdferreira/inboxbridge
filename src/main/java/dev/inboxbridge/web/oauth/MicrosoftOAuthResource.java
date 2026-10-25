@@ -101,10 +101,10 @@ public class MicrosoftOAuthResource {
     @Consumes(MediaType.APPLICATION_JSON)
     public Response exchange(MicrosoftOAuthCodeRequest request) {
         try {
-            if (request.state() != null && !request.state().isBlank()) {
-                return Response.ok(microsoftOAuthService.exchangeAuthorizationCodeByState(request.state(), request.code())).build();
+            if (request == null || request.state() == null || request.state().isBlank()) {
+                throw new IllegalArgumentException("Missing OAuth state. Start the flow again from InboxBridge.");
             }
-            return Response.ok(microsoftOAuthService.exchangeAuthorizationCode(request.sourceId(), request.code())).build();
+            return Response.ok(microsoftOAuthService.exchangeAuthorizationCodeByState(request.state(), request.code())).build();
         } catch (IllegalArgumentException | IllegalStateException e) {
             return Response.status(Response.Status.BAD_REQUEST)
                     .entity(new ApiError(

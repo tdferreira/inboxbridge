@@ -17,7 +17,6 @@ import dev.inboxbridge.dto.PollRunResult;
 import dev.inboxbridge.dto.RemoteControlView;
 import dev.inboxbridge.dto.RemoteSessionUserResponse;
 import dev.inboxbridge.persistence.AppUser;
-import dev.inboxbridge.persistence.ImportedMessageRepository;
 import dev.inboxbridge.security.CurrentUserContext;
 import dev.inboxbridge.service.auth.AuthClientAddressService;
 import dev.inboxbridge.service.polling.PollingLiveService;
@@ -33,19 +32,13 @@ import jakarta.ws.rs.core.Response;
 class WebInfrastructureTest {
 
     @Test
-    void healthSummaryReturnsStatusAndImportedMessageCount() {
+    void publicHealthSummaryDoesNotExposeCrossUserStatistics() {
         HealthResource resource = new HealthResource();
-        resource.importedMessageRepository = new ImportedMessageRepository() {
-            @Override
-            public long count() {
-                return 42L;
-            }
-        };
 
         Map<String, Object> summary = resource.summary();
 
         assertEquals("UP", summary.get("status"));
-        assertEquals(42L, summary.get("importedMessages"));
+        assertEquals(Map.of("status", "UP"), summary);
     }
 
     @Test

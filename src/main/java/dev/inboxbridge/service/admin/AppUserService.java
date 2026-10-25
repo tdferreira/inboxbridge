@@ -159,8 +159,21 @@ public class AppUserService {
         managedUser.updatedAt = Instant.now();
     }
 
+    @Transactional
     public boolean passwordMatches(AppUser user, String rawPassword) {
-        return hasPassword(user) && rawPassword != null && passwordHashService.matches(rawPassword, user.passwordHash);
+        if (!hasPassword(user) || rawPassword == null || !passwordHashService.matches(rawPassword, user.passwordHash)) {
+            return false;
+        }
+        if (passwordHashService.needsRehash(user.passwordHash)) {
+            String previousHash = user.passwordHash;
+            String upgradedHash = passwordHashService.hash(rawPassword);
+            // Never overwrite a password reset that raced with this successful verification.
+            if (repository.upgradePasswordHash(user.id, previousHash, upgradedHash) == 0) {
+                return false;
+            }
+            user.passwordHash = upgradedHash;
+        }
+        return true;
     }
 
     public boolean hasPassword(AppUser user) {

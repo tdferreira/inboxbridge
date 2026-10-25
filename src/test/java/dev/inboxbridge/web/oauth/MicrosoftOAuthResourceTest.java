@@ -26,6 +26,16 @@ import jakarta.ws.rs.core.Response;
 class MicrosoftOAuthResourceTest {
 
     @Test
+    void exchangeRejectsMissingStateEvenWhenASourceIdIsSupplied() {
+        var resource = newResource(new FakeMicrosoftOAuthService());
+        for (String state : new String[] {null, "", " "}) {
+            var request = new dev.inboxbridge.dto.MicrosoftOAuthCodeRequest("another-users-source", "attacker-code", state);
+            assertEquals(400, resource.exchange(request).getStatus());
+        }
+        assertEquals(400, resource.exchange(null).getStatus());
+    }
+
+    @Test
     void startRedirectsBrowserToAuthorizationUrl() {
         MicrosoftOAuthResource resource = newResource(new FakeMicrosoftOAuthService());
 

@@ -14,7 +14,7 @@ import jakarta.enterprise.context.ApplicationScoped;
 public class PasswordHashService {
 
     private static final String ALGORITHM = "PBKDF2WithHmacSHA256";
-    private static final int ITERATIONS = 210_000;
+    private static final int ITERATIONS = 600_000;
     private static final int KEY_BITS = 256;
     private static final int SALT_BYTES = 16;
 
@@ -42,11 +42,21 @@ public class PasswordHashService {
         return java.security.MessageDigest.isEqual(expected, actual);
     }
 
+    public boolean needsRehash(String storedHash) {
+        String[] parts = storedHash.split("\\$");
+        return parts.length == 4 && "pbkdf2".equals(parts[0]) && Integer.parseInt(parts[1]) < ITERATIONS;
+    }
+
     private byte[] derive(char[] password, byte[] salt, int iterations) {
         try {
             PBEKeySpec spec = new PBEKeySpec(password, salt, iterations, KEY_BITS);
             SecretKeyFactory factory = SecretKeyFactory.getInstance(ALGORITHM);
-            return factory.generateSecret(spec).getEncoded();
+            try {
+                return factory.generateSecret(spec).getEncoded();
+            } finally {
+                spec.clearPassword();
+                java.util.Arrays.fill(password, '\0');
+            }
         } catch (NoSuchAlgorithmException | InvalidKeySpecException e) {
             throw new IllegalStateException("Password hashing failed", e);
         }

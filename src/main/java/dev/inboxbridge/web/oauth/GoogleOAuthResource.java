@@ -81,10 +81,11 @@ public class GoogleOAuthResource {
     @Path("/exchange")
     @Consumes(MediaType.APPLICATION_JSON)
     public GoogleTokenExchangeResponse exchange(GoogleOAuthCodeRequest request) {
-        if (request.state() != null && !request.state().isBlank()) {
-            return googleOAuthService.exchangeAuthorizationCode(request.state(), request.code());
+        // The one-time state binds this public callback to an authorized start.
+        if (request == null || request.state() == null || request.state().isBlank()) {
+            throw new jakarta.ws.rs.BadRequestException("Missing OAuth state. Start the flow again from InboxBridge.");
         }
-        return googleOAuthService.exchangeAuthorizationCode(request.code());
+        return googleOAuthService.exchangeAuthorizationCode(request.state(), request.code());
     }
 
     @GET

@@ -7,8 +7,11 @@ import java.net.http.HttpClient;
 import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
 import java.nio.charset.StandardCharsets;
+import java.security.MessageDigest;
+import java.security.NoSuchAlgorithmException;
 import java.time.Duration;
 import java.util.Locale;
+import java.util.Base64;
 import java.util.Map;
 import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
@@ -28,6 +31,8 @@ import jakarta.inject.Inject;
 public class RegistrationChallengeService {
 
     private static final Duration DEFAULT_REQUEST_TIMEOUT = Duration.ofSeconds(5);
+    private static final int MAX_CAPTCHA_TOKEN_LENGTH = 16_384;
+    private static final int MAX_CONSUMED_CHALLENGES = 10_000;
 
     @Inject
     AuthSecuritySettingsService authSecuritySettingsService;
@@ -67,14 +72,14 @@ public class RegistrationChallengeService {
         if (!enabled()) {
             return;
         }
-        if (captchaToken == null || captchaToken.isBlank()) {
+        if (captchaToken == null || captchaToken.isBlank() || captchaToken.length() > MAX_CAPTCHA_TOKEN_LENGTH) {
             throw new IllegalArgumentException("Registration CAPTCHA validation is required");
         }
         AuthSecuritySettingsService.EffectiveAuthSecuritySettings settings = authSecuritySettingsService.effectiveSettings();
         RegistrationCaptchaProvider provider = effectiveProvider(settings);
         validateProviderConfigured(provider, settings);
         switch (provider) {
-            case ALTCHA -> validateAltcha(captchaToken.trim(), settings);
+            case ALTCHA -> validateAltcha(captchaToken.trim());
             case TURNSTILE -> validateTurnstile(captchaToken.trim(), remoteIpAddress, settings);
             case HCAPTCHA -> validateHcaptcha(captchaToken.trim(), remoteIpAddress, settings);
         }
@@ -113,28 +118,53 @@ public class RegistrationChallengeService {
                         challenge.signature()));
     }
 
-    private void validateAltcha(String captchaToken, AuthSecuritySettingsService.EffectiveAuthSecuritySettings settings) {
+    private void validateAltcha(String captchaToken) {
         purgeUsedAltchaPayloads();
-        String replayKey = Integer.toHexString(captchaToken.hashCode());
-        if (usedCaptchaPayloads.putIfAbsent(replayKey, System.currentTimeMillis()) != null) {
-            throw new IllegalArgumentException("Registration CAPTCHA is invalid or already used");
-        }
-        boolean valid;
+        String replayKey;
+        long expiresAt;
         try {
+            Altcha.Payload payload = Altcha.parsePayload(captchaToken);
+            Challenge challenge = payload.challenge();
+            if (challenge == null || challenge.parameters() == null || challenge.signature() == null
+                    || challenge.signature().isBlank() || challenge.parameters().nonce() == null
+                    || challenge.parameters().expiresAt() == null) {
+                throw new IllegalArgumentException("Missing signed CAPTCHA parameters");
+            }
             Altcha.VerifySolutionResult result = Altcha.verifySolution(
-                    captchaToken,
+                    challenge,
+                    payload.solution(),
                     effectiveAltchaHmacKey(),
                     Altcha.kdf(inboxBridgeConfig.security().auth().registrationCaptcha().altcha().algorithm()));
-            valid = result.verified();
+            double expiryMillis = challenge.parameters().expiresAt().doubleValue() * 1000d;
+            if (!result.verified() || !Double.isFinite(expiryMillis) || expiryMillis <= System.currentTimeMillis()
+                    || expiryMillis >= Long.MAX_VALUE) {
+                throw new IllegalArgumentException("Invalid CAPTCHA solution or expiry");
+            }
+            expiresAt = (long) Math.ceil(expiryMillis);
+            // Consume the signed challenge nonce, not attacker-controlled JSON/base64 formatting.
+            replayKey = nonceKey(challenge.parameters().nonce());
         } catch (Exception e) {
-            usedCaptchaPayloads.remove(replayKey);
             throw new IllegalArgumentException("Registration CAPTCHA is invalid or expired", e);
         }
-        if (!valid) {
-            usedCaptchaPayloads.remove(replayKey);
-            throw new IllegalArgumentException("Registration CAPTCHA is invalid or expired");
+        synchronized (usedCaptchaPayloads) {
+            if (usedCaptchaPayloads.containsKey(replayKey)) {
+                throw new IllegalArgumentException("Registration CAPTCHA is invalid or already used");
+            }
+            if (usedCaptchaPayloads.size() >= MAX_CONSUMED_CHALLENGES) {
+                throw new IllegalArgumentException("Too many registration challenges. Try again later.");
+            }
+            // Keep the entry until the signed expiry, even if the configured TTL changes.
+            usedCaptchaPayloads.put(replayKey, expiresAt);
         }
-        usedCaptchaPayloads.put(replayKey, System.currentTimeMillis() + settings.registrationChallengeTtl().toMillis());
+    }
+
+    private String nonceKey(String nonce) {
+        try {
+            return Base64.getUrlEncoder().withoutPadding().encodeToString(MessageDigest.getInstance("SHA-256")
+                    .digest(nonce.toLowerCase(Locale.ROOT).getBytes(StandardCharsets.UTF_8)));
+        } catch (NoSuchAlgorithmException e) {
+            throw new IllegalStateException("SHA-256 is unavailable", e);
+        }
     }
 
     private void validateTurnstile(

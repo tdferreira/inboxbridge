@@ -10,6 +10,8 @@ import java.time.Duration;
 import java.util.Base64;
 import java.util.Map;
 import java.util.Optional;
+import java.util.List;
+import java.util.concurrent.Executors;
 
 import org.altcha.altcha.v2.Altcha;
 import org.junit.jupiter.api.Test;
@@ -70,6 +72,69 @@ class RegistrationChallengeServiceTest {
         assertThrows(IllegalArgumentException.class, () -> service.validateAndConsume(tamperedPayload, "203.0.113.7"));
         // A rejected submission must not consume the original signed solution.
         assertDoesNotThrow(() -> service.validateAndConsume(payload, "203.0.113.7"));
+    }
+
+    @Test
+    void rejectsReplayWithDifferentJsonFormattingAndUnsignedSolutionMetadata() throws Exception {
+        RegistrationChallengeService service = configuredService();
+        String payload = solveChallenge(service);
+        var json = service.objectMapper.readTree(Base64.getDecoder().decode(payload));
+        ((ObjectNode) json.path("solution")).put("time", 12345);
+        String reformatted = Base64.getEncoder().encodeToString(service.objectMapper.writerWithDefaultPrettyPrinter()
+                .writeValueAsBytes(json));
+
+        service.validateAndConsume(payload, "203.0.113.7");
+        assertThrows(IllegalArgumentException.class, () -> service.validateAndConsume(reformatted, "203.0.113.8"));
+    }
+
+    @Test
+    void requiresASignatureAndDoesNotConsumeAChallengeOnInvalidSubmission() throws Exception {
+        RegistrationChallengeService service = configuredService();
+        String payload = solveChallenge(service);
+        var json = service.objectMapper.readTree(Base64.getDecoder().decode(payload));
+        ((ObjectNode) json.path("challenge")).remove("signature");
+        String unsigned = Base64.getEncoder().encodeToString(service.objectMapper.writeValueAsBytes(json));
+        assertThrows(IllegalArgumentException.class, () -> service.validateAndConsume(unsigned, "203.0.113.7"));
+        assertDoesNotThrow(() -> service.validateAndConsume(payload, "203.0.113.7"));
+    }
+
+    @Test
+    void consumesAChallengeOnlyOnceUnderConcurrentVerification() throws Exception {
+        RegistrationChallengeService service = configuredService();
+        String payload = solveChallenge(service);
+        try (var executor = Executors.newFixedThreadPool(2)) {
+            var results = executor.invokeAll(List.of(
+                    () -> consume(service, payload), () -> consume(service, payload)));
+            int successes = 0;
+            for (var result : results) {
+                if ((Boolean) result.get()) {
+                    successes++;
+                }
+            }
+            assertEquals(1, successes);
+        }
+    }
+
+    @Test
+    void rejectsOversizedCaptchaTokensBeforeParsing() {
+        assertThrows(IllegalArgumentException.class, () -> configuredService().validateAndConsume("a".repeat(16_385), null));
+    }
+
+    private boolean consume(RegistrationChallengeService service, String payload) {
+        try {
+            service.validateAndConsume(payload, "203.0.113.7");
+            return true;
+        } catch (IllegalArgumentException rejected) {
+            return false;
+        }
+    }
+
+    private RegistrationChallengeService configuredService() {
+        RegistrationChallengeService service = new RegistrationChallengeService();
+        service.authSecuritySettingsService = authSecuritySettingsService(true, "ALTCHA");
+        service.inboxBridgeConfig = new TestConfig();
+        service.objectMapper = new ObjectMapper();
+        return service;
     }
 
     private String solveChallenge(RegistrationChallengeService service) throws Exception {

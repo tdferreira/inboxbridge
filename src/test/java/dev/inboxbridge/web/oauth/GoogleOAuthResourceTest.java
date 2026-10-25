@@ -2,6 +2,7 @@ package dev.inboxbridge.web.oauth;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 
 import java.net.URI;
 import java.time.Instant;
@@ -9,10 +10,34 @@ import java.time.Instant;
 import org.junit.jupiter.api.Test;
 
 import dev.inboxbridge.dto.GoogleTokenExchangeResponse;
+import dev.inboxbridge.dto.GoogleOAuthCodeRequest;
 import dev.inboxbridge.service.oauth.GoogleOAuthService;
 import jakarta.ws.rs.core.Response;
 
 class GoogleOAuthResourceTest {
+
+    @Test
+    void exchangeRejectsMissingStateInsteadOfModifyingSharedCredentials() {
+        var resource = newResource(new FakeGoogleOAuthService());
+        for (String state : new String[] {null, "", " "}) {
+            assertThrows(jakarta.ws.rs.BadRequestException.class,
+                    () -> resource.exchange(new GoogleOAuthCodeRequest("attacker-code", state)));
+        }
+        assertThrows(jakarta.ws.rs.BadRequestException.class, () -> resource.exchange(null));
+    }
+
+    @Test
+    void exchangeUsesOnlyTheStateBoundProfile() {
+        var resource = newResource(new FakeGoogleOAuthService() {
+            @Override
+            public GoogleTokenExchangeResponse exchangeAuthorizationCode(String state, String code) {
+                assertEquals("state-1", state);
+                assertEquals("code-1", code);
+                return super.exchangeAuthorizationCode(code);
+            }
+        });
+        assertTrue(resource.exchange(new GoogleOAuthCodeRequest("code-1", "state-1")).storedInDatabase());
+    }
 
     @Test
     void startRedirectsBrowserToGoogleAuthorizationUrl() {
