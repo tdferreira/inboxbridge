@@ -20,17 +20,30 @@ jobs:
 
     steps:
       - name: Check out repository
-        uses: actions/checkout@v7
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
       - name: Resolve release metadata
         id: release_meta
+        env:
+          RELEASE_EVENT_NAME: ${{ github.event_name }}
+          INPUT_TAG_NAME: ${{ inputs.tag_name }}
+          REF_NAME: ${{ github.ref_name }}
+          REPOSITORY: ${{ github.repository }}
         run: |
-          TAG_NAME="${{ github.event_name == 'workflow_dispatch' && inputs.tag_name || github.ref_name }}"
+          set -euo pipefail
+          TAG_NAME="$REF_NAME"
+          if [ "$RELEASE_EVENT_NAME" = "workflow_dispatch" ]; then
+            TAG_NAME="$INPUT_TAG_NAME"
+          fi
+          if [[ ! "$TAG_NAME" =~ ^v[0-9]+\.[0-9]+\.[0-9]+([.-][0-9A-Za-z.-]+)?$ ]]; then
+            echo "Release tags must be semantic versions such as v0.8.3." >&2
+            exit 1
+          fi
           echo "tag_name=${TAG_NAME}" >> "$GITHUB_OUTPUT"
-          echo "docs_base_url=https://github.com/${{ github.repository }}/blob/${TAG_NAME}" >> "$GITHUB_OUTPUT"
+          echo "docs_base_url=https://github.com/${REPOSITORY}/blob/${TAG_NAME}" >> "$GITHUB_OUTPUT"
 
       - name: Set up Java
-        uses: actions/setup-java@v6
+        uses: actions/setup-java@b843ebf9b913146b38da2eaa7aeddf76074ae1ad # v6.1.0
         with:
           distribution: temurin
           java-version: '25'
@@ -38,7 +51,7 @@ jobs:
           cache: maven
 
       - name: Set up Node.js
-        uses: actions/setup-node@v7
+        uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
         with:
           node-version: '24'
           check-latest: true
@@ -77,8 +90,9 @@ jobs:
         run: npm run zip:firefox
 
       - name: Prepare release assets
+        env:
+          TAG_NAME: ${{ steps.release_meta.outputs.tag_name }}
         run: |
-          TAG_NAME="${{ steps.release_meta.outputs.tag_name }}"
           mkdir -p release-assets
           cp README.md LICENSE docker-compose.yml .env.example Dockerfile pom.xml release-assets/
           cp -R docs release-assets/docs
@@ -95,8 +109,9 @@ jobs:
 
       - name: Refresh packaged artifact metadata
         id: packaged_artifacts
+        env:
+          TAG_NAME: ${{ steps.release_meta.outputs.tag_name }}
         run: |
-          TAG_NAME="${{ steps.release_meta.outputs.tag_name }}"
           echo "release_bundle=inboxbridge-${TAG_NAME}.zip" >> "$GITHUB_OUTPUT"
           echo "release_checksum=inboxbridge-${TAG_NAME}.sha256" >> "$GITHUB_OUTPUT"
           echo "chrome_package=$(find browser-extensions/chromium/dist/packages -maxdepth 1 -type f -name '*.zip' | head -n 1)" >> "$GITHUB_OUTPUT"
@@ -105,22 +120,23 @@ jobs:
       - name: Generate release notes
         id: release_notes
         env:
+          TAG_NAME: ${{ steps.release_meta.outputs.tag_name }}
+          DOCS_BASE_URL: ${{ steps.release_meta.outputs.docs_base_url }}
+          RELEASE_BUNDLE: ${{ steps.packaged_artifacts.outputs.release_bundle }}
+          RELEASE_CHECKSUM: ${{ steps.packaged_artifacts.outputs.release_checksum }}
+          CHROME_PACKAGE: ${{ steps.packaged_artifacts.outputs.chrome_package }}
+          FIREFOX_PACKAGE: ${{ steps.packaged_artifacts.outputs.firefox_package }}
+          REPOSITORY: ${{ github.repository }}
           GITHUB_TOKEN: ${{ github.token }}
         run: |
           set -euo pipefail
-          TAG_NAME="${{ steps.release_meta.outputs.tag_name }}"
-          DOCS_BASE_URL="${{ steps.release_meta.outputs.docs_base_url }}"
-          RELEASE_BUNDLE="${{ steps.packaged_artifacts.outputs.release_bundle }}"
-          RELEASE_CHECKSUM="${{ steps.packaged_artifacts.outputs.release_checksum }}"
-          CHROME_PACKAGE="${{ steps.packaged_artifacts.outputs.chrome_package }}"
-          FIREFOX_PACKAGE="${{ steps.packaged_artifacts.outputs.firefox_package }}"
           CHROME_FILENAME="$(basename "${CHROME_PACKAGE}")"
           FIREFOX_FILENAME="$(basename "${FIREFOX_PACKAGE}")"
 
           gh api \
             --method POST \
             -H "Accept: application/vnd.github+json" \
-            "/repos/${{ github.repository }}/releases/generate-notes" \
+            "/repos/${REPOSITORY}/releases/generate-notes" \
             -f tag_name="${TAG_NAME}" \
             > generated-release-notes.json
 
@@ -168,10 +184,10 @@ jobs:
 
       - name: Publish GitHub release
         env:
+          TAG_NAME: ${{ steps.release_meta.outputs.tag_name }}
+          NOTES_FILE: ${{ steps.release_notes.outputs.notes_file }}
           GITHUB_TOKEN: ${{ github.token }}
         run: |
-          TAG_NAME="${{ steps.release_meta.outputs.tag_name }}"
-          NOTES_FILE="${{ steps.release_notes.outputs.notes_file }}"
           if gh release view "${TAG_NAME}" >/dev/null 2>&1; then
             gh release upload "${TAG_NAME}" \
               "inboxbridge-${TAG_NAME}.zip" \
@@ -270,6 +286,7 @@ jobs:
         id: edge_addons
         if: ${{ steps.store_flags.outputs.edge_ready == 'true' }}
         env:
+          TAG_NAME: ${{ steps.release_meta.outputs.tag_name }}
           EDGE_API_KEY: ${{ secrets.EDGE_ADDONS_API_KEY }}
           EDGE_CLIENT_ID: ${{ secrets.EDGE_ADDONS_CLIENT_ID }}
           EDGE_PRODUCT_ID: ${{ secrets.EDGE_ADDONS_PRODUCT_ID }}
@@ -287,7 +304,7 @@ jobs:
             -H "Authorization: ApiKey ${EDGE_API_KEY}" \
             -H "X-ClientID: ${EDGE_CLIENT_ID}" \
             -H "Content-Type: application/json" \
-            -d "{\"notes\":\"Automated GitHub Actions submission for ${{ steps.release_meta.outputs.tag_name }}\"}" \
+            -d "{\"notes\":\"Automated GitHub Actions submission for ${TAG_NAME}\"}" \
             "https://api.addons.microsoftedge.microsoft.com/v1/products/${EDGE_PRODUCT_ID}/submissions" \
             > edge-publish-response.json
           jq . edge-upload-response.json > /dev/null || true
@@ -302,7 +319,7 @@ jobs:
           FIREFOX_AMO_API_SECRET: ${{ secrets.FIREFOX_AMO_API_SECRET }}
         run: |
           set -euo pipefail
-          npx --yes web-ext sign \
+          npx --yes web-ext@10.8.0 sign \
             --source-dir browser-extensions/firefox/dist/firefox \
             --artifacts-dir browser-extensions/firefox/dist/amo-signed \
             --api-key "${FIREFOX_AMO_API_KEY}" \
@@ -312,21 +329,25 @@ jobs:
 
       - name: Summarize extension store submissions
         if: always()
+        env:
+          CHROME_STATUS: ${{ steps.chrome_webstore.outputs.status }}
+          EDGE_STATUS: ${{ steps.edge_addons.outputs.status }}
+          FIREFOX_STATUS: ${{ steps.firefox_amo.outputs.status }}
         run: |
           {
             echo "## Browser extension store submissions"
             echo
-            if [ -n "${{ steps.chrome_webstore.outputs.status }}" ]; then
+            if [ -n "${CHROME_STATUS}" ]; then
               echo "- Chrome Web Store: submitted"
             else
               echo "- Chrome Web Store: skipped (missing secrets or store setup)"
             fi
-            if [ -n "${{ steps.edge_addons.outputs.status }}" ]; then
+            if [ -n "${EDGE_STATUS}" ]; then
               echo "- Microsoft Edge Add-ons: submitted"
             else
               echo "- Microsoft Edge Add-ons: skipped (missing secrets or store setup)"
             fi
-            if [ -n "${{ steps.firefox_amo.outputs.status }}" ]; then
+            if [ -n "${FIREFOX_STATUS}" ]; then
               echo "- Firefox AMO: submitted"
             else
               echo "- Firefox AMO: skipped (missing secrets or store setup)"

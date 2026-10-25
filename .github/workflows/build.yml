@@ -36,10 +36,10 @@ jobs:
 
     steps:
       - name: Check out repository
-        uses: actions/checkout@v7
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
       - name: Set up Java
-        uses: actions/setup-java@v6
+        uses: actions/setup-java@b843ebf9b913146b38da2eaa7aeddf76074ae1ad # v6.1.0
         with:
           distribution: temurin
           java-version: '25'
@@ -47,7 +47,7 @@ jobs:
           cache: maven
 
       - name: Set up Node.js
-        uses: actions/setup-node@v7
+        uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
         with:
           node-version: '24'
           check-latest: true
@@ -59,7 +59,16 @@ jobs:
         run: npm install --global "$(node -p "require('./package.json').packageManager")"
 
       - name: Run backend tests
-        run: mvn -q test
+        run: mvn -q -Dit.test='*QuarkusIT' verify
+
+      - name: Check workflow security regressions
+        run: python3 scripts/security/test-workflows.py
+
+      - name: Check Compose ingress compatibility
+        run: python3 scripts/security/test-compose-ports.py
+
+      - name: Check certificate isolation
+        run: sh scripts/security/test-cert-init.sh
 
       - name: Install frontend dependencies
         working-directory: admin-ui
@@ -75,3 +84,8 @@ jobs:
 
       - name: Validate GitHub Pages site generator
         run: node site/test-config-generator.mjs
+
+      - name: Test browser extensions
+        run: |
+          npm --prefix browser-extensions/chromium test
+          npm --prefix browser-extensions/firefox test
