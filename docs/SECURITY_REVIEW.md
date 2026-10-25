@@ -146,16 +146,35 @@ valid. Existing coverage also exercises settings persistence, browser/remote/
 extension sessions, token rotation/revocation, OAuth routing, CSRF, user
 isolation, mailbox polling/import/deduplication, admin controls and backups.
 
-Both applications were rebuilt and force-recreated. The original database
-volume and configuration counts were preserved: three users, five sources and
-one destination. Internal backend/database readiness is UP. Real browser
+Both applications were rebuilt and force-recreated. Existing deployment data
+and credentials were preserved. Internal backend/database readiness is UP. Real browser
 checks load the main and `/remote` sign-in pages over Tailscale and the main
 page over localhost without bypassing certificate checks. Network checks
 verify login POST reachability without submitting real account credentials.
 
-One live Sapo source currently receives an authentication rejection. Older
-Sapo polling failures are present before these changes; retained records do
-not establish their original authentication cause. No mailbox credentials
-were changed. Automated mailflow checks do not establish that every live
-provider credential is valid. Physical passkey interaction, live provider
+Automated mailflow checks do not establish that every live provider credential
+is valid. Deployment-specific account counts and mailbox diagnostics belong in
+private operator records, not repository reports. Physical passkey interaction, live provider
 consent and a live authenticated user walkthrough remain manual checks.
+
+## Privacy audit — 2026-10-25
+
+The audit covered tracked source, Git history, commit-email metadata and PNG
+metadata without reading a working environment file. Current documentation
+uses relative links and reserved example network addresses; deployment-specific
+counts and mailbox troubleshooting notes have been removed. Optional icon
+metadata was stripped while preserving every compressed pixel-data chunk.
+
+The initial default Gitleaks history scan matched three deterministic
+encryption fixtures used by disposable tests. These are public test data, not
+deployment credentials. The reviewed policy exempts only those exact values,
+never a file or test directory. Canary checks ensure changed keys remain
+visible and private paths, tailnet hosts and contact addresses are detected.
+Commit email metadata uses GitHub noreply addresses. No committed environment
+file or certificate/private-key export was found.
+
+The reviewed current-tree scan reports no secret/private-identifier findings.
+Older history still contains machine-specific path disclosures; a cleanup
+commit does not erase those old copies. Removing them requires separately
+coordinated published-history remediation. See the contributor privacy checks
+for reproducible source/history scanning and the scope of the safeguards.

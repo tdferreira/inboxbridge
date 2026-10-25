@@ -217,7 +217,7 @@ and any still-required legacy keys.
 Important host/access notes:
 
 - if you want to sign in from another device such as a phone, tablet, or another laptop, prefer a hostname covered by the generated or custom certificate
-- passkeys/WebAuthn do not work reliably on raw IP hosts such as `https://192.168.50.6:3000`
+- passkeys/WebAuthn do not work reliably on raw IP hosts such as `https://192.0.2.10:3000`
 - the `/remote` PWA install prompt also depends on the browser treating the HTTPS origin as trusted
 - browser geolocation prompts can fail or behave inconsistently on self-signed or otherwise untrusted HTTPS origins
 

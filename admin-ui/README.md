@@ -54,7 +54,7 @@ Key design choices:
 - passkey registration now opens in a focused modal dialog instead of stretching the security panel inline layout
 - the login screen supports passkey sign-in for users who have already enrolled one
 - the login form only prefills the bootstrap `admin` / `nimda` credentials while the untouched bootstrap admin is still in its original first-login state; after a password change, passkey enrollment, or user removal, the form falls back to empty fields
-- passkey UI is intentionally disabled on raw IP hosts because WebAuthn does not work there; LAN access should use a real hostname configured in `SECURITY_PASSKEY_*` instead of a bare address like `192.168.50.6`
+- passkey UI is intentionally disabled on raw IP hosts because WebAuthn does not work there; LAN access should use a real hostname configured in `SECURITY_PASSKEY_*` instead of a bare address like `192.0.2.10`
 - the app now also ships a dedicated `/remote` mobile-first remote-control surface with its own scoped session, tiny source list, and poll-now actions for phones and quick-access devices
 - that `/remote` surface now also hydrates the active live poll snapshot on load, listens to the SSE progress stream, highlights the source or sources currently being processed, and exposes pause/resume/stop plus per-source `Move Next` / `Retry` controls when the current remote viewer can manage the run
 - disabled source accounts are filtered out of `/remote`, so the quick-access list only shows sources that can actually be triggered from that surface

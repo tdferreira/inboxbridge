@@ -2,6 +2,27 @@ target/
 .idea/
 .vscode/
 .env
+.env.*
+!.env.example
+# Local credentials, private certificates, databases and backup artifacts.
+*.pem
+*.key
+*.p12
+*.pfx
+*.jks
+*.keystore
+*.crt
+*.cer
+*.der
+*.db
+*.sqlite
+*.sqlite3
+*.dump
+*.backup
+*.sql.gz
+backups/
+.backups/
+gitleaks-report.*
 *.iml
 .DS_Store
 .m2repo/

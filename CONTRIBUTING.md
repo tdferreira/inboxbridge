@@ -185,3 +185,34 @@ and explicitly configured bindings without reading the deployment's `.env`.
 Use `python3 scripts/security/test-runtime.py --base-url https://YOUR_HOST:3000`
 to verify the operator's actual URL as well as localhost; testing localhost
 alone does not prove a LAN/tailnet address remains reachable.
+
+## Repository privacy
+
+Keep operator home paths, real private hostnames, personal contact details,
+local deployment/account counts and mailbox incident histories out of source
+and audit notes. Use relative links and reserved example addresses. Public
+project ownership, add-on identifiers and explicit synthetic fixtures remain
+part of the project. Do not commit environment files, credential/certificate
+exports, database dumps or optional personal image metadata.
+
+Before committing, run:
+
+```bash
+python3 scripts/security/test-repository-privacy.py
+python3 scripts/security/test-secrets-rules.py
+sh scripts/security/scan-secrets.sh
+```
+
+Gitleaks 8.30.1 scans an explicit Git-tracked source snapshot with redacted
+reports. The policy extends its standard secret rules with home-path, private
+tailnet-host and email checks. Only exact, public deterministic test keys and
+explicit example/project identifiers are exempted; no files or test trees are
+skipped. Canary tests prove changed fixture keys and private identifiers are
+still detected.
+
+Use `sh scripts/security/scan-secrets.sh history` for a separate full-history
+audit. It scans a self-contained Git bundle without local Git authentication
+configuration or working environment files. A clean current tree does not
+erase disclosures in old commits: published-history remediation requires a
+coordinated rewrite and collaborator resynchronization, with additional
+provider cleanup where retained copies exist.

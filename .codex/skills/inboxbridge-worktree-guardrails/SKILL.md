@@ -10,6 +10,7 @@ Read [`AGENTS.md`](../../../AGENTS.md) first, then load only the repo docs neede
 ## Always follow
 
 - Do not read `.env` unless the user explicitly asks.
+- Keep operator-specific paths, private hostnames, personal contact details, deployment counts, mailbox incidents and image metadata out of Git. Use relative links/reserved examples; run `test-repository-privacy.py` and `scan-secrets.sh` before commits. A new sanitizing commit does not erase already-published history.
 - Treat [`CONTEXT.md`](../../../CONTEXT.md) as the cross-chat source of truth.
 - Update docs whenever behavior, UI copy, setup flow, or architecture changes.
 - Add or update tests for every behavior change.

@@ -1313,7 +1313,7 @@ Current live config issue in this workspace:
 - when a session has browser-reported latitude/longitude, the admin UI now does a best-effort client-side reverse-geocode to show a friendlier device-reported place label and exposes an `Open in Maps` link; that guessed label is a convenience hint only and does not replace the stored raw device-location sample
 - the Sessions tab now distinguishes `not captured yet` for the current browser session from older `not shared` sessions, and exposes an inline retry capture action there so a dismissed or missed banner prompt does not strand the user without a way to save the device location
 - both the main app and `/remote` now auto-capture device location only when the browser already reports geolocation permission as granted; browsers that still require a user gesture, especially mobile browsers, keep the explicit `Share Device Location` button as the reliable capture path, and the geolocation flow still retries with a lower-accuracy lookup when the first high-accuracy request fails
-- passkeys are viable only on `localhost` or a real hostname/domain configured in `SECURITY_PASSKEY_*`; the admin UI now treats raw IP hosts such as `192.168.50.6` as non-passkey-capable and shows explicit guidance instead of letting WebAuthn fail with browser `effective domain` errors
+- passkeys are viable only on `localhost` or a real hostname/domain configured in `SECURITY_PASSKEY_*`; the admin UI now treats raw IP hosts such as `192.0.2.10` as non-passkey-capable and shows explicit guidance instead of letting WebAuthn fail with browser `effective domain` errors
 - self-registration no longer relies on the old arithmetic challenge; it now uses a provider-driven CAPTCHA flow. The default provider is `ALTCHA`, which is self-hosted and works without external registration or tokens. `Cloudflare Turnstile` and `hCaptcha` are also supported and can be selected from `Administration -> Authentication Security` once their required credentials are configured.
 - the `Edit Authentication Security` modal is intentionally wider than the standard settings dialogs and now mirrors the grouped-card structure used by the polling editor, including dedicated registration CAPTCHA selection/configuration sections plus the translated effective-value summary block
 - The Google setup help panel is fully localized across the supported admin-ui languages.
@@ -1372,14 +1372,22 @@ the main and `/remote` sign-in pages over Tailscale and the main localhost page.
 A new PostgreSQL HTTP regression seeds a legacy 210,000-iteration password
 hash, signs in with the unchanged password, verifies its upgrade to 600,000
 iterations, signs in again and confirms the first session remains valid. Tests
-use isolated databases; the deployment retains its original volume and its
-three users, five source accounts and one destination. No credentials were
-reset and no manual live mailbox import was triggered for validation.
+use isolated databases; deployment data and credentials were preserved. No
+manual live mailbox import was triggered for validation.
 
-Live Sapo polling currently reports server-side authentication rejection.
-Historical Sapo poll failures predate this deployment, but retained history
-does not identify the original authentication cause. Do not claim all live
-provider connections work solely because the automated mailflow suite passes.
+Do not claim all live provider connections work solely because the automated
+mailflow suite passes. Keep deployment-specific mailbox diagnostics private.
 Physical user passkey interaction and live Google/Microsoft consent remain
 manual checks; automated authentication/session/ownership/configuration and
 GreenMail regression coverage passes.
+
+### Repository privacy boundaries
+
+Repository notes must describe behavior and validation without preserving
+operator-specific paths, private endpoints, personal contacts, deployment
+counts or mailbox incidents. Use relative documentation links and reserved
+example network addresses. Keep environment/credential exports and optional
+image metadata untracked. The tracked-file privacy checks, scanner canaries
+and Gitleaks source scan run in CI; historical scans are separate because a
+new sanitizing commit does not remove old published content. Synthetic public
+encryption fixtures are exact-value exceptions, with no path-based exclusions.

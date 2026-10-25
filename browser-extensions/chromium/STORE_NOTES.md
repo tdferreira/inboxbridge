@@ -17,7 +17,7 @@ These notes exist so the Chromium MVP stays close to future signing/submission s
 - public short and long descriptions
 - initial manual Chrome Web Store listing
 - initial manual Microsoft Edge Add-ons listing
-- API credentials and repository secrets described in [docs/BROWSER_EXTENSION_STORES.md](/Users/tdferreira/Developer/inboxbridge/docs/BROWSER_EXTENSION_STORES.md)
+- API credentials and repository secrets described in [docs/BROWSER_EXTENSION_STORES.md](../../docs/BROWSER_EXTENSION_STORES.md)
 
 ## Packaging commands
 

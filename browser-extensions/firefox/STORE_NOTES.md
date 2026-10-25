@@ -18,7 +18,7 @@ before any AMO release.
 - polished privacy/data-use statement
 - public short and long descriptions
 - initial manual AMO listing or unlisted add-on registration
-- AMO API credentials and repository secrets described in [docs/BROWSER_EXTENSION_STORES.md](/Users/tdferreira/Developer/inboxbridge/docs/BROWSER_EXTENSION_STORES.md)
+- AMO API credentials and repository secrets described in [docs/BROWSER_EXTENSION_STORES.md](../../docs/BROWSER_EXTENSION_STORES.md)
 
 ## Packaging commands
 

@@ -68,7 +68,7 @@ describe('passkeys helpers', () => {
   it('treats raw ip hosts as unsupported for passkeys', () => {
     expect(hostSupportsPasskeys('localhost')).toBe(true)
     expect(hostSupportsPasskeys('inboxbridge.local')).toBe(true)
-    expect(hostSupportsPasskeys('192.168.50.6')).toBe(false)
+    expect(hostSupportsPasskeys('192.0.2.10')).toBe(false)
     expect(hostSupportsPasskeys('::1')).toBe(false)
   })
 })

@@ -64,6 +64,14 @@ jobs:
       - name: Check workflow security regressions
         run: python3 scripts/security/test-workflows.py
 
+      - name: Check repository privacy
+        run: |
+          python3 scripts/security/test-repository-privacy.py
+          python3 scripts/security/test-secrets-rules.py
+
+      - name: Scan tracked source for secrets and private identifiers
+        run: sh scripts/security/scan-secrets.sh
+
       - name: Check Compose ingress compatibility
         run: python3 scripts/security/test-compose-ports.py
 

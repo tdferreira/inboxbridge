@@ -1,0 +1,36 @@
+title = "InboxBridge committed-data privacy policy"
+
+[extend]
+useDefault = true
+
+# These exact deterministic keys belong only to disposable test resources.
+# Never exclude a whole test tree or accept arbitrary values in these files.
+
+[[allowlists]]
+description = "Exact public synthetic encryption fixtures; never skip a file or test tree"
+regexTarget = "secret"
+regexes = ['''^(?:fedcba9876543210fedcba9876543210|0123456789abcdef0123456789abcdef)$''']
+
+[[rules]]
+id = "private-home-directory"
+description = "Machine-specific home-directory paths must not be published"
+regex = '''(?:/Users/|/home/|[A-Za-z]:\\Users\\)[A-Za-z0-9._-]+[/\\]'''
+
+[[rules]]
+id = "private-tailnet-hostname"
+description = "Use explicit examples instead of a real tailnet hostname"
+regex = '''[A-Za-z0-9](?:[A-Za-z0-9.-]*[A-Za-z0-9])?\.ts\.net'''
+[[rules.allowlists]]
+regexTarget = "secret"
+regexes = ['''^(?:inboxbridge\.your-tailnet\.ts\.net|something\.ts\.net)$''']
+
+[[rules]]
+id = "personal-email-address"
+description = "Use reserved example addresses and explicit public project identifiers"
+regex = '''[A-Za-z0-9._%+-]+@(?:[A-Za-z0-9-]+\.)+[A-Za-z]{2,}'''
+[[rules.allowlists]]
+regexTarget = "secret"
+regexes = [
+  '''^[^@]+@(?:example\.(?:com|org|net|test)|gmail\.(?:example|test))$''',
+  '''^(?:inboxbridge@extensions\.inboxbridge\.dev|you@outlook\.com)$'''
+]

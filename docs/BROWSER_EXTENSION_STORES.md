@@ -1,7 +1,7 @@
 # Browser Extension Store Releases
 
 InboxBridge now ships browser-extension release automation through
-[.github/workflows/release.yml](/Users/tdferreira/Developer/inboxbridge/.github/workflows/release.yml).
+[.github/workflows/release.yml](../.github/workflows/release.yml).
 
 The release workflow always:
 
