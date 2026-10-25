@@ -1467,3 +1467,11 @@ smoke test with non-root users, CA-key isolation and no backend/database ports.
 Only the public CA was exported; localhost hostname verification remained on.
 The local development stack was rebuilt and force-recreated. Registry pushes,
 source release tags and an upstream PR have not been performed for this proposal.
+
+Hosted release verification passed application tests and the HTTPS/non-root
+image smoke checks. Linux then rejected host-side removal of root-owned bind
+certificate files. Smoke cleanup now removes only its disposable certificate
+directory through a read-only, network-disabled bootstrap container with all
+capabilities dropped, after stopping the test stack. Source/deployment keys
+are never mounted there. The existing tag is retained; publication uses a new
+prerelease revision rather than retargeting a previously pushed source tag.

@@ -8,6 +8,7 @@ import json
 import os
 import shutil
 import subprocess
+import uuid
 import unittest
 from unittest.mock import patch
 
@@ -75,6 +76,24 @@ class ContainerReleaseTests(unittest.TestCase):
             self.assertFalse(services['postgres'].get('ports'))
             self.assertEqual(services['inboxbridge-admin']['ports'][0]['host_ip'],'127.0.0.1')
 
+    def test_disposable_root_owned_certificates_can_be_removed_without_capabilities(self):
+        volume='inboxbridge-cleanup-test-'+uuid.uuid4().hex
+        subprocess.run(['docker','volume','create',volume],check=True,capture_output=True)
+        mount=['--mount',f'type=volume,source={volume},target=/certs']
+        try:
+            subprocess.run(['docker','run','--rm','--network','none',*mount,'alpine:3.24',
+                'sh','-c','mkdir /certs/private; chmod 700 /certs/private; echo synthetic > /certs/private/key'],check=True,capture_output=True)
+            denied=subprocess.run(['docker','run','--rm','--network','none','--user','1001:1001',
+                *mount,'alpine:3.24','sh','-c','rm -rf /certs/private'],capture_output=True)
+            self.assertNotEqual(denied.returncode,0)
+            subprocess.run(['docker','run','--rm','--network','none','--read-only','--cap-drop','ALL',
+                '--security-opt','no-new-privileges',*mount,'alpine:3.24','sh','-c','rm -rf /certs/*'],check=True,capture_output=True)
+            files=subprocess.check_output(['docker','run','--rm','--network','none',*mount,
+                'alpine:3.24','ls','-A','/certs'],text=True)
+            self.assertEqual(files,'')
+        finally:
+            subprocess.run(['docker','volume','rm',volume],check=True,capture_output=True)
+
     def test_release_checks_exact_tag_and_tests_before_registry_publication(self):
         workflow=(ROOT/'.github/workflows/release.yml').read_text()
         self.assertIn('ref: ${{ steps.release_meta.outputs.tag_name }}',workflow)
@@ -92,6 +111,8 @@ class ContainerReleaseTests(unittest.TestCase):
         self.assertIn('compose cp cert-init:/certs/ca.crt',smoke)
         self.assertNotIn('--insecure',smoke)
         self.assertIn('https://localhost:',smoke)
+        self.assertIn('--network none --read-only --cap-drop ALL',smoke)
+        self.assertIn('source=$task_tmp/certs,target=/certs',smoke)
         self.assertIn('sh scripts/release/smoke-images.sh',(ROOT/'.github/workflows/build.yml').read_text())
 
 

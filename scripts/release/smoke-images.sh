@@ -9,6 +9,14 @@ task_project="image-smoke-$(date +%s)-$$"
 compose() { docker compose --project-directory "$task_tmp" --env-file "$task_tmp/.env" -p "$task_project" -f "$task_tmp/compose.json" "$@"; }
 cleanup() {
   if [ -f "$task_tmp/compose.json" ]; then compose down --volumes --remove-orphans >/dev/null 2>&1 || true; fi
+  # Linux bind mounts retain root ownership from cert-init. Remove only this
+  # disposable certificate directory using its existing bootstrap image.
+  if [ -d "$task_tmp/certs" ]; then
+    docker run --rm --network none --read-only --cap-drop ALL \
+      --security-opt no-new-privileges \
+      --mount "type=bind,source=$task_tmp/certs,target=/certs" \
+      alpine:3.24 sh -c 'rm -rf /certs/*'
+  fi
   rm -rf "$task_tmp"
 }
 trap cleanup EXIT
