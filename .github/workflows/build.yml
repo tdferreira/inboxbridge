@@ -39,18 +39,24 @@ jobs:
         uses: actions/checkout@v7
 
       - name: Set up Java
-        uses: actions/setup-java@v5
+        uses: actions/setup-java@v6
         with:
           distribution: temurin
           java-version: '25'
+          check-latest: true
           cache: maven
 
       - name: Set up Node.js
         uses: actions/setup-node@v7
         with:
           node-version: '24'
+          check-latest: true
           cache: npm
           cache-dependency-path: admin-ui/package-lock.json
+
+      - name: Update npm
+        working-directory: admin-ui
+        run: npm install --global "$(node -p "require('./package.json').packageManager")"
 
       - name: Run backend tests
         run: mvn -q test

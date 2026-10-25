@@ -15,18 +15,26 @@
         <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
         <quarkus.platform.group-id>io.quarkus.platform</quarkus.platform.group-id>
         <quarkus.platform.artifact-id>quarkus-bom</quarkus.platform.artifact-id>
-        <quarkus.platform.version>3.33.3</quarkus.platform.version>
-        <compiler-plugin.version>3.15.0</compiler-plugin.version>
+        <quarkus.platform.version>3.40.1.1</quarkus.platform.version>
+        <compiler-plugin.version>3.16.0</compiler-plugin.version>
         <jacoco-plugin.version>0.8.15</jacoco-plugin.version>
-        <surefire-plugin.version>3.5.6</surefire-plugin.version>
-        <failsafe-plugin.version>3.5.6</failsafe-plugin.version>
+        <surefire-plugin.version>3.6.0</surefire-plugin.version>
+        <failsafe-plugin.version>3.6.0</failsafe-plugin.version>
         <angus-mail.version>2.0.5</angus-mail.version>
         <commons-compress.version>1.28.0</commons-compress.version>
-        <testcontainers.version>1.21.4</testcontainers.version>
+        <testcontainers.version>2.0.5</testcontainers.version>
     </properties>
 
     <dependencyManagement>
         <dependencies>
+            <!-- Keep every Testcontainers module on the same tested release. -->
+            <dependency>
+                <groupId>org.testcontainers</groupId>
+                <artifactId>testcontainers-bom</artifactId>
+                <version>${testcontainers.version}</version>
+                <type>pom</type>
+                <scope>import</scope>
+            </dependency>
             <dependency>
                 <groupId>${quarkus.platform.group-id}</groupId>
                 <artifactId>${quarkus.platform.artifact-id}</artifactId>
@@ -87,12 +95,12 @@
         <dependency>
             <groupId>com.yubico</groupId>
             <artifactId>webauthn-server-core</artifactId>
-            <version>2.9.0</version>
+            <version>2.10.1</version>
         </dependency>
         <dependency>
             <groupId>org.altcha</groupId>
             <artifactId>altcha</artifactId>
-            <version>2.0.3</version>
+            <version>2.1.1</version>
         </dependency>
         <!--
           ALTCHA v2 uses org.json internally and publishes it as a provided
@@ -102,17 +110,17 @@
         <dependency>
             <groupId>org.json</groupId>
             <artifactId>json</artifactId>
-            <version>20260719</version>
+            <version>20260814</version>
         </dependency>
 
         <dependency>
             <groupId>io.quarkus</groupId>
-            <artifactId>quarkus-junit5</artifactId>
+            <artifactId>quarkus-junit</artifactId>
             <scope>test</scope>
         </dependency>
         <dependency>
             <groupId>io.quarkus</groupId>
-            <artifactId>quarkus-junit5-component</artifactId>
+            <artifactId>quarkus-junit-component</artifactId>
             <scope>test</scope>
         </dependency>
         <dependency>
@@ -123,19 +131,17 @@
         <dependency>
             <groupId>com.icegreen</groupId>
             <artifactId>greenmail-junit5</artifactId>
-            <version>2.1.11</version>
+            <version>2.1.14</version>
             <scope>test</scope>
         </dependency>
         <dependency>
             <groupId>org.testcontainers</groupId>
-            <artifactId>junit-jupiter</artifactId>
-            <version>${testcontainers.version}</version>
+            <artifactId>testcontainers-junit-jupiter</artifactId>
             <scope>test</scope>
         </dependency>
         <dependency>
             <groupId>org.testcontainers</groupId>
-            <artifactId>postgresql</artifactId>
-            <version>${testcontainers.version}</version>
+            <artifactId>testcontainers-postgresql</artifactId>
             <scope>test</scope>
         </dependency>
     </dependencies>

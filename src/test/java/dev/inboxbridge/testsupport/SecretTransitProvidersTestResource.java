@@ -42,11 +42,11 @@ public final class SecretTransitProvidersTestResource implements QuarkusTestReso
     @Override
     public Map<String, String> start() {
         openbao = new GenericContainer<>(DockerImageName.parse(
-                System.getProperty("inboxbridge.test.openbao.image", "openbao/openbao:latest")))
+                System.getProperty("inboxbridge.test.openbao.image", "openbao/openbao:2.7.1")))
                 .withEnv("BAO_DEV_ROOT_TOKEN_ID", OPENBAO_TOKEN)
                 .withExposedPorts(8200);
         vault = new GenericContainer<>(DockerImageName.parse(
-                System.getProperty("inboxbridge.test.vault.image", "hashicorp/vault:1.19")))
+                System.getProperty("inboxbridge.test.vault.image", "hashicorp/vault:2.2.1")))
                 .withCommand("server", "-dev", "-dev-root-token-id=" + VAULT_TOKEN, "-dev-listen-address=0.0.0.0:8200")
                 .withExposedPorts(8200);
 

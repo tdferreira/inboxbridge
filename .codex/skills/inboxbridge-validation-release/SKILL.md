@@ -17,6 +17,29 @@ Use this skill near the end of a task or when asked for release, PR, review, or 
 6. If runnable services were touched, finish with `docker compose up --build -d` unless the user explicitly asked not to or the environment blocks it.
 7. Leave the stack ready for a human to open `https://localhost:3000` and `https://localhost:3000/remote`.
 
+For dependency refreshes or an explicit request to run all tests, use Java 25
+and `mvn -q -Dit.test='*QuarkusIT' verify` so packaged runtime checks run too.
+Docker must be available for the PostgreSQL, OpenBao, and Vault integrations;
+run backend builds sequentially because they share `target/quarkus-app`.
+Use current Node 24 LTS (at least 24.15.0 for jsdom 30), run the full frontend
+suite and build, and exercise `npm run test:coverage` when updating Vitest or
+its coverage provider. Also run both browser-extension suites with
+`npm --prefix browser-extensions/chromium test` and
+`npm --prefix browser-extensions/firefox test`, plus the public-site generator
+check. Compose image builds install with `npm ci` but do not run frontend
+tests unless `RUN_TESTS=true` is explicitly enabled.
+If a recent Compose/Bake version rejects the existing host build network, use
+the explicit `--allow=network.host` Bake path in `CONTRIBUTING.md`, then recreate
+the affected services with Compose.
+
+Dependency audits must also check advisory applicability and image contents,
+including build tools and integration-test images. A floating tag can contain
+older runtimes or package-manager dependencies. The frontend's npm version is
+declared by `packageManager` in `admin-ui/package.json`; Docker and CI install
+that version before `npm ci`. Record dated findings and unresolved upstream
+gaps in `docs/DEPENDENCIES.md`, without treating scanner severity alone as proof
+that a deployed request path is exploitable.
+
 ## What to report back
 
 - What changed

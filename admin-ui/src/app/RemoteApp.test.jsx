@@ -1094,6 +1094,8 @@ describe('RemoteApp', () => {
 
     expect(await screen.findByRole('button', { name: 'Poll My Sources' })).toBeInTheDocument()
 
+    await waitFor(() => expect(FakeEventSource.instances).toHaveLength(1))
+
     act(() => {
       FakeEventSource.instances[0].emit('session-revoked', {
         type: 'session-revoked'
@@ -1204,6 +1206,8 @@ describe('RemoteApp', () => {
     render(<RemoteApp />)
 
     expect(await screen.findByRole('button', { name: 'Poll My Sources' })).toBeInTheDocument()
+
+    await waitFor(() => expect(FakeEventSource.instances).toHaveLength(1))
 
     await act(async () => {
       await FakeEventSource.instances[0].onerror?.()
@@ -1970,6 +1974,8 @@ describe('RemoteApp', () => {
     render(<RemoteApp />)
 
     await screen.findByText('Main Inbox')
+
+    await waitFor(() => expect(FakeEventSource.instances).toHaveLength(1))
 
     act(() => {
       FakeEventSource.instances[0].emit('poll-source-started', {

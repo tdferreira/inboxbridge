@@ -30,18 +30,24 @@ jobs:
           echo "docs_base_url=https://github.com/${{ github.repository }}/blob/${TAG_NAME}" >> "$GITHUB_OUTPUT"
 
       - name: Set up Java
-        uses: actions/setup-java@v5
+        uses: actions/setup-java@v6
         with:
           distribution: temurin
           java-version: '25'
+          check-latest: true
           cache: maven
 
       - name: Set up Node.js
         uses: actions/setup-node@v7
         with:
           node-version: '24'
+          check-latest: true
           cache: npm
           cache-dependency-path: admin-ui/package-lock.json
+
+      - name: Update npm
+        working-directory: admin-ui
+        run: npm install --global "$(node -p "require('./package.json').packageManager")"
 
       - name: Build backend
         run: mvn -q -DskipTests package

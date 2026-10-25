@@ -1,10 +1,12 @@
 version: 2
 # Policy note:
-# Dependabot cannot express "track the latest LTS line" for ecosystems like
-# Node or Quarkus. This repository therefore uses Dependabot for broad update
-# visibility, while Node and Quarkus major-line decisions are reviewed
-# manually and should usually stay on approved LTS baselines unless the
-# repository is intentionally upgraded.
+# Prefer the latest patched LTS release when the current distribution has one.
+# If that LTS still has a major applicable security flaw, use the latest stable
+# release that fixes it. Otherwise use current compatible stable releases for
+# dependencies without LTS, preserving framework BOM compatibility.
+# Dependabot cannot encode dynamic LTS or security applicability rules, so keep
+# broad update visibility and review frontend, backend, Actions, and all images
+# against this policy manually. Never infer LTS solely from a "stable" tag.
 updates:
   - package-ecosystem: "github-actions"
     directory: "/"

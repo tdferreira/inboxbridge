@@ -3,12 +3,14 @@ WORKDIR /app
 ENV NODE_OPTIONS=--max-old-space-size=6144
 ARG RUN_TESTS=false
 COPY admin-ui/package.json admin-ui/package-lock.json ./
+RUN npm install --global "$(node -p "require('./package.json').packageManager")"
 RUN npm ci
 COPY admin-ui/ ./
 RUN if [ "$RUN_TESTS" = "true" ]; then CI=1 node ./scripts/run-vitest.mjs run --pool threads --maxWorkers=1; fi
 RUN npm run build
 
-FROM nginx:1.31.2-alpine
+FROM nginx:1.31.8-alpine
+RUN apk upgrade --no-cache
 COPY admin-ui/nginx.conf /etc/nginx/conf.d/default.conf
 COPY --from=build /app/dist /usr/share/nginx/html
 EXPOSE 80 443

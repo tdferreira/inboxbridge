@@ -1,6 +1,6 @@
 services:
   cert-init:
-    image: alpine:3.20
+    image: alpine:3.24
     container_name: inboxbridge-cert-init
     volumes:
       - ./certs:/certs

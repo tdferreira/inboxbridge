@@ -1,16 +1,21 @@
 package dev.inboxbridge.service.auth;
 
+import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.time.Duration;
+import java.util.Base64;
+import java.util.Map;
 import java.util.Optional;
 
+import org.altcha.altcha.v2.Altcha;
 import org.junit.jupiter.api.Test;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.fasterxml.jackson.databind.node.ObjectNode;
 import dev.inboxbridge.config.InboxBridgeConfig;
 import dev.inboxbridge.dto.RegistrationChallengeResponse;
 
@@ -30,6 +35,56 @@ class RegistrationChallengeServiceTest {
         assertNotNull(response.altcha());
         assertEquals("PBKDF2/SHA-256", response.altcha().parameters().algorithm());
         assertTrue(response.altcha().parameters().cost() > 0);
+        assertTrue(response.altcha().parameters().expiresAt().doubleValue() > System.currentTimeMillis() / 1000.0);
+    }
+
+    @Test
+    void validateAndConsumeAcceptsSerializedChallengeAndRejectsReplay() throws Exception {
+        RegistrationChallengeService service = new RegistrationChallengeService();
+        service.authSecuritySettingsService = authSecuritySettingsService(true, "ALTCHA");
+        service.inboxBridgeConfig = new TestConfig();
+        service.objectMapper = new ObjectMapper();
+
+        String payload = solveChallenge(service);
+
+        assertDoesNotThrow(() -> service.validateAndConsume(payload, "203.0.113.7"));
+        IllegalArgumentException error = assertThrows(
+                IllegalArgumentException.class,
+                () -> service.validateAndConsume(payload, "203.0.113.7"));
+        assertEquals("Registration CAPTCHA is invalid or already used", error.getMessage());
+    }
+
+    @Test
+    void validateAndConsumeRejectsTamperedChallengeExpiry() throws Exception {
+        RegistrationChallengeService service = new RegistrationChallengeService();
+        service.authSecuritySettingsService = authSecuritySettingsService(true, "ALTCHA");
+        service.inboxBridgeConfig = new TestConfig();
+        service.objectMapper = new ObjectMapper();
+
+        String payload = solveChallenge(service);
+        var json = service.objectMapper.readTree(Base64.getDecoder().decode(payload));
+        var parameters = (ObjectNode) json.path("challenge").path("parameters");
+        parameters.put("expiresAt", parameters.path("expiresAt").asDouble() + 3600);
+        String tamperedPayload = Base64.getEncoder().encodeToString(service.objectMapper.writeValueAsBytes(json));
+
+        assertThrows(IllegalArgumentException.class, () -> service.validateAndConsume(tamperedPayload, "203.0.113.7"));
+        // A rejected submission must not consume the original signed solution.
+        assertDoesNotThrow(() -> service.validateAndConsume(payload, "203.0.113.7"));
+    }
+
+    private String solveChallenge(RegistrationChallengeService service) throws Exception {
+        RegistrationChallengeResponse.AltchaChallengeResponse response = service.currentChallenge().altcha();
+        Map<String, Object> challenge = Map.of("parameters", response.parameters(), "signature", response.signature());
+        // Round-trip the public DTO through the same JSON/base64 envelope used by the browser.
+        String initialPayload = Base64.getEncoder().encodeToString(service.objectMapper.writeValueAsBytes(Map.of(
+                "challenge", challenge,
+                "solution", Map.of("counter", 0, "derivedKey", "00", "time", 0))));
+        Altcha.Challenge parsedChallenge = Altcha.parsePayload(initialPayload).challenge();
+        Altcha.Solution solution = Altcha.solveChallenge(parsedChallenge, Altcha.kdf(response.parameters().algorithm()));
+        assertNotNull(solution);
+        return Base64.getEncoder().encodeToString(service.objectMapper.writeValueAsBytes(Map.of(
+                "challenge", challenge,
+                "solution", solution)));
     }
 
     @Test

@@ -2,7 +2,7 @@ package dev.inboxbridge.testsupport;
 
 import java.util.Map;
 
-import org.testcontainers.containers.PostgreSQLContainer;
+import org.testcontainers.postgresql.PostgreSQLContainer;
 import org.testcontainers.utility.DockerImageName;
 
 import io.quarkus.test.common.QuarkusTestResourceLifecycleManager;
@@ -14,11 +14,11 @@ import io.quarkus.test.common.QuarkusTestResourceLifecycleManager;
  */
 public final class PostgresTestResource implements QuarkusTestResourceLifecycleManager {
 
-    private PostgreSQLContainer<?> postgres;
+    private PostgreSQLContainer postgres;
 
     @Override
     public Map<String, String> start() {
-        postgres = new PostgreSQLContainer<>(DockerImageName.parse(
+        postgres = new PostgreSQLContainer(DockerImageName.parse(
                 System.getProperty("inboxbridge.test.postgres.image", "postgres:16")))
                 .withDatabaseName("inboxbridge_test")
                 .withUsername("inboxbridge")

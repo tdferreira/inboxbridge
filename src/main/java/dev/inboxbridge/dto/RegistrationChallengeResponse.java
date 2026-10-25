@@ -23,7 +23,8 @@ public record RegistrationChallengeResponse(
             int cost,
             int keyLength,
             String keyPrefix,
-            Long expiresAt) {
+            // Preserve ALTCHA's signed numeric value without coercing it.
+            Number expiresAt) {
     }
 
     public static RegistrationChallengeResponse disabled() {
