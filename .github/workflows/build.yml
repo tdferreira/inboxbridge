@@ -12,6 +12,8 @@ permissions:
 
 jobs:
   build:
+    # Keep this exact check name aligned with main's existing protection rules.
+    name: .github/workflows/build.yml
     runs-on: ubuntu-latest
 
     services:
@@ -73,7 +75,9 @@ jobs:
         run: sh scripts/security/scan-secrets.sh
 
       - name: Check Compose ingress compatibility
-        run: python3 scripts/security/test-compose-ports.py
+        run: |
+          docker compose version
+          python3 scripts/security/test-compose-ports.py
 
       - name: Check certificate isolation
         run: sh scripts/security/test-cert-init.sh

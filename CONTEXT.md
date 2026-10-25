@@ -1391,3 +1391,13 @@ image metadata untracked. The tracked-file privacy checks, scanner canaries
 and Gitleaks source scan run in CI; historical scans are separate because a
 new sanitizing commit does not remove old published content. Synthetic public
 encryption fixtures are exact-value exceptions, with no path-based exclusions.
+
+### Hosted CI Compose compatibility
+
+The hosted runner uses Compose 2.38.2, which requires service `env_file` paths
+to exist even when `config --no-env-resolution` is used. The ingress test now
+creates an empty file in its temporary project directory, preserving isolation
+from deployment configuration and compatibility with local Compose 5.6.1.
+The build prints the Compose version for diagnostics. Its job display name is
+`.github/workflows/build.yml`, matching the existing required check context;
+repository protection rules remain unchanged.

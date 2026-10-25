@@ -216,3 +216,18 @@ configuration or working environment files. A clean current tree does not
 erase disclosures in old commits: published-history remediation requires a
 coordinated rewrite and collaborator resynchronization, with additional
 provider cleanup where retained copies exist.
+
+### Compose versions and required build checks
+
+The ingress test creates an empty service environment file inside its temporary
+project directory. Older Compose releases, including the hosted runner's
+2.38.2, validate `env_file` existence even with `--no-env-resolution`; a missing
+fixture can therefore fail CI while newer local Compose versions pass. Keep
+this fixture isolated: tests must not use the deployment environment file. The
+build logs its Compose version before running the regression checks.
+
+The build job reports the exact check name `.github/workflows/build.yml` to
+match the existing main-branch requirement. Keep the job name and required
+status-check context aligned. A successful check does not remove pull-request,
+approval, signature or protected-ref requirements; direct pushes by a bypass
+actor can succeed while GitHub reports the bypassed rules.

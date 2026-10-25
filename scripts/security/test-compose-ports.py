@@ -16,6 +16,9 @@ def frontend_port(overrides=None):
            if key not in ("PUBLIC_BIND_ADDRESS", "PUBLIC_PORT", "COMPOSE_ENV_FILES")}
     env.update(overrides or {})
     with tempfile.TemporaryDirectory() as directory:
+        # Compose v2 validates service env_file paths even without resolving them.
+        # Use an empty fixture so the operator's actual environment is never read.
+        (Path(directory) / ".env").touch()
         output = subprocess.check_output(
             ["docker", "compose", "--project-directory", directory,
              "--env-file", "/dev/null", "-f", str(ROOT / "docker-compose.yml"),
