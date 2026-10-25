@@ -1,0 +1,14 @@
+FROM eclipse-temurin:25-jre
+ARG SOURCE_URL
+ARG REVISION
+ARG VERSION
+LABEL org.opencontainers.image.source="${SOURCE_URL}" \
+      org.opencontainers.image.revision="${REVISION}" \
+      org.opencontainers.image.version="${VERSION}" \
+      org.opencontainers.image.licenses="Apache-2.0"
+WORKDIR /app
+COPY --chown=10001:10001 backend/ /app/
+COPY LICENSE /usr/share/licenses/inboxbridge/LICENSE
+USER 10001:10001
+EXPOSE 8443
+ENTRYPOINT ["java", "-XX:MaxRAMPercentage=65", "-jar", "/app/quarkus-run.jar"]

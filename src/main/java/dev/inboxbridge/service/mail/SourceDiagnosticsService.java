@@ -75,8 +75,11 @@ public class SourceDiagnosticsService {
                     throttleView(PollThrottleKeys.sourceMailbox(account)),
                     throttleView(PollThrottleKeys.destination(account.destination())),
                     idleHealthy(account),
-                    idleSchedulerFallback(account),
-                    idleWatchViews(account)));
+                    idleSchedulerFallback(account, state),
+                    usesImapIdle(account) && imapIdleHealthService != null && imapIdleHealthService.isSafetyPollingEnabled(account),
+                    idleWatchViews(account),
+                    usesImapIdle(account) && imapIdleHealthService != null
+                            ? imapIdleHealthService.nextSafetyPollAt(account, state == null ? null : state.lastSuccessAt) : null));
         }
         return result;
     }
@@ -148,11 +151,13 @@ public class SourceDiagnosticsService {
         return imapIdleHealthService.isHealthy(account.id());
     }
 
-    private boolean idleSchedulerFallback(RuntimeEmailAccount account) {
+    private boolean idleSchedulerFallback(RuntimeEmailAccount account, SourcePollingState state) {
         if (!usesImapIdle(account) || imapIdleHealthService == null) {
             return false;
         }
-        return imapIdleHealthService.shouldSchedulerFallback(account.id(), null);
+        return imapIdleHealthService.shouldSchedulerFallback(account.id(), null)
+                && (!imapIdleHealthService.isSafetyPollingEnabled(account)
+                    || imapIdleHealthService.isSafetyPollDue(account, java.time.Instant.now(), state == null ? null : state.lastSuccessAt));
     }
 
     private List<SourceIdleWatchView> idleWatchViews(RuntimeEmailAccount account) {
@@ -164,7 +169,7 @@ public class SourceDiagnosticsService {
                         folderNameFromWatchKey(state.watchKey()),
                         idleStatusFor(state),
                         state.lastConnectedAt(),
-                        state.disconnectedSince()))
+                        state.disconnectedSince(), state.lastRenewedAt()))
                 .sorted(Comparator.comparing(SourceIdleWatchView::folderName, String.CASE_INSENSITIVE_ORDER))
                 .toList();
     }

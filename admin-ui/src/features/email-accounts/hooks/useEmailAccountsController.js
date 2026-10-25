@@ -7,6 +7,9 @@ import { applyEmailAccountPreset, DEFAULT_EMAIL_ACCOUNT_FORM, normalizeEmailAcco
 import { statsTimezoneHeader } from '@/lib/statsTimezone'
 
 const DEFAULT_SOURCE_POLLING_FORM = {
+  idleSafetyPollingMode: 'DEFAULT',
+  idleSafetyPollIntervalOverride: '',
+  idleRenewalIntervalOverride: '',
   pollEnabledMode: 'DEFAULT',
   pollIntervalOverride: '',
   fetchWindowOverride: '',
@@ -79,6 +82,16 @@ function normalizeSourcePollingForm(payload) {
       : payload.pollEnabledOverride ? 'ENABLED' : 'DISABLED',
     pollIntervalOverride: payload.pollIntervalOverride || '',
     fetchWindowOverride: payload.fetchWindowOverride === null ? '' : String(payload.fetchWindowOverride),
+    idleSafetyPollingMode: payload.idleSafetyPollingEnabledOverride == null
+      ? 'DEFAULT' : payload.idleSafetyPollingEnabledOverride ? 'ENABLED' : 'DISABLED',
+    baseIdleSafetyPollingEnabled: payload.baseIdleSafetyPollingEnabled,
+    baseIdleSafetyPollInterval: payload.baseIdleSafetyPollInterval,
+    baseIdleRenewalInterval: payload.baseIdleRenewalInterval,
+    idleRenewalIntervalOverride: payload.idleRenewalIntervalOverride || '',
+    effectiveIdleRenewalInterval: payload.effectiveIdleRenewalInterval,
+    idleSafetyPollIntervalOverride: payload.idleSafetyPollIntervalOverride || '',
+    effectiveIdleSafetyPollInterval: payload.effectiveIdleSafetyPollInterval,
+    effectiveIdleSafetyPollingEnabled: payload.effectiveIdleSafetyPollingEnabled,
     basePollEnabled: payload.basePollEnabled,
     basePollInterval: payload.basePollInterval,
     baseFetchWindow: payload.baseFetchWindow,
@@ -702,7 +715,10 @@ export function useEmailAccountsController({
               ? null
               : fetcherPollingForm.pollEnabledMode === 'ENABLED',
             pollIntervalOverride: fetcherPollingForm.pollIntervalOverride.trim() || null,
-            fetchWindowOverride: fetcherPollingForm.fetchWindowOverride === '' ? null : Number(fetcherPollingForm.fetchWindowOverride)
+            fetchWindowOverride: fetcherPollingForm.fetchWindowOverride === '' ? null : Number(fetcherPollingForm.fetchWindowOverride),
+            idleSafetyPollingEnabledOverride: fetcherPollingForm.idleSafetyPollingMode === 'DEFAULT' ? null : fetcherPollingForm.idleSafetyPollingMode === 'ENABLED',
+            idleSafetyPollIntervalOverride: (fetcherPollingForm.idleSafetyPollIntervalOverride || '').trim() || null,
+            idleRenewalIntervalOverride: (fetcherPollingForm.idleRenewalIntervalOverride || '').trim() || null
           })
         })
         if (!response.ok) {

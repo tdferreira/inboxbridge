@@ -106,7 +106,9 @@ class SourceDiagnosticsServiceTest {
         assertEquals(3, view.sourceThrottle().adaptiveMultiplier());
         assertEquals(2, view.destinationThrottle().adaptiveMultiplier());
         assertFalse(view.idleHealthy());
-        assertTrue(view.idleSchedulerFallback());
+        assertFalse(view.idleSchedulerFallback());
+        assertNotNull(view.nextIdleSafetyPollAt());
+        assertTrue(view.idleSafetyPollingEnabled());
         assertEquals(2, view.idleWatches().size());
         assertEquals("CONNECTED", view.idleWatches().getFirst().status());
         assertEquals("DISCONNECTED", view.idleWatches().get(1).status());

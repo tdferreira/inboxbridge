@@ -10,6 +10,7 @@ import java.util.concurrent.atomic.AtomicBoolean;
 
 import org.eclipse.angus.mail.imap.IMAPFolder;
 import org.jboss.logging.Logger;
+import org.eclipse.microprofile.config.inject.ConfigProperty;
 
 import dev.inboxbridge.config.InboxBridgeConfig;
 import dev.inboxbridge.domain.RuntimeEmailAccount;
@@ -61,10 +62,30 @@ public class ImapIdleWatchService {
     @Inject
     MailSessionFactory mailSessionFactory;
 
+    @Inject
+    dev.inboxbridge.service.polling.PollingSettingsService pollingSettingsService;
+
+    @Inject
+    dev.inboxbridge.service.polling.SourcePollingSettingsService sourcePollingSettingsService;
+
+    @Inject
+    @ConfigProperty(name = "inboxbridge.mail.idle-renewal-interval", defaultValue = "PT25M")
+    Duration idleRenewalInterval = Duration.ofMinutes(25);
+
+    @Inject
+    @ConfigProperty(name = "inboxbridge.mail.idle-renewal-timeout", defaultValue = "PT20S")
+    Duration idleRenewalTimeout = Duration.ofSeconds(20);
+
     private final Map<String, IdleWatchHandle> handles = new ConcurrentHashMap<>();
-    private final Set<String> pendingSources = ConcurrentHashMap.newKeySet();
+    // True means a real mailbox notification; it takes priority over connection catch-up.
+    private final Map<String, Boolean> pendingSources = new ConcurrentHashMap<>();
+
+    private void queueSync(String sourceId, boolean notification) {
+        pendingSources.merge(sourceId, notification, (oldReason, newReason) -> oldReason || newReason);
+    }
 
     void onStart(@Observes StartupEvent ignored) {
+        ImapIdleRenewal.validate(idleRenewalInterval, idleRenewalTimeout);
         refreshWatches();
     }
 
@@ -94,12 +115,13 @@ public class ImapIdleWatchService {
         if (pollingService == null) {
             return;
         }
-        List<String> sourceIds = new ArrayList<>(pendingSources);
+        List<String> sourceIds = new ArrayList<>(pendingSources.keySet());
         if (!sourceIds.isEmpty()) {
             LOG.infof("IMAP IDLE drain examining %d queued source(s): %s", sourceIds.size(), sourceIds);
         }
         for (String sourceId : sourceIds) {
-            if (!pendingSources.remove(sourceId)) {
+            Boolean notification = pendingSources.remove(sourceId);
+            if (notification == null) {
                 continue;
             }
             RuntimeEmailAccount source = currentIdleSources().stream()
@@ -111,10 +133,11 @@ public class ImapIdleWatchService {
                 continue;
             }
             LOG.infof("IMAP IDLE drain starting queued sync for %s", source.id());
-            PollRunResult result = pollingService.runIdleTriggeredPollForSource(source);
+            PollRunResult result = notification ? pollingService.runIdleTriggeredPollForSource(source)
+                    : pollingService.runIdleCatchUpForSource(source);
             if (isBusyResult(result, source.id())) {
                 LOG.infof("IMAP IDLE drain re-queueing %s because the poll runner was busy", source.id());
-                pendingSources.add(source.id());
+                queueSync(source.id(), notification);
             }
         }
     }
@@ -134,15 +157,32 @@ public class ImapIdleWatchService {
     }
 
     synchronized void refreshWatches() {
+        if (pollingSettingsService != null) {
+            var settings = pollingSettingsService.effectiveIdleSettings();
+            idleRenewalInterval = settings.renewalInterval();
+            idleRenewalTimeout = settings.renewalTimeout();
+            dev.inboxbridge.service.polling.PollingSettingsService.validateIdleSafetyInterval(
+                    pollingSettingsService.effectiveIdleSafetyPollInterval(), idleRenewalInterval, idleRenewalTimeout);
+        }
+        ImapIdleRenewal.validate(idleRenewalInterval, idleRenewalTimeout);
         Instant now = Instant.now();
         Map<String, WatchTarget> desired = currentIdleSources().stream()
-                .flatMap(source -> source.sourceFolders().stream()
-                        .map(folderName -> new WatchTarget(watchKey(source.id(), folderName), source, folderName)))
+                .flatMap(source -> {
+                    Duration renewal = sourcePollingSettingsService == null ? idleRenewalInterval
+                            : sourcePollingSettingsService.effectiveIdleRenewalInterval(source);
+                    if (sourcePollingSettingsService != null) {
+                        dev.inboxbridge.service.polling.PollingSettingsService.validateIdleRenewal(renewal, idleRenewalTimeout);
+                        dev.inboxbridge.service.polling.PollingSettingsService.validateIdleSafetyInterval(
+                                sourcePollingSettingsService.effectiveIdleSafetyPollInterval(source), renewal, idleRenewalTimeout);
+                    }
+                    return source.sourceFolders().stream()
+                            .map(folderName -> new WatchTarget(watchKey(source.id(), folderName), source, folderName, renewal));
+                })
                 .collect(java.util.stream.Collectors.toMap(WatchTarget::watchKey, target -> target));
 
         for (Map.Entry<String, IdleWatchHandle> entry : new ArrayList<>(handles.entrySet())) {
             WatchTarget next = desired.get(entry.getKey());
-            if (next == null || !entry.getValue().matches(next.source(), next.folderName())) {
+            if (next == null || !entry.getValue().matches(next.source(), next.folderName(), next.renewalInterval())) {
                 entry.getValue().stop();
                 handles.remove(entry.getKey());
                 if (imapIdleHealthService != null) {
@@ -156,9 +196,9 @@ public class ImapIdleWatchService {
                 imapIdleHealthService.ensureTracked(target.source().id(), target.watchKey(), now);
             }
             handles.computeIfAbsent(target.watchKey(), ignored -> {
-                IdleWatchHandle handle = new IdleWatchHandle(target.source(), target.folderName());
+                IdleWatchHandle handle = new IdleWatchHandle(target.source(), target.folderName(), target.renewalInterval());
                 handle.start();
-                pendingSources.add(target.source().id());
+                // Catch-up is queued after a successful connection.
                 return handle;
             });
         }
@@ -175,13 +215,16 @@ public class ImapIdleWatchService {
     private final class IdleWatchHandle {
         private final RuntimeEmailAccount source;
         private final String watchedFolderName;
+        private final Duration renewalInterval;
+        private final Duration renewalTimeout = idleRenewalTimeout;
         private final AtomicBoolean active = new AtomicBoolean(true);
         private volatile Thread thread;
         private volatile Store store;
         private volatile Folder folder;
         private volatile int lastKnownMessageCount = -1;
 
-        private IdleWatchHandle(RuntimeEmailAccount source, String watchedFolderName) {
+        private IdleWatchHandle(RuntimeEmailAccount source, String watchedFolderName, Duration renewalInterval) {
+            this.renewalInterval = renewalInterval;
             this.source = source;
             this.watchedFolderName = watchedFolderName;
         }
@@ -190,8 +233,10 @@ public class ImapIdleWatchService {
             thread = Thread.startVirtualThread(this::runLoop);
         }
 
-        private boolean matches(RuntimeEmailAccount candidate, String candidateFolderName) {
-            return source.id().equals(candidate.id())
+        private boolean matches(RuntimeEmailAccount candidate, String candidateFolderName, Duration candidateRenewalInterval) {
+            return renewalInterval.equals(candidateRenewalInterval)
+                    && renewalTimeout.equals(idleRenewalTimeout)
+                    && source.id().equals(candidate.id())
                     && source.enabled() == candidate.enabled()
                     && source.protocol() == candidate.protocol()
                     && source.fetchMode() == candidate.fetchMode()
@@ -208,12 +253,13 @@ public class ImapIdleWatchService {
 
         private void stop() {
             active.set(false);
-            closeQuietly(folder);
-            closeQuietly(store);
+            // Interrupt the virtual reader before closing: close may itself wait for IDLE.
             Thread currentThread = thread;
             if (currentThread != null) {
                 currentThread.interrupt();
             }
+            closeQuietly(folder);
+            closeQuietly(store);
         }
 
         private void runLoop() {
@@ -221,11 +267,14 @@ public class ImapIdleWatchService {
             while (active.get()) {
                 try {
                     watchUntilInterrupted();
+                    // A renewal deadline interrupts only this connection, not the watcher lifecycle.
+                    Thread.interrupted();
                     delay = MIN_RECONNECT_DELAY;
                 } catch (RuntimeException error) {
                     if (!active.get()) {
                         return;
                     }
+                    Thread.interrupted();
                     LOG.warnf(error, "IMAP IDLE watcher for %s disconnected; retrying soon", source.id());
                     sleep(delay);
                     delay = delay.multipliedBy(2);
@@ -238,6 +287,7 @@ public class ImapIdleWatchService {
 
         private void watchUntilInterrupted() {
             String folderName = watchedFolderName;
+            ImapIdleRenewal renewal = null;
             try {
                 Session session = mailSessionFactory().idleImapSession(source);
                 store = session.getStore(mailSessionFactory().imapStoreProtocol(source.tls()));
@@ -248,9 +298,6 @@ public class ImapIdleWatchService {
                 }
                 folder.open(Folder.READ_ONLY);
                 lastKnownMessageCount = safeMessageCount(folder);
-                if (imapIdleHealthService != null) {
-                    imapIdleHealthService.markConnected(source.id(), watchKey(source.id(), folderName), Instant.now());
-                }
                 LOG.infof("IMAP IDLE watcher connected for %s on %s", source.id(), folderName);
                 if (!(folder instanceof IMAPFolder imapFolder)) {
                     throw new IllegalStateException("IMAP IDLE requires an IMAP folder implementation");
@@ -260,17 +307,45 @@ public class ImapIdleWatchService {
                     public void messagesAdded(MessageCountEvent event) {
                         int addedCount = event.getMessages() == null ? -1 : event.getMessages().length;
                         LOG.infof("IMAP IDLE watcher received messagesAdded for %s (%d new message(s))", source.id(), Math.max(addedCount, 0));
-                        pendingSources.add(source.id());
+                        queueSync(source.id(), true);
                         refreshLastKnownMessageCount();
                     }
                 });
-                while (active.get() && store.isConnected() && folder.isOpen()) {
+                // Reconnects must catch up even if mail arrived while no IDLE listener existed.
+                queueSync(source.id(), false);
+                if (imapIdleHealthService != null) {
+                    imapIdleHealthService.markConnected(source.id(), watchKey(source.id(), folderName), Instant.now());
+                }
+                renewal = new ImapIdleRenewal(renewalInterval, renewalTimeout,
+                        () -> renewIdle(imapFolder),
+                        () -> {
+                            if (active.get() && folder == imapFolder) {
+                                if (imapIdleHealthService != null) {
+                                    imapIdleHealthService.markRenewed(source.id(), watchKey(source.id(), folderName), Instant.now());
+                                }
+                                LOG.infof("IMAP IDLE renewed for %s on %s", source.id(), folderName);
+                            }
+                        },
+                        error -> {
+                            if (active.get() && folder == imapFolder) {
+                                LOG.warnf("IMAP IDLE renewal failed for %s on %s (%s); reconnecting", source.id(), folderName, error.getClass().getSimpleName());
+                                if (imapIdleHealthService != null) {
+                                    imapIdleHealthService.markDisconnected(source.id(), watchKey(source.id(), folderName), Instant.now());
+                                }
+                                // Interruptible virtual-thread socket I/O releases a silent IDLE reader.
+                                thread.interrupt();
+                            }
+                        });
+                while (active.get() && !Thread.currentThread().isInterrupted() && store.isConnected() && folder.isOpen()) {
                     imapFolder.idle();
                     queueIfMailboxAdvanced();
                 }
             } catch (MessagingException error) {
                 throw new IllegalStateException("IMAP IDLE watcher failed for source " + source.id(), error);
             } finally {
+                if (renewal != null) {
+                    renewal.close();
+                }
                 if (active.get() && imapIdleHealthService != null) {
                     imapIdleHealthService.markDisconnected(source.id(), watchKey(source.id(), folderName), Instant.now());
                 }
@@ -279,6 +354,19 @@ public class ImapIdleWatchService {
                 folder = null;
                 store = null;
                 lastKnownMessageCount = -1;
+            }
+        }
+
+        private void renewIdle(IMAPFolder watchedFolder) {
+            try {
+                // Angus sends DONE and waits for IDLE completion before issuing NOOP.
+                // Never send raw protocol commands concurrently with the IDLE reader.
+                watchedFolder.doCommand(protocol -> {
+                    protocol.noop();
+                    return null;
+                });
+            } catch (MessagingException error) {
+                throw new IllegalStateException("IDLE renewal failed", error);
             }
         }
 
@@ -297,7 +385,7 @@ public class ImapIdleWatchService {
                         source.id(),
                         lastKnownMessageCount,
                         latestCount);
-                pendingSources.add(source.id());
+                queueSync(source.id(), true);
             }
             lastKnownMessageCount = latestCount;
         }
@@ -334,7 +422,7 @@ public class ImapIdleWatchService {
         return sourceId + "\n" + folderName;
     }
 
-    private record WatchTarget(String watchKey, RuntimeEmailAccount source, String folderName) {
+    private record WatchTarget(String watchKey, RuntimeEmailAccount source, String folderName, Duration renewalInterval) {
     }
 
     private void connectStore(Store store, RuntimeEmailAccount source) throws MessagingException {
@@ -389,6 +477,15 @@ public class ImapIdleWatchService {
         }
         MailSessionFactory fallback = new MailSessionFactory();
         fallback.setMailClientConfig(new dev.inboxbridge.config.MailClientConfig() {
+            @Override
+            public java.time.Duration idleRenewalInterval() { return java.time.Duration.ofMinutes(25); }
+            @Override
+            public java.time.Duration idleRenewalTimeout() { return java.time.Duration.ofSeconds(20); }
+            @Override
+            public java.time.Duration idleSafetyPollInterval() { return java.time.Duration.ofMinutes(30); }
+            @Override
+            public boolean idleSafetyPollingEnabled() { return true; }
+
             @Override
             public java.time.Duration connectionTimeout() {
                 return java.time.Duration.ofSeconds(20);

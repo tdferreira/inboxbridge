@@ -274,6 +274,7 @@ describe('EmailAccountListItem', () => {
             sourceThrottle: { adaptiveMultiplier: 3, nextAllowedAt: '2026-04-06T10:06:00Z' },
             destinationThrottle: { adaptiveMultiplier: 3, nextAllowedAt: '2026-04-06T10:07:00Z' },
             idleHealthy: false,
+            idleSafetyPollingEnabled: true,
             idleSchedulerFallback: true,
             idleWatches: [
               { folderName: 'INBOX', status: 'CONNECTED' },
@@ -310,6 +311,7 @@ describe('EmailAccountListItem', () => {
     fireEvent.click(screen.getByRole('button', { name: /idle-source/i }))
 
     expect(screen.getByText('Diagnostics')).toBeInTheDocument()
+    expect(screen.getByText('Periodic IDLE safety polling').nextElementSibling).toHaveTextContent('Yes')
     expect(screen.getByText('imap-append:abc123')).toBeInTheDocument()
     expect(screen.getByText('INBOX · UIDVALIDITY 44 · UID 101')).toBeInTheDocument()
     expect(screen.getByText('Projects/2026 · UIDVALIDITY 77 · UID 205')).toBeInTheDocument()
@@ -488,7 +490,7 @@ describe('EmailAccountListItem', () => {
     fireEvent.click(screen.getByRole('button', { name: /idle-source/i }))
 
     expect(screen.getByText('IMAP IDLE (real-time)')).toBeInTheDocument()
-    expect(screen.getByText('Run Poll Now still starts an immediate one-off sync for this source. It does not disable IMAP IDLE, and scheduled polling still skips this mailbox while the watcher stays active.')).toBeInTheDocument()
+    expect(screen.getByText('Run Poll Now starts an immediate sync without disabling IMAP IDLE. Periodic safety polling also checks this mailbox at its effective interval when enabled in the deployment.')).toBeInTheDocument()
   })
 
   it('shows determinate live progress for a running source', () => {

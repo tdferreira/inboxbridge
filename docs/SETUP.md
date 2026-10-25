@@ -531,7 +531,7 @@ configured `MAIL_ACCOUNT_*` values even if they are present.
 IMAP sources can now also choose a fetch mode:
 
 - `POLLING`: normal scheduled fetches using the effective poll interval and fetch window
-- `IDLE`: a long-lived IMAP IDLE watcher for that one folder, with scheduled batch polling skipped for that source while the watcher stays healthy; if the watcher remains unhealthy long enough, InboxBridge temporarily falls back to scheduler polling until the watcher reconnects
+- `IDLE`: a long-lived IMAP IDLE watcher per selected folder, renewed periodically, with independent scheduled safety polling enabled by default; notification-only mode can be restored explicitly, retaining disconnected-watcher fallback
 
 `IDLE` is only available for IMAP accounts. POP3 sources are always forced back to `POLLING`. Saving a source after switching it to `IDLE` refreshes the watcher registry immediately, so the new watcher starts right away instead of waiting for the periodic refresh loop.
 
@@ -567,3 +567,60 @@ Once signed in, users can optionally:
 
 - [`README.md`](../README.md)
 - [`OAUTH_SETUP.md`](OAUTH_SETUP.md)
+
+
+## Resilient IMAP IDLE
+
+IDLE sources use distinct controls for connection renewal and stale-connection
+recovery. A successful renewal updates an acknowledgement timestamp; it does
+not fetch messages and does not create an import execution.
+
+| Environment default | Value | Meaning |
+| --- | --- | --- |
+| `MAIL_IDLE_RENEWAL_INTERVAL` | `PT25M` | Renew each folder's IDLE command through DONE/NOOP. |
+| `MAIL_IDLE_RENEWAL_TIMEOUT` | `PT20S` | Bound the response wait; failure reconnects the watcher. |
+| `MAIL_IDLE_SAFETY_POLL_INTERVAL` | `PT30M` | Poll only after this duration without an acknowledged renewal or successful mailbox sync. |
+| `MAIL_IDLE_SAFETY_POLLING_ENABLED` | `true` | Enable the stale-acknowledgement safety policy. |
+
+Administration → Global Polling Settings exposes inherited/explicit values.
+Each IDLE source's polling dialog can override its renewal interval, safety
+policy and safety deadline, or leave fields blank to inherit. The response
+wait stays global. Values persist in PostgreSQL; V74 and V75 add nullable
+settings columns without changing mailbox credentials or checkpoints.
+
+The safety deadline must exceed the effective renewal interval **plus** its
+response wait. Renewal interval plus response wait must remain below 29 minutes.
+The API validates global and mailbox overrides together; an admin change cannot
+invalidate an existing mailbox override. For example, renewal `10m`, response
+wait `20s` and safety `15m` are valid. Ordinary polling intervals continue to
+control POLLING sources; they no longer set the IDLE safety deadline.
+
+After commit, only watchers with changed renewal timings reconnect. Policy or
+safety-deadline changes leave connections intact. Each folder is tracked:
+the oldest acknowledgement prevents one healthy folder hiding a stalled sibling.
+A successful safety sync advances the deadline, avoiding a poll on every scheduler
+tick after a connection becomes stale. Enablement, cooldown, throttling and the
+shared per-source execution guard still apply. If the new policy is explicitly
+disabled, the legacy detected-disconnection fallback retains its two-minute
+threshold and ordinary polling interval.
+
+Notifications trigger `idle-source` imports. Startup/reconnection queues a catch-up
+with trigger `idle-catchup`, counted separately. Successful renewals only update
+health diagnostics. Historical `idle-source` events from older versions cannot
+be reliably split after the fact and are not rewritten.
+
+A valid connection acknowledgement does not prove that every mailbox notification
+was delivered. This policy supervises connection health; it intentionally does
+not perform unconditional periodic mailbox scans. GreenMail covers protocol,
+recovery and counter behavior with synthetic mail; real-provider longevity still
+requires operator testing. Pass environment defaults into the backend service,
+not merely unused Portainer variables. After upgrading an earlier experimental
+build, set `15m` in the **new safety deadline field** if that is your desired
+fallback delay; the ordinary polling interval is a separate setting.
+
+## Prebuilt images
+
+[Container setup and release publication](CONTAINERS.md) ([Français](CONTAINERS.fr.md))
+explains the image-only Compose override, version matching, certificate
+requirements and independent fork publication. Existing custom HTTP packaging
+requires an explicit compatibility check before switching to standard TLS images.

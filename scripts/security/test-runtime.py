@@ -13,9 +13,11 @@ import urllib.request
 ROOT = Path(__file__).resolve().parents[2]
 parser = argparse.ArgumentParser(add_help=False)
 parser.add_argument("--base-url", default="https://localhost:3000")
+parser.add_argument("--ca-file", default=str(ROOT / "certs/ca.crt"))
+parser.add_argument("--project")
 options, test_arguments = parser.parse_known_args()
 BASE_URL = options.base_url.rstrip("/")
-CONTEXT = ssl.create_default_context(cafile=str(ROOT / "certs/ca.crt"))
+CONTEXT = ssl.create_default_context(cafile=options.ca_file)
 
 
 def request(path, body=None):
@@ -29,6 +31,13 @@ def request(path, body=None):
 
 
 def docker(*args):
+    if options.project:
+        args = list(args)
+        mapping = {"inboxbridge": "inboxbridge", "inboxbridge-admin": "inboxbridge-admin", "inboxbridge-postgres": "postgres"}
+        for index, value in enumerate(args):
+            if value in mapping:
+                args[index] = subprocess.check_output(["docker", "compose", "--env-file", "/dev/null", "-p", options.project,
+                    "-f", str(ROOT / "dev/compose.yaml"), "ps", "-q", mapping[value]], text=True, timeout=30).strip()
     return subprocess.check_output(["docker", *args], text=True, timeout=30).strip()
 
 

@@ -6,12 +6,18 @@ import static org.junit.jupiter.api.Assertions.fail;
 
 import java.nio.charset.StandardCharsets;
 import java.time.Instant;
+import java.time.Duration;
+import java.io.ByteArrayOutputStream;
+import java.io.PrintStream;
+import java.util.concurrent.atomic.AtomicInteger;
+import java.util.function.BooleanSupplier;
 import java.util.List;
 import java.util.Optional;
 import java.util.Properties;
 import java.util.concurrent.CopyOnWriteArrayList;
 
 import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.RegisterExtension;
 
@@ -48,10 +54,164 @@ class ImapIdleWatchServiceGreenMailIntegrationTest {
         sourceMail.setUser(SOURCE_USERNAME, SOURCE_PASSWORD);
     }
 
+    private final List<ImapIdleWatchService> testWatchers = new CopyOnWriteArrayList<>();
+
+    private ImapIdleWatchService newWatchService() {
+        ImapIdleWatchService service = new ImapIdleWatchService();
+        service.imapIdleHealthService = new ImapIdleHealthService();
+        testWatchers.add(service);
+        return service;
+    }
+
+    @AfterEach
+    void stopWatchers() {
+        testWatchers.forEach(ImapIdleWatchService::shutdown);
+    }
+
+    @Test
+    void sourceSpecificRenewalChangeLeavesOtherMailboxConnected() throws Exception {
+        var renewal = new java.util.concurrent.atomic.AtomicReference<>(Duration.ofMinutes(25));
+        var watcher = newWatchService();
+        RuntimeEmailAccount base = runtimeAccount(SourceFetchMode.IDLE);
+        RuntimeEmailAccount other = new RuntimeEmailAccount("idle-other", "USER", 7L, "alice", true,
+                base.protocol(), base.host(), base.port(), base.tls(), base.authMethod(), base.oauthProvider(),
+                base.username(), base.password(), "", Optional.of("INBOX"), false, SourceFetchMode.IDLE, Optional.empty(), null);
+        watcher.runtimeEmailAccountService = new FixedRuntimeEmailAccountService(List.of(base, other));
+        watcher.mailSessionFactory = secureMailSessionFactory();
+        watcher.sourcePollingSettingsService = new dev.inboxbridge.service.polling.SourcePollingSettingsService() {
+            @Override public Duration effectiveIdleRenewalInterval(RuntimeEmailAccount account) {
+                return account.id().equals(SOURCE_ID) ? renewal.get() : Duration.ofMinutes(25);
+            }
+            @Override public Duration effectiveIdleSafetyPollInterval(RuntimeEmailAccount account) {
+                return Duration.ofMinutes(30);
+            }
+        };
+        watcher.refreshWatches();
+        waitForCondition(() -> watcher.imapIdleHealthService.isHealthy(SOURCE_ID) && watcher.imapIdleHealthService.isHealthy("idle-other"));
+        Instant first = watcher.imapIdleHealthService.watchStates(SOURCE_ID).getFirst().lastConnectedAt();
+        Instant unchanged = watcher.imapIdleHealthService.watchStates("idle-other").getFirst().lastConnectedAt();
+        renewal.set(Duration.ofMillis(250));
+        watcher.refreshWatches();
+        waitForCondition(() -> watcher.imapIdleHealthService.isHealthy(SOURCE_ID)
+                && watcher.imapIdleHealthService.watchStates(SOURCE_ID).getFirst().lastConnectedAt().isAfter(first));
+        assertEquals(unchanged, watcher.imapIdleHealthService.watchStates("idle-other").getFirst().lastConnectedAt());
+    }
+
+    @Test
+    void changedRenewalSettingsReconnectWithoutRestartingTheService() throws Exception {
+        var settings = new java.util.concurrent.atomic.AtomicReference<>(
+                new dev.inboxbridge.service.polling.PollingSettingsService.EffectiveIdleSettings(true, Duration.ofMinutes(25), Duration.ofSeconds(20)));
+        var watcher = newWatchService();
+        watcher.pollingSettingsService = new dev.inboxbridge.service.polling.PollingSettingsService() {
+            @Override public EffectiveIdleSettings effectiveIdleSettings() { return settings.get(); }
+        };
+        watcher.runtimeEmailAccountService = new FixedRuntimeEmailAccountService(List.of(runtimeAccount(SourceFetchMode.IDLE)));
+        watcher.mailSessionFactory = secureMailSessionFactory();
+        watcher.refreshWatches();
+        waitForCondition(() -> watcher.imapIdleHealthService.isHealthy(SOURCE_ID));
+        Instant connected = watcher.imapIdleHealthService.watchStates(SOURCE_ID).getFirst().lastConnectedAt();
+        // A policy-only change must not interrupt the live connection.
+        settings.set(new dev.inboxbridge.service.polling.PollingSettingsService.EffectiveIdleSettings(false, Duration.ofMinutes(25), Duration.ofSeconds(20)));
+        watcher.refreshWatches();
+        assertEquals(connected, watcher.imapIdleHealthService.watchStates(SOURCE_ID).getFirst().lastConnectedAt());
+        settings.set(new dev.inboxbridge.service.polling.PollingSettingsService.EffectiveIdleSettings(false, Duration.ofMillis(250), Duration.ofSeconds(2)));
+        watcher.refreshWatches();
+        waitForCondition(() -> watcher.imapIdleHealthService.isHealthy(SOURCE_ID)
+                && watcher.imapIdleHealthService.watchStates(SOURCE_ID).getFirst().lastConnectedAt().isAfter(connected));
+        waitForCondition(() -> watcher.imapIdleHealthService.watchStates(SOURCE_ID).getFirst().lastRenewedAt() != null);
+    }
+
+    @Test
+    void renewalEndsAndReissuesIdleWithoutReopeningTheFolder() throws Exception {
+        RecordingPollingService pollingService = new RecordingPollingService();
+        ImapIdleWatchService watcher = newWatchService();
+        watcher.runtimeEmailAccountService = new FixedRuntimeEmailAccountService(List.of(runtimeAccount(SourceFetchMode.IDLE)));
+        watcher.pollingService = pollingService;
+        watcher.idleRenewalInterval = Duration.ofMillis(250);
+        watcher.idleRenewalTimeout = Duration.ofSeconds(2);
+        ByteArrayOutputStream transcript = new ByteArrayOutputStream();
+        MailSessionFactory sessions = secureMailSessionFactory();
+        watcher.mailSessionFactory = new MailSessionFactory() {
+            @Override public Session idleImapSession(RuntimeEmailAccount account) {
+                Session session = sessions.idleImapSession(account);
+                session.setDebugOut(new PrintStream(transcript, true, StandardCharsets.UTF_8));
+                session.setDebug(true);
+                return session;
+            }
+        };
+        pollingService.watchService = watcher;
+        watcher.refreshWatches();
+        waitForInvocations(pollingService, 1);
+        pollingService.invokedSourceIds.clear();
+        Instant firstConnection = watcher.imapIdleHealthService.watchStates(SOURCE_ID).getFirst().lastConnectedAt();
+        waitForCondition(() -> {
+            watcher.drainPendingSources();
+            return transcript.toString(StandardCharsets.UTF_8).contains("DONE")
+                    && transcript.toString(StandardCharsets.UTF_8).contains("NOOP")
+                    && watcher.imapIdleHealthService.watchStates(SOURCE_ID).getFirst().lastRenewedAt() != null;
+        });
+        assertEquals(firstConnection, watcher.imapIdleHealthService.watchStates(SOURCE_ID).getFirst().lastConnectedAt());
+        watcher.drainPendingSources();
+        assertTrue(pollingService.invokedSourceIds.isEmpty(), "Successful renewals must not queue imports");
+        assertEquals(List.of("catchup"), pollingService.reasons);
+        // Notifications still work after the command was renewed on the same connection.
+        pollingService.invokedSourceIds.clear();
+        appendMessage("after-renewal", "<after-renewal@example.com>");
+        waitForInvocations(pollingService, 1);
+        assertEquals("notification", pollingService.reasons.getLast());
+        assertTrue(watcher.imapIdleHealthService.isHealthy(SOURCE_ID));
+    }
+
+    @Test
+    void reconnectQueuesCatchUpForMailDeliveredWhileTheServerWasDown() throws Exception {
+        RecordingPollingService pollingService = new RecordingPollingService();
+        ImapIdleWatchService watcher = newWatchService();
+        watcher.runtimeEmailAccountService = new FixedRuntimeEmailAccountService(List.of(runtimeAccount(SourceFetchMode.IDLE)));
+        watcher.pollingService = pollingService;
+        watcher.mailSessionFactory = secureMailSessionFactory();
+        pollingService.watchService = watcher;
+        watcher.refreshWatches();
+        waitForInvocations(pollingService, 1);
+        Instant firstConnection = watcher.imapIdleHealthService.watchStates(SOURCE_ID).getFirst().lastConnectedAt();
+        int port = sourceMail.getImaps().getPort();
+        sourceMail.stop();
+        waitForCondition(() -> !watcher.imapIdleHealthService.isHealthy(SOURCE_ID));
+        MimeMessage offlineMessage = new MimeMessage(secureImapSession());
+        offlineMessage.setFrom("sender@example.com");
+        offlineMessage.setRecipients(Message.RecipientType.TO, SOURCE_USERNAME);
+        offlineMessage.setSubject("delivered-during-outage");
+        offlineMessage.setText("Must be found by catch-up without a new IDLE notification");
+        offlineMessage.saveChanges();
+        com.icegreen.greenmail.util.GreenMail restarted = new com.icegreen.greenmail.util.GreenMail(
+                new ServerSetup(port, HOST, ServerSetup.PROTOCOL_IMAPS));
+        restarted.setUser(SOURCE_USERNAME, SOURCE_PASSWORD).deliver(offlineMessage);
+        pollingService.invokedSourceIds.clear();
+        try {
+            restarted.start();
+            waitForCondition(() -> watcher.imapIdleHealthService.isHealthy(SOURCE_ID)
+                    && watcher.imapIdleHealthService.watchStates(SOURCE_ID).getFirst().lastConnectedAt().isAfter(firstConnection));
+            waitForInvocations(pollingService, 1);
+            assertEquals(SOURCE_ID, pollingService.invokedSourceIds.getFirst());
+            assertEquals("delivered-during-outage", restarted.getReceivedMessages()[0].getSubject());
+        } finally {
+            watcher.shutdown();
+            restarted.stop();
+        }
+    }
+
+    private void waitForCondition(BooleanSupplier condition) throws InterruptedException {
+        long deadline = System.nanoTime() + Duration.ofSeconds(8).toNanos();
+        while (System.nanoTime() < deadline) {
+            if (condition.getAsBoolean()) return;
+            Thread.sleep(25);
+        }
+        fail("Timed out waiting for IMAP watcher state");
+    }
+
     @Test
     void idleWatcherQueuesAndRunsAnIdleTriggeredPollWhenNewMailArrives() throws Exception {
         RecordingPollingService pollingService = new RecordingPollingService();
-        ImapIdleWatchService watchService = new ImapIdleWatchService();
+        ImapIdleWatchService watchService = newWatchService();
         watchService.runtimeEmailAccountService = new FixedRuntimeEmailAccountService(List.of(runtimeAccount(SourceFetchMode.IDLE)));
         watchService.pollingService = pollingService;
         watchService.mailSessionFactory = secureMailSessionFactory();
@@ -71,7 +231,7 @@ class ImapIdleWatchServiceGreenMailIntegrationTest {
     @Test
     void idleWatcherQueuesAndRunsAnIdleTriggeredPollWhenMultipartMailWithAttachmentArrives() throws Exception {
         RecordingPollingService pollingService = new RecordingPollingService();
-        ImapIdleWatchService watchService = new ImapIdleWatchService();
+        ImapIdleWatchService watchService = newWatchService();
         watchService.runtimeEmailAccountService = new FixedRuntimeEmailAccountService(List.of(runtimeAccount(SourceFetchMode.IDLE)));
         watchService.pollingService = pollingService;
         watchService.mailSessionFactory = secureMailSessionFactory();
@@ -91,7 +251,7 @@ class ImapIdleWatchServiceGreenMailIntegrationTest {
     @Test
     void idleWatcherAlsoWatchesSecondaryConfiguredFolders() throws Exception {
         RecordingPollingService pollingService = new RecordingPollingService();
-        ImapIdleWatchService watchService = new ImapIdleWatchService();
+        ImapIdleWatchService watchService = newWatchService();
         watchService.runtimeEmailAccountService = new FixedRuntimeEmailAccountService(List.of(runtimeAccount("INBOX, Projects/2026", SourceFetchMode.IDLE)));
         watchService.pollingService = pollingService;
         watchService.mailSessionFactory = secureMailSessionFactory();
@@ -110,14 +270,15 @@ class ImapIdleWatchServiceGreenMailIntegrationTest {
     }
 
     @Test
-    void idleWatcherRequeuesBusyRunsUntilThePollRunnerAcceptsThem() {
+    void idleWatcherRequeuesBusyRunsUntilThePollRunnerAcceptsThem() throws Exception {
         BusyOncePollingService pollingService = new BusyOncePollingService();
-        ImapIdleWatchService watchService = new ImapIdleWatchService();
+        ImapIdleWatchService watchService = newWatchService();
         watchService.runtimeEmailAccountService = new FixedRuntimeEmailAccountService(List.of(runtimeAccount(SourceFetchMode.IDLE)));
         watchService.pollingService = pollingService;
         watchService.mailSessionFactory = secureMailSessionFactory();
 
         watchService.refreshWatches();
+        waitForCondition(() -> watchService.imapIdleHealthService.isHealthy(SOURCE_ID));
         watchService.drainPendingSources();
         assertTrue(pollingService.invokedSourceIds.isEmpty());
 
@@ -127,14 +288,15 @@ class ImapIdleWatchServiceGreenMailIntegrationTest {
     }
 
     @Test
-    void drainStillInvokesIdleSourceWhenSchedulerIsAlreadyRunning() {
+    void drainStillInvokesIdleSourceWhenSchedulerIsAlreadyRunning() throws Exception {
         SchedulerCompatiblePollingService pollingService = new SchedulerCompatiblePollingService();
-        ImapIdleWatchService watchService = new ImapIdleWatchService();
+        ImapIdleWatchService watchService = newWatchService();
         watchService.runtimeEmailAccountService = new FixedRuntimeEmailAccountService(List.of(runtimeAccount(SourceFetchMode.IDLE)));
         watchService.pollingService = pollingService;
         watchService.mailSessionFactory = secureMailSessionFactory();
 
         watchService.refreshWatches();
+        waitForCondition(() -> watchService.imapIdleHealthService.isHealthy(SOURCE_ID));
         pollingService.invokedSourceIds.clear();
         pollingService.running = true;
 
@@ -253,7 +415,9 @@ class ImapIdleWatchServiceGreenMailIntegrationTest {
     private void waitForInvocations(RecordingPollingService pollingService, int expectedCount) throws InterruptedException {
         long deadline = System.currentTimeMillis() + 8_000L;
         while (System.currentTimeMillis() < deadline) {
-            watchAndDrain(pollingService.watchService);
+            if (pollingService.watchService.imapIdleHealthService.isHealthy(SOURCE_ID)) {
+                watchAndDrain(pollingService.watchService);
+            }
             if (pollingService.invokedSourceIds.size() >= expectedCount) {
                 return;
             }
@@ -288,6 +452,15 @@ class ImapIdleWatchServiceGreenMailIntegrationTest {
 
     private MailClientConfig mailClientConfig() {
         return new MailClientConfig() {
+            @Override
+            public java.time.Duration idleRenewalInterval() { return java.time.Duration.ofMinutes(25); }
+            @Override
+            public java.time.Duration idleRenewalTimeout() { return java.time.Duration.ofSeconds(20); }
+            @Override
+            public java.time.Duration idleSafetyPollInterval() { return java.time.Duration.ofMinutes(30); }
+            @Override
+            public boolean idleSafetyPollingEnabled() { return true; }
+
             @Override
             public java.time.Duration connectionTimeout() {
                 return java.time.Duration.ofSeconds(5);
@@ -351,6 +524,7 @@ class ImapIdleWatchServiceGreenMailIntegrationTest {
     private static final class RecordingPollingService extends PollingService {
         private final List<String> invokedSourceIds = new CopyOnWriteArrayList<>();
         private ImapIdleWatchService watchService;
+        private final List<String> reasons = new CopyOnWriteArrayList<>();
 
         @Override
         public boolean isRunning() {
@@ -358,7 +532,15 @@ class ImapIdleWatchServiceGreenMailIntegrationTest {
         }
 
         @Override
+        public dev.inboxbridge.dto.PollRunResult runIdleCatchUpForSource(RuntimeEmailAccount emailAccount) {
+            reasons.add("catchup");
+            invokedSourceIds.add(emailAccount.id());
+            return new dev.inboxbridge.dto.PollRunResult();
+        }
+
+        @Override
         public dev.inboxbridge.dto.PollRunResult runIdleTriggeredPollForSource(RuntimeEmailAccount emailAccount) {
+            reasons.add("notification");
             invokedSourceIds.add(emailAccount.id());
             return new dev.inboxbridge.dto.PollRunResult();
         }
@@ -371,6 +553,11 @@ class ImapIdleWatchServiceGreenMailIntegrationTest {
         @Override
         public boolean isRunning() {
             return false;
+        }
+
+        @Override
+        public dev.inboxbridge.dto.PollRunResult runIdleCatchUpForSource(RuntimeEmailAccount emailAccount) {
+            return runIdleTriggeredPollForSource(emailAccount);
         }
 
         @Override
@@ -394,6 +581,11 @@ class ImapIdleWatchServiceGreenMailIntegrationTest {
         @Override
         public boolean isRunning() {
             return running;
+        }
+
+        @Override
+        public dev.inboxbridge.dto.PollRunResult runIdleCatchUpForSource(RuntimeEmailAccount emailAccount) {
+            return runIdleTriggeredPollForSource(emailAccount);
         }
 
         @Override

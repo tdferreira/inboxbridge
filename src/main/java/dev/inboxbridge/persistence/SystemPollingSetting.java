@@ -64,6 +64,18 @@ public class SystemPollingSetting extends PanacheEntityBase {
     @Column(name = "max_success_jitter_override")
     public String maxSuccessJitterOverride;
 
+    @Column(name = "idle_safety_polling_enabled_override")
+    public Boolean idleSafetyPollingEnabledOverride;
+
+    @Column(name = "idle_renewal_interval_override", length = 40)
+    public String idleRenewalIntervalOverride;
+
+    @Column(name = "idle_renewal_timeout_override", length = 40)
+    public String idleRenewalTimeoutOverride;
+
+    @Column(name = "idle_safety_poll_interval_override", length = 40)
+    public String idleSafetyPollIntervalOverride;
+
     @Column(name = "updated_at", nullable = false)
     public Instant updatedAt;
 }

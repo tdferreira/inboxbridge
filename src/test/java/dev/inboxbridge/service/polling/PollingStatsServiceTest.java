@@ -195,7 +195,13 @@ class PollingStatsServiceTest {
                 event.fetchedCount = 4;
                 event.importedCount = 4;
                 event.duplicateCount = 0;
-                return List.of(event);
+                SourcePollEvent recovery = new SourcePollEvent();
+                recovery.sourceId = event.sourceId;
+                recovery.triggerName = "idle-catchup";
+                recovery.status = "SUCCESS";
+                recovery.startedAt = idleStartedAt;
+                recovery.finishedAt = idleFinishedAt;
+                return List.of(event, recovery);
             }
         };
         service.sourcePollingStateService = new SourcePollingStateService() {
@@ -234,6 +240,7 @@ class PollingStatsServiceTest {
         assertEquals(0L, stats.manualRuns());
         assertEquals(0L, stats.scheduledRuns());
         assertEquals(1L, stats.idleRuns());
+        assertEquals(1L, stats.catchUpRuns());
         assertEquals(1L, stats.idleRunTimelines().get("pastMonth").stream()
                 .mapToLong(dev.inboxbridge.dto.ImportTimelinePointView::importedMessages)
                 .sum());

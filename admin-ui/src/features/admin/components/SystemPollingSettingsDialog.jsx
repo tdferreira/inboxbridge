@@ -28,6 +28,38 @@ function SystemPollingSettingsDialog({
       unsavedChangesMessage={t('dialogs.unsavedChanges')}
     >
       <form className="system-polling-form" onSubmit={onSavePollingSettings}>
+        <section className="surface-card system-polling-section">
+          <h3>{t('idleSettings.title')}</h3>
+          <p className="section-copy">{t('idleSettings.help')}</p>
+          <div className="settings-grid system-polling-grid">
+            <label>
+              <span>{t('idleSettings.safety')}</span>
+              <select value={pollingSettingsForm.idleSafetyPollingMode || 'DEFAULT'} onChange={(event) => onPollingFormChange((current) => ({ ...current, idleSafetyPollingMode: event.target.value }))}>
+                <option value="DEFAULT">{t('idleSettings.inherit')} ({pollingSettings.idleSettings?.defaultSafetyPollingEnabled === false ? t('common.no') : t('common.yes')})</option>
+                <option value="ENABLED">{t('common.yes')}</option>
+                <option value="DISABLED">{t('common.no')}</option>
+              </select>
+            </label>
+            <label>
+              <span>{t('idleSettings.renewalInterval')}</span>
+              <input placeholder={pollingSettings.idleSettings?.defaultRenewalInterval || 'PT25M'} value={pollingSettingsForm.idleRenewalIntervalOverride || ''} onChange={(event) => onPollingFormChange((current) => ({ ...current, idleRenewalIntervalOverride: event.target.value }))} />
+            </label>
+            <label>
+              <span>{t('idleSettings.renewalTimeout')}</span>
+              <input placeholder={pollingSettings.idleSettings?.defaultRenewalTimeout || 'PT20S'} value={pollingSettingsForm.idleRenewalTimeoutOverride || ''} onChange={(event) => onPollingFormChange((current) => ({ ...current, idleRenewalTimeoutOverride: event.target.value }))} />
+            </label>
+            <label>
+              <span>{t('idleSettings.safetyInterval')}</span>
+              <input placeholder={pollingSettings.idleSettings?.defaultSafetyPollInterval || 'PT30M'} value={pollingSettingsForm.idleSafetyPollIntervalOverride || ''} onChange={(event) => { const value = event.target.value; onPollingFormChange((current) => ({ ...current, idleSafetyPollIntervalOverride: value })) }} />
+            </label>
+          </div>
+          <p className="section-copy">{t('idleSettings.durationHelp')}</p>
+          <p className="section-copy">{t('idleSettings.safetyIntervalHelp')}</p>
+          {pollingSettings.idleSettings ? <p className="muted-box">
+            {t('idleSettings.safety')}: {pollingSettings.idleSettings.effectiveSafetyPollingEnabled ? t('common.yes') : t('common.no')} · {t('idleSettings.renewalInterval')}: <DurationValue locale={locale} value={pollingSettings.idleSettings.effectiveRenewalInterval} /> · {t('idleSettings.renewalTimeout')}: <DurationValue locale={locale} value={pollingSettings.idleSettings.effectiveRenewalTimeout} />
+          </p> : null}
+        </section>
+
         <div className="system-polling-sections">
           <section className="surface-card system-polling-section">
             <div className="system-polling-section-header">

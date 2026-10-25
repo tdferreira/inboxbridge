@@ -25,10 +25,19 @@ public class PollingSettingsService {
     public static final int DEFAULT_MANUAL_TRIGGER_LIMIT_WINDOW_SECONDS = 60;
 
     @Inject
+    dev.inboxbridge.config.MailClientConfig mailClientConfig;
+
+    @Inject
+    jakarta.enterprise.event.Event<dev.inboxbridge.service.mail.SourceMailboxConfigurationChanged> mailboxChanged;
+
+    @Inject
     InboxBridgeConfig inboxBridgeConfig;
 
     @Inject
     SystemPollingSettingRepository repository;
+
+    @Inject
+    dev.inboxbridge.persistence.SourcePollingSettingRepository sourceSettingsRepository;
 
     @Transactional
     public EffectivePollingSettings effectiveSettings() {
@@ -146,7 +155,7 @@ public class PollingSettingsService {
                 effectiveThrottle.successJitterRatio(),
                 inboxBridgeConfig.maxSuccessJitter().toString(),
                 setting == null ? null : setting.maxSuccessJitterOverride,
-                effectiveThrottle.maxSuccessJitter().toString());
+                effectiveThrottle.maxSuccessJitter().toString(), idleSettingsView(setting));
     }
 
     @Transactional
@@ -155,6 +164,31 @@ public class PollingSettingsService {
         if (setting.id == null) {
             setting.id = SystemPollingSetting.SINGLETON_ID;
         }
+        // Validate the complete candidate before mutating a managed entity.
+        String renewalInterval = normalizePositiveDurationOverride(request.idleRenewalIntervalOverride(), "IDLE renewal interval");
+        String renewalTimeout = normalizePositiveDurationOverride(request.idleRenewalTimeoutOverride(), "IDLE renewal timeout");
+        validateIdleRenewal(renewalInterval == null ? defaultIdleInterval() : Duration.parse(renewalInterval),
+                renewalTimeout == null ? defaultIdleTimeout() : Duration.parse(renewalTimeout));
+        String safetyInterval = normalizePositiveDurationOverride(request.idleSafetyPollIntervalOverride(), "IDLE safety interval");
+        Duration candidateRenewal = renewalInterval == null ? defaultIdleInterval() : Duration.parse(renewalInterval);
+        Duration candidateTimeout = renewalTimeout == null ? defaultIdleTimeout() : Duration.parse(renewalTimeout);
+        validateIdleSafetyInterval(safetyInterval == null ? defaultIdleSafetyInterval() : Duration.parse(safetyInterval), candidateRenewal, candidateTimeout);
+        // An admin change must not invalidate an existing mailbox-specific deadline.
+        if (sourceSettingsRepository != null) {
+            for (var source : sourceSettingsRepository.listAll()) {
+                Duration sourceRenewal = source.idleRenewalIntervalOverride == null ? candidateRenewal
+                        : parsePositiveDuration(source.idleRenewalIntervalOverride, "IDLE renewal interval");
+                Duration sourceSafety = source.idleSafetyPollIntervalOverride == null
+                        ? safetyInterval == null ? defaultIdleSafetyInterval() : Duration.parse(safetyInterval)
+                        : parsePositiveDuration(source.idleSafetyPollIntervalOverride, "IDLE safety interval");
+                validateIdleRenewal(sourceRenewal, candidateTimeout);
+                validateIdleSafetyInterval(sourceSafety, sourceRenewal, candidateTimeout);
+            }
+        }
+        setting.idleSafetyPollIntervalOverride = safetyInterval;
+        setting.idleSafetyPollingEnabledOverride = request.idleSafetyPollingEnabledOverride();
+        setting.idleRenewalIntervalOverride = renewalInterval;
+        setting.idleRenewalTimeoutOverride = renewalTimeout;
         setting.pollEnabledOverride = request.pollEnabledOverride();
         setting.pollIntervalOverride = normalizeIntervalOverride(request.pollIntervalOverride());
         setting.fetchWindowOverride = normalizeFetchWindowOverride(request.fetchWindowOverride());
@@ -191,7 +225,64 @@ public class PollingSettingsService {
                 "Maximum success jitter");
         setting.updatedAt = Instant.now();
         repository.persist(setting);
+        if (mailboxChanged != null) {
+            mailboxChanged.fire(new dev.inboxbridge.service.mail.SourceMailboxConfigurationChanged(null));
+        }
         return view();
+    }
+
+    public record EffectiveIdleSettings(boolean safetyPollingEnabled, Duration renewalInterval, Duration renewalTimeout) { }
+
+    @Transactional
+    public EffectiveIdleSettings effectiveIdleSettings() {
+        SystemPollingSetting setting = repository == null ? null : repository.findSingleton().orElse(null);
+        var view = idleSettingsView(setting);
+        return new EffectiveIdleSettings(view.effectiveSafetyPollingEnabled(),
+                Duration.parse(view.effectiveRenewalInterval()), Duration.parse(view.effectiveRenewalTimeout()));
+    }
+
+    @Transactional
+    public Duration effectiveIdleSafetyPollInterval() {
+        SystemPollingSetting setting = repository == null ? null : repository.findSingleton().orElse(null);
+        return setting == null || setting.idleSafetyPollIntervalOverride == null ? defaultIdleSafetyInterval()
+                : parsePositiveDuration(setting.idleSafetyPollIntervalOverride, "IDLE safety interval");
+    }
+
+    private Duration defaultIdleInterval() {
+        return mailClientConfig == null ? Duration.ofMinutes(25) : mailClientConfig.idleRenewalInterval();
+    }
+
+    private Duration defaultIdleSafetyInterval() {
+        return mailClientConfig == null ? Duration.ofMinutes(30) : mailClientConfig.idleSafetyPollInterval();
+    }
+
+    public static void validateIdleSafetyInterval(Duration safety, Duration renewal, Duration timeout) {
+        if (safety.compareTo(renewal.plus(timeout)) <= 0) {
+            throw new IllegalArgumentException("IDLE safety interval must be greater than the renewal interval plus its response deadline");
+        }
+    }
+
+    private Duration defaultIdleTimeout() {
+        return mailClientConfig == null ? Duration.ofSeconds(20) : mailClientConfig.idleRenewalTimeout();
+    }
+
+    private dev.inboxbridge.dto.IdleSettingsView idleSettingsView(SystemPollingSetting setting) {
+        boolean enabled = mailClientConfig == null || mailClientConfig.idleSafetyPollingEnabled();
+        Boolean override = setting == null ? null : setting.idleSafetyPollingEnabledOverride;
+        String interval = setting == null ? null : setting.idleRenewalIntervalOverride;
+        String timeout = setting == null ? null : setting.idleRenewalTimeoutOverride;
+        String safety = setting == null ? null : setting.idleSafetyPollIntervalOverride;
+        return new dev.inboxbridge.dto.IdleSettingsView(enabled, override, override == null ? enabled : override,
+                defaultIdleInterval().toString(), interval, interval == null ? defaultIdleInterval().toString() : interval,
+                defaultIdleTimeout().toString(), timeout, timeout == null ? defaultIdleTimeout().toString() : timeout,
+                defaultIdleSafetyInterval().toString(), safety, safety == null ? defaultIdleSafetyInterval().toString() : safety);
+    }
+
+    public static void validateIdleRenewal(Duration interval, Duration timeout) {
+        if (interval.isZero() || interval.isNegative() || timeout.isZero() || timeout.isNegative()
+                || interval.plus(timeout).compareTo(Duration.ofMinutes(29)) >= 0) {
+            throw new IllegalArgumentException("IDLE renewal interval and timeout must be positive and total less than 29 minutes");
+        }
     }
 
     private String normalizeIntervalOverride(String override) {

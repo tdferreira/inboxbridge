@@ -18,5 +18,43 @@ public record UpdateAdminPollingSettingsRequest(
         String throttleLeaseTtlOverride,
         Integer adaptiveThrottleMaxMultiplierOverride,
         Double successJitterRatioOverride,
+        String maxSuccessJitterOverride,
+        Boolean idleSafetyPollingEnabledOverride,
+        String idleRenewalIntervalOverride,
+        String idleRenewalTimeoutOverride,
+        String idleSafetyPollIntervalOverride) {
+    public UpdateAdminPollingSettingsRequest(Boolean pollEnabledOverride,
+        String pollIntervalOverride,
+        Integer fetchWindowOverride,
+        Integer manualTriggerLimitCountOverride,
+        Integer manualTriggerLimitWindowSecondsOverride,
+        String sourceHostMinSpacingOverride,
+        Integer sourceHostMaxConcurrencyOverride,
+        String destinationProviderMinSpacingOverride,
+        Integer destinationProviderMaxConcurrencyOverride,
+        String throttleLeaseTtlOverride,
+        Integer adaptiveThrottleMaxMultiplierOverride,
+        Double successJitterRatioOverride,
+        String maxSuccessJitterOverride,
+        Boolean idleSafetyPollingEnabledOverride,
+        String idleRenewalIntervalOverride,
+        String idleRenewalTimeoutOverride) {
+        this(pollEnabledOverride, pollIntervalOverride, fetchWindowOverride, manualTriggerLimitCountOverride, manualTriggerLimitWindowSecondsOverride, sourceHostMinSpacingOverride, sourceHostMaxConcurrencyOverride, destinationProviderMinSpacingOverride, destinationProviderMaxConcurrencyOverride, throttleLeaseTtlOverride, adaptiveThrottleMaxMultiplierOverride, successJitterRatioOverride, maxSuccessJitterOverride, idleSafetyPollingEnabledOverride, idleRenewalIntervalOverride, idleRenewalTimeoutOverride, null);
+    }
+
+    public UpdateAdminPollingSettingsRequest(Boolean pollEnabledOverride,
+        String pollIntervalOverride,
+        Integer fetchWindowOverride,
+        Integer manualTriggerLimitCountOverride,
+        Integer manualTriggerLimitWindowSecondsOverride,
+        String sourceHostMinSpacingOverride,
+        Integer sourceHostMaxConcurrencyOverride,
+        String destinationProviderMinSpacingOverride,
+        Integer destinationProviderMaxConcurrencyOverride,
+        String throttleLeaseTtlOverride,
+        Integer adaptiveThrottleMaxMultiplierOverride,
+        Double successJitterRatioOverride,
         String maxSuccessJitterOverride) {
+        this(pollEnabledOverride, pollIntervalOverride, fetchWindowOverride, manualTriggerLimitCountOverride, manualTriggerLimitWindowSecondsOverride, sourceHostMinSpacingOverride, sourceHostMaxConcurrencyOverride, destinationProviderMinSpacingOverride, destinationProviderMaxConcurrencyOverride, throttleLeaseTtlOverride, adaptiveThrottleMaxMultiplierOverride, successJitterRatioOverride, maxSuccessJitterOverride, null, null, null);
+    }
 }

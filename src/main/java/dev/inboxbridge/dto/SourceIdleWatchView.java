@@ -9,5 +9,9 @@ public record SourceIdleWatchView(
         String folderName,
         String status,
         Instant lastConnectedAt,
-        Instant disconnectedSince) {
+        Instant disconnectedSince,
+        Instant lastRenewedAt) {
+    public SourceIdleWatchView(String folderName, String status, Instant lastConnectedAt, Instant disconnectedSince) {
+        this(folderName, status, lastConnectedAt, disconnectedSince, null);
+    }
 }

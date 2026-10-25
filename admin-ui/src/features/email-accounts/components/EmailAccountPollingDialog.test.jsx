@@ -66,6 +66,26 @@ describe('EmailAccountPollingDialog', () => {
     expect(onChange).toHaveBeenCalled()
   })
 
+  it('edits an IDLE safety override and supports returning to inherited defaults', () => {
+    const onChange = vi.fn()
+    render(<EmailAccountPollingDialog
+      fetcher={{ emailAccountId: 'idle-source', fetchMode: 'IDLE' }}
+      form={{ pollEnabledMode: 'DEFAULT', idleSafetyPollingMode: 'DEFAULT', baseIdleSafetyPollingEnabled: false, pollIntervalOverride: '', fetchWindowOverride: '' }}
+      onChange={onChange} onClose={vi.fn()} onReset={vi.fn()} onSave={vi.fn()}
+      t={(key, params) => translate('en', key, params)}
+    />)
+    const policy = screen.getByRole('combobox', { name: /Periodic safety polling/ })
+    expect(policy).toHaveTextContent('Inherit defaults (No)')
+    fireEvent.change(screen.getByRole('textbox', { name: /^Renewal interval/ }), { target: { value: '10m' } })
+    expect(onChange.mock.lastCall[0]({})).toEqual({ idleRenewalIntervalOverride: '10m', isDirty: true })
+    fireEvent.change(screen.getByRole('textbox', { name: /Safety polling deadline/ }), { target: { value: '15m' } })
+    expect(onChange.mock.lastCall[0]({})).toEqual({ idleSafetyPollIntervalOverride: '15m', isDirty: true })
+    fireEvent.change(policy, { target: { value: 'ENABLED' } })
+    expect(onChange.mock.lastCall[0]({})).toEqual({ idleSafetyPollingMode: 'ENABLED', isDirty: true })
+    fireEvent.change(policy, { target: { value: 'DEFAULT' } })
+    expect(onChange.mock.lastCall[0]({})).toEqual({ idleSafetyPollingMode: 'DEFAULT', isDirty: true })
+  })
+
   it('documents fetch window backfill behavior in the source help copy', () => {
     expect(translate('en', 'sourcePolling.fetchWindowHelp')).toContain('does not page backward across older mail automatically')
     expect(translate('en', 'sourcePolling.fetchWindowHelp')).toContain('temporarily raise the window')

@@ -28,6 +28,26 @@ function EmailAccountPollingDialog({
     >
       <form className="fetcher-polling-dialog-form" onSubmit={onSave}>
         <div className="settings-grid fetcher-polling-grid">
+          {fetcher.fetchMode === 'IDLE' ? <><label className="full">
+            <span>{t('idleSettings.safety')}</span>
+            <select value={form.idleSafetyPollingMode || 'DEFAULT'} onChange={(event) => { const value = event.target.value; onChange((current) => ({ ...current, idleSafetyPollingMode: value, isDirty: true })) }}>
+              <option value="DEFAULT">{t('idleSettings.inherit')} ({form.baseIdleSafetyPollingEnabled === false ? t('common.no') : t('common.yes')})</option>
+              <option value="ENABLED">{t('common.yes')}</option>
+              <option value="DISABLED">{t('common.no')}</option>
+            </select>
+            <span className="section-copy">{t('idleSettings.sourceHelp')}</span>
+          </label>
+          <label className="full">
+            <span>{t('idleSettings.renewalInterval')}</span>
+            <input placeholder={form.baseIdleRenewalInterval || 'PT25M'} value={form.idleRenewalIntervalOverride || ''} onChange={(event) => { const value = event.target.value; onChange((current) => ({ ...current, idleRenewalIntervalOverride: value, isDirty: true })) }} />
+            <span className="section-copy">{t('idleSettings.durationHelp')}</span>
+          </label>
+          <label className="full">
+            <span>{t('idleSettings.safetyInterval')}</span>
+            <input placeholder={form.baseIdleSafetyPollInterval || 'PT30M'} value={form.idleSafetyPollIntervalOverride || ''} onChange={(event) => { const value = event.target.value; onChange((current) => ({ ...current, idleSafetyPollIntervalOverride: value, isDirty: true })) }} />
+            <span className="section-copy">{t('idleSettings.safetyIntervalHelp')}</span>
+          </label></> : null}
+
           <label>
             <span className="field-label-row">
               <span>{t('sourcePolling.pollingMode')}</span>

@@ -11,6 +11,7 @@ import dev.inboxbridge.service.user.UserMailDestinationConfigService;
 import dev.inboxbridge.service.user.UserPollingSettingsService;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
@@ -390,7 +391,7 @@ class PollingServiceTest {
     }
 
     @Test
-    void schedulerPollSkipsIdleSources() {
+    void schedulerPollSkipsIdleSourcesWhenNoHealthServiceIsAvailable() {
         PollingService service = new PollingService();
         MultiSourceRecordingMailSourceClient mailSourceClient = new MultiSourceRecordingMailSourceClient();
         RecordingDestinationMailboxService destinationService = new RecordingDestinationMailboxService();
@@ -419,7 +420,9 @@ class PollingServiceTest {
         PollingService service = new PollingService();
         MultiSourceRecordingMailSourceClient mailSourceClient = new MultiSourceRecordingMailSourceClient();
         RecordingDestinationMailboxService destinationService = new RecordingDestinationMailboxService();
-        ImapIdleHealthService imapIdleHealthService = new ImapIdleHealthService();
+        ImapIdleHealthService imapIdleHealthService = new ImapIdleHealthService() {
+            @Override public boolean isSafetyPollingEnabled() { return false; }
+        };
         Instant baseline = Instant.now().minus(ImapIdleHealthService.SCHEDULER_FALLBACK_THRESHOLD).minusSeconds(5);
         imapIdleHealthService.ensureTracked("polling-fetcher", baseline);
         imapIdleHealthService.ensureTracked("idle-fetcher", baseline);
@@ -453,7 +456,9 @@ class PollingServiceTest {
         PollingService service = new PollingService();
         MultiSourceRecordingMailSourceClient mailSourceClient = new MultiSourceRecordingMailSourceClient();
         RecordingDestinationMailboxService destinationService = new RecordingDestinationMailboxService();
-        ImapIdleHealthService imapIdleHealthService = new ImapIdleHealthService();
+        ImapIdleHealthService imapIdleHealthService = new ImapIdleHealthService() {
+            @Override public boolean isSafetyPollingEnabled() { return false; }
+        };
         Instant now = Instant.now();
         imapIdleHealthService.ensureTracked("polling-fetcher", now);
         imapIdleHealthService.ensureTracked("idle-fetcher", now);
@@ -478,6 +483,40 @@ class PollingServiceTest {
         assertEquals(0, result.getErrors().size());
         assertEquals(List.of("polling-fetcher"), mailSourceClient.fetchedSourceIds);
         assertEquals(List.of("polling-fetcher->alice-destination"), destinationService.importRoutes);
+    }
+
+    @Test
+    void safetySchedulerAndIdleCannotImportTheSameSourceConcurrently() throws Exception {
+        PollingService service = new PollingService();
+        RuntimeEmailAccount account = userBridgeWithFetchMode("idle-fetcher", 7L, "alice", "alice-destination", SourceFetchMode.IDLE);
+        BlockingDestinationService destination = new BlockingDestinationService();
+        destination.blockFirstImport = true;
+        service.mailSourceClient = new MultiSourceRecordingMailSourceClient();
+        service.importDeduplicationService = new NeverDuplicateImportDeduplicationService();
+        service.mailDestinationServices = new FakeMailDestinationServices(destination);
+        service.sourcePollEventService = new NoopSourcePollEventService();
+        service.runtimeEmailAccountService = new FakeRuntimeEmailAccountService(List.of(account));
+        service.pollingSettingsService = new FakePollingSettingsService(true, Duration.ofMinutes(5), "5m", 10);
+        service.userPollingSettingsService = new FakeUserPollingSettingsService(true, Duration.ofMinutes(5), "5m", 10);
+        service.sourcePollingSettingsService = new FakeSourcePollingSettingsService();
+        service.sourcePollingStateService = new RecordingSourcePollingStateService();
+        service.imapIdleHealthService = new ImapIdleHealthService();
+        service.imapIdleHealthService.markConnected(account.id(), Instant.now().minusSeconds(31 * 60));
+        AtomicReference<PollRunResult> scheduled = new AtomicReference<>();
+        Thread scheduler = Thread.startVirtualThread(() -> scheduled.set(service.runPoll("scheduler")));
+        try {
+            assertTrue(destination.firstImportStarted.await(2, TimeUnit.SECONDS));
+            PollRunResult idle = service.runIdleTriggeredPollForSource(account);
+            assertEquals(1, idle.getErrorDetails().size());
+            assertEquals("poll_busy", idle.getErrorDetails().getFirst().code());
+            assertEquals(1, destination.importCount.get());
+        } finally {
+            destination.allowFirstImportToFinish.countDown();
+            scheduler.join(3000);
+        }
+        assertFalse(scheduler.isAlive());
+        assertEquals(1, scheduled.get().getImported());
+        assertEquals(1, destination.importCount.get());
     }
 
     @Test

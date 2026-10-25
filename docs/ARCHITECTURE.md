@@ -489,11 +489,15 @@ The scheduler checks that state on every run so one blocked or throttled mailbox
 
 Scheduler-triggered runs now also filter out sources whose current eligibility says `INTERVAL`, `COOLDOWN`, or `DISABLED` before creating any live run state, so the user-facing live coordinator only tracks real runnable work instead of every scheduler tick.
 
-Scheduler-triggered runs also skip sources whose fetch mode is `IDLE`, because those sources are expected to wake the shared import pipeline from the background watcher instead of being batch-polled every few minutes. When a source mailbox is saved or deleted, an after-commit event also forces the watcher registry to refresh immediately so newly switched `IDLE` sources do not wait for the normal periodic rescan. On backend startup the watcher registry is refreshed immediately as well, so eligible `IDLE` sources reconnect within the normal Quarkus boot path instead of waiting for the 30-second sweep.
+Scheduler-triggered runs include `IDLE` sources only when their acknowledgement-based safety deadline expires. Setting `MAIL_IDLE_SAFETY_POLLING_ENABLED=false` restores notification-only IDLE with the existing disconnected-watcher fallback. When a source mailbox is saved or deleted, an after-commit event also forces the watcher registry to refresh immediately so newly switched `IDLE` sources do not wait for the normal periodic rescan. On backend startup the watcher registry is refreshed immediately as well, so eligible `IDLE` sources reconnect within the normal Quarkus boot path instead of waiting for the 30-second sweep.
 
 Realtime `idle-source` activations now also get priority over scheduler contention. If a scheduler batch is already running, InboxBridge can start a single-source `idle-source` run alongside that scheduler batch for the newly activated IMAP source instead of repeatedly re-queueing it until the whole batch finishes. Other busy states still return `poll_busy`, so manual/source-scoped runs keep the existing safety guardrails.
 
-IDLE sources now also keep a lightweight watcher-health record. Healthy watchers remain the primary ingestion path and scheduler polling continues to skip those sources. If a watcher disconnects and stays unhealthy beyond the normal reconnect window, the scheduler temporarily treats that source as eligible again so mail still flows while the watcher keeps retrying in the background. Once the watcher reconnects, scheduler fallback stops automatically and the source returns to pure IDLE-driven ingestion.
+IDLE sources keep a lightweight watcher-health record, but `Connected` only records the observed connection state; it is not proof that notifications are still flowing. Safety polling uses a dedicated interval since the oldest acknowledged renewal or a newer completed mailbox sync, with normal cooldown/throttle/checkpoint/dedupe rules. The existing disconnected-watcher fallback (after two minutes) remains available when safety polling is explicitly disabled. Diagnostics expose these two mechanisms separately.
+
+Each folder renews its IDLE command after 25 minutes by default (RFC 2177 recommends ending/reissuing before 29 minutes). A separate virtual thread issues a normal Angus folder NOOP, which sends DONE and waits for the old IDLE command before sending another command; no raw command is written alongside the IDLE reader. A bounded renewal deadline interrupts the virtual reader and command thread if the server stops acknowledging the renewal, forcing reconnection. A folder-specific renewal loop prevents one stalled folder from blocking the rest. Stopping/removing a watcher cancels its renewal work before another connection can be used.
+
+Every successfully opened/reopened watched folder queues a source catch-up sync after installing its listener, regardless of the message count; this recovers mail delivered during a gap without needing another arrival notification. Successful renewals update health only and never queue catch-up. The pending source set coalesces folders/notifications and retains busy requests for retry. Scheduler and IDLE execution paths share a per-source in-process guard so their overlap cannot import the same source simultaneously; distinct sources retain the existing parallel execution behavior. No message deletion, checkpoint or destination-isolation semantics are changed.
 
 Successful scheduled polls now persist the next eligible time on aligned interval boundaries rather than `last success + interval`, so the single scheduler loop still wakes up every few seconds but each source's actual cadence follows predictable slots such as `:00`, `:05`, and `:10` according to that source's effective polling settings.
 
@@ -628,3 +632,39 @@ configured immediate peers, and Nginx replaces untrusted forwarding headers.
 Java and Nginx run unprivileged and mount separate TLS leaf directories. The CA
 signing key is available only to certificate bootstrap. See
 [the source security review](SECURITY_REVIEW.md) for findings, tests and limits.
+
+### Runtime IDLE settings
+
+`PollingSettingsService` resolves the three IDLE environment defaults through
+`MailClientConfig` and nullable overrides in `SystemPollingSetting`;
+`SourcePollingSettingsService` resolves a per-source nullable safety policy in
+`SourcePollingSetting`. These use the existing admin-only and actor-scoped
+polling-settings endpoints, preserving mailbox ownership checks. Source policy overrides inherit the global policy. V75 separates the safety deadline from ordinary polling and supports per-source renewal intervals.
+The API exposes default/override/effective values so a client can round-trip
+false and null without conflating disabled with inherited.
+
+After commit, a source-mailbox configuration event reconciles renewal settings.
+Each handle captures immutable renewal timings; a changed pair replaces that
+handle, while policy-only changes retain connected watchers. Acknowledged
+renewal times are in-memory per-folder health observations, cleared when a new
+connection starts and preserved while that connection is disconnected.
+Migration V74 adds nullable columns, leaving old deployments on inherited
+defaults without changing mailbox credentials or stored checkpoints.
+
+### IDLE acknowledgement deadlines and execution reasons
+
+Successful renewals no longer enqueue import work. The scheduler evaluates the
+oldest per-folder acknowledgement (or initial connection time) plus a dedicated
+safety interval, taking a newer completed source sync into account. IDLE safety
+checks ignore the ordinary poll cadence while retaining enablement/cooldown.
+The deadline is checked again under the per-source guard to handle concurrent
+renewal acknowledgements. The original disconnected fallback is used only when
+the acknowledgement-based policy is disabled.
+
+Per-source renewal and safety overrides are resolved through
+`SourcePollingSettingsService`. Watch targets capture resolved timings so only
+affected connections are replaced. Global changes validate every stored source
+override before mutation; safety exceeds renewal plus response wait. V75 stores
+these independent deadlines. Connection recovery uses `idle-catchup`, exposed as
+`catchUpRuns`; mailbox notifications alone use `idle-source`. Pure renewals write
+no poll event. Historical ambiguous events remain unchanged.

@@ -1,0 +1,102 @@
+# Separate project and volumes for each checkout; never reads the production .env.
+services:
+  backend-tools:
+    image: maven:3.10-eclipse-temurin-25
+    working_dir: /workspace
+    volumes:
+      - ..:/workspace
+      - maven-cache:/root/.m2
+      - ${DEV_DOCKER_SOCKET:-/var/run/docker.sock}:/var/run/docker.sock
+    environment:
+      TESTCONTAINERS_HOST_OVERRIDE: host.docker.internal
+      DOCKER_API_VERSION: "1.44"
+    profiles: [tools]
+  frontend-tools:
+    image: node:24-bookworm-slim
+    working_dir: /workspace/admin-ui
+    volumes:
+      - ..:/workspace
+      - node-modules:/workspace/admin-ui/node_modules
+      - npm-cache:/root/.npm
+    environment:
+      CI: "1"
+      NODE_OPTIONS: --max-old-space-size=4096
+    profiles: [tools]
+  cert-init:
+    image: alpine:3.24
+    volumes:
+      - certificates:/certs
+      - ../docker:/opt/inboxbridge/docker:ro
+    environment:
+      PUBLIC_HOSTNAME: localhost
+      PUBLIC_PORT: ${DEV_PORT:-3000}
+    command: [sh, /opt/inboxbridge/docker/cert-init.sh]
+  postgres:
+    image: postgres:16
+    environment:
+      PGDATA: /var/lib/postgresql/data/pgdata
+      POSTGRES_DB: inboxbridge
+      POSTGRES_USER: inboxbridge
+      POSTGRES_PASSWORD: local-development-only
+    volumes:
+      - database:/var/lib/postgresql/data
+      - type: volume
+        source: certificates
+        target: /etc/inboxbridge/certs
+        read_only: true
+        volume:
+          subpath: postgres
+      - ../docker:/opt/inboxbridge/docker:ro
+    entrypoint: [bash, /opt/inboxbridge/docker/postgres-entrypoint.sh]
+    depends_on:
+      cert-init:
+        condition: service_completed_successfully
+    healthcheck:
+      test: [CMD-SHELL, pg_isready -U inboxbridge -d inboxbridge]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+  inboxbridge:
+    build:
+      context: ..
+      dockerfile: dev/Dockerfile.backend
+    environment:
+      JDBC_URL: jdbc:postgresql://postgres:5432/inboxbridge?sslmode=verify-full&sslrootcert=/etc/inboxbridge/certs/ca.crt
+      JDBC_USERNAME: inboxbridge
+      JDBC_PASSWORD: local-development-only
+      PUBLIC_HOSTNAME: localhost
+      PUBLIC_PORT: ${DEV_PORT:-3000}
+      SECURITY_TOKEN_ENCRYPTION_KEY: ${DEV_ENCRYPTION_KEY:?Use scripts/dev to generate the local development key}
+      SECURITY_ALLOW_ENV_MANAGED_MAILBOX_SECRETS: "false"
+      POLL_ENABLED: "false"
+    volumes:
+      - type: volume
+        source: certificates
+        target: /etc/inboxbridge/certs
+        read_only: true
+        volume:
+          subpath: backend
+    depends_on:
+      postgres:
+        condition: service_healthy
+  inboxbridge-admin:
+    build:
+      context: ..
+      dockerfile: dev/Dockerfile.frontend
+    ports:
+      - 127.0.0.1:${DEV_PORT:-3000}:8443
+    volumes:
+      - type: volume
+        source: certificates
+        target: /etc/inboxbridge/certs
+        read_only: true
+        volume:
+          subpath: frontend
+    depends_on:
+      - inboxbridge
+volumes:
+  maven-cache:
+  npm-cache:
+  node-modules:
+  certificates:
+  database:

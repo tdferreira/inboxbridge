@@ -1,5 +1,6 @@
 import { act, fireEvent, render, screen } from '@testing-library/react'
 import { vi } from 'vitest'
+import { Tooltip, XAxis } from 'recharts'
 
 import ImportTimelineChart from './ImportTimelineChart'
 import { DATE_FORMAT_YMD_24, resetCurrentFormattingDateFormat, setCurrentFormattingDateFormat } from '@/lib/formatters'
@@ -42,8 +43,8 @@ vi.mock('recharts', () => ({
     </svg>
   ),
   ResponsiveContainer: ({ children }) => <div data-testid="responsive-container">{children}</div>,
-  Tooltip: (props) => <div data-cursor={String(props.cursor)} data-testid="tooltip-props" />,
-  XAxis: () => null,
+  Tooltip: vi.fn((props) => <div data-cursor={String(props.cursor)} data-testid="tooltip-props" />),
+  XAxis: vi.fn(() => null),
   YAxis: () => null
 }))
 
@@ -83,6 +84,53 @@ describe('ImportTimelineChart', () => {
       window.sessionStorage.clear()
     }
     vi.unstubAllGlobals()
+  })
+
+  it('keeps sparse hourly ticks aligned with their actual buckets across midnight', async () => {
+    setCurrentFormattingTimeZone('Europe/Paris')
+    const resizeObservers = installResizeObserver()
+    const points = Array.from({ length: 24 }, (_, index) => ({
+      bucketLabel: index < 14
+        ? `2026-10-24T${String(index + 10).padStart(2, '0')}:00`
+        : `2026-10-25T${String(index - 14).padStart(2, '0')}:00`,
+      importedMessages: index === 23 ? 1 : 0
+    }))
+    render(
+      <ImportTimelineChart
+        timelines={{ today: points }}
+        t={(key, params) => translate('en', key, params)}
+        title="Import activity over time"
+      />
+    )
+    await mountFrame(resizeObservers)
+
+    // Recharts numbers the visible ticks after thinning them to fit the width.
+    // A displayed tick's index is therefore not its index in the source rows.
+    const axis = XAxis.mock.lastCall[0]
+    expect(axis.tickFormatter(points[14].bucketLabel, 7)).toBe('10-25 00:00')
+    expect(axis.tickFormatter(points[23].bucketLabel, 11)).toBe('10-25 09:00')
+    const tooltip = Tooltip.mock.lastCall[0]
+    expect(tooltip.labelFormatter(null, [{ payload: points[23] }])).toBe('2026-10-25T09:00')
+  })
+
+  it('keeps sparse daily ticks aligned with the end of a month', async () => {
+    const resizeObservers = installResizeObserver()
+    const points = Array.from({ length: 31 }, (_, index) => ({
+      bucketLabel: `2026-10-${String(index + 1).padStart(2, '0')}`,
+      importedMessages: index
+    }))
+    render(
+      <ImportTimelineChart
+        points={points}
+        t={(key, params) => translate('en', key, params)}
+        title="Import activity over time"
+      />
+    )
+    await mountFrame(resizeObservers)
+
+    const axis = XAxis.mock.lastCall[0]
+    expect(axis.tickFormatter(points[15].bucketLabel, 5)).toBe('10-16')
+    expect(axis.tickFormatter(points[30].bucketLabel, 10)).toBe('10-31')
   })
 
   it('waits for a measurable frame before mounting the responsive chart', async () => {

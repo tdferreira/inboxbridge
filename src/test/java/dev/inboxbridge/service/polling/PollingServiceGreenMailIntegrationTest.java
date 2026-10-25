@@ -1092,6 +1092,28 @@ class PollingServiceGreenMailIntegrationTest {
         assertEquals(List.of("idle-alpha"), listSubjects(destinationMail, DESTINATION_USERNAME, DESTINATION_PASSWORD, DESTINATION_FOLDER));
     }
 
+    @Test
+    void safetyPollRetrievesMissedIdleMailEvenWhenWatchersAreReportedHealthy() throws Exception {
+        appendMessage(sourceMail, SOURCE_USERNAME, SOURCE_PASSWORD, "INBOX", "missed-notification", "Catch-up", "<missed-idle@example.com>");
+        RuntimeEmailAccount account = runtimeAccountWithFetchMode(SourceFetchMode.IDLE);
+        RecordingImportedMessageRepository history = new RecordingImportedMessageRepository();
+        PollingService service = pollService(List.of(account), history);
+        service.imapIdleHealthService = new dev.inboxbridge.service.mail.ImapIdleHealthService();
+        service.imapIdleHealthService.markConnected(account.id(), Instant.now());
+        assertEquals(0, service.runPoll("scheduler").getImported(), "Fresh IDLE connection must suppress the safety poll");
+        assertTrue(history.importedMessages.isEmpty());
+        service.imapIdleHealthService.markConnected(account.id(), Instant.now().minusSeconds(31 * 60));
+
+        PollRunResult first = service.runPoll("scheduler");
+        assertEquals(1, first.getImported());
+        assertTrue(first.getErrorDetails().isEmpty());
+        assertEquals(List.of("missed-notification"), listSubjects(destinationMail, DESTINATION_USERNAME, DESTINATION_PASSWORD, DESTINATION_FOLDER));
+        PollRunResult second = service.runPoll("scheduler");
+        assertEquals(0, second.getImported());
+        assertEquals(1, history.importedMessages.size());
+        assertEquals(1, listSubjects(destinationMail, DESTINATION_USERNAME, DESTINATION_PASSWORD, DESTINATION_FOLDER).size());
+    }
+
     private PollingService pollService(RuntimeEmailAccount runtimeAccount) {
         return pollService(List.of(runtimeAccount), new RecordingImportedMessageRepository());
     }
@@ -1927,6 +1949,15 @@ class PollingServiceGreenMailIntegrationTest {
 
     private static MailClientConfig mailClientConfig() {
         return new MailClientConfig() {
+            @Override
+            public java.time.Duration idleRenewalInterval() { return java.time.Duration.ofMinutes(25); }
+            @Override
+            public java.time.Duration idleRenewalTimeout() { return java.time.Duration.ofSeconds(20); }
+            @Override
+            public java.time.Duration idleSafetyPollInterval() { return java.time.Duration.ofMinutes(30); }
+            @Override
+            public boolean idleSafetyPollingEnabled() { return true; }
+
             @Override
             public java.time.Duration connectionTimeout() {
                 return java.time.Duration.ofSeconds(5);

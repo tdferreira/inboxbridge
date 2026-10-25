@@ -27,7 +27,7 @@ InboxBridge can:
 - support multi-user or single-user deployments
 - provide a full admin UI, a lightweight `/remote` control page, and browser extensions for quick poll status and control
 - show live polling progress with pause, resume, stop, retry, and queue reprioritization controls
-- let IMAP sources opt into real-time IMAP IDLE watching with durable UID checkpoints and scheduler fallback if a watcher stays unhealthy
+- let IMAP sources opt into real-time IMAP IDLE watching with durable UID checkpoints, periodic command renewal and safety polling when acknowledgements become stale
 - keep durable POP3 UIDL checkpoints so scheduled polling can resume from newer POP mail instead of always re-reading only the latest tail window
 
 ## Who It Is For
@@ -66,6 +66,10 @@ InboxBridge includes:
 - Docker Compose services for the backend, frontend, database, and local TLS certificate bootstrap
 
 By default, the local Docker setup serves the app over HTTPS with generated self-signed certificates.
+
+Published releases also provide prebuilt backend/frontend images for amd64 and arm64.
+See [prebuilt container setup](docs/CONTAINERS.md) ([Français](docs/CONTAINERS.fr.md))
+to deploy without compiling, including from an independently maintained fork.
 
 ## Main Features
 

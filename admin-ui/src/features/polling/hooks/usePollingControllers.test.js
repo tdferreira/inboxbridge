@@ -43,6 +43,25 @@ describe('usePollingControllers', () => {
     }
   }
 
+  it('hydrates and saves nullable global IDLE overrides through the admin endpoint', async () => {
+    fetch.mockResolvedValue({ ok: true })
+    const { result } = renderController()
+    act(() => result.current.applyLoadedSystemPolling({
+      pollEnabledOverride: null, fetchWindowOverride: null,
+      manualTriggerLimitCountOverride: null, manualTriggerLimitWindowSecondsOverride: null,
+      sourceHostMaxConcurrencyOverride: null, destinationProviderMaxConcurrencyOverride: null,
+      adaptiveThrottleMaxMultiplierOverride: null, successJitterRatioOverride: null,
+      idleSettings: { safetyPollingEnabledOverride: false, renewalIntervalOverride: 'PT20M', renewalTimeoutOverride: 'PT15S', safetyPollIntervalOverride: 'PT30M' }
+    }))
+    expect(result.current.systemPollingForm).toEqual(expect.objectContaining({ idleSafetyPollingMode: 'DISABLED', idleRenewalIntervalOverride: 'PT20M', idleRenewalTimeoutOverride: 'PT15S', idleSafetyPollIntervalOverride: 'PT30M' }))
+    await act(async () => result.current.savePollingSettings({ preventDefault: vi.fn() }))
+    expect(fetch.mock.calls[0][0]).toBe('/api/admin/polling-settings')
+    expect(JSON.parse(fetch.mock.calls[0][1].body)).toEqual(expect.objectContaining({ idleSafetyPollingEnabledOverride: false, idleRenewalIntervalOverride: 'PT20M', idleRenewalTimeoutOverride: 'PT15S', idleSafetyPollIntervalOverride: 'PT30M' }))
+    act(() => result.current.handleSystemPollingFormChange((current) => ({ ...current, idleSafetyPollingMode: 'DEFAULT', idleRenewalIntervalOverride: '', idleRenewalTimeoutOverride: '', idleSafetyPollIntervalOverride: '' })))
+    await act(async () => result.current.savePollingSettings({ preventDefault: vi.fn() }))
+    expect(JSON.parse(fetch.mock.lastCall[1].body)).toEqual(expect.objectContaining({ idleSafetyPollingEnabledOverride: null, idleRenewalIntervalOverride: null, idleRenewalTimeoutOverride: null, idleSafetyPollIntervalOverride: null }))
+  })
+
   it('hydrates user polling settings while the form is pristine', () => {
     const { result } = renderController()
 

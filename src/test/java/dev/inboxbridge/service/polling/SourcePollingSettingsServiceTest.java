@@ -22,6 +22,61 @@ import jakarta.transaction.Transactional;
 class SourcePollingSettingsServiceTest {
 
     @Test
+    void mailboxRenewalAndSafetyDeadlineAreValidatedTogether() {
+        var service = service();
+        var view = service.updateForSource(actor(), "fetcher-1", new UpdateSourcePollingSettingsRequest(null, null, null, true, "15m", "10m"));
+        assertEquals("PT10M", view.effectiveIdleRenewalInterval());
+        assertEquals("PT15M", view.effectiveIdleSafetyPollInterval());
+        assertThrows(IllegalArgumentException.class, () -> service.updateForSource(actor(), "fetcher-1",
+                new UpdateSourcePollingSettingsRequest(null, null, null, true, "15m", "16m")));
+        assertThrows(IllegalArgumentException.class, () -> service.updateForSource(actor(), "fetcher-1",
+                new UpdateSourcePollingSettingsRequest(null, null, null, true, "40m", "29m")));
+        assertEquals(java.time.Duration.ofMinutes(10), service.effectiveIdleRenewalInterval(runtimeBridge()));
+        var cleared = service.updateForSource(actor(), "fetcher-1", new UpdateSourcePollingSettingsRequest(null, null, null, null, null, null));
+        assertEquals("PT25M", cleared.effectiveIdleRenewalInterval());
+    }
+
+    @Test
+    void sourceSafetyDeadlineInheritsValidatesAndClears() {
+        var service = service();
+        assertThrows(IllegalArgumentException.class, () -> service.updateForSource(actor(), "fetcher-1",
+                new UpdateSourcePollingSettingsRequest(null, null, null, true, "20m")));
+        var view = service.updateForSource(actor(), "fetcher-1", new UpdateSourcePollingSettingsRequest(null, null, null, true, "40m"));
+        assertEquals("PT40M", view.effectiveIdleSafetyPollInterval());
+        assertEquals("PT30M", view.baseIdleSafetyPollInterval());
+        var cleared = service.updateForSource(actor(), "fetcher-1", new UpdateSourcePollingSettingsRequest(null, null, null, null, ""));
+        assertEquals("PT30M", cleared.effectiveIdleSafetyPollInterval());
+        assertEquals(null, cleared.idleSafetyPollIntervalOverride());
+    }
+
+    @Test
+    void sourceSafetyPolicyOverridesAndReturnsToGlobalDefaults() {
+        var service = service();
+        var disabled = service.updateForSource(actor(), "fetcher-1", new UpdateSourcePollingSettingsRequest(true, "2m", 33, false));
+        assertEquals(false, disabled.effectiveIdleSafetyPollingEnabled());
+        assertEquals(true, disabled.baseIdleSafetyPollingEnabled());
+        assertEquals(false, service.effectiveIdleSafetyPollingEnabled(runtimeBridge()));
+        var inherited = service.updateForSource(actor(), "fetcher-1", new UpdateSourcePollingSettingsRequest(null, null, null, null));
+        assertEquals(true, inherited.effectiveIdleSafetyPollingEnabled());
+        assertEquals(null, inherited.idleSafetyPollingEnabledOverride());
+        service.pollingSettingsService = new PollingSettingsService() {
+            @Override public EffectiveIdleSettings effectiveIdleSettings() {
+                return new EffectiveIdleSettings(false, Duration.ofMinutes(25), Duration.ofSeconds(20));
+            }
+        };
+        assertEquals(false, service.effectiveIdleSafetyPollingEnabled(runtimeBridge()));
+        service.updateForSource(actor(), "fetcher-1", new UpdateSourcePollingSettingsRequest(null, null, null, true));
+        assertEquals(true, service.effectiveIdleSafetyPollingEnabled(runtimeBridge()));
+    }
+
+    @Test
+    void sourceSafetySettingCannotBeChangedForAnInaccessibleMailbox() {
+        var service = service();
+        assertThrows(IllegalArgumentException.class, () -> service.updateForSource(actor(), "someone-elses-source",
+                new UpdateSourcePollingSettingsRequest(null, null, null, false)));
+    }
+
+    @Test
     void effectiveSettingsFallBackToInheritedUserPolling() {
         SourcePollingSettingsService service = service();
 

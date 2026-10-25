@@ -1,0 +1,6 @@
+# Use with docker-compose.yml and up --no-build; retain the standard TLS setup.
+services:
+  inboxbridge:
+    image: ${INBOXBRIDGE_BACKEND_IMAGE:?Set the backend image tag or digest}
+  inboxbridge-admin:
+    image: ${INBOXBRIDGE_FRONTEND_IMAGE:?Set the frontend image tag or digest}

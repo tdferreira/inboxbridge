@@ -277,7 +277,7 @@ function EmailAccountListItem({
             <div><dt>{t('emailAccount.pollingEnabled')}</dt><dd>{fetcher.effectivePollEnabled ? t('common.yes') : t('common.no')}</dd></div>
             <div><dt>{t('emailAccount.effectivePollInterval')}</dt><dd>{fetcher.effectivePollInterval}</dd></div>
             <div><dt>{t('emailAccount.effectiveFetchWindow')}</dt><dd>{fetcher.effectiveFetchWindow}</dd></div>
-            <div><dt>{t('emailAccount.nextPollAt')}</dt><dd>{formatDate(fetcher.pollingState?.nextPollAt, locale)}</dd></div>
+            <div><dt>{t(fetcher.fetchMode === 'IDLE' && fetcher.diagnostics?.idleSafetyPollingEnabled ? 'idleSettings.nextSafetyPoll' : 'emailAccount.nextPollAt')}</dt><dd>{formatDate(fetcher.fetchMode === 'IDLE' && fetcher.diagnostics?.idleSafetyPollingEnabled ? fetcher.diagnostics.nextIdleSafetyPollAt : fetcher.pollingState?.nextPollAt, locale)}</dd></div>
             <div><dt>{t('emailAccount.cooldownUntil')}</dt><dd>{formatDate(fetcher.pollingState?.cooldownUntil, locale)}</dd></div>
             <div><dt>{t('emailAccount.consecutiveFailures')}</dt><dd>{fetcher.pollingState?.consecutiveFailures || 0}</dd></div>
           </dl>
@@ -315,6 +315,7 @@ function EmailAccountListItem({
                 {fetcher.fetchMode === 'IDLE' ? (
                   <>
                     <div><dt>{t('emailAccount.idleHealthy')}</dt><dd>{fetcher.diagnostics.idleHealthy ? t('common.yes') : t('common.no')}</dd></div>
+                    <div><dt>{t('emailAccount.idleSafetyPollingEnabled')}</dt><dd>{fetcher.diagnostics.idleSafetyPollingEnabled ? t('common.yes') : t('common.no')}</dd></div>
                     <div><dt>{t('emailAccount.idleSchedulerFallback')}</dt><dd>{fetcher.diagnostics.idleSchedulerFallback ? t('common.yes') : t('common.no')}</dd></div>
                   </>
                 ) : null}
@@ -338,6 +339,7 @@ function EmailAccountListItem({
                     {fetcher.diagnostics.idleWatches.map((watch) => (
                       <span className={`status-pill ${idleStatusTone(watch.status)}`} key={`${watch.folderName}:${watch.status}`}>
                         {watch.folderName} · {t(`emailAccount.idleStatus.${watch.status.toLowerCase()}`)}
+                        {watch.lastRenewedAt ? <> · {t('idleSettings.lastRenewed')}: {formatDate(watch.lastRenewedAt, locale)}</> : null}
                       </span>
                     ))}
                   </div>

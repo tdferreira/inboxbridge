@@ -67,6 +67,17 @@ public final class MailSourceStandaloneFactory {
     private static MailClientConfig defaultMailClientConfig() {
         return new MailClientConfig() {
             @Override
+            public Duration idleRenewalInterval() { return Duration.ofMinutes(25); }
+
+            @Override
+            public Duration idleRenewalTimeout() { return Duration.ofSeconds(20); }
+
+            @Override
+            public java.time.Duration idleSafetyPollInterval() { return java.time.Duration.ofMinutes(30); }
+            @Override
+            public boolean idleSafetyPollingEnabled() { return true; }
+
+            @Override
             public Duration connectionTimeout() {
                 return Duration.ofSeconds(20);
             }

@@ -26,6 +26,9 @@ public class SourcePollingSettingsService {
     SourcePollingSettingRepository repository;
 
     @Inject
+    jakarta.enterprise.event.Event<dev.inboxbridge.service.mail.SourceMailboxConfigurationChanged> mailboxChanged;
+
+    @Inject
     RuntimeEmailAccountService runtimeEmailAccountService;
 
     @Inject
@@ -89,11 +92,25 @@ public class SourcePollingSettingsService {
             setting.sourceId = sourceId;
             setting.ownerUserId = emailAccount.ownerUserId();
         }
+        String safety = request.idleSafetyPollIntervalOverride();
+        safety = safety == null || safety.isBlank() ? null
+                : pollingSettingsService.parsePositiveDuration(safety, "IDLE safety interval").toString();
+        var idle = pollingSettingsService.effectiveIdleSettings();
+        String renewal = request.idleRenewalIntervalOverride();
+        renewal = renewal == null || renewal.isBlank() ? null
+                : pollingSettingsService.parsePositiveDuration(renewal, "IDLE renewal interval").toString();
+        java.time.Duration effectiveRenewal = renewal == null ? idle.renewalInterval() : java.time.Duration.parse(renewal);
+        PollingSettingsService.validateIdleRenewal(effectiveRenewal, idle.renewalTimeout());
+        PollingSettingsService.validateIdleSafetyInterval(safety == null ? pollingSettingsService.effectiveIdleSafetyPollInterval() : java.time.Duration.parse(safety), effectiveRenewal, idle.renewalTimeout());
+        setting.idleRenewalIntervalOverride = renewal;
+        setting.idleSafetyPollIntervalOverride = safety;
+        setting.idleSafetyPollingEnabledOverride = request.idleSafetyPollingEnabledOverride();
         setting.pollEnabledOverride = request.pollEnabledOverride();
         setting.pollIntervalOverride = normalizeIntervalOverride(request.pollIntervalOverride());
         setting.fetchWindowOverride = normalizeFetchWindowOverride(request.fetchWindowOverride());
         setting.updatedAt = Instant.now();
         repository.persist(setting);
+        if (mailboxChanged != null) mailboxChanged.fire(new dev.inboxbridge.service.mail.SourceMailboxConfigurationChanged(sourceId));
         return toView(emailAccount, setting);
     }
 
@@ -117,7 +134,42 @@ public class SourcePollingSettingsService {
                 effective.pollIntervalText(),
                 base.fetchWindow(),
                 setting == null ? null : setting.fetchWindowOverride,
-                effective.fetchWindow());
+                effective.fetchWindow(),
+                pollingSettingsService.effectiveIdleSettings().safetyPollingEnabled(),
+                setting == null ? null : setting.idleSafetyPollingEnabledOverride,
+                effectiveIdleSafetyPollingEnabled(emailAccount),
+                pollingSettingsService.effectiveIdleSafetyPollInterval().toString(),
+                setting == null ? null : setting.idleSafetyPollIntervalOverride,
+                effectiveIdleSafetyPollInterval(emailAccount).toString(),
+                pollingSettingsService.effectiveIdleSettings().renewalInterval().toString(),
+                setting == null ? null : setting.idleRenewalIntervalOverride,
+                effectiveIdleRenewalInterval(emailAccount).toString());
+    }
+
+    @Transactional
+    public boolean effectiveIdleSafetyPollingEnabled(RuntimeEmailAccount account) {
+        SourcePollingSetting setting = repository == null ? null : repository.findBySourceId(account.id()).orElse(null);
+        if (setting != null && setting.idleSafetyPollingEnabledOverride != null) {
+            return setting.idleSafetyPollingEnabledOverride;
+        }
+        return pollingSettingsService == null || pollingSettingsService.effectiveIdleSettings().safetyPollingEnabled();
+    }
+
+    @Transactional
+    public java.time.Duration effectiveIdleSafetyPollInterval(RuntimeEmailAccount account) {
+        SourcePollingSetting setting = repository == null ? null : repository.findBySourceId(account.id()).orElse(null);
+        return setting != null && setting.idleSafetyPollIntervalOverride != null
+                ? java.time.Duration.parse(setting.idleSafetyPollIntervalOverride)
+                : pollingSettingsService == null ? java.time.Duration.ofMinutes(30) : pollingSettingsService.effectiveIdleSafetyPollInterval();
+    }
+
+    @Transactional
+    public java.time.Duration effectiveIdleRenewalInterval(RuntimeEmailAccount account) {
+        SourcePollingSetting setting = repository == null ? null : repository.findBySourceId(account.id()).orElse(null);
+        return setting != null && setting.idleRenewalIntervalOverride != null
+                ? java.time.Duration.parse(setting.idleRenewalIntervalOverride)
+                : pollingSettingsService == null ? java.time.Duration.ofMinutes(25)
+                    : pollingSettingsService.effectiveIdleSettings().renewalInterval();
     }
 
     private String normalizeIntervalOverride(String override) {

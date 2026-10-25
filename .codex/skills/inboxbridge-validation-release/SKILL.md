@@ -77,3 +77,19 @@ Certificate bootstrap must precede the unprivileged services so separate leaf
 mounts have correct permissions. Preserve CA-key isolation. The scanner and
 remaining findings are documented in `docs/SECURITY_REVIEW.md` and
 `docs/DEPENDENCIES.md`; never report zero vulnerabilities from a clean scan.
+
+For the container-only local path use `./scripts/dev test-backend`,
+`./scripts/dev test-frontend`, `./scripts/dev build` and `./scripts/dev up`.
+This replaces host Maven/npm commands and the production Compose invocation.
+Report browser CA trust and real mailflow checks separately from automated tests.
+
+IMAP IDLE changes require both narrow renewal/concurrency tests and GreenMail
+coverage of DONE/NOOP, reconnect catch-up and safety import without notification.
+Accelerated local tests do not establish provider-specific long-duration behavior.
+
+For release-workflow or image publication changes, run
+`python3 scripts/release/test-images.py` and the workflow security checks.
+Use the same tested runtime-only context for amd64 smoke checks and amd64/arm64
+publication. Source/fork registry names must be derived from the repository,
+and manual release runs must check out the validated tag. Package visibility
+and real operator mailflow remain separate checks.

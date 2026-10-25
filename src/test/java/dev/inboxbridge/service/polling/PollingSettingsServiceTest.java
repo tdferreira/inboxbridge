@@ -18,6 +18,65 @@ import jakarta.transaction.Transactional;
 
 class PollingSettingsServiceTest {
 
+    private UpdateAdminPollingSettingsRequest idleRequest(Boolean enabled, String interval, String timeout) {
+        return new UpdateAdminPollingSettingsRequest(null, null, null, null, null, null, null, null, null, null, null, null, null,
+                enabled, interval, timeout);
+    }
+
+    @Test
+    void safetyDeadlineMustExceedTheCompleteRenewalWindow() {
+        var repository = new InMemorySystemPollingSettingRepository(null);
+        var service = service(new TestConfig(), repository);
+        assertThrows(IllegalArgumentException.class, () -> service.update(new UpdateAdminPollingSettingsRequest(
+                null, null, null, null, null, null, null, null, null, null, null, null, null, true, "10m", "20s", "10m")));
+        var view = service.update(new UpdateAdminPollingSettingsRequest(
+                null, null, null, null, null, null, null, null, null, null, null, null, null, true, "10m", "20s", "15m"));
+        assertEquals("PT15M", view.idleSettings().effectiveSafetyPollInterval());
+        assertEquals(Duration.ofMinutes(15), service.effectiveIdleSafetyPollInterval());
+        service.update(idleRequest(null, null, null));
+        assertEquals(Duration.ofMinutes(30), service.effectiveIdleSafetyPollInterval());
+    }
+
+    @Test
+    void adminCannotInvalidateAnExistingSourceSafetyOverride() {
+        var service = service(new TestConfig(), new InMemorySystemPollingSettingRepository(null));
+        service.sourceSettingsRepository = new dev.inboxbridge.persistence.SourcePollingSettingRepository() {
+            @Override public java.util.List<dev.inboxbridge.persistence.SourcePollingSetting> listAll() {
+                var setting = new dev.inboxbridge.persistence.SourcePollingSetting();
+                setting.idleSafetyPollIntervalOverride = "PT15M";
+                return java.util.List.of(setting);
+            }
+        };
+        assertThrows(IllegalArgumentException.class, () -> service.update(idleRequest(true, "20m", "20s")));
+    }
+
+    @Test
+    void idleOverridesPersistAndClearBackToEnvironmentDefaults() {
+        var repository = new InMemorySystemPollingSettingRepository(null);
+        var service = service(new TestConfig(), repository);
+        var view = service.update(idleRequest(false, "20m", "15s")).idleSettings();
+        assertEquals(false, view.effectiveSafetyPollingEnabled());
+        assertEquals("PT20M", view.effectiveRenewalInterval());
+        assertEquals("PT15S", view.effectiveRenewalTimeout());
+        assertEquals(false, service.effectiveIdleSettings().safetyPollingEnabled());
+        service.update(idleRequest(null, "", null));
+        assertEquals(true, service.effectiveIdleSettings().safetyPollingEnabled());
+        assertEquals(Duration.ofMinutes(25), service.effectiveIdleSettings().renewalInterval());
+        assertNull(repository.setting.idleSafetyPollingEnabledOverride);
+        assertNull(repository.setting.idleRenewalIntervalOverride);
+    }
+
+    @Test
+    void invalidRenewalCombinationIsRejectedBeforeMutatingStoredSettings() {
+        var repository = new InMemorySystemPollingSettingRepository(stored(true, "5m", 50, 5, 60));
+        var service = service(new TestConfig(), repository);
+        assertThrows(IllegalArgumentException.class, () -> service.update(idleRequest(false, "28m", "1m")));
+        assertNull(repository.setting.idleSafetyPollingEnabledOverride);
+        assertThrows(IllegalArgumentException.class, () -> service.update(idleRequest(true, "0s", "20s")));
+        assertThrows(IllegalArgumentException.class, () -> service.update(idleRequest(true, "bad", "20s")));
+        assertThrows(IllegalArgumentException.class, () -> service.update(idleRequest(true, "25m", "-1s")));
+    }
+
     @Test
     void effectiveSettingsUseOverridesWhenPresent() {
         PollingSettingsService service = service(new TestConfig(), new InMemorySystemPollingSettingRepository(stored(Boolean.FALSE, "90s", 12, 7, 120)));

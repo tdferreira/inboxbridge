@@ -39,6 +39,8 @@ jobs:
     steps:
       - name: Check out repository
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
 
       - name: Set up Java
         uses: actions/setup-java@b843ebf9b913146b38da2eaa7aeddf76074ae1ad # v6.1.0
@@ -93,6 +95,24 @@ jobs:
       - name: Build frontend
         working-directory: admin-ui
         run: npm run build
+
+      # Packaged integration tests activate the H2 build profile. Rebuild the
+      # production PostgreSQL runtime before preparing any release image.
+      - name: Rebuild production PostgreSQL runtime
+        run: mvn -q -DskipTests package
+
+      - name: Validate release helpers and build images
+        env:
+          SOURCE_URL: https://github.com/${{ github.repository }}
+          REVISION: ${{ github.sha }}
+          VERSION: v0.0.0-ci
+          BACKEND_IMAGE: inboxbridge-backend:ci
+          FRONTEND_IMAGE: inboxbridge-frontend:ci
+        run: |
+          python3 scripts/release/test-images.py
+          python3 scripts/release/prepare-images.py "$RUNNER_TEMP/inboxbridge-runtime"
+          sh scripts/release/build-images.sh "$RUNNER_TEMP/inboxbridge-runtime"
+          sh scripts/release/smoke-images.sh
 
       - name: Validate GitHub Pages site generator
         run: node site/test-config-generator.mjs

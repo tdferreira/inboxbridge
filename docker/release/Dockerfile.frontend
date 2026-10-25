@@ -1,0 +1,15 @@
+FROM nginx:1.31.8-alpine
+RUN apk upgrade --no-cache
+ARG SOURCE_URL
+ARG REVISION
+ARG VERSION
+LABEL org.opencontainers.image.source="${SOURCE_URL}" \
+      org.opencontainers.image.revision="${REVISION}" \
+      org.opencontainers.image.version="${VERSION}" \
+      org.opencontainers.image.licenses="Apache-2.0"
+COPY nginx-main.conf /etc/nginx/nginx.conf
+COPY nginx.conf /etc/nginx/conf.d/default.conf
+COPY frontend/ /usr/share/nginx/html/
+COPY LICENSE /usr/share/licenses/inboxbridge/LICENSE
+USER 101:101
+EXPOSE 8080 8443

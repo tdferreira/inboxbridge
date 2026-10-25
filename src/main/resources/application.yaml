@@ -50,6 +50,10 @@ inboxbridge:
     connection-timeout: ${MAIL_CONNECTION_TIMEOUT:PT20S}
     operation-timeout: ${MAIL_OPERATION_TIMEOUT:PT20S}
     idle-operation-timeout: ${MAIL_IDLE_OPERATION_TIMEOUT:PT0S}
+    idle-renewal-interval: ${MAIL_IDLE_RENEWAL_INTERVAL:PT25M}
+    idle-renewal-timeout: ${MAIL_IDLE_RENEWAL_TIMEOUT:PT20S}
+    idle-safety-poll-interval: ${MAIL_IDLE_SAFETY_POLL_INTERVAL:PT30M}
+    idle-safety-polling-enabled: ${MAIL_IDLE_SAFETY_POLLING_ENABLED:true}
   security:
     auth:
       trusted-proxy-addresses: ${SECURITY_AUTH_TRUSTED_PROXY_ADDRESSES:127.0.0.1,::1,inboxbridge-admin}

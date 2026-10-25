@@ -268,7 +268,7 @@ Key design choices:
 - `Global Polling Settings` now asks for confirmation before starting an all-users manual run, and the dialog also exposes the manual-run rate limit configuration used to prevent repeated hammering
 - the `Edit Global Polling Settings` modal is now grouped into scheduler, manual-run, source pacing, destination pacing, adaptive recovery, and effective-value subsections so the deployment-wide controls are easier to scan
 - broad manual polling runs still respect per-source cooldown and next-window checks, while the single mail-account `Run Poll Now` action remains the explicit force-run path
-- on IMAP IDLE mailboxes, `Run Poll Now` still triggers an immediate one-off sync for that source without disabling the watcher or re-enabling scheduled polling
+- on IMAP IDLE mailboxes, `Run Poll Now` still triggers an immediate one-off sync for that source without disabling the watcher; deployment-controlled safety polling independently checks the source at its effective interval
 - source connection tests for IMAP mailboxes now surface a best-effort `$Forwarded` capability probe based on IMAP permanent flags so the UI can show whether the server appears to support that source-side marker
 - effective polling behavior now follows a three-layer precedence chain: deployment-wide defaults, optional per-user overrides for DB-managed sources, and optional per-source overrides on top
 - those broad manual polling runs now follow the backend's active source and move the per-row spinner/status pill one mailbox at a time, so the user can see which source is actually being processed right now
@@ -465,3 +465,31 @@ main config stores writable temporary files under `/tmp`; certificate mounts
 contain only the frontend key/certificate and public CA. Fresh installations
 copied from `.env.example` explicitly select loopback; existing deployments
 without `PUBLIC_BIND_ADDRESS` retain their prior LAN/tailnet reachability.
+
+
+Source diagnostics distinguish the observed IMAP IDLE connection state,
+disconnected-watcher scheduler fallback, and the deployment's independent
+periodic IDLE safety polling policy. `Connected` does not prove recent protocol
+activity; the safety check can be enabled while disconnected fallback is inactive.
+
+Timeline axis labels are resolved by bucket value, never by the index among
+visible ticks: Recharts thins ticks to fit the available width. This keeps
+hourly and daily axes aligned with the tooltip and backend timezone buckets
+on narrow charts without converting the already-localized buckets again.
+
+The existing global polling dialog now includes an IMAP IDLE reliability
+section, with inherited/explicit safety policy and renewal interval/deadline
+overrides. Source polling dialogs show a matching inherited/explicit policy
+only for IDLE sources and reuse the existing polling interval for safety
+checks. Controllers preserve false versus null in API requests and clear
+overrides on reset. All six dictionaries include the labels and operating
+help. Source diagnostics show acknowledged renewal timestamps and the next
+safety check; changing renewal timings reconnects affected watchers after
+saving, without a container restart.
+
+IDLE settings now expose a dedicated safety deadline and a per-mailbox renewal
+interval, both inheriting global defaults. Successful renewals defer the safety
+deadline without importing mail. The next safety time uses diagnostics rather
+than ordinary nextPollAt. Catch-up executions have their own counter; successful
+renewals do not increase IDLE executions. Historical totals from earlier builds
+remain mixed and the help text explains that limitation.
