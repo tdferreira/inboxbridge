@@ -21,6 +21,7 @@ class AuthClientAddressServiceTest {
     @Test
     void prefersXRealIpFromTrustedProxy() {
         AuthClientAddressService service = new AuthClientAddressService();
+        service.trustedProxyAddresses = "172.18.0.2";
 
         String resolved = service.resolveClientKey(headers("203.0.113.9", "127.0.0.1"), "172.18.0.2");
 
@@ -30,10 +31,44 @@ class AuthClientAddressServiceTest {
     @Test
     void fallsBackToRightMostForwardedForEntryWhenOnlyThatHeaderIsAvailable() {
         AuthClientAddressService service = new AuthClientAddressService();
+        service.trustedProxyAddresses = "172.18.0.2";
 
         String resolved = service.resolveClientKey(headers("198.51.100.10, 127.0.0.1", null), "172.18.0.2");
 
         assertEquals("127.0.0.1", resolved);
+    }
+
+    @Test
+    void doesNotTrustAnArbitraryPrivateNetworkClient() {
+        AuthClientAddressService service = new AuthClientAddressService();
+        service.trustedProxyAddresses = "127.0.0.1,::1";
+        assertEquals("192.168.1.9", service.resolveClientKey(headers("203.0.113.8", "203.0.113.9"), "192.168.1.9"));
+    }
+
+    @Test
+    void ignoresSpoofableProviderHeadersEvenForATrustedProxy() {
+        AuthClientAddressService service = new AuthClientAddressService();
+        service.trustedProxyAddresses = "172.18.0.2";
+        HttpHeaders request = headers("198.51.100.10", "198.51.100.10");
+        request.getRequestHeaders().add("CF-Connecting-IP", "203.0.113.9");
+        request.getRequestHeaders().add("True-Client-IP", "203.0.113.8");
+        assertEquals("198.51.100.10", service.resolveClientKey(request, "172.18.0.2"));
+    }
+
+    @Test
+    void rejectsNonIpHeadersAndDoesNotSkipBackToAnAttackerControlledForwardedEntry() {
+        AuthClientAddressService service = new AuthClientAddressService();
+        service.trustedProxyAddresses = "172.18.0.2";
+        assertEquals("172.18.0.2", service.resolveClientKey(headers("203.0.113.9, invalid", "attacker.example"), "172.18.0.2"));
+        assertEquals("172.18.0.2", service.resolveClientKey(headers(null, "999.1.1.1"), "172.18.0.2"));
+    }
+
+    @Test
+    void normalizesIpv6ProxyAndClientAddresses() {
+        AuthClientAddressService service = new AuthClientAddressService();
+        service.trustedProxyAddresses = "::1";
+        assertEquals("2001:db8:0:0:0:0:0:9", service.resolveClientKey(headers(null, "2001:db8::9"), "::1"));
+        assertEquals("unknown", service.resolveClientKey(headers(null, "203.0.113.9"), null));
     }
 
     private HttpHeaders headers(String forwardedFor, String realIp) {

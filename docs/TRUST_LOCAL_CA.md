@@ -3,6 +3,10 @@
 InboxBridge's Docker Compose setup generates a local certificate authority and
 uses it to sign the frontend/backend HTTPS certificates.
 
+Only `cert-init` mounts the CA signing key. Application/database containers see
+their own leaf certificate/key and a copy of the public CA in separate runtime
+directories. Continue trusting `certs/ca.crt`; never distribute `certs/ca.key`.
+
 The CA certificate is:
 
 - [`certs/ca.crt`](../certs/ca.crt)

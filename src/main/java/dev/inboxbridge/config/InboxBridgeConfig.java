@@ -86,6 +86,9 @@ public interface InboxBridgeConfig {
         Remote remote();
 
         interface Auth {
+            @WithDefault("127.0.0.1,::1,inboxbridge-admin")
+            String trustedProxyAddresses();
+
             @WithDefault("5")
             int loginFailureThreshold();
 

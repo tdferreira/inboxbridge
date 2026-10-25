@@ -1,14 +1,20 @@
 package dev.inboxbridge.service.auth;
 
-import java.net.Inet6Address;
 import java.net.InetAddress;
 import java.net.UnknownHostException;
+
+import org.eclipse.microprofile.config.inject.ConfigProperty;
 
 import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.ws.rs.core.HttpHeaders;
 
 @ApplicationScoped
 public class AuthClientAddressService {
+
+    private static final String DEFAULT_TRUSTED_PROXIES = "127.0.0.1,::1,inboxbridge-admin";
+
+    @ConfigProperty(name = "inboxbridge.security.auth.trusted-proxy-addresses", defaultValue = DEFAULT_TRUSTED_PROXIES)
+    String trustedProxyAddresses = DEFAULT_TRUSTED_PROXIES;
 
     public String resolveClientKey(HttpHeaders headers) {
         return resolveClientKey(headers, null);
@@ -20,8 +26,6 @@ public class AuthClientAddressService {
             return directAddress == null ? "unknown" : directAddress;
         }
         String preferredForwarded = firstNonBlank(
-                headerIp(headers, "CF-Connecting-IP"),
-                headerIp(headers, "True-Client-IP"),
                 headerIp(headers, "X-Real-IP"),
                 forwardedForClient(headers));
         if (preferredForwarded != null) {
@@ -39,13 +43,8 @@ public class AuthClientAddressService {
         }
         String forwardedFor = headers.getHeaderString("X-Forwarded-For");
         if (forwardedFor != null && !forwardedFor.isBlank()) {
-            String[] entries = forwardedFor.split(",");
-            for (int index = entries.length - 1; index >= 0; index -= 1) {
-                String candidate = normalizeIp(entries[index]);
-                if (candidate != null) {
-                    return candidate;
-                }
-            }
+            // Only the immediate trusted hop's appended value is authoritative.
+            return normalizeIp(forwardedFor.substring(forwardedFor.lastIndexOf(',') + 1));
         }
         return null;
     }
@@ -73,19 +72,22 @@ public class AuthClientAddressService {
         if (candidate == null) {
             return false;
         }
-        try {
-            InetAddress address = InetAddress.getByName(candidate);
-            if (address.isAnyLocalAddress() || address.isLoopbackAddress() || address.isLinkLocalAddress() || address.isSiteLocalAddress()) {
-                return true;
+        for (String configured : trustedProxyAddresses.split(",")) {
+            if (configured.isBlank()) {
+                continue;
             }
-            if (address instanceof Inet6Address) {
-                byte[] bytes = address.getAddress();
-                return bytes.length > 0 && (bytes[0] & (byte) 0xfe) == (byte) 0xfc;
+            try {
+                // DNS resolution is restricted to operator-configured proxy names.
+                for (InetAddress proxy : InetAddress.getAllByName(configured.trim())) {
+                    if (candidate.equals(proxy.getHostAddress())) {
+                        return true;
+                    }
+                }
+            } catch (UnknownHostException ignored) {
+                // An unavailable configured proxy must not broaden trust.
             }
-            return false;
-        } catch (UnknownHostException e) {
-            return false;
         }
+        return false;
     }
 
     private String normalizeIp(String candidate) {
@@ -93,9 +95,31 @@ public class AuthClientAddressService {
             return null;
         }
         String normalized = candidate.trim();
-        if (normalized.isBlank() || "unknown".equalsIgnoreCase(normalized)) {
+        if (normalized.isBlank() || normalized.length() > 45 || "unknown".equalsIgnoreCase(normalized)) {
             return null;
         }
-        return normalized;
+        try {
+            if (normalized.contains(":") && normalized.matches("[0-9a-fA-F:.]+")) {
+                return InetAddress.getByName(normalized).getHostAddress();
+            }
+            String[] parts = normalized.split("\\.", -1);
+            if (parts.length != 4) {
+                return null;
+            }
+            byte[] bytes = new byte[4];
+            for (int index = 0; index < parts.length; index++) {
+                if (!parts[index].matches("[0-9]{1,3}")) {
+                    return null;
+                }
+                int value = Integer.parseInt(parts[index]);
+                if (value > 255) {
+                    return null;
+                }
+                bytes[index] = (byte) value;
+            }
+            return InetAddress.getByAddress(bytes).getHostAddress();
+        } catch (UnknownHostException | NumberFormatException ignored) {
+            return null;
+        }
     }
 }

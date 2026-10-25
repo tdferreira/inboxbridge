@@ -608,3 +608,23 @@ If those configured hostnames change, `cert-init` automatically reissues the
 generated leaf certificates on the next compose startup instead of keeping stale
 SANs. Client devices still need to trust `certs/ca.crt` for browsers to accept
 those generated certificates as valid secure-context TLS.
+
+## Authentication and runtime security boundaries
+
+Public OAuth exchange is authorized through the unexpired, one-time state
+issued by an authenticated/authorized start; it cannot fall back to shared or
+caller-selected credentials. Extension handoffs require browser consent bound
+to the request/user and atomic PKCE redemption. Passkey verification locks its
+ceremony row through deletion. CAPTCHA replay tracking consumes the verified
+signed nonce through signed expiry. Password hashes are upgraded after
+successful verification with a conditional update that preserves concurrent
+password changes.
+
+Only Nginx is published by Compose. Fresh installations copied from
+`.env.example` explicitly select loopback; existing deployments without
+`PUBLIC_BIND_ADDRESS` retain their prior all-interface binding so upgrades do
+not break configured LAN/tailnet URLs. The backend accepts client-IP headers only from
+configured immediate peers, and Nginx replaces untrusted forwarding headers.
+Java and Nginx run unprivileged and mount separate TLS leaf directories. The CA
+signing key is available only to certificate bootstrap. See
+[the source security review](SECURITY_REVIEW.md) for findings, tests and limits.

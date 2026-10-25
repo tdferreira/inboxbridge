@@ -1,5 +1,6 @@
 #!/bin/sh
 set -eu
+umask 077
 
 apk add --no-cache openssl >/dev/null
 
@@ -185,3 +186,22 @@ frontend_cn="$(trim "${public_host:-localhost}")"
 generate_signed_cert backend inboxbridge "$backend_hosts"
 generate_signed_cert frontend "$frontend_cn" "$frontend_hosts"
 generate_signed_cert postgres postgres "$postgres_hosts"
+
+# Only cert-init sees the CA signing key. Runtime mounts contain one leaf key
+# and the public CA, so compromising one service cannot impersonate the others.
+chmod 600 /certs/ca.key /certs/backend.key /certs/frontend.key /certs/postgres.key
+publish_runtime_cert() {
+  name="$1"
+  group="$2"
+  mkdir -p "/certs/${name}"
+  chmod 755 "/certs/${name}"
+  cp "/certs/${name}.crt" /certs/ca.crt "/certs/${name}/"
+  cp "/certs/${name}.key" "/certs/${name}/${name}.key"
+  chown "0:${group}" "/certs/${name}/${name}.key"
+  chmod 640 "/certs/${name}/${name}.key"
+  chmod 644 "/certs/${name}/${name}.crt" "/certs/${name}/ca.crt"
+}
+publish_runtime_cert backend 10001
+publish_runtime_cert frontend 101
+publish_runtime_cert postgres 0
+chmod 644 /certs/ca.crt

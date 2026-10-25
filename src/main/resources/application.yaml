@@ -3,6 +3,9 @@ quarkus:
     port: ${HTTP_PORT:8080}
     ssl-port: ${HTTPS_PORT:8443}
     insecure-requests: disabled
+    limits:
+      max-body-size: 256K
+      max-header-size: 16K
     cors:
       enabled: true
       headers: Authorization,Content-Type
@@ -49,6 +52,7 @@ inboxbridge:
     idle-operation-timeout: ${MAIL_IDLE_OPERATION_TIMEOUT:PT0S}
   security:
     auth:
+      trusted-proxy-addresses: ${SECURITY_AUTH_TRUSTED_PROXY_ADDRESSES:127.0.0.1,::1,inboxbridge-admin}
       login-failure-threshold: ${SECURITY_AUTH_LOGIN_FAILURE_THRESHOLD:5}
       login-initial-block: ${SECURITY_AUTH_LOGIN_INITIAL_BLOCK:PT5M}
       login-max-block: ${SECURITY_AUTH_LOGIN_MAX_BLOCK:PT1H}

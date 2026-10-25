@@ -2,7 +2,12 @@
 
 The admin UI is a separate React + Vite application served by Nginx in its own container. It talks to the Quarkus backend through proxied REST endpoints under `/api/...`.
 
-The frontend dependency set is intentionally kept on current stable major versions, and now targets React 19, Vite 8, Vitest 4, jsdom 29, and Recharts 3.x.
+The frontend dependency set is intentionally kept on current stable major versions, and now targets React 19, Vite 8, Vitest 5, jsdom 30, and Recharts 3.x. Use current Node 24 LTS for parity with Docker and CI; jsdom requires at least Node 24.15.0 on that line. The full supported Node range is declared in `package.json`.
+
+The `packageManager` field selects npm 12.2.1. Docker and CI install this version
+before `npm ci` so older dependencies bundled with Node's npm do not define the
+build toolchain. Dependency selection follows the repository's
+[LTS and security policy](../docs/DEPENDENCIES.md).
 
 ## Structure
 
@@ -347,13 +352,13 @@ cd admin-ui
 npm run test:coverage
 ```
 
-The Docker Compose build path now runs the frontend Vitest suite during the
-admin UI image build, so `docker compose up --build` remains the reliable
-end-to-end validation path before manual testing.
-If you need to skip the frontend suite for a constrained standalone image build, override the Docker build arg explicitly:
+Docker Compose builds the production frontend with the committed lockfile using
+`npm ci`. Run the full Vitest suite separately before deployment; tests are
+opt-in during image builds because container builds can hang after successful
+test output. To enable tests for a standalone image build:
 
 ```bash
-docker build -f admin-ui/Dockerfile --build-arg RUN_TESTS=false .
+docker build -f admin-ui/Dockerfile --build-arg RUN_TESTS=true .
 ```
 
 Current unit coverage focuses on:
@@ -446,3 +451,17 @@ The `Administration` workspace now keeps its own admin-specific quick setup guid
 The `Administration -> OAuth Apps` area now explains what the shared Google and Microsoft app registrations are for, including the operator steps for creating the Google Cloud OAuth client used for Gmail destinations and the Microsoft Entra app registration used for Outlook destinations, always reusing the exact redirect URI shown in the InboxBridge dialog.
 The `Administration -> OAuth Apps` provider cards are now stacked vertically and expand individually like the admin user cards, while the edit dialogs keep `Client ID`, `Client Secret`, and `Redirect URI` on separate full-width rows and render the redirect URI as its own copyable block inside the provider setup instructions.
 User management now also supports switching between single-user and multi-user mode with confirmation, preserving disabled accounts for later reactivation, and deleting any other user account from the admin UI.
+
+## Extension connection consent
+
+Opening `?extensionAuthRequest=...` must never silently authorize an extension.
+After sign-in, show the translated consent warning and explicit Approve/Cancel
+actions. Bind approval to both the current request ID and session user ID. Only
+then send the CSRF-protected completion request and start the close countdown.
+The backend owns PKCE validation, expiry and single-use redemption.
+
+The production Nginx container runs as UID 101 on internal ports 8080/8443. Its
+main config stores writable temporary files under `/tmp`; certificate mounts
+contain only the frontend key/certificate and public CA. Fresh installations
+copied from `.env.example` explicitly select loopback; existing deployments
+without `PUBLIC_BIND_ADDRESS` retain their prior LAN/tailnet reachability.

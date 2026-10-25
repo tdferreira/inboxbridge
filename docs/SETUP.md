@@ -84,8 +84,31 @@ After startup:
 
 - admin UI: `https://localhost:3000`
 - remote control page: `https://localhost:3000/remote`
-- backend HTTPS: `https://localhost:8443`
+- backend HTTPS: `https://inboxbridge:8443` (internal Docker network)
 - backend and PostgreSQL stay on the internal Docker network by default, so only the HTTPS frontend is published to the host
+
+The example environment explicitly binds a fresh installation to loopback
+(`PUBLIC_BIND_ADDRESS=127.0.0.1`). Change the initial admin password before
+setting this variable to a LAN/tailnet address or `0.0.0.0` for remote access.
+For compatibility, an existing installation without this variable keeps the
+previous all-interface binding, so upgrades do not break configured LAN or
+Tailscale URLs. The public browser URL remains controlled
+by `PUBLIC_HOSTNAME`, `PUBLIC_PORT` and optional `PUBLIC_BASE_URL`; the bind
+address controls which host interfaces accept connections.
+
+Java and Nginx run without root privileges. `cert-init` retains the CA signing
+key in the top-level certificate directory and publishes separate `backend/`,
+`frontend/` and `postgres/` directories containing only that service's leaf key,
+certificate and the public CA. Keep the entire `certs/` directory protected in
+backups; do not mount its top level into an application container. Existing
+certificates are reused when their configured hostnames still match.
+
+Nginx replaces client-supplied forwarding headers. The backend accepts client
+addresses only from `SECURITY_AUTH_TRUSTED_PROXY_ADDRESSES` (default
+`127.0.0.1,::1,inboxbridge-admin`), rather than trusting every private address.
+If adding a proxy, explicitly configure its immediate peer address/name and
+sanitize forwarded headers there. Authentication routes have per-IP burst
+limits; API requests are limited to 256 KiB bodies and 16 KiB headers.
 
 If you want the generated self-signed certs to cover extra LAN or Tailscale hostnames, set:
 
@@ -328,7 +351,7 @@ The endpoint is intended for an authenticated admin session. If you call it
 with `curl`, include the session cookie from an active admin login.
 
 ```bash
-curl -sk https://localhost:8443/api/admin/config-backups/safe
+curl --cacert certs/ca.crt https://localhost:3000/api/admin/config-backups/safe
 ```
 
 That response redacts mailbox passwords, OAuth refresh tokens, client secrets,

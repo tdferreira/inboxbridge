@@ -170,10 +170,16 @@ Services:
 
 - Admin UI: `https://localhost:3000`
 - Remote control page: `https://localhost:3000/remote`
-- Backend HTTPS: `https://localhost:8443`
+- Backend HTTPS: `https://inboxbridge:8443` (internal Docker network)
 - Backend and PostgreSQL stay on the internal Docker network and are not published to the host by default
 
-The first startup generates certificates in `./certs`.
+The first startup generates certificates in `./certs`. Each service receives
+only its own TLS key and the public CA certificate; the CA signing key stays
+with certificate bootstrap. Fresh installations copied from `.env.example`
+bind the frontend to `127.0.0.1`. After changing the initial admin password, set
+`PUBLIC_BIND_ADDRESS` to an explicit LAN/tailnet address or `0.0.0.0` if remote
+access is required. Existing installations without that variable keep their
+previous network access when upgrading.
 
 ### 3. Sign in
 
@@ -288,7 +294,9 @@ From the extension, you can:
 
 Each extension signs in directly to the configured HTTPS InboxBridge origin.
 Password accounts authenticate in extension Settings, while passkey-backed
-accounts complete a secure handoff through the normal InboxBridge sign-in page.
+accounts complete a secure handoff through the normal InboxBridge sign-in page
+and explicitly approve the extension connection. Approve only a sign-in you
+started from your own extension.
 Extension access is kept separate from the main browser session, uses
 short-lived access tokens with rotating refresh tokens, and stores its local
 authentication bundle encrypted. Host and active-tab access are requested only
@@ -402,7 +410,7 @@ AI assistance was used to help design, implement, refactor, test, and document p
 ## Technology Stack
 
 - Java 25
-- Quarkus 3.33.3
+- Quarkus 3.40.1.1 LTS
 - React 19
 - Vite 8
 - PostgreSQL 16

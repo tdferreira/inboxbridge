@@ -16,15 +16,15 @@ services:
       dockerfile: Dockerfile
       network: host
     container_name: inboxbridge
-    ports:
-      - "8443:8443"
+    cap_drop: [ALL]
+    security_opt: [no-new-privileges:true]
     depends_on:
       cert-init:
         condition: service_completed_successfully
       postgres:
         condition: service_healthy
     volumes:
-      - ./certs:/etc/inboxbridge/certs:ro
+      - ./certs/backend:/etc/inboxbridge/certs:ro
     env_file:
       - .env
     restart: unless-stopped
@@ -35,15 +35,19 @@ services:
       dockerfile: admin-ui/Dockerfile
       network: host
     container_name: inboxbridge-admin
+    cap_drop: [ALL]
+    security_opt: [no-new-privileges:true]
     ports:
-      - "${PUBLIC_PORT:-3000}:443"
+      # Preserve reachability for existing installs that predate this setting.
+      # Fresh installs explicitly select loopback in .env.example.
+      - "${PUBLIC_BIND_ADDRESS:-0.0.0.0}:${PUBLIC_PORT:-3000}:8443"
     depends_on:
       cert-init:
         condition: service_completed_successfully
       inboxbridge:
         condition: service_started
     volumes:
-      - ./certs:/etc/inboxbridge/certs:ro
+      - ./certs/frontend:/etc/inboxbridge/certs:ro
     restart: unless-stopped
 
   postgres:
@@ -58,7 +62,7 @@ services:
       POSTGRES_PASSWORD: inboxbridge
     volumes:
       - postgres_data:/var/lib/postgresql/data
-      - ./certs:/etc/inboxbridge/certs:ro
+      - ./certs/postgres:/etc/inboxbridge/certs:ro
       - ./docker:/opt/inboxbridge/docker:ro
     entrypoint:
       - /bin/bash

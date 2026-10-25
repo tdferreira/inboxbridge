@@ -363,6 +363,9 @@ class RemoteAuthResourceTest {
                 public Auth auth() {
                     return new Auth() {
                         @Override
+                        public String trustedProxyAddresses() { return "127.0.0.1,::1,inboxbridge-admin"; }
+
+                        @Override
                         public int loginFailureThreshold() { return 5; }
                         @Override
                         public java.time.Duration loginInitialBlock() { return java.time.Duration.ofMinutes(5); }
