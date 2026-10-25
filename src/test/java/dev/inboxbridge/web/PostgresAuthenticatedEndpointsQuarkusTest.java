@@ -363,7 +363,7 @@ class PostgresAuthenticatedEndpointsQuarkusTest {
     @Test
     void extensionBrowserHandoffCompletesAndRedeemsAgainstRealBrowserSessionState() {
         BrowserSession browserSession = loginBrowserAsAdmin();
-        String codeVerifier = "pgtest-browser-handoff-verifier";
+        String codeVerifier = "pgtest-browser-handoff-verifier-at-least-43-characters";
         String codeChallenge = pkceS256(codeVerifier);
 
         ValidatableResponse startResponse = given()

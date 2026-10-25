@@ -11,6 +11,8 @@ import java.time.Clock;
 import java.time.Instant;
 import java.time.ZoneOffset;
 import java.util.Base64;
+import java.util.List;
+import java.util.concurrent.Executors;
 
 import org.junit.jupiter.api.Test;
 
@@ -20,9 +22,57 @@ import dev.inboxbridge.persistence.ExtensionSession;
 class ExtensionBrowserAuthHandoffServiceTest {
 
     @Test
+    void concurrentRedemptionMintsOnlyOneSession() throws Exception {
+        var service = configuredService();
+        String verifier = "browser-verifier-with-at-least-43-characters-123456";
+        var started = service.start(s256(verifier), "S256", null, null, null);
+        AppUser user = new AppUser();
+        user.id = 9L;
+        service.complete(started.requestId(), user);
+        try (var executor = Executors.newFixedThreadPool(2)) {
+            var results = executor.<ExtensionBrowserAuthHandoffService.BrowserAuthRedeemResult>invokeAll(List.of(
+                    () -> service.redeem(started.requestId(), verifier),
+                    () -> service.redeem(started.requestId(), verifier)));
+            int authenticated = 0;
+            for (var result : results) {
+                if (result.get().status() == ExtensionBrowserAuthHandoffService.Status.AUTHENTICATED) {
+                    authenticated++;
+                }
+            }
+            assertEquals(1, authenticated);
+        }
+    }
+
+    @Test
+    void completedRequestCannotSwitchUsers() {
+        var service = configuredService();
+        var started = service.start(s256("verifier"), "S256", null, null, null);
+        AppUser first = new AppUser();
+        first.id = 9L;
+        AppUser other = new AppUser();
+        other.id = 10L;
+        service.complete(started.requestId(), first);
+        assertThrows(IllegalArgumentException.class, () -> service.complete(started.requestId(), other));
+    }
+
+    @Test
+    void startRejectsMalformedChallengesAndBoundsPendingState() {
+        var service = configuredService();
+        for (String challenge : List.of("", "short", "a".repeat(100_000), "+".repeat(43))) {
+            assertThrows(IllegalArgumentException.class, () -> service.start(challenge, "S256", null, null, null));
+        }
+        for (int index = 0; index < ExtensionBrowserAuthHandoffService.MAX_PENDING_HANDOFFS; index++) {
+            service.start(s256("verifier"), "S256", null, null, null);
+        }
+        assertThrows(IllegalArgumentException.class, () -> service.start(s256("verifier"), "S256", null, null, null));
+        service.clock = Clock.fixed(Instant.parse("2026-04-12T10:05:00Z"), ZoneOffset.UTC);
+        assertDoesNotThrow(() -> service.start(s256("verifier"), "S256", null, null, null));
+    }
+
+    @Test
     void redeemReturnsPendingUntilBrowserSessionCompletes() {
         ExtensionBrowserAuthHandoffService service = configuredService();
-        String verifier = "browser-verifier";
+        String verifier = "browser-verifier-with-at-least-43-characters-123456";
         var started = service.start(s256(verifier), "S256", "Laptop", "firefox", "0.1.0");
 
         var result = service.redeem(started.requestId(), verifier);
@@ -34,7 +84,7 @@ class ExtensionBrowserAuthHandoffServiceTest {
     @Test
     void redeemCreatesExtensionSessionAfterBrowserCompletion() {
         ExtensionBrowserAuthHandoffService service = configuredService();
-        String verifier = "browser-verifier";
+        String verifier = "browser-verifier-with-at-least-43-characters-123456";
         var started = service.start(s256(verifier), "S256", "Laptop", "firefox", "0.1.0");
         AppUser user = new AppUser();
         user.id = 9L;
@@ -53,7 +103,7 @@ class ExtensionBrowserAuthHandoffServiceTest {
     @Test
     void completeStillSucceedsAfterRedeemConsumesTheExtensionSession() {
         ExtensionBrowserAuthHandoffService service = configuredService();
-        String verifier = "browser-verifier";
+        String verifier = "browser-verifier-with-at-least-43-characters-123456";
         var started = service.start(s256(verifier), "S256", "Laptop", "firefox", "0.1.0");
         AppUser user = new AppUser();
         user.id = 9L;
@@ -68,7 +118,7 @@ class ExtensionBrowserAuthHandoffServiceTest {
     @Test
     void redeemRejectsWrongVerifier() {
         ExtensionBrowserAuthHandoffService service = configuredService();
-        var started = service.start(s256("browser-verifier"), "S256", "Laptop", "firefox", "0.1.0");
+        var started = service.start(s256("browser-verifier-with-at-least-43-characters-123456"), "S256", "Laptop", "firefox", "0.1.0");
         AppUser user = new AppUser();
         user.id = 9L;
         service.complete(started.requestId(), user);
@@ -81,7 +131,7 @@ class ExtensionBrowserAuthHandoffServiceTest {
     @Test
     void redeemExpiresAfterTtl() {
         ExtensionBrowserAuthHandoffService service = configuredService();
-        String verifier = "browser-verifier";
+        String verifier = "browser-verifier-with-at-least-43-characters-123456";
         var started = service.start(s256(verifier), "S256", "Laptop", "firefox", "0.1.0");
 
         service.clock = Clock.fixed(Instant.parse("2026-04-12T10:05:00Z"), ZoneOffset.UTC);

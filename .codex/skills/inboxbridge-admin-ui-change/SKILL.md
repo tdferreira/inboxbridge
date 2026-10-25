@@ -42,3 +42,5 @@ Start with [`admin-ui/README.md`](../../../admin-ui/README.md), [`CONTEXT.md`](.
 - Frontend behavior or UX guidance: [`admin-ui/README.md`](../../../admin-ui/README.md)
 - Cross-chat product/runtime memory: [`CONTEXT.md`](../../../CONTEXT.md)
 - Operator-facing setup or screenshots/copy-sensitive docs: [`README.md`](../../../README.md)
+
+- Extension handoff URLs must show translated consent and require an explicit approval bound to request ID and session user ID before completing authorization. An existing web session must not automatically approve a handoff. Preserve the completed-popup countdown after approval.

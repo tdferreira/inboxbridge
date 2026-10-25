@@ -138,7 +138,7 @@ describe('App', () => {
     expect(screen.queryByText('Signed in with passkey.')).not.toBeInTheDocument()
   })
 
-  it('completes the extension browser sign-in handoff after a normal web session is present', async () => {
+  it('requires explicit consent before completing an extension browser sign-in handoff', async () => {
     window.history.replaceState({}, '', '/?extensionAuthRequest=request-1')
     const closeSpy = vi.spyOn(window, 'close').mockImplementation(() => {})
     const fetchMock = createWorkspaceRouteFetch({
@@ -158,6 +158,8 @@ describe('App', () => {
     render(<App />)
 
     await screen.findByText('Connect your browser extension')
+    expect(fetchMock.mock.calls.some(([url]) => url === '/api/extension/auth/browser-handoff/complete')).toBe(false)
+    fireEvent.click(await screen.findByRole('button', { name: 'Approve connection' }))
     await screen.findByText('The browser extension is connected. You can close this window.')
     await screen.findByRole('button', { name: 'Close window (5s)' })
     expect(fetchMock).toHaveBeenCalledWith('/api/extension/auth/browser-handoff/complete', expect.objectContaining({
@@ -189,6 +191,7 @@ describe('App', () => {
 
     render(<App />)
 
+    fireEvent.click(await screen.findByRole('button', { name: 'Approve connection' }))
     await screen.findByRole('button', { name: 'Close window (5s)' })
     await waitFor(() => {
       expect(closeSpy).toHaveBeenCalled()

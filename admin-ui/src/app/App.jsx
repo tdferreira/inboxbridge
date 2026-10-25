@@ -287,6 +287,7 @@ function AppContent({ timings = DEFAULT_APP_TIMINGS }) {
   const [showAuthSecurityDialog, setShowAuthSecurityDialog] = useState(false)
   const [globalStatsNeedsAttention, setGlobalStatsNeedsAttention] = useState(false)
   const [extensionAuthBridge, setExtensionAuthBridge] = useState({ error: '', status: 'idle' })
+  const [approvedExtensionAuthRequest, setApprovedExtensionAuthRequest] = useState(null)
   const [extensionAuthCloseCountdown, setExtensionAuthCloseCountdown] = useState(5)
   const notificationTimersRef = useRef(new Map())
   const selectedUserLoaderRef = useRef(null)
@@ -874,7 +875,9 @@ function AppContent({ timings = DEFAULT_APP_TIMINGS }) {
   }, [extensionAuthRequestId])
 
   useEffect(() => {
-    if (!extensionAuthRequestId || !session) {
+    // Approval belongs to this request and user, never to a URL alone.
+    if (!extensionAuthRequestId || !session
+      || approvedExtensionAuthRequest !== `${extensionAuthRequestId}:${session.id}`) {
       return
     }
     let cancelled = false
@@ -909,7 +912,7 @@ function AppContent({ timings = DEFAULT_APP_TIMINGS }) {
     return () => {
       cancelled = true
     }
-  }, [extensionAuthRequestId, session?.id])
+  }, [extensionAuthRequestId, session?.id, approvedExtensionAuthRequest])
 
   useEffect(() => {
     if (!extensionAuthRequestId || extensionAuthBridge.status !== 'completed') {
@@ -1863,7 +1866,9 @@ function AppContent({ timings = DEFAULT_APP_TIMINGS }) {
   if (extensionAuthRequestId) {
     const bridgeMessage = extensionAuthBridge.status === 'completed'
       ? t('extensionAuth.success')
-      : extensionAuthBridge.status === 'completing' || extensionAuthBridge.status === 'idle'
+      : extensionAuthBridge.status === 'idle'
+        ? t('extensionAuth.consent')
+        : extensionAuthBridge.status === 'completing'
         ? t('extensionAuth.completing')
         : extensionAuthBridge.error || t('extensionAuth.failed')
     const closeButtonLabel = extensionAuthBridge.status === 'completed'
@@ -1874,7 +1879,16 @@ function AppContent({ timings = DEFAULT_APP_TIMINGS }) {
         <main className="auth-screen-card">
           <h1>{t('extensionAuth.signInTitle')}</h1>
           <div className="muted-box auth-screen-note">{bridgeMessage}</div>
-          {extensionAuthBridge.status === 'error' ? (
+          {extensionAuthBridge.status === 'idle' ? (
+            <div className="action-row">
+              <button className="primary" onClick={() => setApprovedExtensionAuthRequest(`${extensionAuthRequestId}:${session.id}`)} type="button">
+                {t('extensionAuth.approve')}
+              </button>
+              <button className="secondary" onClick={() => window.location.replace('/')} type="button">
+                {t('extensionAuth.cancel')}
+              </button>
+            </div>
+          ) : extensionAuthBridge.status === 'error' ? (
             <div className="action-row">
               <button className="primary" onClick={() => window.location.reload()} type="button">
                 {t('extensionAuth.retry')}

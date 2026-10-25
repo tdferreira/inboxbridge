@@ -24,6 +24,7 @@ import jakarta.inject.Inject;
 public class ExtensionBrowserAuthHandoffService {
 
     static final Duration HANDOFF_TTL = Duration.ofMinutes(5);
+    static final int MAX_PENDING_HANDOFFS = 1_000;
 
     private static final SecureRandom SECURE_RANDOM = new SecureRandom();
 
@@ -41,8 +42,8 @@ public class ExtensionBrowserAuthHandoffService {
             String browserFamily,
             String extensionVersion) {
         pruneExpired();
-        if (codeChallenge == null || codeChallenge.isBlank()) {
-            throw new IllegalArgumentException("A browser extension sign-in challenge is required.");
+        if (codeChallenge == null || !codeChallenge.matches("[A-Za-z0-9_-]{43}")) {
+            throw new IllegalArgumentException("A valid S256 browser extension sign-in challenge is required.");
         }
         if (!"S256".equalsIgnoreCase(String.valueOf(codeChallengeMethod))) {
             throw new IllegalArgumentException("InboxBridge only supports S256 extension sign-in challenges.");
@@ -57,7 +58,12 @@ public class ExtensionBrowserAuthHandoffService {
                 extensionSessionService.normalizeExtensionVersion(extensionVersion),
                 now,
                 expiresAt);
-        handoffs.put(handoff.requestId(), handoff);
+        synchronized (handoffs) {
+            if (handoffs.size() >= MAX_PENDING_HANDOFFS) {
+                throw new IllegalArgumentException("Too many pending extension sign-ins. Please try again later.");
+            }
+            handoffs.put(handoff.requestId(), handoff);
+        }
         return new StartedBrowserAuthHandoff(handoff.requestId(), handoff.expiresAt());
     }
 
@@ -68,9 +74,15 @@ public class ExtensionBrowserAuthHandoffService {
         if (user == null || user.id == null) {
             throw new IllegalArgumentException("The browser sign-in session is not available.");
         }
-        handoff.completedUserId = user.id;
-        handoff.completedAt = Instant.now(clock);
-        return true;
+        synchronized (handoff) {
+            // Repeated completion for the same user is harmless (the popup can retry).
+            if (handoff.completedUserId != null && !handoff.completedUserId.equals(user.id)) {
+                throw new IllegalArgumentException("The browser extension sign-in request was already approved.");
+            }
+            handoff.completedUserId = user.id;
+            handoff.completedAt = Instant.now(clock);
+            return true;
+        }
     }
 
     public BrowserAuthRedeemResult redeem(String requestId, String codeVerifier) {
@@ -79,31 +91,35 @@ public class ExtensionBrowserAuthHandoffService {
         if (handoff == null) {
             return BrowserAuthRedeemResult.expired();
         }
-        Instant now = Instant.now(clock);
-        if (handoff.expiresAt().isBefore(now) || handoff.expiresAt().equals(now)) {
-            handoffs.remove(handoff.requestId());
-            return BrowserAuthRedeemResult.expired();
-        }
-        if (handoff.completedUserId == null) {
-            return BrowserAuthRedeemResult.pending(handoff.expiresAt());
-        }
-        if (handoff.redeemedAt != null) {
-            return BrowserAuthRedeemResult.expired();
-        }
-        if (codeVerifier == null || codeVerifier.isBlank() || !handoff.codeChallenge().equals(s256(codeVerifier.trim()))) {
-            throw new IllegalArgumentException("The browser extension sign-in verification failed.");
-        }
+        // Verification and consumption must be atomic: parallel polls may mint only one session.
+        synchronized (handoff) {
+            Instant now = Instant.now(clock);
+            if (!handoff.expiresAt().isAfter(now)) {
+                handoffs.remove(handoff.requestId());
+                return BrowserAuthRedeemResult.expired();
+            }
+            if (handoff.completedUserId == null) {
+                return BrowserAuthRedeemResult.pending(handoff.expiresAt());
+            }
+            if (handoff.redeemedAt != null) {
+                return BrowserAuthRedeemResult.expired();
+            }
+            if (codeVerifier == null || !codeVerifier.matches("[A-Za-z0-9._~-]{43,128}")
+                    || !handoff.codeChallenge().equals(s256(codeVerifier))) {
+                throw new IllegalArgumentException("The browser extension sign-in verification failed.");
+            }
 
-        AppUser user = new AppUser();
-        user.id = handoff.completedUserId;
-        handoff.redeemedAt = now;
-        return BrowserAuthRedeemResult.authenticated(
-                extensionSessionService.createAuthenticatedSession(
-                        user,
-                        handoff.label(),
-                        handoff.browserFamily(),
-                        handoff.extensionVersion()),
-                handoff.expiresAt());
+            AppUser user = new AppUser();
+            user.id = handoff.completedUserId;
+            handoff.redeemedAt = now;
+            return BrowserAuthRedeemResult.authenticated(
+                    extensionSessionService.createAuthenticatedSession(
+                            user,
+                            handoff.label(),
+                            handoff.browserFamily(),
+                            handoff.extensionVersion()),
+                    handoff.expiresAt());
+        }
     }
 
     private Optional<PendingBrowserAuthHandoff> activeHandoff(String requestId) {
