@@ -626,3 +626,12 @@ requirements and independent fork publication. The same image pair supports
 standard internal TLS by default, or an existing HTTP deployment behind a trusted
 external HTTPS terminator with frontend TLS_ENABLED=false. Keep the backend's
 explicit HTTP settings and private/loopback ingress in the latter profile.
+
+IDLE production timing limits are shared by environment defaults, inherited
+settings and API overrides: renewal is at least one minute, renewal plus the
+response deadline stays below 29 minutes, and safety is at most 24 hours and
+strictly exceeds that renewal window. Invalid API values return a client error
+before persistence. Invalid legacy per-source values are isolated so they cannot
+abort another user's scheduler batch. State snapshots are read in short
+transactions that finish before mailbox I/O. Accelerated protocol timing uses
+a test-only execution seam, never a production configuration bypass.

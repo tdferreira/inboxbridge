@@ -1,7 +1,7 @@
 const dictionary = {
   "pollingStats.idleRunsHelp": "IDLE-Läufe zählen Postfachbenachrichtigungen. Erfolgreiche Erneuerungen sind keine Importläufe. Verbindungsabgleiche werden separat gezählt. Ältere Versionen zählten Erneuerungen und Abgleiche als IDLE.",
   "pollingStats.catchUpRuns": "Abgleich nach Verbindung",
-  "idleSettings.safetyIntervalHelp": "Nur abfragen, wenn innerhalb dieser Zeit keine Erneuerung oder Synchronisierung erfolgreich war. Muss Erneuerungsintervall plus Antwortfrist überschreiten. Getrennt vom normalen Abruf.",
+  "idleSettings.safetyIntervalHelp": "Nur ohne erfolgreiche Erneuerung oder Synchronisierung in diesem Zeitraum abfragen. Höchstens 24 Stunden und länger als Erneuerungsintervall plus Antwortfrist. Unabhängig vom normalen Abruf.",
   "idleSettings.safetyInterval": "Zeitlimit für Sicherheitsabrufe",
   "idleSettings.title": "IMAP-IDLE-Zuverlässigkeit",
   "idleSettings.safety": "Regelmäßige Sicherheitsabfrage",
@@ -9,7 +9,7 @@ const dictionary = {
   "idleSettings.renewalInterval": "Erneuerungsintervall",
   "idleSettings.renewalTimeout": "Zeitlimit für Erneuerung",
   "idleSettings.help": "Eine erfolgreiche Erneuerung verschiebt den Sicherheitsabruf ohne Mailimport. Veraltete oder getrennte Überwachung ermöglicht Wiederherstellung.",
-  "idleSettings.durationHelp": "Positive Zeitangaben wie 25m und 20s verwenden. Die Summe muss unter 29 Minuten liegen. Leer lassen für Umgebungsstandards.",
+  "idleSettings.durationHelp": "Erneuerungsintervall mindestens 1 Minute; zusammen mit der Antwortfrist unter 29 Minuten. Zum Beispiel 25m und 20s. Leer lassen zum Erben.",
   "idleSettings.sourceHelp": "Globale Sicherheitsrichtlinie übernehmen oder für dieses Postfach überschreiben.",
   "idleSettings.lastRenewed": "Letzte erfolgreiche IDLE-Erneuerung",
   "idleSettings.nextSafetyPoll": "Nächste IDLE-Sicherheitsabfrage",

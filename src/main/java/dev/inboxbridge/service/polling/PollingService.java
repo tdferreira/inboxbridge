@@ -273,6 +273,14 @@ public class PollingService {
         try {
             pollSingleSourceExclusively(trigger, now, tally, liveRunId, emailAccount,
                     ignoreInterval, ignoreCooldown, actorUsername, executionSurface);
+        } catch (RuntimeException failure) {
+            // A stale/corrupt setting or repository failure must not terminate another source's worker.
+            LOG.errorf(failure, "Polling source %s failed; other sources will continue", emailAccount.id());
+            tally.addError(new PollRunError("source_poll_failed", emailAccount.id(),
+                    "Source polling failed; inspect the server diagnostics.", null));
+            if (liveRunId != null && pollingLiveService != null) {
+                pollingLiveService.markSourceFinished(liveRunId, emailAccount.id(), 0, 0, 0, "failed");
+            }
         } finally {
             activeSources.remove(emailAccount.id());
         }
@@ -340,12 +348,16 @@ public class PollingService {
     }
 
     private Predicate<RuntimeEmailAccount> isSchedulerEligible(Instant now) {
-        return (emailAccount) -> sourcePollingStateService.eligibility(
-                emailAccount.id(),
-                effectiveSettingsFor(emailAccount),
-                now,
-                emailAccount.fetchMode() == SourceFetchMode.IDLE,
-                false).shouldPoll() && isSchedulerAllowedForFetchMode(emailAccount, now);
+        return emailAccount -> {
+            try {
+                return sourcePollingStateService.eligibility(emailAccount.id(), effectiveSettingsFor(emailAccount), now,
+                        emailAccount.fetchMode() == SourceFetchMode.IDLE, false).shouldPoll()
+                        && isSchedulerAllowedForFetchMode(emailAccount, now);
+            } catch (RuntimeException failure) {
+                LOG.errorf(failure, "Skipping ineligible polling source %s; other sources will continue", emailAccount.id());
+                return false;
+            }
+        };
     }
 
     private boolean isSchedulerAllowedForFetchMode(RuntimeEmailAccount emailAccount, Instant now) {

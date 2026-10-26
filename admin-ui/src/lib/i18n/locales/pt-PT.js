@@ -1,7 +1,7 @@
 const dictionary = {
   "pollingStats.idleRunsHelp": "Execuções IDLE contam notificações da caixa. Renovações bem-sucedidas não são importações. Sincronizações após ligação são contadas separadamente. Versões anteriores incluíam-nas em IDLE.",
   "pollingStats.catchUpRuns": "Sincronizações após ligação",
-  "idleSettings.safetyIntervalHelp": "Consultar apenas se nenhuma renovação ou sincronização teve sucesso neste prazo. Deve superar o intervalo de renovação mais o prazo de resposta. É separado da consulta normal.",
+  "idleSettings.safetyIntervalHelp": "Consultar apenas sem renovação ou sincronização bem-sucedida neste prazo. Máximo 24 horas; deve superar renovação mais prazo de resposta. Separado da consulta normal.",
   "idleSettings.safetyInterval": "Prazo da consulta de recurso",
   "idleSettings.title": "Fiabilidade do IMAP IDLE",
   "idleSettings.safety": "Verificação periódica de segurança",
@@ -9,7 +9,7 @@ const dictionary = {
   "idleSettings.renewalInterval": "Intervalo de renovação",
   "idleSettings.renewalTimeout": "Prazo máximo de renovação",
   "idleSettings.help": "Uma renovação bem-sucedida adia a consulta de recurso sem importar mensagens. Uma ligação expirada ou desligada permite recuperação.",
-  "idleSettings.durationHelp": "Use durações positivas como 25m e 20s. A soma deve ser inferior a 29 minutos. Deixe vazio para herdar do ambiente.",
+  "idleSettings.durationHelp": "Intervalo de renovação mínimo de 1 minuto; com o prazo de resposta deve ser inferior a 29 minutos. Por exemplo 25m e 20s. Deixe vazio para herdar.",
   "idleSettings.sourceHelp": "Herde a política global de recurso ou ajuste para esta caixa.",
   "idleSettings.lastRenewed": "Última renovação IDLE bem-sucedida",
   "idleSettings.nextSafetyPoll": "Próxima verificação de segurança IDLE",

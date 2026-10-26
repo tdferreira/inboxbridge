@@ -679,3 +679,12 @@ never falls back from missing TLS certificates automatically. Backend transport
 remains independently configured; its CMD preserves existing Compose Java
 commands. Both profiles run non-root and are smoke-tested on disposable data.
 See docs/CONTAINERS.md for the exact operator settings.
+
+IDLE production timing limits are shared by environment defaults, inherited
+settings and API overrides: renewal is at least one minute, renewal plus the
+response deadline stays below 29 minutes, and safety is at most 24 hours and
+strictly exceeds that renewal window. Invalid API values return a client error
+before persistence. Invalid legacy per-source values are isolated so they cannot
+abort another user's scheduler batch. State snapshots are read in short
+transactions that finish before mailbox I/O. Accelerated protocol timing uses
+a test-only execution seam, never a production configuration bypass.

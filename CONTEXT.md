@@ -1497,3 +1497,18 @@ retains the existing Java command, HTTP/JDBC/forwarding parameters, read-only
 non-root filesystems and private backend/database ports, with no certificate
 mounts. Default/explicit TLS without certificates, invalid modes and malformed
 hostnames fail startup. Source Java/UI code is unchanged by this packaging work.
+
+
+PR review hardening: IDLE renewal configuration uses a shared production policy:
+interval >= 1 minute, positive response deadline, combined window < 29 minutes,
+and safety interval > combined window and <= 24 hours. API overrides and inherited
+environment defaults use the same bounds. Accelerated protocol tests override only
+the watcher's execution interval, never the production validation. Polling state
+DTO reads open short transactions that end before virtual-worker mailbox I/O.
+Invalid persisted settings and per-source worker exceptions cannot abort other
+users' scheduler work. A silent-session proxy integration keeps TCP open while
+dropping server responses and verifies reconnect catch-up through a real GreenMail
+destination without duplicate delivery. The PostgreSQL scheduler regression uses
+real CDI/state/settings on two parallel workers. Coverage evidence must distinguish
+plain unit tests from CDI/protocol/database integrations; use the opt-in
+`split-coverage` profile and `scripts/validation/changed-coverage.py` sequentially.

@@ -57,7 +57,11 @@ class ImapIdleWatchServiceGreenMailIntegrationTest {
     private final List<ImapIdleWatchService> testWatchers = new CopyOnWriteArrayList<>();
 
     private ImapIdleWatchService newWatchService() {
-        ImapIdleWatchService service = new ImapIdleWatchService();
+        ImapIdleWatchService service = new ImapIdleWatchService() {
+            @Override protected Duration renewalExecutionInterval(Duration configured) {
+                return configured.compareTo(Duration.ofMinutes(25)) < 0 ? Duration.ofMillis(250) : configured;
+            }
+        };
         service.imapIdleHealthService = new ImapIdleHealthService();
         testWatchers.add(service);
         return service;
@@ -90,7 +94,7 @@ class ImapIdleWatchServiceGreenMailIntegrationTest {
         waitForCondition(() -> watcher.imapIdleHealthService.isHealthy(SOURCE_ID) && watcher.imapIdleHealthService.isHealthy("idle-other"));
         Instant first = watcher.imapIdleHealthService.watchStates(SOURCE_ID).getFirst().lastConnectedAt();
         Instant unchanged = watcher.imapIdleHealthService.watchStates("idle-other").getFirst().lastConnectedAt();
-        renewal.set(Duration.ofMillis(250));
+        renewal.set(Duration.ofMinutes(1));
         watcher.refreshWatches();
         waitForCondition(() -> watcher.imapIdleHealthService.isHealthy(SOURCE_ID)
                 && watcher.imapIdleHealthService.watchStates(SOURCE_ID).getFirst().lastConnectedAt().isAfter(first));
@@ -114,7 +118,7 @@ class ImapIdleWatchServiceGreenMailIntegrationTest {
         settings.set(new dev.inboxbridge.service.polling.PollingSettingsService.EffectiveIdleSettings(false, Duration.ofMinutes(25), Duration.ofSeconds(20)));
         watcher.refreshWatches();
         assertEquals(connected, watcher.imapIdleHealthService.watchStates(SOURCE_ID).getFirst().lastConnectedAt());
-        settings.set(new dev.inboxbridge.service.polling.PollingSettingsService.EffectiveIdleSettings(false, Duration.ofMillis(250), Duration.ofSeconds(2)));
+        settings.set(new dev.inboxbridge.service.polling.PollingSettingsService.EffectiveIdleSettings(false, Duration.ofMinutes(1), Duration.ofSeconds(2)));
         watcher.refreshWatches();
         waitForCondition(() -> watcher.imapIdleHealthService.isHealthy(SOURCE_ID)
                 && watcher.imapIdleHealthService.watchStates(SOURCE_ID).getFirst().lastConnectedAt().isAfter(connected));
@@ -127,7 +131,7 @@ class ImapIdleWatchServiceGreenMailIntegrationTest {
         ImapIdleWatchService watcher = newWatchService();
         watcher.runtimeEmailAccountService = new FixedRuntimeEmailAccountService(List.of(runtimeAccount(SourceFetchMode.IDLE)));
         watcher.pollingService = pollingService;
-        watcher.idleRenewalInterval = Duration.ofMillis(250);
+        watcher.idleRenewalInterval = Duration.ofMinutes(1);
         watcher.idleRenewalTimeout = Duration.ofSeconds(2);
         ByteArrayOutputStream transcript = new ByteArrayOutputStream();
         MailSessionFactory sessions = secureMailSessionFactory();

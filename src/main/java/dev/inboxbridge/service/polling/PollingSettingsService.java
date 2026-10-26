@@ -237,15 +237,18 @@ public class PollingSettingsService {
     public EffectiveIdleSettings effectiveIdleSettings() {
         SystemPollingSetting setting = repository == null ? null : repository.findSingleton().orElse(null);
         var view = idleSettingsView(setting);
-        return new EffectiveIdleSettings(view.effectiveSafetyPollingEnabled(),
-                Duration.parse(view.effectiveRenewalInterval()), Duration.parse(view.effectiveRenewalTimeout()));
+        Duration interval = Duration.parse(view.effectiveRenewalInterval());
+        Duration timeout = Duration.parse(view.effectiveRenewalTimeout());
+        validateIdleRenewal(interval, timeout);
+        return new EffectiveIdleSettings(view.effectiveSafetyPollingEnabled(), interval, timeout);
     }
 
     @Transactional
     public Duration effectiveIdleSafetyPollInterval() {
         SystemPollingSetting setting = repository == null ? null : repository.findSingleton().orElse(null);
-        return setting == null || setting.idleSafetyPollIntervalOverride == null ? defaultIdleSafetyInterval()
-                : parsePositiveDuration(setting.idleSafetyPollIntervalOverride, "IDLE safety interval");
+        return dev.inboxbridge.config.IdleTimingPolicy.validateSafetyRange(
+                setting == null || setting.idleSafetyPollIntervalOverride == null ? defaultIdleSafetyInterval()
+                : parsePositiveDuration(setting.idleSafetyPollIntervalOverride, "IDLE safety interval"));
     }
 
     private Duration defaultIdleInterval() {
@@ -257,9 +260,7 @@ public class PollingSettingsService {
     }
 
     public static void validateIdleSafetyInterval(Duration safety, Duration renewal, Duration timeout) {
-        if (safety.compareTo(renewal.plus(timeout)) <= 0) {
-            throw new IllegalArgumentException("IDLE safety interval must be greater than the renewal interval plus its response deadline");
-        }
+        dev.inboxbridge.config.IdleTimingPolicy.validateSafety(safety, renewal, timeout);
     }
 
     private Duration defaultIdleTimeout() {
@@ -279,10 +280,7 @@ public class PollingSettingsService {
     }
 
     public static void validateIdleRenewal(Duration interval, Duration timeout) {
-        if (interval.isZero() || interval.isNegative() || timeout.isZero() || timeout.isNegative()
-                || interval.plus(timeout).compareTo(Duration.ofMinutes(29)) >= 0) {
-            throw new IllegalArgumentException("IDLE renewal interval and timeout must be positive and total less than 29 minutes");
-        }
+        dev.inboxbridge.config.IdleTimingPolicy.validateRenewal(interval, timeout);
     }
 
     private String normalizeIntervalOverride(String override) {

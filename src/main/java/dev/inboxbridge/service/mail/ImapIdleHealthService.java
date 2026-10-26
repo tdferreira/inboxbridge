@@ -29,8 +29,9 @@ public class ImapIdleHealthService {
     }
 
     public Duration safetyPollInterval(dev.inboxbridge.domain.RuntimeEmailAccount account) {
-        return sourcePollingSettingsService == null ? Duration.ofMinutes(30)
-                : sourcePollingSettingsService.effectiveIdleSafetyPollInterval(account);
+        return dev.inboxbridge.config.IdleTimingPolicy.validateSafetyRange(
+                sourcePollingSettingsService == null ? Duration.ofMinutes(30)
+                : sourcePollingSettingsService.effectiveIdleSafetyPollInterval(account));
     }
 
     /** The oldest folder acknowledgement protects against one live folder hiding a stalled sibling. */

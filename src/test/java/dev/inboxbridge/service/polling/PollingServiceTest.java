@@ -42,6 +42,54 @@ import jakarta.enterprise.util.TypeLiteral;
 class PollingServiceTest {
 
     @Test
+    void overflowInOneUsersIdleEligibilityDoesNotPreventAnotherUsersPoll() {
+        var bad = userBridgeWithFetchMode("bad-idle", 7L, "alice", "alice-destination", SourceFetchMode.IDLE);
+        var good = userBridge("good-source", 8L, "bob", "bob-destination");
+        var source = new MultiSourceRecordingMailSourceClient();
+        var service = reviewService(List.of(bad, good), source);
+        service.imapIdleHealthService = new ImapIdleHealthService() {
+            @Override public Duration safetyPollInterval(RuntimeEmailAccount account) { return Duration.ofSeconds(Long.MAX_VALUE); }
+        };
+        service.imapIdleHealthService.markConnected(bad.id(), Instant.now());
+        service.runPoll("scheduler");
+        assertEquals(List.of(good.id()), source.fetchedSourceIds);
+    }
+
+    @Test
+    void exceptionInAWorkerDoesNotTerminateOtherSourcesOrLeakItsGuard() {
+        var bad = userBridge("bad-source", 7L, "alice", "alice-destination");
+        var good = userBridge("good-source", 8L, "bob", "bob-destination");
+        var source = new MultiSourceRecordingMailSourceClient();
+        var service = reviewService(List.of(bad, good), source);
+        var calls = new AtomicInteger();
+        service.sourcePollingStateService = new RecordingSourcePollingStateService() {
+            @Override public PollEligibility eligibility(String id, PollingSettingsService.EffectivePollingSettings settings,
+                    Instant now, boolean ignoreInterval, boolean ignoreCooldown) {
+                if (id.equals(bad.id()) && calls.incrementAndGet() > 1) throw new IllegalStateException("Synthetic worker failure");
+                return new PollEligibility(true, "READY", null);
+            }
+        };
+        var result = service.runPoll("scheduler");
+        assertEquals(List.of(good.id()), source.fetchedSourceIds);
+        assertEquals("source_poll_failed", result.getErrorDetails().getFirst().code());
+        assertFalse(service.status().running());
+    }
+
+    private PollingService reviewService(List<RuntimeEmailAccount> accounts, MailSourceClient source) {
+        var service = new PollingService();
+        service.runtimeEmailAccountService = new FakeRuntimeEmailAccountService(accounts);
+        service.mailSourceClient = source;
+        service.importDeduplicationService = new NeverDuplicateImportDeduplicationService();
+        service.mailDestinationServices = new FakeMailDestinationServices(new FakeMailDestinationService(true));
+        service.sourcePollEventService = new NoopSourcePollEventService();
+        service.pollingSettingsService = new FakePollingSettingsService(true, Duration.ofMinutes(5), "5m", 10);
+        service.userPollingSettingsService = new FakeUserPollingSettingsService(true, Duration.ofMinutes(5), "5m", 10);
+        service.sourcePollingSettingsService = new FakeSourcePollingSettingsService();
+        service.sourcePollingStateService = new RecordingSourcePollingStateService();
+        return service;
+    }
+
+    @Test
     void scheduledPollDelegatesEveryTickToRuntimeEligibility() {
         RecordingPollingService service = new RecordingPollingService();
 
@@ -1532,7 +1580,7 @@ class PollingServiceTest {
         }
     }
 
-    private static final class RecordingSourcePollingStateService extends SourcePollingStateService {
+    private static class RecordingSourcePollingStateService extends SourcePollingStateService {
         private String lastRecordedSuccessSourceId;
         private String lastRecordedPopCheckpoint;
         private String lastRecordedCheckpointDestinationKey;

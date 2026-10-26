@@ -48,6 +48,7 @@ public class SourcePollingStateService {
         this.pollingSettingsService = pollingSettingsService;
     }
 
+    @Transactional
     public Optional<SourcePollingStateView> viewForSource(String sourceId) {
         if (repository == null) {
             return Optional.empty();
@@ -55,6 +56,7 @@ public class SourcePollingStateService {
         return repository.findBySourceId(sourceId).map(this::toView);
     }
 
+    @Transactional
     public Map<String, SourcePollingStateView> viewBySourceIds(List<String> sourceIds) {
         if (repository == null) {
             return Map.of();

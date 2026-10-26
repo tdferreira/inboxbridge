@@ -158,9 +158,10 @@ public class SourcePollingSettingsService {
     @Transactional
     public java.time.Duration effectiveIdleSafetyPollInterval(RuntimeEmailAccount account) {
         SourcePollingSetting setting = repository == null ? null : repository.findBySourceId(account.id()).orElse(null);
-        return setting != null && setting.idleSafetyPollIntervalOverride != null
+        return dev.inboxbridge.config.IdleTimingPolicy.validateSafetyRange(
+                setting != null && setting.idleSafetyPollIntervalOverride != null
                 ? java.time.Duration.parse(setting.idleSafetyPollIntervalOverride)
-                : pollingSettingsService == null ? java.time.Duration.ofMinutes(30) : pollingSettingsService.effectiveIdleSafetyPollInterval();
+                : pollingSettingsService == null ? java.time.Duration.ofMinutes(30) : pollingSettingsService.effectiveIdleSafetyPollInterval());
     }
 
     @Transactional

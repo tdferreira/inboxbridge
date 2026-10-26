@@ -95,7 +95,7 @@ describe('SystemPollingSettingsDialog', () => {
     expect(form.idleSafetyPollingMode).toBe('DISABLED')
     expect(form.idleRenewalIntervalOverride).toBe('20m')
     expect(form.idleRenewalTimeoutOverride).toBe('15s')
-    expect(screen.getByText(/total must be less than 29 minutes/)).toBeInTheDocument()
+    expect(screen.getByText(/interval must be at least 1 minute;.*below 29 minutes/)).toBeInTheDocument()
     expect(form.pollEnabledMode).toBe('DISABLED')
     expect(form.pollIntervalOverride).toBe('10m')
     expect(form.fetchWindowOverride).toBe('25')

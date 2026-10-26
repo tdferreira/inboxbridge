@@ -85,7 +85,7 @@ public class ImapIdleWatchService {
     }
 
     void onStart(@Observes StartupEvent ignored) {
-        ImapIdleRenewal.validate(idleRenewalInterval, idleRenewalTimeout);
+        dev.inboxbridge.service.polling.PollingSettingsService.validateIdleRenewal(idleRenewalInterval, idleRenewalTimeout);
         refreshWatches();
     }
 
@@ -142,6 +142,11 @@ public class ImapIdleWatchService {
         }
     }
 
+    /** Test seam for accelerated protocol probes; production always uses the validated interval. */
+    protected Duration renewalExecutionInterval(Duration configured) {
+        return configured;
+    }
+
     private boolean isBusyResult(PollRunResult result, String sourceId) {
         if (result == null) {
             return false;
@@ -164,7 +169,7 @@ public class ImapIdleWatchService {
             dev.inboxbridge.service.polling.PollingSettingsService.validateIdleSafetyInterval(
                     pollingSettingsService.effectiveIdleSafetyPollInterval(), idleRenewalInterval, idleRenewalTimeout);
         }
-        ImapIdleRenewal.validate(idleRenewalInterval, idleRenewalTimeout);
+        dev.inboxbridge.service.polling.PollingSettingsService.validateIdleRenewal(idleRenewalInterval, idleRenewalTimeout);
         Instant now = Instant.now();
         Map<String, WatchTarget> desired = currentIdleSources().stream()
                 .flatMap(source -> {
@@ -316,7 +321,7 @@ public class ImapIdleWatchService {
                 if (imapIdleHealthService != null) {
                     imapIdleHealthService.markConnected(source.id(), watchKey(source.id(), folderName), Instant.now());
                 }
-                renewal = new ImapIdleRenewal(renewalInterval, renewalTimeout,
+                renewal = new ImapIdleRenewal(renewalExecutionInterval(renewalInterval), renewalTimeout,
                         () -> renewIdle(imapFolder),
                         () -> {
                             if (active.get() && folder == imapFolder) {

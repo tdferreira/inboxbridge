@@ -1114,6 +1114,46 @@ class PollingServiceGreenMailIntegrationTest {
         assertEquals(1, listSubjects(destinationMail, DESTINATION_USERNAME, DESTINATION_PASSWORD, DESTINATION_FOLDER).size());
     }
 
+    @Test
+    void silentOpenWatchTimesOutReconnectsAndImportsMissedMailExactlyOnce() throws Exception {
+        try (var proxy = new dev.inboxbridge.testsupport.SilentImapProxy(sourceMail.getImap().getPort())) {
+            var original = runtimeAccountWithFetchMode(SourceFetchMode.IDLE);
+            var account = new RuntimeEmailAccount(original.id(), original.ownerKind(), original.ownerUserId(),
+                    original.ownerUsername(), true, original.protocol(), "127.0.0.1", proxy.port(), false,
+                    original.authMethod(), original.oauthProvider(), original.username(), original.password(), "",
+                    original.folder(), false, SourceFetchMode.IDLE, original.customLabel(), original.destination());
+            var history = new RecordingImportedMessageRepository();
+            var pipeline = pollService(List.of(account), history);
+            var health = new dev.inboxbridge.service.mail.ImapIdleHealthService();
+            try (var watcher = new dev.inboxbridge.service.mail.AcceleratedIdleWatcher(
+                    new FixedRuntimeEmailAccountService(List.of(account)), pipeline, health)) {
+                watcher.refresh();
+                long initialDeadline = System.nanoTime() + Duration.ofSeconds(8).toNanos();
+                while (!health.isHealthy(account.id()) && System.nanoTime() < initialDeadline) Thread.sleep(10);
+                assertTrue(health.isHealthy(account.id()));
+                watcher.drain(); // Complete initial catch-up before injecting the failure.
+                assertTrue(history.importedMessages.isEmpty());
+                Instant firstConnection = health.watchStates(account.id()).getFirst().lastConnectedAt();
+                proxy.silenceWatch();
+                appendMessage(sourceMail, SOURCE_USERNAME, SOURCE_PASSWORD, "INBOX", "silent-watch-mail", "missed mail", "<silent-watch@example.com>");
+                assertTrue(proxy.responseSuppressed.await(2, java.util.concurrent.TimeUnit.SECONDS));
+                assertTrue(proxy.firstConnectionOpen(), "Failure must leave TCP open");
+                assertTrue(health.isHealthy(account.id()), "No disconnection notification has arrived");
+                assertTrue(history.importedMessages.isEmpty());
+                long deadline = System.nanoTime() + Duration.ofSeconds(12).toNanos();
+                while (history.importedMessages.isEmpty() && System.nanoTime() < deadline) {
+                    watcher.drain(); Thread.sleep(20);
+                }
+                assertTrue(health.watchStates(account.id()).getFirst().lastConnectedAt().isAfter(firstConnection));
+                assertEquals(1, history.importedMessages.size());
+                assertEquals(List.of("silent-watch-mail"), listSubjects(destinationMail, DESTINATION_USERNAME, DESTINATION_PASSWORD, DESTINATION_FOLDER));
+                watcher.drain(); pipeline.runIdleCatchUpForSource(account);
+                assertEquals(1, history.importedMessages.size());
+                assertEquals(1, listSubjects(destinationMail, DESTINATION_USERNAME, DESTINATION_PASSWORD, DESTINATION_FOLDER).size());
+            }
+        }
+    }
+
     private PollingService pollService(RuntimeEmailAccount runtimeAccount) {
         return pollService(List.of(runtimeAccount), new RecordingImportedMessageRepository());
     }

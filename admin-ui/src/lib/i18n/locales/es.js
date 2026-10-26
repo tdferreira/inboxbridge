@@ -1,7 +1,7 @@
 const dictionary = {
   "pollingStats.idleRunsHelp": "Las ejecuciones IDLE cuentan notificaciones del buzón. Las renovaciones correctas no son importaciones. Las sincronizaciones tras conexión se cuentan aparte. Las versiones anteriores las incluían en IDLE.",
   "pollingStats.catchUpRuns": "Sincronizaciones tras conexión",
-  "idleSettings.safetyIntervalHelp": "Consultar solo si no hubo renovación o sincronización correcta durante este plazo. Debe superar el intervalo de renovación más su tiempo de respuesta. Es independiente del sondeo normal.",
+  "idleSettings.safetyIntervalHelp": "Consultar solo sin renovación ni sincronización correcta durante este plazo. Máximo 24 horas; debe superar renovación más plazo de respuesta. Independiente del sondeo normal.",
   "idleSettings.safetyInterval": "Plazo del sondeo de respaldo",
   "idleSettings.title": "Fiabilidad de IMAP IDLE",
   "idleSettings.safety": "Comprobación periódica de seguridad",
@@ -9,7 +9,7 @@ const dictionary = {
   "idleSettings.renewalInterval": "Intervalo de renovación",
   "idleSettings.renewalTimeout": "Tiempo máximo de renovación",
   "idleSettings.help": "Una renovación correcta aplaza el sondeo de respaldo sin importar correo. Una conexión caducada o desconectada permite recuperar.",
-  "idleSettings.durationHelp": "Use duraciones positivas como 25m y 20s. La suma debe ser inferior a 29 minutos. Deje vacío para heredar del entorno.",
+  "idleSettings.durationHelp": "Intervalo de renovación mínimo de 1 minuto; junto con el plazo de respuesta debe ser inferior a 29 minutos. Por ejemplo 25m y 20s. Dejar vacío para heredar.",
   "idleSettings.sourceHelp": "Heredar la política global de respaldo o ajustarla para este buzón.",
   "idleSettings.lastRenewed": "Última renovación IDLE correcta",
   "idleSettings.nextSafetyPoll": "Próxima comprobación de seguridad IDLE",

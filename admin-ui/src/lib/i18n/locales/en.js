@@ -1,6 +1,6 @@
 const dictionary = {
   "pollingStats.catchUpRuns": "Connection catch-up runs",
-  "idleSettings.safetyIntervalHelp": "Poll only when no successful renewal or mailbox sync has occurred within this duration. It must exceed the renewal interval plus its response deadline. This is separate from ordinary polling.",
+  "idleSettings.safetyIntervalHelp": "Poll only without a successful renewal or sync within this duration. Maximum 24 hours; must exceed renewal plus response deadline. Separate from ordinary polling.",
   "idleSettings.safetyInterval": "Safety polling deadline",
   "idleSettings.title": "IMAP IDLE reliability",
   "idleSettings.safety": "Periodic safety polling",
@@ -8,7 +8,7 @@ const dictionary = {
   "idleSettings.renewalInterval": "Renewal interval",
   "idleSettings.renewalTimeout": "Renewal deadline",
   "idleSettings.help": "A successful renewal postpones safety polling without importing mail. A stale or disconnected watcher enables recovery.",
-  "idleSettings.durationHelp": "Use positive durations such as 25m and 20s. Their total must be less than 29 minutes. Leave blank to inherit environment defaults.",
+  "idleSettings.durationHelp": "Renewal interval must be at least 1 minute; renewal plus response deadline must remain below 29 minutes. For example 25m and 20s. Leave blank to inherit.",
   "idleSettings.sourceHelp": "Inherit the global safety policy or override it for this mailbox.",
   "idleSettings.lastRenewed": "Last successful IDLE renewal",
   "idleSettings.nextSafetyPoll": "Next IDLE safety check",

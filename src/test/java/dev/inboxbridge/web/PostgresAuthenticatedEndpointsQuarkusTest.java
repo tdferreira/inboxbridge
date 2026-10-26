@@ -81,6 +81,36 @@ class PostgresAuthenticatedEndpointsQuarkusTest {
     dev.inboxbridge.persistence.PasskeyCeremonyRepository passkeyCeremonyRepository;
 
     @Test
+    void idleTimingApiRejectsUnsafeValuesForAdminAndMailboxOwner() {
+        BrowserSession admin = loginBrowserAsAdmin();
+        var fixture = QuarkusTransaction.requiringNew().call(this::seedConfiguredMailboxUser);
+        BrowserSession owner = loginBrowser(fixture.username(), fixture.password());
+        for (var payload : List.of(
+                Map.of("idleSafetyPollIntervalOverride", "PT9223372036854775807S"),
+                Map.of("idleSafetyPollIntervalOverride", "PT24H0.000000001S"),
+                Map.of("idleRenewalIntervalOverride", "PT0.000000001S"),
+                Map.of("idleRenewalIntervalOverride", "PT59.999999999S"))) {
+            given().cookie(SESSION_COOKIE, admin.sessionToken()).cookie(CSRF_COOKIE, admin.csrfToken())
+                    .header(CSRF_HEADER, admin.csrfToken()).contentType("application/json").body(payload)
+                    .when().put("/api/admin/polling-settings").then().statusCode(400);
+            given().cookie(SESSION_COOKIE, owner.sessionToken()).cookie(CSRF_COOKIE, owner.csrfToken())
+                    .header(CSRF_HEADER, owner.csrfToken()).contentType("application/json").body(payload)
+                    .when().put("/api/app/email-accounts/{id}/polling-settings", fixture.sourceId()).then().statusCode(400);
+        }
+        given().cookie(SESSION_COOKIE, owner.sessionToken()).cookie(CSRF_COOKIE, owner.csrfToken())
+                .header(CSRF_HEADER, owner.csrfToken()).contentType("application/json")
+                .body(Map.of("idleRenewalIntervalOverride", "PT1M", "idleSafetyPollIntervalOverride", "PT24H"))
+                .when().put("/api/app/email-accounts/{id}/polling-settings", fixture.sourceId())
+                .then().statusCode(200).body("effectiveIdleRenewalInterval", equalTo("PT1M"))
+                .body("effectiveIdleSafetyPollInterval", equalTo("PT24H"));
+        given().cookie(SESSION_COOKIE, owner.sessionToken()).cookie(CSRF_COOKIE, owner.csrfToken())
+                .header(CSRF_HEADER, owner.csrfToken()).contentType("application/json").body(Map.of())
+                .when().put("/api/app/email-accounts/{id}/polling-settings", fixture.sourceId())
+                .then().statusCode(200).body("idleRenewalIntervalOverride", org.hamcrest.Matchers.nullValue())
+                .body("idleSafetyPollIntervalOverride", org.hamcrest.Matchers.nullValue());
+    }
+
+    @Test
     void concurrentTransactionsCannotConsumeTheSamePasskeyCeremony() throws Exception {
         String ceremonyId = java.util.UUID.randomUUID().toString();
         QuarkusTransaction.requiringNew().run(() -> {

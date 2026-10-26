@@ -85,6 +85,15 @@ Report browser CA trust and real mailflow checks separately from automated tests
 
 IMAP IDLE changes require both narrow renewal/concurrency tests and GreenMail
 coverage of DONE/NOOP, reconnect catch-up and safety import without notification.
+For silent-session regressions, keep TCP open and suppress server responses,
+then check bounded reconnect and real destination delivery exactly once. Include
+real PostgreSQL/CDI scheduler workers and verify no transaction spans mailbox I/O.
+Production renewal has a 1-minute minimum and safety a 24-hour maximum; accelerate
+protocol tests only via the protected execution-interval seam.
+Run `python3 scripts/validation/changed-coverage.py --run` sequentially for disjoint
+unit/integration reports, then `--base <review-base>` for added-line metrics after
+frontend coverage. Stage new source files before the diff-based report. Keep CDI,
+GreenMail and database execution separate from unit-only coverage claims.
 Accelerated local tests do not establish provider-specific long-duration behavior.
 
 For release-workflow or image publication changes, run

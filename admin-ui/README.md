@@ -493,3 +493,5 @@ deadline without importing mail. The next safety time uses diagnostics rather
 than ordinary nextPollAt. Catch-up executions have their own counter; successful
 renewals do not increase IDLE executions. Historical totals from earlier builds
 remain mixed and the help text explains that limitation.
+
+IDLE timing help exposes the shared production bounds: renewal at least one minute, total renewal/response window below 29 minutes, and safety no greater than 24 hours. Server-side validation applies to overrides and inherited configuration.

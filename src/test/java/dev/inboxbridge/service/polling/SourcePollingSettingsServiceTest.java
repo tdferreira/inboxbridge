@@ -22,6 +22,15 @@ import jakarta.transaction.Transactional;
 class SourcePollingSettingsServiceTest {
 
     @Test
+    void rejectsExtremeSafetyAndSubMinuteRenewalForMailboxOwner() {
+        var service = service();
+        assertThrows(IllegalArgumentException.class, () -> service.updateForSource(actor(), "fetcher-1",
+                new UpdateSourcePollingSettingsRequest(null, null, null, true, "PT9223372036854775807S", null)));
+        assertThrows(IllegalArgumentException.class, () -> service.updateForSource(actor(), "fetcher-1",
+                new UpdateSourcePollingSettingsRequest(null, null, null, true, null, "PT0.000000001S")));
+    }
+
+    @Test
     void mailboxRenewalAndSafetyDeadlineAreValidatedTogether() {
         var service = service();
         var view = service.updateForSource(actor(), "fetcher-1", new UpdateSourcePollingSettingsRequest(null, null, null, true, "15m", "10m"));

@@ -24,6 +24,17 @@ class PollingSettingsServiceTest {
     }
 
     @Test
+    void rejectsExtremeSafetyAndSubMinuteRenewalBeforePersistence() {
+        var repository = new InMemorySystemPollingSettingRepository(null);
+        var service = service(new TestConfig(), repository);
+        assertThrows(IllegalArgumentException.class, () -> service.update(new UpdateAdminPollingSettingsRequest(
+                null, null, null, null, null, null, null, null, null, null, null, null, null,
+                true, null, null, "PT9223372036854775807S")));
+        assertThrows(IllegalArgumentException.class, () -> service.update(idleRequest(true, "PT0.000000001S", "PT20S")));
+        assertNull(repository.setting);
+    }
+
+    @Test
     void safetyDeadlineMustExceedTheCompleteRenewalWindow() {
         var repository = new InMemorySystemPollingSettingRepository(null);
         var service = service(new TestConfig(), repository);

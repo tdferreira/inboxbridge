@@ -1,7 +1,7 @@
 const dictionary = {
   "pollingStats.idleRunsHelp": "Les exécutions IDLE comptent les notifications de boîte. Les renouvellements réussis ne sont pas des imports. Les rattrapages sont comptés séparément. Les anciennes versions incluaient renouvellements et rattrapages dans les totaux IDLE.",
   "pollingStats.catchUpRuns": "Rattrapages après connexion",
-  "idleSettings.safetyIntervalHelp": "Interroger seulement si aucun renouvellement ni aucune synchronisation n’a réussi pendant ce délai. Il doit dépasser l’intervalle de renouvellement et son délai maximal de réponse. Il est distinct du polling ordinaire.",
+  "idleSettings.safetyIntervalHelp": "Interroger seulement sans renouvellement ni synchronisation réussis dans ce délai. Maximum 24 heures ; doit dépasser renouvellement plus délai de réponse. Distinct du polling ordinaire.",
   "idleSettings.safetyInterval": "Délai du polling de secours",
   "idleSettings.title": "Fiabilité IMAP IDLE",
   "idleSettings.safety": "Vérification périodique de sécurité",
@@ -9,7 +9,7 @@ const dictionary = {
   "idleSettings.renewalInterval": "Intervalle de renouvellement",
   "idleSettings.renewalTimeout": "Délai maximal du renouvellement",
   "idleSettings.help": "Un renouvellement réussi repousse le polling de secours sans importer de mail. Une surveillance expirée ou déconnectée permet la reprise.",
-  "idleSettings.durationHelp": "Utilisez des durées positives, par exemple 25m et 20s. Leur somme doit rester inférieure à 29 minutes. Laissez vide pour hériter de l’environnement.",
+  "idleSettings.durationHelp": "Renouvellement : 1 minute minimum ; la somme avec le délai de réponse doit rester inférieure à 29 minutes. Par exemple 25m et 20s. Laissez vide pour hériter.",
   "idleSettings.sourceHelp": "Héritez de la politique de secours globale ou ajustez-la pour cette boîte.",
   "idleSettings.lastRenewed": "Dernier renouvellement IDLE réussi",
   "idleSettings.nextSafetyPoll": "Prochaine vérification de sécurité IDLE",
