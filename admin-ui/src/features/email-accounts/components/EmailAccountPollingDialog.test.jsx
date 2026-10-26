@@ -3,6 +3,16 @@ import EmailAccountPollingDialog from './EmailAccountPollingDialog'
 import { translate } from '@/lib/i18n'
 
 describe('EmailAccountPollingDialog', () => {
+  it.each([undefined, 'ENABLED'])('renders inherited safety independently of the current override (%s)', (mode) => {
+    render(<EmailAccountPollingDialog
+      fetcher={{ emailAccountId: 'idle-source', fetchMode: 'IDLE' }}
+      form={{ idleSafetyPollingMode: mode, baseIdleSafetyPollingEnabled: mode === undefined }}
+      onChange={vi.fn()} onClose={vi.fn()} onReset={vi.fn()} onSave={vi.fn()}
+      t={(key, params) => translate('en', key, params)}
+    />)
+    expect(screen.getByText('Inherit default', { exact: false })).toHaveTextContent(mode === undefined ? 'Yes' : 'No')
+  })
+
   it('renders translated polling settings labels in portuguese', () => {
     render(
       <EmailAccountPollingDialog

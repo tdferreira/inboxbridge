@@ -18,6 +18,36 @@ import jakarta.transaction.Transactional;
 
 class PollingSettingsServiceTest {
 
+    @Test
+    void environmentAndAllMailboxInheritanceCombinationsAreValidatedBeforeAdminUpdate() {
+        var service=service(new TestConfig(),new InMemorySystemPollingSettingRepository(null));
+        var config=org.mockito.Mockito.mock(dev.inboxbridge.config.MailClientConfig.class);
+        org.mockito.Mockito.when(config.idleRenewalInterval()).thenReturn(Duration.ofMinutes(10));
+        org.mockito.Mockito.when(config.idleRenewalTimeout()).thenReturn(Duration.ofSeconds(20));
+        org.mockito.Mockito.when(config.idleSafetyPollInterval()).thenReturn(Duration.ofMinutes(15));
+        service.mailClientConfig=config;
+        var sources=org.mockito.Mockito.mock(dev.inboxbridge.persistence.SourcePollingSettingRepository.class);
+        service.sourceSettingsRepository=sources;
+        @SuppressWarnings("unchecked") jakarta.enterprise.event.Event<dev.inboxbridge.service.mail.SourceMailboxConfigurationChanged> event=org.mockito.Mockito.mock(jakarta.enterprise.event.Event.class);
+        service.mailboxChanged=event;
+        for(String renewal:new String[]{null,"PT5M"}) for(String safety:new String[]{null,"PT15M"}) {
+            var setting=new dev.inboxbridge.persistence.SourcePollingSetting();
+            setting.idleRenewalIntervalOverride=renewal;setting.idleSafetyPollIntervalOverride=safety;
+            org.mockito.Mockito.when(sources.listAll()).thenReturn(java.util.List.of(setting));
+            service.update(idleRequest(null,null,null));
+            service.update(new UpdateAdminPollingSettingsRequest(null,null,null,null,null,null,null,null,null,null,null,null,null,
+                    true,null,null,"PT15M"));
+        }
+        assertEquals(Duration.ofMinutes(10),service.effectiveIdleSettings().renewalInterval());
+        assertEquals(Duration.ofMinutes(15),service.effectiveIdleSafetyPollInterval());
+        service.update(idleRequest(null,null,null));
+        assertEquals(false,service.effectiveIdleSettings().safetyPollingEnabled());
+        org.mockito.Mockito.verify(event,org.mockito.Mockito.times(9)).fire(org.mockito.ArgumentMatchers.any());
+        org.mockito.Mockito.when(config.idleSafetyPollingEnabled()).thenReturn(true);
+        service.update(idleRequest(null,null,null));
+        assertEquals(true,service.effectiveIdleSettings().safetyPollingEnabled());
+    }
+
     private UpdateAdminPollingSettingsRequest idleRequest(Boolean enabled, String interval, String timeout) {
         return new UpdateAdminPollingSettingsRequest(null, null, null, null, null, null, null, null, null, null, null, null, null,
                 enabled, interval, timeout);

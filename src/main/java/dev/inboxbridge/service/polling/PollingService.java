@@ -268,6 +268,9 @@ public class PollingService {
         if (!activeSources.add(emailAccount.id())) {
             tally.addError(new PollRunError("poll_busy", emailAccount.id(),
                     "A poll is already running for this source.", null));
+            if (liveRunId != null) {
+                pollingLiveService.markSourceFinished(liveRunId, emailAccount.id(), 0, 0, 0, "poll_busy");
+            }
             return;
         }
         try {
@@ -278,7 +281,7 @@ public class PollingService {
             LOG.errorf(failure, "Polling source %s failed; other sources will continue", emailAccount.id());
             tally.addError(new PollRunError("source_poll_failed", emailAccount.id(),
                     "Source polling failed; inspect the server diagnostics.", null));
-            if (liveRunId != null && pollingLiveService != null) {
+            if (liveRunId != null) {
                 pollingLiveService.markSourceFinished(liveRunId, emailAccount.id(), 0, 0, 0, "failed");
             }
         } finally {
@@ -291,7 +294,13 @@ public class PollingService {
             RuntimeEmailAccount emailAccount, boolean ignoreInterval, boolean ignoreCooldown,
             String actorUsername, String executionSurface) {
         if ("scheduler".equals(trigger) && emailAccount.fetchMode() == SourceFetchMode.IDLE) {
-            if (!isSchedulerAllowedForFetchMode(emailAccount, now)) return;
+            if (!isSchedulerAllowedForFetchMode(emailAccount, now)) {
+                // Renewal can advance the safety deadline after the source was dequeued as RUNNING.
+                if (liveRunId != null) {
+                    pollingLiveService.markSourceFinished(liveRunId, emailAccount.id(), 0, 0, 0, null);
+                }
+                return;
+            }
             ignoreInterval = true;
         }
         if (!emailAccount.enabled()) {

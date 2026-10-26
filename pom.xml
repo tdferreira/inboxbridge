@@ -123,6 +123,12 @@
             <artifactId>quarkus-junit-component</artifactId>
             <scope>test</scope>
         </dependency>
+        <!-- Already supplied transitively by Quarkus component tests; declare the unit-test API explicitly. -->
+        <dependency>
+            <groupId>org.mockito</groupId>
+            <artifactId>mockito-core</artifactId>
+            <scope>test</scope>
+        </dependency>
         <dependency>
             <groupId>io.rest-assured</groupId>
             <artifactId>rest-assured</artifactId>

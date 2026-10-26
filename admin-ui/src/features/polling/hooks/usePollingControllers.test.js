@@ -43,6 +43,12 @@ describe('usePollingControllers', () => {
     }
   }
 
+  it('hydrates an explicitly enabled global IDLE safety override', () => {
+    const { result } = renderController()
+    act(() => result.current.applyLoadedSystemPolling({ idleSettings: { safetyPollingEnabledOverride: true } }))
+    expect(result.current.systemPollingForm.idleSafetyPollingMode).toBe('ENABLED')
+  })
+
   it('hydrates and saves nullable global IDLE overrides through the admin endpoint', async () => {
     fetch.mockResolvedValue({ ok: true })
     const { result } = renderController()

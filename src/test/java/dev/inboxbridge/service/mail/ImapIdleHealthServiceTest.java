@@ -1,6 +1,7 @@
 package dev.inboxbridge.service.mail;
 
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.time.Instant;
@@ -15,6 +16,28 @@ class ImapIdleHealthServiceTest {
                 dev.inboxbridge.config.InboxBridgeConfig.AuthMethod.PASSWORD, dev.inboxbridge.config.InboxBridgeConfig.OAuthProvider.NONE,
                 "synthetic@example.test", "synthetic", "", java.util.Optional.of("INBOX"), false,
                 dev.inboxbridge.domain.SourceFetchMode.IDLE, java.util.Optional.empty(), null);
+    }
+
+    @Test
+    void safetyDefaultsAndDisconnectedBaselinesCoverMissingAndInheritedState() {
+        var health=new ImapIdleHealthService();var account=account();var now=Instant.parse("2026-10-26T10:00:00Z");
+        org.junit.jupiter.api.Assertions.assertNull(health.nextSafetyPollAt(account,null));
+        assertFalse(health.isSafetyPollDue(account,now,null));
+        assertEquals(now.plusSeconds(1800),health.nextSafetyPollAt(account,now));
+        health.ensureTracked(account.id(),null,null);
+        health.markConnected(account.id(),null,null);
+        health.markDisconnected("new",null,null);
+        health.markRenewed("missing","none",now);
+        health.markRenewed(account.id(),"missing",now);
+        health.sourcePollingSettingsService=org.mockito.Mockito.mock(dev.inboxbridge.service.polling.SourcePollingSettingsService.class);
+        org.mockito.Mockito.when(health.sourcePollingSettingsService.effectiveIdleSafetyPollingEnabled(account)).thenReturn(true);
+        org.mockito.Mockito.when(health.sourcePollingSettingsService.effectiveIdleSafetyPollInterval(account)).thenReturn(java.time.Duration.ofMinutes(15));
+        assertEquals(java.time.Duration.ofMinutes(15),health.safetyPollInterval(account));
+        assertTrue(health.isSafetyPollingEnabled(account));
+        health.clear(account.id());health.ensureTracked(account.id(),now);
+        assertEquals(now.plusSeconds(900),health.nextSafetyPollAt(account,null));
+        health.markConnected(account.id(),now.plusSeconds(10));
+        assertEquals(now.plusSeconds(910),health.nextSafetyPollAt(account,now));
     }
 
     @Test

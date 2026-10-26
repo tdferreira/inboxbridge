@@ -688,3 +688,12 @@ before persistence. Invalid legacy per-source values are isolated so they cannot
 abort another user's scheduler batch. State snapshots are read in short
 transactions that finish before mailbox I/O. Accelerated protocol timing uses
 a test-only execution seam, never a production configuration bypass.
+
+
+Live polling terminal-state invariant: a finished run must not contain a RUNNING
+source. A scheduler source whose safety deadline advances after dequeue completes
+normally without fetching. A source rejected by the per-source busy guard finishes
+with poll_busy; it does not clear the other execution's guard. These transitions
+are tested through final SSE events with real live/health services. Renewal unit
+tests use controlled scheduling to verify close races; the production constructor
+continues to use virtual threads and Thread.sleep.

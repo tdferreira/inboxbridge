@@ -92,7 +92,9 @@ Production renewal has a 1-minute minimum and safety a 24-hour maximum; accelera
 protocol tests only via the protected execution-interval seam.
 Run `python3 scripts/validation/changed-coverage.py --run` sequentially for disjoint
 unit/integration reports, then `--base <review-base>` for added-line metrics after
-frontend coverage. Stage new source files before the diff-based report. Keep CDI,
+frontend coverage. Add `--check` to require full added executable unit and frontend
+line/branch coverage. Assert final SSE source states on early-return races.
+Stage new source files before the diff-based report. Keep CDI,
 GreenMail and database execution separate from unit-only coverage claims.
 Accelerated local tests do not establish provider-specific long-duration behavior.
 

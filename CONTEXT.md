@@ -1512,3 +1512,17 @@ destination without duplicate delivery. The PostgreSQL scheduler regression uses
 real CDI/state/settings on two parallel workers. Coverage evidence must distinguish
 plain unit tests from CDI/protocol/database integrations; use the opt-in
 `split-coverage` profile and `scripts/validation/changed-coverage.py` sequentially.
+
+
+PR 110 follow-up: scheduler workers must terminalize the live source on every
+exit, including a safety deadline advanced by a concurrent IDLE acknowledgement
+and an occupied per-source execution guard. Renewal-based skips complete normally
+with zero work; a busy source receives the existing poll_busy error and cannot
+release another execution's guard. Regression tests assert the final SSE payload
+rather than only the poll return value. ImapIdleRenewal keeps its virtual-thread
+scheduler and sleep defaults; package-level scheduling collaborators allow unit
+tests to place close precisely before/after command completion. Watcher unit
+coverage substitutes transport boundaries without sockets, CDI or persistence.
+Changed-code coverage can be gated with changed-coverage.py --check, keeping the
+plain unit group separate from protocol/database integrations. It measures only
+instrumented executable locations and branches, not complete UI rendering quality.

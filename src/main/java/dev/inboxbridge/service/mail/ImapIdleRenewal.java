@@ -7,6 +7,7 @@ import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.function.Consumer;
+import java.util.function.Function;
 
 /**
  * Ends IDLE through a normal folder command on a separate virtual thread.
@@ -20,16 +21,25 @@ final class ImapIdleRenewal implements AutoCloseable {
 
     ImapIdleRenewal(Duration interval, Duration timeout, Runnable command,
             Runnable renewed, Consumer<Throwable> failed) {
+        this(interval, timeout, command, renewed, failed, Thread::sleep, Thread::startVirtualThread);
+    }
+
+    @FunctionalInterface
+    interface Sleeper { void sleep(Duration duration) throws InterruptedException; }
+
+    // Scheduling is injectable so close/acknowledgement races can be exercised deterministically.
+    ImapIdleRenewal(Duration interval, Duration timeout, Runnable command,
+            Runnable renewed, Consumer<Throwable> failed, Sleeper sleeper, Function<Runnable, Thread> startThread) {
         validate(interval, timeout);
-        renewalThread = Thread.startVirtualThread(() -> {
+        renewalThread = startThread.apply(() -> {
             while (!closed.get()) {
                 try {
-                    Thread.sleep(interval);
+                    sleeper.sleep(interval);
                     if (closed.get()) {
                         return;
                     }
                     FutureTask<Void> attempt = new FutureTask<>(command, null);
-                    commandThread = Thread.startVirtualThread(attempt);
+                    commandThread = startThread.apply(attempt);
                     try {
                         attempt.get(Math.max(1L, timeout.toMillis()), TimeUnit.MILLISECONDS);
                         if (!closed.get()) {

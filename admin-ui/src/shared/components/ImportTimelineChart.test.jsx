@@ -108,6 +108,7 @@ describe('ImportTimelineChart', () => {
     // A displayed tick's index is therefore not its index in the source rows.
     const axis = XAxis.mock.lastCall[0]
     expect(axis.tickFormatter(points[14].bucketLabel, 7)).toBe('10-25 00:00')
+    expect(axis.tickFormatter('unknown-bucket')).toBe('unknown-bucket')
     expect(axis.tickFormatter(points[23].bucketLabel, 11)).toBe('10-25 09:00')
     const tooltip = Tooltip.mock.lastCall[0]
     expect(tooltip.labelFormatter(null, [{ payload: points[23] }])).toBe('2026-10-25T09:00')

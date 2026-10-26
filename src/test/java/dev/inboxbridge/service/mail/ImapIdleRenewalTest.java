@@ -12,6 +12,43 @@ import org.junit.jupiter.api.Test;
 
 class ImapIdleRenewalTest {
     @Test
+    void closeAtEachSchedulingBoundarySuppressesLateCallbacks() {
+        for(String boundary:java.util.List.of("sleep","success","failure","acknowledgement")) {
+            var loop=new AtomicReference<Runnable>();var holder=new AtomicReference<ImapIdleRenewal>();
+            var callbacks=new AtomicInteger();var started=new AtomicInteger();
+            java.util.function.Function<Runnable,Thread> scheduler=task->{
+                if(started.getAndIncrement()==0) loop.set(task);
+                else { task.run(); if(!boundary.equals("acknowledgement")) holder.get().close(); }
+                return new Thread(){ @Override public void interrupt(){} };
+            };
+            var renewal=new ImapIdleRenewal(Duration.ofMillis(1),Duration.ofSeconds(1),
+                ()->{if(boundary.equals("failure"))throw new IllegalStateException("synthetic close");},
+                ()->{callbacks.incrementAndGet();holder.get().close();},error->callbacks.incrementAndGet(),
+                duration->{if(boundary.equals("sleep"))holder.get().close();},scheduler);
+            holder.set(renewal);loop.get().run();
+            assertEquals(boundary.equals("acknowledgement")?1:0,callbacks.get());
+            renewal.close();
+        }
+    }
+
+    @Test
+    void closeBeforeScheduledLoopStartsDoesNotStartACommand() {
+        var loop=new AtomicReference<Runnable>();var commands=new AtomicInteger();
+        var renewal=new ImapIdleRenewal(Duration.ofMillis(1),Duration.ofSeconds(1),commands::incrementAndGet,
+            ()->fail("No acknowledgement expected"),error->fail("No failure expected"),duration->{},
+            task->{loop.set(task);return new Thread(){@Override public void interrupt(){}};});
+        renewal.close();loop.get().run();assertEquals(0,commands.get());
+    }
+
+    @Test
+    void validationRejectsEveryNonPositiveOrMissingDuration() {
+        for(Duration interval:new Duration[]{null,Duration.ZERO,Duration.ofNanos(-1)})
+            assertThrows(IllegalArgumentException.class,()->ImapIdleRenewal.validate(interval,Duration.ofSeconds(1)));
+        for(Duration timeout:new Duration[]{null,Duration.ZERO,Duration.ofNanos(-1)})
+            assertThrows(IllegalArgumentException.class,()->ImapIdleRenewal.validate(Duration.ofSeconds(1),timeout));
+    }
+
+    @Test
     void renewsRepeatedlyAndStopsOnClose() throws Exception {
         CountDownLatch renewed = new CountDownLatch(2);
         AtomicInteger commands = new AtomicInteger();

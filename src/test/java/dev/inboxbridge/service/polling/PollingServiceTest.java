@@ -75,6 +75,113 @@ class PollingServiceTest {
         assertFalse(service.status().running());
     }
 
+    @Test
+    void acknowledgedRenewalBetweenSelectionAndExecutionFinishesLiveSourceNormally() {
+        var account = userBridgeWithFetchMode("idle-race", 7L, "alice", "destination", SourceFetchMode.IDLE);
+        var source = new MultiSourceRecordingMailSourceClient();
+        var service = reviewService(List.of(account), source);
+        var health = new ImapIdleHealthService();
+        health.markConnected(account.id(), Instant.now().minus(Duration.ofHours(1)));
+        service.imapIdleHealthService = health;
+        var live = new PollingLiveService() {
+            @Override public PollRunHandle startRun(String trigger, List<RuntimeEmailAccount> accounts,
+                    dev.inboxbridge.persistence.AppUser actor) {
+                var handle = super.startRun(trigger, accounts, actor);
+                // Deterministically acknowledge after selection, before a worker's safety recheck.
+                health.markRenewed(account.id(), account.id(), Instant.now());
+                return handle;
+            }
+        };
+        assertFinishedLiveSource(service, live, "COMPLETED", "COMPLETED", null);
+        assertTrue(source.fetchedSourceIds.isEmpty());
+    }
+
+    @Test
+    void occupiedSourceGuardFinishesLiveSourceWithoutReleasingAnotherExecutionGuard() throws Exception {
+        var account = userBridge("guard-busy", 7L, "alice", "destination");
+        var service = reviewService(List.of(account), new MultiSourceRecordingMailSourceClient());
+        var field = PollingService.class.getDeclaredField("activeSources");
+        field.setAccessible(true);
+        @SuppressWarnings("unchecked") var guards = (java.util.Set<String>) field.get(service);
+        guards.add(account.id());
+        try {
+            assertFinishedLiveSource(service, new PollingLiveService(), "FAILED", "FAILED", "poll_busy");
+            assertTrue(guards.contains(account.id()), "The existing execution still owns its guard");
+        } finally { guards.clear(); }
+    }
+
+    private void assertFinishedLiveSource(PollingService service, PollingLiveService live,
+            String runState, String sourceState, String errorCode) {
+        var admin = new dev.inboxbridge.persistence.AppUser();
+        admin.id = 1L; admin.username = "review-admin"; admin.role = dev.inboxbridge.persistence.AppUser.Role.ADMIN;
+        var finished = new AtomicReference<dev.inboxbridge.dto.PollLiveView>();
+        service.pollingLiveService = live;
+        var subscription = live.subscribe(admin, PollingLiveService.SessionStreamKind.BROWSER, 11L)
+                .subscribe().with(event -> {
+                    if ("poll-run-finished".equals(event.type())) finished.set(event.poll());
+                });
+        try {
+            var result = service.runPoll("scheduler");
+            assertNotNull(finished.get());
+            assertEquals(runState, finished.get().state());
+            assertEquals(1, finished.get().sources().size());
+            for (var source : finished.get().sources()) {
+                assertEquals(sourceState, source.state());
+                assertNotNull(source.finishedAt());
+            }
+            if (errorCode == null) assertTrue(result.getErrors().isEmpty());
+            else assertEquals(errorCode, result.getErrorDetails().getFirst().code());
+        } finally { subscription.cancel(); live.shutdownHeartbeatExecutor(); }
+    }
+
+    @Test
+    void failedLiveWorkerAndNonLiveRenewalSkipBothReleaseTheirOwnGuards() throws Exception {
+        var account=userBridgeWithFetchMode("source",7L,"alice","destination",SourceFetchMode.IDLE);
+        var service=reviewService(List.of(account),new MultiSourceRecordingMailSourceClient());
+        var health=new ImapIdleHealthService();service.imapIdleHealthService=health;
+        health.markConnected(account.id(),Instant.now().minusSeconds(3600));
+        var calls=new AtomicInteger();
+        service.sourcePollingStateService=new RecordingSourcePollingStateService(){
+            @Override public java.util.Optional<dev.inboxbridge.dto.SourcePollingStateView> viewForSource(String id){
+                if(calls.incrementAndGet()==2)health.markRenewed(id,id,Instant.now());
+                return java.util.Optional.empty();
+            }
+        };
+        assertEquals(0,service.runPoll("scheduler").getFetched());
+        assertFalse(service.status().running());
+        health.clear(account.id());health.markConnected(account.id(),Instant.now().minusSeconds(3600));
+        service.sourcePollingStateService=new RecordingSourcePollingStateService(){
+            int count;
+            @Override public PollEligibility eligibility(String id,PollingSettingsService.EffectivePollingSettings settings,
+                    Instant now,boolean ignoreInterval,boolean ignoreCooldown){
+                if(++count>1)throw new IllegalStateException("Synthetic worker failure");
+                return new PollEligibility(true,"READY",null);
+            }
+        };
+        assertFinishedLiveSource(service,new PollingLiveService(),"FAILED","FAILED","source_poll_failed");
+        var catchUp=reviewService(List.of(account),new MultiSourceRecordingMailSourceClient());
+        assertTrue(catchUp.runIdleCatchUpForSource(account).getErrors().isEmpty());
+    }
+
+    @Test
+    void disablingSafetyStillAppliesTheNormalIntervalToDisconnectedWatcherFallback() {
+        var account=userBridgeWithFetchMode("source",7L,"alice","destination",SourceFetchMode.IDLE);
+        var source=new MultiSourceRecordingMailSourceClient();var service=reviewService(List.of(account),source);
+        service.imapIdleHealthService=new ImapIdleHealthService(){
+            @Override public boolean isSafetyPollingEnabled(RuntimeEmailAccount ignored){return false;}
+            @Override public boolean shouldSchedulerFallback(String id,Instant now){return true;}
+        };
+        service.sourcePollingStateService=new RecordingSourcePollingStateService(){
+            int calls;
+            @Override public PollEligibility eligibility(String id,PollingSettingsService.EffectivePollingSettings settings,
+                    Instant now,boolean ignoreInterval,boolean ignoreCooldown){
+                return new PollEligibility(++calls==1,"NOT_DUE",null);
+            }
+        };
+        assertTrue(service.runPoll("scheduler").getErrors().isEmpty());
+        assertTrue(source.fetchedSourceIds.isEmpty());
+    }
+
     private PollingService reviewService(List<RuntimeEmailAccount> accounts, MailSourceClient source) {
         var service = new PollingService();
         service.runtimeEmailAccountService = new FakeRuntimeEmailAccountService(accounts);

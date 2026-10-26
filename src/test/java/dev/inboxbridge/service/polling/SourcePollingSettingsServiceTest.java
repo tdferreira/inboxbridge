@@ -22,6 +22,46 @@ import jakarta.transaction.Transactional;
 class SourcePollingSettingsServiceTest {
 
     @Test
+    void absentMailboxOverridesAppearAsInheritedAndUpdatesPublishConfigurationChanges() {
+        var service=service();
+        var initial=service.viewForSource(actor(),"fetcher-1").orElseThrow();
+        assertEquals(null,initial.idleRenewalIntervalOverride());
+        assertEquals(null,initial.idleSafetyPollIntervalOverride());
+        assertEquals(null,initial.idleSafetyPollingEnabledOverride());
+        @SuppressWarnings("unchecked") jakarta.enterprise.event.Event<dev.inboxbridge.service.mail.SourceMailboxConfigurationChanged> event=org.mockito.Mockito.mock(jakarta.enterprise.event.Event.class);
+        service.mailboxChanged=event;
+        service.updateForSource(actor(),"fetcher-1",new UpdateSourcePollingSettingsRequest(null,null,null,true,"  "," "));
+        org.mockito.Mockito.verify(event).fire(org.mockito.ArgumentMatchers.any());
+    }
+
+    @Test
+    void effectiveIdlePolicyResolvesMissingServicesAndEachNullableOverride() {
+        var defaults=new SourcePollingSettingsService();
+        var account=runtimeBridge();
+        assertEquals(true,defaults.effectiveIdleSafetyPollingEnabled(account));
+        assertEquals(java.time.Duration.ofMinutes(30),defaults.effectiveIdleSafetyPollInterval(account));
+        assertEquals(java.time.Duration.ofMinutes(25),defaults.effectiveIdleRenewalInterval(account));
+        var repo=org.mockito.Mockito.mock(dev.inboxbridge.persistence.SourcePollingSettingRepository.class);
+        defaults.repository=repo;
+        var setting=new dev.inboxbridge.persistence.SourcePollingSetting();
+        org.mockito.Mockito.when(repo.findBySourceId(account.id())).thenReturn(java.util.Optional.of(setting));
+        assertEquals(true,defaults.effectiveIdleSafetyPollingEnabled(account));
+        assertEquals(java.time.Duration.ofMinutes(30),defaults.effectiveIdleSafetyPollInterval(account));
+        assertEquals(java.time.Duration.ofMinutes(25),defaults.effectiveIdleRenewalInterval(account));
+        defaults.pollingSettingsService=org.mockito.Mockito.mock(PollingSettingsService.class);
+        org.mockito.Mockito.when(defaults.pollingSettingsService.effectiveIdleSettings()).thenReturn(
+            new PollingSettingsService.EffectiveIdleSettings(false,java.time.Duration.ofMinutes(10),java.time.Duration.ofSeconds(20)));
+        org.mockito.Mockito.when(defaults.pollingSettingsService.effectiveIdleSafetyPollInterval()).thenReturn(java.time.Duration.ofMinutes(15));
+        assertEquals(false,defaults.effectiveIdleSafetyPollingEnabled(account));
+        assertEquals(java.time.Duration.ofMinutes(10),defaults.effectiveIdleRenewalInterval(account));
+        assertEquals(java.time.Duration.ofMinutes(15),defaults.effectiveIdleSafetyPollInterval(account));
+        setting.idleSafetyPollingEnabledOverride=true;setting.idleSafetyPollIntervalOverride="PT20M";setting.idleRenewalIntervalOverride="PT5M";
+        assertEquals(true,defaults.effectiveIdleSafetyPollingEnabled(account));
+        assertEquals(java.time.Duration.ofMinutes(20),defaults.effectiveIdleSafetyPollInterval(account));
+        assertEquals(java.time.Duration.ofMinutes(5),defaults.effectiveIdleRenewalInterval(account));
+    }
+
+    @Test
     void rejectsExtremeSafetyAndSubMinuteRenewalForMailboxOwner() {
         var service = service();
         assertThrows(IllegalArgumentException.class, () -> service.updateForSource(actor(), "fetcher-1",

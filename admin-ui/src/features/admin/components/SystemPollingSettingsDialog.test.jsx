@@ -3,6 +3,19 @@ import SystemPollingSettingsDialog from './SystemPollingSettingsDialog'
 import { translate } from '@/lib/i18n'
 
 describe('SystemPollingSettingsDialog', () => {
+  it.each([undefined, false, true])('renders the effective IDLE safety policy (%s)', (enabled) => {
+    render(<SystemPollingSettingsDialog
+      pollingSettings={{ idleSettings: enabled === undefined ? undefined : {
+        defaultSafetyPollingEnabled: enabled, effectiveSafetyPollingEnabled: enabled,
+        effectiveRenewalInterval: 'PT10M', effectiveRenewalTimeout: 'PT20S'
+      } }}
+      pollingSettingsForm={{ pollEnabledMode: 'DEFAULT' }}
+      onPollingFormChange={vi.fn()} onClose={vi.fn()} onSavePollingSettings={vi.fn()}
+      onResetPollingSettings={vi.fn()} t={(key, params) => translate('en', key, params)}
+    />)
+    expect(screen.getByText('Inherit default', { exact: false })).toHaveTextContent(enabled === false ? 'No' : 'Yes')
+  })
+
   it('renders the edit form and forwards changes', () => {
     let form = {
       pollEnabledMode: 'DEFAULT',

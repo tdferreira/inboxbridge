@@ -103,6 +103,7 @@ def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--run', action='store_true')
     parser.add_argument('--base', default='upstream/main')
+    parser.add_argument('--check', action='store_true', help='Require full added-line/branch unit coverage and frontend coverage')
     args = parser.parse_args()
     if args.run:
         run_groups()
@@ -112,6 +113,11 @@ def main():
         f'target/coverage/{group}/jacoco.xml')) for group in ('unit', 'integration')},
         'frontend': summarize(changed, frontend_coverage('admin-ui/coverage/lcov.info'))}
     print(json.dumps(result, indent=2))
+    if args.check:
+        for group, stats in [('backend unit', result['backend']['unit']), ('frontend', result['frontend'])]:
+            lines, total_lines, branches, total_branches = stats['total']
+            if lines != total_lines or branches != total_branches:
+                raise SystemExit(f'{group}: added executable code is not fully covered')
 
 
 if __name__ == '__main__':

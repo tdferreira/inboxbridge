@@ -277,7 +277,7 @@ describe('EmailAccountListItem', () => {
             idleSafetyPollingEnabled: true,
             idleSchedulerFallback: true,
             idleWatches: [
-              { folderName: 'INBOX', status: 'CONNECTED' },
+              { folderName: 'INBOX', status: 'CONNECTED', lastRenewedAt: '2026-04-06T10:06:00Z' },
               { folderName: 'Projects/2026', status: 'DISCONNECTED' }
             ]
           },
@@ -315,7 +315,7 @@ describe('EmailAccountListItem', () => {
     expect(screen.getByText('imap-append:abc123')).toBeInTheDocument()
     expect(screen.getByText('INBOX · UIDVALIDITY 44 · UID 101')).toBeInTheDocument()
     expect(screen.getByText('Projects/2026 · UIDVALIDITY 77 · UID 205')).toBeInTheDocument()
-    expect(screen.getByText('INBOX · Connected')).toBeInTheDocument()
+    expect(screen.getByText(/INBOX · Connected/)).toBeInTheDocument()
     expect(screen.getByText('Projects/2026 · Disconnected')).toBeInTheDocument()
     expect(screen.getByText(/Failure category/)).toBeInTheDocument()
     expect(screen.getByText(/Rate Limit/)).toBeInTheDocument()
