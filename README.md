@@ -68,6 +68,8 @@ InboxBridge includes:
 By default, the local Docker setup serves the app over HTTPS with generated self-signed certificates.
 
 Published releases also provide prebuilt backend/frontend images for amd64 and arm64.
+The same pair supports internal TLS by default or HTTP behind a trusted external
+HTTPS terminator with frontend `TLS_ENABLED=false`.
 See [prebuilt container setup](docs/CONTAINERS.md) ([Français](docs/CONTAINERS.fr.md))
 to deploy without compiling, including from an independently maintained fork.
 

@@ -33,11 +33,39 @@ Back up the database and preserve encryption/vault material before upgrades.
 V74/V75 add nullable IDLE settings; rollback requires the prior database backup
 as well as the old images. Never copy a running PostgreSQL folder as a file backup.
 
-Tailscale is optional. It controls reachability and may terminate external HTTPS;
-the standard images still expect the internal TLS configuration documented in
-[SETUP.md](SETUP.md). An existing deployment using a different HTTP proxy packaging
-needs a deliberate ingress/certificate migration before adopting these images.
-Do not replace its images blindly or start a second importer on the same mailboxes.
+### One image pair, two ingress modes
+
+The **same backend and frontend tags** support both profiles. Tailscale is optional;
+any trusted external HTTPS terminator can serve the second profile.
+
+| Frontend setting | Frontend/backend link | Public-facing HTTPS |
+| --- | --- | --- |
+| `TLS_ENABLED=true` (default) | HTTPS on backend 8443 | Frontend 8443, with the standard certificate mounts |
+| `TLS_ENABLED=false` | HTTP on backend 8080 | A trusted external proxy, such as Tailscale Serve |
+
+`false` requires `PUBLIC_HOSTNAME`, a lowercase canonical DNS hostname without
+scheme, port or path. The frontend serves HTTP on 8080, rejects other Host values,
+and replaces incoming forwarding headers with the canonical HTTPS origin. It runs
+as UID 101 and supports a read-only filesystem with writable `/tmp`. No certificate
+mount is required in this mode. Invalid modes, missing default-mode certificates
+and malformed hostnames fail closed; missing certificates never select HTTP.
+
+For an existing HTTP deployment, keep its database, networks, folders, encryption
+keys, OAuth hostname and Tailscale target. Change both images and add **only**
+`TLS_ENABLED: "false"` to the existing frontend service environment. Retain the
+existing backend HTTP settings: `HTTP_PORT=8080`,
+`QUARKUS_HTTP_INSECURE_REQUESTS=enabled`, empty
+`QUARKUS_HTTP_SSL_CERTIFICATE_FILES` and `QUARKUS_HTTP_SSL_CERTIFICATE_KEY_FILES`,
+and the existing JDBC URL and forwarding settings. The backend uses Docker `CMD`,
+so an existing Compose `command: [java, ..., -jar, /app/quarkus-run.jar]` still works.
+The frontend flag selects only the frontend mode; it does not silently reconfigure
+the database or backend transport.
+
+Keep HTTP ingress loopback-only (for example `127.0.0.1:18080:8080`), leave backend
+and database host ports unpublished, and retain private Docker networks. This
+mode assumes those internal links are trusted; source/destination mailbox TLS
+requirements remain unchanged. Existing standard-TLS installations need no new
+setting or certificate change. Do not start a second importer on the same mailboxes.
 No Gmail credentials, environment files, private certificates, database contents
 or encryption keys belong in an image or build context.
 
@@ -52,7 +80,9 @@ checks, frontend tests/build, extension tests and repository privacy checks. It
 creates an explicit runtime-only context from `target/quarkus-app`, `admin-ui/dist`,
 Nginx configuration and LICENSE. It builds both images locally and checks HTTPS
 health/UI, non-root users, CA-key isolation and unpublished backend/database ports
-on an isolated disposable stack. PR builds run the same image checks without a
+on an isolated disposable stack. The same pair is also tested with the existing
+HTTP/Java command contract, read-only services, hostname rejection and explicit
+TLS-mode validation, without certificate mounts. PR builds run the same image checks without a
 registry login or publication.
 
 After these gates, GHCR receives both architectures with source/revision/version

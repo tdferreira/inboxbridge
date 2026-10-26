@@ -622,5 +622,7 @@ fallback delay; the ordinary polling interval is a separate setting.
 
 [Container setup and release publication](CONTAINERS.md) ([Français](CONTAINERS.fr.md))
 explains the image-only Compose override, version matching, certificate
-requirements and independent fork publication. Existing custom HTTP packaging
-requires an explicit compatibility check before switching to standard TLS images.
+requirements and independent fork publication. The same image pair supports
+standard internal TLS by default, or an existing HTTP deployment behind a trusted
+external HTTPS terminator with frontend TLS_ENABLED=false. Keep the backend's
+explicit HTTP settings and private/loopback ingress in the latter profile.

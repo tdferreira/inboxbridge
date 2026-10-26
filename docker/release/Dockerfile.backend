@@ -10,5 +10,5 @@ WORKDIR /app
 COPY --chown=10001:10001 backend/ /app/
 COPY LICENSE /usr/share/licenses/inboxbridge/LICENSE
 USER 10001:10001
-EXPOSE 8443
-ENTRYPOINT ["java", "-XX:MaxRAMPercentage=65", "-jar", "/app/quarkus-run.jar"]
+EXPOSE 8080 8443
+CMD ["java", "-XX:MaxRAMPercentage=65", "-jar", "/app/quarkus-run.jar"]

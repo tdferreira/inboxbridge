@@ -668,3 +668,14 @@ override before mutation; safety exceeds renewal plus response wait. V75 stores
 these independent deadlines. Connection recovery uses `idle-catchup`, exposed as
 `catchUpRuns`; mailbox notifications alone use `idle-source`. Pure renewals write
 no poll event. Historical ambiguous events remain unchanged.
+
+## Release ingress selection
+
+One release image pair supports standard internal TLS by default and explicit
+external HTTPS termination through frontend TLS_ENABLED=false. The latter uses
+HTTP to backend 8080 with canonical HTTPS forwarding headers and strict Host
+validation, assuming private internal networks and loopback-only ingress. It
+never falls back from missing TLS certificates automatically. Backend transport
+remains independently configured; its CMD preserves existing Compose Java
+commands. Both profiles run non-root and are smoke-tested on disposable data.
+See docs/CONTAINERS.md for the exact operator settings.

@@ -93,3 +93,9 @@ Use the same tested runtime-only context for amd64 smoke checks and amd64/arm64
 publication. Source/fork registry names must be derived from the repository,
 and manual release runs must check out the validated tag. Package visibility
 and real operator mailflow remain separate checks.
+
+When release ingress changes, run both smoke-images.sh (default TLS) and
+smoke-proxy-images.sh (explicit TLS_ENABLED=false) against the same image pair.
+Missing certificates must never trigger an implicit downgrade. The HTTP test
+retains the existing Compose Java command, JDBC/HTTP settings, private ports
+and read-only non-root filesystem; use synthetic data only.

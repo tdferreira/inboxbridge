@@ -8,8 +8,16 @@ LABEL org.opencontainers.image.source="${SOURCE_URL}" \
       org.opencontainers.image.version="${VERSION}" \
       org.opencontainers.image.licenses="Apache-2.0"
 COPY nginx-main.conf /etc/nginx/nginx.conf
-COPY nginx.conf /etc/nginx/conf.d/default.conf
+RUN sed -i 's@include /etc/nginx/conf.d/\*.conf;@include /tmp/inboxbridge-ingress.conf;@' /etc/nginx/nginx.conf \
+    && grep -q 'include /tmp/inboxbridge-ingress.conf;' /etc/nginx/nginx.conf
+COPY nginx.conf /etc/nginx/inboxbridge/internal-tls.conf
+COPY ingress/default.conf.template /etc/nginx/inboxbridge/proxy.conf.template
+COPY --chmod=755 ingress/entrypoint.sh /usr/local/bin/inboxbridge-frontend
 COPY frontend/ /usr/share/nginx/html/
 COPY LICENSE /usr/share/licenses/inboxbridge/LICENSE
 USER 101:101
 EXPOSE 8080 8443
+
+ENV TLS_ENABLED=true
+ENTRYPOINT ["/usr/local/bin/inboxbridge-frontend"]
+CMD ["nginx", "-g", "daemon off;"]

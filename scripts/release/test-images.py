@@ -43,12 +43,15 @@ class ContainerReleaseTests(unittest.TestCase):
             for name,body in {'target/quarkus-app/quarkus-run.jar':'runtime',
                               'admin-ui/dist/index.html':'<html>', 'admin-ui/nginx.conf':'nginx',
                               'admin-ui/nginx-main.conf':'nginx', 'LICENSE':'license',
+                              'docker/release/ingress/default.conf.template':'proxy template',
+                              'docker/release/ingress/entrypoint.sh':'proxy entrypoint',
                               '.env':'synthetic-private-canary', 'certs/ca.key':'synthetic-private-canary',
                               '.dev-local/encryption-key':'synthetic-private-canary'}.items():
                 file=root/name;file.parent.mkdir(parents=True,exist_ok=True);file.write_text(body)
             with patch.object(helper,'ROOT',root): helper.prepare(out)
             self.assertEqual({str(p.relative_to(out)) for p in out.rglob('*') if p.is_file()},
-                             {'backend/quarkus-run.jar','frontend/index.html','nginx.conf','nginx-main.conf','LICENSE'})
+                             {'backend/quarkus-run.jar','frontend/index.html','nginx.conf','nginx-main.conf','LICENSE',
+                              'ingress/default.conf.template','ingress/entrypoint.sh'})
             with patch.object(helper,'ROOT',root), self.assertRaises(ValueError): helper.prepare(out)
 
     def test_missing_outputs_fail_before_context_creation(self):
@@ -93,6 +96,27 @@ class ContainerReleaseTests(unittest.TestCase):
             self.assertEqual(files,'')
         finally:
             subprocess.run(['docker','volume','rm',volume],check=True,capture_output=True)
+
+    def test_same_images_preserve_command_override_and_explicit_tls_choice(self):
+        backend=(ROOT/'docker/release/Dockerfile.backend').read_text()
+        self.assertIn('CMD ["java"',backend)
+        self.assertNotIn('ENTRYPOINT',backend)
+        standard=(ROOT/'docker/release/Dockerfile.frontend').read_text()
+        self.assertIn('nginx.conf /etc/nginx/inboxbridge/internal-tls.conf',standard)
+        self.assertIn('ENV TLS_ENABLED=true',standard)
+        self.assertIn('listen 8443 ssl',(ROOT/'admin-ui/nginx.conf').read_text())
+        proxy=(ROOT/'docker/release/ingress/default.conf.template').read_text()
+        self.assertIn('server inboxbridge:8080 resolve',proxy)
+        self.assertIn('proxy_set_header X-Forwarded-Proto https;',proxy)
+        self.assertIn('proxy_set_header X-Forwarded-Port 443;',proxy)
+        self.assertIn('proxy_set_header Forwarded "";',proxy)
+        self.assertNotIn('proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for',proxy)
+        for workflow in ('build','release'):
+            self.assertIn('sh scripts/release/smoke-proxy-images.sh',
+                          (ROOT/'.github/workflows'/f'{workflow}.yml').read_text())
+        entrypoint=(ROOT/'docker/release/ingress/entrypoint.sh').read_text()
+        self.assertIn('case "${TLS_ENABLED-true}"',entrypoint)
+        self.assertIn('TLS_ENABLED=true requires readable',entrypoint)
 
     def test_release_checks_exact_tag_and_tests_before_registry_publication(self):
         workflow=(ROOT/'.github/workflows/release.yml').read_text()

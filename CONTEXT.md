@@ -1475,3 +1475,25 @@ directory through a read-only, network-disabled bootstrap container with all
 capabilities dropped, after stopping the test stack. Source/deployment keys
 are never mounted there. The existing tag is retained; publication uses a new
 prerelease revision rather than retargeting a previously pushed source tag.
+
+## Shared release images for both ingress profiles
+
+Release frontend now selects standard internal TLS by default or explicit HTTP
+behind a trusted HTTPS terminator with TLS_ENABLED=false and PUBLIC_HOSTNAME.
+There are no variant-specific image tags and no automatic certificate fallback.
+The HTTP mode binds 8080, forwards to backend 8080 and overwrites client forwarding
+headers with the canonical HTTPS origin. Backend CMD preserves the existing
+Compose Java command. Existing HTTP stacks retain their database, keys, OAuth
+URL, network/loopback ports and backend settings, changing only image references
+and the frontend TLS flag. Standard TLS mounts/configuration are unchanged.
+Both modes use the same non-root images and support read-only filesystems with
+writable /tmp. Runtime-only context and CI include both modes; malformed mode,
+hostname and missing-certificate startup failures are tested.
+
+Local validation of shared ingress images: seven release-helper tests and the
+workflow security tests pass. The same final image pair passed both default
+verified-HTTPS and explicit external-HTTPS/HTTP stack smokes. The HTTP smoke
+retains the existing Java command, HTTP/JDBC/forwarding parameters, read-only
+non-root filesystems and private backend/database ports, with no certificate
+mounts. Default/explicit TLS without certificates, invalid modes and malformed
+hostnames fail startup. Source Java/UI code is unchanged by this packaging work.

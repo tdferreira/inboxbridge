@@ -20,6 +20,7 @@ def prepare(destination):
         shutil.copytree(source, destination / name)
     for name in ('nginx.conf', 'nginx-main.conf'):
         shutil.copyfile(ROOT / 'admin-ui' / name, destination / name)
+    shutil.copytree(ROOT / 'docker/release/ingress', destination / 'ingress')
     shutil.copyfile(ROOT / 'LICENSE', destination / 'LICENSE')
 
 

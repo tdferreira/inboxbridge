@@ -137,6 +137,7 @@ jobs:
         run: |
           sh scripts/release/build-images.sh "$RUNNER_TEMP/inboxbridge-runtime"
           sh scripts/release/smoke-images.sh
+          sh scripts/release/smoke-proxy-images.sh
 
       - name: Set up QEMU
         uses: docker/setup-qemu-action@99012661954931238ded8c8b007157a8430204e1
@@ -237,6 +238,7 @@ jobs:
 
           - Backend: \`${BACKEND_REPOSITORY}:${TAG_NAME}\`
           - Frontend: \`${FRONTEND_REPOSITORY}:${TAG_NAME}\`
+          - The same image pair supports internal TLS by default, or external HTTPS termination with frontend \`TLS_ENABLED=false\`.
           - Platforms: linux/amd64 and linux/arm64. [Prebuilt-image setup](${DOCS_BASE_URL}/docs/CONTAINERS.md).
 
           ### Browser extensions
