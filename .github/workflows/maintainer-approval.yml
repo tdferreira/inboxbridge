@@ -1,0 +1,24 @@
+name: Maintainer approval
+
+on:
+  pull_request:
+    branches: [main]
+    types: [opened, reopened, synchronize, ready_for_review, edited]
+
+# This job records a protected manual decision; it needs no repository token rights.
+permissions: {}
+
+concurrency:
+  group: maintainer-approval-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
+jobs:
+  approval:
+    if: ${{ !github.event.pull_request.draft }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    environment: maintainer-approval
+    steps:
+      # Never check out or execute PR code, use secrets, or grant publishing rights here.
+      - name: Record maintainer approval
+        run: echo 'The designated maintainer approved this candidate.'

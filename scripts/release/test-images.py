@@ -61,6 +61,22 @@ class ContainerReleaseTests(unittest.TestCase):
             with patch.object(helper,'ROOT',root), self.assertRaises(ValueError): helper.prepare(out)
             self.assertFalse(out.exists())
 
+    def test_context_refuses_existing_symlink_destination_without_overwriting_target(self):
+        helper=load('prepare-images')
+        with tempfile.TemporaryDirectory() as directory:
+            root=Path(directory); protected=root/'existing'; protected.mkdir()
+            canary=protected/'canary'; canary.write_text('synthetic-preserve-me')
+            output=root/'context'; output.symlink_to(protected, target_is_directory=True)
+            with patch.object(helper,'ROOT',root), self.assertRaises(ValueError): helper.prepare(output)
+            self.assertEqual(canary.read_text(), 'synthetic-preserve-me')
+            self.assertEqual(list(protected.iterdir()), [canary])
+
+    def test_repository_metadata_rejects_shell_newline_and_path_payloads(self):
+        helper=load('image-metadata')
+        for repository in ('owner/../repo', 'owner/repo\nextra=true',
+                           'owner/repo$(id)', 'owner/repo/other', '-'*100000+'!'):
+            with self.assertRaises(ValueError): helper.metadata(repository, 'v0.8.4', 'a'*40)
+
     def test_image_override_preserves_ingress_and_isolation_without_reading_operator_env(self):
         with tempfile.TemporaryDirectory() as directory:
             temporary=Path(directory)

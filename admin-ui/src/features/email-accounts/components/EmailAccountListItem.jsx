@@ -3,6 +3,7 @@ import { authMethodLabel, effectiveEmailAccountStatus, formatDate, formatImporte
 import { buildSourceEmailAccountTargetId } from '@/lib/sectionTargets'
 import { formatLiveProgressLabel, formatLiveProgressSummary, hasDeterminateLiveProgress, liveProgressPercent } from '@/lib/livePollProgress'
 import { buildSourceDiagnosticsAlerts } from '@/lib/sourceDiagnosticsAlerts'
+import { mailProviderLabelKey } from '@/lib/mailProviderLabel'
 import CopyButton from '@/shared/components/CopyButton'
 import FloatingActionMenu from '@/shared/components/FloatingActionMenu'
 import './EmailAccountCard.css'
@@ -14,14 +15,7 @@ function inferProviderLabel(fetcher, locale, t) {
   if (fetcher.oauthProvider && fetcher.oauthProvider !== 'NONE') {
     return oauthProviderLabel(fetcher.oauthProvider, locale)
   }
-  const host = (fetcher.host || '').toLowerCase()
-  if (host.includes('gmail')) return t('emailAccount.providerGmail')
-  if (host.includes('office365') || host.includes('outlook') || host.includes('hotmail') || host.includes('live.com')) {
-    return t('emailAccount.providerMicrosoft')
-  }
-  if (host.includes('yahoo')) return t('emailAccount.providerYahoo')
-  if (host === '127.0.0.1' && fetcher.port === 1143) return t('emailAccount.providerProton')
-  return fetcher.protocol === 'POP3' ? t('emailAccount.providerGenericPop3') : t('emailAccount.providerGenericImap')
+  return t(mailProviderLabelKey(fetcher))
 }
 
 function hasMeaningfulStats(stats) {

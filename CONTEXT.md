@@ -11,6 +11,38 @@ When meaningful behavior, architecture, validation expectations, or known
 runtime constraints change, update this file so future chats can resume from it
 without depending on older ad-hoc handoff notes.
 
+## Repository security governance
+
+The 0.8.4 CodeQL triage and release notes are in
+[`docs/CODEQL_REVIEW_0_8_4.md`](docs/CODEQL_REVIEW_0_8_4.md). Public-site folder
+names must use text-only DOM rendering. Extension authentication warnings must
+not include request paths, methods or bearer input. Provider host hints use
+domain boundaries and must never become authorization decisions. The tolerant
+TLS discovery probe is unauthenticated and isolated from strict credential TLS;
+retain both mail-session unit assertions and the GreenMail trust-isolation test.
+
+Public contributions use forks, with an individual-account, PR-only maintainer
+merge allowlist separate from the core ruleset. Core main-branch protections have
+no bypass actors and retain signed commits, a required `maintainer-approval`
+environment deployment, resolved threads and strict CI pinned to GitHub Actions.
+The environment's only reviewer is `tdferreira`, self-review is allowed for that
+account, and administrator bypass is disabled. All PR authors require the same
+explicit owner decision; contributors gain no review or merge rights. This
+replaces native second-person approval settings that cannot work for the sole
+maintainer's own PRs. The approval job has no token permissions, secrets or PR
+checkout/execution. Configuring the gate is not authorization to approve PR
+content; agents must wait for the owner's explicit approval before doing so.
+Managed extended CodeQL scans are required for all security-alert severities.
+External contributor workflows always require approval; workflow tokens default
+to read-only, action SHAs and an explicit allowlist are enforced, and Actions
+cannot approve PRs. Secret-scanning alerts, push protection, private vulnerability
+reporting and immutable future releases are enabled. Versioned release-tag
+creation is maintainer-only; tag integrity has no bypass actors. See
+[`docs/REPOSITORY_SECURITY.md`](docs/REPOSITORY_SECURITY.md) for the effective policy,
+the owner-only approval model and the distinction between a merger-access
+exception and a safety-rule bypass. The public-site folder pillbox renders user
+values through text nodes; its real-DOM regression runs with the generator check.
+
 ## Current product shape
 
 InboxBridge now consists of:

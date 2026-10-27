@@ -247,3 +247,6 @@ assert.match(siteCss, /\.field \.site-pillbox-input[^}]*width:\s*auto;/s)
 assert.match(siteCss, /\.field \.site-pillbox-input[^}]*border:\s*0;/s)
 
 console.log('site config generator ok')
+
+// CI installs the frontend dev dependencies before checking the public site.
+await import('./test-pillbox.mjs')

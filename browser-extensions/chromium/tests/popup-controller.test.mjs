@@ -123,7 +123,7 @@ test('popup controller renders attention items and triggers configured tabs', as
         throw new Error('should not disconnect')
       },
       escapeHtml(value) {
-        return String(value).replace('Needs attention', 'Needs attention')
+        return String(value)
       },
       fetchStatus: async () => ({ user: { username: 'alice' } }),
       localizePopupPage() {},

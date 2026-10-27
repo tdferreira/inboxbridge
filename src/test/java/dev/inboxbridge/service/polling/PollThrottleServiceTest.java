@@ -80,9 +80,11 @@ class PollThrottleServiceTest {
         assertFalse(service.inMemoryLeaseRepository.leases.isEmpty());
         assertEquals(1, records.size());
         assertEquals(Level.WARNING, records.getFirst().level());
-        assertTrue(records.getFirst().message().startsWith("Unable to release poll throttle lease "));
-        assertTrue(records.getFirst().message().endsWith(" for source-host:imap.example.com; the lease will expire automatically"));
-        assertTrue(records.getFirst().thrown() instanceof IllegalStateException);
+        assertEquals("Unable to release a poll throttle lease (IllegalStateException); the lease will expire automatically",
+                records.getFirst().message());
+        assertFalse(records.getFirst().message().contains(lease.leaseToken()));
+        assertFalse(records.getFirst().message().contains(lease.key()));
+        assertEquals(null, records.getFirst().thrown());
     }
 
     @Test

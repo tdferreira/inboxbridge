@@ -18,12 +18,14 @@ class GoogleOAuthResourceTest {
 
     @Test
     void exchangeRejectsMissingStateInsteadOfModifyingSharedCredentials() {
-        var resource = newResource(new FakeGoogleOAuthService());
+        var service = org.mockito.Mockito.mock(GoogleOAuthService.class);
+        var resource = newResource(service);
         for (String state : new String[] {null, "", " "}) {
             assertThrows(jakarta.ws.rs.BadRequestException.class,
                     () -> resource.exchange(new GoogleOAuthCodeRequest("attacker-code", state)));
         }
         assertThrows(jakarta.ws.rs.BadRequestException.class, () -> resource.exchange(null));
+        org.mockito.Mockito.verifyNoInteractions(service);
     }
 
     @Test

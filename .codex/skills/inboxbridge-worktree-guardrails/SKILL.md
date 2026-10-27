@@ -5,6 +5,10 @@ description: Use when working anywhere in the InboxBridge repository or when a r
 
 # InboxBridge Worktree Guardrails
 
+For scanner triage, follow the evidence and trust-boundary examples in
+[`docs/CODEQL_REVIEW_0_8_4.md`](../../../docs/CODEQL_REVIEW_0_8_4.md).
+Never weaken a required scan or auth/TLS guard merely to remove an alert.
+
 Read [`AGENTS.md`](../../../AGENTS.md) first, then load only the repo docs needed for the task.
 
 ## Always follow
@@ -12,6 +16,7 @@ Read [`AGENTS.md`](../../../AGENTS.md) first, then load only the repo docs neede
 - Do not read `.env` unless the user explicitly asks.
 - Keep operator-specific paths, private hostnames, personal contact details, deployment counts, mailbox incidents and image metadata out of Git. Use relative links/reserved examples; run `test-repository-privacy.py` and `scan-secrets.sh` before commits. A new sanitizing commit does not erase already-published history.
 - Treat [`CONTEXT.md`](../../../CONTEXT.md) as the cross-chat source of truth.
+- Follow [`docs/REPOSITORY_SECURITY.md`](../../../docs/REPOSITORY_SECURITY.md) for GitHub governance. Keep the individual-account merger/tag-creation allowlists separate from non-bypassable core safety rules; never use a broad administrator exemption for signatures, CI or CodeQL. The protected `maintainer-approval` environment requires an explicit owner decision for every PR, including owner-authored work. Only `tdferreira` may approve that gate or merge. Gate configuration permission does not authorize an agent to approve PR content; wait for the owner's explicit content approval.
 - Update docs whenever behavior, UI copy, setup flow, or architecture changes.
 - Add or update tests for every behavior change.
 - Prefer minimal changes that preserve the current architecture and style.

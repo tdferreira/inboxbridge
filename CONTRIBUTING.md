@@ -232,6 +232,16 @@ status-check context aligned. A successful check does not remove pull-request,
 approval, signature or protected-ref requirements; direct pushes by a bypass
 actor can succeed while GitHub reports the bypassed rules.
 
+## Repository security
+
+Repository access, mandatory merge checks, external-contributor CI approval and
+immutable-release expectations are documented in
+[Repository security governance](docs/REPOSITORY_SECURITY.md). Public-site checks
+now include real-DOM injection regressions using the frontend's installed jsdom
+development dependency; install frontend dependencies before running the site
+check in its container. Neither signed commits nor full unit coverage replaces
+security review.
+
 ## Release container images
 
 See [CONTAINERS.md](docs/CONTAINERS.md) for versioned GHCR publication, fork
