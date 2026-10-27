@@ -23,8 +23,15 @@ retain both mail-session unit assertions and the GreenMail trust-isolation test.
 
 Public contributions use forks, with an individual-account, PR-only maintainer
 merge allowlist separate from the core ruleset. Core main-branch protections have
-no bypass actors and retain signed commits, owner review, stale-review dismissal,
-latest-push approval, resolved threads and strict CI pinned to GitHub Actions.
+no bypass actors and retain signed commits, a required `maintainer-approval`
+environment deployment, resolved threads and strict CI pinned to GitHub Actions.
+The environment's only reviewer is `tdferreira`, self-review is allowed for that
+account, and administrator bypass is disabled. All PR authors require the same
+explicit owner decision; contributors gain no review or merge rights. This
+replaces native second-person approval settings that cannot work for the sole
+maintainer's own PRs. The approval job has no token permissions, secrets or PR
+checkout/execution. Configuring the gate is not authorization to approve PR
+content; agents must wait for the owner's explicit approval before doing so.
 Managed extended CodeQL scans are required for all security-alert severities.
 External contributor workflows always require approval; workflow tokens default
 to read-only, action SHAs and an explicit allowlist are enforced, and Actions
@@ -32,7 +39,7 @@ cannot approve PRs. Secret-scanning alerts, push protection, private vulnerabili
 reporting and immutable future releases are enabled. Versioned release-tag
 creation is maintainer-only; tag integrity has no bypass actors. See
 [`docs/REPOSITORY_SECURITY.md`](docs/REPOSITORY_SECURITY.md) for the effective policy,
-owner-authored PR limitations and the distinction between a merger-access
+the owner-only approval model and the distinction between a merger-access
 exception and a safety-rule bypass. The public-site folder pillbox renders user
 values through text nodes; its real-DOM regression runs with the generator check.
 

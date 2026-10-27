@@ -13,8 +13,7 @@ Keep access control separate from merge requirements:
   through pull requests only. Do not grant this exception to contributors,
   repository roles, deploy keys or automation.
 - The core protection ruleset has no bypass actors, including administrators.
-  It requires verified commit signatures, code-owner approval, dismissal of
-  stale approvals, approval of the latest reviewable push by another person,
+  It requires verified commit signatures, a protected maintainer approval,
   resolved discussions and an up-to-date successful build.
 - Bind the `.github/workflows/build.yml` required check to the GitHub Actions
   integration, rather than accepting a matching check name from any source.
@@ -27,9 +26,24 @@ GitHub records the narrow merger-allowlist exception as a bypass of that access
 rule. It must never exempt a merge from the separate core safety rules. Inspect
 the detailed rule evaluation when auditing a merge.
 
-The maintainer cannot approve their own pull request. With a sole code owner and
-no core bypass, maintainer-authored PRs need a deliberately approved independent
-review arrangement; do not silently relax protections to work around this.
+GitHub does not let a PR author approve their own PR. For this sole-maintainer
+repository, the required `maintainer-approval` environment supplies the human
+decision instead. Its only reviewer is `tdferreira`; self-review is allowed so
+the same maintainer can approve owner-authored work. This grants no contributor
+approval or merge rights. Every PR author follows the same protected gate.
+
+The approval workflow has no token permissions, secrets, checkout or PR-code
+execution. Core rules require its environment deployment to succeed before
+merge. Administrator bypass is disabled for that environment. New commits need
+their own successful approval deployment; cancellation groups isolate each PR.
+GitHub's native second-person review requirements are disabled only after this
+replacement gate is configured and validated. `CODEOWNERS` remains a review
+routing aid, not the sole-maintainer approval mechanism.
+
+Approval is a manual decision on the specific candidate, separate from green CI.
+An agent must not approve this gate merely because tests passed or because it
+was authorized to configure the gate. Wait for the owner's explicit approval of
+the PR content. Keep the owner-only merger allowlist unchanged.
 
 ## GitHub Actions and security reporting
 

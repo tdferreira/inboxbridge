@@ -82,6 +82,6 @@ merging; these local results do not substitute for them.
 Backend and admin UI versions are aligned at 0.8.4. Extension runtime code is
 unchanged and retains its independent 0.2.1 version; package and test both
 extensions for this release. Publish only from reviewed, merged, signed source
-after required checks and independent code-owner approval. Preparing a version
+after required checks and protected owner approval. Preparing a version
 does not authorize bypassing review or releasing unmerged fixes. See
 [repository security governance](REPOSITORY_SECURITY.md).
