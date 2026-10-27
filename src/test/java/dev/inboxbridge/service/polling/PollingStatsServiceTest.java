@@ -29,6 +29,25 @@ import dev.inboxbridge.service.user.UserMailDestinationConfigService;
 class PollingStatsServiceTest {
 
     @Test
+    void recoveryIsSeparateFromManualScheduledAndNotificationStatistics() {
+        var service=new PollingStatsService();
+        service.envSourceService=org.mockito.Mockito.mock(EnvSourceService.class);
+        service.userEmailAccountRepository=org.mockito.Mockito.mock(UserEmailAccountRepository.class);
+        service.importedMessageRepository=org.mockito.Mockito.mock(ImportedMessageRepository.class);
+        service.sourcePollEventService=org.mockito.Mockito.mock(SourcePollEventService.class);
+        service.sourcePollingStateService=new SourcePollingStateService();
+        var now=Instant.now();var events=new java.util.ArrayList<SourcePollEvent>();
+        for(String trigger:List.of("scheduler","idle-source","idle-catchup","user-ui")) {
+            var event=new SourcePollEvent();event.sourceId="source";event.triggerName=trigger;event.status="SUCCESS";
+            event.startedAt=now.minusSeconds(1);event.finishedAt=now;events.add(event);
+        }
+        org.mockito.Mockito.when(service.sourcePollEventService.listSince(org.mockito.ArgumentMatchers.any())).thenReturn(events);
+        var view=service.globalStats(0);
+        assertEquals(1,view.manualRuns());assertEquals(1,view.scheduledRuns());
+        assertEquals(1,view.idleRuns());assertEquals(1,view.catchUpRuns());
+    }
+
+    @Test
     void userStatsStayScopedToOneUserDestinationKey() {
         Instant importDay = LocalDate.now(ZoneOffset.UTC).minusDays(1).atStartOfDay().toInstant(ZoneOffset.UTC);
         PollingStatsService service = new PollingStatsService();
@@ -195,7 +214,13 @@ class PollingStatsServiceTest {
                 event.fetchedCount = 4;
                 event.importedCount = 4;
                 event.duplicateCount = 0;
-                return List.of(event);
+                SourcePollEvent recovery = new SourcePollEvent();
+                recovery.sourceId = event.sourceId;
+                recovery.triggerName = "idle-catchup";
+                recovery.status = "SUCCESS";
+                recovery.startedAt = idleStartedAt;
+                recovery.finishedAt = idleFinishedAt;
+                return List.of(event, recovery);
             }
         };
         service.sourcePollingStateService = new SourcePollingStateService() {
@@ -234,6 +259,7 @@ class PollingStatsServiceTest {
         assertEquals(0L, stats.manualRuns());
         assertEquals(0L, stats.scheduledRuns());
         assertEquals(1L, stats.idleRuns());
+        assertEquals(1L, stats.catchUpRuns());
         assertEquals(1L, stats.idleRunTimelines().get("pastMonth").stream()
                 .mapToLong(dev.inboxbridge.dto.ImportTimelinePointView::importedMessages)
                 .sum());

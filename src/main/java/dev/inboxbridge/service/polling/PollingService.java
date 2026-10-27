@@ -85,6 +85,8 @@ public class PollingService {
 
     private final AtomicBoolean running = new AtomicBoolean(false);
     private final AtomicReference<ActivePoll> activePoll = new AtomicReference<>();
+    // IDLE can run alongside a scheduler batch; both paths must share this source guard.
+    private final Set<String> activeSources = java.util.concurrent.ConcurrentHashMap.newKeySet();
     private final Set<String> activeIdleSources = java.util.concurrent.ConcurrentHashMap.newKeySet();
 
     @Scheduled(every = "5s")
@@ -135,15 +137,23 @@ public class PollingService {
     }
 
     public PollRunResult runIdleTriggeredPollForSource(RuntimeEmailAccount emailAccount) {
+        return runIdleSourcePoll(emailAccount, "idle-source");
+    }
+
+    public PollRunResult runIdleCatchUpForSource(RuntimeEmailAccount emailAccount) {
+        return runIdleSourcePoll(emailAccount, "idle-catchup");
+    }
+
+    private PollRunResult runIdleSourcePoll(RuntimeEmailAccount emailAccount, String trigger) {
         if (!activeIdleSources.add(emailAccount.id())) {
             return busyResult(emailAccount.id(), "A realtime source activation is already running for source " + emailAccount.id() + ".");
         }
         try {
             ActivePoll current = activePoll.get();
             if (running.get() && current != null && "scheduler".equals(current.trigger())) {
-                return runConcurrentIdleSourcePoll(emailAccount);
+                return runConcurrentIdleSourcePoll(emailAccount, trigger);
             }
-            return runPollInternal("idle-source", List.of(emailAccount), null, null, true, true, true, emailAccount.id(), executionSurfaceForTrigger("idle-source"));
+            return runPollInternal(trigger, List.of(emailAccount), null, null, true, true, true, emailAccount.id(), executionSurfaceForTrigger(trigger));
         } finally {
             activeIdleSources.remove(emailAccount.id());
         }
@@ -255,6 +265,44 @@ public class PollingService {
             boolean ignoreCooldown,
             String actorUsername,
             String executionSurface) {
+        if (!activeSources.add(emailAccount.id())) {
+            tally.addError(new PollRunError("poll_busy", emailAccount.id(),
+                    "A poll is already running for this source.", null));
+            if (liveRunId != null) {
+                pollingLiveService.markSourceFinished(liveRunId, emailAccount.id(), 0, 0, 0, "poll_busy");
+            }
+            return;
+        }
+        try {
+            pollSingleSourceExclusively(trigger, now, tally, liveRunId, emailAccount,
+                    ignoreInterval, ignoreCooldown, actorUsername, executionSurface);
+        } catch (RuntimeException failure) {
+            // A stale/corrupt setting or repository failure must not terminate another source's worker.
+            LOG.errorf(failure, "Polling source %s failed; other sources will continue", emailAccount.id());
+            tally.addError(new PollRunError("source_poll_failed", emailAccount.id(),
+                    "Source polling failed; inspect the server diagnostics.", null));
+            if (liveRunId != null) {
+                pollingLiveService.markSourceFinished(liveRunId, emailAccount.id(), 0, 0, 0, "failed");
+            }
+        } finally {
+            activeSources.remove(emailAccount.id());
+        }
+    }
+
+    private void pollSingleSourceExclusively(
+            String trigger, Instant now, SourcePollTally tally, String liveRunId,
+            RuntimeEmailAccount emailAccount, boolean ignoreInterval, boolean ignoreCooldown,
+            String actorUsername, String executionSurface) {
+        if ("scheduler".equals(trigger) && emailAccount.fetchMode() == SourceFetchMode.IDLE) {
+            if (!isSchedulerAllowedForFetchMode(emailAccount, now)) {
+                // Renewal can advance the safety deadline after the source was dequeued as RUNNING.
+                if (liveRunId != null) {
+                    pollingLiveService.markSourceFinished(liveRunId, emailAccount.id(), 0, 0, 0, null);
+                }
+                return;
+            }
+            ignoreInterval = true;
+        }
         if (!emailAccount.enabled()) {
             if (!"scheduler".equals(trigger)) {
                 tally.addError(new PollRunError(
@@ -309,20 +357,31 @@ public class PollingService {
     }
 
     private Predicate<RuntimeEmailAccount> isSchedulerEligible(Instant now) {
-        return (emailAccount) -> sourcePollingStateService.eligibility(
-                emailAccount.id(),
-                effectiveSettingsFor(emailAccount),
-                now,
-                false,
-                false).shouldPoll() && isSchedulerAllowedForFetchMode(emailAccount, now);
+        return emailAccount -> {
+            try {
+                return sourcePollingStateService.eligibility(emailAccount.id(), effectiveSettingsFor(emailAccount), now,
+                        emailAccount.fetchMode() == SourceFetchMode.IDLE, false).shouldPoll()
+                        && isSchedulerAllowedForFetchMode(emailAccount, now);
+            } catch (RuntimeException failure) {
+                LOG.errorf(failure, "Skipping ineligible polling source %s; other sources will continue", emailAccount.id());
+                return false;
+            }
+        };
     }
 
     private boolean isSchedulerAllowedForFetchMode(RuntimeEmailAccount emailAccount, Instant now) {
         if (emailAccount.fetchMode() != SourceFetchMode.IDLE) {
             return true;
         }
-        return imapIdleHealthService != null
-                && imapIdleHealthService.shouldSchedulerFallback(emailAccount.id(), now);
+        if (imapIdleHealthService == null) return false;
+        if (imapIdleHealthService.isSafetyPollingEnabled(emailAccount)) {
+            return imapIdleHealthService.isSafetyPollDue(emailAccount, now,
+                    sourcePollingStateService.viewForSource(emailAccount.id())
+                            .map(dev.inboxbridge.dto.SourcePollingStateView::lastSuccessAt).orElse(null));
+        }
+        // Retain the former disconnected-watcher policy only when the new deadline is disabled.
+        return imapIdleHealthService.shouldSchedulerFallback(emailAccount.id(), now)
+                && sourcePollingStateService.eligibility(emailAccount.id(), effectiveSettingsFor(emailAccount), now, false, false).shouldPoll();
     }
 
     private void runParallelLivePoll(
@@ -465,7 +524,7 @@ public class PollingService {
     private String executionSurfaceForTrigger(String trigger) {
         return switch (String.valueOf(trigger)) {
             case "scheduler" -> "AUTOMATIC";
-            case "idle-source" -> "AUTOMATIC";
+            case "idle-source", "idle-catchup" -> "AUTOMATIC";
             case "user-ui", "app-fetcher" -> "MY_INBOXBRIDGE";
             case "admin-ui", "admin-fetcher" -> "ADMINISTRATION";
             case "remote-ui", "remote-admin", "remote-source" -> "INBOXBRIDGE_GO";
@@ -477,13 +536,13 @@ public class PollingService {
         return running.get();
     }
 
-    private PollRunResult runConcurrentIdleSourcePoll(RuntimeEmailAccount emailAccount) {
+    private PollRunResult runConcurrentIdleSourcePoll(RuntimeEmailAccount emailAccount, String trigger) {
         PollRunResult result = new PollRunResult();
         try {
-            LOG.infof("Starting single-source poll triggered by idle-source alongside the active scheduler run for %s", emailAccount.id());
+            LOG.infof("Starting single-source poll triggered by %s alongside the active scheduler run for %s", trigger, emailAccount.id());
             SourcePollTally tally = new SourcePollTally();
             pollSingleSource(
-                    "idle-source",
+                    trigger,
                     Instant.now(),
                     tally,
                     null,
@@ -491,7 +550,7 @@ public class PollingService {
                     true,
                     true,
                     null,
-                    executionSurfaceForTrigger("idle-source"));
+                    executionSurfaceForTrigger(trigger));
             tally.mergeInto(result);
             return result;
         } catch (RuntimeException e) {

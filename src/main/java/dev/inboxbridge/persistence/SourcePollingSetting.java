@@ -46,6 +46,15 @@ public class SourcePollingSetting extends PanacheEntityBase {
     @Column(name = "fetch_window_override")
     public Integer fetchWindowOverride;
 
+    @Column(name = "idle_safety_polling_enabled_override")
+    public Boolean idleSafetyPollingEnabledOverride;
+
+    @Column(name = "idle_safety_poll_interval_override", length = 40)
+    public String idleSafetyPollIntervalOverride;
+
+    @Column(name = "idle_renewal_interval_override", length = 40)
+    public String idleRenewalIntervalOverride;
+
     @Column(name = "updated_at", nullable = false)
     public Instant updatedAt;
 }

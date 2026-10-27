@@ -807,6 +807,11 @@ function ImportTimelineChart({
     () => aggregateChartRows(chartRows, nativeResolution, resolvedResolution, selectedRange, t),
     [chartRows, nativeResolution, resolvedResolution, selectedRange, t]
   )
+  // Recharts supplies the index among visible ticks, not the source row index.
+  const labelsByBucket = useMemo(
+    () => new Map(resolvedChartRows.map((row) => [row.bucketLabel, row.label])),
+    [resolvedChartRows]
+  )
   const visibleMarkers = useMemo(
     () => buildVisibleMarkers(
       resolvedChartRows,
@@ -1032,7 +1037,7 @@ function ImportTimelineChart({
                     minTickGap={18}
                     tick={{ fill: 'var(--muted)', fontSize: 12 }}
                     tickLine={false}
-                    tickFormatter={(_, index) => resolvedChartRows[index]?.label || ''}
+                    tickFormatter={(bucketLabel) => labelsByBucket.get(bucketLabel) ?? bucketLabel}
                   />
                   <YAxis
                     allowDecimals={false}

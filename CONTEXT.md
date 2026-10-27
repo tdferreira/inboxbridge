@@ -211,7 +211,7 @@ System polling behavior:
 - env-managed system source email accounts use the global effective settings, while DB-managed user source email accounts use the owning user's effective settings
 - source-level overrides take precedence over both per-user and global polling settings
 - each IMAP source account now also chooses its own fetch mode: `POLLING` or `IDLE`
-- scheduler-triggered batch runs skip `IDLE` sources, and a separate background watcher queues those sources back into the normal import pipeline when new mail arrives
+- scheduler-triggered batch runs include `IDLE` sources for periodic safety polling by default; a separate background watcher also queues those sources into the normal import pipeline when new mail arrives
 - the admin UI now splits polling into admin-only `Global Poller Settings` and user-scoped `My Poller Settings`
 - `Global Poller Settings` now focuses on effective deployment-wide polling controls, while a separate `Global Statistics` section shows deployment-wide analytics across all users
 - `Global Poller Settings` now keeps only the effective summary in-page and opens a dedicated modal dialog for editing the deployment-wide overrides
@@ -1401,3 +1401,128 @@ from deployment configuration and compatibility with local Compose 5.6.1.
 The build prints the Compose version for diagnostics. Its job display name is
 `.github/workflows/build.yml`, matching the existing required check context;
 repository protection rules remain unchanged.
+## Container-only macOS development
+
+`dev/compose.yaml` and `scripts/dev` provide a separate local developer stack.
+Java 25/Maven and Node 24 run in tool containers, with named caches and no host
+language installs. Run test-backend/test-frontend, then build/up. The wrapper
+ignores `.env`, generates a protected local-only encryption key, namespaces
+volumes per checkout and publishes only loopback HTTPS (default port 3000).
+Certificates stay in a Docker volume; exporting the public CA is explicit and
+macOS trust is never changed automatically. Testcontainers uses the host Docker
+socket and host.docker.internal. See dev/README.md for lifecycle and limits.
+The dev PostgreSQL service puts PGDATA in a child directory because the upstream
+TLS entrypoint writes server certificates to the volume root before initdb.
+
+The local Compose project name is persisted in .dev-local/project-name so moving
+the checkout retains the existing database, certificates and cache volumes.
+
+
+## Resilient IMAP IDLE and timeline labels
+
+IDLE renews every 25 minutes by default using Angus DONE/NOOP with a 20-second
+response deadline. Successful renewals update health only. Connection recovery
+queues idle-catchup; mailbox notifications queue idle-source. Both serialize
+per source while preserving concurrency across mailboxes. Safety uses a separate
+30-minute default since the oldest folder acknowledgement or a newer successful
+source sync, retaining enablement, cooldown, throttling and deduplication.
+Global and per-source nullable settings inherit by default; false is explicit.
+A source may override renewal and safety intervals; response wait remains global.
+Safety must exceed renewal plus response wait, including cross-scope validation.
+V74/V75 persist these settings. Diagnostics expose acknowledgements and the real
+next safety deadline. Timing changes replace only affected watchers. Catch-up
+has a distinct counter; ambiguous historical IDLE totals remain unchanged.
+
+ImportTimelineChart resolves visible axis labels by actual bucket values,
+rather than visible-tick indexes. Sparse hourly/daily axes remain aligned with
+correct tooltips and backend timezone buckets.
+
+Validation: 772 backend tests and 660 frontend tests passed on the previous
+upstream base; GreenMail covers renewal, reconnect, missing-notification recovery
+and live reconfiguration. PostgreSQL covers V74/V75. Actual provider behavior and
+browser CA trust remain separate operator checks. Python 3.13 rejects existing
+local CAs without Key Usage; no certificate-validation bypass was introduced.
+
+## Container release contribution
+
+Release publication now tests backend packaged runtime, frontend, extensions and
+privacy before building runtime-only images. Manual runs check out the validated
+tag. PR CI builds both images and runs a disposable TLS/isolation smoke check
+without registry login. Release jobs push amd64/arm64 GHCR images with version
+and exact-source tags, provenance and SBOM before publishing the GitHub release.
+Registry ownership follows the source repository so a fork can publish without
+upstream acceptance. There is no moving latest alias. First-time GHCR package
+visibility and Actions access require maintainer verification. The image-only
+Compose override preserves standard internal TLS; custom HTTP deployments need
+a separate ingress migration. See docs/CONTAINERS.md and its French counterpart.
+The privacy and hosted-CI fixes through upstream 83936c9 are incorporated.
+
+Contribution validation on upstream 83936c9: 772 backend tests and 34 packaged
+runtime tests pass, followed by an explicit production PostgreSQL rebuild. The
+660 UI tests, 81 Chromium tests, 11 Firefox tests and site generator pass. Five
+release-helper tests, three workflow-security tests, three repository-privacy
+tests and scanner canaries pass; the tracked-source scan reports no findings.
+The runtime-only PostgreSQL images passed a fresh disposable HTTPS health/UI
+smoke test with non-root users, CA-key isolation and no backend/database ports.
+Only the public CA was exported; localhost hostname verification remained on.
+The local development stack was rebuilt and force-recreated. Registry pushes,
+source release tags and an upstream PR have not been performed for this proposal.
+
+Hosted release verification passed application tests and the HTTPS/non-root
+image smoke checks. Linux then rejected host-side removal of root-owned bind
+certificate files. Smoke cleanup now removes only its disposable certificate
+directory through a read-only, network-disabled bootstrap container with all
+capabilities dropped, after stopping the test stack. Source/deployment keys
+are never mounted there. The existing tag is retained; publication uses a new
+prerelease revision rather than retargeting a previously pushed source tag.
+
+## Shared release images for both ingress profiles
+
+Release frontend now selects standard internal TLS by default or explicit HTTP
+behind a trusted HTTPS terminator with TLS_ENABLED=false and PUBLIC_HOSTNAME.
+There are no variant-specific image tags and no automatic certificate fallback.
+The HTTP mode binds 8080, forwards to backend 8080 and overwrites client forwarding
+headers with the canonical HTTPS origin. Backend CMD preserves the existing
+Compose Java command. Existing HTTP stacks retain their database, keys, OAuth
+URL, network/loopback ports and backend settings, changing only image references
+and the frontend TLS flag. Standard TLS mounts/configuration are unchanged.
+Both modes use the same non-root images and support read-only filesystems with
+writable /tmp. Runtime-only context and CI include both modes; malformed mode,
+hostname and missing-certificate startup failures are tested.
+
+Local validation of shared ingress images: seven release-helper tests and the
+workflow security tests pass. The same final image pair passed both default
+verified-HTTPS and explicit external-HTTPS/HTTP stack smokes. The HTTP smoke
+retains the existing Java command, HTTP/JDBC/forwarding parameters, read-only
+non-root filesystems and private backend/database ports, with no certificate
+mounts. Default/explicit TLS without certificates, invalid modes and malformed
+hostnames fail startup. Source Java/UI code is unchanged by this packaging work.
+
+
+PR review hardening: IDLE renewal configuration uses a shared production policy:
+interval >= 1 minute, positive response deadline, combined window < 29 minutes,
+and safety interval > combined window and <= 24 hours. API overrides and inherited
+environment defaults use the same bounds. Accelerated protocol tests override only
+the watcher's execution interval, never the production validation. Polling state
+DTO reads open short transactions that end before virtual-worker mailbox I/O.
+Invalid persisted settings and per-source worker exceptions cannot abort other
+users' scheduler work. A silent-session proxy integration keeps TCP open while
+dropping server responses and verifies reconnect catch-up through a real GreenMail
+destination without duplicate delivery. The PostgreSQL scheduler regression uses
+real CDI/state/settings on two parallel workers. Coverage evidence must distinguish
+plain unit tests from CDI/protocol/database integrations; use the opt-in
+`split-coverage` profile and `scripts/validation/changed-coverage.py` sequentially.
+
+
+PR 110 follow-up: scheduler workers must terminalize the live source on every
+exit, including a safety deadline advanced by a concurrent IDLE acknowledgement
+and an occupied per-source execution guard. Renewal-based skips complete normally
+with zero work; a busy source receives the existing poll_busy error and cannot
+release another execution's guard. Regression tests assert the final SSE payload
+rather than only the poll return value. ImapIdleRenewal keeps its virtual-thread
+scheduler and sleep defaults; package-level scheduling collaborators allow unit
+tests to place close precisely before/after command completion. Watcher unit
+coverage substitutes transport boundaries without sockets, CDI or persistence.
+Changed-code coverage can be gated with changed-coverage.py --check, keeping the
+plain unit group separate from protocol/database integrations. It measures only
+instrumented executable locations and branches, not complete UI rendering quality.

@@ -15,5 +15,19 @@ public record SourceDiagnosticsView(
         SourceThrottleStateView destinationThrottle,
         boolean idleHealthy,
         boolean idleSchedulerFallback,
+        boolean idleSafetyPollingEnabled,
+        List<SourceIdleWatchView> idleWatches,
+        java.time.Instant nextIdleSafetyPollAt) {
+    public SourceDiagnosticsView(String destinationIdentityKey,
+        String popLastSeenUidl,
+        List<SourceImapCheckpointView> imapCheckpoints,
+        SourceThrottleStateView sourceThrottle,
+        SourceThrottleStateView destinationThrottle,
+        boolean idleHealthy,
+        boolean idleSchedulerFallback,
+        boolean idleSafetyPollingEnabled,
         List<SourceIdleWatchView> idleWatches) {
+        this(destinationIdentityKey, popLastSeenUidl, imapCheckpoints, sourceThrottle, destinationThrottle, idleHealthy, idleSchedulerFallback, idleSafetyPollingEnabled, idleWatches, null);
+    }
+
 }

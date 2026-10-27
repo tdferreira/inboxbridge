@@ -14,6 +14,18 @@ public interface MailClientConfig {
     @WithDefault("PT20S")
     Duration operationTimeout();
 
+    @WithDefault("PT25M")
+    Duration idleRenewalInterval();
+
+    @WithDefault("PT20S")
+    Duration idleRenewalTimeout();
+
+    @WithDefault("PT30M")
+    Duration idleSafetyPollInterval();
+
+    @WithDefault("true")
+    boolean idleSafetyPollingEnabled();
+
     @WithDefault("PT0S")
     Duration idleOperationTimeout();
 }

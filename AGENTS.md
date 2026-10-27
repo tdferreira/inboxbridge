@@ -80,3 +80,11 @@ home of the repository's general communication policy.
 
 - Run relevant tests after changes.
 - If Docker is the reliable local execution path, use it to build and prepare the app for manual verification.
+
+## Container-only local development
+
+- Use `./scripts/dev` for local builds, tests and services; see `dev/README.md`.
+- Do not install Java, Maven, Node, npm or project dependencies on the macOS host.
+- Never read `.dev-local/encryption-key` or print resolved Compose configuration.
+- Development stack uses its own volumes, loopback ports and synthetic data; do not reuse NAS secrets or databases.
+- For concurrent worktrees choose distinct `DEV_PORT` values; project names are isolated automatically.

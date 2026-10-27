@@ -1,0 +1,68 @@
+#!/bin/sh
+# Keep language toolchains inside Docker. Only generated output lives in the checkout.
+set -eu
+ROOT=$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)
+cd "$ROOT"
+if command -v docker >/dev/null 2>&1; then
+  DOCKER=$(command -v docker)
+elif [ -x /Applications/Docker.app/Contents/Resources/bin/docker ]; then
+  DOCKER=/Applications/Docker.app/Contents/Resources/bin/docker
+else
+  echo 'Install and start Docker Desktop first.' >&2
+  exit 1
+fi
+# Docker credential helpers ship next to the CLI on macOS.
+PATH="$(dirname "$DOCKER"):$PATH"
+export PATH
+if [ -S "${HOME}/.docker/run/docker.sock" ]; then
+  DEV_DOCKER_SOCKET=${DEV_DOCKER_SOCKET:-${HOME}/.docker/run/docker.sock}
+  export DEV_DOCKER_SOCKET
+fi
+# Persist the namespace so moving a checkout preserves its matching volumes.
+mkdir -p .dev-local
+chmod 700 .dev-local
+if [ -z "${DEV_PROJECT:-}" ]; then
+  if [ -f .dev-local/project-name ]; then
+    DEV_PROJECT=$(cat .dev-local/project-name)
+  else
+    DEV_PROJECT=inboxbridge-dev-$(printf '%s' "$ROOT" | cksum | awk '{print $1}')
+    (umask 077; printf '%s\n' "$DEV_PROJECT" > .dev-local/project-name)
+  fi
+fi
+export DEV_PROJECT
+if [ ! -f .dev-local/encryption-key ]; then
+  (umask 077; openssl rand -base64 32 > .dev-local/encryption-key)
+fi
+DEV_ENCRYPTION_KEY=$(cat .dev-local/encryption-key)
+export DEV_ENCRYPTION_KEY
+compose() { "$DOCKER" compose --env-file /dev/null -p "$DEV_PROJECT" -f dev/compose.yaml "$@"; }
+command=${1:-help}
+[ "$#" -eq 0 ] || shift
+case "$command" in
+  doctor) "$DOCKER" version; compose version ;;
+  backend) compose run --rm backend-tools mvn "$@" ;;
+  frontend) compose run --rm frontend-tools "$@" ;;
+  test-backend) compose run --rm backend-tools mvn -B test "$@" ;;
+  test-frontend) compose run --rm frontend-tools sh -c 'npm install --global "$(node -p "require(\"./package.json\").packageManager")" && npm ci && npm run test:run -- --maxWorkers=1' ;;
+  build)
+    compose run --rm backend-tools mvn -B -DskipTests package
+    compose run --rm frontend-tools sh -c 'npm install --global "$(node -p "require(\"./package.json\").packageManager")" && npm ci && npm run build'
+    compose build
+    ;;
+  up) compose up -d --force-recreate ;;
+  down) compose down ;;
+  security-static)
+    python3 scripts/security/test-workflows.py
+    python3 scripts/security/test-compose-ports.py
+    sh scripts/security/test-cert-init.sh
+    ;;
+  security-runtime)
+    compose cp cert-init:/certs/ca.crt .dev-local/ca.crt
+    python3 scripts/security/test-runtime.py --ca-file .dev-local/ca.crt --project "$DEV_PROJECT" "$@"
+    ;;
+  status) compose ps ;;
+  logs) compose logs "$@" ;;
+  ca) compose cp cert-init:/certs/ca.crt .dev-local/ca.crt ;;
+  config) compose config --quiet ;;
+  *) printf '%s\n' 'Usage: ./scripts/dev {doctor|test-backend|test-frontend|build|up|down|status|logs|ca|backend <mvn args>|frontend <command...>|config}' ;;
+esac

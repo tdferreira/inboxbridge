@@ -1,0 +1,5 @@
+**
+!admin-ui/
+!admin-ui/dist/
+!admin-ui/dist/**
+!admin-ui/nginx.conf

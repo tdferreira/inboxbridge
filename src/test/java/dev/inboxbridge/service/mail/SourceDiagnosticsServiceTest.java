@@ -31,6 +31,26 @@ import dev.inboxbridge.persistence.SourcePollingStateRepository;
 class SourceDiagnosticsServiceTest {
 
     @Test
+    void safetyDiagnosticsDistinguishMissingHealthStaleWatchAndANewerSuccessfulSync() {
+        var service=service();
+        var account=new RuntimeEmailAccount("source","USER",7L,"alice",true,InboxBridgeConfig.Protocol.IMAP,
+            "imap.example.test",993,true,InboxBridgeConfig.AuthMethod.PASSWORD,InboxBridgeConfig.OAuthProvider.NONE,
+            "synthetic","synthetic","",java.util.Optional.of("INBOX"),false,SourceFetchMode.IDLE,java.util.Optional.empty(),null);
+        service.imapIdleHealthService=null;
+        assertFalse(service.viewByRuntimeAccounts(List.of(account)).get("source").idleSafetyPollingEnabled());
+        var health=new ImapIdleHealthService();service.imapIdleHealthService=health;
+        health.markConnected("source",Instant.now().minusSeconds(3600));
+        assertFalse(service.viewByRuntimeAccounts(List.of(account)).get("source").idleSchedulerFallback());
+        health.markDisconnected("source",Instant.now().minusSeconds(3500));
+        assertTrue(service.viewByRuntimeAccounts(List.of(account)).get("source").idleSchedulerFallback());
+        var state=new SourcePollingState();state.sourceId="source";state.lastSuccessAt=Instant.now();
+        ((InMemorySourcePollingStateRepository)service.sourcePollingStateRepository).persist(state);
+        assertFalse(service.viewByRuntimeAccounts(List.of(account)).get("source").idleSchedulerFallback());
+        health.safetyPollingEnabled=false;
+        assertTrue(service.viewByRuntimeAccounts(List.of(account)).get("source").idleSchedulerFallback());
+    }
+
+    @Test
     void viewByRuntimeAccountsIncludesCheckpointThrottleAndIdleDetails() {
         SourceDiagnosticsService service = service();
         RuntimeEmailAccount account = new RuntimeEmailAccount(
@@ -106,7 +126,9 @@ class SourceDiagnosticsServiceTest {
         assertEquals(3, view.sourceThrottle().adaptiveMultiplier());
         assertEquals(2, view.destinationThrottle().adaptiveMultiplier());
         assertFalse(view.idleHealthy());
-        assertTrue(view.idleSchedulerFallback());
+        assertFalse(view.idleSchedulerFallback());
+        assertNotNull(view.nextIdleSafetyPollAt());
+        assertTrue(view.idleSafetyPollingEnabled());
         assertEquals(2, view.idleWatches().size());
         assertEquals("CONNECTED", view.idleWatches().getFirst().status());
         assertEquals("DISCONNECTED", view.idleWatches().get(1).status());

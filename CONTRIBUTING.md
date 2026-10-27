@@ -231,3 +231,20 @@ match the existing main-branch requirement. Keep the job name and required
 status-check context aligned. A successful check does not remove pull-request,
 approval, signature or protected-ref requirements; direct pushes by a bypass
 actor can succeed while GitHub reports the bypassed rules.
+
+## Release container images
+
+See [CONTAINERS.md](docs/CONTAINERS.md) for versioned GHCR publication, fork
+ownership, first-package visibility and the prebuilt-image Compose override.
+Release builds check out the exact validated tag, test the application, then
+build a runtime-only context and smoke-test TLS/isolation before pushing
+amd64/arm64 images. PR builds run the image checks without registry credentials.
+To validate helpers locally without publishing:
+
+```sh
+python3 scripts/release/test-images.py
+```
+
+Use `scripts/dev` for container-only application tests/builds. After building,
+`prepare-images.py` must target a new empty directory; `build-images.sh` and
+`smoke-images.sh` require explicit image references, never operator secrets.

@@ -123,6 +123,12 @@
             <artifactId>quarkus-junit-component</artifactId>
             <scope>test</scope>
         </dependency>
+        <!-- Already supplied transitively by Quarkus component tests; declare the unit-test API explicitly. -->
+        <dependency>
+            <groupId>org.mockito</groupId>
+            <artifactId>mockito-core</artifactId>
+            <scope>test</scope>
+        </dependency>
         <dependency>
             <groupId>io.rest-assured</groupId>
             <artifactId>rest-assured</artifactId>
@@ -223,6 +229,27 @@
     </build>
 
     <profiles>
+        <!-- Keep unit and integration evidence separate; run these groups sequentially. -->
+        <profile>
+            <id>split-coverage</id>
+            <properties>
+                <coverage.group>unit</coverage.group>
+            </properties>
+            <build>
+                <plugins>
+                    <plugin>
+                        <groupId>org.jacoco</groupId>
+                        <artifactId>jacoco-maven-plugin</artifactId>
+                        <configuration>
+                            <destFile>${project.build.directory}/coverage/${coverage.group}.exec</destFile>
+                            <dataFile>${project.build.directory}/coverage/${coverage.group}.exec</dataFile>
+                            <outputDirectory>${project.build.directory}/coverage/${coverage.group}</outputDirectory>
+                            <append>true</append>
+                        </configuration>
+                    </plugin>
+                </plugins>
+            </build>
+        </profile>
         <profile>
             <id>packaged-it-h2</id>
             <activation>

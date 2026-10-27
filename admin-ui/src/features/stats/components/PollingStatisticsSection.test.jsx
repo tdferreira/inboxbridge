@@ -162,13 +162,15 @@ describe('PollingStatisticsSection', () => {
         manualRuns: 1,
         scheduledRuns: 0,
         idleRuns: 2,
+        catchUpRuns: 3,
         averagePollDurationMillis: 800
       }
     })
 
     expect(screen.getByText('Source activity over time')).toBeInTheDocument()
+    expect(screen.getByText('Connection catch-up runs')).toBeInTheDocument()
     expect(screen.getAllByText('Realtime source activations').length).toBeGreaterThan(0)
-    expect(screen.getByText('Realtime source activations count the initial IMAP IDLE sync and later activations caused by newly arrived mail. They do not measure connection time.')).toBeInTheDocument()
+    expect(screen.getByText('IDLE runs count mailbox notifications. Successful renewals are not import runs. Connection catch-up is counted separately. Older versions included renewal/catch-up runs in IDLE totals.')).toBeInTheDocument()
   })
 
   it('shows realtime source activations in non-source statistics when present', () => {

@@ -1,0 +1,41 @@
+# Only for a trusted external HTTPS terminator and a private Docker backend.
+resolver 127.0.0.11 valid=10s ipv6=off;
+upstream inboxbridge_backend {
+  zone inboxbridge_backend 64k;
+  server inboxbridge:8080 resolve;
+}
+server {
+  listen 8080;
+  server_name ${PUBLIC_HOSTNAME};
+  if ($host != '${PUBLIC_HOSTNAME}') { return 421; }
+  root /usr/share/nginx/html;
+  index index.html;
+  add_header Strict-Transport-Security "max-age=31536000; includeSubDomains" always;
+  add_header X-Content-Type-Options nosniff always;
+  add_header X-Frame-Options DENY always;
+  add_header Referrer-Policy no-referrer always;
+  add_header Permissions-Policy "camera=(), geolocation=(), microphone=()" always;
+  add_header Cross-Origin-Opener-Policy same-origin always;
+  add_header Cross-Origin-Resource-Policy same-origin always;
+  add_header Content-Security-Policy "default-src 'self'; base-uri 'self'; frame-ancestors 'none'; form-action 'self'; object-src 'none'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; font-src 'self' data:; connect-src 'self'; manifest-src 'self'; worker-src 'self' blob:" always;
+  location /api/ {
+    client_max_body_size 256k;
+    limit_req zone=auth_requests burst=20 nodelay;
+    limit_req_status 429;
+    proxy_pass http://inboxbridge_backend/api/;
+    proxy_http_version 1.1;
+    # The trusted terminator serves HTTPS. Never trust client forwarding headers.
+    proxy_set_header Host ${PUBLIC_HOSTNAME};
+    proxy_set_header X-Forwarded-Host ${PUBLIC_HOSTNAME};
+    proxy_set_header X-Forwarded-Port 443;
+    proxy_set_header X-Forwarded-Proto https;
+    proxy_set_header X-Forwarded-For $remote_addr;
+    proxy_set_header X-Real-IP $remote_addr;
+    proxy_set_header Forwarded "";
+    proxy_set_header CF-Connecting-IP "";
+    proxy_set_header True-Client-IP "";
+    proxy_buffering off;
+    proxy_read_timeout 3600s;
+  }
+  location / { try_files $uri /index.html; }
+}

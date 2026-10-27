@@ -67,6 +67,15 @@ class MailSessionFactoryTest {
         MailSessionFactory factory = new MailSessionFactory();
         factory.setMailClientConfig(new MailClientConfig() {
             @Override
+            public java.time.Duration idleRenewalInterval() { return java.time.Duration.ofMinutes(25); }
+            @Override
+            public java.time.Duration idleRenewalTimeout() { return java.time.Duration.ofSeconds(20); }
+            @Override
+            public java.time.Duration idleSafetyPollInterval() { return java.time.Duration.ofMinutes(30); }
+            @Override
+            public boolean idleSafetyPollingEnabled() { return true; }
+
+            @Override
             public Duration connectionTimeout() {
                 return Duration.ofSeconds(5);
             }

@@ -351,6 +351,7 @@ function PollingStatisticsSection({
               <div className="polling-statistics-card-title">{t('pollingStats.runBreakdown')}</div>
               <div className="polling-statistics-breakdown">
                 <div><span>{t('pollingStats.manualRuns')}</span><strong>{stats.manualRuns}</strong></div>
+                {stats.catchUpRuns > 0 ? <div><span>{t('pollingStats.catchUpRuns')}</span><strong>{stats.catchUpRuns}</strong></div> : null}
                 <div><span>{t('pollingStats.scheduledRuns')}</span><strong>{stats.scheduledRuns}</strong></div>
                 {showIdleRunSeries ? <div><span>{t('pollingStats.idleRuns')}</span><strong>{stats.idleRuns ?? 0}</strong></div> : null}
                 <div><span>{t('pollingStats.averagePollDuration')}</span><strong>{formatDuration(stats.averagePollDurationMillis, t)}</strong></div>

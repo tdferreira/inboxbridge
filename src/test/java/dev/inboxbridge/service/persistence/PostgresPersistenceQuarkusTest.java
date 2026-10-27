@@ -48,6 +48,46 @@ class PostgresPersistenceQuarkusTest {
     @Inject
     ExtensionSessionRepository extensionSessionRepository;
 
+    @Inject
+    jakarta.persistence.EntityManager entityManager;
+
+    @Test
+    @TestTransaction
+    void postgresPersistsNullableIdleOverrides() {
+        var global = entityManager.find(dev.inboxbridge.persistence.SystemPollingSetting.class, 1L);
+        if (global == null) {
+            global = new dev.inboxbridge.persistence.SystemPollingSetting();
+            global.id = 1L;
+            global.updatedAt = java.time.Instant.now();
+            entityManager.persist(global);
+        }
+        global.idleSafetyPollingEnabledOverride = false;
+        global.idleRenewalIntervalOverride = "PT20M";
+        global.idleRenewalTimeoutOverride = "PT15S";
+        global.idleSafetyPollIntervalOverride = "PT30M";
+        var source = new dev.inboxbridge.persistence.SourcePollingSetting();
+        source.sourceId = "synthetic-idle-settings";
+        source.updatedAt = java.time.Instant.now();
+        source.idleSafetyPollingEnabledOverride = true;
+        source.idleSafetyPollIntervalOverride = "PT40M";
+        source.idleRenewalIntervalOverride = "PT10M";
+        entityManager.persist(source);
+        entityManager.flush();
+        entityManager.clear();
+        var stored = entityManager.find(dev.inboxbridge.persistence.SystemPollingSetting.class, 1L);
+        org.junit.jupiter.api.Assertions.assertEquals(false, stored.idleSafetyPollingEnabledOverride);
+        org.junit.jupiter.api.Assertions.assertEquals("PT20M", stored.idleRenewalIntervalOverride);
+        org.junit.jupiter.api.Assertions.assertEquals("PT30M", stored.idleSafetyPollIntervalOverride);
+        var storedSource = entityManager.find(dev.inboxbridge.persistence.SourcePollingSetting.class, source.id);
+        org.junit.jupiter.api.Assertions.assertEquals(true, storedSource.idleSafetyPollingEnabledOverride);
+        org.junit.jupiter.api.Assertions.assertEquals("PT40M", storedSource.idleSafetyPollIntervalOverride);
+        org.junit.jupiter.api.Assertions.assertEquals("PT10M", storedSource.idleRenewalIntervalOverride);
+        storedSource.idleSafetyPollingEnabledOverride = null;
+        entityManager.flush();
+        entityManager.clear();
+        org.junit.jupiter.api.Assertions.assertNull(entityManager.find(dev.inboxbridge.persistence.SourcePollingSetting.class, source.id).idleSafetyPollingEnabledOverride);
+    }
+
     @Test
     @TestTransaction
     void flywayBackedPostgresPersistsUiPreferencesAndNotificationHistory() {

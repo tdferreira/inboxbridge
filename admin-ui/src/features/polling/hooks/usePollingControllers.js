@@ -16,7 +16,11 @@ const DEFAULT_SYSTEM_POLLING_FORM = {
   throttleLeaseTtlOverride: '',
   adaptiveThrottleMaxMultiplierOverride: '',
   successJitterRatioOverride: '',
-  maxSuccessJitterOverride: ''
+  maxSuccessJitterOverride: '',
+  idleSafetyPollingMode: 'DEFAULT',
+  idleRenewalIntervalOverride: '',
+  idleRenewalTimeoutOverride: '',
+  idleSafetyPollIntervalOverride: ''
 }
 
 const DEFAULT_USER_POLLING_FORM = {
@@ -103,7 +107,12 @@ export function usePollingControllers({
         throttleLeaseTtlOverride: systemPollingPayload.throttleLeaseTtlOverride || '',
         adaptiveThrottleMaxMultiplierOverride: systemPollingPayload.adaptiveThrottleMaxMultiplierOverride === null ? '' : String(systemPollingPayload.adaptiveThrottleMaxMultiplierOverride),
         successJitterRatioOverride: systemPollingPayload.successJitterRatioOverride === null ? '' : String(systemPollingPayload.successJitterRatioOverride),
-        maxSuccessJitterOverride: systemPollingPayload.maxSuccessJitterOverride || ''
+        maxSuccessJitterOverride: systemPollingPayload.maxSuccessJitterOverride || '',
+        idleSafetyPollingMode: systemPollingPayload.idleSettings?.safetyPollingEnabledOverride == null
+          ? 'DEFAULT' : systemPollingPayload.idleSettings.safetyPollingEnabledOverride ? 'ENABLED' : 'DISABLED',
+        idleRenewalIntervalOverride: systemPollingPayload.idleSettings?.renewalIntervalOverride || '',
+        idleRenewalTimeoutOverride: systemPollingPayload.idleSettings?.renewalTimeoutOverride || '',
+        idleSafetyPollIntervalOverride: systemPollingPayload.idleSettings?.safetyPollIntervalOverride || ''
       })
     }
   }
@@ -297,7 +306,11 @@ export function usePollingControllers({
             successJitterRatioOverride: systemPollingForm.successJitterRatioOverride.trim() === ''
               ? null
               : Number(systemPollingForm.successJitterRatioOverride),
-            maxSuccessJitterOverride: systemPollingForm.maxSuccessJitterOverride.trim() || null
+            maxSuccessJitterOverride: systemPollingForm.maxSuccessJitterOverride.trim() || null,
+            idleSafetyPollingEnabledOverride: systemPollingForm.idleSafetyPollingMode === 'DEFAULT' ? null : systemPollingForm.idleSafetyPollingMode === 'ENABLED',
+            idleRenewalIntervalOverride: (systemPollingForm.idleRenewalIntervalOverride || '').trim() || null,
+            idleRenewalTimeoutOverride: (systemPollingForm.idleRenewalTimeoutOverride || '').trim() || null,
+            idleSafetyPollIntervalOverride: (systemPollingForm.idleSafetyPollIntervalOverride || '').trim() || null
           })
         })
         if (!response.ok) {

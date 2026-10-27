@@ -11,6 +11,7 @@ import dev.inboxbridge.service.user.UserMailDestinationConfigService;
 import dev.inboxbridge.service.user.UserPollingSettingsService;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
@@ -39,6 +40,161 @@ import jakarta.enterprise.inject.Instance;
 import jakarta.enterprise.util.TypeLiteral;
 
 class PollingServiceTest {
+
+    @Test
+    void overflowInOneUsersIdleEligibilityDoesNotPreventAnotherUsersPoll() {
+        var bad = userBridgeWithFetchMode("bad-idle", 7L, "alice", "alice-destination", SourceFetchMode.IDLE);
+        var good = userBridge("good-source", 8L, "bob", "bob-destination");
+        var source = new MultiSourceRecordingMailSourceClient();
+        var service = reviewService(List.of(bad, good), source);
+        service.imapIdleHealthService = new ImapIdleHealthService() {
+            @Override public Duration safetyPollInterval(RuntimeEmailAccount account) { return Duration.ofSeconds(Long.MAX_VALUE); }
+        };
+        service.imapIdleHealthService.markConnected(bad.id(), Instant.now());
+        service.runPoll("scheduler");
+        assertEquals(List.of(good.id()), source.fetchedSourceIds);
+    }
+
+    @Test
+    void exceptionInAWorkerDoesNotTerminateOtherSourcesOrLeakItsGuard() {
+        var bad = userBridge("bad-source", 7L, "alice", "alice-destination");
+        var good = userBridge("good-source", 8L, "bob", "bob-destination");
+        var source = new MultiSourceRecordingMailSourceClient();
+        var service = reviewService(List.of(bad, good), source);
+        var calls = new AtomicInteger();
+        service.sourcePollingStateService = new RecordingSourcePollingStateService() {
+            @Override public PollEligibility eligibility(String id, PollingSettingsService.EffectivePollingSettings settings,
+                    Instant now, boolean ignoreInterval, boolean ignoreCooldown) {
+                if (id.equals(bad.id()) && calls.incrementAndGet() > 1) throw new IllegalStateException("Synthetic worker failure");
+                return new PollEligibility(true, "READY", null);
+            }
+        };
+        var result = service.runPoll("scheduler");
+        assertEquals(List.of(good.id()), source.fetchedSourceIds);
+        assertEquals("source_poll_failed", result.getErrorDetails().getFirst().code());
+        assertFalse(service.status().running());
+    }
+
+    @Test
+    void acknowledgedRenewalBetweenSelectionAndExecutionFinishesLiveSourceNormally() {
+        var account = userBridgeWithFetchMode("idle-race", 7L, "alice", "destination", SourceFetchMode.IDLE);
+        var source = new MultiSourceRecordingMailSourceClient();
+        var service = reviewService(List.of(account), source);
+        var health = new ImapIdleHealthService();
+        health.markConnected(account.id(), Instant.now().minus(Duration.ofHours(1)));
+        service.imapIdleHealthService = health;
+        var live = new PollingLiveService() {
+            @Override public PollRunHandle startRun(String trigger, List<RuntimeEmailAccount> accounts,
+                    dev.inboxbridge.persistence.AppUser actor) {
+                var handle = super.startRun(trigger, accounts, actor);
+                // Deterministically acknowledge after selection, before a worker's safety recheck.
+                health.markRenewed(account.id(), account.id(), Instant.now());
+                return handle;
+            }
+        };
+        assertFinishedLiveSource(service, live, "COMPLETED", "COMPLETED", null);
+        assertTrue(source.fetchedSourceIds.isEmpty());
+    }
+
+    @Test
+    void occupiedSourceGuardFinishesLiveSourceWithoutReleasingAnotherExecutionGuard() throws Exception {
+        var account = userBridge("guard-busy", 7L, "alice", "destination");
+        var service = reviewService(List.of(account), new MultiSourceRecordingMailSourceClient());
+        var field = PollingService.class.getDeclaredField("activeSources");
+        field.setAccessible(true);
+        @SuppressWarnings("unchecked") var guards = (java.util.Set<String>) field.get(service);
+        guards.add(account.id());
+        try {
+            assertFinishedLiveSource(service, new PollingLiveService(), "FAILED", "FAILED", "poll_busy");
+            assertTrue(guards.contains(account.id()), "The existing execution still owns its guard");
+        } finally { guards.clear(); }
+    }
+
+    private void assertFinishedLiveSource(PollingService service, PollingLiveService live,
+            String runState, String sourceState, String errorCode) {
+        var admin = new dev.inboxbridge.persistence.AppUser();
+        admin.id = 1L; admin.username = "review-admin"; admin.role = dev.inboxbridge.persistence.AppUser.Role.ADMIN;
+        var finished = new AtomicReference<dev.inboxbridge.dto.PollLiveView>();
+        service.pollingLiveService = live;
+        var subscription = live.subscribe(admin, PollingLiveService.SessionStreamKind.BROWSER, 11L)
+                .subscribe().with(event -> {
+                    if ("poll-run-finished".equals(event.type())) finished.set(event.poll());
+                });
+        try {
+            var result = service.runPoll("scheduler");
+            assertNotNull(finished.get());
+            assertEquals(runState, finished.get().state());
+            assertEquals(1, finished.get().sources().size());
+            for (var source : finished.get().sources()) {
+                assertEquals(sourceState, source.state());
+                assertNotNull(source.finishedAt());
+            }
+            if (errorCode == null) assertTrue(result.getErrors().isEmpty());
+            else assertEquals(errorCode, result.getErrorDetails().getFirst().code());
+        } finally { subscription.cancel(); live.shutdownHeartbeatExecutor(); }
+    }
+
+    @Test
+    void failedLiveWorkerAndNonLiveRenewalSkipBothReleaseTheirOwnGuards() throws Exception {
+        var account=userBridgeWithFetchMode("source",7L,"alice","destination",SourceFetchMode.IDLE);
+        var service=reviewService(List.of(account),new MultiSourceRecordingMailSourceClient());
+        var health=new ImapIdleHealthService();service.imapIdleHealthService=health;
+        health.markConnected(account.id(),Instant.now().minusSeconds(3600));
+        var calls=new AtomicInteger();
+        service.sourcePollingStateService=new RecordingSourcePollingStateService(){
+            @Override public java.util.Optional<dev.inboxbridge.dto.SourcePollingStateView> viewForSource(String id){
+                if(calls.incrementAndGet()==2)health.markRenewed(id,id,Instant.now());
+                return java.util.Optional.empty();
+            }
+        };
+        assertEquals(0,service.runPoll("scheduler").getFetched());
+        assertFalse(service.status().running());
+        health.clear(account.id());health.markConnected(account.id(),Instant.now().minusSeconds(3600));
+        service.sourcePollingStateService=new RecordingSourcePollingStateService(){
+            int count;
+            @Override public PollEligibility eligibility(String id,PollingSettingsService.EffectivePollingSettings settings,
+                    Instant now,boolean ignoreInterval,boolean ignoreCooldown){
+                if(++count>1)throw new IllegalStateException("Synthetic worker failure");
+                return new PollEligibility(true,"READY",null);
+            }
+        };
+        assertFinishedLiveSource(service,new PollingLiveService(),"FAILED","FAILED","source_poll_failed");
+        var catchUp=reviewService(List.of(account),new MultiSourceRecordingMailSourceClient());
+        assertTrue(catchUp.runIdleCatchUpForSource(account).getErrors().isEmpty());
+    }
+
+    @Test
+    void disablingSafetyStillAppliesTheNormalIntervalToDisconnectedWatcherFallback() {
+        var account=userBridgeWithFetchMode("source",7L,"alice","destination",SourceFetchMode.IDLE);
+        var source=new MultiSourceRecordingMailSourceClient();var service=reviewService(List.of(account),source);
+        service.imapIdleHealthService=new ImapIdleHealthService(){
+            @Override public boolean isSafetyPollingEnabled(RuntimeEmailAccount ignored){return false;}
+            @Override public boolean shouldSchedulerFallback(String id,Instant now){return true;}
+        };
+        service.sourcePollingStateService=new RecordingSourcePollingStateService(){
+            int calls;
+            @Override public PollEligibility eligibility(String id,PollingSettingsService.EffectivePollingSettings settings,
+                    Instant now,boolean ignoreInterval,boolean ignoreCooldown){
+                return new PollEligibility(++calls==1,"NOT_DUE",null);
+            }
+        };
+        assertTrue(service.runPoll("scheduler").getErrors().isEmpty());
+        assertTrue(source.fetchedSourceIds.isEmpty());
+    }
+
+    private PollingService reviewService(List<RuntimeEmailAccount> accounts, MailSourceClient source) {
+        var service = new PollingService();
+        service.runtimeEmailAccountService = new FakeRuntimeEmailAccountService(accounts);
+        service.mailSourceClient = source;
+        service.importDeduplicationService = new NeverDuplicateImportDeduplicationService();
+        service.mailDestinationServices = new FakeMailDestinationServices(new FakeMailDestinationService(true));
+        service.sourcePollEventService = new NoopSourcePollEventService();
+        service.pollingSettingsService = new FakePollingSettingsService(true, Duration.ofMinutes(5), "5m", 10);
+        service.userPollingSettingsService = new FakeUserPollingSettingsService(true, Duration.ofMinutes(5), "5m", 10);
+        service.sourcePollingSettingsService = new FakeSourcePollingSettingsService();
+        service.sourcePollingStateService = new RecordingSourcePollingStateService();
+        return service;
+    }
 
     @Test
     void scheduledPollDelegatesEveryTickToRuntimeEligibility() {
@@ -390,7 +546,7 @@ class PollingServiceTest {
     }
 
     @Test
-    void schedulerPollSkipsIdleSources() {
+    void schedulerPollSkipsIdleSourcesWhenNoHealthServiceIsAvailable() {
         PollingService service = new PollingService();
         MultiSourceRecordingMailSourceClient mailSourceClient = new MultiSourceRecordingMailSourceClient();
         RecordingDestinationMailboxService destinationService = new RecordingDestinationMailboxService();
@@ -419,7 +575,9 @@ class PollingServiceTest {
         PollingService service = new PollingService();
         MultiSourceRecordingMailSourceClient mailSourceClient = new MultiSourceRecordingMailSourceClient();
         RecordingDestinationMailboxService destinationService = new RecordingDestinationMailboxService();
-        ImapIdleHealthService imapIdleHealthService = new ImapIdleHealthService();
+        ImapIdleHealthService imapIdleHealthService = new ImapIdleHealthService() {
+            @Override public boolean isSafetyPollingEnabled() { return false; }
+        };
         Instant baseline = Instant.now().minus(ImapIdleHealthService.SCHEDULER_FALLBACK_THRESHOLD).minusSeconds(5);
         imapIdleHealthService.ensureTracked("polling-fetcher", baseline);
         imapIdleHealthService.ensureTracked("idle-fetcher", baseline);
@@ -453,7 +611,9 @@ class PollingServiceTest {
         PollingService service = new PollingService();
         MultiSourceRecordingMailSourceClient mailSourceClient = new MultiSourceRecordingMailSourceClient();
         RecordingDestinationMailboxService destinationService = new RecordingDestinationMailboxService();
-        ImapIdleHealthService imapIdleHealthService = new ImapIdleHealthService();
+        ImapIdleHealthService imapIdleHealthService = new ImapIdleHealthService() {
+            @Override public boolean isSafetyPollingEnabled() { return false; }
+        };
         Instant now = Instant.now();
         imapIdleHealthService.ensureTracked("polling-fetcher", now);
         imapIdleHealthService.ensureTracked("idle-fetcher", now);
@@ -478,6 +638,40 @@ class PollingServiceTest {
         assertEquals(0, result.getErrors().size());
         assertEquals(List.of("polling-fetcher"), mailSourceClient.fetchedSourceIds);
         assertEquals(List.of("polling-fetcher->alice-destination"), destinationService.importRoutes);
+    }
+
+    @Test
+    void safetySchedulerAndIdleCannotImportTheSameSourceConcurrently() throws Exception {
+        PollingService service = new PollingService();
+        RuntimeEmailAccount account = userBridgeWithFetchMode("idle-fetcher", 7L, "alice", "alice-destination", SourceFetchMode.IDLE);
+        BlockingDestinationService destination = new BlockingDestinationService();
+        destination.blockFirstImport = true;
+        service.mailSourceClient = new MultiSourceRecordingMailSourceClient();
+        service.importDeduplicationService = new NeverDuplicateImportDeduplicationService();
+        service.mailDestinationServices = new FakeMailDestinationServices(destination);
+        service.sourcePollEventService = new NoopSourcePollEventService();
+        service.runtimeEmailAccountService = new FakeRuntimeEmailAccountService(List.of(account));
+        service.pollingSettingsService = new FakePollingSettingsService(true, Duration.ofMinutes(5), "5m", 10);
+        service.userPollingSettingsService = new FakeUserPollingSettingsService(true, Duration.ofMinutes(5), "5m", 10);
+        service.sourcePollingSettingsService = new FakeSourcePollingSettingsService();
+        service.sourcePollingStateService = new RecordingSourcePollingStateService();
+        service.imapIdleHealthService = new ImapIdleHealthService();
+        service.imapIdleHealthService.markConnected(account.id(), Instant.now().minusSeconds(31 * 60));
+        AtomicReference<PollRunResult> scheduled = new AtomicReference<>();
+        Thread scheduler = Thread.startVirtualThread(() -> scheduled.set(service.runPoll("scheduler")));
+        try {
+            assertTrue(destination.firstImportStarted.await(2, TimeUnit.SECONDS));
+            PollRunResult idle = service.runIdleTriggeredPollForSource(account);
+            assertEquals(1, idle.getErrorDetails().size());
+            assertEquals("poll_busy", idle.getErrorDetails().getFirst().code());
+            assertEquals(1, destination.importCount.get());
+        } finally {
+            destination.allowFirstImportToFinish.countDown();
+            scheduler.join(3000);
+        }
+        assertFalse(scheduler.isAlive());
+        assertEquals(1, scheduled.get().getImported());
+        assertEquals(1, destination.importCount.get());
     }
 
     @Test
@@ -1493,7 +1687,7 @@ class PollingServiceTest {
         }
     }
 
-    private static final class RecordingSourcePollingStateService extends SourcePollingStateService {
+    private static class RecordingSourcePollingStateService extends SourcePollingStateService {
         private String lastRecordedSuccessSourceId;
         private String lastRecordedPopCheckpoint;
         private String lastRecordedCheckpointDestinationKey;

@@ -20,6 +20,7 @@ Read [`AGENTS.md`](../../../AGENTS.md) first, then load only the repo docs neede
 - Preserve the GitHub Pages/public-site rules captured in `CONTEXT.md` when touching `site/`: full locale coverage for `en`, `fr`, `de`, `pt-PT`, `pt-BR`, and `es`; a compact flag language picker with direct-open fallback behavior; the centered lower-level runtime diagram plus security-highlights block; and the guidance that `.env` should stay minimal while normal mailbox setup belongs in the web UI.
 - Preserve localized workspace-route behavior in the admin UI: explicit admin routes such as `/admin` should canonicalize immediately to the current locale slug (for example `/administracao`) instead of waiting on delayed preference hydration.
 - Preserve the current operator-diagnostics model: expanded source rows in the admin UI now expose destination identity, POP/IMAP checkpoint state, throttle buckets, IMAP IDLE watcher health, recent poll-decision audit data, and explicit alert pills for disconnected IDLE watches, cooldown loops, and sustained throttling. Do not silently remove or narrow that visibility without replacing it with an equally usable troubleshooting surface.
+- Preserve resilient IMAP IDLE: bounded per-folder renewal, catch-up on reconnect, independent safety polling and the shared per-source execution guard. Watcher health, safety policy and disconnected fallback are separate diagnostics.
 - Preserve the reusable `PillboxInput` contract: it is a shared component, not dialog-local UI. Real touch devices may use the native multi-select path when options are locked, but desktop browser mobile emulation should continue using the floating combobox rather than being treated like a real touch device.
 - End with the stack ready for manual testing whenever feasible.
 - If a runnable service was touched, finish with a fresh `docker compose` deployment of the affected services unless the user asked not to or the environment blocks it.
@@ -39,3 +40,18 @@ Read [`AGENTS.md`](../../../AGENTS.md) first, then load only the repo docs neede
 2. Refresh docs and `CONTEXT.md` if the repo knowledge changed.
 3. If services changed, bring the stack back up with Docker Compose for manual verification.
 4. Summarize what changed, what was validated, any gaps, and the ready-to-use commit message.
+
+## Container-only workstation
+
+For this checkout use `scripts/dev` and `dev/README.md` to run builds, tests and
+runtime services. Do not install language toolchains on macOS. Keep the local
+development stack separate from the release-packaging repository and NAS data.
+
+IDLE runtime controls use existing polling settings endpoints and nullable DB
+overrides (V74). Preserve source > global > environment inheritance, the existing
+poll interval as safety cadence and after-commit watcher reconciliation.
+
+IDLE acknowledgement policy: successful renewal is health-only, never an import.
+Safety and renewal have separate per-source inherited intervals (V75); validate
+safety > renewal + response deadline. Catch-up and notification triggers/counters
+are distinct; preserve old ambiguous history.

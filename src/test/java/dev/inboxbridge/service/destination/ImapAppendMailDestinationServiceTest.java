@@ -324,6 +324,15 @@ class ImapAppendMailDestinationServiceTest {
     private MailClientConfig mailClientConfig() {
         return new MailClientConfig() {
             @Override
+            public java.time.Duration idleRenewalInterval() { return java.time.Duration.ofMinutes(25); }
+            @Override
+            public java.time.Duration idleRenewalTimeout() { return java.time.Duration.ofSeconds(20); }
+            @Override
+            public java.time.Duration idleSafetyPollInterval() { return java.time.Duration.ofMinutes(30); }
+            @Override
+            public boolean idleSafetyPollingEnabled() { return true; }
+
+            @Override
             public java.time.Duration connectionTimeout() {
                 return java.time.Duration.ofSeconds(5);
             }

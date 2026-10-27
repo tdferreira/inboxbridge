@@ -22,6 +22,110 @@ import jakarta.transaction.Transactional;
 class SourcePollingSettingsServiceTest {
 
     @Test
+    void absentMailboxOverridesAppearAsInheritedAndUpdatesPublishConfigurationChanges() {
+        var service=service();
+        var initial=service.viewForSource(actor(),"fetcher-1").orElseThrow();
+        assertEquals(null,initial.idleRenewalIntervalOverride());
+        assertEquals(null,initial.idleSafetyPollIntervalOverride());
+        assertEquals(null,initial.idleSafetyPollingEnabledOverride());
+        @SuppressWarnings("unchecked") jakarta.enterprise.event.Event<dev.inboxbridge.service.mail.SourceMailboxConfigurationChanged> event=org.mockito.Mockito.mock(jakarta.enterprise.event.Event.class);
+        service.mailboxChanged=event;
+        service.updateForSource(actor(),"fetcher-1",new UpdateSourcePollingSettingsRequest(null,null,null,true,"  "," "));
+        org.mockito.Mockito.verify(event).fire(org.mockito.ArgumentMatchers.any());
+    }
+
+    @Test
+    void effectiveIdlePolicyResolvesMissingServicesAndEachNullableOverride() {
+        var defaults=new SourcePollingSettingsService();
+        var account=runtimeBridge();
+        assertEquals(true,defaults.effectiveIdleSafetyPollingEnabled(account));
+        assertEquals(java.time.Duration.ofMinutes(30),defaults.effectiveIdleSafetyPollInterval(account));
+        assertEquals(java.time.Duration.ofMinutes(25),defaults.effectiveIdleRenewalInterval(account));
+        var repo=org.mockito.Mockito.mock(dev.inboxbridge.persistence.SourcePollingSettingRepository.class);
+        defaults.repository=repo;
+        var setting=new dev.inboxbridge.persistence.SourcePollingSetting();
+        org.mockito.Mockito.when(repo.findBySourceId(account.id())).thenReturn(java.util.Optional.of(setting));
+        assertEquals(true,defaults.effectiveIdleSafetyPollingEnabled(account));
+        assertEquals(java.time.Duration.ofMinutes(30),defaults.effectiveIdleSafetyPollInterval(account));
+        assertEquals(java.time.Duration.ofMinutes(25),defaults.effectiveIdleRenewalInterval(account));
+        defaults.pollingSettingsService=org.mockito.Mockito.mock(PollingSettingsService.class);
+        org.mockito.Mockito.when(defaults.pollingSettingsService.effectiveIdleSettings()).thenReturn(
+            new PollingSettingsService.EffectiveIdleSettings(false,java.time.Duration.ofMinutes(10),java.time.Duration.ofSeconds(20)));
+        org.mockito.Mockito.when(defaults.pollingSettingsService.effectiveIdleSafetyPollInterval()).thenReturn(java.time.Duration.ofMinutes(15));
+        assertEquals(false,defaults.effectiveIdleSafetyPollingEnabled(account));
+        assertEquals(java.time.Duration.ofMinutes(10),defaults.effectiveIdleRenewalInterval(account));
+        assertEquals(java.time.Duration.ofMinutes(15),defaults.effectiveIdleSafetyPollInterval(account));
+        setting.idleSafetyPollingEnabledOverride=true;setting.idleSafetyPollIntervalOverride="PT20M";setting.idleRenewalIntervalOverride="PT5M";
+        assertEquals(true,defaults.effectiveIdleSafetyPollingEnabled(account));
+        assertEquals(java.time.Duration.ofMinutes(20),defaults.effectiveIdleSafetyPollInterval(account));
+        assertEquals(java.time.Duration.ofMinutes(5),defaults.effectiveIdleRenewalInterval(account));
+    }
+
+    @Test
+    void rejectsExtremeSafetyAndSubMinuteRenewalForMailboxOwner() {
+        var service = service();
+        assertThrows(IllegalArgumentException.class, () -> service.updateForSource(actor(), "fetcher-1",
+                new UpdateSourcePollingSettingsRequest(null, null, null, true, "PT9223372036854775807S", null)));
+        assertThrows(IllegalArgumentException.class, () -> service.updateForSource(actor(), "fetcher-1",
+                new UpdateSourcePollingSettingsRequest(null, null, null, true, null, "PT0.000000001S")));
+    }
+
+    @Test
+    void mailboxRenewalAndSafetyDeadlineAreValidatedTogether() {
+        var service = service();
+        var view = service.updateForSource(actor(), "fetcher-1", new UpdateSourcePollingSettingsRequest(null, null, null, true, "15m", "10m"));
+        assertEquals("PT10M", view.effectiveIdleRenewalInterval());
+        assertEquals("PT15M", view.effectiveIdleSafetyPollInterval());
+        assertThrows(IllegalArgumentException.class, () -> service.updateForSource(actor(), "fetcher-1",
+                new UpdateSourcePollingSettingsRequest(null, null, null, true, "15m", "16m")));
+        assertThrows(IllegalArgumentException.class, () -> service.updateForSource(actor(), "fetcher-1",
+                new UpdateSourcePollingSettingsRequest(null, null, null, true, "40m", "29m")));
+        assertEquals(java.time.Duration.ofMinutes(10), service.effectiveIdleRenewalInterval(runtimeBridge()));
+        var cleared = service.updateForSource(actor(), "fetcher-1", new UpdateSourcePollingSettingsRequest(null, null, null, null, null, null));
+        assertEquals("PT25M", cleared.effectiveIdleRenewalInterval());
+    }
+
+    @Test
+    void sourceSafetyDeadlineInheritsValidatesAndClears() {
+        var service = service();
+        assertThrows(IllegalArgumentException.class, () -> service.updateForSource(actor(), "fetcher-1",
+                new UpdateSourcePollingSettingsRequest(null, null, null, true, "20m")));
+        var view = service.updateForSource(actor(), "fetcher-1", new UpdateSourcePollingSettingsRequest(null, null, null, true, "40m"));
+        assertEquals("PT40M", view.effectiveIdleSafetyPollInterval());
+        assertEquals("PT30M", view.baseIdleSafetyPollInterval());
+        var cleared = service.updateForSource(actor(), "fetcher-1", new UpdateSourcePollingSettingsRequest(null, null, null, null, ""));
+        assertEquals("PT30M", cleared.effectiveIdleSafetyPollInterval());
+        assertEquals(null, cleared.idleSafetyPollIntervalOverride());
+    }
+
+    @Test
+    void sourceSafetyPolicyOverridesAndReturnsToGlobalDefaults() {
+        var service = service();
+        var disabled = service.updateForSource(actor(), "fetcher-1", new UpdateSourcePollingSettingsRequest(true, "2m", 33, false));
+        assertEquals(false, disabled.effectiveIdleSafetyPollingEnabled());
+        assertEquals(true, disabled.baseIdleSafetyPollingEnabled());
+        assertEquals(false, service.effectiveIdleSafetyPollingEnabled(runtimeBridge()));
+        var inherited = service.updateForSource(actor(), "fetcher-1", new UpdateSourcePollingSettingsRequest(null, null, null, null));
+        assertEquals(true, inherited.effectiveIdleSafetyPollingEnabled());
+        assertEquals(null, inherited.idleSafetyPollingEnabledOverride());
+        service.pollingSettingsService = new PollingSettingsService() {
+            @Override public EffectiveIdleSettings effectiveIdleSettings() {
+                return new EffectiveIdleSettings(false, Duration.ofMinutes(25), Duration.ofSeconds(20));
+            }
+        };
+        assertEquals(false, service.effectiveIdleSafetyPollingEnabled(runtimeBridge()));
+        service.updateForSource(actor(), "fetcher-1", new UpdateSourcePollingSettingsRequest(null, null, null, true));
+        assertEquals(true, service.effectiveIdleSafetyPollingEnabled(runtimeBridge()));
+    }
+
+    @Test
+    void sourceSafetySettingCannotBeChangedForAnInaccessibleMailbox() {
+        var service = service();
+        assertThrows(IllegalArgumentException.class, () -> service.updateForSource(actor(), "someone-elses-source",
+                new UpdateSourcePollingSettingsRequest(null, null, null, false)));
+    }
+
+    @Test
     void effectiveSettingsFallBackToInheritedUserPolling() {
         SourcePollingSettingsService service = service();
 

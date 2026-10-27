@@ -24,5 +24,27 @@ public record GlobalPollingStatsView(
         long manualRuns,
         long scheduledRuns,
         long idleRuns,
+        long averagePollDurationMillis,
+        long catchUpRuns) {
+    public GlobalPollingStatsView(long totalImportedMessages,
+        int configuredMailFetchers,
+        int enabledMailFetchers,
+        int sourcesWithErrors,
+        long errorPolls,
+        List<ImportTimelinePointView> importsByDay,
+        Map<String, List<ImportTimelinePointView>> importTimelines,
+        Map<String, List<ImportTimelinePointView>> duplicateTimelines,
+        Map<String, List<ImportTimelinePointView>> errorTimelines,
+        Map<String, List<ImportTimelinePointView>> manualRunTimelines,
+        Map<String, List<ImportTimelinePointView>> scheduledRunTimelines,
+        Map<String, List<ImportTimelinePointView>> idleRunTimelines,
+        PollingHealthSummaryView health,
+        List<PollingBreakdownItemView> providerBreakdown,
+        long manualRuns,
+        long scheduledRuns,
+        long idleRuns,
         long averagePollDurationMillis) {
+        this(totalImportedMessages, configuredMailFetchers, enabledMailFetchers, sourcesWithErrors, errorPolls, importsByDay, importTimelines, duplicateTimelines, errorTimelines, manualRunTimelines, scheduledRunTimelines, idleRunTimelines, health, providerBreakdown, manualRuns, scheduledRuns, idleRuns, averagePollDurationMillis, 0L);
+    }
+
 }

@@ -65,6 +65,51 @@ describe('useEmailAccountsController', () => {
     }
   }
 
+  it.each([null, true])('loads inherited or enabled IDLE policy and saves cleared durations (%s)', async (override) => {
+    const originalFetch = global.fetch
+    global.fetch = vi.fn().mockResolvedValue({ ok: true, json: async () => ({
+      idleSafetyPollingEnabledOverride: override, idleSafetyPollIntervalOverride: null,
+      idleRenewalIntervalOverride: null, fetchWindowOverride: null
+    }) })
+    try {
+      const { result } = renderController()
+      await act(async () => result.current.openFetcherPollingDialog({ emailAccountId: 'idle-source', fetchMode: 'IDLE' }))
+      expect(result.current.fetcherPollingForm.idleSafetyPollingMode).toBe(override == null ? 'DEFAULT' : 'ENABLED')
+      for (const value of [undefined, '', ' PT15M ']) {
+        await act(async () => result.current.openFetcherPollingDialog({ emailAccountId: 'idle-source', fetchMode: 'IDLE' }))
+        act(() => result.current.handleFetcherPollingFormChange(current => ({ ...current,
+          idleSafetyPollIntervalOverride: value, idleRenewalIntervalOverride: value ? ' PT10M ' : value,
+          fetchWindowOverride: '50'
+        })))
+        await act(async () => result.current.saveFetcherPollingSettings({ preventDefault: vi.fn() }))
+        expect(JSON.parse(global.fetch.mock.lastCall[1].body)).toEqual(expect.objectContaining({
+          idleSafetyPollIntervalOverride: value ? 'PT15M' : null,
+          idleRenewalIntervalOverride: value ? 'PT10M' : null, fetchWindowOverride: 50
+        }))
+      }
+    } finally { global.fetch = originalFetch }
+  })
+
+  it('loads and saves a per-mailbox IDLE policy without losing inheritance', async () => {
+    const originalFetch = global.fetch
+    global.fetch = vi.fn().mockResolvedValue({ ok: true, json: async () => ({
+      pollEnabledOverride: null, fetchWindowOverride: null,
+      baseIdleSafetyPollingEnabled: true, idleSafetyPollingEnabledOverride: false, effectiveIdleSafetyPollingEnabled: false, idleSafetyPollIntervalOverride: "PT15M", idleRenewalIntervalOverride: "PT10M"
+    }) })
+    try {
+      const { result } = renderController()
+      await act(async () => result.current.openFetcherPollingDialog({ emailAccountId: 'idle-source', fetchMode: 'IDLE' }))
+      expect(result.current.fetcherPollingForm.idleSafetyPollingMode).toBe('DISABLED')
+      expect(result.current.fetcherPollingForm.idleRenewalIntervalOverride).toBe('PT10M')
+      await act(async () => result.current.saveFetcherPollingSettings({ preventDefault: vi.fn() }))
+      expect(JSON.parse(global.fetch.mock.calls[1][1].body)).toEqual(expect.objectContaining({ idleSafetyPollingEnabledOverride: false, idleSafetyPollIntervalOverride: 'PT15M', idleRenewalIntervalOverride: 'PT10M' }))
+      await act(async () => result.current.openFetcherPollingDialog({ emailAccountId: 'idle-source', fetchMode: 'IDLE' }))
+      act(() => result.current.handleFetcherPollingFormChange((current) => ({ ...current, idleSafetyPollingMode: 'DEFAULT' })))
+      await act(async () => result.current.saveFetcherPollingSettings({ preventDefault: vi.fn() }))
+      expect(JSON.parse(global.fetch.mock.lastCall[1].body).idleSafetyPollingEnabledOverride).toBe(null)
+    } finally { global.fetch = originalFetch }
+  })
+
   it('resets the form when opening the add email account dialog', () => {
     const { result } = renderController()
 

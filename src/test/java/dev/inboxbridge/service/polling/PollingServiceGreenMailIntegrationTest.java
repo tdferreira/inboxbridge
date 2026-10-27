@@ -1092,6 +1092,68 @@ class PollingServiceGreenMailIntegrationTest {
         assertEquals(List.of("idle-alpha"), listSubjects(destinationMail, DESTINATION_USERNAME, DESTINATION_PASSWORD, DESTINATION_FOLDER));
     }
 
+    @Test
+    void safetyPollRetrievesMissedIdleMailEvenWhenWatchersAreReportedHealthy() throws Exception {
+        appendMessage(sourceMail, SOURCE_USERNAME, SOURCE_PASSWORD, "INBOX", "missed-notification", "Catch-up", "<missed-idle@example.com>");
+        RuntimeEmailAccount account = runtimeAccountWithFetchMode(SourceFetchMode.IDLE);
+        RecordingImportedMessageRepository history = new RecordingImportedMessageRepository();
+        PollingService service = pollService(List.of(account), history);
+        service.imapIdleHealthService = new dev.inboxbridge.service.mail.ImapIdleHealthService();
+        service.imapIdleHealthService.markConnected(account.id(), Instant.now());
+        assertEquals(0, service.runPoll("scheduler").getImported(), "Fresh IDLE connection must suppress the safety poll");
+        assertTrue(history.importedMessages.isEmpty());
+        service.imapIdleHealthService.markConnected(account.id(), Instant.now().minusSeconds(31 * 60));
+
+        PollRunResult first = service.runPoll("scheduler");
+        assertEquals(1, first.getImported());
+        assertTrue(first.getErrorDetails().isEmpty());
+        assertEquals(List.of("missed-notification"), listSubjects(destinationMail, DESTINATION_USERNAME, DESTINATION_PASSWORD, DESTINATION_FOLDER));
+        PollRunResult second = service.runPoll("scheduler");
+        assertEquals(0, second.getImported());
+        assertEquals(1, history.importedMessages.size());
+        assertEquals(1, listSubjects(destinationMail, DESTINATION_USERNAME, DESTINATION_PASSWORD, DESTINATION_FOLDER).size());
+    }
+
+    @Test
+    void silentOpenWatchTimesOutReconnectsAndImportsMissedMailExactlyOnce() throws Exception {
+        try (var proxy = new dev.inboxbridge.testsupport.SilentImapProxy(sourceMail.getImap().getPort())) {
+            var original = runtimeAccountWithFetchMode(SourceFetchMode.IDLE);
+            var account = new RuntimeEmailAccount(original.id(), original.ownerKind(), original.ownerUserId(),
+                    original.ownerUsername(), true, original.protocol(), "127.0.0.1", proxy.port(), false,
+                    original.authMethod(), original.oauthProvider(), original.username(), original.password(), "",
+                    original.folder(), false, SourceFetchMode.IDLE, original.customLabel(), original.destination());
+            var history = new RecordingImportedMessageRepository();
+            var pipeline = pollService(List.of(account), history);
+            var health = new dev.inboxbridge.service.mail.ImapIdleHealthService();
+            try (var watcher = new dev.inboxbridge.service.mail.AcceleratedIdleWatcher(
+                    new FixedRuntimeEmailAccountService(List.of(account)), pipeline, health)) {
+                watcher.refresh();
+                long initialDeadline = System.nanoTime() + Duration.ofSeconds(8).toNanos();
+                while (!health.isHealthy(account.id()) && System.nanoTime() < initialDeadline) Thread.sleep(10);
+                assertTrue(health.isHealthy(account.id()));
+                watcher.drain(); // Complete initial catch-up before injecting the failure.
+                assertTrue(history.importedMessages.isEmpty());
+                Instant firstConnection = health.watchStates(account.id()).getFirst().lastConnectedAt();
+                proxy.silenceWatch();
+                appendMessage(sourceMail, SOURCE_USERNAME, SOURCE_PASSWORD, "INBOX", "silent-watch-mail", "missed mail", "<silent-watch@example.com>");
+                assertTrue(proxy.responseSuppressed.await(2, java.util.concurrent.TimeUnit.SECONDS));
+                assertTrue(proxy.firstConnectionOpen(), "Failure must leave TCP open");
+                assertTrue(health.isHealthy(account.id()), "No disconnection notification has arrived");
+                assertTrue(history.importedMessages.isEmpty());
+                long deadline = System.nanoTime() + Duration.ofSeconds(12).toNanos();
+                while (history.importedMessages.isEmpty() && System.nanoTime() < deadline) {
+                    watcher.drain(); Thread.sleep(20);
+                }
+                assertTrue(health.watchStates(account.id()).getFirst().lastConnectedAt().isAfter(firstConnection));
+                assertEquals(1, history.importedMessages.size());
+                assertEquals(List.of("silent-watch-mail"), listSubjects(destinationMail, DESTINATION_USERNAME, DESTINATION_PASSWORD, DESTINATION_FOLDER));
+                watcher.drain(); pipeline.runIdleCatchUpForSource(account);
+                assertEquals(1, history.importedMessages.size());
+                assertEquals(1, listSubjects(destinationMail, DESTINATION_USERNAME, DESTINATION_PASSWORD, DESTINATION_FOLDER).size());
+            }
+        }
+    }
+
     private PollingService pollService(RuntimeEmailAccount runtimeAccount) {
         return pollService(List.of(runtimeAccount), new RecordingImportedMessageRepository());
     }
@@ -1927,6 +1989,15 @@ class PollingServiceGreenMailIntegrationTest {
 
     private static MailClientConfig mailClientConfig() {
         return new MailClientConfig() {
+            @Override
+            public java.time.Duration idleRenewalInterval() { return java.time.Duration.ofMinutes(25); }
+            @Override
+            public java.time.Duration idleRenewalTimeout() { return java.time.Duration.ofSeconds(20); }
+            @Override
+            public java.time.Duration idleSafetyPollInterval() { return java.time.Duration.ofMinutes(30); }
+            @Override
+            public boolean idleSafetyPollingEnabled() { return true; }
+
             @Override
             public java.time.Duration connectionTimeout() {
                 return java.time.Duration.ofSeconds(5);

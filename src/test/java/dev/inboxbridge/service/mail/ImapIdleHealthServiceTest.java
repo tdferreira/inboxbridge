@@ -1,6 +1,7 @@
 package dev.inboxbridge.service.mail;
 
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.time.Instant;
@@ -8,6 +9,80 @@ import java.time.Instant;
 import org.junit.jupiter.api.Test;
 
 class ImapIdleHealthServiceTest {
+
+    private dev.inboxbridge.domain.RuntimeEmailAccount account() {
+        return new dev.inboxbridge.domain.RuntimeEmailAccount("source", "SYSTEM", null, null, true,
+                dev.inboxbridge.config.InboxBridgeConfig.Protocol.IMAP, "imap.example.test", 993, true,
+                dev.inboxbridge.config.InboxBridgeConfig.AuthMethod.PASSWORD, dev.inboxbridge.config.InboxBridgeConfig.OAuthProvider.NONE,
+                "synthetic@example.test", "synthetic", "", java.util.Optional.of("INBOX"), false,
+                dev.inboxbridge.domain.SourceFetchMode.IDLE, java.util.Optional.empty(), null);
+    }
+
+    @Test
+    void safetyDefaultsAndDisconnectedBaselinesCoverMissingAndInheritedState() {
+        var health=new ImapIdleHealthService();var account=account();var now=Instant.parse("2026-10-26T10:00:00Z");
+        org.junit.jupiter.api.Assertions.assertNull(health.nextSafetyPollAt(account,null));
+        assertFalse(health.isSafetyPollDue(account,now,null));
+        assertEquals(now.plusSeconds(1800),health.nextSafetyPollAt(account,now));
+        health.ensureTracked(account.id(),null,null);
+        health.markConnected(account.id(),null,null);
+        health.markDisconnected("new",null,null);
+        health.markRenewed("missing","none",now);
+        health.markRenewed(account.id(),"missing",now);
+        health.sourcePollingSettingsService=org.mockito.Mockito.mock(dev.inboxbridge.service.polling.SourcePollingSettingsService.class);
+        org.mockito.Mockito.when(health.sourcePollingSettingsService.effectiveIdleSafetyPollingEnabled(account)).thenReturn(true);
+        org.mockito.Mockito.when(health.sourcePollingSettingsService.effectiveIdleSafetyPollInterval(account)).thenReturn(java.time.Duration.ofMinutes(15));
+        assertEquals(java.time.Duration.ofMinutes(15),health.safetyPollInterval(account));
+        assertTrue(health.isSafetyPollingEnabled(account));
+        health.clear(account.id());health.ensureTracked(account.id(),now);
+        assertEquals(now.plusSeconds(900),health.nextSafetyPollAt(account,null));
+        health.markConnected(account.id(),now.plusSeconds(10));
+        assertEquals(now.plusSeconds(910),health.nextSafetyPollAt(account,now));
+    }
+
+    @Test
+    void freshRenewalDefersSafetyDeadlineAndAStaleAcknowledgementTriggersIt() {
+        var health = new ImapIdleHealthService();
+        var account = account();
+        Instant start = Instant.parse("2026-10-25T20:00:00Z");
+        health.markConnected("source", "source\nINBOX", start);
+        assertFalse(health.isSafetyPollDue(account, start.plusSeconds(29 * 60), null));
+        assertTrue(health.isSafetyPollDue(account, start.plusSeconds(30 * 60), null));
+        health.markRenewed("source", "source\nINBOX", start.plusSeconds(20 * 60));
+        org.junit.jupiter.api.Assertions.assertEquals(start.plusSeconds(50 * 60), health.nextSafetyPollAt(account, null));
+        assertFalse(health.isSafetyPollDue(account, start.plusSeconds(40 * 60), null));
+        assertTrue(health.isSafetyPollDue(account, start.plusSeconds(50 * 60), null));
+        // A completed safety sync must not cause another run on every scheduler tick.
+        assertFalse(health.isSafetyPollDue(account, start.plusSeconds(51 * 60), start.plusSeconds(50 * 60)));
+        health.safetyPollingEnabled = false;
+        org.junit.jupiter.api.Assertions.assertNull(health.nextSafetyPollAt(account, null));
+    }
+
+    @Test
+    void aFreshSiblingDoesNotHideAStaleFolder() {
+        var health = new ImapIdleHealthService();
+        Instant start = Instant.parse("2026-10-25T20:00:00Z");
+        health.markConnected("source", "source\nINBOX", start);
+        health.markConnected("source", "source\nJunk", start);
+        health.markRenewed("source", "source\nINBOX", start.plusSeconds(29 * 60));
+        assertTrue(health.isSafetyPollDue(account(), start.plusSeconds(30 * 60), null));
+        health.markRenewed("source", "source\nJunk", start.plusSeconds(29 * 60));
+        assertFalse(health.isSafetyPollDue(account(), start.plusSeconds(30 * 60), null));
+    }
+
+    @Test
+    void renewalTimestampTracksAcknowledgementsAndResetsOnReconnect() {
+        var service = new ImapIdleHealthService();
+        Instant now = Instant.parse("2026-10-25T09:00:00Z");
+        service.markConnected("source", "source\nINBOX", now);
+        service.markRenewed("source", "source\nINBOX", now.plusSeconds(20));
+        org.junit.jupiter.api.Assertions.assertEquals(now.plusSeconds(20), service.watchStates("source").getFirst().lastRenewedAt());
+        service.markDisconnected("source", "source\nINBOX", now.plusSeconds(30));
+        service.markRenewed("source", "source\nINBOX", now.plusSeconds(40));
+        org.junit.jupiter.api.Assertions.assertEquals(now.plusSeconds(20), service.watchStates("source").getFirst().lastRenewedAt());
+        service.markConnected("source", "source\nINBOX", now.plusSeconds(50));
+        org.junit.jupiter.api.Assertions.assertNull(service.watchStates("source").getFirst().lastRenewedAt());
+    }
 
     @Test
     void schedulerFallbackStartsOnlyAfterTheConfiguredUnhealthyThreshold() {

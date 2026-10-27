@@ -135,7 +135,7 @@ public class PollingStatsService {
                 computation.manualRuns(),
                 computation.scheduledRuns(),
                 computation.idleRuns(),
-                computation.averagePollDurationMillis());
+                computation.averagePollDurationMillis(), computation.catchUpRuns());
     }
 
     public UserPollingStatsView userStats(Long userId) {
@@ -187,7 +187,7 @@ public class PollingStatsService {
                 scopedStats.manualRuns(),
                 scopedStats.scheduledRuns(),
                 scopedStats.idleRuns(),
-                scopedStats.averagePollDurationMillis());
+                scopedStats.averagePollDurationMillis(), scopedStats.catchUpRuns());
     }
 
     public SourcePollingStatsView sourceStats(RuntimeEmailAccount emailAccount) {
@@ -241,7 +241,7 @@ public class PollingStatsService {
                 scopedStats.manualRuns(),
                 scopedStats.scheduledRuns(),
                 scopedStats.idleRuns(),
-                scopedStats.averagePollDurationMillis());
+                scopedStats.averagePollDurationMillis(), scopedStats.catchUpRuns());
     }
 
     public PollingTimelineBundleView globalTimelineBundle(Instant fromInclusive, Instant toExclusive) {
@@ -325,7 +325,7 @@ public class PollingStatsService {
                 computation.manualRuns(),
                 computation.scheduledRuns(),
                 computation.idleRuns(),
-                computation.averagePollDurationMillis());
+                computation.averagePollDurationMillis(), computation.catchUpRuns());
     }
 
     private Instant normalizeUpperBound(Instant value) {
@@ -436,11 +436,16 @@ public class PollingStatsService {
                 manualRunPoints,
                 scheduledRunPoints,
                 idleRunPoints,
-                fallbackSourcesWithErrors >= 0 ? fallbackSourcesWithErrors : derivedSourcesWithErrors);
+                fallbackSourcesWithErrors >= 0 ? fallbackSourcesWithErrors : derivedSourcesWithErrors,
+                events.stream().filter(this::isCatchUpTrigger).count());
     }
 
     private boolean isScheduledTrigger(SourcePollEvent event) {
         return "scheduler".equals(event.triggerName);
+    }
+
+    private boolean isCatchUpTrigger(SourcePollEvent event) {
+        return "idle-catchup".equals(event.triggerName);
     }
 
     private boolean isIdleTrigger(SourcePollEvent event) {
@@ -448,7 +453,7 @@ public class PollingStatsService {
     }
 
     private boolean isManualTrigger(SourcePollEvent event) {
-        return !isScheduledTrigger(event) && !isIdleTrigger(event);
+        return !isScheduledTrigger(event) && !isIdleTrigger(event) && !isCatchUpTrigger(event);
     }
 
     private String providerLabel(ConfiguredSourceSnapshot source) {
@@ -501,7 +506,7 @@ public class PollingStatsService {
             List<PollingTimelineService.TimedCount> manualRunPoints,
             List<PollingTimelineService.TimedCount> scheduledRunPoints,
             List<PollingTimelineService.TimedCount> idleRunPoints,
-            int sourcesWithErrors) {
+            int sourcesWithErrors, long catchUpRuns) {
     }
 
     private PollingTimelineService timelineService() {
@@ -526,7 +531,7 @@ public class PollingStatsService {
             long manualRuns,
             long scheduledRuns,
             long idleRuns,
-            long averagePollDurationMillis) {
+            long averagePollDurationMillis, long catchUpRuns) {
     }
 
 }
