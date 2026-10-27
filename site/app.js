@@ -129,11 +129,14 @@ function createPillbox(root) {
   }
 
   function renderValues() {
-    valueContainer.innerHTML = ''
+    valueContainer.replaceChildren()
     selectedValues().forEach((value) => {
       const pill = document.createElement('span')
       pill.className = 'site-pillbox-pill'
-      pill.innerHTML = `<span>${value}</span>`
+      // Folder names are user input and must never be interpreted as markup.
+      const label = document.createElement('span')
+      label.textContent = value
+      pill.append(label)
 
       const removeButton = document.createElement('button')
       removeButton.type = 'button'

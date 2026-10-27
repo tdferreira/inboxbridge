@@ -27,12 +27,14 @@ class MicrosoftOAuthResourceTest {
 
     @Test
     void exchangeRejectsMissingStateEvenWhenASourceIdIsSupplied() {
-        var resource = newResource(new FakeMicrosoftOAuthService());
+        var service = org.mockito.Mockito.mock(MicrosoftOAuthService.class);
+        var resource = newResource(service);
         for (String state : new String[] {null, "", " "}) {
             var request = new dev.inboxbridge.dto.MicrosoftOAuthCodeRequest("another-users-source", "attacker-code", state);
             assertEquals(400, resource.exchange(request).getStatus());
         }
         assertEquals(400, resource.exchange(null).getStatus());
+        org.mockito.Mockito.verifyNoInteractions(service);
     }
 
     @Test

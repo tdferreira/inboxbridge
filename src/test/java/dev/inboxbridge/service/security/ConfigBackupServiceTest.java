@@ -62,19 +62,25 @@ class ConfigBackupServiceTest {
 
     @Test
     void encryptedSecretsBackupRequiresRiskAcknowledgement() {
-        ConfigBackupService service = configuredService(new InMemoryAuditRepository(), true, true);
-
-        assertThrows(IllegalArgumentException.class, () ->
-                service.encryptedSecretsBackup(admin(), session(), new ConfigBackupExportRequest("key", false)));
+        // Leave snapshot/encryption dependencies unset: rejection must precede all secret access.
+        ConfigBackupService service = new ConfigBackupService();
+        service.secretManagementService = org.mockito.Mockito.mock(SecretManagementService.class);
+        for (ConfigBackupExportRequest request : new ConfigBackupExportRequest[] {
+                null, new ConfigBackupExportRequest("key", null), new ConfigBackupExportRequest("key", false)}) {
+            assertThrows(IllegalArgumentException.class, () -> service.encryptedSecretsBackup(admin(), session(), request));
+        }
+        org.mockito.Mockito.verifyNoInteractions(service.secretManagementService);
     }
 
     @Test
     void encryptedSecretsBackupRequiresFreshSensitiveActionAuthentication() throws Exception {
         ConfigBackupService service = configuredService(new InMemoryAuditRepository(), true, false);
+        service.secretEncryptionService = org.mockito.Mockito.mock(SecretEncryptionService.class);
         String publicKey = publicKeyPem(KeyPairGenerator.getInstance("RSA").generateKeyPair());
 
         assertThrows(IllegalStateException.class, () ->
                 service.encryptedSecretsBackup(admin(), session(), new ConfigBackupExportRequest(publicKey, true)));
+        org.mockito.Mockito.verifyNoInteractions(service.secretEncryptionService);
     }
 
     @Test

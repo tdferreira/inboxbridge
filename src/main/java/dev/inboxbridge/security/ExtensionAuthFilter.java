@@ -42,35 +42,28 @@ public class ExtensionAuthFilter implements ContainerRequestFilter {
     public void filter(ContainerRequestContext requestContext) {
         String authorization = requestContext.getHeaderString(HttpHeaders.AUTHORIZATION);
         if (authorization == null || !authorization.startsWith("Bearer ")) {
-            LOG.warnf("Rejected browser-extension request without bearer token path=%s method=%s",
-                    requestContext.getUriInfo().getPath(),
-                    requestContext.getMethod());
+            // Request paths can contain decoded control characters or secrets.
+            LOG.warn("Rejected browser-extension request without bearer token");
             throw new NotAuthorizedException("Not authenticated");
         }
 
         String rawToken = authorization.substring("Bearer ".length()).trim();
         ExtensionSessionService.AuthenticatedExtensionSession authenticated = extensionSessionService.authenticate(rawToken)
                 .orElseThrow(() -> {
-                    LOG.warnf("Rejected browser-extension request with invalid bearer token path=%s method=%s",
-                            requestContext.getUriInfo().getPath(),
-                            requestContext.getMethod());
+                    LOG.warn("Rejected browser-extension request with invalid bearer token");
                     return new NotAuthorizedException("Not authenticated");
                 });
         ExtensionSession extensionSession = extensionSessionRepository.findByIdOptional(authenticated.sessionId())
                 .orElseThrow(() -> {
-                    LOG.warnf("Rejected browser-extension request because session id=%s no longer exists path=%s method=%s",
-                            authenticated.sessionId(),
-                            requestContext.getUriInfo().getPath(),
-                            requestContext.getMethod());
+                    LOG.warnf("Rejected browser-extension request because session id=%s no longer exists",
+                            authenticated.sessionId());
                     return new NotAuthorizedException("Not authenticated");
                 });
         AppUser user = appUserRepository.findByIdOptional(authenticated.userId())
                 .filter(candidate -> candidate.active && candidate.approved)
                 .orElseThrow(() -> {
-                    LOG.warnf("Rejected browser-extension request because user id=%s is missing, inactive, or unapproved path=%s method=%s sessionId=%s",
+                    LOG.warnf("Rejected browser-extension request because user id=%s is missing, inactive, or unapproved sessionId=%s",
                             authenticated.userId(),
-                            requestContext.getUriInfo().getPath(),
-                            requestContext.getMethod(),
                             authenticated.sessionId());
                     return new NotAuthorizedException("Not authenticated");
                 });

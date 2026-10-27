@@ -18,8 +18,8 @@ Please do not open public GitHub issues for suspected security vulnerabilities.
 
 Instead:
 
-1. Use GitHub private vulnerability reporting or a private security advisory if it is enabled for this repository.
-2. If that is not available, contact the repository owner privately through GitHub.
+1. Use [GitHub private vulnerability reporting](https://github.com/tdferreira/inboxbridge/security/advisories/new), which is enabled for this repository.
+2. Use synthetic examples and redact mailbox passwords, refresh tokens, private keys, and personal mail from reports and attachments.
 3. Include clear reproduction steps, affected versions or commits, impact, and any suggested mitigations.
 
 Please avoid publicly disclosing an issue until the maintainer has had a reasonable chance to investigate and respond.

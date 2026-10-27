@@ -1,6 +1,7 @@
 package dev.inboxbridge.service.mail;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertNull;
 
 import java.time.Duration;
 
@@ -16,6 +17,25 @@ import dev.inboxbridge.domain.SourcePostPollSettings;
 import jakarta.mail.Session;
 
 class MailSessionFactoryTest {
+
+    @Test
+    void credentialBearingSessionsNeverUseTheCapabilityProbesTrustManager() {
+        MailSessionFactory factory = factory();
+        for (Session session : new Session[] {
+                factory.sourceImapSession(runtimeImapAccount(993, true)),
+                factory.sourceImapSession(runtimeImapAccount(143, true)),
+                factory.destinationImapSession(destinationTarget(993, true)),
+                factory.destinationImapSession(destinationTarget(143, true)),
+                factory.sourcePop3Session(runtimeImapAccount(995, true)),
+                factory.sourcePop3Session(runtimeImapAccount(110, true))}) {
+            assertEquals("true", session.getProperty("mail." + session.getProperty("mail.store.protocol") + ".ssl.checkserveridentity"));
+            for (String protocol : new String[] {"imap", "imaps", "pop3", "pop3s"}) {
+                assertNull(session.getProperties().get("mail." + protocol + ".ssl.trust"));
+                assertNull(session.getProperties().get("mail." + protocol + ".ssl.socketFactory"));
+                assertNull(session.getProperties().get("mail." + protocol + ".socketFactory"));
+            }
+        }
+    }
 
     @Test
     void sourceImapSessionUsesStartTlsWhenTlsIsEnabledOnPlainImapPort() {

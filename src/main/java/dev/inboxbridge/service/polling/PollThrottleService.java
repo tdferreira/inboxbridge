@@ -56,10 +56,9 @@ public class PollThrottleService {
         try {
             releaseByToken(lease.leaseToken());
         } catch (RuntimeException releaseError) {
-            LOG.warnf(releaseError,
-                    "Unable to release poll throttle lease %s for %s; the lease will expire automatically",
-                    lease.leaseToken(),
-                    lease.key());
+            // Cleanup is recoverable; do not expose lease identifiers or raw errors.
+            LOG.warnf("Unable to release a poll throttle lease (%s); the lease will expire automatically",
+                    releaseError.getClass().getSimpleName());
         }
     }
 
