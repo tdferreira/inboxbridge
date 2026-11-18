@@ -1592,3 +1592,16 @@ advisories (Guava native deserialization and OpenTelemetry tracestate parsing);
 no affected application input path was demonstrated. Trivy findings for Guava,
 Maven/plugin dependencies, PostgreSQL and disposable transit test servers remain
 documented in the dated dependency audit, without BOM overrides or suppressions.
+
+
+## Release 0.8.5 preparation
+
+Backend and admin UI package metadata are aligned at 0.8.5. Browser extensions
+retain their independent 0.2.1 version because their runtime source is unchanged.
+The release includes the dependency and Java4Shell mitigation refresh merged
+in PR #122; see docs/RELEASE_0_8_5.md for release notes and security limits.
+Publish v0.8.5 only from the reviewed, merged, signed version-preparation commit
+after required CI, CodeQL and protected maintainer approval succeed. The signed
+tag triggers the existing Release workflow, which rebuilds/tests the exact tag,
+checks both ingress modes, publishes amd64/arm64 images, and attaches bundles,
+checksums and extension packages before finalizing the immutable release.
