@@ -153,7 +153,7 @@ The backend polling path is now split more intentionally too: `PollingService` s
 ## Technical stack
 
 - Java 25
-- Quarkus 3.40.1.1 (LTS)
+- Quarkus 3.40.1.2 (LTS)
 - React 19 + Vite 8
 - PostgreSQL 16
 - Flyway
@@ -292,11 +292,11 @@ System polling behavior:
 - the `Automatic` date-format option in Preferences now displays the effective locale-derived pattern inline so users can see which default format their selected language currently maps to before saving
 - that timezone preference still applies consistently across those same surfaces, so each account can see the same local-time view even if different users on the same instance live in different regions
 - statistics rendering now uses `Recharts 3.x`, giving the polling dashboards shared hover tooltips and more maintainable chart behavior than the previous custom SVG chart
-- the frontend package set is intentionally kept on current stable major versions, including React 19, Vite 8, Vitest 5, jsdom 30, and Recharts 3.x
+- the frontend package set is intentionally kept on current stable major versions, including React 19, Vite 8, Vitest 5, jsdom 31, and Recharts 3.x
 - the 2026-10-25 dependency refresh incorporates or supersedes all 17 open Dependabot proposals. Quarkus moves directly to 3.40.1.1 LTS rather than the older proposed 3.39 line; Maven Compiler, Surefire/Failsafe, GreenMail, WebAuthn, ALTCHA, JSON, all frontend direct dependencies, and transitive frontend packages are refreshed to current stable releases. Platform-managed backend dependencies remain aligned through the Quarkus BOM. The Maven builder now tracks `maven:3.10-eclipse-temurin-25` to match the Java 25 runtime, Nginx is `1.31.8-alpine`, and build/release workflows use `actions/setup-java@v6`.
-- jsdom 30 requires Node `^22.22.2 || ^24.15.0 || >=26.0.0`; the admin package declares that engine constraint, and Docker/CI continue using current Node 24 LTS images. ALTCHA 2.1 exposes challenge expiry as `Number`; the response DTO preserves that signed numeric value, with regression coverage for serialized challenge verification, replay rejection, expiry tampering, and the browser's PBKDF2 counter encoding. Remote SSE tests wait explicitly for their event stream before sending events to avoid the races observed in Dependabot CI.
-- the frontend Docker build and GitHub Actions workflows now use Node 24 LTS as the baseline instead of Node 22 or local Node 25 Current, so local test/runtime quirks from Node 25 should not define the supported admin-ui environment
-- admin-ui test commands now run through `admin-ui/scripts/run-vitest.mjs`, which adds `--no-webstorage` only when the local runtime is Node 25+ so Node's built-in Web Storage does not override jsdom's browser-like storage during Vitest runs; Docker and CI stay on Node 24 LTS without that flag, and the workaround should be revisited when the Node 25 + Vitest/jsdom interaction is resolved upstream
+- jsdom 31 requires Node `^22.22.2 || ^24.15.0 || >=26.0.0`; the admin package declares that engine constraint, and Docker/CI now use Node 26 LTS images. ALTCHA 2.1 exposes challenge expiry as `Number`; the response DTO preserves that signed numeric value, with regression coverage for serialized challenge verification, replay rejection, expiry tampering, and the browser's PBKDF2 counter encoding. Remote SSE tests wait explicitly for their event stream before sending events to avoid the races observed in Dependabot CI.
+- the frontend Docker build, tooling containers and GitHub Actions workflows use Node 26 LTS (26.13.1 as of 2026-11-18)
+- admin-ui test commands now run through `admin-ui/scripts/run-vitest.mjs`, which adds `--no-webstorage` only when the local runtime is Node 25+ so Node's built-in Web Storage does not override jsdom's browser-like storage during Vitest runs; Docker and CI now run Node 26 LTS with that flag, and the workaround should be revisited when the Node 25 + Vitest/jsdom interaction is resolved upstream
 - the normal `cd admin-ui && npm run test:run` frontend suite now uses forked Vitest workers with a default `50%` worker cap instead of forcing one worker, while CI and coverage runs stay single-worker to remain more memory-stable on stricter environments
 - the admin-ui Docker image installs the committed frontend lockfile with `npm ci`, excludes host `node_modules` and `dist` output from the build context, and no longer runs the full Vitest suite by default during `docker compose up --build`; CI remains the authoritative always-on frontend test path, while the Dockerfile keeps an opt-in `RUN_TESTS=true` build argument for explicit in-image validation because the full suite can hang after printing successful output inside container builds
 - the top-level `App` and `/remote` `RemoteApp` now define their production polling/watchdog/anomaly timing defaults in explicit timing maps so tests can inject much shorter intervals without changing the shipped runtime behavior; this keeps the slowest app-level live-poll and anomaly pulse regressions in the sub-second range instead of waiting on the real multi-second timers
@@ -1436,7 +1436,7 @@ repository protection rules remain unchanged.
 ## Container-only macOS development
 
 `dev/compose.yaml` and `scripts/dev` provide a separate local developer stack.
-Java 25/Maven and Node 24 run in tool containers, with named caches and no host
+Java 25/Maven and Node 26 run in tool containers, with named caches and no host
 language installs. Run test-backend/test-frontend, then build/up. The wrapper
 ignores `.env`, generates a protected local-only encryption key, namespaces
 volumes per checkout and publishes only loopback HTTPS (default port 3000).
@@ -1558,3 +1558,37 @@ coverage substitutes transport boundaries without sockets, CDI or persistence.
 Changed-code coverage can be gated with changed-coverage.py --check, keeping the
 plain unit group separate from protocol/database integrations. It measures only
 instrumented executable locations and branches, not complete UI rendering quality.
+
+
+## Dependency and Java4Shell refresh (2026-11-18)
+
+All nine open Dependabot proposals (#112-#116, #118-#121) are incorporated or
+superseded locally. Quarkus stays on LTS 3.40.1.2 with its managed libraries;
+Surefire/Failsafe are aligned at 3.6.1, GreenMail is 2.1.15 and JaCoCo is 0.8.16.
+Frontend packages and lockfile use current compatible stable releases, including
+paired Vitest/coverage 5.1.1, jsdom 31.0.1 and npm 12.2.3. Node moves to 26.13.1 LTS.
+Nginx 1.31.9 includes the November 18 security fixes. PostgreSQL stays on major
+16 with patch 16.16; Alpine is 3.24.4, OpenBao tests use 2.7.2 and Vault Community
+tests use 2.2.2. Actions remain pinned to verified release commit SHAs.
+
+Keep Eclipse Temurin, per the operator's explicit preference. Freshly pulled
+Temurin Java 25 runtime and Maven builder images contain 25.0.5+8. Linux
+25.0.5.1 binaries/images were not yet available during this audit, although
+Oracle's November 17 CSPU fixes CVE-2026-114938 (Java4Shell) in 25.0.5.1.
+`JAVA_TOOL_OPTIONS=-XX:-UseBASE64Intrinsics` disables the affected intrinsic
+in every backend Docker stage, the development Maven tools and CI. This is
+the researcher's published mitigation, not a claim that 25.0.5 is patched.
+Do not overwrite that variable without preserving the mitigation. Recheck
+actual amd64/arm64 Temurin versions and replace this workaround with the
+patched runtime once upstream publishes it. Security regression checks cover
+the configuration and release smoke checks verify the effective JVM flag.
+See docs/DEPENDENCIES.md for the dated inventory and validation evidence.
+
+Validation completed with 821 backend tests, 34 packaged API tests, 695 frontend
+tests with V8 coverage, both extension suites and public-site checks. Both
+release deployment modes and the isolated development stack pass HTTPS,
+isolation and effective JVM-flag checks. OSV reports two managed-library
+advisories (Guava native deserialization and OpenTelemetry tracestate parsing);
+no affected application input path was demonstrated. Trivy findings for Guava,
+Maven/plugin dependencies, PostgreSQL and disposable transit test servers remain
+documented in the dated dependency audit, without BOM overrides or suppressions.

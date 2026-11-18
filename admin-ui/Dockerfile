@@ -1,4 +1,4 @@
-FROM node:24-alpine AS build
+FROM node:26.13.1-alpine AS build
 WORKDIR /app
 ENV NODE_OPTIONS=--max-old-space-size=6144
 ARG RUN_TESTS=false
@@ -9,7 +9,7 @@ COPY admin-ui/ ./
 RUN if [ "$RUN_TESTS" = "true" ]; then CI=1 node ./scripts/run-vitest.mjs run --pool threads --maxWorkers=1; fi
 RUN npm run build
 
-FROM nginx:1.31.8-alpine
+FROM nginx:1.31.9-alpine
 RUN apk upgrade --no-cache
 COPY admin-ui/nginx-main.conf /etc/nginx/nginx.conf
 COPY admin-ui/nginx.conf /etc/nginx/conf.d/default.conf

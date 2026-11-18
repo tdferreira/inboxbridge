@@ -1,7 +1,7 @@
 # Container-only development with Codex
 
 Open this checkout in Codex. Install/start Docker Desktop; Git and the macOS
-OpenSSL utility are the only other host prerequisites. Java 25/Maven 3.10 and Node 24
+OpenSSL utility are the only other host prerequisites. Java 25/Maven 3.10 and Node 26
 run in disposable containers. No host language package installation is needed.
 
 ```sh
@@ -72,3 +72,9 @@ and ephemeral certificate bootstrap; `./scripts/dev security-runtime` verifies
 the namespaced stack using only the exported public CA and anonymous requests.
 The frontend tooling installs the npm version declared in package.json inside
 its disposable container, not on macOS.
+
+The backend currently retains Eclipse Temurin Java 25 and disables Base64
+intrinsics with `JAVA_TOOL_OPTIONS=-XX:-UseBASE64Intrinsics` to mitigate
+Java4Shell (CVE-2026-114938) while the patched Temurin Linux images are pending.
+Preserve that option in custom JVM settings. See `docs/DEPENDENCIES.md` for
+the checked versions, upstream gap and criteria for removing the workaround.

@@ -90,6 +90,10 @@ mvn -q -Dit.test='*QuarkusIT' verify
 This also runs all packaged-runtime smoke tests with the H2 build profile.
 Docker must be available for the PostgreSQL, OpenBao, and Vault test containers.
 Run backend builds sequentially because they share `target/quarkus-app`.
+The container-only `./scripts/dev backend` path also sets the temporary
+Java4Shell mitigation, `JAVA_TOOL_OPTIONS=-XX:-UseBASE64Intrinsics`. Preserve
+that option in other Java invocations until patched Temurin Linux images
+are available; see [the dependency audit](docs/DEPENDENCIES.md).
 
 Frontend:
 
@@ -99,7 +103,7 @@ npm test -- --run
 npm run build
 ```
 
-Use current Node 24 LTS (at least 24.15.0). `npm run test:coverage` runs the
+Use current Node 26 LTS (26.13.1 or newer on that line). `npm run test:coverage` runs the
 same full frontend suite with V8 coverage enabled.
 
 Complete repository validation also includes the browser extensions and public site:

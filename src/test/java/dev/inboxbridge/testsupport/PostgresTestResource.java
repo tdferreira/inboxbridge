@@ -19,7 +19,7 @@ public final class PostgresTestResource implements QuarkusTestResourceLifecycleM
     @Override
     public Map<String, String> start() {
         postgres = new PostgreSQLContainer(DockerImageName.parse(
-                System.getProperty("inboxbridge.test.postgres.image", "postgres:16")))
+                System.getProperty("inboxbridge.test.postgres.image", "postgres:16.16")))
                 .withDatabaseName("inboxbridge_test")
                 .withUsername("inboxbridge")
                 .withPassword("inboxbridge");

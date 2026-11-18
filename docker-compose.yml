@@ -1,6 +1,6 @@
 services:
   cert-init:
-    image: alpine:3.24
+    image: alpine:3.24.4
     container_name: inboxbridge-cert-init
     volumes:
       - ./certs:/certs
@@ -51,7 +51,7 @@ services:
     restart: unless-stopped
 
   postgres:
-    image: postgres:16
+    image: postgres:16.16
     container_name: inboxbridge-postgres
     depends_on:
       cert-init:

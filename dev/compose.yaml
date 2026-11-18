@@ -8,11 +8,13 @@ services:
       - maven-cache:/root/.m2
       - ${DEV_DOCKER_SOCKET:-/var/run/docker.sock}:/var/run/docker.sock
     environment:
+      # CVE-2026-114938: also protect Maven and its forked test JVMs.
+      JAVA_TOOL_OPTIONS: -XX:-UseBASE64Intrinsics
       TESTCONTAINERS_HOST_OVERRIDE: host.docker.internal
       DOCKER_API_VERSION: "1.44"
     profiles: [tools]
   frontend-tools:
-    image: node:24-bookworm-slim
+    image: node:26.13.1-bookworm-slim
     working_dir: /workspace/admin-ui
     volumes:
       - ..:/workspace
@@ -23,7 +25,7 @@ services:
       NODE_OPTIONS: --max-old-space-size=4096
     profiles: [tools]
   cert-init:
-    image: alpine:3.24
+    image: alpine:3.24.4
     volumes:
       - certificates:/certs
       - ../docker:/opt/inboxbridge/docker:ro
@@ -32,7 +34,7 @@ services:
       PUBLIC_PORT: ${DEV_PORT:-3000}
     command: [sh, /opt/inboxbridge/docker/cert-init.sh]
   postgres:
-    image: postgres:16
+    image: postgres:16.16
     environment:
       PGDATA: /var/lib/postgresql/data/pgdata
       POSTGRES_DB: inboxbridge

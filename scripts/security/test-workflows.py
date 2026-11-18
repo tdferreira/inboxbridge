@@ -45,6 +45,26 @@ class WorkflowSecurityTests(unittest.TestCase):
             for action in re.findall(r"uses:\s*([^\s]+)", path.read_text()):
                 self.assertRegex(action, r"^[^@]+@[a-f0-9]{40}$", str(path))
 
+    def test_java4shell_workaround_covers_build_and_runtime_jvms(self):
+        # Floating Temurin tags can lag security releases. Protect every stage,
+        # including release CMD overrides and Maven's forked test processes.
+        option = '-XX:-UseBASE64Intrinsics'
+        for name in ('Dockerfile', 'dev/Dockerfile.backend', 'docker/release/Dockerfile.backend'):
+            stages = (ROOT / name).read_text().split('FROM ')[1:]
+            self.assertTrue(stages, name)
+            for stage in stages:
+                self.assertIn(f'ENV JAVA_TOOL_OPTIONS="{option}"', stage, name)
+        self.assertIn(f'JAVA_TOOL_OPTIONS: {option}', (ROOT / 'dev/compose.yaml').read_text())
+        for workflow in ('build', 'release'):
+            workflow_steps = steps(ROOT / f'.github/workflows/{workflow}.yml')
+            mitigation = next(i for i, step in enumerate(workflow_steps)
+                              if step.startswith('Disable vulnerable Base64 intrinsic\n'))
+            backend = next(i for i, step in enumerate(workflow_steps)
+                           if 'mvn -q' in step)
+            self.assertLess(mitigation, backend)
+            self.assertIn(f'JAVA_TOOL_OPTIONS={option}', workflow_steps[mitigation])
+            self.assertIn('"$GITHUB_ENV"', workflow_steps[mitigation])
+
     def test_context_values_never_become_shell_source(self):
         for path in (ROOT / ".github/workflows").glob("*.yml"):
             for step in steps(path):

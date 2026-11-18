@@ -3,7 +3,7 @@
 set -eu
 root="$(CDPATH= cd -- "$(dirname -- "$0")/../.." && pwd)"
 docker run --rm -i --tmpfs /certs -v "$root/docker/cert-init.sh:/cert-init.sh:ro" \
-  -e PUBLIC_HOSTNAME=security-test.example alpine:3.24 sh <<'SH'
+  -e PUBLIC_HOSTNAME=security-test.example alpine:3.24.4 sh <<'SH'
 set -eu
 sh /cert-init.sh
 test "$(stat -c '%a' /certs/ca.key)" = 600

@@ -19,7 +19,7 @@ import base64, json, os, secrets, sys
 from pathlib import Path
 config={
  'services':{
-  'postgres':{'image':'postgres:16','environment':{'POSTGRES_DB':'inboxbridge','POSTGRES_USER':'inboxbridge','POSTGRES_PASSWORD':'smoke-only'},
+  'postgres':{'image':'postgres:16.16','environment':{'POSTGRES_DB':'inboxbridge','POSTGRES_USER':'inboxbridge','POSTGRES_PASSWORD':'smoke-only'},
     'volumes':['database:/var/lib/postgresql/data'],
     'healthcheck':{'test':['CMD-SHELL','pg_isready -U inboxbridge -d inboxbridge'],'interval':'2s','timeout':'5s','retries':30},'networks':['database_net']},
   'inboxbridge':{'image':os.environ['BACKEND_IMAGE'],'user':'10001:10001',
@@ -66,6 +66,8 @@ if docker run --rm --network none -e PUBLIC_HOSTNAME=inboxbridge.example.test \
   echo 'Frontend silently downgraded to HTTP without an explicit TLS_ENABLED=false.' >&2; exit 1
 fi
 compose up -d
+compose exec -T inboxbridge java -XX:+PrintFlagsFinal -version > "$task_tmp/java-flags.txt" 2>&1
+grep -Eq 'bool[[:space:]]+UseBASE64Intrinsics[[:space:]]+=[[:space:]]+false' "$task_tmp/java-flags.txt"
 address=$(compose port frontend 8080)
 ready=false
 for attempt in $(seq 1 90); do
