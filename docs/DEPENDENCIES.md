@@ -30,6 +30,142 @@ Dependabot provides update visibility, but cannot express this dynamic policy.
 Its proposals still need lifecycle/security review and checks for image strings
 embedded in test code.
 
+## Audit dated 2026-11-18
+
+The nine open Dependabot PRs were reviewed together. The working tree includes
+each proposal or a newer compatible stable release; the upstream PRs remain
+open, and each original PR has a successful Build workflow with the maintainer
+approval gate still waiting. Vitest and its coverage provider are upgraded together because their
+peer versions must match.
+
+| Dependabot PR | Proposed update | Selected update |
+| --- | --- | --- |
+| [#112](https://github.com/tdferreira/inboxbridge/pull/112) | Failsafe 3.6.1 | Surefire and Failsafe 3.6.1 |
+| [#113](https://github.com/tdferreira/inboxbridge/pull/113) | GreenMail 2.1.15 | 2.1.15 |
+| [#114](https://github.com/tdferreira/inboxbridge/pull/114), [#115](https://github.com/tdferreira/inboxbridge/pull/115) | Vitest / coverage 5.1.0 | Both 5.1.1 |
+| [#116](https://github.com/tdferreira/inboxbridge/pull/116) | React Router 7.18.5 | 7.18.6 |
+| [#118](https://github.com/tdferreira/inboxbridge/pull/118) | setup-java 6.2.0 | 6.3.0, immutable release commit |
+| [#119](https://github.com/tdferreira/inboxbridge/pull/119) | docker/login-action 4.8.0 | 4.8.0, immutable release commit |
+| [#120](https://github.com/tdferreira/inboxbridge/pull/120) | Vite 8.3.7 | 8.3.8 |
+| [#121](https://github.com/tdferreira/inboxbridge/pull/121) | plugin-react 6.3.0 | 6.3.0 |
+
+Additional registry/release checks cover all direct packages, framework BOMs,
+build plugins, Actions, and runtime/build/bootstrap/integration-test images.
+
+| Component | Selected version | Compatibility decision |
+| --- | --- | --- |
+| Quarkus | 3.40.1.2 LTS | November security patch; retain platform-managed dependency alignment. Quarkus 4 CR is excluded. |
+| Java | Temurin 25 LTS, currently 25.0.5+8 in Linux images | Retain Temurin at the operator's request; apply the Java4Shell mitigation below while patched images are pending. |
+| Maven | 3.10.0 | Retain the current stable Maven line and Temurin builder. |
+| Node.js | 26.13.1 LTS | Node 26 is now Active LTS; use it in frontend Docker/tooling and CI. |
+| npm | 12.2.3 | Install the declared package manager before lockfile installation. |
+| Nginx OSS | 1.31.9-alpine | November 18 security release, including HTTP/2, TLS request-body and resolver fixes; retain the existing mainline branch. |
+| PostgreSQL | 16.16 | Apply the supported major's latest patch without a major/data-volume migration. |
+| Alpine | 3.24.4 | Latest patch on the current bootstrap branch. |
+| OpenBao / Vault Community test images | 2.7.2 / 2.2.2 | Security patch releases of the existing distributions/editions. |
+| Recharts | 3.11.0 | Current stable; existing React 19 peer range remains supported. |
+| jsdom | 31.0.1 | Current stable; Node engine range remains compatible with Node 26. |
+| JaCoCo | 0.8.16 | Current stable; Java 25 instrumentation verified by the backend suite. |
+
+React/React DOM 19.3.1, Testing Library React 16.3.3, jest-dom 7.0.1, Angus Mail
+2.0.5, Commons Compress 1.28.0, WebAuthn 2.10.1, ALTCHA 2.1.1, JSON 20260814,
+Testcontainers 2.0.5 and Compiler 3.16.0 remain current stable selections.
+Angus 2.1 milestones, Maven 4/Compiler 4 prereleases and Quarkus 4 prereleases
+are excluded. The other pinned Actions and Firefox web-ext 10.8.0 remain current.
+
+### Java4Shell: mitigation while Temurin Linux patches are pending
+
+Oracle's November 17 CSPU and the OpenJDK advisory identify CVE-2026-114938
+(Java4Shell), a memory-corruption issue in the optimized Base64 decoder.
+The fixed Java 25 release is 25.0.5.1. Fresh pulls of both
+`eclipse-temurin:25-jre` and `maven:3.10-eclipse-temurin-25` still execute
+Temurin 25.0.5+8. The Temurin 25.0.5.1+2 release currently has macOS arm64
+assets but no Linux JDK/JRE assets, and Docker Hub has no 25.0.5.1 Temurin tags.
+A new tag or a successful image pull alone does not establish remediation.
+
+The project keeps Temurin and applies the researcher's published mitigation:
+
+```text
+JAVA_TOOL_OPTIONS=-XX:-UseBASE64Intrinsics
+```
+
+Every Java Docker build/runtime stage, development Maven tool container and
+build/release CI JVM receives the option. It also applies to forked test JVMs
+and the release image's supported custom Java command. Disabling the intrinsic
+uses Java's regular Base64 implementation and can reduce Base64 throughput.
+Preserve the option when supplying custom `JAVA_TOOL_OPTIONS`.
+
+This mitigates Java4Shell; it does not install the November CSPU or address
+its other JVM fixes. Keep this upstream patch gap explicit. Recheck both
+amd64 and arm64 Linux builds, pull/rebuild every backend image, run the full
+validation below, and inspect `java -version` inside the final containers
+before replacing the workaround with a patched Temurin 25.0.5.1 or newer image.
+Do not infer that the ARM development machine proves x86 production safety.
+
+References:
+
+- [Oracle November CSPU](https://www.oracle.com/security-alerts/cspunov2026.html) and [Java 25.0.5.1 release notes](https://www.oracle.com/java/technologies/javase/25-0-5-1-relnotes.html)
+- [OpenJDK November 17 advisory](https://openjdk.org/groups/vulnerability/advisories/2026-11-17) and [Calif's disclosure and mitigation](https://calif.io/java4shell/)
+- [Temurin release assets](https://github.com/adoptium/temurin25-binaries/releases/tag/jdk-25.0.5.1%2B2) and [Temurin guidance](https://adoptium.net/news/2026/11/temurin-november-2026-cspu-java4shell/)
+- [Quarkus 3.40.1.2](https://quarkus.io/blog/quarkus-3-40-1-2-released/), [Node release schedule](https://github.com/nodejs/Release/blob/main/schedule.json), and [Nginx advisories](https://nginx.org/en/security_advisories.html)
+- [PostgreSQL 16.16](https://www.postgresql.org/docs/16/release-16-16.html), [OpenBao 2.7.2](https://github.com/openbao/openbao/releases/tag/v2.7.2), and [Vault 2.2.2](https://github.com/hashicorp/vault/releases/tag/v2.2.2)
+
+### Compatibility validation and security results
+
+The container-only validation uses Temurin 25 with the mitigation and Node
+26.13.1 LTS. All 821 backend tests and 34 packaged REST smoke tests pass without
+failures or skips, including GreenMail, PostgreSQL, OpenBao and Vault coverage.
+The frontend passes all 695 tests in 105 files with V8 coverage and a production
+build. Both extension suites (81 Chromium, 11 Firefox) and the public-site
+configuration/DOM checks pass. `npm ls --all` has no invalid peer dependencies,
+`npm outdated --json` is empty and `npm audit` reports no findings.
+
+Workflow/security, ingress, certificate bootstrap, release helpers, privacy and
+tracked-secret checks pass. Release images pass both internal HTTPS and external
+proxy smoke tests, including the legacy custom Java command. The effective
+`UseBASE64Intrinsics` flag is false in the runtime and in both amd64/arm64 base
+checks. A fresh isolated development stack is healthy with HTTPS verification,
+non-root services, private backend/database ports and valid Nginx configuration.
+Browser CA trust and real-provider mailflow were not manually exercised.
+
+OSV checked all 326 resolved backend entries, including test dependencies. Two
+framework-managed advisories remain in the latest LTS BOM:
+
+- [Guava CVE-2026-102554 / GHSA-xxph-c9ww-hj94](https://github.com/google/guava/security/advisories/GHSA-xxph-c9ww-hj94):
+  WebAuthn transitively supplies Guava 33.6.0-jre; native Java deserialization
+  can allocate excessive memory. Fixed in 33.7.2. No application
+  `ObjectInputStream` or native-deserialization input path was found.
+- [OpenTelemetry GHSA-ccrj-gw8r-854m](https://github.com/open-telemetry/opentelemetry-java/security/advisories/GHSA-ccrj-gw8r-854m):
+  scheduler instrumentation supplies API 1.62.0; crafted W3C tracestate parsing
+  can consume excessive CPU, fixed in 1.67.0. The app does not install the
+  Quarkus OpenTelemetry extension or directly invoke the affected extractor.
+
+These are inventory findings without a demonstrated affected application path.
+Keep the platform aligned rather than independently overriding related libraries;
+recheck the next Quarkus LTS patch. This is an applicability assessment, not a
+claim that the vulnerable packages are absent.
+
+Trivy 0.76.2 scanned the public images and exported rebuilt release images
+without Docker socket access. Results are dated inventory matches, not a claim
+that a clean scan proves safety:
+
+| Inspected image | HIGH / CRITICAL matches | Remaining finding |
+| --- | --- | --- |
+| Rebuilt backend | 1 / 0 | Guava 33.6.0-jre, assessed above. |
+| Rebuilt frontend | 0 / 0 | Nginx 1.31.9 with available Alpine package upgrades. |
+| Temurin base / Alpine bootstrap | 0 / 0 | Scanner output does not establish JVM CSPU coverage; the Java patch gap above remains. |
+| Downloaded Maven dependency/plugin cache | 6 / 0 | Guava plus tool/test-side BeanUtils 1.9.4 (CVE-2025-48734), shaded HttpCore 5.3.6 (CVE-2026-54399 / CVE-2026-54428), and Plexus Utils 3.0.24/3.6.0 (CVE-2025-67030). Cache inventory includes audit tooling; these extra jars are absent from the application runtime scan. |
+| Maven base | 1 / 0 | Maven's own Guava 33.7.1-jre has the same deserialization advisory. No newer stable Maven distribution was available. |
+| Node 26 Alpine base | 6 / 0 | Bundled npm has old Undici/brace-expansion; the project installs npm 12.2.3, verified to bundle Undici 6.29.1 and brace-expansion 5.0.12. Node/npm are absent from the served Nginx image. |
+| PostgreSQL 16.16 | 148 / 2 | 61 distinct CVEs across packages, including libxml2 CVE-2026-6653 without a Debian fixed version and Go CVE-2025-68121 in gosu. Retain private network exposure and the supported database major; no implicit distribution/data migration. |
+| OpenBao 2.7.2 test server | 3 / 0 | go-jose/v3 and /v4 CVE-2026-116587 plus x/net CVE-2026-78661. No newer stable server image was available. |
+| Vault Community 2.2.2 test server | 1 / 0 | go-jose/v3 CVE-2026-116587, with no fixed v3 version reported. |
+
+The transit integrations use disposable dev-mode servers and synthetic root
+credentials. Their JWT/HTML findings do not establish an affected transit
+request path. None of these findings is suppressed. The older audit below
+remains dated history; its versions and counts do not describe current images.
+
 ## Audit dated 2026-10-25
 
 The audit used npm registry metadata and `npm audit`, Maven Central version and
@@ -182,7 +318,7 @@ separate LTS stream. The release-only Firefox signing tool is pinned to
   test containers do not contain deployment credentials. The latest Vault
   Community 2.2.1 test image has no high/critical matches in this scan.
 
-## Validation
+### Validation of the 2026-10-25 audit
 
 The dependency refresh is validated with the complete Java 25 Maven test suite,
 all packaged REST smoke tests, the full Node 24 frontend suite and production

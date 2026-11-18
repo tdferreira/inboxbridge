@@ -2,9 +2,9 @@
 
 The admin UI is a separate React + Vite application served by Nginx in its own container. It talks to the Quarkus backend through proxied REST endpoints under `/api/...`.
 
-The frontend dependency set is intentionally kept on current stable major versions, and now targets React 19, Vite 8, Vitest 5, jsdom 30, and Recharts 3.x. Use current Node 24 LTS for parity with Docker and CI; jsdom requires at least Node 24.15.0 on that line. The full supported Node range is declared in `package.json`.
+The frontend dependency set is intentionally kept on current stable major versions, and now targets React 19, Vite 8, Vitest 5, jsdom 31, and Recharts 3.x. Use current Node 26 LTS for parity with Docker and CI; the checked LTS patch is 26.13.1. The full supported Node range is declared in `package.json`.
 
-The `packageManager` field selects npm 12.2.1. Docker and CI install this version
+The `packageManager` field selects npm 12.2.3. Docker and CI install this version
 before `npm ci` so older dependencies bundled with Node's npm do not define the
 build toolchain. Dependency selection follows the repository's
 [LTS and security policy](../docs/DEPENDENCIES.md).

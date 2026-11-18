@@ -15,7 +15,7 @@ cleanup() {
     docker run --rm --network none --read-only --cap-drop ALL \
       --security-opt no-new-privileges \
       --mount "type=bind,source=$task_tmp/certs,target=/certs" \
-      alpine:3.24 sh -c 'rm -rf /certs/*'
+      alpine:3.24.4 sh -c 'rm -rf /certs/*'
   fi
   rm -rf "$task_tmp"
 }
@@ -50,6 +50,9 @@ data['services']['postgres']['environment']['PGDATA']='/var/lib/postgresql/data/
 (root/'compose.json').write_text(json.dumps(data))
 PY
 compose up -d --no-build
+# Check the effective JVM configuration, including images started with CMD overrides.
+compose exec -T inboxbridge java -XX:+PrintFlagsFinal -version > "$task_tmp/java-flags.txt" 2>&1
+grep -Eq 'bool[[:space:]]+UseBASE64Intrinsics[[:space:]]+=[[:space:]]+false' "$task_tmp/java-flags.txt"
 # The certificate directory is root-owned; export only its public trust anchor.
 compose cp cert-init:/certs/ca.crt "$task_tmp/public-ca.crt"
 address=$(compose port inboxbridge-admin 8443)

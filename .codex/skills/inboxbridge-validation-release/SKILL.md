@@ -21,7 +21,7 @@ For dependency refreshes or an explicit request to run all tests, use Java 25
 and `mvn -q -Dit.test='*QuarkusIT' verify` so packaged runtime checks run too.
 Docker must be available for the PostgreSQL, OpenBao, and Vault integrations;
 run backend builds sequentially because they share `target/quarkus-app`.
-Use current Node 24 LTS (at least 24.15.0 for jsdom 30), run the full frontend
+Use current Node 26 LTS (26.13.1 as of 2026-11-18, with jsdom 31), run the full frontend
 suite and build, and exercise `npm run test:coverage` when updating Vitest or
 its coverage provider. Also run both browser-extension suites with
 `npm --prefix browser-extensions/chromium test` and
@@ -82,6 +82,13 @@ For the container-only local path use `./scripts/dev test-backend`,
 `./scripts/dev test-frontend`, `./scripts/dev build` and `./scripts/dev up`.
 This replaces host Maven/npm commands and the production Compose invocation.
 Report browser CA trust and real mailflow checks separately from automated tests.
+
+Retain Eclipse Temurin per the operator's preference. Until Linux Temurin
+25.0.5.1 images are published, preserve `JAVA_TOOL_OPTIONS=-XX:-UseBASE64Intrinsics`
+in every Java build/runtime stage, development tools and CI. This mitigates
+CVE-2026-114938 but does not install the full November CSPU. Verify the effective
+flag in running images and recheck upstream amd64/arm64 patch availability;
+see `docs/DEPENDENCIES.md`. Never claim a floating image tag proves remediation.
 
 IMAP IDLE changes require both narrow renewal/concurrency tests and GreenMail
 coverage of DONE/NOOP, reconnect catch-up and safety import without notification.
